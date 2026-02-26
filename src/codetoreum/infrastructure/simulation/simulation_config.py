@@ -2,10 +2,31 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+
+class FidelityLevel(Enum):
+    """Fidelity levels for simulation testing.
+
+    LOW: Preconfigured outcomes, zero/minimal delays, no causal linking
+         Speed: 100x+ faster
+         Use case: Unit tests, fast regression
+
+    MEDIUM: Causal linking via events, proportional delays, realistic state propagation
+            Speed: 10-50x faster
+            Use case: Integration tests, workflow validation
+
+    HIGH: Full simulation fidelity, realistic timing with jitter, probabilistic failures
+          Speed: 1-5x faster
+          Use case: Performance testing, chaos engineering
+    """
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
 
 
 @dataclass
@@ -110,6 +131,14 @@ class SimulationConfig:
     # Metrics configuration
     metrics: MetricsConfig = field(default_factory=MetricsConfig)
 
+    # Fidelity level (determines timing accuracy and realism)
+    fidelity_level: FidelityLevel = FidelityLevel.LOW
+
+    # Proportional timing parameters (used when fidelity >= MEDIUM)
+    ms_per_token: float = 50.0  # LLM latency
+    ms_per_file_operation: float = 10.0  # Container/repo file operations
+    ms_per_event: float = 1.0  # Event processing latency
+
     # Additional metadata
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -173,6 +202,10 @@ class SimulationConfig:
         cls,
         scenario_name: str,
         speed_multiplier: float = 100.0,
+        fidelity_level: FidelityLevel = FidelityLevel.LOW,
+        ms_per_token: float = 50.0,
+        ms_per_file_operation: float = 10.0,
+        ms_per_event: float = 1.0,
     ) -> "SimulationConfig":
         """
         Create a configuration optimized for fast test execution.
@@ -180,6 +213,10 @@ class SimulationConfig:
         Args:
             scenario_name: Name of the scenario
             speed_multiplier: How much faster than real time
+            fidelity_level: Fidelity level (LOW, MEDIUM, HIGH)
+            ms_per_token: Milliseconds per LLM token for proportional timing
+            ms_per_file_operation: Milliseconds per file operation for proportional timing
+            ms_per_event: Milliseconds per event processing for proportional timing
 
         Returns:
             SimulationConfig optimized for speed
@@ -197,6 +234,10 @@ class SimulationConfig:
             notifications=NotificationConfig(
                 send_delay=0.0,
             ),
+            fidelity_level=fidelity_level,
+            ms_per_token=ms_per_token,
+            ms_per_file_operation=ms_per_file_operation,
+            ms_per_event=ms_per_event,
         )
 
     @classmethod
@@ -204,6 +245,10 @@ class SimulationConfig:
         cls,
         scenario_name: str,
         speed_multiplier: float = 10.0,
+        fidelity_level: FidelityLevel = FidelityLevel.MEDIUM,
+        ms_per_token: float = 50.0,
+        ms_per_file_operation: float = 10.0,
+        ms_per_event: float = 1.0,
     ) -> "SimulationConfig":
         """
         Create a configuration that mimics realistic behavior.
@@ -211,6 +256,10 @@ class SimulationConfig:
         Args:
             scenario_name: Name of the scenario
             speed_multiplier: How much faster than real time
+            fidelity_level: Fidelity level (LOW, MEDIUM, HIGH)
+            ms_per_token: Milliseconds per LLM token for proportional timing
+            ms_per_file_operation: Milliseconds per file operation for proportional timing
+            ms_per_event: Milliseconds per event processing for proportional timing
 
         Returns:
             SimulationConfig with realistic timing
@@ -228,6 +277,10 @@ class SimulationConfig:
             notifications=NotificationConfig(
                 send_delay=0.01,
             ),
+            fidelity_level=fidelity_level,
+            ms_per_token=ms_per_token,
+            ms_per_file_operation=ms_per_file_operation,
+            ms_per_event=ms_per_event,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -269,6 +322,10 @@ class SimulationConfig:
                 "enabled": self.metrics.enabled,
                 "tracked_metrics": self.metrics.tracked_metrics,
             },
+            "fidelity_level": self.fidelity_level.value,
+            "ms_per_token": self.ms_per_token,
+            "ms_per_file_operation": self.ms_per_file_operation,
+            "ms_per_event": self.ms_per_event,
             "metadata": self.metadata,
         }
 
@@ -325,6 +382,9 @@ class SimulationConfig:
             tracked_metrics=metrics_data.get("tracked_metrics", []),
         )
 
+        fidelity_str = data.get("fidelity_level", "low")
+        fidelity_level = FidelityLevel(fidelity_str) if isinstance(fidelity_str, str) else fidelity_str
+
         return cls(
             scenario_name=data["scenario_name"],
             scenario_description=data.get("scenario_description", ""),
@@ -333,6 +393,10 @@ class SimulationConfig:
             container=container,
             notifications=notifications,
             metrics=metrics,
+            fidelity_level=fidelity_level,
+            ms_per_token=data.get("ms_per_token", 50.0),
+            ms_per_file_operation=data.get("ms_per_file_operation", 10.0),
+            ms_per_event=data.get("ms_per_event", 1.0),
             metadata=data.get("metadata", {}),
         )
 

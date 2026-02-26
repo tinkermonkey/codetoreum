@@ -6,6 +6,7 @@ import threading
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from re import Pattern
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from codetoreum.ports.exceptions import (
@@ -23,6 +24,9 @@ from codetoreum.ports.output.llm_provider import (
     ToolDefinition,
     UsageStats,
 )
+
+if TYPE_CHECKING:
+    from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 
 
 class MockLLMAdapter(ILLMProvider):
@@ -51,6 +55,8 @@ class MockLLMAdapter(ILLMProvider):
         cost_per_output_token: float = 0.0,
         context_window: int = 100000,
         max_output_tokens: int = 4096,
+        config: "SimulationConfig | None" = None,
+        clock: "AsyncIterator | None" = None,
     ):
         """
         Initialize the mock LLM adapter.
@@ -64,6 +70,8 @@ class MockLLMAdapter(ILLMProvider):
             cost_per_output_token: Cost per output token (default: 0.0 for testing)
             context_window: Maximum context window size
             max_output_tokens: Maximum output tokens
+            config: Optional SimulationConfig for fidelity-based timing
+            clock: Optional SimulationClock for time manipulation
         """
         if delay_seconds < 0:
             msg = "Delay seconds cannot be negative"
@@ -72,6 +80,8 @@ class MockLLMAdapter(ILLMProvider):
         self._default_response = default_response
         self._delay_seconds = delay_seconds
         self._simulate_rate_limits = simulate_rate_limits
+        self._config = config
+        self._clock = clock
 
         # Pattern-based responses
         self._response_patterns: list[tuple[Pattern, str]] = []
@@ -139,6 +149,43 @@ class MockLLMAdapter(ILLMProvider):
                     return response
             return self._default_response
 
+    def _calculate_delay_seconds(self, prompt: str, response: str) -> float:
+        """
+        Calculate delay based on fidelity level and token count.
+
+        Uses SimulationConfig if available for fidelity-aware timing.
+        Otherwise falls back to fixed delay_seconds.
+
+        Args:
+            prompt: The input prompt
+            response: The generated response
+
+        Returns:
+            Delay in seconds
+        """
+        # If no config, use fixed delay
+        if not self._config:
+            return self._delay_seconds
+
+        # Import here to avoid circular dependencies
+        from codetoreum.infrastructure.simulation.simulation_config import FidelityLevel
+
+        # LOW fidelity: no delay
+        if self._config.fidelity_level == FidelityLevel.LOW:
+            return 0.0
+
+        # MEDIUM/HIGH fidelity: proportional delay based on tokens
+        # Rough token estimation: 1 token ≈ 4 characters
+        prompt_tokens = len(prompt) / 4.0
+        response_tokens = len(response) / 4.0
+        total_tokens = prompt_tokens + response_tokens
+
+        # Calculate delay in milliseconds
+        delay_ms = total_tokens * self._config.ms_per_token
+        delay_seconds = delay_ms / 1000.0
+
+        return delay_seconds
+
     async def execute(
         self,
         prompt: str,
@@ -169,14 +216,22 @@ class MockLLMAdapter(ILLMProvider):
                 msg = "Mock rate limit exceeded (100 requests)"
                 raise RateLimitError(msg)
 
-        # Simulate delay
-        if self._delay_seconds > 0:
-            await asyncio.sleep(self._delay_seconds)
-
         started_at = datetime.now(UTC)
 
         # Get response
         response = self._get_response_for_prompt(prompt)
+
+        # Calculate delay based on fidelity level
+        delay_seconds = self._calculate_delay_seconds(prompt, response)
+
+        # Apply delay using clock if available, otherwise use asyncio.sleep
+        if delay_seconds > 0:
+            if self._clock:
+                # Use simulated clock for time manipulation support
+                await self._clock.sleep(delay_seconds)
+            else:
+                # Fall back to asyncio.sleep for real-time execution
+                await asyncio.sleep(delay_seconds)
 
         # Calculate mock tokens
         prompt_tokens = len(prompt.split())

@@ -415,11 +415,24 @@ class SimulationApplicationBootstrap:
 
         # Create adapters using factory
         ticket_system = self._adapter_factory.create_ticket_system(adapter_name="in_memory")
-        llm_provider = self._adapter_factory.create_llm_provider(adapter_name="mock")
-        # Pass event_emitter and event_bus to container for event subscription
-        container = self._adapter_factory.create_container(
-            adapter_name="fake", event_emitter=event_emitter, event_bus=event_bus
+
+        # Pass config and clock to LLM adapter for fidelity-aware timing
+        llm_provider = self._adapter_factory.create_llm_provider(
+            adapter_name="mock",
+            config=self._config,
+            clock=self._engine.get_clock_for_testing() if self._engine else None,
         )
+
+        # Pass event_emitter, event_bus, config, and clock to container for event subscription
+        # and fidelity-aware timing
+        container = self._adapter_factory.create_container(
+            adapter_name="fake",
+            event_emitter=event_emitter,
+            event_bus=event_bus,
+            config=self._config,
+            clock=self._engine.get_clock_for_testing() if self._engine else None,
+        )
+
         repository = InMemoryRepositoryAdapter(event_emitter=event_emitter)
         event_store = self._adapter_factory.create_event_store(adapter_name="in_memory")
 

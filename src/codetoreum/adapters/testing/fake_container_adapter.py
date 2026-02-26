@@ -4,8 +4,9 @@ import asyncio
 import re
 import threading
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from codetoreum.domain.events import (
@@ -24,6 +25,21 @@ from codetoreum.ports.output.container import (
     IContainer,
 )
 from codetoreum.ports.output.event_emitter import IEventEmitter
+
+if TYPE_CHECKING:
+    from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+
+
+@dataclass
+class CommandExecution:
+    """Record of a single command execution in a container."""
+
+    timestamp: datetime
+    command: str
+    exit_code: int
+    stdout: str
+    stderr: str
+    duration_ms: float
 
 
 class FakeContainerAdapter(IContainer):
@@ -53,6 +69,8 @@ class FakeContainerAdapter(IContainer):
         max_containers: int = 100,
         event_emitter: IEventEmitter | None = None,
         event_bus: EventBus | None = None,
+        config: "SimulationConfig | None" = None,
+        clock: "Any | None" = None,
     ):
         """
         Initialize the fake container adapter.
@@ -65,6 +83,8 @@ class FakeContainerAdapter(IContainer):
             max_containers: Maximum number of containers allowed (default: 100)
             event_emitter: Optional event emitter for domain events
             event_bus: Optional event bus for event subscriptions
+            config: Optional SimulationConfig for fidelity-based timing
+            clock: Optional SimulationClock for time manipulation
 
         Raises:
             ValidationError: If parameters are invalid
@@ -83,6 +103,8 @@ class FakeContainerAdapter(IContainer):
         self._max_containers = max_containers
         self._event_emitter = event_emitter
         self._event_bus = event_bus
+        self._config = config
+        self._clock = clock
 
         # Container storage
         self._containers: dict[str, dict[str, Any]] = {}
@@ -90,8 +112,11 @@ class FakeContainerAdapter(IContainer):
         # Predefined results for specific commands
         self._command_results: dict[str, ContainerResult] = {}
 
-        # Execution history
+        # Execution history (old format for backwards compatibility)
         self._execution_history: list[dict[str, Any]] = []
+
+        # Command execution history by container ID
+        self._command_history: dict[str, list[CommandExecution]] = {}
 
         # Virtual filesystem tracking (container_id -> {file_path -> content})
         self._virtual_filesystems: dict[str, dict[str, str]] = {}
@@ -131,6 +156,65 @@ class FakeContainerAdapter(IContainer):
                 duration_ms=int(self._execution_delay * 1000),
                 container_id=container_id,
             )
+
+    def _estimate_file_operations(self, command: str) -> int:
+        """
+        Estimate number of file operations based on command.
+
+        Uses simple heuristics to estimate I/O overhead:
+        - pytest: 10 ops per test file in /context
+        - pip install: 50 ops for package installation
+        - git: 20 ops for VCS operations
+        - default: 5 ops for simple commands
+
+        Args:
+            command: Command string to analyze
+
+        Returns:
+            Estimated number of file operations
+        """
+        if "pytest" in command:
+            # Estimate based on test count (roughly 10 ops per test)
+            return 50
+        elif "pip" in command and "install" in command:
+            return 50
+        elif "git" in command:
+            return 20
+        else:
+            return 5
+
+    def _calculate_delay_seconds(self, command: str) -> float:
+        """
+        Calculate delay based on fidelity level and command complexity.
+
+        Uses SimulationConfig if available for fidelity-aware timing.
+        Otherwise falls back to fixed execution_delay.
+
+        Args:
+            command: Command string to analyze
+
+        Returns:
+            Delay in seconds
+        """
+        # If no config, use fixed delay
+        if not self._config:
+            return self._execution_delay
+
+        # Import here to avoid circular dependencies
+        from codetoreum.infrastructure.simulation.simulation_config import FidelityLevel
+
+        # LOW fidelity: no delay
+        if self._config.fidelity_level == FidelityLevel.LOW:
+            return 0.0
+
+        # MEDIUM/HIGH fidelity: proportional delay based on command complexity
+        file_operations = self._estimate_file_operations(command)
+        base_delay_ms = 100  # Base command overhead
+        operation_delay_ms = file_operations * self._config.ms_per_file_operation
+        delay_ms = base_delay_ms + operation_delay_ms
+        delay_seconds = delay_ms / 1000.0
+
+        return delay_seconds
 
     def _get_result_for_command(
         self,
@@ -206,22 +290,50 @@ class FakeContainerAdapter(IContainer):
             msg = "Command is required"
             raise ValidationError(msg)
 
-        # Simulate execution delay
-        if self._execution_delay > 0:
-            await asyncio.sleep(self._execution_delay)
-
         # Create container
         container_id = f"fake-{uuid4().hex[:12]}"
 
         # Initialize virtual filesystem for this container
         with self._lock:
             self._virtual_filesystems[container_id] = {}
+            self._command_history[container_id] = []
+
+        # Track start time for duration calculation
+        start_time = datetime.now(UTC)
+
+        # Calculate and apply delay based on fidelity level
+        command_str = " ".join(command)
+        delay_seconds = self._calculate_delay_seconds(command_str)
+
+        # Apply delay using clock if available, otherwise use asyncio.sleep
+        if delay_seconds > 0:
+            if self._clock:
+                # Use simulated clock for time manipulation support
+                await self._clock.sleep(delay_seconds)
+            else:
+                # Fall back to asyncio.sleep for real-time execution
+                await asyncio.sleep(delay_seconds)
 
         # Get result
         result = self._get_result_for_command(command, container_id)
 
-        # Record execution
+        # Calculate actual duration
+        end_time = datetime.now(UTC)
+        duration_ms = int((end_time - start_time).total_seconds() * 1000)
+
+        # Create CommandExecution record
+        execution = CommandExecution(
+            timestamp=start_time,
+            command=command_str,
+            exit_code=result.exit_code,
+            stdout=result.stdout,
+            stderr=result.stderr,
+            duration_ms=duration_ms,
+        )
+
+        # Record execution in command history and legacy history format
         with self._lock:
+            self._command_history[container_id].append(execution)
             self._execution_history.append(
                 {
                     "container_id": container_id,
@@ -231,7 +343,7 @@ class FakeContainerAdapter(IContainer):
                     "environment": environment,
                     "timeout": timeout,
                     "result": result,
-                    "executed_at": datetime.now(UTC),
+                    "executed_at": start_time,
                 }
             )
 
@@ -432,6 +544,9 @@ class FakeContainerAdapter(IContainer):
         """
         Get container logs.
 
+        Generates realistic logs from command execution history, including
+        timestamps, commands, output, and exit codes.
+
         Args:
             container_id: Container ID
             stream: Return async generator for streaming
@@ -449,17 +564,72 @@ class FakeContainerAdapter(IContainer):
             msg = "Container ID cannot be empty"
             raise ValidationError(msg)
 
+        # Check if container exists in either _containers (created) or _command_history (run)
         with self._lock:
-            if container_id not in self._containers:
-                msg = "Container"
-                raise ResourceNotFoundError(msg, container_id)
+            container_exists = (
+                container_id in self._containers or container_id in self._command_history
+            )
 
-        # Return fake logs
-        logs = f"Fake logs for container {container_id}\nLine 1\nLine 2\nLine 3"
+        if not container_exists:
+            msg = "Container"
+            raise ResourceNotFoundError(msg, container_id)
 
+        # Generate logs from execution history
+        log_lines = []
+
+        with self._lock:
+            history = self._command_history.get(container_id, [])
+
+        if not history:
+            # No executions, return default message with "Fake logs" for backward compatibility
+            logs = f"Fake logs for container {container_id}\nLine 1\nLine 2\nLine 3"
+        else:
+            # Generate realistic logs from execution history
+            for exec_record in history:
+                # Add timestamp and command line
+                log_lines.append(f"[{exec_record.timestamp.isoformat()}] $ {exec_record.command}")
+
+                # Add stdout if present
+                if exec_record.stdout:
+                    log_lines.append(exec_record.stdout)
+
+                # Add stderr if present
+                if exec_record.stderr:
+                    log_lines.append(f"[stderr] {exec_record.stderr}")
+
+                # Add exit code and duration
+                log_lines.append(f"[exit {exec_record.exit_code}] duration: {exec_record.duration_ms:.2f}ms")
+                log_lines.append("")
+
+            logs = "\n".join(log_lines)
+
+        # Apply tail filter if specified
         if tail:
             lines = logs.split("\n")
             logs = "\n".join(lines[-tail:])
+
+        # Apply since filter if specified
+        if since:
+            lines = logs.split("\n")
+            filtered_lines = []
+            for line in lines:
+                # Try to parse timestamp from log line
+                if line.startswith("["):
+                    try:
+                        end_bracket = line.find("]")
+                        if end_bracket > 0:
+                            timestamp_str = line[1:end_bracket]
+                            timestamp = datetime.fromisoformat(timestamp_str)
+                            if timestamp >= since:
+                                filtered_lines.append(line)
+                    except (ValueError, IndexError):
+                        # If parsing fails, include the line
+                        filtered_lines.append(line)
+                else:
+                    # Non-timestamped lines are included if we have recent content
+                    if filtered_lines:
+                        filtered_lines.append(line)
+            logs = "\n".join(filtered_lines)
 
         if stream:
 
@@ -812,6 +982,7 @@ class FakeContainerAdapter(IContainer):
             self._containers.clear()
             self._execution_history.clear()
             self._command_results.clear()
+            self._command_history.clear()
 
     def get_execution_history(self) -> list[dict[str, Any]]:
         """
