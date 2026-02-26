@@ -501,31 +501,53 @@ await store.subscribe(on_event)
 - ✅ Directory-like structure
 - ✅ Metadata tracking
 - ✅ Object retrieval
+- ✅ **Thread-safe concurrent access** (using `threading.Lock()`)
 
 **Usage**:
 ```python
 storage = InMemoryStorageAdapter()
 
 # Store file
-await storage.put_object(
+await storage.upload(
     key="outputs/result.txt",
-    data=b"Agent output here"
+    content=b"Agent output here"
 )
 
 # Retrieve
-obj = await storage.get_object("outputs/result.txt")
-content = obj.data  # bytes
+content = await storage.download("outputs/result.txt")
 
 # List objects
-objects = await storage.list_objects("outputs/")
+objects = await storage.list_files("outputs/")
 
 # Delete
-await storage.delete_object("outputs/result.txt")
+await storage.delete("outputs/result.txt")
 ```
+
+**Thread Safety Contract**:
+
+All storage operations are protected by an internal lock to ensure thread-safe concurrent access matching production storage adapter behavior (S3, Azure Blob Storage, etc.).
+
+| Operation | Concurrency | Behavior |
+|-----------|-------------|----------|
+| Multiple uploads to **same key** | Concurrent | **Last-write-wins**: One completely overwrites the other. Result is deterministic (one of the uploaded contents), never corrupted partial data. |
+| Upload + download **same key** | Concurrent | Download returns either old or new complete content, never partial/corrupted data. Lock ensures consistent snapshot. |
+| Upload + delete **same key** | Concurrent | One operation wins: either artifact exists (if upload won) or doesn't (if delete won). Final state is consistent. |
+| Multiple downloads **same key** | Concurrent | All downloads return identical, complete content. No partial reads or corruption. |
+| List + upload **different keys** | Concurrent | List returns consistent snapshot: either sees new file or doesn't, but never partial/corrupted data. |
+| Multiple deletes **same key** | Concurrent | First delete succeeds, second raises `ResourceNotFoundError`. Lock ensures serialization. |
+
+**Guarantees**:
+- ✅ All state changes are atomic (protected by lock)
+- ✅ No partial writes or reads due to concurrent operations
+- ✅ No data corruption from simultaneous access
+- ✅ Deterministic results (not racy/flaky)
+- ✅ Same concurrency semantics as production storage (eventual consistency with atomic operations)
 
 **Use Cases**:
 - Agent output storage testing
 - Artifact management validation
+- **Concurrent workflow testing** (ensures multi-threaded code is tested realistically)
+- **Production adapter behavior simulation** (matches S3/Azure concurrency guarantees)
 
 ---
 
@@ -811,6 +833,88 @@ config = await store.get("app_config")
 # List
 all_keys = await store.list()
 ```
+
+---
+
+## Thread Safety in Mock Adapters
+
+Mock adapters replicate production storage adapter concurrency semantics using `threading.Lock()` for thread-safe access. This ensures multi-threaded code is tested realistically without introducing subtle race conditions.
+
+### Adapters with Thread Safety
+
+The following adapters protect concurrent access with internal locks:
+
+1. **InMemoryStorageAdapter** - File/object storage with atomic operations
+2. **InMemoryQueueService** - Queue operations (enqueue, dequeue, position updates)
+3. **InMemoryEventStore** - Event persistence and retrieval (if applicable)
+
+### Design Principle
+
+Mock adapters use the same thread-safety pattern as production adapters:
+- Each adapter maintains internal state in dictionaries/lists
+- All state-changing operations (`upload`, `download`, `delete`, `enqueue`, etc.) are protected by `with self._lock:`
+- Read-only operations (`exists`, `list_files`, `get_queue_entries`) also acquire the lock for consistent snapshots
+- No external locks required - thread safety is internal to the adapter
+
+### Concurrent Testing Example
+
+```python
+@pytest.mark.asyncio
+async def test_concurrent_storage_operations():
+    """Test that concurrent storage operations don't corrupt data."""
+    storage = InMemoryStorageAdapter()
+
+    # Setup initial data
+    await storage.upload("file-1", b"initial content")
+
+    # Race: concurrent operations
+    results = await asyncio.gather(
+        storage.upload("file-1", b"updated content"),
+        storage.download("file-1")
+    )
+
+    # Download returns consistent snapshot (not partial data)
+    download_result = results[1]
+    assert download_result in [b"initial content", b"updated content"]
+
+    # No corruption or partial reads
+    assert len(download_result) > 0
+```
+
+### Testing Concurrent Failures
+
+```python
+@pytest.mark.asyncio
+async def test_concurrent_delete_race():
+    """Test that delete operations are atomic even under concurrency."""
+    storage = InMemoryStorageAdapter()
+    await storage.upload("file-1", b"content")
+
+    # Two concurrent deletes
+    results = await asyncio.gather(
+        storage.delete("file-1"),  # Should succeed
+        storage.delete("file-1"),  # Should fail with ResourceNotFoundError
+        return_exceptions=True
+    )
+
+    # One succeeds, one raises error
+    assert any(isinstance(r, Exception) for r in results)
+    assert any(r is None for r in results)
+
+    # File must not exist
+    with pytest.raises(ResourceNotFoundError):
+        await storage.download("file-1")
+```
+
+### Production Behavior Fidelity
+
+Thread-safe mock adapters ensure:
+- ✅ Concurrent tests don't produce flaky/racy results
+- ✅ Same concurrency semantics as production (S3, etc.)
+- ✅ Error conditions are tested realistically (race conditions, concurrent failures)
+- ✅ Multi-threaded code paths are covered (agents executing in parallel)
+
+See `tests/unit/adapters/testing/test_adapter_error_handling.py` for comprehensive concurrent access tests.
 
 ---
 
