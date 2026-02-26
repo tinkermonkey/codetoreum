@@ -9,8 +9,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from dateutil import parser as dateparser
 import docker.errors
+from dateutil import parser as dateparser
 
 from codetoreum.domain.types import ContainerId
 from codetoreum.infrastructure.error_ids import ErrorRegistry
@@ -18,8 +18,6 @@ from codetoreum.infrastructure.observability.instrumentation import (
     add_span_attributes,
     instrument_async_function,
 )
-
-logger = logging.getLogger(__name__)
 from codetoreum.ports.exceptions import (
     AuthenticationError,
     ContainerError,
@@ -35,6 +33,8 @@ from codetoreum.ports.output.container import (
     ContainerStatus,
     IContainer,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
