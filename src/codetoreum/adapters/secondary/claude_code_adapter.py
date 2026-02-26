@@ -33,6 +33,8 @@ from codetoreum.ports.output.llm_provider import (
     UsageStats,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class ICredentialProvider:
     """Interface for secure credential providers."""
@@ -376,16 +378,20 @@ class ClaudeCodeAdapter(ILLMProvider):
                         if "session_id" in event:
                             conversation_id = event["session_id"]
 
-                    except json.JSONDecodeError:
-                        # Skip non-JSON lines
-                        pass
+                    except json.JSONDecodeError as e:
+                        # Log truncated/malformed JSON from network interruptions
+                        logger.warning(
+                            f"Failed to parse JSON event line (possible truncation from network interruption): {e}",
+                            exc_info=True,
+                            extra={"error_id": "ERR_JSON_PARSE_FAILED"},
+                        )
 
             # Read with timeout
             timeout = ctx.timeout_seconds
             try:
                 await asyncio.wait_for(read_stream(), timeout=timeout)
             except TimeoutError as e:
-                logging.exception(
+                logger.exception(
                     "Claude Code streaming timed out after %d seconds, terminating process (PID: %s)",
                     timeout,
                     process.pid,
@@ -396,7 +402,7 @@ class ClaudeCodeAdapter(ILLMProvider):
                     await asyncio.wait_for(process.wait(), timeout=_PROCESS_TIMEOUT_AFTER_SIGKILL_SECONDS)
                 except TimeoutError:
                     # Process didn't respond to SIGKILL - it's in uninterruptible state
-                    logging.warning(
+                    logger.warning(
                         "Process (PID: %s) did not terminate after SIGKILL within %d seconds, "
                         "likely in D-state (uninterruptible kernel I/O)",
                         process.pid,
@@ -409,7 +415,7 @@ class ClaudeCodeAdapter(ILLMProvider):
             try:
                 await asyncio.wait_for(process.wait(), timeout=_PROCESS_TIMEOUT_NORMAL_COMPLETION_SECONDS)
             except TimeoutError as e:
-                logging.exception(
+                logger.exception(
                     "Process (PID: %s) did not complete within %d seconds after streaming finished, killing process",
                     process.pid,
                     _PROCESS_TIMEOUT_NORMAL_COMPLETION_SECONDS,
@@ -418,7 +424,7 @@ class ClaudeCodeAdapter(ILLMProvider):
                 try:
                     await asyncio.wait_for(process.wait(), timeout=_PROCESS_TIMEOUT_AFTER_SIGKILL_SECONDS)
                 except TimeoutError:
-                    logging.warning(
+                    logger.warning(
                         "Process (PID: %s) did not terminate after SIGKILL within %d seconds, "
                         "giving up - process may be in D-state",
                         process.pid,
@@ -528,7 +534,7 @@ class ClaudeCodeAdapter(ILLMProvider):
                 # Log warning but continue - Claude has built-in tools
                 import logging
 
-                logging.warning(
+                logger.warning(
                     "Tool definitions provided but no MCP servers configured. "
                     "Custom tools will not be available. Built-in Claude tools will be used."
                 )
@@ -597,7 +603,7 @@ class ClaudeCodeAdapter(ILLMProvider):
             try:
                 await asyncio.wait_for(process.wait(), timeout=timeout)
             except TimeoutError as e:
-                logging.exception(
+                logger.exception(
                     "Claude Code streaming timed out after %d seconds, terminating process (PID: %s)",
                     timeout,
                     process.pid,
@@ -606,7 +612,7 @@ class ClaudeCodeAdapter(ILLMProvider):
                 try:
                     await asyncio.wait_for(process.wait(), timeout=_PROCESS_TIMEOUT_AFTER_SIGKILL_SECONDS)
                 except TimeoutError:
-                    logging.warning(
+                    logger.warning(
                         "Process (PID: %s) did not terminate after SIGKILL within %d seconds, "
                         "likely in D-state (uninterruptible kernel I/O)",
                         process.pid,
@@ -855,7 +861,7 @@ class ClaudeCodeAdapter(ILLMProvider):
             pass
         except Exception as e:
             # Log cleanup errors but suppress to avoid masking original exception
-            logging.warning(
+            logger.warning(
                 "Error during context manager cleanup: %s",
                 str(e),
                 exc_info=True,

@@ -166,6 +166,11 @@ class HealthChecker(IHealthCheck):
                 last_check=datetime.now(UTC),
             )
         except Exception as e:
+            logger.error(
+                f"Health check failed for {name}: {e!s}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_HEALTH_CHECK_FAILED},
+            )
             return DependencyHealth(
                 name=name,
                 status=HealthStatus.UNHEALTHY,
