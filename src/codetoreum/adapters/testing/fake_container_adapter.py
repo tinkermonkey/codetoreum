@@ -1,7 +1,6 @@
 """Fake container adapter for testing."""
 
 import asyncio
-import random
 import re
 import threading
 from collections.abc import Callable
@@ -108,6 +107,13 @@ class FakeContainerAdapter(IContainer):
         self._config = config
         self._clock = clock
 
+        # Initialize delay calculator for fidelity-aware timing
+        from codetoreum.infrastructure.simulation.proportional_delay_calculator import (
+            ProportionalDelayCalculator,
+        )
+
+        self._delay_calculator = ProportionalDelayCalculator(config)
+
         # Container storage
         self._containers: dict[str, dict[str, Any]] = {}
 
@@ -162,39 +168,12 @@ class FakeContainerAdapter(IContainer):
                 container_id=container_id,
             )
 
-    def _estimate_file_operations(self, command: str) -> int:
-        """
-        Estimate number of file operations based on command.
-
-        Uses simple heuristics to estimate I/O overhead:
-        - pytest: 10 ops per test file in /context
-        - pip install: 50 ops for package installation
-        - git: 20 ops for VCS operations
-        - default: 5 ops for simple commands
-
-        Args:
-            command: Command string to analyze
-
-        Returns:
-            Estimated number of file operations
-        """
-        if "pytest" in command:
-            # Estimate based on test count (roughly 10 ops per test)
-            return 50
-        if "pip" in command and "install" in command:
-            return 50
-        if "git" in command:
-            return 20
-        return 5
-
     def _calculate_delay_seconds(self, command: str) -> float:
         """
         Calculate delay based on fidelity level and command complexity.
 
-        Uses SimulationConfig if available for fidelity-aware timing.
-        Otherwise falls back to fixed execution_delay.
-
-        For HIGH fidelity, adds timing jitter (±20% randomness).
+        Uses ProportionalDelayCalculator for centralized fidelity-aware timing.
+        Falls back to fixed execution_delay if no config provided.
 
         Args:
             command: Command string to analyze
@@ -202,29 +181,10 @@ class FakeContainerAdapter(IContainer):
         Returns:
             Delay in seconds
         """
-        # If no config, use fixed delay
         if not self._config:
             return self._execution_delay
 
-        # Import here to avoid circular dependencies
-        from codetoreum.infrastructure.simulation.simulation_config import FidelityLevel
-
-        # LOW fidelity: no delay
-        if self._config.fidelity_level == FidelityLevel.LOW:
-            return 0.0
-
-        # MEDIUM/HIGH fidelity: proportional delay based on command complexity
-        file_operations = self._estimate_file_operations(command)
-        base_delay_ms = 100  # Base command overhead
-        operation_delay_ms = file_operations * self._config.ms_per_file_operation
-        delay_ms = base_delay_ms + operation_delay_ms
-        delay_seconds = delay_ms / 1000.0
-
-        # HIGH fidelity: add timing jitter (±20% randomness)
-        if self._config.fidelity_level == FidelityLevel.HIGH:
-            delay_seconds = random.uniform(delay_seconds * 0.8, delay_seconds * 1.2)
-
-        return delay_seconds
+        return self._delay_calculator.calculate_container_delay(command)
 
     def _should_fail_for_high_fidelity(self) -> bool:
         """

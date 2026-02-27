@@ -1,7 +1,6 @@
 """Mock LLM provider adapter for testing."""
 
 import asyncio
-import random
 import re
 import threading
 from collections.abc import AsyncIterator
@@ -84,6 +83,13 @@ class MockLLMAdapter(ILLMProvider):
         self._simulate_rate_limits = simulate_rate_limits
         self._config = config
         self._clock = clock
+
+        # Initialize delay calculator for fidelity-aware timing
+        from codetoreum.infrastructure.simulation.proportional_delay_calculator import (
+            ProportionalDelayCalculator,
+        )
+
+        self._delay_calculator = ProportionalDelayCalculator(config)
 
         # Pattern-based responses
         self._response_patterns: list[tuple[Pattern, str]] = []
@@ -184,10 +190,8 @@ class MockLLMAdapter(ILLMProvider):
         """
         Calculate delay based on fidelity level and token count.
 
-        Uses SimulationConfig if available for fidelity-aware timing.
-        Otherwise falls back to fixed delay_seconds.
-
-        For HIGH fidelity, adds timing jitter (±20% randomness).
+        Uses ProportionalDelayCalculator for centralized fidelity-aware timing.
+        Falls back to fixed delay_seconds if no config provided.
 
         Args:
             prompt: The input prompt
@@ -196,32 +200,10 @@ class MockLLMAdapter(ILLMProvider):
         Returns:
             Delay in seconds
         """
-        # If no config, use fixed delay
         if not self._config:
             return self._delay_seconds
 
-        # Import here to avoid circular dependencies
-        from codetoreum.infrastructure.simulation.simulation_config import FidelityLevel
-
-        # LOW fidelity: no delay
-        if self._config.fidelity_level == FidelityLevel.LOW:
-            return 0.0
-
-        # MEDIUM/HIGH fidelity: proportional delay based on tokens
-        # Rough token estimation: 1 token ≈ 4 characters
-        prompt_tokens = len(prompt) / 4.0
-        response_tokens = len(response) / 4.0
-        total_tokens = prompt_tokens + response_tokens
-
-        # Calculate delay in milliseconds
-        delay_ms = total_tokens * self._config.ms_per_token
-        delay_seconds = delay_ms / 1000.0
-
-        # HIGH fidelity: add timing jitter (±20% randomness)
-        if self._config.fidelity_level == FidelityLevel.HIGH:
-            delay_seconds = random.uniform(delay_seconds * 0.8, delay_seconds * 1.2)
-
-        return delay_seconds
+        return self._delay_calculator.calculate_llm_delay(prompt, response)
 
     async def execute(
         self,

@@ -297,12 +297,12 @@ class TestFakeContainerAdapter:
         config = SimulationConfig.create_fast_config(
             "test",
             fidelity_level=FidelityLevel.MEDIUM,
-            ms_per_file_operation=10.0,
+            ms_per_file_operation=100.0,  # Higher per-operation cost to make timing clearer
             speed_multiplier=1.0,
         )
         adapter = FakeContainerAdapter(config=config)
 
-        # Simple command
+        # Simple command (estimated 1 operation)
         start = time.time()
         result = await adapter.run(
             image="python:3.11",
@@ -312,18 +312,19 @@ class TestFakeContainerAdapter:
         )
         duration_simple = time.time() - start
 
-        # Complex command (pytest)
+        # Complex command (npm install, estimated 100 operations)
         start = time.time()
         result = await adapter.run(
             image="python:3.11",
-            command=["pytest", "tests/"],
+            command=["npm", "install", "package"],
             volumes={},
             environment={},
         )
         duration_complex = time.time() - start
 
-        # Complex command should take longer
-        assert duration_complex > duration_simple
+        # Complex command should take significantly longer
+        # npm install should be ~11x slower than echo (100 ops vs 1 op base)
+        assert duration_complex > duration_simple * 5
 
     async def test_command_execution_history(self):
         """Test that CommandExecution records are created."""
