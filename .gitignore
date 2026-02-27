@@ -239,5 +239,6 @@ config.local.yaml
 
 # Test virtual environments
 .venv_test/
+venv_test/
 .venv_test_run/
 test_env/
