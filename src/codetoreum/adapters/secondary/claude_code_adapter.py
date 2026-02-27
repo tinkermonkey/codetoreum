@@ -380,11 +380,10 @@ class ClaudeCodeAdapter(ILLMProvider):
                             conversation_id = event["session_id"]
 
                     except json.JSONDecodeError as e:
-                        # Log non-JSON lines at warning level for visibility; may indicate data loss or progress output
-                        logger.warning(
+                        # Log non-JSON lines at debug level; expected due to progress output or stderr leakage
+                        logger.debug(
                             f"Skipping non-JSON event line (may be progress output, stderr leakage, or truncated JSON): {e}. Line: {line!r}",
                             exc_info=True,
-                            extra={"error_id": ErrorRegistry.ERR_LLM_PROVIDER_ERROR},
                         )
 
             # Read with timeout
