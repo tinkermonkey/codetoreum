@@ -204,9 +204,7 @@ class TestEventReplayer:
 
         since = now - timedelta(minutes=1)
 
-        stats = await replayer.replay_from_timestamp(
-            since, event_types=["WorkItemCreated"]
-        )
+        stats = await replayer.replay_from_timestamp(since, event_types=["WorkItemCreated"])
 
         assert stats["events_replayed"] == 1
 
@@ -428,9 +426,7 @@ class TestTimeManipulationReplayer:
 
         target_timestamp = now + timedelta(minutes=7)
 
-        stats = await replayer.fast_forward_replay(
-            "work-1", target_timestamp, speed_multiplier=100.0
-        )
+        stats = await replayer.fast_forward_replay("work-1", target_timestamp, speed_multiplier=100.0)
 
         assert stats["events_replayed"] == 2  # Only events up to target
 
@@ -456,9 +452,7 @@ class TestTimeManipulationReplayer:
 
         target_timestamp = now + timedelta(seconds=120)
 
-        stats = await replayer.fast_forward_replay(
-            "work-1", target_timestamp, speed_multiplier=100.0
-        )
+        stats = await replayer.fast_forward_replay("work-1", target_timestamp, speed_multiplier=100.0)
 
         # Should complete quickly due to 100x speed multiplier
         assert stats["events_replayed"] >= 1
