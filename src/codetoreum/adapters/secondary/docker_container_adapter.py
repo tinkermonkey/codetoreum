@@ -2,11 +2,14 @@
 
 import asyncio
 import gc
+import io
 import logging
+import tarfile
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import docker
@@ -110,8 +113,6 @@ class DockerContainerAdapter(IContainer):
         Raises:
             ValidationError: If volume specification is invalid or contains unsafe paths
         """
-        from pathlib import Path
-
         docker_volumes = {}
 
         for host_path, spec in volumes.items():
@@ -1091,10 +1092,6 @@ class DockerContainerAdapter(IContainer):
 
         def _copy():
             try:
-                import io
-                import tarfile
-                from pathlib import Path
-
                 container = client.containers.get(container_id)
 
                 # Create tar archive of source
@@ -1134,9 +1131,6 @@ class DockerContainerAdapter(IContainer):
 
         def _copy():
             try:
-                import io
-                import tarfile
-
                 container = client.containers.get(container_id)
 
                 # Get tar archive from container
