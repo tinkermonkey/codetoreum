@@ -334,10 +334,10 @@ class GitHubWebhookAdapter:
         secret = await self.config.get_webhook_secret()
         if not secret:
             self.logger.error(
-                "Webhook secret not configured",
+                "Webhook secret not configured; webhook verification cannot proceed",
                 extra={"error_id": ErrorRegistry.ERR_MISSING_CONFIGURATION},
             )
-            return False
+            raise ValueError("Webhook secret is not configured") from None
 
         # Compute expected signature
         expected = hmac.new(key=secret.encode("utf-8"), msg=payload, digestmod=hashlib.sha256).hexdigest()

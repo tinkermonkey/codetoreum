@@ -315,6 +315,11 @@ class ConnectionHealthCheck(IHealthCheck):
             return HealthCheckResult(status=HealthStatus.UNHEALTHY, message=f"{self.resource_name} is not healthy")
 
         except Exception as e:
+            logger.error(
+                f"Health check failed for {self.resource_name}: {e!s}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_HEALTH_CHECK_FAILED},
+            )
             return HealthCheckResult(status=HealthStatus.UNHEALTHY, message=f"{self.resource_name} check failed: {e!s}")
 
     async def check_dependency(self, dependency_name: str) -> DependencyHealth:

@@ -380,9 +380,10 @@ class ClaudeCodeAdapter(ILLMProvider):
                             conversation_id = event["session_id"]
 
                     except json.JSONDecodeError as e:
-                        # Log non-JSON lines (expected) at debug level; actual parse errors are rare
-                        logger.debug(
-                            f"Skipping non-JSON event line (may be progress output or stderr leakage): {e}",
+                        # Log non-JSON lines at warning level for visibility; may indicate data loss or progress output
+                        logger.warning(
+                            f"Skipping non-JSON event line (may be progress output, stderr leakage, or truncated JSON): {e}. Line: {line!r}",
+                            exc_info=True,
                             extra={"error_id": ErrorRegistry.ERR_LLM_PROVIDER_ERROR},
                         )
 
@@ -593,8 +594,12 @@ class ClaudeCodeAdapter(ILLMProvider):
                                 yield chunk
                                 chunk_index += 1
 
-                except json.JSONDecodeError:
-                    pass
+                except json.JSONDecodeError as e:
+                    logger.warning(
+                        f"Failed to parse JSON event from Claude Code stream, data loss possible: {e}. Line: {line!r}",
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_LLM_PROVIDER_ERROR},
+                    )
 
             # Wait for process completion with timeout
             timeout = ctx.timeout_seconds
