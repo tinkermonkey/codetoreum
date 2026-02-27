@@ -17,7 +17,6 @@ from codetoreum.ports.output.event_store import IEventStore
 
 if TYPE_CHECKING:
     from codetoreum.infrastructure.simulation.simulation_config import (
-        FidelityLevel,
         SimulationConfig,
     )
 
@@ -253,7 +252,7 @@ class InMemoryEventStore(IEventStore):
         Proportional to the number of events appended and ms_per_event config.
 
         Design Note - Handler Count Factor:
-        The original specification mentions "event count × handler count" for latency.
+        The original specification mentions "event count x handler count" for latency.
         In practice, ms_per_event is pre-calibrated to include the expected number
         of handlers processing each event. This approach is simpler, more testable,
         and avoids tight coupling to handler registration details.
@@ -270,7 +269,7 @@ class InMemoryEventStore(IEventStore):
         # Get per-event delay (handles fidelity level and jitter)
         delay_per_event = await self._get_event_delay_seconds()
 
-        # Apply proportional delay: total = event_count × delay_per_event
+        # Apply proportional delay: total = event_count x delay_per_event
         total_delay_seconds = delay_per_event * event_count
 
         if total_delay_seconds > 0:

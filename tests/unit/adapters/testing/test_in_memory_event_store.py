@@ -971,14 +971,14 @@ class TestBackpressureMechanism:
         assert elapsed < 0.01
 
     async def test_apply_event_processing_latency_medium_fidelity_proportional(self):
-        """Test that MEDIUM fidelity produces proportional delay (event_count × ms_per_event)."""
+        """Test that MEDIUM fidelity produces proportional delay (event_count x ms_per_event)."""
         config = MagicMock(spec=SimulationConfig)
         config.fidelity_level = FidelityLevel.MEDIUM
         config.ms_per_event = 10.0  # 10ms per event
 
         store = InMemoryEventStore(config=config)
 
-        # 5 events × 10ms = 50ms expected
+        # 5 events x 10ms = 50ms expected
         start = asyncio.get_event_loop().time()
         await store._apply_event_processing_latency(5)
         elapsed = asyncio.get_event_loop().time() - start
@@ -994,7 +994,7 @@ class TestBackpressureMechanism:
 
         store = InMemoryEventStore(config=config)
 
-        # 5 events × 10ms = 50ms base, with ±20% jitter
+        # 5 events x 10ms = 50ms base, with ±20% jitter
         # Expected range: 40ms to 60ms (allow 2ms tolerance for timing variance)
         durations = []
         for _ in range(5):
@@ -1034,7 +1034,7 @@ class TestBackpressureMechanism:
 
         await store._apply_event_processing_latency(5)
 
-        # Clock sleep should have been called with 0.05 seconds (5 × 10ms)
+        # Clock sleep should have been called with 0.05 seconds (5 x 10ms)
         mock_clock.sleep.assert_called_once()
         call_arg = mock_clock.sleep.call_args[0][0]
         assert 0.04 < call_arg < 0.06  # Allow for jitter in MEDIUM fidelity
@@ -1047,7 +1047,7 @@ class TestBackpressureMechanism:
 
         store = InMemoryEventStore(config=config)
 
-        # Append 10 events, expect ~100ms latency (10 × 10ms)
+        # Append 10 events, expect ~100ms latency (10 x 10ms)
         events = [sample_event for _ in range(10)]
 
         start = asyncio.get_event_loop().time()
