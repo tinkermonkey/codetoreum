@@ -21,6 +21,7 @@ application bootstrap that wires together all components in the correct order wi
 dependency injection.
 """
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from typing import Any
@@ -81,11 +82,25 @@ from codetoreum.adapters.testing import (
 from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
 
 # Lazy import to avoid circular dependency
+from codetoreum.adapters.primary.routers.simulation_ticketing import (
+    create_simulation_ticketing_router,
+)
 from codetoreum.adapters.testing.mock_container_recovery_adapter import (
     MockContainerRecoveryAdapter,
 )
-from codetoreum.application.agent_scheduler import AgentScheduler
+from codetoreum.application.agent_scheduler import (
+    AgentScheduler,
+    InMemoryTaskQueue,
+    MockProjectConfiguration,
+    MockRateLimiter,
+    MockResourceMonitor,
+    MockSchedulingEvents,
+)
 from codetoreum.application.configuration_service import ConfigurationService
+from codetoreum.application.event_handlers.board_event_handler import (
+    BoardColumnEventHandler,
+)
+from codetoreum.application.workflow_orchestrator import WorkflowState
 from codetoreum.application.container_recovery_service import ContainerRecoveryService
 from codetoreum.application.execution_service import ExecutionService
 from codetoreum.application.feedback_processor import FeedbackProcessor
@@ -93,6 +108,11 @@ from codetoreum.application.multi_project_orchestrator import MultiProjectOrches
 from codetoreum.application.pipeline_manager import PipelineManager
 from codetoreum.application.review_service import ReviewService
 from codetoreum.application.work_item_service import WorkItemService
+
+# Domain
+from codetoreum.domain.events import BoardReconciled, WorkItemColumnChanged
+from codetoreum.domain.value_objects import ProjectConfig
+from codetoreum.domain.work_item import WorkItemStatus
 
 # Application Services
 from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator
@@ -483,8 +503,6 @@ class SimulationApplicationBootstrap:
         agent_executor = MockAgentExecutor(execution_delay_seconds=3.0)
 
         # Pre-configure default test project for simulation testing
-        from codetoreum.domain.value_objects import ProjectConfig
-
         project_manager.add_project(
             "default_project",
             ProjectConfig(
@@ -628,14 +646,6 @@ class SimulationApplicationBootstrap:
 
         # Agent Scheduler - create with simulation dependencies
         # Import mock implementations from agent_scheduler module
-        from codetoreum.application.agent_scheduler import (
-            InMemoryTaskQueue,
-            MockProjectConfiguration,
-            MockRateLimiter,
-            MockResourceMonitor,
-            MockSchedulingEvents,
-        )
-
         task_queue = InMemoryTaskQueue()
         resource_monitor = MockResourceMonitor()
         rate_limiter = MockRateLimiter()
@@ -660,8 +670,6 @@ class SimulationApplicationBootstrap:
                 self._states = {}
 
             async def get_workflow_state(self, issue_id: str) -> "WorkflowState":
-                from codetoreum.application.workflow_orchestrator import WorkflowState
-
                 if issue_id not in self._states:
                     self._states[issue_id] = WorkflowState(
                         in_progress_tasks={}, current_column=None, current_agent=None
@@ -889,10 +897,6 @@ class SimulationApplicationBootstrap:
         )
 
         # Mount simulation-only ticketing router (never in production create_app)
-        from codetoreum.adapters.primary.routers.simulation_ticketing import (
-            create_simulation_ticketing_router,
-        )
-
         sim_router = create_simulation_ticketing_router(self.adapters.ticket_system, self.adapters.board)
         app.include_router(sim_router)
 
@@ -954,11 +958,6 @@ class SimulationApplicationBootstrap:
         if not self.adapters or not self.infrastructure:
             logger.warning("Cannot register board event bridge: components not ready")
             return
-
-        import asyncio
-
-        from codetoreum.domain.events import BoardReconciled, WorkItemColumnChanged
-        from codetoreum.domain.work_item import WorkItemStatus
 
         event_bus = self.infrastructure.event_bus
         ticket_adapter = self.adapters.ticket_system
@@ -1096,10 +1095,6 @@ class SimulationApplicationBootstrap:
         if not self.adapters or not self.infrastructure:
             logger.warning("Cannot register board column handler: components not ready")
             return
-
-        from codetoreum.application.event_handlers.board_event_handler import (
-            BoardColumnEventHandler,
-        )
 
         handler = BoardColumnEventHandler(
             board_service=self.adapters.board,

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+import docker
 import docker.errors
 from dateutil import parser as dateparser
 
@@ -82,8 +83,6 @@ class DockerContainerAdapter(IContainer):
         """Get or create Docker client."""
         if self._docker_client is None:
             try:
-                import docker
-
                 if self.config.docker_host:
                     self._docker_client = docker.DockerClient(
                         base_url=self.config.docker_host,

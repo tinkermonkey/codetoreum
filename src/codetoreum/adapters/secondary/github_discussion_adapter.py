@@ -413,8 +413,6 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
         # Close HTTP client if no more work items being monitored
         if not self._monitoring and self._http_client is not None:
             # Schedule close to be called from async context
-            import asyncio
-
             try:
                 asyncio.create_task(self.close())
             except RuntimeError:

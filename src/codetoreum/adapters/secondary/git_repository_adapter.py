@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -123,8 +124,6 @@ class GitRepositoryAdapter(IRepository):
         cmd = [self.config.git_path] + sanitized_args
 
         # Set up clean git environment
-        import os
-
         git_env = os.environ.copy()
         # Disable global and system git config to avoid issues
         git_env["GIT_CONFIG_GLOBAL"] = "/dev/null"
@@ -296,8 +295,6 @@ class GitRepositoryAdapter(IRepository):
                 await self._run_git_command(["add", file], cwd=repo_path)
 
         # Set up environment with author info
-        import os
-
         env = os.environ.copy()
         env["GIT_AUTHOR_NAME"] = author_name
         env["GIT_AUTHOR_EMAIL"] = author_email

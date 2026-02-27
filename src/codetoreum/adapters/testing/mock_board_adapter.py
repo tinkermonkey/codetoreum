@@ -5,6 +5,7 @@ board structure and state in memory, and includes test helper methods
 for simulating board changes via event emission and tracking movement history.
 """
 
+import asyncio
 import logging
 import threading
 from dataclasses import dataclass
@@ -629,8 +630,6 @@ class MockBoardAdapter(IBoardService):
         Example:
             adapter.simulate_human_move("item-1", "In Progress")
         """
-        import asyncio
-
         if self.current_project is None:
             msg = "current_project not set"
             raise ValueError(msg)

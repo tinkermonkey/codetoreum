@@ -24,7 +24,9 @@ The trade-off (direct import from infrastructure) is acceptable because:
 4. OpenTelemetry support is optional (OPENTELEMETRY_AVAILABLE flag)
 """
 
+import asyncio
 import functools
+import inspect
 import logging
 from collections.abc import Callable
 from typing import Any
@@ -261,8 +263,6 @@ def instrument_class(attributes: dict[str, Any] | None = None) -> Callable:
 
             # Instrument callable methods
             if callable(attr):
-                import asyncio
-
                 if asyncio.iscoroutinefunction(attr):
                     decorated = instrument_async_function(attributes=attributes)(attr)
                 else:
@@ -343,8 +343,6 @@ def _extract_business_context(
         business_context_fields: List of parameter names to extract .id from
     """
     try:
-        import inspect
-
         # Get function signature
         sig = inspect.signature(func)
         bound_args = sig.bind_partial(*args, **kwargs)

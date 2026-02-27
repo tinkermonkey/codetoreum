@@ -16,6 +16,7 @@ from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
 from typing import Any, Protocol
 
+import docker
 from dateutil import parser as dateparser
 
 from codetoreum.domain.types import (
@@ -160,8 +161,6 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
         """Get or create Docker client."""
         if self._docker_client is None:
             try:
-                import docker
-
                 self._docker_client = docker.from_env()
             except ImportError as e:
                 msg = f"Docker SDK not installed: {e!s}"

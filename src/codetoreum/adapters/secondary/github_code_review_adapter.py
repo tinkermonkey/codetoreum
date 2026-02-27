@@ -11,6 +11,7 @@ Implements ICodeReviewService interface for GitHub pull requests, supporting:
 
 import asyncio
 import logging
+import re
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
@@ -1249,8 +1250,6 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
         body = pr_data.get("body", "")
         if "work item" in body.lower():
             # Simple heuristic: look for "item-123" pattern
-            import re
-
             match = re.search(r"item-\d+", body)
             if match:
                 return match.group(0)

@@ -7,6 +7,7 @@ declarative configuration.
 """
 
 import logging
+import random
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -991,8 +992,6 @@ class SimulationDataSeeder:
         # Seed work items
         for work_item_model in scenario.work_items:
             # Convert string priority/status to enum
-            from codetoreum.domain.work_item import WorkItemPriority, WorkItemStatus
-
             priority_map = {
                 "low": WorkItemPriority.LOW,
                 "medium": WorkItemPriority.MEDIUM,
@@ -1186,8 +1185,6 @@ class SimulationDataSeeder:
             )
 
         # Set review responses based on approval rate
-        import random
-
         random.seed(42)  # Deterministic for testing
 
         def review_response_fn():

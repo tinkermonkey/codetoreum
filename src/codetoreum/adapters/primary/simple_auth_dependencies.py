@@ -4,6 +4,8 @@ FastAPI Simple Authentication Dependencies
 Provides FastAPI dependencies for the simplified JupyterLab-style token authentication.
 """
 
+import os
+
 from fastapi import Cookie, Header, HTTPException, Query, Response, status
 
 from codetoreum.infrastructure.audit import (
@@ -167,8 +169,6 @@ class SimpleAuthDependencies:
 
             if self.auth_manager.validate_token(token):
                 # Set httpOnly cookie for future requests
-                import os
-
                 use_https = os.getenv("API_USE_HTTPS", "false").lower() == "true"
                 response.set_cookie(
                     key="codetoreum_token",

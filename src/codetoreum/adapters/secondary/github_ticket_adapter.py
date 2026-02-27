@@ -1,6 +1,7 @@
 """GitHub Issues adapter for ITicketSystem interface."""
 
 import asyncio
+import re
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -15,6 +16,7 @@ from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStat
 from codetoreum.ports.exceptions import (
     AuthenticationError,
     ExternalServiceError,
+    ResourceNotFoundError,
     ValidationError,
     WorkItemNotFoundError,
 )
@@ -142,8 +144,6 @@ class GitHubTicketAdapter(ITicketSystem):
         Returns:
             Sanitized error message
         """
-        import re
-
         # Remove tokens
         sanitized = re.sub(r"ghp_[a-zA-Z0-9]{36}", "[REDACTED_TOKEN]", error)
         sanitized = re.sub(r"ghs_[a-zA-Z0-9]{36}", "[REDACTED_TOKEN]", sanitized)
@@ -674,8 +674,6 @@ class GitHubTicketAdapter(ITicketSystem):
         work_item = await self.get_work_item(item_id)
 
         # Extract issue numbers from description and comments
-        import re
-
         issue_pattern = r"#(\d+)"
 
         referenced_ids = set()
@@ -738,8 +736,6 @@ class GitHubTicketAdapter(ITicketSystem):
         response = await self._make_request("DELETE", path)
 
         if response.status_code == 404:
-            from codetoreum.ports.exceptions import ResourceNotFoundError
-
             msg = "Webhook"
             raise ResourceNotFoundError(msg, webhook_id)
         if response.status_code != 204:

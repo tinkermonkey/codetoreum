@@ -6,6 +6,7 @@ Supports configurable sampling strategies, performance tuning, and granular enab
 """
 
 import logging as stdlib_logging
+import socket
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -76,8 +77,6 @@ def _check_otlp_connectivity(config: ObservabilityConfig) -> None:
         config: Observability configuration containing OTLP endpoint details
     """
     try:
-        import socket
-
         # Parse endpoint to extract host and port
         endpoint = config.signoz.grpc_endpoint
 
