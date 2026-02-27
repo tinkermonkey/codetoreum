@@ -50,6 +50,11 @@ from codetoreum.adapters.primary.input_port_adapters.mock import (
     MockWorkItemQueryAdapter,
     MockWorkspaceQueryAdapter,
 )
+
+# Lazy import to avoid circular dependency
+from codetoreum.adapters.primary.routers.simulation_ticketing import (
+    create_simulation_ticketing_router,
+)
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
 )
@@ -80,11 +85,6 @@ from codetoreum.adapters.testing import (
     SimpleEncryptionAdapter,
 )
 from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
-
-# Lazy import to avoid circular dependency
-from codetoreum.adapters.primary.routers.simulation_ticketing import (
-    create_simulation_ticketing_router,
-)
 from codetoreum.adapters.testing.mock_container_recovery_adapter import (
     MockContainerRecoveryAdapter,
 )
@@ -97,11 +97,10 @@ from codetoreum.application.agent_scheduler import (
     MockSchedulingEvents,
 )
 from codetoreum.application.configuration_service import ConfigurationService
+from codetoreum.application.container_recovery_service import ContainerRecoveryService
 from codetoreum.application.event_handlers.board_event_handler import (
     BoardColumnEventHandler,
 )
-from codetoreum.application.workflow_orchestrator import WorkflowState
-from codetoreum.application.container_recovery_service import ContainerRecoveryService
 from codetoreum.application.execution_service import ExecutionService
 from codetoreum.application.feedback_processor import FeedbackProcessor
 from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
@@ -109,15 +108,15 @@ from codetoreum.application.pipeline_manager import PipelineManager
 from codetoreum.application.review_service import ReviewService
 from codetoreum.application.work_item_service import WorkItemService
 
+# Application Services
+from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator, WorkflowState
+from codetoreum.application.workflow_run_query_service import WorkflowRunQueryService
+from codetoreum.application.workspace_router import WorkspaceRouter
+
 # Domain
 from codetoreum.domain.events import BoardReconciled, WorkItemColumnChanged
 from codetoreum.domain.value_objects import ProjectConfig
 from codetoreum.domain.work_item import WorkItemStatus
-
-# Application Services
-from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator
-from codetoreum.application.workflow_run_query_service import WorkflowRunQueryService
-from codetoreum.application.workspace_router import WorkspaceRouter
 from codetoreum.infrastructure.adapters.factory import (
     AdapterFactory,
     AdapterFactoryConfig,
