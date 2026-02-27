@@ -59,24 +59,27 @@ RUN pip install --no-cache-dir pre-commit
 
 # Python packages are installed as root in /usr/local, no chown needed
 
-# Ensure /home/orchestrator/.gitconfig does not exist as a directory.
-# The orchestrator bind-mounts a .gitconfig FILE at runtime. If a directory
-# exists at that path (from a prior layer or build artifact), Docker will
-# fail with "cannot create subdirectories ... not a directory".
-RUN if [ -d /home/orchestrator/.gitconfig ]; then \
-        rm -rf /home/orchestrator/.gitconfig; \
-    fi && \
-    if [ -e /home/orchestrator/.gitconfig ]; then \
-        rm -f /home/orchestrator/.gitconfig; \
-    fi
+# NOTE: Do NOT touch /home/orchestrator/.gitconfig here.
+# It is a runtime bind mount injected by the orchestrator — never create,
+# remove, or modify it during the image build.
 
 # ============================================================================
-# Stage 5: Switch to Runtime User
+# Stage 5: Configure Headless Environment
+# ============================================================================
+# Disable dbus-based secret storage for gh CLI. In a headless container there
+# is no session bus, so gh would fail or hang trying to reach gnome-keyring.
+# GH_NO_KEYRING tells gh to fall back to file-based token storage.
+ENV GH_NO_KEYRING=1
+# Prevent any tool from attempting a dbus session connection.
+ENV DBUS_SESSION_BUS_ADDRESS=disabled:
+
+# ============================================================================
+# Stage 6: Switch to Runtime User
 # ============================================================================
 USER orchestrator
 
 # ============================================================================
-# Stage 6: Verification (MANDATORY)
+# Stage 7: Verification (MANDATORY)
 # ============================================================================
 # Verify all critical CLIs are present (from base image)
 RUN claude --version && \
