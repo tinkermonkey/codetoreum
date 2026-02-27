@@ -325,8 +325,8 @@ class SimulationApplicationBootstrap:
             logger.info("Phase 1: Creating infrastructure...")
             self.infrastructure = self._create_infrastructure()
 
-            # Phase 2: Create adapters (16 total) with event bus subscriptions
-            logger.info("Phase 2: Creating 16 adapters...")
+            # Phase 2: Create adapters (24 total) with event bus subscriptions
+            logger.info("Phase 2: Creating 24 adapters...")
             self.adapters = await self._create_adapters()
 
             # Phase 3: Create services
@@ -597,7 +597,7 @@ class SimulationApplicationBootstrap:
 
     async def _create_services(self) -> SimulationServices:
         """
-        Create all 8 application services with proper dependencies.
+        Create all 11 application services with proper dependencies.
 
         Returns:
             SimulationServices with all services configured
