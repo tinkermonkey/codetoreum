@@ -520,6 +520,11 @@ async def test_prepare_container_environment(workspace_router, sample_work_item,
     assert env_vars["CODETOREUM_WORKSPACE_TYPE"] == "issue"
     assert env_vars["CODETOREUM_AGENT_ID"] == "developer-agent"
     assert env_vars["ENV"] == "test"  # From project env vars
+    # Git identity env vars (replaces .gitconfig bind mount for DinD compatibility)
+    assert env_vars["GIT_AUTHOR_NAME"] == "Codetoreum"
+    assert env_vars["GIT_AUTHOR_EMAIL"] == "noreply@codetoreum.ai"
+    assert env_vars["GIT_COMMITTER_NAME"] == "Codetoreum"
+    assert env_vars["GIT_COMMITTER_EMAIL"] == "noreply@codetoreum.ai"
 
 
 @pytest.mark.asyncio

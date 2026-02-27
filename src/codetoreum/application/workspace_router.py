@@ -456,6 +456,12 @@ class WorkspaceRouter:
         Returns:
             Dict[str, str]: Environment variables for container
         """
+        # Git author/committer info via env vars instead of .gitconfig bind mount.
+        # .gitconfig file mounts break in Docker-in-Docker (DinD) environments
+        # because the file appears as a directory inside the target container.
+        author_name = getattr(project, "author_name", self.config.default_author_name)
+        author_email = getattr(project, "author_email", self.config.default_author_email)
+
         env_vars = {
             # Project identification
             "CODETOREUM_PROJECT_ID": project.id,
@@ -466,6 +472,11 @@ class WorkspaceRouter:
             # Agent identification
             "CODETOREUM_AGENT_ID": agent.id,
             "CODETOREUM_AGENT_TYPE": agent.agent_type.value,
+            # Git author/committer identity (replaces .gitconfig bind mount)
+            "GIT_AUTHOR_NAME": author_name,
+            "GIT_AUTHOR_EMAIL": author_email,
+            "GIT_COMMITTER_NAME": author_name,
+            "GIT_COMMITTER_EMAIL": author_email,
         }
 
         # Add branch info for issue workspaces
