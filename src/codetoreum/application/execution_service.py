@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -898,8 +899,6 @@ class ExecutionService:
         Returns:
             Tuple of (input_tokens, output_tokens), or (0, 0) if not found
         """
-        import re
-
         input_tokens = 0
         output_tokens = 0
 

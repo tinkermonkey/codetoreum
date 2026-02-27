@@ -21,11 +21,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-# Load environment variables from .env file
 from dotenv import load_dotenv
-
-load_dotenv()
-
 from fastapi import Depends, FastAPI, Header, Query, Request, Response, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -70,8 +66,6 @@ from codetoreum.adapters.primary.websocket_adapter import (
 from codetoreum.config import DEFAULT_API_PORT, DEFAULT_RATE_LIMIT
 from codetoreum.infrastructure.auth import SimpleTokenAuthManager
 from codetoreum.infrastructure.error_ids import ErrorRegistry
-
-# OpenTelemetry / Signoz integration
 from codetoreum.infrastructure.observability.config import ObservabilityConfig
 from codetoreum.infrastructure.observability.otel_setup import setup_opentelemetry
 from codetoreum.ports.input.agent_command import IAgentCommandPort
@@ -93,6 +87,9 @@ from codetoreum.ports.input.workflow_query import IWorkflowQueryPort
 from codetoreum.ports.input.workflow_run_query import IWorkflowRunQueryPort
 from codetoreum.ports.input.workspace_query import IWorkspaceQueryPort
 from codetoreum.ports.output.event_store import IEventStore
+
+# Load environment variables from .env file
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 

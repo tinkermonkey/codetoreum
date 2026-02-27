@@ -4,7 +4,9 @@ import asyncio
 import json
 import logging
 import os
+import re
 import subprocess
+import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -268,8 +270,6 @@ class ClaudeCodeAdapter(ILLMProvider):
         Returns:
             Sanitized error message
         """
-        import re
-
         # Remove API keys (common patterns)
         sanitized = re.sub(r"sk-[a-zA-Z0-9]{20,}", "[REDACTED_API_KEY]", error)
         sanitized = re.sub(r"Bearer [a-zA-Z0-9_-]{20,}", "Bearer [REDACTED_TOKEN]", sanitized)
@@ -651,8 +651,6 @@ class ClaudeCodeAdapter(ILLMProvider):
         Note: Claude Code CLI manages sessions internally.
         This creates a local tracking entry.
         """
-        import uuid
-
         conversation_id = str(uuid.uuid4())
 
         self._conversations[conversation_id] = {
