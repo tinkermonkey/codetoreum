@@ -40,7 +40,6 @@ Example:
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
 
 class LinkType(Enum):
@@ -70,11 +69,7 @@ class CausalLink:
         """Compare links by their core identity."""
         if not isinstance(other, CausalLink):
             return False
-        return (
-            self.source == other.source
-            and self.target == other.target
-            and self.link_type == other.link_type
-        )
+        return self.source == other.source and self.target == other.target and self.link_type == other.link_type
 
 
 @dataclass
@@ -104,8 +99,6 @@ class EventSubscription:
 class CausalLinkConsistencyError(Exception):
     """Raised when causal links violate consistency rules."""
 
-    pass
-
 
 class CausalLinkRegistry:
     """Centralized registry for causal dependencies between components.
@@ -124,7 +117,7 @@ class CausalLinkRegistry:
         source: str,
         target: str,
         link_type: LinkType | str,
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
     ) -> None:
         """Register a causal dependency between two components.
 
@@ -138,9 +131,7 @@ class CausalLinkRegistry:
             ValueError: If source and target are the same
         """
         if source == target:
-            raise ValueError(
-                f"Causal link cannot point to itself: {source}"
-            )
+            raise ValueError(f"Causal link cannot point to itself: {source}")
 
         if isinstance(link_type, str):
             try:
@@ -161,7 +152,7 @@ class CausalLinkRegistry:
         publisher: str,
         subscriber: str,
         event_type: str,
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
     ) -> None:
         """Register an event subscription.
 
@@ -175,9 +166,7 @@ class CausalLinkRegistry:
             ValueError: If publisher and subscriber are the same
         """
         if publisher == subscriber:
-            raise ValueError(
-                f"Event subscription cannot be self-referential: {publisher}"
-            )
+            raise ValueError(f"Event subscription cannot be self-referential: {publisher}")
 
         subscription = EventSubscription(
             publisher=publisher,
@@ -189,9 +178,9 @@ class CausalLinkRegistry:
 
     def get_links(
         self,
-        source: Optional[str] = None,
-        target: Optional[str] = None,
-        link_type: Optional[LinkType] = None,
+        source: str | None = None,
+        target: str | None = None,
+        link_type: LinkType | None = None,
     ) -> list[CausalLink]:
         """Query causal links by filtering criteria.
 
@@ -216,9 +205,9 @@ class CausalLinkRegistry:
 
     def get_subscriptions(
         self,
-        publisher: Optional[str] = None,
-        subscriber: Optional[str] = None,
-        event_type: Optional[str] = None,
+        publisher: str | None = None,
+        subscriber: str | None = None,
+        event_type: str | None = None,
     ) -> list[EventSubscription]:
         """Query event subscriptions by filtering criteria.
 
@@ -287,9 +276,7 @@ class CausalLinkRegistry:
         for component in components:
             if component not in visited:
                 if has_cycle(component):
-                    raise CausalLinkConsistencyError(
-                        f"Cycle detected in causal link graph involving {component}"
-                    )
+                    raise CausalLinkConsistencyError(f"Cycle detected in causal link graph involving {component}")
 
     def clear(self) -> None:
         """Clear all registered links and subscriptions."""
@@ -298,8 +285,4 @@ class CausalLinkRegistry:
 
     def __repr__(self) -> str:
         """String representation of the registry."""
-        return (
-            f"CausalLinkRegistry("
-            f"links={len(self._links)}, "
-            f"subscriptions={len(self._subscriptions)})"
-        )
+        return f"CausalLinkRegistry(" f"links={len(self._links)}, " f"subscriptions={len(self._subscriptions)})"

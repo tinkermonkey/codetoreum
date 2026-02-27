@@ -2,6 +2,8 @@
 
 from typing import TYPE_CHECKING, Any
 
+from .causal_link_registry import CausalLinkRegistry
+from .contract_test_generator import ContractTestGenerator
 from .mock_tracer import (
     MockTracer,
     SpanCapture,
@@ -9,6 +11,7 @@ from .mock_tracer import (
     SpanStatus,
     TraceContextValidator,
 )
+from .proportional_delay_calculator import ProportionalDelayCalculator
 from .scenario_models import (
     ScenarioAgentModel,
     ScenarioBoardItemPlacementModel,
@@ -35,9 +38,6 @@ from .simulation_config import (
     TimeConfig,
 )
 from .simulation_engine import SimulationEngine
-from .causal_link_registry import CausalLinkRegistry
-from .contract_test_generator import ContractTestGenerator
-from .proportional_delay_calculator import ProportionalDelayCalculator
 from .simulation_runner import (
     AssertionResult,
     SimulationResult,

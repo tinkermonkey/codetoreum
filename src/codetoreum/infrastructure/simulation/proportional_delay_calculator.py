@@ -28,7 +28,6 @@ Example:
 
 import random
 import re
-from typing import Optional
 
 from codetoreum.infrastructure.simulation.simulation_config import (
     FidelityLevel,
@@ -45,7 +44,7 @@ class ProportionalDelayCalculator:
     - Configurable proportional timing parameters
     """
 
-    def __init__(self, config: Optional[SimulationConfig] = None) -> None:
+    def __init__(self, config: SimulationConfig | None = None) -> None:
         """Initialize the calculator with simulation configuration.
 
         Args:
@@ -195,9 +194,7 @@ class ProportionalDelayCalculator:
         # Package managers and test runners
         if re.search(r"npm\s+install", command, re.IGNORECASE):
             count += 100
-        elif re.search(r"pip\s+install", command, re.IGNORECASE):
-            count += 50
-        elif re.search(r"pytest", command, re.IGNORECASE):
+        elif re.search(r"pip\s+install", command, re.IGNORECASE) or re.search(r"pytest", command, re.IGNORECASE):
             count += 50
         elif re.search(r"apt-get\s+install", command, re.IGNORECASE):
             count += 30

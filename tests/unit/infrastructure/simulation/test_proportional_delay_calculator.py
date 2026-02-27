@@ -100,9 +100,7 @@ class TestProportionalDelayCalculator:
         calculator = ProportionalDelayCalculator(config)
 
         # Get multiple delays for same command - should vary due to jitter
-        delays = [
-            calculator.calculate_container_delay("git clone repo") for _ in range(10)
-        ]
+        delays = [calculator.calculate_container_delay("git clone repo") for _ in range(10)]
 
         # All delays should be positive
         assert all(d > 0 for d in delays)
@@ -151,9 +149,7 @@ class TestProportionalDelayCalculator:
 
         prompt_400_tokens = "hello world " * 100  # ~100 tokens
         response_400_tokens = "response text " * 100  # ~100 tokens
-        delay_large = calculator.calculate_llm_delay(
-            prompt_400_tokens, response_400_tokens
-        )
+        delay_large = calculator.calculate_llm_delay(prompt_400_tokens, response_400_tokens)
 
         # Large should be significantly larger than small
         assert delay_large > delay_small * 5
@@ -279,9 +275,7 @@ class TestProportionalDelayCalculator:
         calculator = ProportionalDelayCalculator(config)
 
         # Multiple runs should produce values in expected range
-        delays = [
-            calculator.calculate_container_delay("git clone repo") for _ in range(5)
-        ]
+        delays = [calculator.calculate_container_delay("git clone repo") for _ in range(5)]
 
         # All should be positive
         assert all(d > 0 for d in delays)

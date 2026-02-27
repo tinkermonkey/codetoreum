@@ -23,7 +23,7 @@ Example:
 """
 
 import inspect
-from typing import Any, Optional, Type
+from typing import Any
 
 from codetoreum.ports.output.board_service import IBoardService
 from codetoreum.ports.output.code_review_service import ICodeReviewService
@@ -60,9 +60,8 @@ class ContractTestGenerator:
 
     def __init__(self) -> None:
         """Initialize the generator."""
-        pass
 
-    def generate_for_port(self, port_class: Type) -> str:
+    def generate_for_port(self, port_class: type) -> str:
         """Generate contract test class for a port interface.
 
         Args:
@@ -94,7 +93,7 @@ class ContractTestGenerator:
 
         return "\n".join(lines)
 
-    def generate_for_port_by_name(self, port_name: str) -> Optional[str]:
+    def generate_for_port_by_name(self, port_name: str) -> str | None:
         """Generate contract test for a built-in port by name.
 
         Args:
@@ -136,18 +135,14 @@ class ContractTestGenerator:
         ]
 
     @staticmethod
-    def _generate_class_definition(port_class: Type) -> list[str]:
+    def _generate_class_definition(port_class: type) -> list[str]:
         """Generate contract class definition."""
         port_name = port_class.__name__
         contract_name = f"Test{port_name}Contract"
-        docstring = (
-            port_class.__doc__
-            if port_class.__doc__
-            else f"Contract tests for {port_name}"
-        )
+        docstring = port_class.__doc__ if port_class.__doc__ else f"Contract tests for {port_name}"
 
         return [
-            f'class {contract_name}(ABC):',
+            f"class {contract_name}(ABC):",
             '    """' + docstring.split("\n")[0],
             "",
             "    All implementations of " + port_name,
@@ -156,7 +151,7 @@ class ContractTestGenerator:
         ]
 
     @staticmethod
-    def _generate_abstract_factory_methods(port_class: Type) -> list[str]:
+    def _generate_abstract_factory_methods(port_class: type) -> list[str]:
         """Generate abstract factory methods for service creation."""
         port_name = port_class.__name__
         lines = [
@@ -187,7 +182,7 @@ class ContractTestGenerator:
         return lines
 
     @staticmethod
-    def _generate_test_methods(port_class: Type) -> list[str]:
+    def _generate_test_methods(port_class: type) -> list[str]:
         """Generate test methods for each public method in the interface."""
         lines = []
 
@@ -240,7 +235,7 @@ class ContractTestGenerator:
 
         return lines
 
-    def estimate_coverage(self, port_class: Type) -> dict[str, Any]:
+    def estimate_coverage(self, port_class: type) -> dict[str, Any]:
         """Estimate test coverage for a port interface.
 
         Args:
@@ -251,9 +246,7 @@ class ContractTestGenerator:
         """
         # Count public methods
         public_methods = [
-            name
-            for name in dir(port_class)
-            if callable(getattr(port_class, name)) and not name.startswith("_")
+            name for name in dir(port_class) if callable(getattr(port_class, name)) and not name.startswith("_")
         ]
 
         return {
@@ -264,7 +257,7 @@ class ContractTestGenerator:
             "total_estimated_tests": 2 + (len(public_methods) * 2),
         }
 
-    def validate_interface(self, port_class: Type) -> dict[str, Any]:
+    def validate_interface(self, port_class: type) -> dict[str, Any]:
         """Validate that an interface is suitable for contract generation.
 
         Args:
@@ -277,17 +270,13 @@ class ContractTestGenerator:
 
         # Check if it's an abstract class
         if not inspect.isabstract(port_class):
-            issues.append(
-                f"{port_class.__name__} is not abstract (should use ABC)"
-            )
+            issues.append(f"{port_class.__name__} is not abstract (should use ABC)")
 
         # Check for public methods
         public_methods = [
             name
             for name in dir(port_class)
-            if callable(getattr(port_class, name))
-            and not name.startswith("_")
-            and not name.startswith("__")
+            if callable(getattr(port_class, name)) and not name.startswith("_") and not name.startswith("__")
         ]
 
         if not public_methods:

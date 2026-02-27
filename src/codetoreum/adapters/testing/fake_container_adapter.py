@@ -6,7 +6,7 @@ import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from codetoreum.domain.events import (
@@ -111,7 +111,7 @@ class FakeContainerAdapter(IContainer):
         self._clock = clock
 
         # Lazy-load delay calculator to avoid circular import
-        self._delay_calculator: Optional["ProportionalDelayCalculator"] = None
+        self._delay_calculator: ProportionalDelayCalculator | None = None
 
         # Container storage
         self._containers: dict[str, dict[str, Any]] = {}

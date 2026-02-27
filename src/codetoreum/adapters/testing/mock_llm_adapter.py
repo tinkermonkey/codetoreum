@@ -6,7 +6,7 @@ import threading
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from re import Pattern
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from codetoreum.ports.exceptions import (
@@ -88,7 +88,7 @@ class MockLLMAdapter(ILLMProvider):
         self._clock = clock
 
         # Lazy-load delay calculator to avoid circular import
-        self._delay_calculator: Optional["ProportionalDelayCalculator"] = None
+        self._delay_calculator: ProportionalDelayCalculator | None = None
 
         # Pattern-based responses
         self._response_patterns: list[tuple[Pattern, str]] = []

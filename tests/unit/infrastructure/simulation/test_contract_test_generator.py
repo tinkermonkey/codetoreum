@@ -240,7 +240,7 @@ class TestContractTestGenerator:
         code = generator.generate_for_port(IBoardService)
 
         # All async def should have docstrings
-        assert 'async def create_service(self)' in code
-        assert 'async def setup_fixtures(self)' in code
-        assert 'async def teardown_fixtures(self)' in code
-        assert 'async def test_service_is_created' in code
+        assert "async def create_service(self)" in code
+        assert "async def setup_fixtures(self)" in code
+        assert "async def teardown_fixtures(self)" in code
+        assert "async def test_service_is_created" in code
