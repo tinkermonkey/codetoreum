@@ -253,11 +253,10 @@ class CausalLinkRegistry:
         """Validate that the causal link graph is consistent.
 
         Checks for:
-        - Cycles in dependency graph
-        - Orphaned links (source or target doesn't exist)
+        - Cycles in dependency graph (detects circular dependencies)
 
         Raises:
-            CausalLinkConsistencyError: If validation fails
+            CausalLinkConsistencyError: If a cycle is detected
         """
         # Build set of all components mentioned in links
         components = set()

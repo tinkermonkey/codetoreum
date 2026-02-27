@@ -152,19 +152,13 @@ class ProportionalDelayCalculator:
         Returns:
             Delay in seconds
         """
-        if not self._config:
-            return 0.0
-
-        if self._config.fidelity_level == FidelityLevel.LOW:
-            return 0.0
-
         # Calculate total delay
         operation_delay_ms = operation_count * ms_per_operation
         total_delay_ms = base_ms + operation_delay_ms
         delay_seconds = total_delay_ms / 1000.0
 
         # Add jitter for HIGH fidelity
-        if self._config.fidelity_level == FidelityLevel.HIGH:
+        if self._config and self._config.fidelity_level == FidelityLevel.HIGH:
             # ±20% jitter
             jitter_factor = random.uniform(0.8, 1.2)
             delay_seconds = delay_seconds * jitter_factor
@@ -198,10 +192,12 @@ class ProportionalDelayCalculator:
         elif re.search(r"git\s+push", command, re.IGNORECASE):
             count += 20
 
-        # Package managers
+        # Package managers and test runners
         if re.search(r"npm\s+install", command, re.IGNORECASE):
             count += 100
         elif re.search(r"pip\s+install", command, re.IGNORECASE):
+            count += 50
+        elif re.search(r"pytest", command, re.IGNORECASE):
             count += 50
         elif re.search(r"apt-get\s+install", command, re.IGNORECASE):
             count += 30

@@ -6,7 +6,7 @@ import threading
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from re import Pattern
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 from uuid import uuid4
 
 from codetoreum.ports.exceptions import (
@@ -26,6 +26,9 @@ from codetoreum.ports.output.llm_provider import (
 )
 
 if TYPE_CHECKING:
+    from codetoreum.infrastructure.simulation.proportional_delay_calculator import (
+        ProportionalDelayCalculator,
+    )
     from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
     from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 
@@ -84,12 +87,8 @@ class MockLLMAdapter(ILLMProvider):
         self._config = config
         self._clock = clock
 
-        # Initialize delay calculator for fidelity-aware timing
-        from codetoreum.infrastructure.simulation.proportional_delay_calculator import (
-            ProportionalDelayCalculator,
-        )
-
-        self._delay_calculator = ProportionalDelayCalculator(config)
+        # Lazy-load delay calculator to avoid circular import
+        self._delay_calculator: Optional["ProportionalDelayCalculator"] = None
 
         # Pattern-based responses
         self._response_patterns: list[tuple[Pattern, str]] = []
@@ -203,6 +202,12 @@ class MockLLMAdapter(ILLMProvider):
         if not self._config:
             return self._delay_seconds
 
+        if self._delay_calculator is None:
+            from codetoreum.infrastructure.simulation.proportional_delay_calculator import (
+                ProportionalDelayCalculator,
+            )
+
+            self._delay_calculator = ProportionalDelayCalculator(self._config)
         return self._delay_calculator.calculate_llm_delay(prompt, response)
 
     async def execute(

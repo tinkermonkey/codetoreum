@@ -6,7 +6,7 @@ import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 from uuid import uuid4
 
 from codetoreum.domain.events import (
@@ -27,6 +27,9 @@ from codetoreum.ports.output.container import (
 from codetoreum.ports.output.event_emitter import IEventEmitter
 
 if TYPE_CHECKING:
+    from codetoreum.infrastructure.simulation.proportional_delay_calculator import (
+        ProportionalDelayCalculator,
+    )
     from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
     from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 
@@ -107,12 +110,8 @@ class FakeContainerAdapter(IContainer):
         self._config = config
         self._clock = clock
 
-        # Initialize delay calculator for fidelity-aware timing
-        from codetoreum.infrastructure.simulation.proportional_delay_calculator import (
-            ProportionalDelayCalculator,
-        )
-
-        self._delay_calculator = ProportionalDelayCalculator(config)
+        # Lazy-load delay calculator to avoid circular import
+        self._delay_calculator: Optional["ProportionalDelayCalculator"] = None
 
         # Container storage
         self._containers: dict[str, dict[str, Any]] = {}
@@ -184,6 +183,12 @@ class FakeContainerAdapter(IContainer):
         if not self._config:
             return self._execution_delay
 
+        if self._delay_calculator is None:
+            from codetoreum.infrastructure.simulation.proportional_delay_calculator import (
+                ProportionalDelayCalculator,
+            )
+
+            self._delay_calculator = ProportionalDelayCalculator(self._config)
         return self._delay_calculator.calculate_container_delay(command)
 
     def _should_fail_for_high_fidelity(self) -> bool:

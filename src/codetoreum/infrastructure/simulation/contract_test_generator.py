@@ -20,18 +20,10 @@ Example:
     test_code = generator.generate_for_port(IBoardService)
     with open("test_board_service_contract.py", "w") as f:
         f.write(test_code)
-
-    # Generate for all ports in a directory
-    port_files = Path("src/codetoreum/ports/output").glob("*.py")
-    for port_file in port_files:
-        test_code = generator.generate_for_port_file(port_file)
-        # ... write to test directory
 """
 
 import inspect
-from abc import ABCMeta
-from pathlib import Path
-from typing import Any, Callable, Optional, Type
+from typing import Any, Optional, Type
 
 from codetoreum.ports.output.board_service import IBoardService
 from codetoreum.ports.output.code_review_service import ICodeReviewService
@@ -68,7 +60,7 @@ class ContractTestGenerator:
 
     def __init__(self) -> None:
         """Initialize the generator."""
-        self._generated_classes: dict[str, str] = {}
+        pass
 
     def generate_for_port(self, port_class: Type) -> str:
         """Generate contract test class for a port interface.
@@ -203,7 +195,7 @@ class ContractTestGenerator:
         methods = [
             (name, method)
             for name, method in inspect.getmembers(port_class, predicate=inspect.ismethod)
-            if not name.startswith("_") and not name.startswith("__")
+            if not name.startswith("_")
         ]
 
         # Also check for functions/abstract methods
@@ -235,6 +227,16 @@ class ContractTestGenerator:
         lines.append("        assert isinstance(fixtures, dict)")
         lines.append("        await self.teardown_fixtures()")
         lines.append("")
+
+        # Generate test stub for each discovered public method
+        for method_name, _ in methods:
+            lines.append("    @pytest.mark.asyncio")
+            lines.append(f"    async def test_{method_name}(self) -> None:")
+            lines.append(f'        """Test contract for {method_name} method."""')
+            lines.append("        service = await self.create_service()")
+            lines.append("        # TODO: Implement contract test for this method")
+            lines.append("        assert service is not None")
+            lines.append("")
 
         return lines
 

@@ -35,6 +35,9 @@ from .simulation_config import (
     TimeConfig,
 )
 from .simulation_engine import SimulationEngine
+from .causal_link_registry import CausalLinkRegistry
+from .contract_test_generator import ContractTestGenerator
+from .proportional_delay_calculator import ProportionalDelayCalculator
 from .simulation_runner import (
     AssertionResult,
     SimulationResult,
@@ -71,6 +74,10 @@ __all__ = [
     "SimulationRunner",
     "SimulationResult",
     "AssertionResult",
+    # Components (new in #346)
+    "CausalLinkRegistry",
+    "ProportionalDelayCalculator",
+    "ContractTestGenerator",
     # Mock Tracer
     "MockTracer",
     "SpanCapture",
