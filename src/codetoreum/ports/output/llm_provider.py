@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -91,7 +91,7 @@ class StreamChunk:
     tool_call_delta: ToolCallDelta | None = None
 
     # Metadata
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -113,8 +113,8 @@ class ExecutionResult:
     total_tokens: int = 0
 
     # Timing
-    started_at: datetime = field(default_factory=datetime.utcnow)
-    completed_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    completed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     duration_ms: int = 0
 
     # Additional data
