@@ -1,7 +1,6 @@
 """Unit tests for EventReplayer."""
 
 from datetime import UTC, datetime, timedelta
-from typing import Optional
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
@@ -30,12 +29,22 @@ class MockEventStore:
             events = [e for e in events if e.aggregate_id == stream_id]
         return events
 
-    async def get_events(self, stream_id: str, from_version: int = 0, to_version: int | None = None):
+    async def get_events(
+        self,
+        stream_id: str,
+        from_version: int = 0,
+        to_version: int | None = None,
+    ):
         """Get events for stream."""
         events = [e for e in self.events if e.aggregate_id == stream_id]
         return events
 
-    async def get_events_by_type(self, event_type: str, since: datetime | None = None, limit: int = 1000):
+    async def get_events_by_type(
+        self,
+        event_type: str,
+        since: datetime | None = None,
+        limit: int = 1000,
+    ):
         """Get events by type."""
         events = [e for e in self.events if e.event_type == event_type]
         if since:
