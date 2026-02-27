@@ -74,12 +74,20 @@ ENV GH_NO_KEYRING=1
 ENV DBUS_SESSION_BUS_ADDRESS=disabled:
 
 # ============================================================================
-# Stage 6: Switch to Runtime User
+# Stage 6: Install Entrypoint Script
+# ============================================================================
+# The entrypoint validates the git environment at startup and repairs common
+# DinD mount corruption (e.g. .gitconfig appearing as a directory).
+COPY scripts/agent-entrypoint.sh /usr/local/bin/agent-entrypoint.sh
+RUN chmod +x /usr/local/bin/agent-entrypoint.sh
+
+# ============================================================================
+# Stage 7: Switch to Runtime User
 # ============================================================================
 USER orchestrator
 
 # ============================================================================
-# Stage 7: Verification (MANDATORY)
+# Stage 8: Verification (MANDATORY)
 # ============================================================================
 # Verify all critical CLIs are present (from base image)
 RUN claude --version && \
@@ -96,4 +104,5 @@ RUN ruff --version && \
 # ============================================================================
 # Default command
 # ============================================================================
+ENTRYPOINT ["agent-entrypoint.sh"]
 CMD ["/bin/bash"]
