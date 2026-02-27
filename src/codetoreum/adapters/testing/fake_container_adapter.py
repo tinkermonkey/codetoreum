@@ -28,6 +28,7 @@ from codetoreum.ports.output.container import (
 from codetoreum.ports.output.event_emitter import IEventEmitter
 
 if TYPE_CHECKING:
+    from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
     from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 
 
@@ -71,7 +72,7 @@ class FakeContainerAdapter(IContainer):
         event_emitter: IEventEmitter | None = None,
         event_bus: EventBus | None = None,
         config: "SimulationConfig | None" = None,
-        clock: "Any | None" = None,
+        clock: "SimulationClock | None" = None,
     ):
         """
         Initialize the fake container adapter.

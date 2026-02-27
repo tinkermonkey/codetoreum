@@ -27,6 +27,7 @@ from codetoreum.ports.output.llm_provider import (
 )
 
 if TYPE_CHECKING:
+    from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
     from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 
 
@@ -57,7 +58,7 @@ class MockLLMAdapter(ILLMProvider):
         context_window: int = 100000,
         max_output_tokens: int = 4096,
         config: "SimulationConfig | None" = None,
-        clock: "AsyncIterator | None" = None,
+        clock: "SimulationClock | None" = None,
     ):
         """
         Initialize the mock LLM adapter.
