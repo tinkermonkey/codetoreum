@@ -8,8 +8,11 @@ Wires up the entire application stack in simulation mode through 6 phases:
 **Phase 2**: Create adapters (24 mock adapters: ticket system, LLM, container, repository,
            event store, metrics, storage, config, notifier, encryption, board, repair cycle,
            project manager, lock service, workflow config, agent executor, version control,
-           message broker, discussion, review cycle, identity service, checkpoint store)
-**Phase 3**: Create services (8 application services with their dependencies)
+           message broker, discussion, review cycle, identity service, checkpoint store, queue service, event emitter)
+**Phase 3**: Create services (11 application services with their dependencies: workflow orchestrator,
+           execution service, agent scheduler, pipeline manager, review service, feedback processor,
+           workspace router, configuration service, work item service, multi-project orchestrator,
+           container recovery service)
 **Phase 4**: Create ports (16 input port implementations)
 **Phase 5**: Create FastAPI app (wire all ports to API endpoints, register event handlers)
 
@@ -51,7 +54,7 @@ from codetoreum.adapters.primary.input_port_adapters.mock import (
     MockWorkspaceQueryAdapter,
 )
 
-# Lazy import to avoid circular dependency
+# Import simulation ticketing router
 from codetoreum.adapters.primary.routers.simulation_ticketing import (
     create_simulation_ticketing_router,
 )
@@ -293,8 +296,8 @@ class SimulationApplicationBootstrap:
         This method executes bootstrap phases in order:
         - Phase 0: Create simulation engine (encapsulates clock and timing)
         - Phase 1: Create infrastructure (event bus, logger, error registry) - EARLY for subscriptions
-        - Phase 2: Create adapters (16 mock adapters for all output ports)
-        - Phase 3: Create services (8 application services with dependencies)
+        - Phase 2: Create adapters (24 mock adapters for all output ports)
+        - Phase 3: Create services (11 application services with dependencies)
         - Phase 4: Create ports (16 input port implementations)
         - Phase 5: Create FastAPI app (wire all ports to API endpoints, register handlers)
 
@@ -421,7 +424,7 @@ class SimulationApplicationBootstrap:
         the adapter constructors.
 
         Returns:
-            SimulationAdapters with all 24 adapters configured
+            SimulationAdapters with all 24 adapters configured in SimulationAdapters dataclass
         """
         if not self._engine:
             message = "SimulationEngine must be created before adapters"

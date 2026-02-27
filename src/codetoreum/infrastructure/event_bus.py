@@ -213,7 +213,7 @@ class EventBus:
 
         Args:
             event_type: Event type to subscribe to (None for all events)
-            callback: Async callback function
+            callback: Callback function (can be sync or async)
 
         Raises:
             EventBusError: If subscription fails

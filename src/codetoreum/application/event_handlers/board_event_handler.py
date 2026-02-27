@@ -143,11 +143,11 @@ class BoardColumnEventHandler(EventHandler):
         Workflow:
         1. Retrieve workflow configuration for the board
         2. Get column configuration for the target column
-        3. If pipeline trigger column: try to acquire lock
+        3. If pipeline trigger column: try to acquire lock (returns after handling)
             - If acquired: trigger agent if configured
             - If queued: emit WorkItemQueued event
-        4. If exit column: release lock and grant to next in queue
-        5. If automated column: trigger agent (independent of lock)
+        4. If exit column: release lock and grant to next in queue (independent of step 3)
+        5. If automated column: trigger agent (independent of steps 3 and 4)
 
         Args:
             event: WorkItemColumnChanged event with column movement details
