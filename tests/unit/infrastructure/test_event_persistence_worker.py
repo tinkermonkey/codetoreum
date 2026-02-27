@@ -40,7 +40,7 @@ class MockEventStore:
         """Initialize mock."""
         self.appended = []
 
-    async def append(self, stream_id: str, events: list, expected_version: int = None):
+    async def append(self, stream_id: str, events: list, expected_version: int | None = None):
         """Append events to stream."""
         self.appended.append((stream_id, events))
 

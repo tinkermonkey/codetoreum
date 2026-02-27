@@ -22,19 +22,19 @@ class MockEventStore:
         self.events = []
         self.appended = []
 
-    async def get_events_since(self, since: datetime, stream_id: str = None):
+    async def get_events_since(self, since: datetime, stream_id: str | None = None):
         """Get events since timestamp."""
         events = [e for e in self.events if e.occurred_at >= since]
         if stream_id:
             events = [e for e in events if e.aggregate_id == stream_id]
         return events
 
-    async def get_events(self, stream_id: str, from_version: int = 0, to_version: int = None):
+    async def get_events(self, stream_id: str, from_version: int = 0, to_version: int | None = None):
         """Get events for stream."""
         events = [e for e in self.events if e.aggregate_id == stream_id]
         return events
 
-    async def get_events_by_type(self, event_type: str, since: datetime = None, limit: int = 1000):
+    async def get_events_by_type(self, event_type: str, since: datetime | None = None, limit: int = 1000):
         """Get events by type."""
         events = [e for e in self.events if e.event_type == event_type]
         if since:
@@ -45,13 +45,13 @@ class MockEventStore:
         """Get all stream IDs."""
         return list(set(e.aggregate_id for e in self.events))
 
-    async def replay_events(self, stream_id: str, from_version: int = 0, to_version: int = None):
+    async def replay_events(self, stream_id: str, from_version: int = 0, to_version: int | None = None):
         """Replay events (async generator)."""
         for event in self.events:
             if event.aggregate_id == stream_id:
                 yield event
 
-    async def append(self, stream_id: str, events: list, expected_version: int = None):
+    async def append(self, stream_id: str, events: list, expected_version: int | None = None):
         """Append events."""
         self.appended.append((stream_id, events))
 
