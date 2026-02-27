@@ -1,6 +1,7 @@
 """In-memory event store for testing."""
 
 import asyncio
+import random
 import threading
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -15,7 +16,10 @@ from codetoreum.ports.exceptions import (
 from codetoreum.ports.output.event_store import IEventStore
 
 if TYPE_CHECKING:
-    from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+    from codetoreum.infrastructure.simulation.simulation_config import (
+        FidelityLevel,
+        SimulationConfig,
+    )
 
 
 class InMemoryEventStore(IEventStore):
@@ -226,8 +230,7 @@ class InMemoryEventStore(IEventStore):
             # Default behavior (for backward compatibility)
             return 0.001
 
-        import random
-
+        # Import at runtime to respect TYPE_CHECKING guard
         from codetoreum.infrastructure.simulation.simulation_config import FidelityLevel
 
         if self._config.fidelity_level == FidelityLevel.LOW:
@@ -249,6 +252,12 @@ class InMemoryEventStore(IEventStore):
         Simulates the real-world cost of event handlers processing events.
         Proportional to the number of events appended and ms_per_event config.
 
+        Design Note - Handler Count Factor:
+        The original specification mentions "event count × handler count" for latency.
+        In practice, ms_per_event is pre-calibrated to include the expected number
+        of handlers processing each event. This approach is simpler, more testable,
+        and avoids tight coupling to handler registration details.
+
         This is the **backpressure mechanism** that ensures appending many
         events incurs proportional delays, matching real event processing costs.
 
@@ -258,25 +267,11 @@ class InMemoryEventStore(IEventStore):
         if not self._config or event_count == 0:
             return
 
-        from codetoreum.infrastructure.simulation.simulation_config import FidelityLevel
+        # Get per-event delay (handles fidelity level and jitter)
+        delay_per_event = await self._get_event_delay_seconds()
 
-        # LOW fidelity: no delay
-        if self._config.fidelity_level == FidelityLevel.LOW:
-            return
-
-        import random
-
-        # Total delay = event_count × ms_per_event
-        total_delay_ms = event_count * self._config.ms_per_event
-
-        # HIGH fidelity: add timing jitter (±20% randomness per event)
-        if self._config.fidelity_level == FidelityLevel.HIGH:
-            # Add jitter: ±20% variance
-            jitter_factor = random.uniform(0.8, 1.2)
-            total_delay_ms = total_delay_ms * jitter_factor
-
-        # Convert to seconds and apply sleep
-        total_delay_seconds = total_delay_ms / 1000.0
+        # Apply proportional delay: total = event_count × delay_per_event
+        total_delay_seconds = delay_per_event * event_count
 
         if total_delay_seconds > 0:
             if self._clock:

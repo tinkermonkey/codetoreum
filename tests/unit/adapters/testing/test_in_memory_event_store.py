@@ -2,6 +2,7 @@
 
 import asyncio
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
@@ -13,6 +14,10 @@ from codetoreum.domain.events import (
     WorkItemCompleted,
     WorkItemCreated,
     WorkItemStarted,
+)
+from codetoreum.infrastructure.simulation.simulation_config import (
+    FidelityLevel,
+    SimulationConfig,
 )
 from codetoreum.ports.exceptions import ConcurrencyConflictError, ResourceNotFoundError
 
@@ -919,3 +924,179 @@ class TestInMemoryEventStore:
         assert len(group_2) == 1
         assert all(e.correlation_id == corr_id_1 for e in group_1)
         assert all(e.correlation_id == corr_id_2 for e in group_2)
+
+
+@pytest.mark.asyncio
+class TestBackpressureMechanism:
+    """Tests for event processing backpressure latency."""
+
+    @pytest.fixture
+    def sample_event(self):
+        """Create a sample event."""
+        return WorkItemCreated(
+            aggregate_id="work-item-123",
+            payload={
+                "title": "Test Work Item",
+                "description": "Test description",
+                "project_id": "project-1",
+                "labels": ["bug"],
+                "priority": 1,
+            },
+        )
+
+    async def test_apply_event_processing_latency_no_config(self):
+        """Test that no latency is applied when config is None."""
+        store = InMemoryEventStore(config=None)
+
+        start = asyncio.get_event_loop().time()
+        await store._apply_event_processing_latency(10)
+        elapsed = asyncio.get_event_loop().time() - start
+
+        # Should complete almost instantly (< 10ms)
+        assert elapsed < 0.01
+
+    async def test_apply_event_processing_latency_low_fidelity(self):
+        """Test that LOW fidelity produces no delay."""
+        config = MagicMock(spec=SimulationConfig)
+        config.fidelity_level = FidelityLevel.LOW
+        config.ms_per_event = 10.0
+
+        store = InMemoryEventStore(config=config)
+
+        start = asyncio.get_event_loop().time()
+        await store._apply_event_processing_latency(10)
+        elapsed = asyncio.get_event_loop().time() - start
+
+        # Should complete almost instantly (< 10ms)
+        assert elapsed < 0.01
+
+    async def test_apply_event_processing_latency_medium_fidelity_proportional(self):
+        """Test that MEDIUM fidelity produces proportional delay (event_count × ms_per_event)."""
+        config = MagicMock(spec=SimulationConfig)
+        config.fidelity_level = FidelityLevel.MEDIUM
+        config.ms_per_event = 10.0  # 10ms per event
+
+        store = InMemoryEventStore(config=config)
+
+        # 5 events × 10ms = 50ms expected
+        start = asyncio.get_event_loop().time()
+        await store._apply_event_processing_latency(5)
+        elapsed = asyncio.get_event_loop().time() - start
+
+        # Should be approximately 50ms (allow ±12ms tolerance for timing variance)
+        assert 0.038 < elapsed < 0.062
+
+    async def test_apply_event_processing_latency_high_fidelity_with_jitter(self):
+        """Test that HIGH fidelity applies jitter to the delay."""
+        config = MagicMock(spec=SimulationConfig)
+        config.fidelity_level = FidelityLevel.HIGH
+        config.ms_per_event = 10.0  # 10ms per event
+
+        store = InMemoryEventStore(config=config)
+
+        # 5 events × 10ms = 50ms base, with ±20% jitter
+        # Expected range: 40ms to 60ms (allow 2ms tolerance for timing variance)
+        durations = []
+        for _ in range(5):
+            start = asyncio.get_event_loop().time()
+            await store._apply_event_processing_latency(5)
+            elapsed = asyncio.get_event_loop().time() - start
+            durations.append(elapsed)
+
+        # All durations should be in the jittered range (±2ms tolerance for system variance)
+        for duration in durations:
+            assert 0.038 < duration < 0.062
+
+    async def test_apply_event_processing_latency_zero_events(self):
+        """Test that zero event count produces no delay."""
+        config = MagicMock(spec=SimulationConfig)
+        config.fidelity_level = FidelityLevel.MEDIUM
+        config.ms_per_event = 10.0
+
+        store = InMemoryEventStore(config=config)
+
+        start = asyncio.get_event_loop().time()
+        await store._apply_event_processing_latency(0)
+        elapsed = asyncio.get_event_loop().time() - start
+
+        # Should complete almost instantly (< 10ms)
+        assert elapsed < 0.01
+
+    async def test_apply_event_processing_latency_with_simulation_clock(self):
+        """Test that latency uses SimulationClock when available."""
+        config = MagicMock(spec=SimulationConfig)
+        config.fidelity_level = FidelityLevel.MEDIUM
+        config.ms_per_event = 10.0
+
+        # Mock clock that tracks sleep calls
+        mock_clock = AsyncMock()
+        store = InMemoryEventStore(config=config, clock=mock_clock)
+
+        await store._apply_event_processing_latency(5)
+
+        # Clock sleep should have been called with 0.05 seconds (5 × 10ms)
+        mock_clock.sleep.assert_called_once()
+        call_arg = mock_clock.sleep.call_args[0][0]
+        assert 0.04 < call_arg < 0.06  # Allow for jitter in MEDIUM fidelity
+
+    async def test_append_incurs_backpressure_latency(self, sample_event):
+        """Test that append() incurs backpressure latency proportional to event count."""
+        config = MagicMock(spec=SimulationConfig)
+        config.fidelity_level = FidelityLevel.MEDIUM
+        config.ms_per_event = 10.0  # 10ms per event
+
+        store = InMemoryEventStore(config=config)
+
+        # Append 10 events, expect ~100ms latency (10 × 10ms)
+        events = [sample_event for _ in range(10)]
+
+        start = asyncio.get_event_loop().time()
+        await store.append("work-item-123", events)
+        elapsed = asyncio.get_event_loop().time() - start
+
+        # Should incur latency (allow 80-120ms range for timing variance)
+        assert 0.08 < elapsed < 0.12
+
+    async def test_append_low_fidelity_no_backpressure(self, sample_event):
+        """Test that append() with LOW fidelity produces no backpressure latency."""
+        config = MagicMock(spec=SimulationConfig)
+        config.fidelity_level = FidelityLevel.LOW
+        config.ms_per_event = 10.0
+
+        store = InMemoryEventStore(config=config)
+
+        # Append 10 events, expect no latency despite high ms_per_event
+        events = [sample_event for _ in range(10)]
+
+        start = asyncio.get_event_loop().time()
+        await store.append("work-item-123", events)
+        elapsed = asyncio.get_event_loop().time() - start
+
+        # Should complete quickly (< 10ms)
+        assert elapsed < 0.01
+
+    async def test_backpressure_latency_scales_linearly(self, sample_event):
+        """Test that backpressure latency scales linearly with event count."""
+        config = MagicMock(spec=SimulationConfig)
+        config.fidelity_level = FidelityLevel.MEDIUM
+        config.ms_per_event = 5.0  # 5ms per event
+
+        store = InMemoryEventStore(config=config)
+
+        # Measure latency for different event counts
+        durations = {}
+        for count in [5, 10, 20]:
+            events = [sample_event for _ in range(count)]
+            start = asyncio.get_event_loop().time()
+            await store.append("stream-id", events)
+            elapsed = asyncio.get_event_loop().time() - start
+            durations[count] = elapsed
+
+        # Verify approximately linear scaling
+        # 10 events should take ~2x as long as 5 events
+        ratio_10_5 = durations[10] / durations[5]
+        assert 1.8 < ratio_10_5 < 2.2
+
+        # 20 events should take ~4x as long as 5 events
+        ratio_20_5 = durations[20] / durations[5]
+        assert 3.8 < ratio_20_5 < 4.2
