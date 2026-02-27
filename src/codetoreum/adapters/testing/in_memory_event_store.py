@@ -75,7 +75,16 @@ class InMemoryEventStore(IEventStore):
         expected_version: int | None = None,
     ) -> None:
         """
-        Append events to a stream.
+        Append events to a stream with simulated processing latency.
+
+        Implements proportional event processing latency based on:
+        - Number of events appended
+        - SimulationConfig.ms_per_event (processing delay per event)
+        - Fidelity level (LOW: no delay, MEDIUM/HIGH: with delay)
+
+        This simulates the real-world cost of event handlers processing events.
+        The backpressure mechanism ensures that appending many events
+        incurs proportional delays, matching real event processing costs.
 
         Args:
             stream_id: Unique stream identifier
@@ -124,6 +133,10 @@ class InMemoryEventStore(IEventStore):
                     if corr_id not in self._events_by_correlation:
                         self._events_by_correlation[corr_id] = []
                     self._events_by_correlation[corr_id].append(event)
+
+        # Apply backpressure: simulate event processing latency (outside of lock)
+        # This represents the cost of event handlers processing the appended events
+        await self._apply_event_processing_latency(len(events))
 
     async def get_events(
         self,
@@ -228,6 +241,50 @@ class InMemoryEventStore(IEventStore):
             delay_seconds = random.uniform(delay_seconds * 0.8, delay_seconds * 1.2)
 
         return delay_seconds
+
+    async def _apply_event_processing_latency(self, event_count: int) -> None:
+        """
+        Apply backpressure latency for event processing.
+
+        Simulates the real-world cost of event handlers processing events.
+        Proportional to the number of events appended and ms_per_event config.
+
+        This is the **backpressure mechanism** that ensures appending many
+        events incurs proportional delays, matching real event processing costs.
+
+        Args:
+            event_count: Number of events being processed
+        """
+        if not self._config or event_count == 0:
+            return
+
+        from codetoreum.infrastructure.simulation.simulation_config import FidelityLevel
+
+        # LOW fidelity: no delay
+        if self._config.fidelity_level == FidelityLevel.LOW:
+            return
+
+        import random
+
+        # Total delay = event_count × ms_per_event
+        total_delay_ms = event_count * self._config.ms_per_event
+
+        # HIGH fidelity: add timing jitter (±20% randomness per event)
+        if self._config.fidelity_level == FidelityLevel.HIGH:
+            # Add jitter: ±20% variance
+            jitter_factor = random.uniform(0.8, 1.2)
+            total_delay_ms = total_delay_ms * jitter_factor
+
+        # Convert to seconds and apply sleep
+        total_delay_seconds = total_delay_ms / 1000.0
+
+        if total_delay_seconds > 0:
+            if self._clock:
+                # Use simulated clock for time manipulation
+                await self._clock.sleep(total_delay_seconds)
+            else:
+                # Fall back to asyncio.sleep
+                await asyncio.sleep(total_delay_seconds)
 
     async def stream_events(
         self,
