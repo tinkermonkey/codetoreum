@@ -1,6 +1,7 @@
 """Unit tests for EventReplayer."""
 
 from datetime import UTC, datetime, timedelta
+from typing import Optional
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
