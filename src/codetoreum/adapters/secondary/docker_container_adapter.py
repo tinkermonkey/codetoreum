@@ -315,8 +315,7 @@ class DockerContainerAdapter(IContainer):
                             },
                         )
                         raise ContainerExecutionError(msg) from e
-                    else:
-                        raise
+                    raise
 
                 duration_ms = int((time.time() - start_time) * 1000)
 
@@ -1149,7 +1148,7 @@ class DockerContainerAdapter(IContainer):
                 container = client.containers.get(container_id)
 
                 # Get tar archive from container
-                bits, stat = container.get_archive(source)
+                bits, _stat = container.get_archive(source)
 
                 # Extract tar archive
                 tar_stream = io.BytesIO()
