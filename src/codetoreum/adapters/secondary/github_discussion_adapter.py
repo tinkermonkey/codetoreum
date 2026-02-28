@@ -416,6 +416,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             # Schedule close to be called from async context
             try:
                 task = asyncio.create_task(self.close())
+
                 # Attach error handler to catch any failures
                 def _handle_close_error(task: asyncio.Task) -> None:
                     if task.cancelled():
