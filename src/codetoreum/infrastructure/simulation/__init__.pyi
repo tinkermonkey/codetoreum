@@ -57,6 +57,9 @@ from .scenario_models import (
 from .seeding import CreatedItems as CreatedItems
 from .seeding import SimulationDataSeeder as SimulationDataSeeder
 from .simulation_clock import (
+    ClockProtocol as ClockProtocol,
+)
+from .simulation_clock import (
     RealTimeClock as RealTimeClock,
 )
 from .simulation_clock import (

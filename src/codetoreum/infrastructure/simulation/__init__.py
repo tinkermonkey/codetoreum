@@ -23,6 +23,7 @@ from .scenario_models import (
     ScenarioWorkItemModel,
 )
 from .simulation_clock import (
+    ClockProtocol,
     RealTimeClock,
     SimulationClock,
     get_clock,
@@ -56,6 +57,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     # Clock
+    "ClockProtocol",
     "SimulationClock",
     "RealTimeClock",
     "get_clock",

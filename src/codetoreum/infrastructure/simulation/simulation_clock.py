@@ -5,8 +5,62 @@ import logging
 import threading
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from typing import Protocol
 
 logger = logging.getLogger(__name__)
+
+
+class ClockProtocol(Protocol):
+    """
+    Formal interface for clock implementations (Protocol).
+
+    Defines the minimal contract that all clock implementations must satisfy for
+    general time-related operations. This protocol enables type-safe polymorphism
+    between RealTimeClock and SimulationClock without relying on union types.
+
+    The protocol defines only operations that are meaningful in both real and
+    simulated time contexts. Simulation-specific operations (like advance(),
+    schedule_callback(), etc.) are not included in this protocol and require
+    using SimulationClock directly.
+
+    Implementations:
+    - RealTimeClock: Uses system time for production
+    - SimulationClock: Uses virtual time for deterministic testing
+
+    Usage:
+        def wait_for_completion(clock: ClockProtocol, timeout_seconds: float) -> bool:
+            '''Wait for an async operation using either real or simulated time.'''
+            start = clock.now()
+            await clock.sleep(timeout_seconds)
+            return (clock.now() - start).total_seconds() >= timeout_seconds
+    """
+
+    def now(self) -> datetime:
+        """
+        Get current time (real or simulated).
+
+        Returns:
+            Current datetime in UTC
+        """
+        ...
+
+    async def sleep(self, seconds: float) -> None:
+        """
+        Sleep for a number of seconds (real or simulated time).
+
+        Args:
+            seconds: Number of seconds to sleep
+        """
+        ...
+
+    async def wait_for(self, delta: timedelta) -> None:
+        """
+        Wait for a time delta (real or simulated time).
+
+        Args:
+            delta: Amount of time to wait
+        """
+        ...
 
 
 class SimulationClock:
@@ -363,15 +417,15 @@ class RealTimeClock:
 
 
 # Global clock instance that can be swapped for testing
-_global_clock: SimulationClock | RealTimeClock | None = None
+_global_clock: ClockProtocol | None = None
 
 
-def get_clock() -> SimulationClock | RealTimeClock:
+def get_clock() -> ClockProtocol:
     """
     Get the global clock instance.
 
     Returns:
-        Global clock (SimulationClock or RealTimeClock)
+        Global clock instance (SimulationClock or RealTimeClock)
     """
     global _global_clock
     if _global_clock is None:
@@ -379,12 +433,12 @@ def get_clock() -> SimulationClock | RealTimeClock:
     return _global_clock
 
 
-def set_clock(clock: SimulationClock | RealTimeClock) -> None:
+def set_clock(clock: ClockProtocol) -> None:
     """
     Set the global clock instance.
 
     Args:
-        clock: Clock instance to use globally
+        clock: Clock instance to use globally (must implement ClockProtocol)
     """
     global _global_clock
     _global_clock = clock
