@@ -356,6 +356,41 @@ class ContainerConfig:
             wrapped_volumes = {host: MappingProxyType(config) for host, config in self.volumes.items()}
             object.__setattr__(self, "volumes", MappingProxyType(wrapped_volumes))
 
+    def get_command_as_list(self) -> list[str] | None:
+        """Get command as mutable list for adapter compatibility.
+
+        Converts immutable tuple to mutable list for passing to port interfaces
+        that expect mutable types, while maintaining domain layer immutability.
+
+        Returns:
+            list[str] | None: Command as list, or None if not set
+        """
+        return list(self.command) if self.command else None
+
+    def get_environment_as_dict(self) -> dict[str, str] | None:
+        """Get environment as mutable dict for adapter compatibility.
+
+        Converts immutable Mapping to mutable dict for passing to port interfaces
+        that expect mutable types, while maintaining domain layer immutability.
+
+        Returns:
+            dict[str, str] | None: Environment as dict, or None if not set
+        """
+        return dict(self.environment) if self.environment else None
+
+    def get_volumes_as_dict(self) -> dict[str, str] | None:
+        """Get volumes as mutable dict for adapter compatibility.
+
+        Converts immutable nested Mapping to mutable dict for passing to port
+        interfaces that expect mutable types, while maintaining domain layer immutability.
+
+        Returns:
+            dict[str, str] | None: Volumes as dict, or None if not set
+        """
+        if not self.volumes:
+            return None
+        return {host: dict(config) for host, config in self.volumes.items()}
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         # Convert tuples to lists for serialization

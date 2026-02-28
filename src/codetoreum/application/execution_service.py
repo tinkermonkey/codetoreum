@@ -464,12 +464,14 @@ class ExecutionService:
             labels = self._build_container_labels(execution, context)
 
             # Create container
+            # Use helper methods to convert immutable types (tuple, Mapping) to mutable types
+            # (list, dict) for adapter compatibility, while maintaining domain layer immutability
             container_id = await self.container.create(
                 image=container_config.image,
                 name=execution.container_name,
-                command=container_config.command,
-                volumes=container_config.volumes,
-                environment=container_config.environment,
+                command=container_config.get_command_as_list(),
+                volumes=container_config.get_volumes_as_dict(),
+                environment=container_config.get_environment_as_dict(),
                 working_dir=container_config.working_dir,
                 user=container_config.user,
                 network=container_config.network,
