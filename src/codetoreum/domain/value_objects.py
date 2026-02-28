@@ -381,15 +381,22 @@ class ContainerConfig:
     def get_volumes_as_dict(self) -> dict[str, str] | None:
         """Get volumes as mutable dict for adapter compatibility.
 
-        Converts immutable nested Mapping to mutable dict for passing to port
+        Converts immutable nested Mapping to mutable dict in adapter format for passing to port
         interfaces that expect mutable types, while maintaining domain layer immutability.
 
+        Format: {host_path: "container_path:mode"} (e.g., {"/host/path": "/container/path:ro"})
+
         Returns:
-            dict[str, str] | None: Volumes as dict, or None if not set
+            dict[str, str] | None: Volumes as dict in adapter format, or None if not set
         """
         if not self.volumes:
             return None
-        return {host: dict(config) for host, config in self.volumes.items()}
+        result = {}
+        for host, config in self.volumes.items():
+            container_path = config["bind"]
+            mode = config.get("mode", "rw")
+            result[host] = f"{container_path}:{mode}"
+        return result
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""

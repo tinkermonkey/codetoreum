@@ -299,7 +299,7 @@ class TestContainerConfig:
         config = ContainerConfig(
             image="python:3.11",
             name="test-container",
-            command=["python", "main.py"],
+            command=("python", "main.py"),
             working_dir="/app",
             user="1001:1001",
             environment={"ENV": "test"},
@@ -372,11 +372,11 @@ class TestExecutionContext:
             discussion_id=None,
             project_id="project-123",
             repository_url="https://github.com/org/repo",
-            tech_stack=["python", "docker"],
+            tech_stack=("python", "docker"),
             filesystem_write_allowed=True,
             can_make_commits=False,
             requires_docker=True,
-            mcp_servers=["artifacts", "logging"],
+            mcp_servers=("artifacts", "logging"),
             previous_session_id=None,
             metadata={"key": "value"},
         )
@@ -385,7 +385,7 @@ class TestExecutionContext:
         assert context.workflow_id == "workflow-123"
         assert context.agent_id == "agent-123"
         assert context.timeout_seconds == 3600
-        assert context.tech_stack == ["python", "docker"]
+        assert context.tech_stack == ("python", "docker")
 
     def test_invalid_timeout_raises_error(self):
         """Test that invalid timeout raises error."""
@@ -402,11 +402,11 @@ class TestExecutionContext:
                 discussion_id=None,
                 project_id="proj",
                 repository_url="url",
-                tech_stack=[],
+                tech_stack=(),
                 filesystem_write_allowed=True,
                 can_make_commits=False,
                 requires_docker=False,
-                mcp_servers=[],
+                mcp_servers=(),
                 previous_session_id=None,
                 metadata={},
             )
@@ -426,11 +426,11 @@ class TestExecutionContext:
                 discussion_id=None,
                 project_id="proj",
                 repository_url="url",
-                tech_stack=[],
+                tech_stack=(),
                 filesystem_write_allowed=True,
                 can_make_commits=False,
                 requires_docker=False,
-                mcp_servers=[],
+                mcp_servers=(),
                 previous_session_id=None,
                 metadata={},
             )
@@ -449,11 +449,11 @@ class TestExecutionContext:
             discussion_id=None,
             project_id="proj",
             repository_url="url",
-            tech_stack=["python"],
+            tech_stack=("python",),
             filesystem_write_allowed=True,
             can_make_commits=False,
             requires_docker=True,
-            mcp_servers=["artifacts"],
+            mcp_servers=("artifacts",),
             previous_session_id=None,
             metadata={"key": "value"},
         )
