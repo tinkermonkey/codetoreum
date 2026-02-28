@@ -298,7 +298,7 @@ class TestRepositoryContract(ABC):
             history = await repo.get_commit_history(dest, limit=10)
             assert len(history) >= 2
             # Most recent should be at index 0
-            assert "Second commit" in history[0]["message"]
+            assert "Second commit" in history[0].message
 
     # ===== Status Tests =====
 
@@ -503,10 +503,9 @@ class TestRepositoryContract(ABC):
 
             # Get commit info
             info = await repo.get_commit_info(dest, commit_hash)
-            assert isinstance(info, dict)
-            assert "message" in info
-            assert "author" in info
-            assert info["message"] == "Test commit"
+            assert hasattr(info, "message")
+            assert hasattr(info, "author")
+            assert info.message == "Test commit"
 
     @pytest.mark.asyncio
     async def test_get_commit_info_nonexistent_raises_error(self):

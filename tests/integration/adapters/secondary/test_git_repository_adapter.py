@@ -181,11 +181,11 @@ async def test_get_commit_info(git_adapter, temp_repo):
     # Get commit info
     commit_info = await git_adapter.get_commit_info(repo_path, commit_sha)
 
-    assert commit_info["sha"] == commit_sha
-    assert commit_info["author_name"] == "Test User"
-    assert commit_info["author_email"] == "test@example.com"
-    assert commit_info["subject"] == "Test commit"
-    assert isinstance(commit_info["timestamp"], datetime)
+    assert commit_info.sha == commit_sha
+    assert commit_info.author.name == "Test User"
+    assert commit_info.author.email == "test@example.com"
+    assert commit_info.message == "Test commit"
+    assert isinstance(commit_info.timestamp, datetime)
 
 
 @pytest.mark.integration
@@ -224,8 +224,8 @@ async def test_get_commit_history(git_adapter, temp_repo):
     history = await git_adapter.get_commit_history(repo_path, limit=10)
 
     assert len(history) == 3
-    assert history[0]["subject"] == "Commit 2"  # Most recent first
-    assert history[2]["subject"] == "Commit 0"
+    assert history[0].message == "Commit 2"  # Most recent first
+    assert history[2].message == "Commit 0"
 
 
 @pytest.mark.integration

@@ -119,6 +119,74 @@ class MergeResult:
                 raise ValueError(msg)
 
 
+@dataclass(frozen=True)
+class CommitAuthor:
+    """Commit author information.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation.
+    """
+
+    name: str
+    email: str
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.name, str) or not self.name:
+            msg = "name must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.email, str) or not self.email:
+            msg = "email must be a non-empty string"
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True)
+class CommitInfo:
+    """Complete commit information.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation.
+    """
+
+    sha: str
+    author: CommitAuthor
+    message: str
+    timestamp: datetime
+    parent_shas: tuple[str, ...] = ()
+    body: str = ""
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.sha, str) or not self.sha:
+            msg = "sha must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.author, CommitAuthor):
+            msg = "author must be a CommitAuthor instance"
+            raise ValueError(msg)
+
+        if not isinstance(self.message, str) or not self.message:
+            msg = "message must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.timestamp, datetime):
+            msg = "timestamp must be a datetime instance"
+            raise ValueError(msg)
+
+        if not isinstance(self.parent_shas, tuple):
+            msg = "parent_shas must be a tuple of strings"
+            raise ValueError(msg)
+
+        if not all(isinstance(sha, str) for sha in self.parent_shas):
+            msg = "all parent_shas must be strings"
+            raise ValueError(msg)
+
+        if not isinstance(self.body, str):
+            msg = "body must be a string"
+            raise ValueError(msg)
+
+
 # ============================================================================
 # Port Interface
 # ============================================================================
@@ -409,7 +477,7 @@ class IRepository(ABC):
         self,
         repo_path: Path,
         commit_sha: str,
-    ) -> dict:
+    ) -> CommitInfo:
         """
         Get information about a commit.
 
@@ -418,7 +486,7 @@ class IRepository(ABC):
             commit_sha: Commit SHA
 
         Returns:
-            dict: Commit information (author, message, timestamp, etc.)
+            CommitInfo: Complete commit information with typed fields
 
         Raises:
             ResourceNotFoundError: Commit doesn't exist
@@ -432,7 +500,7 @@ class IRepository(ABC):
         branch: str | None = None,
         limit: int = 100,
         since: datetime | None = None,
-    ) -> list[dict]:
+    ) -> list[CommitInfo]:
         """
         Get commit history.
 
@@ -443,7 +511,7 @@ class IRepository(ABC):
             since: Only return commits after this date
 
         Returns:
-            List[dict]: List of commit information
+            List[CommitInfo]: List of commit information with typed fields
 
         Raises:
             RepositoryError: Query failed

@@ -19,6 +19,8 @@ from codetoreum.ports.exceptions import (
 )
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.repository import (
+    CommitAuthor,
+    CommitInfo,
     IRepository,
     MergeResult,
     RepositoryStatus,
@@ -684,7 +686,7 @@ index abc123..def456 100644
         self,
         repo_path: Path,
         commit_sha: str,
-    ) -> dict:
+    ) -> CommitInfo:
         """
         Get information about a commit.
 
@@ -693,7 +695,7 @@ index abc123..def456 100644
             commit_sha: Commit SHA hash
 
         Returns:
-            Dictionary with commit information
+            CommitInfo with typed commit information
 
         Raises:
             ResourceNotFoundError: If repository or commit doesn't exist
@@ -717,16 +719,18 @@ index abc123..def456 100644
                 raise ResourceNotFoundError(msg, commit_sha)
 
             commit = self._commits[commit_key]
-            return {
-                "sha": commit["sha"],
-                "message": commit["message"],
-                "author": {
-                    "name": commit["author_name"],
-                    "email": commit["author_email"],
-                },
-                "timestamp": commit["timestamp"].isoformat(),
-                "parent": commit.get("parent"),
-            }
+            parent_shas = (commit["parent"],) if commit.get("parent") else ()
+            author = CommitAuthor(
+                name=commit["author_name"],
+                email=commit["author_email"],
+            )
+            return CommitInfo(
+                sha=commit["sha"],
+                author=author,
+                message=commit["message"],
+                timestamp=commit["timestamp"],
+                parent_shas=parent_shas,
+            )
 
     async def get_commit_history(
         self,
@@ -734,7 +738,7 @@ index abc123..def456 100644
         branch: str | None = None,
         limit: int = 100,
         since: datetime | None = None,
-    ) -> list[dict]:
+    ) -> list[CommitInfo]:
         """
         Get commit history.
 
@@ -745,7 +749,7 @@ index abc123..def456 100644
             since: Optional timestamp to filter commits after
 
         Returns:
-            List of commit information dictionaries
+            List of CommitInfo with typed commit information
 
         Raises:
             ResourceNotFoundError: If repository or branch doesn't exist
@@ -776,16 +780,19 @@ index abc123..def456 100644
                     if since and commit["timestamp"] < since:
                         break
 
+                    parent_shas = (commit.get("parent"),) if commit.get("parent") else ()
+                    author = CommitAuthor(
+                        name=commit["author_name"],
+                        email=commit["author_email"],
+                    )
                     commits.append(
-                        {
-                            "sha": commit["sha"],
-                            "message": commit["message"],
-                            "author": {
-                                "name": commit["author_name"],
-                                "email": commit["author_email"],
-                            },
-                            "timestamp": commit["timestamp"].isoformat(),
-                        }
+                        CommitInfo(
+                            sha=commit["sha"],
+                            author=author,
+                            message=commit["message"],
+                            timestamp=commit["timestamp"],
+                            parent_shas=parent_shas,
+                        )
                     )
 
                     current_commit = commit.get("parent")

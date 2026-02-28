@@ -17,6 +17,8 @@ from codetoreum.ports.exceptions import (
     ValidationError,
 )
 from codetoreum.ports.output.repository import (
+    CommitAuthor,
+    CommitInfo,
     IRepository,
     MergeResult,
     RepositoryStatus,
@@ -616,7 +618,7 @@ class GitRepositoryAdapter(IRepository):
         self,
         repo_path: Path,
         commit_sha: str,
-    ) -> dict:
+    ) -> CommitInfo:
         """Get information about a commit."""
         if not repo_path or not repo_path.exists():
             msg = f"Repository path does not exist: {repo_path}"
@@ -638,14 +640,14 @@ class GitRepositoryAdapter(IRepository):
             msg = f"Invalid commit info format for {commit_sha}"
             raise RepositoryError(msg)
 
-        return {
-            "sha": lines[0],
-            "author_name": lines[1],
-            "author_email": lines[2],
-            "timestamp": datetime.fromtimestamp(int(lines[3]), tz=UTC),
-            "subject": lines[4],
-            "body": "\n".join(lines[5:]) if len(lines) > 5 else "",
-        }
+        author = CommitAuthor(name=lines[1], email=lines[2])
+        return CommitInfo(
+            sha=lines[0],
+            author=author,
+            message=lines[4],
+            timestamp=datetime.fromtimestamp(int(lines[3]), tz=UTC),
+            body="\n".join(lines[5:]) if len(lines) > 5 else "",
+        )
 
     async def get_commit_history(
         self,
@@ -653,7 +655,7 @@ class GitRepositoryAdapter(IRepository):
         branch: str | None = None,
         limit: int = 100,
         since: datetime | None = None,
-    ) -> list[dict]:
+    ) -> list[CommitInfo]:
         """Get commit history."""
         if not repo_path or not repo_path.exists():
             msg = f"Repository path does not exist: {repo_path}"
@@ -680,14 +682,14 @@ class GitRepositoryAdapter(IRepository):
 
             parts = line.split("|", 4)
             if len(parts) == 5:
+                author = CommitAuthor(name=parts[1], email=parts[2])
                 commits.append(
-                    {
-                        "sha": parts[0],
-                        "author_name": parts[1],
-                        "author_email": parts[2],
-                        "timestamp": datetime.fromtimestamp(int(parts[3]), tz=UTC),
-                        "subject": parts[4],
-                    }
+                    CommitInfo(
+                        sha=parts[0],
+                        author=author,
+                        message=parts[4],
+                        timestamp=datetime.fromtimestamp(int(parts[3]), tz=UTC),
+                    )
                 )
 
         return commits

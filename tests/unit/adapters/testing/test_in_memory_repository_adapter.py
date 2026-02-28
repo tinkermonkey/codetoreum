@@ -270,8 +270,8 @@ class TestInMemoryRepositoryAdapter:
             repo_path=Path("/tmp/test-repo"),
             commit_sha=commit_sha,
         )
-        assert commit_info["message"] == "Add new feature"
-        assert commit_info["author"]["name"] == "Test Author"
+        assert commit_info.message == "Add new feature"
+        assert commit_info.author.name == "Test Author"
 
     async def test_commit_validation(self, adapter):
         """Test commit validation."""
@@ -517,11 +517,11 @@ class TestInMemoryRepositoryAdapter:
             commit_sha=commit_sha,
         )
 
-        assert commit_info["sha"] == commit_sha
-        assert commit_info["message"] == "Test commit"
-        assert commit_info["author"]["name"] == "John Doe"
-        assert commit_info["author"]["email"] == "john@example.com"
-        assert "timestamp" in commit_info
+        assert commit_info.sha == commit_sha
+        assert commit_info.message == "Test commit"
+        assert commit_info.author.name == "John Doe"
+        assert commit_info.author.email == "john@example.com"
+        assert commit_info.timestamp is not None
 
     async def test_get_commit_info_nonexistent_fails(self, adapter):
         """Test getting non-existent commit fails."""
@@ -558,9 +558,9 @@ class TestInMemoryRepositoryAdapter:
 
         # Should have initial commit + 3 new commits
         assert len(history) == 4
-        assert history[0]["message"] == "Commit 2"
-        assert history[1]["message"] == "Commit 1"
-        assert history[2]["message"] == "Commit 0"
+        assert history[0].message == "Commit 2"
+        assert history[1].message == "Commit 1"
+        assert history[2].message == "Commit 0"
 
     async def test_get_commit_history_with_limit(self, adapter):
         """Test getting commit history with limit."""
@@ -619,7 +619,7 @@ class TestInMemoryRepositoryAdapter:
         )
 
         assert len(history) == 2
-        assert all("New commit" in commit["message"] for commit in history)
+        assert all("New commit" in commit.message for commit in history)
 
     async def test_get_commit_history_nonexistent_branch_fails(self, adapter):
         """Test getting history for non-existent branch fails."""
