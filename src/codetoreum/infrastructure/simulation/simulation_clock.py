@@ -5,11 +5,12 @@ import logging
 import threading
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
 
 
+@runtime_checkable
 class ClockProtocol(Protocol):
     """
     Formal interface for clock implementations (Protocol).
@@ -28,11 +29,17 @@ class ClockProtocol(Protocol):
     - SimulationClock: Uses virtual time for deterministic testing
 
     Usage:
-        def wait_for_completion(clock: ClockProtocol, timeout_seconds: float) -> bool:
+        async def wait_for_completion(clock: ClockProtocol, timeout_seconds: float) -> bool:
             '''Wait for an async operation using either real or simulated time.'''
             start = clock.now()
             await clock.sleep(timeout_seconds)
             return (clock.now() - start).total_seconds() >= timeout_seconds
+
+    Migration Guide:
+    When updating code to use ClockProtocol, check which clock methods are called:
+    - If code only calls now(), sleep(), or wait_for(): Use ClockProtocol
+    - If code calls advance(), schedule_callback(), or other simulation methods: Use SimulationClock
+    This distinction ensures components remain portable across real and simulated time contexts.
     """
 
     def now(self) -> datetime:
@@ -382,10 +389,10 @@ class SimulationClock:
 
 class RealTimeClock:
     """
-    Real-time clock adapter that matches the SimulationClock interface.
+    Real-time clock adapter that implements the ClockProtocol.
 
-    This is used in production to provide the same interface as SimulationClock
-    but using actual system time.
+    This is used in production to provide the same interface as defined by
+    ClockProtocol but using actual system time instead of simulated time.
     """
 
     def now(self) -> datetime:
