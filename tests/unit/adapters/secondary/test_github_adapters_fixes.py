@@ -279,7 +279,7 @@ class TestGitHubWebhookAdapterExceptionChaining:
         mock_request.json = AsyncMock(return_value={"test": "data"})
 
         # Mock verification to fail with exception chain
-        with patch.object(adapter, "verify_signature", new_callable=AsyncMock) as mock_verify:
+        with patch.object(adapter, "_verify_signature", new_callable=AsyncMock) as mock_verify:
             mock_verify.return_value = False
 
             with pytest.raises(HTTPException) as exc_info:
