@@ -1,7 +1,7 @@
 """IContainer output port interface."""
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -48,9 +48,9 @@ class IContainer(ABC):
     async def run(
         self,
         image: str,
-        command: list[str],
-        volumes: dict[str, str],
-        environment: dict[str, str],
+        command: list[str] | tuple[str, ...],
+        volumes: dict[str, str] | Mapping[str, str],
+        environment: dict[str, str] | Mapping[str, str],
         timeout: int = 300,
         stream_callback: Callable | None = None,
     ) -> ContainerResult:
@@ -59,10 +59,10 @@ class IContainer(ABC):
 
         Args:
             image: Container image name
-            command: Command to execute
+            command: Command to execute (list or immutable tuple)
             volumes: Volume mounts (host_path: container_path:mode)
                     e.g., {"/host/path": "/container/path:ro"}
-            environment: Environment variables
+            environment: Environment variables (dict or Mapping)
             timeout: Execution timeout in seconds
             stream_callback: Optional callback for streaming logs
 
@@ -81,9 +81,9 @@ class IContainer(ABC):
         self,
         image: str,
         name: str | None = None,
-        command: list[str] | None = None,
-        volumes: dict[str, str] | None = None,
-        environment: dict[str, str] | None = None,
+        command: list[str] | tuple[str, ...] | None = None,
+        volumes: dict[str, str] | Mapping[str, str] | None = None,
+        environment: dict[str, str] | Mapping[str, str] | None = None,
         working_dir: str | None = None,
         user: str | None = None,
         network: str | None = None,
@@ -95,9 +95,9 @@ class IContainer(ABC):
         Args:
             image: Container image name
             name: Optional container name
-            command: Optional command to execute
-            volumes: Optional volume mounts
-            environment: Optional environment variables
+            command: Optional command to execute (list or immutable tuple)
+            volumes: Optional volume mounts (dict or Mapping)
+            environment: Optional environment variables (dict or Mapping)
             working_dir: Optional working directory
             user: Optional user (UID:GID or username)
             network: Optional network name
@@ -214,20 +214,20 @@ class IContainer(ABC):
     async def exec(
         self,
         container_id: str,
-        command: list[str],
+        command: list[str] | tuple[str, ...],
         user: str | None = None,
         working_dir: str | None = None,
-        environment: dict[str, str] | None = None,
+        environment: dict[str, str] | Mapping[str, str] | None = None,
     ) -> ContainerResult:
         """
         Execute a command in a running container.
 
         Args:
             container_id: Container identifier
-            command: Command to execute
+            command: Command to execute (list or immutable tuple)
             user: Optional user to run as
             working_dir: Optional working directory
-            environment: Optional environment variables
+            environment: Optional environment variables (dict or Mapping)
 
         Returns:
             ContainerResult: Execution result

@@ -6,7 +6,7 @@ import io
 import logging
 import tarfile
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -173,9 +173,9 @@ class DockerContainerAdapter(IContainer):
     async def run(
         self,
         image: str,
-        command: list[str],
-        volumes: dict[str, str],
-        environment: dict[str, str],
+        command: list[str] | tuple[str, ...],
+        volumes: dict[str, str] | Mapping[str, str],
+        environment: dict[str, str] | Mapping[str, str],
         timeout: int = 300,
         stream_callback: Callable | None = None,
     ) -> ContainerResult:
@@ -397,9 +397,9 @@ class DockerContainerAdapter(IContainer):
         self,
         image: str,
         name: str | None = None,
-        command: list[str] | None = None,
-        volumes: dict[str, str] | None = None,
-        environment: dict[str, str] | None = None,
+        command: list[str] | tuple[str, ...] | None = None,
+        volumes: dict[str, str] | Mapping[str, str] | None = None,
+        environment: dict[str, str] | Mapping[str, str] | None = None,
         working_dir: str | None = None,
         user: str | None = None,
         network: str | None = None,
@@ -795,10 +795,10 @@ class DockerContainerAdapter(IContainer):
     async def exec(
         self,
         container_id: str,
-        command: list[str],
+        command: list[str] | tuple[str, ...],
         user: str | None = None,
         working_dir: str | None = None,
-        environment: dict[str, str] | None = None,
+        environment: dict[str, str] | Mapping[str, str] | None = None,
     ) -> ContainerResult:
         """Execute a command in a running container."""
         client = self._get_client()

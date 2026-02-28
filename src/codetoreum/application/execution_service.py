@@ -7,10 +7,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
-from typing import (
-    Any,
-    cast,
-)
+from typing import Any
 
 from codetoreum.domain.agent import Agent
 from codetoreum.domain.agent_execution import AgentExecution, ExecutionStatus
@@ -471,8 +468,8 @@ class ExecutionService:
                 image=container_config.image,
                 name=execution.container_name,
                 command=container_config.command,
-                volumes=cast("dict[str, str] | None", container_config.volumes),
-                environment=container_config.environment or {},
+                volumes=container_config.volumes,
+                environment=container_config.environment,
                 working_dir=container_config.working_dir,
                 user=container_config.user,
                 network=container_config.network,

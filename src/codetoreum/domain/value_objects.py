@@ -353,9 +353,7 @@ class ContainerConfig:
                     msg = f"Volume mode must be 'rw' or 'ro', got {mode}"
                     raise DomainError(msg)
             # Wrap nested volume configs in MappingProxyType, then wrap the outer dict
-            wrapped_volumes = {
-                host: MappingProxyType(config) for host, config in self.volumes.items()
-            }
+            wrapped_volumes = {host: MappingProxyType(config) for host, config in self.volumes.items()}
             object.__setattr__(self, "volumes", MappingProxyType(wrapped_volumes))
 
     def to_dict(self) -> dict[str, Any]:
