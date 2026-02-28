@@ -433,28 +433,16 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
 
                 task.add_done_callback(_handle_close_error)
             except RuntimeError as e:
-                # No event loop running - attempt synchronous close
+                # No event loop running - HTTP client cleanup is deferred
                 logger.warning(
-                    f"No event loop for async close, attempting sync cleanup: {e}",
+                    f"Cannot close HTTP client without event loop, cleanup deferred: {e}",
                     exc_info=True,
                     extra={
                         "error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR,
-                        "operation": "async_close_fallback",
+                        "operation": "async_close_deferred",
+                        "note": "AsyncClient requires async context for graceful shutdown",
                     },
                 )
-                # Try to close synchronously if httpx supports it
-                if hasattr(self._http_client, "close"):
-                    try:
-                        self._http_client.close()
-                    except Exception as close_exc:
-                        logger.error(
-                            f"Synchronous client close failed: {close_exc}",
-                            exc_info=True,
-                            extra={
-                                "error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR,
-                                "operation": "sync_client_close",
-                            },
-                        )
 
     # Webhook Handling
 
@@ -692,22 +680,39 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
 
         Raises:
             ValueError: Invalid event type
+            asyncio.CancelledError: If cancellation is requested (never suppressed)
         """
-        if not hasattr(event, "type"):
+        event_type = getattr(event, "type", None)
+        if event_type is None:
             msg = "event must have a 'type' attribute"
             raise ValueError(msg)
-
-        event_type = event.type  # type: ignore
         if event_type not in self._event_handlers:
             return
 
+        failures = []
         for handler in self._event_handlers[event_type]:
             handler_name = getattr(handler, "__name__", str(handler))
             try:
                 handler(event)
-            except Exception as e:
+            except asyncio.CancelledError:
+                # Never suppress cancellation - propagate immediately
+                raise
+            except (ValueError, TypeError) as e:
+                # Expected validation errors from handlers
                 logger.error(
-                    f"Event handler failed for {event_type}: {e}",
+                    f"Handler {handler_name} validation error for {event_type}: {e}",
+                    exc_info=True,
+                    extra={
+                        "event_type": event_type,
+                        "handler": handler_name,
+                        "error_id": ErrorRegistry.ERR_VALIDATION_FAILED,
+                    },
+                )
+                failures.append((handler_name, str(e)))
+            except Exception as e:
+                # Unexpected runtime errors from handlers
+                logger.error(
+                    f"Handler {handler_name} execution error for {event_type}: {e}",
                     exc_info=True,
                     extra={
                         "error_id": ErrorRegistry.ERR_HANDLER_EXECUTION,
@@ -716,7 +721,19 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
                         "handler": handler_name,
                     },
                 )
-                # Continue processing other handlers - don't re-raise
+                failures.append((handler_name, str(e)))
+
+        # Log summary if any handlers failed
+        if failures:
+            logger.error(
+                f"Event emission for {event_type} completed with {len(failures)} handler failure(s)",
+                extra={
+                    "error_id": ErrorRegistry.ERR_HANDLER_EXECUTION,
+                    "event_type": event_type,
+                    "event_id": getattr(event, "event_id", None),
+                    "failure_count": len(failures),
+                },
+            )
 
     # Utility Methods
 
