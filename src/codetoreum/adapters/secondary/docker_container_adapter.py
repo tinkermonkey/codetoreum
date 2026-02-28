@@ -294,12 +294,27 @@ class DockerContainerAdapter(IContainer):
                     # If we get here due to timeout, re-raise it
                     if isinstance(e, ContainerTimeoutError):
                         raise
-                    # If container was removed during streaming, we might not get all logs
-                    # but we can still return what we captured
+                    # If container was removed during streaming, we cannot determine its exit status
+                    # The container may have been OOM-killed, force-removed, or crashed.
+                    # Reporting success (exit_code=0) would cause workflows to proceed with
+                    # potentially missing or incomplete artifacts - this is unacceptable.
                     if "404" in str(e) or "not found" in str(e).lower():
-                        # Container was removed, use what we have
-                        exit_code = 0  # Assume success if container completed and was removed
-                        container_id = ContainerId(container.short_id if container else "unknown")
+                        container_id_str = container.short_id if container else "unknown"
+                        msg = (
+                            f"Container disappeared during log streaming (possibly OOM-killed, "
+                            f"force-removed, or crashed). Cannot determine exit status. "
+                            f"Logs captured: {len(log_buffer)} lines. Container ID: {container_id_str}"
+                        )
+                        logger.error(
+                            msg,
+                            exc_info=True,
+                            extra={
+                                "error_id": "ERR_CONTAINER_DISAPPEARED_DURING_STREAMING",
+                                "container_id": container_id_str,
+                                "logs_captured": len(log_buffer),
+                            },
+                        )
+                        raise ContainerExecutionError(msg) from e
                     else:
                         raise
 
