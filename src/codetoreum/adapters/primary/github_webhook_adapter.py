@@ -264,7 +264,7 @@ class GitHubWebhookAdapter:
             )
 
             # 3. Verify signature
-            if not await self.verify_signature(payload_bytes, x_hub_signature_256):
+            if not await self._verify_signature(payload_bytes, x_hub_signature_256, event.repository):
                 msg = "Invalid HMAC signature"
                 raise WebhookVerificationError(msg)
 
@@ -319,21 +319,43 @@ class GitHubWebhookAdapter:
             )
             raise HTTPException(status_code=500, detail="Internal error") from e
 
-    async def verify_signature(self, payload: bytes, signature: str) -> bool:
+    async def _verify_signature(self, payload: bytes, signature: str, repository: str) -> bool:
         """
         Verify HMAC-SHA256 signature from GitHub.
 
         Args:
             payload: Raw request body bytes
             signature: X-Hub-Signature-256 header (format: 'sha256=<hex>')
+            repository: GitHub repository (format: 'org/repo')
 
         Returns:
             True if signature matches
         """
-        # Get webhook secret from configuration
-        secret = await self.config.get_webhook_secret()
+        # Identify project from repository to get its webhook secret
+        project_id = await self._identify_project(repository)
+        if not project_id:
+            self.logger.warning(
+                f"Could not identify project for repository {repository}; "
+                f"signature verification cannot proceed"
+            )
+            return False
+
+        # Get project config to retrieve webhook secret from metadata
+        try:
+            project_config = await self.config.get_project_config(project_id)
+        except Exception as e:
+            self.logger.warning(
+                f"Could not load project config for {project_id}: {e}",
+                exc_info=True,
+            )
+            return False
+
+        secret = project_config.metadata.get("webhook_secret")
         if not secret:
-            self.logger.warning("Webhook secret not configured; signature verification cannot proceed")
+            self.logger.warning(
+                f"Webhook secret not configured for project {project_id}; "
+                f"signature verification cannot proceed"
+            )
             return False
 
         # Compute expected signature
@@ -617,13 +639,10 @@ class GitHubWebhookAdapter:
             Project name or None
         """
         projects = await self.config.list_projects()
-        for project in projects:
-            project_config = await self.config.get_project_config(project)
-            # This assumes project_config has github.org and github.repo attributes
-            # This will need to be adjusted based on actual config structure
-            repo_full_name = f"{project_config.github.org}/{project_config.github.repo}"
+        for project_config in projects:
+            repo_full_name = f"{project_config.github_org}/{project_config.github_repo}"
             if repo_full_name == repository:
-                return project
+                return project_config.id
         return None
 
     async def _map_column_to_stage(self, project: str, column_id: int) -> StageInfo | None:
@@ -637,44 +656,18 @@ class GitHubWebhookAdapter:
         Returns:
             Stage information or None
         """
-        # Load GitHub state (contains column ID mappings)
-        state = await self.config.load_github_state(project)
-        if not state:
-            return None
-
-        # Find column name by ID
-        column_name = None
-        board_name = None
-        for board, board_data in state.get("boards", {}).items():
-            for col_name, col_id in board_data.get("columns", {}).items():
-                if col_id == column_id:
-                    column_name = col_name
-                    board_name = board
-                    break
-
-        if not column_name:
-            return None
-
-        # Get project configuration
-        project_config = await self.config.get_project_config(project)
-
-        # Find pipeline for this board
-        for pipeline in project_config.pipelines:
-            if pipeline.board_name == board_name:
-                # Get workflow template
-                workflow = await self.config.get_workflow_template(pipeline.workflow)
-
-                # Find column in workflow
-                for col in workflow.columns:
-                    if col.name == column_name:
-                        return StageInfo(
-                            pipeline_name=pipeline.name,
-                            board_name=board_name,
-                            stage_name=col.name,
-                            column_name=col.name,
-                            agent_name=col.agent,
-                        )
-
+        # Note: Column ID to stage mapping requires board_id and column metadata
+        # which is not currently available from GitHub webhook events alone.
+        # This functionality requires integration with BoardService to:
+        # 1. Query board column structure and find column name by ID
+        # 2. Use WorkflowConfigService to map column to stage/agent
+        #
+        # For now, we return None and log a warning
+        self.logger.warning(
+            f"Column ID to stage mapping not implemented: "
+            f"project={project}, column_id={column_id}. "
+            f"Requires BoardService integration."
+        )
         return None
 
     def _extract_work_item_id(self, content_url: str) -> str | None:
