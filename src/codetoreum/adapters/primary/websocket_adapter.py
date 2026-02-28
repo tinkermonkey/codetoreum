@@ -790,44 +790,44 @@ class ConnectionManager:
         attributes = self._extract_event_attributes(event_dict)
         event_type = event_dict.get("event_type", "UnknownEvent")
 
-        # Start with all connections, then intersect with relevant indices
+        # Start with empty set, then union all matching index lookups
         relevant_connections: set[str] | None = None
 
         # Find subscribers using reverse indices (fast set operations)
         if attributes["workflow_run_id"] and attributes["workflow_run_id"] in self.workflow_subscribers:
             candidate_set = self.workflow_subscribers[attributes["workflow_run_id"]]
             relevant_connections = (
-                candidate_set.copy() if relevant_connections is None else relevant_connections & candidate_set
+                candidate_set.copy() if relevant_connections is None else relevant_connections | candidate_set
             )
 
         if attributes["execution_id"] and attributes["execution_id"] in self.execution_subscribers:
             candidate_set = self.execution_subscribers[attributes["execution_id"]]
             relevant_connections = (
-                candidate_set.copy() if relevant_connections is None else relevant_connections & candidate_set
+                candidate_set.copy() if relevant_connections is None else relevant_connections | candidate_set
             )
 
         if attributes["work_item_id"] and attributes["work_item_id"] in self.work_item_subscribers:
             candidate_set = self.work_item_subscribers[attributes["work_item_id"]]
             relevant_connections = (
-                candidate_set.copy() if relevant_connections is None else relevant_connections & candidate_set
+                candidate_set.copy() if relevant_connections is None else relevant_connections | candidate_set
             )
 
         if attributes["workflow_id"] and attributes["workflow_id"] in self.workflow_definition_subscribers:
             candidate_set = self.workflow_definition_subscribers[attributes["workflow_id"]]
             relevant_connections = (
-                candidate_set.copy() if relevant_connections is None else relevant_connections & candidate_set
+                candidate_set.copy() if relevant_connections is None else relevant_connections | candidate_set
             )
 
         if attributes["agent_id"] and attributes["agent_id"] in self.agent_subscribers:
             candidate_set = self.agent_subscribers[attributes["agent_id"]]
             relevant_connections = (
-                candidate_set.copy() if relevant_connections is None else relevant_connections & candidate_set
+                candidate_set.copy() if relevant_connections is None else relevant_connections | candidate_set
             )
 
         if attributes["project_name"] and attributes["project_name"] in self.project_subscribers:
             candidate_set = self.project_subscribers[attributes["project_name"]]
             relevant_connections = (
-                candidate_set.copy() if relevant_connections is None else relevant_connections & candidate_set
+                candidate_set.copy() if relevant_connections is None else relevant_connections | candidate_set
             )
 
         # If no index-based matches, check all connections with complex filters
