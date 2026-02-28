@@ -14,6 +14,7 @@ serve as the single source of truth for the system's history.
 """
 
 from dataclasses import dataclass
+from typing import Literal
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
@@ -125,7 +126,7 @@ class ReviewCycleIterationCompletedEvent(CodetoreumEvent):
         review_cycle_id (str): ID of the review cycle
         work_item_id (str): ID of the work item being reviewed
         iteration (int): Iteration number (1-indexed)
-        status (str): Review decision (APPROVED, CHANGES_REQUESTED, BLOCKED)
+        status (Literal): Review decision ("APPROVED", "CHANGES_REQUESTED", "BLOCKED")
         blocking_count (int): Number of blocking findings in this iteration
 
     Example:
@@ -144,7 +145,7 @@ class ReviewCycleIterationCompletedEvent(CodetoreumEvent):
     review_cycle_id: str = ""
     work_item_id: str = ""
     iteration: int = 0
-    status: str = ""  # APPROVED, CHANGES_REQUESTED, BLOCKED
+    status: Literal["APPROVED", "CHANGES_REQUESTED", "BLOCKED"] = "APPROVED"
     blocking_count: int = 0
 
     def __post_init__(self) -> None:

@@ -307,16 +307,21 @@ class ExecutionResult:
 
 @dataclass(frozen=True)
 class ContainerConfig:
-    """Configuration for container creation."""
+    """Configuration for container creation.
+
+    **IMMUTABILITY**: Frozen dataclass with immutable collection types (tuples instead of lists).
+    All collections are immutable: command and entrypoint use tuples, and environment and
+    volumes dicts are wrapped in MappingProxyType to prevent in-place mutations.
+    """
 
     image: str  # Image name:tag
     name: str | None = None  # Container name
-    command: list[str] | None = None  # Command to run
-    entrypoint: list[str] | None = None
+    command: tuple[str, ...] | None = None  # Command to run - immutable tuple
+    entrypoint: tuple[str, ...] | None = None  # Immutable tuple
     working_dir: str = "/workspace"
     user: str = "1000:1000"  # UID:GID
-    environment: dict[str, str] | None = None
-    volumes: dict[str, dict[str, str]] | None = None  # {host: {bind: path, mode}}
+    environment: dict[str, str] | None = None  # Wrapped in MappingProxyType in __post_init__
+    volumes: dict[str, dict[str, str]] | None = None  # {host: {bind: path, mode}} - wrapped in __post_init__
     network: str | None = None
     auto_remove: bool = False  # --rm flag
     detached: bool = False  # -d flag
@@ -324,10 +329,19 @@ class ContainerConfig:
     tty: bool = False  # -t flag
 
     def __post_init__(self) -> None:
-        """Validate container configuration."""
+        """Validate container configuration and wrap mutable collections."""
         if not self.image:
             msg = "Container image cannot be empty"
             raise DomainError(msg)
+        # Convert lists to tuples for immutability
+        if self.command is not None and isinstance(self.command, list):
+            object.__setattr__(self, "command", tuple(self.command))
+        if self.entrypoint is not None and isinstance(self.entrypoint, list):
+            object.__setattr__(self, "entrypoint", tuple(self.entrypoint))
+        # Wrap environment dict in MappingProxyType for immutability
+        if self.environment is not None:
+            object.__setattr__(self, "environment", MappingProxyType(self.environment))
+        # Wrap volumes dict and nested dicts in MappingProxyType for deep immutability
         if self.volumes:
             for host_path, config in self.volumes.items():
                 if "bind" not in config:
@@ -337,18 +351,32 @@ class ContainerConfig:
                 if mode not in ["rw", "ro"]:
                     msg = f"Volume mode must be 'rw' or 'ro', got {mode}"
                     raise DomainError(msg)
+            # Wrap nested volume configs in MappingProxyType, then wrap the outer dict
+            wrapped_volumes = {
+                host: MappingProxyType(config) for host, config in self.volumes.items()
+            }
+            object.__setattr__(self, "volumes", MappingProxyType(wrapped_volumes))
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
+        # Convert tuples to lists for serialization
+        command = list(self.command) if self.command else None
+        entrypoint = list(self.entrypoint) if self.entrypoint else None
+        # Convert MappingProxyType dicts to regular dicts for serialization
+        environment = dict(self.environment) if self.environment else {}
+        volumes = {}
+        if self.volumes:
+            for host, config in self.volumes.items():
+                volumes[host] = dict(config)
         return {
             "image": self.image,
             "name": self.name,
-            "command": self.command,
-            "entrypoint": self.entrypoint,
+            "command": command,
+            "entrypoint": entrypoint,
             "working_dir": self.working_dir,
             "user": self.user,
-            "environment": self.environment or {},
-            "volumes": self.volumes or {},
+            "environment": environment,
+            "volumes": volumes,
             "network": self.network,
             "auto_remove": self.auto_remove,
             "detached": self.detached,

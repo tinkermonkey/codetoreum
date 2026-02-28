@@ -309,7 +309,7 @@ class TestContainerConfig:
 
         assert config.image == "python:3.11"
         assert config.name == "test-container"
-        assert config.command == ["python", "main.py"]
+        assert config.command == ("python", "main.py")
         assert config.working_dir == "/app"
         assert config.user == "1001:1001"
         assert config.environment == {"ENV": "test"}

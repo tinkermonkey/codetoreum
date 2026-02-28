@@ -9,6 +9,7 @@ Terminology (vendor-agnostic):
 """
 
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Any
 from uuid import uuid4
 
@@ -101,16 +102,16 @@ class WorkItemUpdatedEvent(CodetoreumEvent):
     integrity. Events represent immutable facts—attempting to modify any field
     will raise `FrozenInstanceError`. This immutability is essential because
     events are the permanent record of state changes in the system and must
-    never be altered once created. The `changes` dict field reference is
-    immutable (cannot be reassigned), though the dict itself is mutable for
-    flexible change tracking.
+    never be altered once created. The `changes` dict is wrapped in MappingProxyType
+    to ensure deep immutability, preventing in-place mutations that could break
+    the event sourcing audit trail.
 
     Attributes:
         type (str): Fixed to "workitem.updated"
         work_item_id (str): ID of the updated work item
         project_id (str): ID of the project containing the work item
-        changes (Dict[str, Any]): Dictionary of field names to new values that were changed.
-            Field reference is immutable (frozen), though dict contents are mutable.
+        changes (MappingProxyType): Immutable mapping of field names to new values.
+            Wrapped in MappingProxyType to prevent in-place mutations.
 
     Example:
         >>> event = WorkItemUpdatedEvent(
@@ -137,9 +138,8 @@ class WorkItemUpdatedEvent(CodetoreumEvent):
         if not self.project_id:
             msg = "project_id is required"
             raise ValueError(msg)
-        # Ensure changes dict is initialized
-        if self.changes is None:
-            object.__setattr__(self, "changes", {})
+        # Wrap changes dict in MappingProxyType for deep immutability
+        object.__setattr__(self, "changes", MappingProxyType(self.changes or {}))
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -148,7 +148,7 @@ class WorkItemUpdatedEvent(CodetoreumEvent):
             {
                 "work_item_id": self.work_item_id,
                 "project_id": self.project_id,
-                "changes": self.changes or {},
+                "changes": dict(self.changes) if self.changes else {},
             }
         )
         return d

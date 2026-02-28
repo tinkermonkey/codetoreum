@@ -986,7 +986,7 @@ class RepairCycleCheckpointFailedEvent(CodetoreumEvent):
     Attributes:
         type (str): Fixed to "repair_cycle.checkpoint_failed"
         workflow_run_id (str): ID of the workflow run
-        test_type (str): RepairTestType value
+        test_type (RepairTestType): Type of test being executed (UNIT, INTEGRATION, E2E)
         iteration (int): Current iteration number (1-based)
         error_type (str): Type of error (e.g., "ConnectionError")
         error_message (str): Error message details
@@ -995,7 +995,7 @@ class RepairCycleCheckpointFailedEvent(CodetoreumEvent):
     """
 
     workflow_run_id: str = ""
-    test_type: str = ""
+    test_type: RepairTestType = RepairTestType.UNIT
     iteration: int = 0
     error_type: str = ""
     error_message: str = ""
@@ -1026,7 +1026,7 @@ class RepairCycleCheckpointFailedEvent(CodetoreumEvent):
         d.update(
             {
                 "workflow_run_id": self.workflow_run_id,
-                "test_type": self.test_type,
+                "test_type": self.test_type.value,
                 "iteration": self.iteration,
                 "error_type": self.error_type,
                 "error_message": self.error_message,
@@ -1046,6 +1046,9 @@ class RepairCycleCheckpointFailedEvent(CodetoreumEvent):
                 stacklevel=2,
             )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
+        test_type = (
+            RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
+        )
         return cls(
             type=data.get("type", "repair_cycle.checkpoint_failed"),
             timestamp=data.get("timestamp", ""),
@@ -1053,7 +1056,7 @@ class RepairCycleCheckpointFailedEvent(CodetoreumEvent):
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
             workflow_run_id=workflow_run_id,
-            test_type=data.get("test_type", ""),
+            test_type=test_type,
             iteration=data.get("iteration", 0),
             error_type=data.get("error_type", ""),
             error_message=data.get("error_message", ""),
