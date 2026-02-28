@@ -356,8 +356,7 @@ class GitHubWebhookAdapter:
         secret = project_config.metadata.get("webhook_secret")
         if not secret:
             self.logger.warning(
-                "Webhook secret not configured for project %s; "
-                "signature verification cannot proceed",
+                "Webhook secret not configured for project %s; " "signature verification cannot proceed",
                 project_id,
             )
             return False
@@ -665,8 +664,7 @@ class GitHubWebhookAdapter:
         """
         if not self.board_service:
             self.logger.warning(
-                "Board service not injected; column ID to stage mapping not available "
-                "for project %s column %s",
+                "Board service not injected; column ID to stage mapping not available " "for project %s column %s",
                 project,
                 column_id,
             )

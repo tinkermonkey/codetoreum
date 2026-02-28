@@ -117,7 +117,7 @@ async def test_github_webhook_process_event_project_card(tracer_provider, webhoo
     )
 
     # Execute
-    result = await webhook_adapter._process_event(event)
+    result = await webhook_adapter._process_event(event, "test-project")
 
     # Assert span was created with correct attributes
     spans = tracer_provider.get_finished_spans()
@@ -185,7 +185,7 @@ async def test_github_webhook_complete_trace_chain(tracer_provider, webhook_adap
     )
 
     # Execute
-    result = await webhook_adapter._process_event(event)
+    result = await webhook_adapter._process_event(event, "test-project")
 
     # Assert all expected spans with complete context
     spans = tracer_provider.get_finished_spans()
