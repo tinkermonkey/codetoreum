@@ -973,6 +973,34 @@ class SimulationApplicationBootstrap:
             "Done": WorkItemStatus.COMPLETED,
         }
 
+        def _handle_publish_task_error(task: asyncio.Task) -> None:
+            """Handle errors from event publish tasks."""
+            try:
+                task.result()
+            except asyncio.CancelledError:
+                # Task was cancelled, this is normal during shutdown
+                pass
+            except Exception as e:
+                logger.error(
+                    f"Event publish task failed: {e}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                )
+
+        def _handle_sync_task_error(task: asyncio.Task) -> None:
+            """Handle errors from work item status sync tasks."""
+            try:
+                task.result()
+            except asyncio.CancelledError:
+                # Task was cancelled, this is normal during shutdown
+                pass
+            except Exception as e:
+                logger.error(
+                    f"Work item status sync task failed: {e}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                )
+
         def board_column_changed_bridge(event):
             """Translate WorkItemColumnChangedEvent (CodetoreumEvent) to WorkItemColumnChanged (DomainEvent).
 
@@ -992,14 +1020,21 @@ class SimulationApplicationBootstrap:
                         "moved_by": event.moved_by,
                     },
                 )
-                loop.create_task(event_bus.publish(domain_event))
+                # Create task with error callback to catch publish failures
+                task = loop.create_task(event_bus.publish(domain_event))
+                task.add_done_callback(_handle_publish_task_error)
 
                 # Sync work item status based on target column (best-effort)
                 target_status = _column_to_status.get(event.to_column)
                 if target_status is not None:
-                    loop.create_task(_sync_work_item_status(event.work_item_id, target_status))
-            except RuntimeError:
-                pass
+                    sync_task = loop.create_task(_sync_work_item_status(event.work_item_id, target_status))
+                    sync_task.add_done_callback(_handle_sync_task_error)
+            except RuntimeError as e:
+                logger.error(
+                    f"Failed to schedule board column event bridge tasks: {e}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                )
 
         async def _sync_work_item_status(work_item_id: str, target_status: WorkItemStatus) -> None:
             """Best-effort sync of work item status in ticket adapter.
@@ -1062,7 +1097,11 @@ class SimulationApplicationBootstrap:
                 await ticket_adapter.update_status(work_item_id, target_status)
 
             except Exception as e:
-                logger.debug(f"Best-effort status sync failed for {work_item_id} -> {target_status.value}: {e}")
+                logger.warning(
+                    f"Best-effort status sync failed for {work_item_id} -> {target_status.value}: {e}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                )
 
         def board_reconciled_bridge(event):
             """Translate BoardReconciledEvent (CodetoreumEvent) to BoardReconciled (DomainEvent)."""
@@ -1078,9 +1117,15 @@ class SimulationApplicationBootstrap:
                         "orphaned_items": [],
                     },
                 )
-                loop.create_task(event_bus.publish(domain_event))
-            except RuntimeError:
-                pass
+                # Create task with error callback to catch publish failures
+                task = loop.create_task(event_bus.publish(domain_event))
+                task.add_done_callback(_handle_publish_task_error)
+            except RuntimeError as e:
+                logger.error(
+                    f"Failed to schedule board reconciliation event bridge task: {e}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                )
 
         self.adapters.board.on("workitem.column_changed", board_column_changed_bridge)
         self.adapters.board.on("board.reconciled", board_reconciled_bridge)
