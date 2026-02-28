@@ -301,7 +301,7 @@ class ReviewCycleEscalatedToHumanEvent(CodetoreumEvent):
     work_item_id: str = ""
     iteration: int = 0
     blocking_count: int = 0
-    escalation_reason: str = ""  # BLOCKED or MAX_ITERATIONS
+    escalation_reason: Literal["BLOCKED", "MAX_ITERATIONS"] = ""  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""

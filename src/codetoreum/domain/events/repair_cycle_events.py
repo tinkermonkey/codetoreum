@@ -16,6 +16,7 @@ event sourcing audit trail integrity. Events represent immutable facts
 about test execution and repair steps—they cannot be modified after creation.
 """
 
+import logging
 import warnings
 from dataclasses import dataclass
 from uuid import uuid4
@@ -27,6 +28,8 @@ from ..repair_cycle_types import (
     RepairTestWarning,
 )
 from .adapter_events import CodetoreumEvent
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -1046,9 +1049,17 @@ class RepairCycleCheckpointFailedEvent(CodetoreumEvent):
                 stacklevel=2,
             )
         workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
-        test_type = (
-            RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
-        )
+
+        # Handle test_type with explicit logging for missing values
+        if isinstance(data.get("test_type"), str):
+            test_type = RepairTestType(data.get("test_type"))
+        else:
+            if "test_type" not in data:
+                logger.warning(
+                    "Missing 'test_type' in RepairCycleCheckpointFailedEvent deserialization, defaulting to UNIT. "
+                    "This may indicate data corruption or incomplete event data."
+                )
+            test_type = RepairTestType.UNIT
         return cls(
             type=data.get("type", "repair_cycle.checkpoint_failed"),
             timestamp=data.get("timestamp", ""),

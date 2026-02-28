@@ -1,5 +1,6 @@
 """Value objects for the domain layer."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from types import MappingProxyType
@@ -320,8 +321,8 @@ class ContainerConfig:
     entrypoint: tuple[str, ...] | None = None  # Immutable tuple
     working_dir: str = "/workspace"
     user: str = "1000:1000"  # UID:GID
-    environment: dict[str, str] | None = None  # Wrapped in MappingProxyType in __post_init__
-    volumes: dict[str, dict[str, str]] | None = None  # {host: {bind: path, mode}} - wrapped in __post_init__
+    environment: Mapping[str, str] | None = None  # Wrapped in MappingProxyType in __post_init__
+    volumes: Mapping[str, Mapping[str, str]] | None = None  # {host: {bind: path, mode}} - wrapped in __post_init__
     network: str | None = None
     auto_remove: bool = False  # --rm flag
     detached: bool = False  # -d flag

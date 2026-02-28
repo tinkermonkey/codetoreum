@@ -8,6 +8,7 @@ Terminology (vendor-agnostic):
 - Work Item ID: The identifier of a work item (issue number, key, etc.)
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any
@@ -127,7 +128,7 @@ class WorkItemUpdatedEvent(CodetoreumEvent):
 
     work_item_id: str = ""
     project_id: str = ""
-    changes: dict[str, Any] = field(default_factory=dict)
+    changes: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""
