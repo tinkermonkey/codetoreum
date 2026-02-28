@@ -27,6 +27,7 @@ from codetoreum.domain.events.discussion_events import (
     CommentNeedsResponseEvent,
     CommentPostedEvent,
 )
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.http.github_graphql_client import GitHubGraphQLClient
 from codetoreum.ports.exceptions import (
     AuthenticationError,
@@ -414,10 +415,46 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
         if not self._monitoring and self._http_client is not None:
             # Schedule close to be called from async context
             try:
-                asyncio.create_task(self.close())
-            except RuntimeError:
-                # No event loop running, client will be closed on next close() call
-                pass
+                task = asyncio.create_task(self.close())
+                # Attach error handler to catch any failures
+                def _handle_close_error(task: asyncio.Task) -> None:
+                    if task.cancelled():
+                        return
+                    exc = task.exception()
+                    if exc is not None:
+                        logger.error(
+                            f"Failed to close HTTP client: {exc}",
+                            exc_info=exc,
+                            extra={
+                                "error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR,
+                                "operation": "http_client_close",
+                            },
+                        )
+
+                task.add_done_callback(_handle_close_error)
+            except RuntimeError as e:
+                # No event loop running - attempt synchronous close
+                logger.warning(
+                    f"No event loop for async close, attempting sync cleanup: {e}",
+                    exc_info=True,
+                    extra={
+                        "error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR,
+                        "operation": "async_close_fallback",
+                    },
+                )
+                # Try to close synchronously if httpx supports it
+                if hasattr(self._http_client, "close"):
+                    try:
+                        self._http_client.close()
+                    except Exception as close_exc:
+                        logger.error(
+                            f"Synchronous client close failed: {close_exc}",
+                            exc_info=True,
+                            extra={
+                                "error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR,
+                                "operation": "sync_client_close",
+                            },
+                        )
 
     # Webhook Handling
 
@@ -646,6 +683,10 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
     def emit(self, event: object) -> None:
         """Emit an event to all subscribers.
 
+        Handler failures are logged at ERROR level with full stack traces but do not
+        prevent other handlers from executing. This allows event processing to continue
+        while ensuring failures are visible in logs for monitoring and debugging.
+
         Args:
             event: Event to emit
 
@@ -657,9 +698,25 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             raise ValueError(msg)
 
         event_type = event.type  # type: ignore
-        if event_type in self._event_handlers:
-            for handler in self._event_handlers[event_type]:
+        if event_type not in self._event_handlers:
+            return
+
+        for handler in self._event_handlers[event_type]:
+            handler_name = getattr(handler, "__name__", str(handler))
+            try:
                 handler(event)
+            except Exception as e:
+                logger.error(
+                    f"Event handler failed for {event_type}: {e}",
+                    exc_info=True,
+                    extra={
+                        "error_id": ErrorRegistry.ERR_HANDLER_EXECUTION,
+                        "event_type": event_type,
+                        "event_id": getattr(event, "event_id", None),
+                        "handler": handler_name,
+                    },
+                )
+                # Continue processing other handlers - don't re-raise
 
     # Utility Methods
 
