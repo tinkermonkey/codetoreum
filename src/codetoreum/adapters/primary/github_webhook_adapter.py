@@ -447,7 +447,7 @@ class GitHubWebhookAdapter:
             # Unsupported event type - ignore gracefully
             return WebhookProcessingResult(
                 success=True,
-                message="Event type %s ignored" % event.event_type,
+                message=f"Event type {event.event_type} ignored",
                 commands_created=[],
             )
 
@@ -456,7 +456,7 @@ class GitHubWebhookAdapter:
 
         return WebhookProcessingResult(
             success=True,
-            message="Processed %s event" % event.event_type,
+            message=f"Processed {event.event_type} event",
             commands_created=[cmd for cmd in commands],
         )
 
@@ -672,27 +672,17 @@ class GitHubWebhookAdapter:
             )
             return None
 
-        try:
-            # TODO #370: Get board ID from project configuration or GitHub event
-            # For now, we cannot reliably map GitHub project IDs to our board IDs
-            # without additional configuration or the board_id in the webhook event
-            self.logger.warning(
-                "Column ID to stage mapping requires board_id resolution; "
-                "not implemented for project %s column %s. "
-                "See #370 for tracking.",
-                project,
-                column_id,
-            )
-            return None
-        except Exception as e:
-            self.logger.warning(
-                "Error mapping column %s to stage for project %s: %s",
-                column_id,
-                project,
-                str(e),
-                exc_info=True,
-            )
-            return None
+        # TODO #370: Get board ID from project configuration or GitHub event
+        # For now, we cannot reliably map GitHub project IDs to our board IDs
+        # without additional configuration or the board_id in the webhook event
+        self.logger.warning(
+            "Column ID to stage mapping requires board_id resolution; "
+            "not implemented for project %s column %s. "
+            "See #370 for tracking.",
+            project,
+            column_id,
+        )
+        return None
 
     def _extract_work_item_id(self, content_url: str) -> str | None:
         """
