@@ -5,9 +5,8 @@ authentication and authorization in the Codetoreum system.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Optional
 from uuid import UUID, uuid4
 
 
@@ -105,9 +104,9 @@ class User:
     roles: set[UserRole] = field(default_factory=set)
     is_active: bool = field(default=True)
     is_verified: bool = field(default=False)
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    last_login_at: Optional[datetime] = field(default=None)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    last_login_at: datetime | None = field(default=None)
     metadata: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -131,13 +130,13 @@ class User:
     def add_role(self, role: UserRole) -> None:
         """Add a role to the user."""
         self.roles.add(role)
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
 
     def remove_role(self, role: UserRole) -> None:
         """Remove a role from the user."""
         if role in self.roles:
             self.roles.remove(role)
-            self.updated_at = datetime.now(timezone.utc)
+            self.updated_at = datetime.now(UTC)
 
     def has_role(self, role: UserRole) -> bool:
         """Check if user has a specific role."""
@@ -161,26 +160,26 @@ class User:
     def deactivate(self) -> None:
         """Deactivate user account."""
         self.is_active = False
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
 
     def activate(self) -> None:
         """Activate user account."""
         self.is_active = True
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
 
     def verify_email(self) -> None:
         """Mark email as verified."""
         self.is_verified = True
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
 
     def record_login(self) -> None:
         """Record user login timestamp."""
-        self.last_login_at = datetime.now(timezone.utc)
+        self.last_login_at = datetime.now(UTC)
 
     def update_password(self, hashed_password: str) -> None:
         """Update user password."""
         self.hashed_password = hashed_password
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
 
 
 @dataclass
@@ -208,9 +207,9 @@ class APIKey:
     user_id: UUID = field(default_factory=uuid4)
     roles: set[UserRole] = field(default_factory=set)
     is_active: bool = field(default=True)
-    expires_at: Optional[datetime] = field(default=None)
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    last_used_at: Optional[datetime] = field(default=None)
+    expires_at: datetime | None = field(default=None)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    last_used_at: datetime | None = field(default=None)
     metadata: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -231,7 +230,7 @@ class APIKey:
         """Check if API key is expired."""
         if self.expires_at is None:
             return False
-        return datetime.now(timezone.utc) > self.expires_at
+        return datetime.now(UTC) > self.expires_at
 
     def is_valid(self) -> bool:
         """Check if API key is valid (active and not expired)."""
@@ -239,7 +238,7 @@ class APIKey:
 
     def record_usage(self) -> None:
         """Record API key usage timestamp."""
-        self.last_used_at = datetime.now(timezone.utc)
+        self.last_used_at = datetime.now(UTC)
 
     def revoke(self) -> None:
         """Revoke API key."""
@@ -274,7 +273,7 @@ class AuthContext:
     roles: set[UserRole]
     permissions: set[Permission]
     auth_method: str = "jwt"  # jwt, api_key, session
-    api_key_id: Optional[UUID] = None
+    api_key_id: UUID | None = None
     metadata: dict = field(default_factory=dict)
 
     def has_permission(self, permission: Permission) -> bool:

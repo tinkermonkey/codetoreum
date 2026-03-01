@@ -4,8 +4,13 @@ Example: Create a new agent in Codetoreum
 This example demonstrates how to create a new agent with capabilities
 and MCP server configuration.
 """
+
+import logging
+from typing import Any, cast
+
 import requests
-from typing import Dict, Any
+
+logger = logging.getLogger(__name__)
 
 
 # Configuration
@@ -17,10 +22,10 @@ def create_agent(
     name: str,
     description: str,
     agent_type: str = "claude_code",
-    capabilities: list[str] = None,
-    mcp_servers: list[Dict[str, Any]] = None,
-    configuration: Dict[str, Any] = None
-) -> Dict[str, Any]:
+    capabilities: list[str] | None = None,
+    mcp_servers: list[dict[str, Any]] | None = None,
+    configuration: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     Create a new agent.
 
@@ -42,7 +47,7 @@ def create_agent(
 
     headers = {
         "Authorization": f"Bearer {API_TOKEN}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
     }
 
     payload = {
@@ -50,29 +55,30 @@ def create_agent(
         "description": description,
         "agent_type": agent_type,
         "capabilities": capabilities or [],
-        "configuration": configuration or {
+        "configuration": configuration
+        or {
             "model": "claude-sonnet-4",
             "temperature": 0.7,
-            "max_tokens": 4000
+            "max_tokens": 4000,
         },
-        "active": True
+        "active": True,
     }
 
-    response = requests.post(url, json=payload, headers=headers)
+    response = requests.post(url, json=payload, headers=headers, timeout=30)
     response.raise_for_status()
 
-    agent_data = response.json()
-    print(f"✓ Created agent: {agent_data['id']}")
+    agent_data: dict[str, Any] = cast("dict[str, Any]", response.json())
+    logger.info("✓ Created agent: %s", agent_data["id"])
 
     # Add MCP servers if provided
     if mcp_servers:
         for mcp_server in mcp_servers:
-            add_mcp_server(agent_data['id'], mcp_server)
+            add_mcp_server(agent_data["id"], mcp_server)
 
     return agent_data
 
 
-def add_mcp_server(agent_id: str, mcp_config: Dict[str, Any]) -> Dict[str, Any]:
+def add_mcp_server(agent_id: str, mcp_config: dict[str, Any]) -> dict[str, Any]:
     """
     Add MCP server to an agent.
 
@@ -87,84 +93,80 @@ def add_mcp_server(agent_id: str, mcp_config: Dict[str, Any]) -> Dict[str, Any]:
 
     headers = {
         "Authorization": f"Bearer {API_TOKEN}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
     }
 
-    response = requests.post(url, json=mcp_config, headers=headers)
+    response = requests.post(url, json=mcp_config, headers=headers, timeout=30)
     response.raise_for_status()
 
-    print(f"✓ Added MCP server: {mcp_config['name']}")
-    return response.json()
+    result: dict[str, Any] = cast("dict[str, Any]", response.json())
+    logger.info("✓ Added MCP server: %s", mcp_config["name"])
+    return result
 
 
-def main():
+def main() -> None:
     """Example usage."""
     try:
         # Example 1: Create a backend development agent
-        print("Creating backend specialist agent...")
+        logger.info("Creating backend specialist agent...")
         backend_agent = create_agent(
             name="backend-specialist",
             description="Python backend development specialist",
             agent_type="claude_code",
-            capabilities=["python", "fastapi", "sqlalchemy", "postgresql", "docker"],
+            capabilities=[
+                "python",
+                "fastapi",
+                "sqlalchemy",
+                "postgresql",
+                "docker",
+            ],
             configuration={
                 "model": "claude-sonnet-4",
                 "temperature": 0.7,
                 "max_tokens": 8000,
-                "timeout_minutes": 120
+                "timeout_minutes": 120,
             },
             mcp_servers=[
                 {
                     "name": "filesystem",
                     "command": "npx",
-                    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/workspace"],
-                    "env": {}
+                    "args": [
+                        "-y",
+                        "@modelcontextprotocol/server-filesystem",
+                        "/workspace",
+                    ],
+                    "env": {},
                 },
                 {
                     "name": "git",
                     "command": "npx",
                     "args": ["-y", "@modelcontextprotocol/server-git"],
-                    "env": {}
-                }
-            ]
+                    "env": {},
+                },
+            ],
         )
 
-        print(f"\nAgent ID: {backend_agent['id']}")
-        print(f"Name: {backend_agent['name']}")
-        print(f"Capabilities: {', '.join(backend_agent['capabilities'])}")
+        logger.info("Agent ID: %s", backend_agent["id"])
+        logger.info("Name: %s", backend_agent["name"])
+        logger.info("Capabilities: %s", ", ".join(backend_agent["capabilities"]))
 
-        # Example 2: Create a frontend development agent
-        print("\nCreating frontend specialist agent...")
-        frontend_agent = create_agent(
-            name="frontend-specialist",
-            description="React and TypeScript frontend specialist",
-            agent_type="claude_code",
-            capabilities=["typescript", "react", "tailwind", "vite"],
-            configuration={
-                "model": "claude-sonnet-4",
-                "temperature": 0.8,
-                "max_tokens": 6000
-            }
-        )
-
-        print(f"\n✓ Created {2} agents successfully")
+        logger.info("✓ Created agent successfully")
 
     except requests.exceptions.HTTPError as e:
-        print(f"\n✗ API Error: {e.response.status_code}")
+        logger.exception("API Error: %s", e.response.status_code)
         try:
             error_detail = e.response.json()
-            print(f"  Detail: {error_detail.get('detail', 'No details provided')}")
+            logger.error("Detail: %s", error_detail.get("detail", "No details provided"))
         except ValueError:
-            print(f"  Detail: {e.response.text}")
-    except requests.exceptions.ConnectionError as e:
-        print(f"\n✗ Connection Error: Unable to connect to {BASE_URL}")
-        print("  Ensure the API server is running")
-    except requests.exceptions.Timeout as e:
-        print(f"\n✗ Timeout Error: Request took too long")
+            logger.error("Detail: %s", e.response.text)
+    except requests.exceptions.ConnectionError:
+        logger.exception("Connection Error: Unable to connect to %s", BASE_URL)
+    except requests.exceptions.Timeout:
+        logger.exception("Timeout Error: Request took too long")
     except requests.exceptions.RequestException as e:
-        print(f"\n✗ Request Error: {str(e)}")
+        logger.exception("Request Error: %s", str(e))
     except Exception as e:
-        print(f"\n✗ Unexpected Error: {type(e).__name__}: {str(e)}")
+        logger.exception("Unexpected Error: %s: %s", type(e).__name__, str(e))
 
 
 if __name__ == "__main__":

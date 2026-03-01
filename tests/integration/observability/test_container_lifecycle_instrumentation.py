@@ -11,9 +11,7 @@ Since the test environment uses OpenTelemetry with OTLP export configured,
 we test that the decorator is applied and attributes are set correctly.
 """
 
-import asyncio
-import logging
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from opentelemetry import trace
@@ -22,10 +20,6 @@ from codetoreum.adapters.secondary import DockerConfig, DockerContainerAdapter
 from codetoreum.adapters.secondary.docker_container_recovery_adapter import (
     DockerContainerRecoveryAdapter,
 )
-from codetoreum.application.container_recovery_service import ContainerRecoveryService
-from codetoreum.ports.output.container_recovery import ContainerMetadata
-from codetoreum.domain.types import ContainerId
-
 
 pytestmark = pytest.mark.integration
 
@@ -53,7 +47,7 @@ class TestDockerContainerAdapterInstrumentation:
         adapter = DockerContainerAdapter(docker_config)
 
         # Mock the Docker client to avoid actual Docker calls
-        with patch.object(adapter, '_get_client') as mock_get_client:
+        with patch.object(adapter, "_get_client") as mock_get_client:
             mock_client = MagicMock()
             mock_container = MagicMock()
             mock_container.logs.return_value = iter([b"test output\n"])
@@ -95,7 +89,7 @@ class TestDockerContainerAdapterInstrumentation:
         """
         adapter = DockerContainerAdapter(docker_config)
 
-        with patch.object(adapter, '_get_client') as mock_get_client:
+        with patch.object(adapter, "_get_client") as mock_get_client:
             mock_client = MagicMock()
             mock_container = MagicMock()
             mock_container.id = "test_container_id_sha256"
@@ -112,7 +106,7 @@ class TestDockerContainerAdapterInstrumentation:
                     labels={
                         "org.codetoreum.work_item_id": "work_item_123",
                         "org.codetoreum.agent": "code_analyzer",
-                    }
+                    },
                 )
 
                 assert container_id == "test_container_id_sha256"
@@ -124,7 +118,7 @@ class TestDockerContainerAdapterInstrumentation:
         """Test that start() method executes successfully with instrumentation."""
         adapter = DockerContainerAdapter(docker_config)
 
-        with patch.object(adapter, '_get_client') as mock_get_client:
+        with patch.object(adapter, "_get_client") as mock_get_client:
             mock_client = MagicMock()
             mock_container = MagicMock()
             mock_client.containers.get.return_value = mock_container
@@ -138,7 +132,7 @@ class TestDockerContainerAdapterInstrumentation:
         """Test that stop() method executes successfully with instrumentation."""
         adapter = DockerContainerAdapter(docker_config)
 
-        with patch.object(adapter, '_get_client') as mock_get_client:
+        with patch.object(adapter, "_get_client") as mock_get_client:
             mock_client = MagicMock()
             mock_container = MagicMock()
             mock_client.containers.get.return_value = mock_container
@@ -152,7 +146,7 @@ class TestDockerContainerAdapterInstrumentation:
         """Test that kill() method executes successfully with instrumentation."""
         adapter = DockerContainerAdapter(docker_config)
 
-        with patch.object(adapter, '_get_client') as mock_get_client:
+        with patch.object(adapter, "_get_client") as mock_get_client:
             mock_client = MagicMock()
             mock_container = MagicMock()
             mock_client.containers.get.return_value = mock_container
@@ -170,7 +164,7 @@ class TestDockerContainerAdapterInstrumentation:
         """
         adapter = DockerContainerAdapter(docker_config)
 
-        with patch.object(adapter, '_get_client') as mock_get_client:
+        with patch.object(adapter, "_get_client") as mock_get_client:
             mock_client = MagicMock()
             mock_container = MagicMock()
             mock_container.wait.return_value = {"StatusCode": 42}
@@ -192,7 +186,7 @@ class TestDockerContainerAdapterInstrumentation:
         """
         adapter = DockerContainerAdapter(docker_config)
 
-        with patch.object(adapter, '_get_client') as mock_get_client:
+        with patch.object(adapter, "_get_client") as mock_get_client:
             mock_client = MagicMock()
             mock_container = MagicMock()
             mock_client.containers.get.return_value = mock_container
@@ -217,7 +211,7 @@ class TestDockerContainerRecoveryAdapterInstrumentation:
 
         adapter = DockerContainerRecoveryAdapter(mock_recovery_service, mock_storage)
 
-        with patch.object(adapter, '_get_client') as mock_get_client:
+        with patch.object(adapter, "_get_client") as mock_get_client:
             mock_client = MagicMock()
             mock_client.containers.list.return_value = []
             mock_get_client.return_value = mock_client
@@ -235,5 +229,5 @@ class TestDockerContainerRecoveryAdapterInstrumentation:
         # The method has @instrument_async_function decorator applied
         # which creates a span named "container_recovery.assess_container"
         # Verify the decorator is present by checking the function attributes
-        assert hasattr(DockerContainerRecoveryAdapter.assess_container, '__wrapped__')
+        assert hasattr(DockerContainerRecoveryAdapter.assess_container, "__wrapped__")
         # The instrumentation decorator wraps the original method

@@ -4,19 +4,18 @@ Mock Orchestration Command Adapter
 In-memory implementation of IOrchestrationCommandPort for development and testing.
 """
 
-from datetime import datetime, timezone
-from typing import Dict, Optional
+from datetime import UTC, datetime
 from threading import RLock
 from uuid import uuid4
 
 from codetoreum.ports.input.orchestration_command import (
-    IOrchestrationCommandPort,
-    StartExecutionCommand,
     CancelExecutionCommand,
+    EntryConditionCheckResult,
+    IOrchestrationCommandPort,
+    OrchestrationCommandResult,
     PauseExecutionCommand,
     ResumeExecutionCommand,
-    OrchestrationCommandResult,
-    EntryConditionCheckResult,
+    StartExecutionCommand,
 )
 
 
@@ -26,7 +25,7 @@ class MockOrchestrationCommandAdapter(IOrchestrationCommandPort):
     """
 
     def __init__(self):
-        self._executions: Dict[str, Dict] = {}
+        self._executions: dict[str, dict] = {}
         self._lock = RLock()
 
     async def start_execution(self, command: StartExecutionCommand) -> OrchestrationCommandResult:
@@ -39,7 +38,7 @@ class MockOrchestrationCommandAdapter(IOrchestrationCommandPort):
                 "work_item_id": command.work_item_id,
                 "workflow_id": command.workflow_id,
                 "status": "ACCEPTED",
-                "started_at": datetime.now(timezone.utc),
+                "started_at": datetime.now(UTC),
             }
 
             return OrchestrationCommandResult(
@@ -48,7 +47,7 @@ class MockOrchestrationCommandAdapter(IOrchestrationCommandPort):
                 workflow_run_id=workflow_run_id,
                 status="ACCEPTED",
                 message=f"Execution started for work item {command.work_item_id}",
-                started_at=datetime.now(timezone.utc),
+                started_at=datetime.now(UTC),
             )
 
     async def cancel_execution(self, command: CancelExecutionCommand) -> OrchestrationCommandResult:
@@ -97,7 +96,7 @@ class MockOrchestrationCommandAdapter(IOrchestrationCommandPort):
         self,
         work_item_id: str,
         workflow_id: str,
-        stage_name: Optional[str] = None,
+        stage_name: str | None = None,
     ) -> EntryConditionCheckResult:
         """Check entry conditions for a workflow stage."""
         return EntryConditionCheckResult(

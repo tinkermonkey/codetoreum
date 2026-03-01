@@ -6,10 +6,8 @@ Defines the contract for agent registry command operations.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, List, Optional
 
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
-
 
 # ============================================================================
 # Commands
@@ -25,14 +23,14 @@ class CreateAgentCommand:
     agent_type: AgentType
     role_description: str
     model: str
-    capabilities: Dict[str, AgentCapability]
+    capabilities: dict[str, AgentCapability]
     timeout_seconds: int = 300
     max_retries: int = 3
     requires_docker: bool = True
     requires_dev_container: bool = False
     makes_code_changes: bool = False
     filesystem_write_allowed: bool = True
-    mcp_servers: Optional[List[str]] = None
+    mcp_servers: list[str] | None = None
 
 
 @dataclass
@@ -40,15 +38,15 @@ class UpdateAgentCommand:
     """Command to update an existing agent."""
 
     agent_id: str
-    display_name: Optional[str] = None
-    role_description: Optional[str] = None
-    model: Optional[str] = None
-    timeout_seconds: Optional[int] = None
-    max_retries: Optional[int] = None
-    requires_docker: Optional[bool] = None
-    requires_dev_container: Optional[bool] = None
-    makes_code_changes: Optional[bool] = None
-    filesystem_write_allowed: Optional[bool] = None
+    display_name: str | None = None
+    role_description: str | None = None
+    model: str | None = None
+    timeout_seconds: int | None = None
+    max_retries: int | None = None
+    requires_docker: bool | None = None
+    requires_dev_container: bool | None = None
+    makes_code_changes: bool | None = None
+    filesystem_write_allowed: bool | None = None
 
 
 @dataclass
@@ -105,7 +103,7 @@ class AgentCommandResult:
     agent_id: str
     message: str
     version: int
-    errors: Optional[List[str]] = None
+    errors: list[str] | None = None
 
 
 # ============================================================================
@@ -134,7 +132,6 @@ class IAgentCommandPort(ABC):
         Raises:
             DomainError: If agent with same name already exists or validation fails
         """
-        pass
 
     @abstractmethod
     async def update_agent(self, command: UpdateAgentCommand) -> Agent:
@@ -151,7 +148,6 @@ class IAgentCommandPort(ABC):
             AgentNotFoundError: If agent doesn't exist
             DomainError: If validation fails
         """
-        pass
 
     @abstractmethod
     async def add_capability(self, command: AddAgentCapabilityCommand) -> Agent:
@@ -168,7 +164,6 @@ class IAgentCommandPort(ABC):
             AgentNotFoundError: If agent doesn't exist
             DomainError: If capability already exists or validation fails
         """
-        pass
 
     @abstractmethod
     async def remove_capability(self, command: RemoveAgentCapabilityCommand) -> Agent:
@@ -185,7 +180,6 @@ class IAgentCommandPort(ABC):
             AgentNotFoundError: If agent doesn't exist
             DomainError: If capability doesn't exist or it's the last capability
         """
-        pass
 
     @abstractmethod
     async def update_capability(self, command: UpdateAgentCapabilityCommand) -> Agent:
@@ -202,7 +196,6 @@ class IAgentCommandPort(ABC):
             AgentNotFoundError: If agent doesn't exist
             DomainError: If capability doesn't exist or proficiency is invalid
         """
-        pass
 
     @abstractmethod
     async def add_mcp_server(self, command: AddMcpServerCommand) -> Agent:
@@ -219,7 +212,6 @@ class IAgentCommandPort(ABC):
             AgentNotFoundError: If agent doesn't exist
             DomainError: If server already configured
         """
-        pass
 
     @abstractmethod
     async def remove_mcp_server(self, command: RemoveMcpServerCommand) -> Agent:
@@ -236,7 +228,6 @@ class IAgentCommandPort(ABC):
             AgentNotFoundError: If agent doesn't exist
             DomainError: If server not configured
         """
-        pass
 
     @abstractmethod
     async def delete_agent(self, agent_id: str) -> AgentCommandResult:
@@ -252,4 +243,3 @@ class IAgentCommandPort(ABC):
         Raises:
             AgentNotFoundError: If agent doesn't exist
         """
-        pass

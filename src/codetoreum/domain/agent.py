@@ -1,9 +1,9 @@
 """Agent entity and value objects."""
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import uuid4
 
 from codetoreum.domain.events import (
@@ -44,12 +44,13 @@ class AgentCapability:
 
     skill: str
     proficiency: float  # 0.0 to 1.0
-    description: Optional[str] = None
+    description: str | None = None
 
     def __post_init__(self) -> None:
         """Validate proficiency range."""
         if not 0.0 <= self.proficiency <= 1.0:
-            raise DomainError("Proficiency must be between 0.0 and 1.0")
+            msg = "Proficiency must be between 0.0 and 1.0"
+            raise DomainError(msg)
 
 
 @dataclass
@@ -67,7 +68,7 @@ class Agent:
     agent_type: AgentType
 
     # Capabilities
-    capabilities: Dict[str, AgentCapability]
+    capabilities: dict[str, AgentCapability]
     role_description: str
 
     # Configuration
@@ -82,17 +83,17 @@ class Agent:
     filesystem_write_allowed: bool
 
     # MCP servers
-    mcp_servers: List[str]
+    mcp_servers: list[str]
 
     # Metadata
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
     # Timestamps
     created_at: datetime
     updated_at: datetime
 
     # Event tracking
-    _events: List[DomainEvent] = field(default_factory=list, init=False, repr=False)
+    _events: list[DomainEvent] = field(default_factory=list, init=False, repr=False)
     _version: int = field(default=0, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -111,19 +112,24 @@ class Agent:
         - Model must be specified
         """
         if not self.name or not self.name.strip():
-            raise DomainError("Agent must have a non-empty name")
+            msg = "Agent must have a non-empty name"
+            raise DomainError(msg)
 
         if not self.capabilities:
-            raise DomainError("Agent must have at least one capability")
+            msg = "Agent must have at least one capability"
+            raise DomainError(msg)
 
         if self.timeout_seconds <= 0:
-            raise DomainError("Timeout must be positive")
+            msg = "Timeout must be positive"
+            raise DomainError(msg)
 
         if self.max_retries < 0:
-            raise DomainError("Max retries must be non-negative")
+            msg = "Max retries must be non-negative"
+            raise DomainError(msg)
 
         if not self.model:
-            raise DomainError("Agent must specify a model")
+            msg = "Agent must specify a model"
+            raise DomainError(msg)
 
     @classmethod
     def create(
@@ -133,14 +139,14 @@ class Agent:
         agent_type: AgentType,
         role_description: str,
         model: str,
-        capabilities: Dict[str, AgentCapability],
+        capabilities: dict[str, AgentCapability],
         timeout_seconds: int = 300,
         max_retries: int = 3,
         requires_docker: bool = True,
         requires_dev_container: bool = False,
         makes_code_changes: bool = False,
         filesystem_write_allowed: bool = True,
-        mcp_servers: Optional[List[str]] = None,
+        mcp_servers: list[str] | None = None,
     ) -> "Agent":
         """
         Factory method to create a new agent.
@@ -181,8 +187,8 @@ class Agent:
             filesystem_write_allowed=filesystem_write_allowed,
             mcp_servers=mcp_servers or [],
             metadata={},
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
 
         event = AgentCreated(
@@ -213,10 +219,11 @@ class Agent:
         Emits: AgentCapabilityAdded event
         """
         if capability.skill in self.capabilities:
-            raise DomainError(f"Agent already has capability {capability.skill}")
+            msg = f"Agent already has capability {capability.skill}"
+            raise DomainError(msg)
 
         self.capabilities[capability.skill] = capability
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = AgentCapabilityAdded(
@@ -245,13 +252,15 @@ class Agent:
         Emits: AgentCapabilityRemoved event
         """
         if skill not in self.capabilities:
-            raise DomainError(f"Agent does not have capability {skill}")
+            msg = f"Agent does not have capability {skill}"
+            raise DomainError(msg)
 
         if len(self.capabilities) == 1:
-            raise DomainError("Cannot remove last capability")
+            msg = "Cannot remove last capability"
+            raise DomainError(msg)
 
         del self.capabilities[skill]
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = AgentCapabilityRemoved(
@@ -274,14 +283,16 @@ class Agent:
         Emits: AgentCapabilityUpdated event
         """
         if skill not in self.capabilities:
-            raise DomainError(f"Agent does not have capability {skill}")
+            msg = f"Agent does not have capability {skill}"
+            raise DomainError(msg)
 
         if not 0.0 <= proficiency <= 1.0:
-            raise DomainError("Proficiency must be between 0.0 and 1.0")
+            msg = "Proficiency must be between 0.0 and 1.0"
+            raise DomainError(msg)
 
         old_proficiency = self.capabilities[skill].proficiency
         self.capabilities[skill].proficiency = proficiency
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = AgentCapabilityUpdated(
@@ -309,11 +320,12 @@ class Agent:
         Emits: AgentModelUpdated event
         """
         if not model:
-            raise DomainError("Model cannot be empty")
+            msg = "Model cannot be empty"
+            raise DomainError(msg)
 
         old_model = self.model
         self.model = model
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = AgentModelUpdated(
@@ -339,11 +351,12 @@ class Agent:
         Emits: AgentTimeoutUpdated event
         """
         if timeout_seconds <= 0:
-            raise DomainError("Timeout must be positive")
+            msg = "Timeout must be positive"
+            raise DomainError(msg)
 
         old_timeout = self.timeout_seconds
         self.timeout_seconds = timeout_seconds
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = AgentTimeoutUpdated(
@@ -369,11 +382,12 @@ class Agent:
         Emits: AgentMaxRetriesUpdated event
         """
         if max_retries < 0:
-            raise DomainError("Max retries must be non-negative")
+            msg = "Max retries must be non-negative"
+            raise DomainError(msg)
 
         old_max_retries = self.max_retries
         self.max_retries = max_retries
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = AgentMaxRetriesUpdated(
@@ -388,10 +402,10 @@ class Agent:
 
     def update_constraints(
         self,
-        requires_docker: Optional[bool] = None,
-        requires_dev_container: Optional[bool] = None,
-        makes_code_changes: Optional[bool] = None,
-        filesystem_write_allowed: Optional[bool] = None,
+        requires_docker: bool | None = None,
+        requires_dev_container: bool | None = None,
+        makes_code_changes: bool | None = None,
+        filesystem_write_allowed: bool | None = None,
     ) -> None:
         """
         Update agent constraints.
@@ -409,13 +423,17 @@ class Agent:
         """
         # Validate types
         if requires_docker is not None and not isinstance(requires_docker, bool):
-            raise DomainError("requires_docker must be a boolean")
+            msg = "requires_docker must be a boolean"
+            raise DomainError(msg)
         if requires_dev_container is not None and not isinstance(requires_dev_container, bool):
-            raise DomainError("requires_dev_container must be a boolean")
+            msg = "requires_dev_container must be a boolean"
+            raise DomainError(msg)
         if makes_code_changes is not None and not isinstance(makes_code_changes, bool):
-            raise DomainError("makes_code_changes must be a boolean")
+            msg = "makes_code_changes must be a boolean"
+            raise DomainError(msg)
         if filesystem_write_allowed is not None and not isinstance(filesystem_write_allowed, bool):
-            raise DomainError("filesystem_write_allowed must be a boolean")
+            msg = "filesystem_write_allowed must be a boolean"
+            raise DomainError(msg)
 
         old_constraints = {
             "requires_docker": self.requires_docker,
@@ -433,7 +451,7 @@ class Agent:
         if filesystem_write_allowed is not None:
             self.filesystem_write_allowed = filesystem_write_allowed
 
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = AgentConstraintsUpdated(
@@ -465,10 +483,11 @@ class Agent:
         Emits: AgentMcpServerAdded event
         """
         if server_name in self.mcp_servers:
-            raise DomainError(f"MCP server {server_name} already configured")
+            msg = f"MCP server {server_name} already configured"
+            raise DomainError(msg)
 
         self.mcp_servers.append(server_name)
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = AgentMcpServerAdded(
@@ -493,10 +512,11 @@ class Agent:
         Emits: AgentMcpServerRemoved event
         """
         if server_name not in self.mcp_servers:
-            raise DomainError(f"MCP server {server_name} not configured")
+            msg = f"MCP server {server_name} not configured"
+            raise DomainError(msg)
 
         self.mcp_servers.remove(server_name)
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = AgentMcpServerRemoved(
@@ -538,9 +558,7 @@ class Agent:
             return 0.0
         return self.capabilities[skill].proficiency
 
-    def can_execute_in_environment(
-        self, has_docker: bool, has_dev_container: bool
-    ) -> bool:
+    def can_execute_in_environment(self, has_docker: bool, has_dev_container: bool) -> bool:
         """
         Check if agent can execute in given environment.
 
@@ -585,7 +603,7 @@ class Agent:
         """
         self._events.append(event)
 
-    def get_pending_events(self) -> List[DomainEvent]:
+    def get_pending_events(self) -> list[DomainEvent]:
         """
         Get all pending events.
 

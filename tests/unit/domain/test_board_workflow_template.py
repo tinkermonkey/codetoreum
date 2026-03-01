@@ -75,7 +75,7 @@ class TestBoardWorkflowTemplateCreation:
 
     def test_create_minimal_template(self):
         """Test creating a template with minimal columns."""
-        columns = [
+        columns = (
             ColumnTemplate(
                 name="Backlog",
                 type=ColumnType.MANUAL,
@@ -94,25 +94,25 @@ class TestBoardWorkflowTemplateCreation:
                 position=1,
                 auto_progress_on_completion=False,
             ),
-        ]
+        )
 
         template = BoardWorkflowTemplate(
             id="template-1",
             name="Simple Workflow",
-            pipeline_trigger_columns=[],
-            exit_columns=["Done"],
+            pipeline_trigger_columns=(),
+            exit_columns=("Done",),
             columns=columns,
         )
 
         assert template.id == "template-1"
         assert template.name == "Simple Workflow"
         assert len(template.columns) == 2
-        assert template.pipeline_trigger_columns == []
-        assert template.exit_columns == ["Done"]
+        assert template.pipeline_trigger_columns == ()
+        assert template.exit_columns == ("Done",)
 
     def test_create_full_workflow_template(self):
         """Test creating a template with full SDLC workflow."""
-        columns = [
+        columns = (
             ColumnTemplate(
                 name="Backlog",
                 type=ColumnType.MANUAL,
@@ -149,19 +149,19 @@ class TestBoardWorkflowTemplateCreation:
                 position=3,
                 auto_progress_on_completion=False,
             ),
-        ]
+        )
 
         template = BoardWorkflowTemplate(
             id="template-sdlc",
             name="Full SDLC Workflow",
-            pipeline_trigger_columns=["In Progress"],
-            exit_columns=["Done"],
+            pipeline_trigger_columns=("In Progress",),
+            exit_columns=("Done",),
             columns=columns,
         )
 
         assert len(template.columns) == 4
-        assert template.pipeline_trigger_columns == ["In Progress"]
-        assert template.exit_columns == ["Done"]
+        assert template.pipeline_trigger_columns == ("In Progress",)
+        assert template.exit_columns == ("Done",)
 
 
 class TestGetColumnConfig:
@@ -170,7 +170,7 @@ class TestGetColumnConfig:
     @pytest.fixture
     def template(self):
         """Fixture providing a complete workflow template."""
-        columns = [
+        columns = (
             ColumnTemplate(
                 name="Backlog",
                 type=ColumnType.MANUAL,
@@ -207,13 +207,13 @@ class TestGetColumnConfig:
                 position=3,
                 auto_progress_on_completion=False,
             ),
-        ]
+        )
 
         return BoardWorkflowTemplate(
             id="template-1",
             name="Test Workflow",
-            pipeline_trigger_columns=["In Progress"],
-            exit_columns=["Done"],
+            pipeline_trigger_columns=("In Progress",),
+            exit_columns=("Done",),
             columns=columns,
         )
 
@@ -263,7 +263,7 @@ class TestGetNextColumn:
     @pytest.fixture
     def template(self):
         """Fixture providing a complete workflow template."""
-        columns = [
+        columns = (
             ColumnTemplate(
                 name="Backlog",
                 type=ColumnType.MANUAL,
@@ -300,13 +300,13 @@ class TestGetNextColumn:
                 position=3,
                 auto_progress_on_completion=False,
             ),
-        ]
+        )
 
         return BoardWorkflowTemplate(
             id="template-1",
             name="Test Workflow",
-            pipeline_trigger_columns=["In Progress"],
-            exit_columns=["Done"],
+            pipeline_trigger_columns=("In Progress",),
+            exit_columns=("Done",),
             columns=columns,
         )
 
@@ -380,7 +380,7 @@ class TestBoardWorkflowTemplateEdgeCases:
 
     def test_single_column_workflow(self):
         """Test workflow with single column."""
-        columns = [
+        columns = (
             ColumnTemplate(
                 name="Work",
                 type=ColumnType.MANUAL,
@@ -390,13 +390,13 @@ class TestBoardWorkflowTemplateEdgeCases:
                 position=0,
                 auto_progress_on_completion=False,
             ),
-        ]
+        )
 
         template = BoardWorkflowTemplate(
             id="template-1",
             name="Single Column",
-            pipeline_trigger_columns=[],
-            exit_columns=[],
+            pipeline_trigger_columns=(),
+            exit_columns=(),
             columns=columns,
         )
 
@@ -406,7 +406,7 @@ class TestBoardWorkflowTemplateEdgeCases:
 
     def test_multiple_trigger_columns(self):
         """Test workflow with multiple pipeline trigger columns."""
-        columns = [
+        columns = (
             ColumnTemplate(
                 name="Dev",
                 type=ColumnType.AUTOMATED,
@@ -425,13 +425,13 @@ class TestBoardWorkflowTemplateEdgeCases:
                 position=1,
                 auto_progress_on_completion=False,
             ),
-        ]
+        )
 
         template = BoardWorkflowTemplate(
             id="template-1",
             name="Multi Trigger",
-            pipeline_trigger_columns=["Dev", "QA"],
-            exit_columns=[],
+            pipeline_trigger_columns=("Dev", "QA"),
+            exit_columns=(),
             columns=columns,
         )
 
@@ -462,7 +462,7 @@ class TestBoardWorkflowTemplatePositionValidation:
 
     def test_valid_sequential_positions(self):
         """Test that sequential positions are accepted."""
-        columns = [
+        columns = (
             ColumnTemplate(
                 name="Col0",
                 type=ColumnType.MANUAL,
@@ -490,13 +490,13 @@ class TestBoardWorkflowTemplatePositionValidation:
                 position=2,
                 auto_progress_on_completion=False,
             ),
-        ]
+        )
 
         template = BoardWorkflowTemplate(
             id="template-1",
             name="Test",
-            pipeline_trigger_columns=[],
-            exit_columns=[],
+            pipeline_trigger_columns=(),
+            exit_columns=(),
             columns=columns,
         )
 
@@ -504,7 +504,7 @@ class TestBoardWorkflowTemplatePositionValidation:
 
     def test_invalid_duplicate_positions(self):
         """Test that duplicate positions are rejected."""
-        columns = [
+        columns = (
             ColumnTemplate(
                 name="Col0",
                 type=ColumnType.MANUAL,
@@ -523,20 +523,20 @@ class TestBoardWorkflowTemplatePositionValidation:
                 position=0,  # Duplicate position
                 auto_progress_on_completion=False,
             ),
-        ]
+        )
 
         with pytest.raises(ValueError, match="Column positions must be unique"):
             BoardWorkflowTemplate(
                 id="template-1",
                 name="Test",
-                pipeline_trigger_columns=[],
-                exit_columns=[],
+                pipeline_trigger_columns=(),
+                exit_columns=(),
                 columns=columns,
             )
 
     def test_invalid_positions_not_starting_at_zero(self):
         """Test that positions not starting at 0 are rejected."""
-        columns = [
+        columns = (
             ColumnTemplate(
                 name="Col1",
                 type=ColumnType.MANUAL,
@@ -555,20 +555,20 @@ class TestBoardWorkflowTemplatePositionValidation:
                 position=2,
                 auto_progress_on_completion=False,
             ),
-        ]
+        )
 
         with pytest.raises(ValueError, match="Column positions must be unique"):
             BoardWorkflowTemplate(
                 id="template-1",
                 name="Test",
-                pipeline_trigger_columns=[],
-                exit_columns=[],
+                pipeline_trigger_columns=(),
+                exit_columns=(),
                 columns=columns,
             )
 
     def test_invalid_positions_with_gaps(self):
         """Test that positions with gaps are rejected."""
-        columns = [
+        columns = (
             ColumnTemplate(
                 name="Col0",
                 type=ColumnType.MANUAL,
@@ -587,13 +587,13 @@ class TestBoardWorkflowTemplatePositionValidation:
                 position=2,  # Gap: missing position 1
                 auto_progress_on_completion=False,
             ),
-        ]
+        )
 
         with pytest.raises(ValueError, match="Column positions must be unique"):
             BoardWorkflowTemplate(
                 id="template-1",
                 name="Test",
-                pipeline_trigger_columns=[],
-                exit_columns=[],
+                pipeline_trigger_columns=(),
+                exit_columns=(),
                 columns=columns,
             )

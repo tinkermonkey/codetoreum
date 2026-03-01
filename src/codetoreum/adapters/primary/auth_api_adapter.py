@@ -5,23 +5,22 @@ including login, token refresh, user management, and API key management.
 """
 
 from datetime import datetime
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
 
-from codetoreum.config import (
-    MIN_USERNAME_LENGTH,
-    MAX_USERNAME_LENGTH,
-    MIN_PASSWORD_LENGTH,
-    MIN_API_KEY_NAME_LENGTH,
-    MAX_API_KEY_NAME_LENGTH,
-)
-
 from codetoreum.adapters.primary.auth_dependencies import AuthDependencies
+from codetoreum.config import (
+    MAX_API_KEY_NAME_LENGTH,
+    MAX_USERNAME_LENGTH,
+    MIN_API_KEY_NAME_LENGTH,
+    MIN_PASSWORD_LENGTH,
+    MIN_USERNAME_LENGTH,
+)
 from codetoreum.domain.user import AuthContext, Permission, UserRole
 from codetoreum.ports.input.authentication import (
+    APIKeyNotFoundError,
     AuthenticationError,
     CreateAPIKeyCommand,
     CreateUserCommand,
@@ -32,7 +31,6 @@ from codetoreum.ports.input.authentication import (
     UserNotFoundError,
     ValidationError,
 )
-
 
 # ============================================================================
 # Request/Response Models
@@ -52,7 +50,7 @@ class LoginResponse(BaseModel):
     access_token: str = Field(..., description="JWT access token")
     token_type: str = Field(default="bearer", description="Token type")
     expires_in: int = Field(..., description="Token expiration in seconds")
-    refresh_token: Optional[str] = Field(None, description="Refresh token")
+    refresh_token: str | None = Field(None, description="Refresh token")
 
 
 class RefreshTokenRequest(BaseModel):
@@ -73,10 +71,10 @@ class CreateUserRequest(BaseModel):
 class UpdateUserRequest(BaseModel):
     """Update user request model."""
 
-    email: Optional[EmailStr] = Field(None, description="Email address")
-    password: Optional[str] = Field(None, min_length=MIN_PASSWORD_LENGTH, description="Password")
-    roles: Optional[list[UserRole]] = Field(None, description="User roles")
-    is_active: Optional[bool] = Field(None, description="Active status")
+    email: EmailStr | None = Field(None, description="Email address")
+    password: str | None = Field(None, min_length=MIN_PASSWORD_LENGTH, description="Password")
+    roles: list[UserRole] | None = Field(None, description="User roles")
+    is_active: bool | None = Field(None, description="Active status")
 
 
 class UserResponse(BaseModel):
@@ -89,17 +87,20 @@ class UserResponse(BaseModel):
     is_active: bool = Field(..., description="Active status")
     is_verified: bool = Field(..., description="Verified status")
     created_at: datetime = Field(..., description="Creation timestamp")
-    last_login_at: Optional[datetime] = Field(None, description="Last login timestamp")
+    last_login_at: datetime | None = Field(None, description="Last login timestamp")
 
 
 class CreateAPIKeyRequest(BaseModel):
     """Create API key request model."""
 
-    name: str = Field(..., min_length=MIN_API_KEY_NAME_LENGTH, max_length=MAX_API_KEY_NAME_LENGTH, description="API key name")
-    roles: list[UserRole] = Field(
-        default=[UserRole.SERVICE_ACCOUNT], description="API key roles"
+    name: str = Field(
+        ...,
+        min_length=MIN_API_KEY_NAME_LENGTH,
+        max_length=MAX_API_KEY_NAME_LENGTH,
+        description="API key name",
     )
-    expires_at: Optional[datetime] = Field(None, description="Expiration timestamp")
+    roles: list[UserRole] = Field(default=[UserRole.SERVICE_ACCOUNT], description="API key roles")
+    expires_at: datetime | None = Field(None, description="Expiration timestamp")
 
 
 class APIKeyResponse(BaseModel):
@@ -107,12 +108,12 @@ class APIKeyResponse(BaseModel):
 
     id: UUID = Field(..., description="API key ID")
     name: str = Field(..., description="API key name")
-    key: Optional[str] = Field(None, description="API key (only returned on creation)")
+    key: str | None = Field(None, description="API key (only returned on creation)")
     roles: list[UserRole] = Field(..., description="API key roles")
     is_active: bool = Field(..., description="Active status")
-    expires_at: Optional[datetime] = Field(None, description="Expiration timestamp")
+    expires_at: datetime | None = Field(None, description="Expiration timestamp")
     created_at: datetime = Field(..., description="Creation timestamp")
-    last_used_at: Optional[datetime] = Field(None, description="Last usage timestamp")
+    last_used_at: datetime | None = Field(None, description="Last usage timestamp")
 
 
 class MeResponse(BaseModel):
@@ -141,7 +142,7 @@ class AuthAPIAdapter:
         router: FastAPI router
     """
 
-    def __init__(self, auth_service: IAuthenticationPort):
+    def __init__(self, auth_service: IAuthenticationPort) -> None:
         """Initialize auth API adapter.
 
         Args:
@@ -172,9 +173,7 @@ class AuthAPIAdapter:
             Returns JWT access token and refresh token.
             """
             try:
-                command = LoginCommand(
-                    username=request.username, password=request.password
-                )
+                command = LoginCommand(username=request.username, password=request.password)
                 result = await self.auth_service.login(command)
 
                 return LoginResponse(
@@ -185,9 +184,7 @@ class AuthAPIAdapter:
                 )
 
             except AuthenticationError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e)
-                ) from e
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e)) from e
 
         @router.post(
             "/refresh",
@@ -212,9 +209,7 @@ class AuthAPIAdapter:
                 )
 
             except AuthenticationError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e)
-                ) from e
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e)) from e
 
         # ====================================================================
         # Authenticated Endpoints
@@ -254,9 +249,7 @@ class AuthAPIAdapter:
         )
         async def create_user(
             request: CreateUserRequest,
-            auth: AuthContext = Depends(
-                self.auth_deps.require_permission(Permission.USER_CREATE)
-            ),
+            _auth: AuthContext = Depends(self.auth_deps.require_permission(Permission.USER_CREATE)),
         ) -> UserResponse:
             """
             Create a new user.
@@ -284,13 +277,9 @@ class AuthAPIAdapter:
                 )
 
             except UserAlreadyExistsError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT, detail=str(e)
-                ) from e
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
             except ValidationError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-                ) from e
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
         @router.get(
             "/users/{user_id}",
@@ -300,9 +289,7 @@ class AuthAPIAdapter:
         )
         async def get_user(
             user_id: UUID,
-            auth: AuthContext = Depends(
-                self.auth_deps.require_permission(Permission.USER_VIEW)
-            ),
+            _auth: AuthContext = Depends(self.auth_deps.require_permission(Permission.USER_VIEW)),
         ) -> UserResponse:
             """
             Get user by ID.
@@ -324,9 +311,7 @@ class AuthAPIAdapter:
                 )
 
             except UserNotFoundError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
-                ) from e
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 
         @router.patch(
             "/users/{user_id}",
@@ -337,9 +322,7 @@ class AuthAPIAdapter:
         async def update_user(
             user_id: UUID,
             request: UpdateUserRequest,
-            auth: AuthContext = Depends(
-                self.auth_deps.require_permission(Permission.USER_UPDATE)
-            ),
+            _auth: AuthContext = Depends(self.auth_deps.require_permission(Permission.USER_UPDATE)),
         ) -> UserResponse:
             """
             Update user.
@@ -368,13 +351,9 @@ class AuthAPIAdapter:
                 )
 
             except UserNotFoundError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
-                ) from e
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
             except ValidationError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-                ) from e
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
         @router.delete(
             "/users/{user_id}",
@@ -383,9 +362,7 @@ class AuthAPIAdapter:
         )
         async def delete_user(
             user_id: UUID,
-            auth: AuthContext = Depends(
-                self.auth_deps.require_permission(Permission.USER_DELETE)
-            ),
+            _auth: AuthContext = Depends(self.auth_deps.require_permission(Permission.USER_DELETE)),
         ) -> None:
             """
             Delete user.
@@ -395,9 +372,7 @@ class AuthAPIAdapter:
             try:
                 await self.auth_service.delete_user(user_id)
             except UserNotFoundError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
-                ) from e
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 
         # ====================================================================
         # API Key Management Endpoints
@@ -439,9 +414,7 @@ class AuthAPIAdapter:
                 )
 
             except ValidationError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-                ) from e
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
         @router.get(
             "/api-keys",
@@ -486,7 +459,21 @@ class AuthAPIAdapter:
             Users can only revoke their own API keys.
             Admins can revoke any API key.
             """
-            # TODO: Add authorization check - users can only revoke their own keys
-            await self.auth_service.revoke_api_key(key_id)
+            try:
+                await self.auth_service.revoke_api_key(
+                    key_id=key_id,
+                    requesting_user_id=auth.user_id,
+                    is_admin=auth.is_admin(),
+                )
+            except APIKeyNotFoundError:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="API key not found",
+                )
+            except PermissionError as e:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=str(e),
+                )
 
         return router

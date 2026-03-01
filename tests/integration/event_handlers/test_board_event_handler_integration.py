@@ -1,8 +1,8 @@
 """Integration tests for BoardColumnEventHandler with mock adapters."""
 
+from unittest.mock import AsyncMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock
-from datetime import datetime, timezone
 
 from codetoreum.application.event_handlers.board_event_handler import (
     BoardColumnEventHandler,
@@ -18,8 +18,8 @@ from codetoreum.domain.board_workflow_template import (
     ColumnType,
 )
 from codetoreum.domain.events import WorkItemColumnChanged
-from codetoreum.ports.output.board_service import WorkItemPosition, MovedByType
 from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.ports.output.board_service import MovedByType, WorkItemPosition
 
 
 @pytest.fixture
@@ -89,9 +89,9 @@ def sdlc_workflow():
     return BoardWorkflowTemplate(
         id="workflow-1",
         name="SDLC Workflow",
-        pipeline_trigger_columns=["Development"],
-        exit_columns=["Done"],
-        columns=[
+        pipeline_trigger_columns=("Development",),
+        exit_columns=("Done",),
+        columns=(
             ColumnTemplate(
                 name="Backlog",
                 type=ColumnType.MANUAL,
@@ -137,7 +137,7 @@ def sdlc_workflow():
                 position=4,
                 auto_progress_on_completion=False,
             ),
-        ],
+        ),
     )
 
 
@@ -183,9 +183,7 @@ class TestEndToEndColumnChangeWorkflow:
 
         # Verify lock acquired and dev agent triggered
         mock_lock_service.try_acquire_lock.assert_called_once()
-        mock_agent_executor.execute.assert_called_with(
-            work_item_id="item-1", agent_id="agent-dev"
-        )
+        mock_agent_executor.execute.assert_called_with(work_item_id="item-1", agent_id="agent-dev")
 
         # Stage 2: Item moves to Code Review (automated, auto-progress enabled)
         mock_agent_executor.reset_mock()
@@ -210,9 +208,7 @@ class TestEndToEndColumnChangeWorkflow:
         await event_bus.publish(review_event)
 
         # Verify review agent triggered
-        mock_agent_executor.execute.assert_called_with(
-            work_item_id="item-1", agent_id="agent-review"
-        )
+        mock_agent_executor.execute.assert_called_with(work_item_id="item-1", agent_id="agent-review")
 
         # Stage 3: Item reaches Done (exit column)
         # Lock released, no more processing
@@ -336,9 +332,7 @@ class TestEndToEndColumnChangeWorkflow:
         await event_bus.publish(exit_event)
 
         # Now item 2's agent should be triggered
-        mock_agent_executor.execute.assert_called_with(
-            work_item_id="item-2", agent_id="agent-dev"
-        )
+        mock_agent_executor.execute.assert_called_with(work_item_id="item-2", agent_id="agent-dev")
 
     @pytest.mark.asyncio
     async def test_auto_progression_chain(
@@ -367,9 +361,7 @@ class TestEndToEndColumnChangeWorkflow:
         )
 
         # Should auto-progress to Testing
-        mock_board_service.move_item_to_column.assert_called_with(
-            "item-1", "Testing", MovedByType.ORCHESTRATOR
-        )
+        mock_board_service.move_item_to_column.assert_called_with("item-1", "Testing", MovedByType.ORCHESTRATOR)
 
         # Simulate item now in Testing
         mock_board_service.get_item_position.return_value = WorkItemPosition(
@@ -441,7 +433,6 @@ class TestErrorRecovery:
         )
 
         # Reset position for second item
-        from codetoreum.ports.output.board_service import WorkItemPosition
         mock_agent_executor.execute.return_value = None
 
         await event_bus.publish(event2)
@@ -470,9 +461,9 @@ class TestMultipleBoardsAndProjects:
         simple_workflow = BoardWorkflowTemplate(
             id="workflow-2",
             name="Simple Workflow",
-            pipeline_trigger_columns=[],
-            exit_columns=[],
-            columns=[
+            pipeline_trigger_columns=(),
+            exit_columns=(),
+            columns=(
                 ColumnTemplate(
                     name="Todo",
                     type=ColumnType.MANUAL,
@@ -491,14 +482,14 @@ class TestMultipleBoardsAndProjects:
                     position=1,
                     auto_progress_on_completion=False,
                 ),
-            ],
+            ),
         )
 
         # Configure board-specific workflows
         def get_workflow(board_id):
             if board_id == "board-1":
                 return sdlc_workflow
-            elif board_id == "board-2":
+            if board_id == "board-2":
                 return simple_workflow
             return None
 

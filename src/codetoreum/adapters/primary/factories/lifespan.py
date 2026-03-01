@@ -27,6 +27,7 @@ def create_lifespan(app: FastAPI):
     Returns:
         Async context manager for application lifespan
     """
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         """

@@ -4,14 +4,11 @@ Mock Execution Query Adapter
 In-memory implementation of IExecutionQueryPort for development and testing.
 """
 
-from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from datetime import UTC, datetime
 from threading import RLock
 
+from codetoreum.domain.exceptions import ExecutionNotFoundError
 from codetoreum.ports.input.execution_query import (
-    ContainerStatus,
-    ErrorType,
-    ExecutionErrorDetail,
     ExecutionFilters,
     ExecutionHistory,
     ExecutionHistoryEntry,
@@ -24,7 +21,6 @@ from codetoreum.ports.input.execution_query import (
     LogEntry,
     SortOrder,
 )
-from codetoreum.domain.exceptions import ExecutionNotFoundError
 
 
 class MockExecutionQueryAdapter(IExecutionQueryPort):
@@ -33,9 +29,9 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
     """
 
     def __init__(self):
-        self._executions: Dict[str, ExecutionInfo] = {}
-        self._logs: Dict[str, List[LogEntry]] = {}  # execution_id -> logs
-        self._history: Dict[str, List[ExecutionHistoryEntry]] = {}  # execution_id -> history
+        self._executions: dict[str, ExecutionInfo] = {}
+        self._logs: dict[str, list[LogEntry]] = {}  # execution_id -> logs
+        self._history: dict[str, list[ExecutionHistoryEntry]] = {}  # execution_id -> history
         self._lock = RLock()
 
     def add_execution(self, execution_info: ExecutionInfo):
@@ -65,13 +61,14 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
         """Get execution by ID."""
         with self._lock:
             if execution_id not in self._executions:
-                raise ExecutionNotFoundError(f"Execution with ID {execution_id} not found")
+                msg = f"Execution with ID {execution_id} not found"
+                raise ExecutionNotFoundError(msg)
             return self._executions[execution_id]
 
     async def list_executions(
         self,
-        filters: Optional[ExecutionFilters] = None,
-        pagination: Optional[ExecutionPaginationParams] = None,
+        filters: ExecutionFilters | None = None,
+        pagination: ExecutionPaginationParams | None = None,
     ) -> ExecutionListResult:
         """List executions with optional filtering and pagination."""
         with self._lock:
@@ -109,13 +106,14 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
     async def get_execution_logs(
         self,
         execution_id: str,
-        stage: Optional[str] = None,
-        tail: Optional[int] = None,
+        stage: str | None = None,
+        tail: int | None = None,
     ) -> ExecutionLogs:
         """Get execution logs."""
         with self._lock:
             if execution_id not in self._executions:
-                raise ExecutionNotFoundError(f"Execution with ID {execution_id} not found")
+                msg = f"Execution with ID {execution_id} not found"
+                raise ExecutionNotFoundError(msg)
 
             logs = self._logs.get(execution_id, [])
 
@@ -135,13 +133,12 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
                 has_more=False,  # Mock doesn't paginate logs
             )
 
-    async def get_execution_history(
-        self, execution_id: str, limit: Optional[int] = None
-    ) -> ExecutionHistory:
+    async def get_execution_history(self, execution_id: str, limit: int | None = None) -> ExecutionHistory:
         """Get execution event history."""
         with self._lock:
             if execution_id not in self._executions:
-                raise ExecutionNotFoundError(f"Execution with ID {execution_id} not found")
+                msg = f"Execution with ID {execution_id} not found"
+                raise ExecutionNotFoundError(msg)
 
             history = self._history.get(execution_id, [])
 
@@ -155,7 +152,7 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
                 total_events=len(history),
             )
 
-    async def count_executions(self, filters: Optional[ExecutionFilters] = None) -> int:
+    async def count_executions(self, filters: ExecutionFilters | None = None) -> int:
         """Count executions matching filters."""
         with self._lock:
             executions = list(self._executions.values())
@@ -165,9 +162,7 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
 
             return len(executions)
 
-    def _apply_filters(
-        self, executions: List[ExecutionInfo], filters: ExecutionFilters
-    ) -> List[ExecutionInfo]:
+    def _apply_filters(self, executions: list[ExecutionInfo], filters: ExecutionFilters) -> list[ExecutionInfo]:
         """Apply filters to execution list."""
         result = executions
 
@@ -187,24 +182,18 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
             result = [e for e in result if e.stage_name == filters.stage_name]
 
         if filters.start_date is not None:
-            result = [
-                e for e in result
-                if e.started_at and e.started_at >= filters.start_date
-            ]
+            result = [e for e in result if e.started_at and e.started_at >= filters.start_date]
 
         if filters.end_date is not None:
-            result = [
-                e for e in result
-                if e.started_at and e.started_at <= filters.end_date
-            ]
+            result = [e for e in result if e.started_at and e.started_at <= filters.end_date]
 
         return result
 
     def _sort_executions(
         self,
-        executions: List[ExecutionInfo],
+        executions: list[ExecutionInfo],
         pagination: ExecutionPaginationParams,
-    ) -> List[ExecutionInfo]:
+    ) -> list[ExecutionInfo]:
         """Sort executions based on pagination parameters."""
         reverse = pagination.sort_order == SortOrder.DESC
 
@@ -212,12 +201,12 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
             executions.sort(key=lambda e: e.initialized_at, reverse=reverse)
         elif pagination.sort_by == ExecutionSortField.STARTED_AT:
             executions.sort(
-                key=lambda e: e.started_at or datetime.min.replace(tzinfo=timezone.utc),
+                key=lambda e: e.started_at or datetime.min.replace(tzinfo=UTC),
                 reverse=reverse,
             )
         elif pagination.sort_by == ExecutionSortField.COMPLETED_AT:
             executions.sort(
-                key=lambda e: e.completed_at or datetime.min.replace(tzinfo=timezone.utc),
+                key=lambda e: e.completed_at or datetime.min.replace(tzinfo=UTC),
                 reverse=reverse,
             )
         elif pagination.sort_by == ExecutionSortField.DURATION:

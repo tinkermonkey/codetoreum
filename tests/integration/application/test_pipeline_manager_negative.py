@@ -1,15 +1,14 @@
 """Negative test cases for PipelineManager."""
 
-import pytest
-from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 
-from codetoreum.application.pipeline_manager import PipelineManager, PipelineStatus
+import pytest
+
 from codetoreum.adapters.testing import InMemoryEventStore
-from codetoreum.domain.pipeline_stage import PipelineStage, StageStatus, StageType
+from codetoreum.application.pipeline_manager import PipelineManager, PipelineStatus
+from codetoreum.domain.pipeline_stage import StageStatus
 from codetoreum.domain.workflow import Workflow
 from codetoreum.domain.workflow_template import WorkflowTemplate
-
 
 # ============================================================================
 # Fixtures
@@ -91,14 +90,18 @@ async def test_pipeline_stops_on_sequential_stage_failure(pipeline_manager, mock
         stage.start(execution_id)
         stage.fail("Simulated failure")
 
-        return type('obj', (object,), {
-            'success': False,
-            'stage_name': stage.name,
-            'output': None,
-            'error': 'Simulated failure',
-            'duration_seconds': 0.1,
-            'metadata': {},
-        })()
+        return type(
+            "obj",
+            (object,),
+            {
+                "success": False,
+                "stage_name": stage.name,
+                "output": None,
+                "error": "Simulated failure",
+                "duration_seconds": 0.1,
+                "metadata": {},
+            },
+        )()
 
     pipeline_manager.execute_stage = mock_execute_stage
 
@@ -120,7 +123,6 @@ async def test_pipeline_stops_on_sequential_stage_failure(pipeline_manager, mock
 @pytest.mark.asyncio
 async def test_parallel_stage_failure_continues(pipeline_manager, parallel_failing_workflow, mock_event_store):
     """Test that pipeline continues when parallel stage fails."""
-    from codetoreum.domain.events import PipelineStageFailed
 
     # Mock the execute_stage to fail for specific stage
     original_execute_stage = pipeline_manager.execute_stage
@@ -132,14 +134,18 @@ async def test_parallel_stage_failure_continues(pipeline_manager, parallel_faili
             execution_id = f"exec-{stage.id}"
             stage.start(execution_id)
             stage.fail("Simulated failure")
-            return type('obj', (object,), {
-                'success': False,
-                'stage_name': stage.name,
-                'output': None,
-                'error': 'Simulated failure',
-                'duration_seconds': 0.1,
-                'metadata': {},
-            })()
+            return type(
+                "obj",
+                (object,),
+                {
+                    "success": False,
+                    "stage_name": stage.name,
+                    "output": None,
+                    "error": "Simulated failure",
+                    "duration_seconds": 0.1,
+                    "metadata": {},
+                },
+            )()
         return await original_execute_stage(stage, context, workflow_id)
 
     pipeline_manager.execute_stage = mock_execute_stage
@@ -163,9 +169,7 @@ async def test_parallel_stage_failure_continues(pipeline_manager, parallel_faili
 
 
 @pytest.mark.asyncio
-async def test_checkpoint_save_failure_doesnt_break_pipeline(
-    pipeline_manager, mock_checkpoint_store
-):
+async def test_checkpoint_save_failure_doesnt_break_pipeline(pipeline_manager, mock_checkpoint_store):
     """Test that checkpoint save failure doesn't break pipeline execution."""
     # Make checkpoint save fail
     mock_checkpoint_store.save_checkpoint.side_effect = Exception("Checkpoint storage error")
@@ -267,14 +271,18 @@ async def test_context_propagation_with_failed_stage(pipeline_manager):
             execution_id = f"exec-{stage.id}"
             stage.start(execution_id)
             stage.fail("Test failure")
-            return type('obj', (object,), {
-                'success': False,
-                'stage_name': stage.name,
-                'output': None,
-                'error': 'Test failure',
-                'duration_seconds': 0.1,
-                'metadata': {},
-            })()
+            return type(
+                "obj",
+                (object,),
+                {
+                    "success": False,
+                    "stage_name": stage.name,
+                    "output": None,
+                    "error": "Test failure",
+                    "duration_seconds": 0.1,
+                    "metadata": {},
+                },
+            )()
         return await original_execute_stage(stage, context, workflow_id)
 
     pipeline_manager.execute_stage = mock_execute_stage

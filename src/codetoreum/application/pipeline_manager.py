@@ -2,21 +2,26 @@
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, cast
+from typing import TYPE_CHECKING, Any, cast
 
+from codetoreum.domain.agent import Agent, AgentCapability, AgentType
 from codetoreum.domain.events import (
-    PipelineStageStarted,
-    PipelineStageCompleted,
-    PipelineStageFailed,
     PipelineCompleted,
     PipelineFailed,
+    PipelineStageCompleted,
+    PipelineStageFailed,
+    PipelineStageStarted,
 )
 from codetoreum.domain.pipeline_stage import PipelineStage, StageStatus
+from codetoreum.domain.value_objects import ExecutionContext as ExecutionContextVO
+from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
 from codetoreum.domain.workflow import Workflow
-from codetoreum.ports.exceptions import PortError, EventStoreError
 from codetoreum.ports.output import IEventStore
+
+if TYPE_CHECKING:
+    from codetoreum.application.execution_service import ExecutionService
 
 logger = logging.getLogger(__name__)
 
@@ -43,12 +48,12 @@ class StageOutput:
     stage_name: str
     success: bool
     data: Any  # Stage-specific output data
-    artifacts: Dict[str, str] = field(default_factory=dict)  # artifact_name -> path
-    metrics: Dict[str, float] = field(default_factory=dict)  # metric_name -> value
-    error: Optional[str] = None
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    artifacts: dict[str, str] = field(default_factory=dict)  # artifact_name -> path
+    metrics: dict[str, float] = field(default_factory=dict)  # metric_name -> value
+    error: str | None = None
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for context propagation."""
         return {
             "stage_name": self.stage_name,
@@ -66,13 +71,13 @@ class PipelineCheckpoint:
     """Pipeline checkpoint for recovery."""
 
     pipeline_id: str
-    current_stage: Optional[str]
-    completed_stages: List[str]
-    failed_stages: List[str]
+    current_stage: str | None
+    completed_stages: list[str]
+    failed_stages: list[str]
     status: PipelineStatus
-    context: Dict[str, Any]
+    context: dict[str, Any]
     timestamp: datetime
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -81,12 +86,12 @@ class PipelineResult:
 
     success: bool
     status: PipelineStatus
-    completed_stages: List[str]
-    failed_stages: List[str]
-    outputs: Dict[str, Any]  # stage_name -> output
-    errors: Dict[str, str]  # stage_name -> error
+    completed_stages: list[str]
+    failed_stages: list[str]
+    outputs: dict[str, Any]  # stage_name -> output
+    errors: dict[str, str]  # stage_name -> error
     duration_seconds: float
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
 
 @dataclass
@@ -95,10 +100,10 @@ class StageResult:
 
     success: bool
     stage_name: str
-    output: Optional[str]
-    error: Optional[str]
+    output: str | None
+    error: str | None
     duration_seconds: float
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
 
 # ============================================================================
@@ -124,16 +129,19 @@ class PipelineManager:
     def __init__(
         self,
         event_store: IEventStore,
-        checkpoint_store: Optional[Any] = None,
+        execution_service: "ExecutionService | None" = None,
+        checkpoint_store: Any | None = None,
     ):
         """
         Initialize PipelineManager.
 
         Args:
             event_store: Event store port for emitting events
+            execution_service: Execution service for running agent stages
             checkpoint_store: Optional checkpoint storage (Redis, file system, etc.)
         """
         self.event_store = event_store
+        self.execution_service = execution_service
         self.checkpoint_store = checkpoint_store
         self._logger = logging.getLogger(f"{__name__}.PipelineManager")
 
@@ -153,7 +161,7 @@ class PipelineManager:
             self._logger.error(
                 f"Failed to emit event {type(event).__name__}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_PIPELINE_EVENT_EMIT_FAILURE"}
+                extra={"error_id": "ERR_PIPELINE_EVENT_EMIT_FAILURE"},
             )
 
     # ========================================================================
@@ -163,7 +171,7 @@ class PipelineManager:
     async def execute_pipeline(
         self,
         workflow: Workflow,
-        context: Dict[str, Any],
+        context: dict[str, Any],
         resume_from_checkpoint: bool = False,
     ) -> PipelineResult:
         """
@@ -190,7 +198,7 @@ class PipelineManager:
             f"resume={resume_from_checkpoint}"
         )
 
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         # Initialize tracking
         completed_stages = []
@@ -203,10 +211,7 @@ class PipelineManager:
             if resume_from_checkpoint:
                 checkpoint = await self.recover(pipeline_id)
                 if checkpoint:
-                    self._logger.info(
-                        f"Resuming from checkpoint: "
-                        f"completed={len(checkpoint.completed_stages)}"
-                    )
+                    self._logger.info(f"Resuming from checkpoint: completed={len(checkpoint.completed_stages)}")
                     completed_stages = checkpoint.completed_stages
                     failed_stages = checkpoint.failed_stages
                     context = {**context, **checkpoint.context}
@@ -220,16 +225,11 @@ class PipelineManager:
 
                 # Check if stage can execute
                 if not stage.can_enter(completed_stages):
-                    self._logger.info(
-                        f"Stage {stage.name} waiting for dependencies: "
-                        f"{stage.dependencies}"
-                    )
+                    self._logger.info(f"Stage {stage.name} waiting for dependencies: {stage.dependencies}")
                     continue
 
                 # Execute stage
-                stage_result = await self.execute_stage(
-                    stage, context, workflow_id=pipeline_id
-                )
+                stage_result = await self.execute_stage(stage, context, workflow_id=pipeline_id)
 
                 # Track result
                 if stage_result.success:
@@ -271,7 +271,7 @@ class PipelineManager:
                         failed_stages=failed_stages,
                         status=PipelineStatus.RUNNING,
                         context=context,
-                        timestamp=datetime.now(timezone.utc),
+                        timestamp=datetime.now(UTC),
                         metadata={
                             "last_stage": stage.name,
                             "stage_result": stage_result.success,
@@ -283,31 +283,23 @@ class PipelineManager:
                 if not stage_result.success:
                     if stage.is_parallel:
                         # For parallel stages, continue to other stages
-                        self._logger.warning(
-                            f"Parallel stage {stage.name} failed, continuing"
-                        )
+                        self._logger.warning(f"Parallel stage {stage.name} failed, continuing")
                         continue
-                    else:
-                        # For sequential stages, stop pipeline and cleanup
-                        self._logger.error(
-                            f"Sequential stage {stage.name} failed, stopping pipeline",
-                            extra={"error_id": "ERR_PIPELINE_SEQUENTIAL_STAGE_FAILURE"}
-                        )
-                        # Cleanup partial state
-                        await self._cleanup_failed_pipeline(
-                            pipeline_id, context, completed_stages, failed_stages
-                        )
-                        raise Exception(
-                            f"Stage {stage.name} failed: {stage_result.error}"
-                        )
+                    # For sequential stages, stop pipeline and cleanup
+                    self._logger.error(
+                        f"Sequential stage {stage.name} failed, stopping pipeline",
+                        extra={"error_id": "ERR_PIPELINE_SEQUENTIAL_STAGE_FAILURE"},
+                    )
+                    # Cleanup partial state
+                    await self._cleanup_failed_pipeline(pipeline_id, context, completed_stages, failed_stages)
+                    message = f"Stage {stage.name} failed: {stage_result.error}"
+                    raise Exception(message)
 
             # All stages completed
-            duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+            duration = (datetime.now(UTC) - start_time).total_seconds()
 
             # Emit completion event
-            await self._emit_pipeline_completed(
-                pipeline_id, workflow, completed_stages, outputs, duration
-            )
+            await self._emit_pipeline_completed(pipeline_id, workflow, completed_stages, outputs, duration)
 
             return PipelineResult(
                 success=True,
@@ -324,17 +316,15 @@ class PipelineManager:
             )
 
         except Exception as e:
-            duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+            duration = (datetime.now(UTC) - start_time).total_seconds()
             self._logger.error(
                 f"Pipeline execution failed: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_PIPELINE_EXECUTION_FAILURE"}
+                extra={"error_id": "ERR_PIPELINE_EXECUTION_FAILURE"},
             )
 
             # Emit failure event
-            await self._emit_pipeline_failed(
-                pipeline_id, workflow, str(e), completed_stages, failed_stages
-            )
+            await self._emit_pipeline_failed(pipeline_id, workflow, str(e), completed_stages, failed_stages)
 
             return PipelineResult(
                 success=False,
@@ -353,30 +343,31 @@ class PipelineManager:
     async def execute_stage(
         self,
         stage: PipelineStage,
-        context: Dict[str, Any],
-        workflow_id: Optional[str] = None,
+        context: dict[str, Any],
+        workflow_id: str | None = None,
     ) -> StageResult:
         """
         Execute single pipeline stage.
 
+        Executes a stage by delegating to the execution service for agent-based stages.
+        Updates stage status and emits domain events for each lifecycle transition.
+
         Args:
             stage: Pipeline stage to execute
-            context: Execution context
+            context: Execution context (project, work item, etc.)
             workflow_id: Optional workflow ID for event correlation
 
         Returns:
             StageResult: Result of stage execution
 
         Raises:
-            ValueError: If stage configuration is invalid
+            ValueError: If stage configuration is invalid or execution service not available
         """
         self._logger.info(
-            f"Executing stage: stage={stage.name}, "
-            f"type={stage.stage_type.value}, "
-            f"status={stage.status.value}"
+            f"Executing stage: stage={stage.name}, type={stage.stage_type.value}, status={stage.status.value}"
         )
 
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         try:
             # Mark stage as ready if pending
@@ -388,55 +379,192 @@ class PipelineManager:
             stage.start(execution_id)
 
             # Emit stage started event
-            await self._emit_stage_started(
-                stage, workflow_id or stage.workflow_id, context
+            await self._emit_stage_started(stage, workflow_id or stage.workflow_id, context)
+
+            # If no execution service, skip actual execution (for testing/simulation)
+            if not self.execution_service:
+                self._logger.warning(f"No execution service configured for stage {stage.name}, skipping execution")
+                output = f"Simulated output from stage {stage.name}"
+                stage.complete(output)
+
+                duration = (datetime.now(UTC) - start_time).total_seconds()
+                await self._emit_stage_completed(stage, workflow_id or stage.workflow_id, output, duration)
+
+                return StageResult(
+                    success=True,
+                    stage_name=stage.name,
+                    output=output,
+                    error=None,
+                    duration_seconds=duration,
+                    metadata={
+                        "execution_id": execution_id,
+                        "stage_type": stage.stage_type.value,
+                        "simulated": True,
+                    },
+                )
+
+            # Get agent ID from stage configuration
+            agent_id = stage.agent_config.get("agent_id")
+            if not agent_id:
+                raise ValueError(f"Stage {stage.name} missing required 'agent_id' in agent_config")
+
+            # Build agent and work item for execution (minimal required data)
+            # TODO: In production, these should be retrieved from repositories instead of
+            # constructing inline from configuration. This is a placeholder for initial implementation.
+            # Create agent capabilities
+            capabilities_config = stage.agent_config.get("capabilities", {})
+            if not capabilities_config:
+                # Default capability if none specified
+                capabilities_config = {"general": {"proficiency": 1.0, "description": "General capability"}}
+
+            capabilities = {}
+            for skill_name, skill_config in capabilities_config.items():
+                if isinstance(skill_config, dict):
+                    proficiency = skill_config.get("proficiency", 1.0)
+                    description = skill_config.get("description")
+                else:
+                    proficiency = 1.0
+                    description = None
+
+                capabilities[skill_name] = AgentCapability(
+                    skill=skill_name,
+                    proficiency=proficiency,
+                    description=description,
+                )
+
+            agent = Agent.create(
+                name=stage.agent_config.get("agent_name", agent_id),
+                display_name=stage.agent_config.get("agent_display_name", agent_id),
+                agent_type=AgentType[stage.agent_config.get("agent_type", "SPECIALIZED").upper()],
+                role_description=stage.agent_config.get("agent_description", f"Agent for stage {stage.name}"),
+                capabilities=capabilities,
+                model=stage.agent_config.get("model", "claude-opus"),
+                timeout_seconds=stage.agent_config.get("timeout_seconds", 3600),
+                max_retries=stage.agent_config.get("max_retries", 3),
             )
 
-            # TODO: This is where we'd call the actual agent execution service
-            # For now, we'll simulate execution
-            self._logger.info(
-                f"Stage {stage.name} execution would happen here "
-                f"(agent_config={stage.agent_config})"
+            work_item_id = context.get("work_item_id")
+            if not work_item_id:
+                raise ValueError("Execution context missing required 'work_item_id'")
+
+            project_id = context.get("project_id")
+            if not project_id:
+                raise ValueError("Execution context missing required 'project_id'")
+
+            # Create work item with required fields
+            work_item = WorkItem(
+                id=work_item_id,
+                project_id=project_id,
+                title=context.get("work_item_title", f"Work item {work_item_id}"),
+                description=context.get("work_item_description", ""),
+                status=WorkItemStatus.IN_PROGRESS,
+                priority=WorkItemPriority.MEDIUM,
+                labels=[],
+                external_id=None,
+                external_url=None,
+                assigned_agent_id=stage.agent_config.get("agent_id"),
+                assigned_at=datetime.now(UTC),
+                current_workflow_id=workflow_id or stage.workflow_id,
+                current_stage=stage.name,
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+                completed_at=None,
             )
 
-            # Simulate successful execution
-            output = f"Output from stage {stage.name}"
-            stage.complete(output)
+            # Build prompt from context
+            prompt = context.get(f"{stage.name}_prompt") or f"Execute stage {stage.name}"
 
-            duration = (datetime.now(timezone.utc) - start_time).total_seconds()
-
-            # Emit stage completed event
-            await self._emit_stage_completed(
-                stage, workflow_id or stage.workflow_id, output, duration
+            # Create execution
+            execution = await self.execution_service.create_execution(
+                agent=agent,
+                work_item=work_item,
+                workflow_id=workflow_id or stage.workflow_id,
+                stage_name=stage.name,
+                prompt=prompt,
             )
+
+            # Build execution context
+            exec_context = ExecutionContextVO(
+                work_item_id=work_item_id,
+                workflow_id=workflow_id or stage.workflow_id,
+                stage_name=stage.name,
+                agent_id=agent_id,
+                model=stage.agent_config.get("model", "claude-opus"),
+                timeout_seconds=stage.agent_config.get("timeout_seconds", 3600),
+                workspace_type="container",
+                branch_name=None,
+                discussion_id=None,
+                project_id=context.get("project_id", ""),
+                repository_url=context.get("repository_url", ""),
+            )
+
+            # Start execution
+            start_result = await self.execution_service.start_execution(
+                execution=execution,
+                context=exec_context,
+            )
+
+            if not start_result.success:
+                raise Exception(f"Failed to start execution: {start_result.error}")
+
+            # Execute with LLM (no container execution for pipeline stages)
+            exec_result = await self.execution_service.execute_with_llm(
+                execution=execution,
+                context=exec_context,
+            )
+
+            duration = (datetime.now(UTC) - start_time).total_seconds()
+
+            if exec_result.success:
+                output = exec_result.execution.output or f"Output from stage {stage.name}"
+                stage.complete(output)
+                await self._emit_stage_completed(stage, workflow_id or stage.workflow_id, output, duration)
+
+                return StageResult(
+                    success=True,
+                    stage_name=stage.name,
+                    output=output,
+                    error=None,
+                    duration_seconds=duration,
+                    metadata={
+                        "execution_id": execution_id,
+                        "stage_type": stage.stage_type.value,
+                        "tokens_used": {
+                            "input": exec_result.execution.input_tokens,
+                            "output": exec_result.execution.output_tokens,
+                        },
+                    },
+                )
+            error_msg = exec_result.error or "Execution failed"
+            stage.fail(error_msg)
+            await self._emit_stage_failed(stage, workflow_id or stage.workflow_id, error_msg, duration)
 
             return StageResult(
-                success=True,
+                success=False,
                 stage_name=stage.name,
-                output=output,
-                error=None,
+                output=None,
+                error=error_msg,
                 duration_seconds=duration,
                 metadata={
                     "execution_id": execution_id,
                     "stage_type": stage.stage_type.value,
+                    "failure_reason": str(exec_result.failure_reason),
                 },
             )
 
         except Exception as e:
-            duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+            duration = (datetime.now(UTC) - start_time).total_seconds()
             self._logger.error(
                 f"Stage execution failed: stage={stage.name}, error={e}",
                 exc_info=True,
-                extra={"error_id": "ERR_PIPELINE_STAGE_EXECUTION_FAILURE"}
+                extra={"error_id": "ERR_PIPELINE_STAGE_EXECUTION_FAILURE"},
             )
 
             # Mark stage as failed
             stage.fail(str(e))
 
             # Emit stage failed event
-            await self._emit_stage_failed(
-                stage, workflow_id or stage.workflow_id, str(e), duration
-            )
+            await self._emit_stage_failed(stage, workflow_id or stage.workflow_id, str(e), duration)
 
             return StageResult(
                 success=False,
@@ -449,9 +577,7 @@ class PipelineManager:
                 },
             )
 
-    async def checkpoint(
-        self, pipeline_id: str, checkpoint: PipelineCheckpoint
-    ) -> None:
+    async def checkpoint(self, pipeline_id: str, checkpoint: PipelineCheckpoint) -> None:
         """
         Save pipeline checkpoint for recovery.
 
@@ -463,8 +589,7 @@ class PipelineManager:
             StorageError: If checkpoint save fails
         """
         self._logger.debug(
-            f"Checkpointing pipeline: pipeline_id={pipeline_id}, "
-            f"completed={len(checkpoint.completed_stages)}"
+            f"Checkpointing pipeline: pipeline_id={pipeline_id}, completed={len(checkpoint.completed_stages)}"
         )
 
         if self.checkpoint_store:
@@ -474,13 +599,13 @@ class PipelineManager:
                 self._logger.error(
                     f"Failed to save checkpoint: {e}",
                     exc_info=True,
-                    extra={"error_id": "ERR_PIPELINE_CHECKPOINT_SAVE_FAILURE"}
+                    extra={"error_id": "ERR_PIPELINE_CHECKPOINT_SAVE_FAILURE"},
                 )
                 # Don't fail pipeline if checkpoint fails
         else:
             self._logger.debug("No checkpoint store configured, skipping")
 
-    async def recover(self, pipeline_id: str) -> Optional[PipelineCheckpoint]:
+    async def recover(self, pipeline_id: str) -> PipelineCheckpoint | None:
         """
         Recover pipeline from checkpoint.
 
@@ -497,20 +622,20 @@ class PipelineManager:
 
         if self.checkpoint_store:
             try:
-                checkpoint = cast(Optional[PipelineCheckpoint], await self.checkpoint_store.load_checkpoint(pipeline_id))
+                checkpoint = cast(
+                    "PipelineCheckpoint | None",
+                    await self.checkpoint_store.load_checkpoint(pipeline_id),
+                )
                 if checkpoint:
-                    self._logger.info(
-                        f"Recovered checkpoint: completed={len(checkpoint.completed_stages)}"
-                    )
+                    self._logger.info(f"Recovered checkpoint: completed={len(checkpoint.completed_stages)}")
                     return checkpoint
-                else:
-                    self._logger.info("No checkpoint found")
-                    return None
+                self._logger.info("No checkpoint found")
+                return None
             except Exception as e:
                 self._logger.error(
                     f"Failed to recover checkpoint: {e}",
                     exc_info=True,
-                    extra={"error_id": "ERR_PIPELINE_CHECKPOINT_RECOVER_FAILURE"}
+                    extra={"error_id": "ERR_PIPELINE_CHECKPOINT_RECOVER_FAILURE"},
                 )
                 return None
         else:
@@ -521,9 +646,7 @@ class PipelineManager:
     # Event Emission
     # ========================================================================
 
-    async def _emit_stage_started(
-        self, stage: PipelineStage, workflow_id: str, context: Dict[str, Any]
-    ) -> None:
+    async def _emit_stage_started(self, stage: PipelineStage, workflow_id: str, context: dict[str, Any]) -> None:
         """Emit stage started event."""
         event = PipelineStageStarted(
             aggregate_id=workflow_id,
@@ -532,7 +655,7 @@ class PipelineManager:
             stage_type=stage.stage_type.value,
             agent_config=stage.agent_config,
             execution_id=stage.execution_id or "",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
         await self._emit_event_safely(event)
 
@@ -551,7 +674,7 @@ class PipelineManager:
             execution_id=stage.execution_id or "",
             output=output,
             duration_seconds=duration_seconds,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
         await self._emit_event_safely(event)
 
@@ -570,7 +693,7 @@ class PipelineManager:
             execution_id=stage.execution_id or "",
             error=error,
             duration_seconds=duration_seconds,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
         await self._emit_event_safely(event)
 
@@ -578,8 +701,8 @@ class PipelineManager:
         self,
         pipeline_id: str,
         workflow: Workflow,
-        completed_stages: List[str],
-        outputs: Dict[str, Any],
+        completed_stages: list[str],
+        outputs: dict[str, Any],
         duration_seconds: float,
     ) -> None:
         """Emit pipeline completed event."""
@@ -590,7 +713,7 @@ class PipelineManager:
             completed_stages=completed_stages,
             outputs=outputs,
             duration_seconds=duration_seconds,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
         await self._emit_event_safely(event)
 
@@ -599,8 +722,8 @@ class PipelineManager:
         pipeline_id: str,
         workflow: Workflow,
         error: str,
-        completed_stages: List[str],
-        failed_stages: List[str],
+        completed_stages: list[str],
+        failed_stages: list[str],
     ) -> None:
         """Emit pipeline failed event."""
         event = PipelineFailed(
@@ -610,16 +733,16 @@ class PipelineManager:
             error=error,
             completed_stages=completed_stages,
             failed_stages=failed_stages,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
         await self._emit_event_safely(event)
 
     async def _cleanup_failed_pipeline(
         self,
         pipeline_id: str,
-        context: Dict[str, Any],
-        completed_stages: List[str],
-        failed_stages: List[str],
+        context: dict[str, Any],
+        completed_stages: list[str],
+        failed_stages: list[str],
     ) -> None:
         """
         Cleanup resources and partial state from failed pipeline.
@@ -639,8 +762,7 @@ class PipelineManager:
             # Clear stage outputs from context to prevent stale data
             for stage_name in completed_stages + failed_stages:
                 output_key = f"{stage_name}_output"
-                if output_key in context:
-                    del context[output_key]
+                context.pop(output_key, None)
 
             # TODO: Add rollback logic for specific stages if needed
             # This could include:
@@ -654,5 +776,5 @@ class PipelineManager:
             self._logger.error(
                 f"Error during pipeline cleanup: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_PIPELINE_CLEANUP_FAILURE"}
+                extra={"error_id": "ERR_PIPELINE_CLEANUP_FAILURE"},
             )

@@ -5,45 +5,43 @@ Provides RESTful CRUD endpoints for workflow definitions with versioning,
 validation, and lifecycle management.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
-from codetoreum.config import (
-    DEFAULT_PAGE_SIZE,
-    MAX_PAGE_SIZE,
-    DEFAULT_OFFSET,
-    VERSIONS_DEFAULT_LIMIT,
-    VERSIONS_MAX_LIMIT,
-)
 from codetoreum.adapters.primary.workflow_dtos import (
     CreateWorkflowRequest,
     UpdateWorkflowRequest,
-    WorkflowResponse,
-    WorkflowListResponse,
     WorkflowCommandResult,
-    WorkflowVersionListResponse,
+    WorkflowListResponse,
+    WorkflowResponse,
     WorkflowValidationResponse,
+    WorkflowVersionListResponse,
 )
 from codetoreum.adapters.primary.workflow_mappers import WorkflowMapper
+from codetoreum.config import (
+    DEFAULT_OFFSET,
+    DEFAULT_PAGE_SIZE,
+    MAX_PAGE_SIZE,
+    VERSIONS_DEFAULT_LIMIT,
+    VERSIONS_MAX_LIMIT,
+)
 from codetoreum.ports.input.workflow_definition_command import (
-    IWorkflowDefinitionCommandPort,
     DeleteWorkflowDefinitionCommand,
+    IWorkflowDefinitionCommandPort,
 )
 from codetoreum.ports.input.workflow_query import (
     IWorkflowQueryPort,
+    SortOrder,
     WorkflowFilters,
     WorkflowPaginationParams,
     WorkflowSortField,
-    SortOrder,
 )
 
 
 def create_workflows_router(
     definition_command_port: IWorkflowDefinitionCommandPort,
     query_port: IWorkflowQueryPort,
-    auth_deps: Optional[SimpleAuthDependencies] = None,
+    auth_deps: SimpleAuthDependencies | None = None,
 ) -> APIRouter:
     """
     Create the workflows REST API router.
@@ -128,7 +126,7 @@ def create_workflows_router(
             # Invalid enum values or validation errors
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid request: {str(e)}",
+                detail=f"Invalid request: {e!s}",
             )
         except Exception as e:
             # Domain errors (circular dependencies, agent not found, etc.)
@@ -138,10 +136,10 @@ def create_workflows_router(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=str(e),
                 )
-            elif "circular" in error_msg:
+            if "circular" in error_msg:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Circular dependency detected: {str(e)}",
+                    detail=f"Circular dependency detected: {e!s}",
                 )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -159,13 +157,18 @@ def create_workflows_router(
         response_description="List of workflow definitions",
     )
     async def list_workflows(
-        project_id: Optional[str] = Query(None, description="Filter by project ID"),
-        is_template: Optional[bool] = Query(None, description="Filter by template status"),
-        is_active: Optional[bool] = Query(None, description="Filter by active status"),
-        work_item_type: Optional[str] = Query(None, description="Filter by applicable work item type"),
-        name_contains: Optional[str] = Query(None, description="Filter by partial name match"),
+        project_id: str | None = Query(None, description="Filter by project ID"),
+        is_template: bool | None = Query(None, description="Filter by template status"),
+        is_active: bool | None = Query(None, description="Filter by active status"),
+        work_item_type: str | None = Query(None, description="Filter by applicable work item type"),
+        name_contains: str | None = Query(None, description="Filter by partial name match"),
         offset: int = Query(DEFAULT_OFFSET, ge=0, description="Offset for pagination"),
-        limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description=f"Limit for pagination (max {MAX_PAGE_SIZE})"),
+        limit: int = Query(
+            DEFAULT_PAGE_SIZE,
+            ge=1,
+            le=MAX_PAGE_SIZE,
+            description=f"Limit for pagination (max {MAX_PAGE_SIZE})",
+        ),
         sort_by: str = Query("updated_at", description="Sort field (name, created_at, updated_at, version)"),
         sort_order: str = Query("desc", description="Sort order (asc, desc)"),
     ) -> WorkflowListResponse:
@@ -252,7 +255,7 @@ def create_workflows_router(
     )
     async def get_workflow(
         workflow_id: str,
-        version: Optional[int] = Query(None, description="Specific version to retrieve (defaults to latest)")
+        version: int | None = Query(None, description="Specific version to retrieve (defaults to latest)"),
     ) -> WorkflowResponse:
         """
         Get detailed information about a specific workflow definition.
@@ -284,7 +287,7 @@ def create_workflows_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Workflow not found: {str(e)}",
+                detail=f"Workflow not found: {e!s}",
             )
 
     # ========================================================================
@@ -356,7 +359,7 @@ def create_workflows_router(
             # Invalid enum values or validation errors
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid request: {str(e)}",
+                detail=f"Invalid request: {e!s}",
             )
         except Exception as e:
             # Domain errors
@@ -366,10 +369,10 @@ def create_workflows_router(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=str(e),
                 )
-            elif "circular" in error_msg:
+            if "circular" in error_msg:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Circular dependency detected: {str(e)}",
+                    detail=f"Circular dependency detected: {e!s}",
                 )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -388,7 +391,7 @@ def create_workflows_router(
     )
     async def delete_workflow(
         workflow_id: str,
-        force: bool = Query(False, description="Force delete even if active executions exist")
+        force: bool = Query(False, description="Force delete even if active executions exist"),
     ) -> WorkflowCommandResult:
         """
         Delete a workflow definition (soft delete).
@@ -467,7 +470,12 @@ def create_workflows_router(
     )
     async def get_workflow_versions(
         workflow_id: str,
-        limit: int = Query(VERSIONS_DEFAULT_LIMIT, ge=1, le=VERSIONS_MAX_LIMIT, description=f"Maximum number of versions to return (max {VERSIONS_MAX_LIMIT})")
+        limit: int = Query(
+            VERSIONS_DEFAULT_LIMIT,
+            ge=1,
+            le=VERSIONS_MAX_LIMIT,
+            description=f"Maximum number of versions to return (max {VERSIONS_MAX_LIMIT})",
+        ),
     ) -> WorkflowVersionListResponse:
         """
         Get version history for a workflow.
@@ -499,7 +507,7 @@ def create_workflows_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Workflow not found: {str(e)}",
+                detail=f"Workflow not found: {e!s}",
             )
 
     # ========================================================================
@@ -514,7 +522,7 @@ def create_workflows_router(
     )
     async def validate_workflow(
         workflow_id: str,
-        version: Optional[int] = Query(None, description="Specific version to validate (defaults to latest)")
+        version: int | None = Query(None, description="Specific version to validate (defaults to latest)"),
     ) -> WorkflowValidationResponse:
         """
         Validate a workflow definition.
@@ -551,7 +559,7 @@ def create_workflows_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Workflow not found: {str(e)}",
+                detail=f"Workflow not found: {e!s}",
             )
 
     return router

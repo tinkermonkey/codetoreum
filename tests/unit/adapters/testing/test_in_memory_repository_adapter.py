@@ -1,13 +1,13 @@
 """Unit tests for InMemoryRepositoryAdapter."""
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from codetoreum.adapters.testing import InMemoryRepositoryAdapter
-from codetoreum.domain.types import BranchName, CommitHash
+from codetoreum.domain.types import BranchName
 from codetoreum.ports.exceptions import ResourceNotFoundError, ValidationError
 
 
@@ -157,6 +157,96 @@ class TestInMemoryRepositoryAdapter:
                 branch_name=BranchName(""),
             )
 
+    async def test_stage_files(self, adapter):
+        """Test staging files for commit."""
+        await adapter.clone(
+            url="https://github.com/test/repo.git",
+            destination=Path("/tmp/test-repo"),
+        )
+
+        # Stage files
+        await adapter.stage_files(
+            repo_path=Path("/tmp/test-repo"),
+            files=["src/main.py", "tests/test_main.py"],
+        )
+
+        # Verify status shows staged files
+        status = await adapter.status(Path("/tmp/test-repo"))
+        assert status.staged_files == ("src/main.py", "tests/test_main.py")
+        assert status.is_dirty
+
+    async def test_stage_files_multiple_calls(self, adapter):
+        """Test staging files across multiple calls."""
+        await adapter.clone(
+            url="https://github.com/test/repo.git",
+            destination=Path("/tmp/test-repo"),
+        )
+
+        # Stage first batch
+        await adapter.stage_files(
+            repo_path=Path("/tmp/test-repo"),
+            files=["src/main.py"],
+        )
+
+        # Stage second batch
+        await adapter.stage_files(
+            repo_path=Path("/tmp/test-repo"),
+            files=["tests/test_main.py"],
+        )
+
+        # Verify all files are staged
+        status = await adapter.status(Path("/tmp/test-repo"))
+        assert set(status.staged_files) == {"src/main.py", "tests/test_main.py"}
+
+    async def test_stage_files_validation(self, adapter):
+        """Test stage_files parameter validation."""
+        await adapter.clone(
+            url="https://github.com/test/repo.git",
+            destination=Path("/tmp/test-repo"),
+        )
+
+        with pytest.raises(ValidationError, match="Repository path is required"):
+            await adapter.stage_files(
+                repo_path=None,
+                files=["src/main.py"],
+            )
+
+        with pytest.raises(ValidationError, match="Files list is required and cannot be empty"):
+            await adapter.stage_files(
+                repo_path=Path("/tmp/test-repo"),
+                files=[],
+            )
+
+    async def test_stage_files_cleared_on_commit(self, adapter):
+        """Test that staged files are cleared after commit."""
+        await adapter.clone(
+            url="https://github.com/test/repo.git",
+            destination=Path("/tmp/test-repo"),
+        )
+
+        # Stage files
+        await adapter.stage_files(
+            repo_path=Path("/tmp/test-repo"),
+            files=["src/main.py", "tests/test_main.py"],
+        )
+
+        # Verify files are staged
+        status = await adapter.status(Path("/tmp/test-repo"))
+        assert len(status.staged_files) > 0
+
+        # Commit
+        await adapter.commit(
+            repo_path=Path("/tmp/test-repo"),
+            message="Test commit",
+            author_name="Test",
+            author_email="test@example.com",
+        )
+
+        # Verify staging area is cleared
+        status = await adapter.status(Path("/tmp/test-repo"))
+        assert status.staged_files == ()
+        assert not status.is_dirty
+
     async def test_commit(self, adapter):
         """Test creating a commit."""
         await adapter.clone(
@@ -180,8 +270,8 @@ class TestInMemoryRepositoryAdapter:
             repo_path=Path("/tmp/test-repo"),
             commit_sha=commit_sha,
         )
-        assert commit_info["message"] == "Add new feature"
-        assert commit_info["author"]["name"] == "Test Author"
+        assert commit_info.message == "Add new feature"
+        assert commit_info.author.name == "Test Author"
 
     async def test_commit_validation(self, adapter):
         """Test commit validation."""
@@ -392,19 +482,21 @@ class TestInMemoryRepositoryAdapter:
 
         assert content == "# Test Repository"
 
-    async def test_get_file_content_nonexistent_returns_empty(self, adapter):
-        """Test getting non-existent file returns empty string."""
+    async def test_get_file_content_nonexistent_raises_error(self, adapter):
+        """Test getting non-existent file raises ResourceNotFoundError."""
         await adapter.clone(
             url="https://github.com/test/repo.git",
             destination=Path("/tmp/test-repo"),
         )
 
-        content = await adapter.get_file_content(
-            repo_path=Path("/tmp/test-repo"),
-            file_path="nonexistent.txt",
-        )
+        with pytest.raises(ResourceNotFoundError) as exc_info:
+            await adapter.get_file_content(
+                repo_path=Path("/tmp/test-repo"),
+                file_path="nonexistent.txt",
+            )
 
-        assert content == ""
+        assert "nonexistent.txt" in str(exc_info.value)
+        assert exc_info.value.resource_id is not None
 
     async def test_get_commit_info(self, adapter):
         """Test getting commit information."""
@@ -425,11 +517,11 @@ class TestInMemoryRepositoryAdapter:
             commit_sha=commit_sha,
         )
 
-        assert commit_info["sha"] == commit_sha
-        assert commit_info["message"] == "Test commit"
-        assert commit_info["author"]["name"] == "John Doe"
-        assert commit_info["author"]["email"] == "john@example.com"
-        assert "timestamp" in commit_info
+        assert commit_info.sha == commit_sha
+        assert commit_info.message == "Test commit"
+        assert commit_info.author.name == "John Doe"
+        assert commit_info.author.email == "john@example.com"
+        assert commit_info.timestamp is not None
 
     async def test_get_commit_info_nonexistent_fails(self, adapter):
         """Test getting non-existent commit fails."""
@@ -466,9 +558,9 @@ class TestInMemoryRepositoryAdapter:
 
         # Should have initial commit + 3 new commits
         assert len(history) == 4
-        assert history[0]["message"] == "Commit 2"
-        assert history[1]["message"] == "Commit 1"
-        assert history[2]["message"] == "Commit 0"
+        assert history[0].message == "Commit 2"
+        assert history[1].message == "Commit 1"
+        assert history[2].message == "Commit 0"
 
     async def test_get_commit_history_with_limit(self, adapter):
         """Test getting commit history with limit."""
@@ -509,7 +601,7 @@ class TestInMemoryRepositoryAdapter:
         )
 
         # Mark the time
-        cutoff_time = datetime.now(timezone.utc)
+        cutoff_time = datetime.now(UTC)
         await asyncio.sleep(0.01)
 
         # Create newer commits
@@ -527,7 +619,7 @@ class TestInMemoryRepositoryAdapter:
         )
 
         assert len(history) == 2
-        assert all("New commit" in commit["message"] for commit in history)
+        assert all("New commit" in commit.message for commit in history)
 
     async def test_get_commit_history_nonexistent_branch_fails(self, adapter):
         """Test getting history for non-existent branch fails."""

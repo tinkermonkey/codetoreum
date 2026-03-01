@@ -16,9 +16,8 @@ Terminology mapping:
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Optional
-from uuid import UUID, uuid4
+from datetime import UTC, datetime
+from uuid import uuid4
 
 
 @dataclass(frozen=True)
@@ -37,9 +36,20 @@ class CodetoreumEvent:
     ensuring consistent routing, tracing, and handling by the
     orchestrator regardless of the source vendor.
 
+    **EventBus Routing**: This class provides two type identifiers with
+    different purposes:
+    - `type` (field): Dot-notation type for semantic categorization
+      (e.g., "workitem.column_changed"). Human-readable, hierarchical,
+      used for event store queries and documentation.
+    - `event_type` (property): Class name for EventBus subscription routing
+      (e.g., "WorkItemColumnChangedEvent"). Matches legacy DomainEvent
+      routing behavior. When subscribing to events, use the class name,
+      not the dot-notation type.
+
     Attributes:
         type: Event type in dot notation (e.g., "workitem.column_changed",
-               "comment.needs_response"). Used for handler routing.
+               "comment.needs_response"). Used for semantic categorization
+               and event store queries.
         timestamp: ISO 8601 timestamp when event occurred.
         source: Adapter that emitted the event (e.g., "github", "jira", "trello").
                Used to identify adapter-specific fields in the event.
@@ -57,32 +67,44 @@ class CodetoreumEvent:
         ... )
         >>> event.type = "modified.event"  # ❌ Raises FrozenInstanceError
         >>> # Events are read-only after construction—this is enforced by the frozen dataclass
+        >>> event.event_type  # Returns "CodetoreumEvent" (class name)
     """
 
     type: str
     timestamp: str
     source: str
-    correlation_id: Optional[str] = None
+    correlation_id: str | None = None
     event_id: str = field(default_factory=lambda: str(uuid4()))
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""
         if not self.type or "." not in self.type:
-            raise ValueError(
-                f"Event type must be in dot notation (e.g., 'workitem.created'), "
-                f"got: {self.type}"
-            )
+            msg = f"Event type must be in dot notation (e.g., 'workitem.created'), got: {self.type}"
+            raise ValueError(msg)
 
         if not self.source:
-            raise ValueError("Event source (adapter name) is required")
+            msg = "Event source (adapter name) is required"
+            raise ValueError(msg)
 
         # Validate timestamp is ISO format
         try:
             datetime.fromisoformat(self.timestamp.replace("Z", "+00:00"))
         except (ValueError, AttributeError):
-            raise ValueError(
-                f"Timestamp must be ISO 8601 format, got: {self.timestamp}"
-            )
+            msg = f"Timestamp must be ISO 8601 format, got: {self.timestamp}"
+            raise ValueError(msg)
+
+    @property
+    def event_type(self) -> str:
+        """Get event type for EventBus routing.
+
+        Returns the class name for compatibility with legacy DomainEvent-based
+        EventBus routing. Subscriptions should use the class name (e.g.,
+        "WorkItemColumnChangedEvent") to match events, not the dot-notation type.
+
+        Returns:
+            Class name (e.g., "WorkItemColumnChangedEvent")
+        """
+        return self.__class__.__name__
 
     def to_dict(self) -> dict:
         """Serialize event to dictionary for storage/transmission.
@@ -121,7 +143,8 @@ class CodetoreumEvent:
                 event_id=data.get("event_id", str(uuid4())),
             )
         except KeyError as e:
-            raise ValueError(f"Missing required field: {e}")
+            msg = f"Missing required field: {e}"
+            raise ValueError(msg)
 
 
 def now_iso() -> str:
@@ -130,4 +153,4 @@ def now_iso() -> str:
     Returns:
         ISO 8601 formatted timestamp (UTC).
     """
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()

@@ -59,8 +59,8 @@ class TraceContextInjector(logging.Filter):
         if span_context.is_valid:
             # Format as 32-digit hex for trace_id, 16-digit hex for span_id
             # This matches the format used by Signoz and other OTLP consumers
-            record.trace_id = format(span_context.trace_id, '032x')
-            record.span_id = format(span_context.span_id, '016x')
+            record.trace_id = format(span_context.trace_id, "032x")
+            record.span_id = format(span_context.span_id, "016x")
         else:
             # No active span - set to N/A for clarity
             record.trace_id = "N/A"

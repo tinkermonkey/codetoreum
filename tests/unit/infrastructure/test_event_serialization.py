@@ -1,7 +1,7 @@
 """Unit tests for event serialization."""
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -29,7 +29,7 @@ class TestEventSerializer:
         # Arrange
         event_id = uuid4()
         correlation_id = uuid4()
-        occurred_at = datetime.now(timezone.utc)
+        occurred_at = datetime.now(UTC)
 
         event = DomainEvent(
             aggregate_id="test-123",
@@ -63,7 +63,7 @@ class TestEventSerializer:
         # Arrange
         event_id = uuid4()
         correlation_id = uuid4()
-        occurred_at = datetime.now(timezone.utc)
+        occurred_at = datetime.now(UTC)
 
         original_event = DomainEvent(
             aggregate_id="test-123",
@@ -189,7 +189,7 @@ class TestEventSerializer:
                         "list": [1, 2, 3],
                     }
                 },
-                "timestamp": datetime.now(timezone.utc),
+                "timestamp": datetime.now(UTC),
             },
         )
 
@@ -204,14 +204,12 @@ class TestEventSerializer:
 
     def test_serialize_invalid_event_raises_error(self):
         """Test that serializing invalid data raises error."""
-        # Arrange
+        # Arrange - create event with non-serializable object in payload
         event = DomainEvent(
             aggregate_id="test-123",
             aggregate_type="TestAggregate",
+            payload={"bad_object": object()},  # Non-serializable object
         )
-
-        # Add non-serializable object to payload
-        event.payload = {"bad_object": object()}
 
         # Act & Assert
         with pytest.raises(EventSerializationError):
@@ -243,6 +241,7 @@ class TestEventSerializer:
 
     def test_register_event_type(self):
         """Test registering event types."""
+
         # Arrange
         class CustomEvent(DomainEvent):
             pass
@@ -256,6 +255,7 @@ class TestEventSerializer:
 
     def test_register_duplicate_event_type_with_same_class_ok(self):
         """Test that registering same event type twice is OK."""
+
         # Arrange
         class CustomEvent(DomainEvent):
             pass
@@ -269,6 +269,7 @@ class TestEventSerializer:
 
     def test_register_duplicate_event_type_with_different_class_raises_error(self):
         """Test that registering same name with different class raises error."""
+
         # Arrange
         class CustomEvent1(DomainEvent):
             pass
@@ -296,7 +297,7 @@ class TestEventSerializer:
                 "event_version": 1,
                 "aggregate_id": "test-123",
                 "aggregate_type": "TestAggregate",
-                "occurred_at": datetime.now(timezone.utc).isoformat(),
+                "occurred_at": datetime.now(UTC).isoformat(),
                 "correlation_id": None,
                 "causation_id": None,
                 "user_id": None,

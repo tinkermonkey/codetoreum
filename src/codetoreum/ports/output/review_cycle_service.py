@@ -13,7 +13,7 @@ feedback on, potentially requiring multiple iterations before approval.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Literal, Optional
+from typing import Literal
 
 ReviewCycleStatus = Literal[
     "initialized",
@@ -25,9 +25,12 @@ ReviewCycleStatus = Literal[
 ReviewStatus = Literal["APPROVED", "CHANGES_REQUESTED", "BLOCKED"]
 
 
-@dataclass
+@dataclass(frozen=True)
 class ReviewFinding:
     """A single finding from a code review.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation.
 
     Attributes:
         severity: Severity level of the finding (blocking, major, minor, suggestion)
@@ -38,35 +41,84 @@ class ReviewFinding:
 
     severity: Literal["blocking", "major", "minor", "suggestion"]
     description: str
-    file: Optional[str] = None
-    line: Optional[int] = None
+    file: str | None = None
+    line: int | None = None
 
     def __post_init__(self) -> None:
         """Validate finding data."""
+        if self.severity not in ("blocking", "major", "minor", "suggestion"):
+            msg = f"severity must be one of: blocking, major, minor, suggestion. Got: {self.severity}"
+            raise ValueError(msg)
+
         if not self.description or not self.description.strip():
-            raise ValueError("Finding description cannot be empty")
+            msg = "Finding description cannot be empty"
+            raise ValueError(msg)
+
+        if self.file is not None:
+            if not isinstance(self.file, str) or not self.file:
+                msg = "file must be a non-empty string or None"
+                raise ValueError(msg)
+
+        if self.line is not None:
+            if isinstance(self.line, bool) or not isinstance(self.line, int) or self.line < 1:
+                msg = "line must be a positive integer or None"
+                raise ValueError(msg)
 
 
-@dataclass
+@dataclass(frozen=True)
 class ReviewResult:
     """Parsed result from reviewer output.
 
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. Findings list is converted
+    to tuple for immutability.
+
     Attributes:
         status: Review decision (APPROVED, CHANGES_REQUESTED, BLOCKED)
-        findings: List of findings from the review
+        findings: Tuple of findings from the review
         blocking_count: Number of blocking findings
         summary: Optional summary of the review
     """
 
     status: ReviewStatus
-    findings: List[ReviewFinding]
+    findings: tuple[ReviewFinding, ...]
     blocking_count: int
-    summary: Optional[str] = None
+    summary: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate result data."""
+        # Coerce list to tuple for findings
+        if isinstance(self.findings, list):
+            object.__setattr__(self, "findings", tuple(self.findings))
+
+        if self.status not in ("APPROVED", "CHANGES_REQUESTED", "BLOCKED"):
+            msg = f"status must be one of: APPROVED, CHANGES_REQUESTED, BLOCKED. Got: {self.status}"
+            raise ValueError(msg)
+
+        if not isinstance(self.findings, tuple):
+            msg = "findings must be a list or tuple of ReviewFinding instances"
+            raise ValueError(msg)
+
+        if not all(isinstance(f, ReviewFinding) for f in self.findings):
+            msg = "all findings must be ReviewFinding instances"
+            raise ValueError(msg)
+
+        if isinstance(self.blocking_count, bool) or not isinstance(self.blocking_count, int) or self.blocking_count < 0:
+            msg = "blocking_count must be a non-negative integer"
+            raise ValueError(msg)
+
+        if self.summary is not None:
+            if not isinstance(self.summary, str) or not self.summary:
+                msg = "summary must be a non-empty string or None"
+                raise ValueError(msg)
 
 
-@dataclass
+@dataclass(frozen=True)
 class IterationOutput:
     """Output from a single iteration (maker or reviewer).
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation.
 
     Attributes:
         iteration: Iteration number (1-indexed)
@@ -80,10 +132,31 @@ class IterationOutput:
     timestamp: str
     post_human_feedback: bool = False
 
+    def __post_init__(self) -> None:
+        """Validate output data."""
+        if isinstance(self.iteration, bool) or not isinstance(self.iteration, int) or self.iteration < 1:
+            msg = "iteration must be a positive integer"
+            raise ValueError(msg)
 
-@dataclass
+        if not isinstance(self.output, str) or not self.output:
+            msg = "output must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.timestamp, str) or not self.timestamp:
+            msg = "timestamp must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.post_human_feedback, bool):
+            msg = "post_human_feedback must be a boolean"
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True)
 class ReviewCycleRequest:
     """Request to start a review cycle.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation.
 
     Attributes:
         work_item_id: ID of the work item being reviewed
@@ -107,17 +180,48 @@ class ReviewCycleRequest:
     auto_advance_on_approval: bool
     escalate_on_blocked: bool
     previous_stage_output: str
-    workflow_run_id: Optional[str] = None
+    workflow_run_id: str | None = None
 
     def __post_init__(self) -> None:
         """Validate request data."""
-        if self.max_iterations <= 0:
-            raise ValueError(f"max_iterations must be positive, got {self.max_iterations}")
+        for field_name in (
+            "work_item_id",
+            "project_id",
+            "board_id",
+            "maker_agent",
+            "reviewer_agent",
+            "previous_stage_output",
+        ):
+            val = getattr(self, field_name)
+            if not isinstance(val, str) or not val:
+                msg = f"{field_name} must be a non-empty string"
+                raise ValueError(msg)
+
+        if (
+            isinstance(self.max_iterations, bool)
+            or not isinstance(self.max_iterations, int)
+            or self.max_iterations <= 0
+        ):
+            msg = f"max_iterations must be positive, got {self.max_iterations}"
+            raise ValueError(msg)
+
+        if not isinstance(self.auto_advance_on_approval, bool) or not isinstance(self.escalate_on_blocked, bool):
+            msg = "auto_advance_on_approval and escalate_on_blocked must be booleans"
+            raise ValueError(msg)
+
+        if self.workflow_run_id is not None:
+            if not isinstance(self.workflow_run_id, str) or not self.workflow_run_id:
+                msg = "workflow_run_id must be a non-empty string or None"
+                raise ValueError(msg)
 
 
 @dataclass(frozen=True)
 class ReviewCycleState:
     """Complete state of an in-progress review cycle.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. Output lists are converted
+    to tuples for immutability.
 
     Attributes:
         work_item_id: ID of the work item being reviewed
@@ -128,8 +232,8 @@ class ReviewCycleState:
         max_iterations: Maximum iterations configured
         workflow_run_id: Associated pipeline run ID
         current_iteration: Current iteration number
-        maker_outputs: List of outputs from maker agent
-        review_outputs: List of outputs from reviewer agent
+        maker_outputs: Tuple of outputs from maker agent
+        review_outputs: Tuple of outputs from reviewer agent
         status: Current state of the review cycle
         escalation_time: ISO timestamp when escalated (if applicable)
         last_escalation_comment_id: ID of escalation comment (if applicable)
@@ -144,24 +248,98 @@ class ReviewCycleState:
     maker_agent: str
     reviewer_agent: str
     max_iterations: int
-    workflow_run_id: Optional[str]
+    workflow_run_id: str | None
     current_iteration: int
-    maker_outputs: List[IterationOutput]
-    review_outputs: List[IterationOutput]
+    maker_outputs: tuple[IterationOutput, ...]
+    review_outputs: tuple[IterationOutput, ...]
     status: ReviewCycleStatus
-    escalation_time: Optional[str] = None
-    last_escalation_comment_id: Optional[str] = None
-    last_approved_commit: Optional[str] = None
+    escalation_time: str | None = None
+    last_escalation_comment_id: str | None = None
+    last_approved_commit: str | None = None
     created_at: str = ""
     updated_at: str = ""
 
     def __post_init__(self) -> None:
         """Validate state data."""
+        # Coerce list to tuple for maker_outputs
+        if isinstance(self.maker_outputs, list):
+            object.__setattr__(self, "maker_outputs", tuple(self.maker_outputs))
+
+        # Coerce list to tuple for review_outputs
+        if isinstance(self.review_outputs, list):
+            object.__setattr__(self, "review_outputs", tuple(self.review_outputs))
+
+        for field_name in ("work_item_id", "project_id", "board_id", "maker_agent", "reviewer_agent"):
+            val = getattr(self, field_name)
+            if not isinstance(val, str) or not val:
+                msg = f"{field_name} must be a non-empty string"
+                raise ValueError(msg)
+
+        if (
+            isinstance(self.max_iterations, bool)
+            or not isinstance(self.max_iterations, int)
+            or self.max_iterations <= 0
+        ):
+            msg = "max_iterations must be a positive integer"
+            raise ValueError(msg)
+
+        if self.workflow_run_id is not None:
+            if not isinstance(self.workflow_run_id, str):
+                msg = "workflow_run_id must be a string or None"
+                raise ValueError(msg)
+
+        if (
+            isinstance(self.current_iteration, bool)
+            or not isinstance(self.current_iteration, int)
+            or self.current_iteration < 0
+        ):
+            msg = "current_iteration must be a non-negative integer"
+            raise ValueError(msg)
+
+        if not isinstance(self.maker_outputs, tuple):
+            msg = "maker_outputs must be a list or tuple of IterationOutput instances"
+            raise ValueError(msg)
+
+        if not all(isinstance(o, IterationOutput) for o in self.maker_outputs):
+            msg = "all maker_outputs must be IterationOutput instances"
+            raise ValueError(msg)
+
+        if not isinstance(self.review_outputs, tuple):
+            msg = "review_outputs must be a list or tuple of IterationOutput instances"
+            raise ValueError(msg)
+
+        if not all(isinstance(o, IterationOutput) for o in self.review_outputs):
+            msg = "all review_outputs must be IterationOutput instances"
+            raise ValueError(msg)
+
+        if self.status not in (
+            "initialized",
+            "maker_working",
+            "reviewer_working",
+            "awaiting_human_feedback",
+            "completed",
+        ):
+            msg = f"status must be one of: initialized, maker_working, reviewer_working, awaiting_human_feedback, completed. Got: {self.status}"
+            raise ValueError(msg)
+
         if self.current_iteration > self.max_iterations:
-            raise ValueError(
-                f"current_iteration ({self.current_iteration}) cannot exceed "
-                f"max_iterations ({self.max_iterations})"
-            )
+            msg = f"current_iteration ({self.current_iteration}) cannot exceed max_iterations ({self.max_iterations})"
+            raise ValueError(msg)
+
+        if self.escalation_time is not None:
+            if not isinstance(self.escalation_time, str) or not self.escalation_time:
+                msg = "escalation_time must be a non-empty string or None"
+                raise ValueError(msg)
+
+        if self.last_escalation_comment_id is not None:
+            if not isinstance(self.last_escalation_comment_id, str) or not self.last_escalation_comment_id:
+                msg = "last_escalation_comment_id must be a non-empty string or None"
+                raise ValueError(msg)
+
+        if self.last_approved_commit is not None:
+            if not isinstance(self.last_approved_commit, str) or not self.last_approved_commit:
+                msg = "last_approved_commit must be a non-empty string or None"
+                raise ValueError(msg)
 
 
 @dataclass(frozen=True)
@@ -185,7 +363,8 @@ class ReviewCycleResult:
     def __post_init__(self) -> None:
         """Validate result data."""
         if self.total_iterations <= 0:
-            raise ValueError(f"total_iterations must be positive, got {self.total_iterations}")
+            msg = f"total_iterations must be positive, got {self.total_iterations}"
+            raise ValueError(msg)
 
 
 class IReviewCycle(ABC):
@@ -242,12 +421,9 @@ class IReviewCycle(ABC):
             ResourceNotFoundError: If work item or agents don't exist
             ExternalServiceError: If external service communication fails
         """
-        pass
 
     @abstractmethod
-    async def resume_review_cycle(
-        self, work_item_id: str, project_id: str
-    ) -> None:
+    async def resume_review_cycle(self, work_item_id: str, project_id: str) -> None:
         """Resume an interrupted review cycle.
 
         Resumes a review cycle that was paused (e.g., due to agent timeout
@@ -262,12 +438,9 @@ class IReviewCycle(ABC):
             InvalidStateError: If cycle is not resumable
             ExternalServiceError: If external service communication fails
         """
-        pass
 
     @abstractmethod
-    async def resume_with_human_feedback(
-        self, cycle_state: ReviewCycleState, feedback: str
-    ) -> None:
+    async def resume_with_human_feedback(self, cycle_state: ReviewCycleState, feedback: str) -> None:
         """Resume a blocked cycle with human feedback.
 
         Resumes a review cycle that was escalated to human when blocked
@@ -283,12 +456,9 @@ class IReviewCycle(ABC):
             ValueError: If feedback is empty
             ExternalServiceError: If external service communication fails
         """
-        pass
 
     @abstractmethod
-    async def get_cycle_state(
-        self, work_item_id: str
-    ) -> Optional[ReviewCycleState]:
+    async def get_cycle_state(self, work_item_id: str) -> ReviewCycleState | None:
         """Retrieve current state of a review cycle.
 
         Gets the complete state of a review cycle in progress,
@@ -303,7 +473,6 @@ class IReviewCycle(ABC):
         Raises:
             ExternalServiceError: If state store communication fails
         """
-        pass
 
     @abstractmethod
     async def save_cycle_state(self, state: ReviewCycleState) -> None:
@@ -319,7 +488,6 @@ class IReviewCycle(ABC):
             ValueError: If state is invalid
             ExternalServiceError: If state store communication fails
         """
-        pass
 
     @abstractmethod
     async def remove_cycle_state(self, state: ReviewCycleState) -> None:
@@ -334,10 +502,9 @@ class IReviewCycle(ABC):
         Raises:
             ExternalServiceError: If state store communication fails
         """
-        pass
 
     @abstractmethod
-    async def load_active_cycles(self, project_id: str) -> List[ReviewCycleState]:
+    async def load_active_cycles(self, project_id: str) -> list[ReviewCycleState]:
         """Load all in-progress cycles for a project.
 
         Retrieves all review cycles currently in progress for a project,
@@ -352,7 +519,6 @@ class IReviewCycle(ABC):
         Raises:
             ExternalServiceError: If state store communication fails
         """
-        pass
 
     @abstractmethod
     def parse_review(self, review_output: str) -> ReviewResult:
@@ -374,4 +540,3 @@ class IReviewCycle(ABC):
         Raises:
             ValueError: If output cannot be parsed
         """
-        pass

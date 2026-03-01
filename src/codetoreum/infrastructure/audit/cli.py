@@ -6,23 +6,21 @@ Command-line interface for querying and managing audit logs.
 
 import asyncio
 import json
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 import click
 
 from codetoreum.infrastructure.audit.interfaces import AuditQueryFilters
-from codetoreum.infrastructure.audit.stores import InMemoryAuditStore, FileAuditStore
 from codetoreum.infrastructure.audit.retention import (
     RetentionPolicy,
     RetentionPolicyManager,
 )
+from codetoreum.infrastructure.audit.stores import FileAuditStore, InMemoryAuditStore
 
 
 @click.group()
 def audit_cli():
     """Audit log management CLI."""
-    pass
 
 
 @audit_cli.command()
@@ -51,13 +49,13 @@ def audit_cli():
 def query(
     store_type: str,
     file_path: str,
-    event_type: Optional[str],
-    resource_type: Optional[str],
-    resource_id: Optional[str],
-    user_id: Optional[str],
-    action: Optional[str],
-    success: Optional[bool],
-    days_ago: Optional[int],
+    event_type: str | None,
+    resource_type: str | None,
+    resource_id: str | None,
+    user_id: str | None,
+    action: str | None,
+    success: bool | None,
+    days_ago: int | None,
     limit: int,
     output_format: str,
 ):
@@ -73,7 +71,7 @@ def query(
         # Build filters
         start_time = None
         if days_ago:
-            start_time = datetime.now(timezone.utc) - timedelta(days=days_ago)
+            start_time = datetime.now(UTC) - timedelta(days=days_ago)
 
         filters = AuditQueryFilters(
             event_type=event_type,
@@ -96,9 +94,7 @@ def query(
             for event in events:
                 serializable_event = event.copy()
                 if isinstance(serializable_event.get("timestamp"), datetime):
-                    serializable_event["timestamp"] = serializable_event[
-                        "timestamp"
-                    ].isoformat()
+                    serializable_event["timestamp"] = serializable_event["timestamp"].isoformat()
                 serializable_events.append(serializable_event)
             click.echo(json.dumps(serializable_events, indent=2))
         else:
@@ -147,9 +143,7 @@ def query(
     help="Delete events older than N days",
 )
 @click.option("--dry-run", is_flag=True, help="Show what would be deleted without deleting")
-def cleanup(
-    store_type: str, file_path: str, retention_days: int, dry_run: bool
-):
+def cleanup(store_type: str, file_path: str, retention_days: int, dry_run: bool):
     """Clean up old audit logs according to retention policy."""
 
     async def _cleanup():
@@ -166,16 +160,12 @@ def cleanup(
         manager = RetentionPolicyManager(store, policy)
 
         # Run cleanup
-        click.echo(
-            f"{'DRY RUN: ' if dry_run else ''}Cleaning up audit events older than {retention_days} days..."
-        )
+        click.echo(f"{'DRY RUN: ' if dry_run else ''}Cleaning up audit events older than {retention_days} days...")
         stats = await manager.cleanup_old_events(dry_run=dry_run)
 
         # Show results
         if dry_run:
-            click.echo(
-                f"\nWould delete {stats.get('events_to_delete', 0)} audit events"
-            )
+            click.echo(f"\nWould delete {stats.get('events_to_delete', 0)} audit events")
         else:
             click.echo(f"\nDeleted {stats.get('events_deleted', 0)} audit events")
 
@@ -209,7 +199,7 @@ def stats(store_type: str, file_path: str):
         filters = AuditQueryFilters(limit=1000000)
         total_events = await store.count_events(filters)
 
-        click.echo(f"\nAudit Log Statistics:")
+        click.echo("\nAudit Log Statistics:")
         click.echo(f"  Total events: {total_events}")
 
         # Count by success/failure
@@ -223,7 +213,7 @@ def stats(store_type: str, file_path: str):
         click.echo(f"  Failed: {failure_count}")
 
         # Count recent events (last 24 hours)
-        yesterday = datetime.now(timezone.utc) - timedelta(days=1)
+        yesterday = datetime.now(UTC) - timedelta(days=1)
         recent_filters = AuditQueryFilters(start_time=yesterday, limit=1000000)
         recent_count = await store.count_events(recent_filters)
 
@@ -232,7 +222,7 @@ def stats(store_type: str, file_path: str):
         # If memory store, show type breakdown
         if store_type == "memory" and hasattr(store, "get_stats"):
             store_stats = store.get_stats()
-            click.echo(f"\n  Events by type:")
+            click.echo("\n  Events by type:")
             for event_type, count in store_stats.get("events_by_type", {}).items():
                 click.echo(f"    {event_type}: {count}")
 

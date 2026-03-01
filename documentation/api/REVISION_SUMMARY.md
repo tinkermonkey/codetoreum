@@ -98,18 +98,20 @@ This document summarizes the revisions made to the API documentation implementat
 - Added comprehensive error handling for all API operations
 - Implemented user-friendly error messages
 - Added nested try-except for optional operations
+- Removed `websocket_events.py` - WebSocket functionality not yet implemented (E2E tests skipped)
 
 **Files Modified**:
-- `documentation/api/examples/python/websocket_events.py`
 - `documentation/api/examples/python/create_agent.py`
 - `documentation/api/examples/python/list_executions.py`
 - `documentation/api/examples/python/start_workflow.py`
+
+**Files Removed**:
+- `documentation/api/examples/python/websocket_events.py` (deprecated websockets API, tests not yet implemented)
 
 **Error Types Handled**:
 - `HTTPError`: API errors with status codes
 - `ConnectionError`: Unable to connect to API
 - `Timeout`: Request timeout
-- `WebSocketException`: WebSocket-specific errors
 - `JSONDecodeError`: Malformed response parsing
 - `KeyError`: Missing expected fields
 
@@ -149,7 +151,7 @@ This document summarizes the revisions made to the API documentation implementat
 | workflows.py | 35 lines | 282 lines | +706% (full implementation) |
 | config.py | 22 lines | 287 lines | +1,204% (full implementation) |
 | client.py | 183 lines | 183 lines | Enhanced error handling |
-| websocket_events.py | 232 lines | 232 lines | Improved error handling |
+| websocket_events.py | 232 lines | REMOVED | Removed - functionality not yet implemented |
 | create_agent.py | 172 lines | 172 lines | Added try-except |
 | list_executions.py | 276 lines | 276 lines | Comprehensive error handling |
 | start_workflow.py | 289 lines | 289 lines | Better error recovery |
@@ -163,8 +165,9 @@ This document summarizes the revisions made to the API documentation implementat
 
 ### Total Changes
 
-- **9 files modified**
+- **8 files modified**
 - **2 files created**
+- **1 file removed** (websocket_events.py)
 - **~1,100 lines of code added/enhanced**
 - **~580 lines of documentation added**
 

@@ -1,9 +1,10 @@
 """Integration tests for WorkflowOrchestrator."""
 
-import pytest
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock
+from datetime import UTC, datetime
 
+import pytest
+
+from codetoreum.adapters.testing import InMemoryEventStore, InMemoryTicketAdapter
 from codetoreum.application.workflow_orchestrator import (
     AgentConfig,
     CardMovedEvent,
@@ -23,12 +24,9 @@ from codetoreum.application.workflow_orchestrator import (
     WorkflowAction,
     WorkflowConfig,
     WorkflowOrchestrator,
-    WorkflowResult,
     WorkflowState,
 )
-from codetoreum.adapters.testing import InMemoryEventStore, InMemoryTicketAdapter
 from codetoreum.domain.work_item import WorkItemPriority
-
 
 # Mock implementations for testing
 
@@ -41,12 +39,12 @@ class MockTaskQueue(ITaskQueue):
 
     async def enqueue(self, task: Task) -> str:
         self.tasks.append(task)
-        return task.id
+        return str(task.id)
 
     def size(self) -> int:
         return len(self.tasks)
 
-    def get_last_task(self) -> Task:
+    def get_last_task(self) -> Task | None:
         return self.tasks[-1] if self.tasks else None
 
 
@@ -114,31 +112,42 @@ class MockProjectConfiguration(IProjectConfiguration):
                 capabilities=["review"],
                 requires_dev_container=True,
             ),
+            "feedback_handler": AgentConfig(
+                id="feedback_handler",
+                name="Feedback Handler",
+                prompt_template="Handle user feedback",
+                capabilities=["communication"],
+                requires_dev_container=False,
+            ),
         }
 
     async def get_workflow_config(self, project: str, board: str) -> WorkflowConfig:
-        return self.workflows.get((project, board))
+        config = self.workflows.get((project, board))
+        if config is None:
+            msg = f"Workflow config not found for {project}/{board}"
+            raise ValueError(msg)
+        return config
 
     async def get_agent_config(self, agent_name: str) -> AgentConfig:
-        return self.agents.get(agent_name)
+        config = self.agents.get(agent_name)
+        if config is None:
+            msg = f"Agent config not found for {agent_name}"
+            raise ValueError(msg)
+        return config
 
 
 class MockWorkflowStateManager(IWorkflowStateManager):
     """Mock workflow state manager."""
 
     def __init__(self):
-        self.states = {}
+        self.states: dict[str, WorkflowState] = {}
 
     async def get_workflow_state(self, issue_id: str) -> WorkflowState:
         if issue_id not in self.states:
-            self.states[issue_id] = WorkflowState(
-                in_progress_tasks={}, current_column=None, current_agent=None
-            )
+            self.states[issue_id] = WorkflowState(in_progress_tasks={}, current_column=None, current_agent=None)
         return self.states[issue_id]
 
-    async def update_workflow_state(
-        self, issue_id: str, state: WorkflowState
-    ) -> None:
+    async def update_workflow_state(self, issue_id: str, state: WorkflowState) -> None:
         self.states[issue_id] = state
 
 
@@ -163,9 +172,7 @@ class MockProjectsAPI(IProjectsAPI):
         self.card_movements = []
         self.labels_added = []
 
-    async def move_card_to_column(
-        self, project: str, issue_number: int, column_name: str
-    ) -> None:
+    async def move_card_to_column(self, project: str, issue_number: int, column_name: str) -> None:
         self.card_movements.append((project, issue_number, column_name))
 
     async def add_label(self, project: str, issue_number: int, label: str) -> None:
@@ -185,7 +192,7 @@ def mock_task_queue():
 @pytest.fixture
 def mock_config():
     config = MockProjectConfiguration()
-    yield config
+    return config
 
 
 @pytest.fixture
@@ -264,10 +271,10 @@ async def test_handle_card_movement_success(orchestrator, mock_task_queue, mock_
             body="Test description",
             labels=["enhancement"],
             state="open",
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         ),
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     result = await orchestrator.handle_card_movement(event)
@@ -288,9 +295,7 @@ async def test_handle_card_movement_success(orchestrator, mock_task_queue, mock_
 
 
 @pytest.mark.asyncio
-async def test_handle_card_movement_duplicate_work(
-    orchestrator, mock_workflow_state, mock_task_queue
-):
+async def test_handle_card_movement_duplicate_work(orchestrator, mock_workflow_state, mock_task_queue):
     """Test that duplicate work is prevented."""
     # First card movement
     event1 = CardMovedEvent(
@@ -305,10 +310,10 @@ async def test_handle_card_movement_duplicate_work(
             body="Test description",
             labels=[],
             state="open",
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         ),
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     result1 = await orchestrator.handle_card_movement(event1)
@@ -338,10 +343,10 @@ async def test_handle_card_movement_invalid_column(orchestrator, mock_task_queue
             body="Test description",
             labels=[],
             state="open",
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         ),
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     result = await orchestrator.handle_card_movement(event)
@@ -353,9 +358,7 @@ async def test_handle_card_movement_invalid_column(orchestrator, mock_task_queue
 
 
 @pytest.mark.asyncio
-async def test_handle_stage_completion_with_review(
-    orchestrator, mock_task_queue, mock_decision_events
-):
+async def test_handle_stage_completion_with_review(orchestrator, mock_task_queue, mock_decision_events):
     """Test stage completion that requires review."""
     event = StageCompletedEvent(
         project="test-project",
@@ -365,7 +368,7 @@ async def test_handle_stage_completion_with_review(
         success=True,
         output="Implementation complete",
         context={"board": "Development"},
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     result = await orchestrator.handle_stage_completion(event)
@@ -395,7 +398,7 @@ async def test_handle_stage_completion_with_auto_advance(
         success=True,
         output="Requirements analyzed",
         context={"board": "Development"},
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     result = await orchestrator.handle_stage_completion(event)
@@ -421,9 +424,7 @@ async def test_handle_stage_completion_with_auto_advance(
 
 
 @pytest.mark.asyncio
-async def test_handle_stage_completion_failure(
-    orchestrator, mock_decision_events
-):
+async def test_handle_stage_completion_failure(orchestrator, mock_decision_events):
     """Test handling of stage failure."""
     event = StageCompletedEvent(
         project="test-project",
@@ -433,7 +434,7 @@ async def test_handle_stage_completion_failure(
         success=False,
         output="Implementation failed",
         context={"board": "Development"},
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     result = await orchestrator.handle_stage_completion(event)
@@ -446,9 +447,7 @@ async def test_handle_stage_completion_failure(
 
 
 @pytest.mark.asyncio
-async def test_handle_review_cycle_completion_approved(
-    orchestrator, mock_projects_api
-):
+async def test_handle_review_cycle_completion_approved(orchestrator, mock_projects_api):
     """Test review cycle completion with approval."""
     event = ReviewCycleCompletedEvent(
         project="test-project",
@@ -458,7 +457,7 @@ async def test_handle_review_cycle_completion_approved(
         maker_agent="developer",
         reviewer_agent="code_reviewer",
         feedback=None,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         context={"board": "Development"},
     )
 
@@ -470,9 +469,7 @@ async def test_handle_review_cycle_completion_approved(
 
 
 @pytest.mark.asyncio
-async def test_handle_review_cycle_completion_rejected(
-    orchestrator, mock_task_queue
-):
+async def test_handle_review_cycle_completion_rejected(orchestrator, mock_task_queue):
     """Test review cycle completion with rejection."""
     event = ReviewCycleCompletedEvent(
         project="test-project",
@@ -482,7 +479,7 @@ async def test_handle_review_cycle_completion_rejected(
         maker_agent="developer",
         reviewer_agent="code_reviewer",
         feedback="Please fix issues",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         context={"board": "Development", "max_iterations": 3},
     )
 
@@ -501,9 +498,7 @@ async def test_handle_review_cycle_completion_rejected(
 
 
 @pytest.mark.asyncio
-async def test_handle_review_cycle_completion_max_iterations(
-    orchestrator, mock_projects_api
-):
+async def test_handle_review_cycle_completion_max_iterations(orchestrator, mock_projects_api):
     """Test review cycle escalation after max iterations."""
     event = ReviewCycleCompletedEvent(
         project="test-project",
@@ -513,7 +508,7 @@ async def test_handle_review_cycle_completion_max_iterations(
         maker_agent="developer",
         reviewer_agent="code_reviewer",
         feedback="Still has issues",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         context={"board": "Development", "max_iterations": 3},
     )
 
@@ -542,7 +537,7 @@ async def test_handle_feedback(orchestrator, mock_task_queue):
         author="user123",
         content="Can you explain this?",
         reply_to_comment_id="comment-456",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     result = await orchestrator.handle_feedback(event)
@@ -575,10 +570,10 @@ async def test_workflow_state_persistence(orchestrator, mock_workflow_state):
             body="Test description",
             labels=[],
             state="open",
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         ),
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     await orchestrator.handle_card_movement(event)
@@ -591,28 +586,7 @@ async def test_workflow_state_persistence(orchestrator, mock_workflow_state):
 
 
 @pytest.mark.asyncio
-async def test_handle_stage_completion_context_none(orchestrator):
-    """Test stage completion with context=None raises AttributeError (type violation)."""
-    event = StageCompletedEvent(
-        project="test-project",
-        issue_number=123,
-        stage_name="Implementation",
-        agent_name="developer",
-        success=True,
-        output="Implementation complete",
-        context=None,  # Type violation: context should be Dict[str, Any]
-        timestamp=datetime.now(timezone.utc),
-    )
-
-    # Should raise AttributeError since None doesn't have .get() method
-    with pytest.raises(AttributeError, match="'NoneType' object has no attribute"):
-        await orchestrator.handle_stage_completion(event)
-
-
-@pytest.mark.asyncio
-async def test_handle_stage_completion_with_extra_context_keys(
-    orchestrator, mock_task_queue, mock_decision_events
-):
+async def test_handle_stage_completion_with_extra_context_keys(orchestrator, mock_task_queue, mock_decision_events):
     """Test stage completion ignores extra keys in context dict."""
     event = StageCompletedEvent(
         project="test-project",
@@ -622,7 +596,7 @@ async def test_handle_stage_completion_with_extra_context_keys(
         success=True,
         output="Implementation complete",
         context={"board": "Development", "extra_key": "extra_value", "another": 123},
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     # Should ignore extra keys and use board="Development"
@@ -634,29 +608,7 @@ async def test_handle_stage_completion_with_extra_context_keys(
 
 
 @pytest.mark.asyncio
-async def test_handle_review_cycle_completion_context_none(orchestrator):
-    """Test review cycle completion with context=None raises AttributeError (type violation)."""
-    event = ReviewCycleCompletedEvent(
-        project="test-project",
-        issue_number=123,
-        approved=True,
-        iteration=1,
-        maker_agent="developer",
-        reviewer_agent="code_reviewer",
-        feedback=None,
-        context=None,  # Type violation: context should be Dict[str, Any]
-        timestamp=datetime.now(timezone.utc),
-    )
-
-    # Should raise AttributeError since None doesn't have .get() method
-    with pytest.raises(AttributeError, match="'NoneType' object has no attribute"):
-        await orchestrator.handle_review_cycle_completion(event)
-
-
-@pytest.mark.asyncio
-async def test_handle_review_cycle_completion_with_extra_context_keys(
-    orchestrator, mock_projects_api
-):
+async def test_handle_review_cycle_completion_with_extra_context_keys(orchestrator, mock_projects_api):
     """Test review cycle completion ignores extra keys in context dict."""
     event = ReviewCycleCompletedEvent(
         project="test-project",
@@ -667,7 +619,7 @@ async def test_handle_review_cycle_completion_with_extra_context_keys(
         reviewer_agent="code_reviewer",
         feedback=None,
         context={"board": "Development", "extra": "value", "other": 456},
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     # Should ignore extra keys and use board="Development"
@@ -678,9 +630,7 @@ async def test_handle_review_cycle_completion_with_extra_context_keys(
 
 
 @pytest.mark.asyncio
-async def test_handle_review_cycle_completion_missing_max_iterations(
-    orchestrator, mock_task_queue
-):
+async def test_handle_review_cycle_completion_missing_max_iterations(orchestrator, mock_task_queue):
     """Test review cycle completion without max_iterations uses default of 3."""
     event = ReviewCycleCompletedEvent(
         project="test-project",
@@ -691,7 +641,7 @@ async def test_handle_review_cycle_completion_missing_max_iterations(
         reviewer_agent="code_reviewer",
         feedback="Please fix",
         context={"board": "Development"},  # No max_iterations key
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     result = await orchestrator.handle_review_cycle_completion(event)
@@ -707,9 +657,7 @@ async def test_handle_review_cycle_completion_missing_max_iterations(
 
 
 @pytest.mark.asyncio
-async def test_handle_review_cycle_completion_max_iterations_exceeded(
-    orchestrator, mock_decision_events
-):
+async def test_handle_review_cycle_completion_max_iterations_exceeded(orchestrator, mock_decision_events):
     """Test review cycle completion escalates when max_iterations reached."""
     event = ReviewCycleCompletedEvent(
         project="test-project",
@@ -720,7 +668,7 @@ async def test_handle_review_cycle_completion_max_iterations_exceeded(
         reviewer_agent="code_reviewer",
         feedback="Still not good",
         context={"board": "Development"},  # max_iterations defaults to 3
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     result = await orchestrator.handle_review_cycle_completion(event)

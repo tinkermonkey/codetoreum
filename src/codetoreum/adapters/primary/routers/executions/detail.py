@@ -4,8 +4,6 @@ Execution Detail Endpoints
 Handles retrieving detailed execution status and history.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, HTTPException, Query
 from fastapi import status as http_status
 
@@ -67,11 +65,11 @@ def register_detail_endpoints(
             if "not found" in str(e).lower():
                 raise HTTPException(
                     status_code=http_status.HTTP_404_NOT_FOUND,
-                    detail=f"Execution not found: {str(e)}",
+                    detail=f"Execution not found: {e!s}",
                 )
             raise HTTPException(
                 status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to get execution: {str(e)}",
+                detail=f"Failed to get execution: {e!s}",
             )
 
     @router.get(
@@ -87,7 +85,7 @@ def register_detail_endpoints(
     )
     async def get_execution_history(
         execution_id: str,
-        limit: Optional[int] = Query(None, ge=1, le=1000, description="Limit number of events (max 1000)"),
+        limit: int | None = Query(None, ge=1, le=1000, description="Limit number of events (max 1000)"),
     ) -> ExecutionHistoryResponse:
         """
         Get event history timeline for an execution.
@@ -123,9 +121,9 @@ def register_detail_endpoints(
             if "not found" in str(e).lower():
                 raise HTTPException(
                     status_code=http_status.HTTP_404_NOT_FOUND,
-                    detail=f"Execution not found: {str(e)}",
+                    detail=f"Execution not found: {e!s}",
                 )
             raise HTTPException(
                 status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to get execution history: {str(e)}",
+                detail=f"Failed to get execution history: {e!s}",
             )

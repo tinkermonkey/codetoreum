@@ -1,10 +1,16 @@
 """Unit tests for MockLLMAdapter."""
 
+import time
+
 import pytest
 
 from codetoreum.adapters.testing import MockLLMAdapter
+from codetoreum.infrastructure.simulation.simulation_config import (
+    FidelityLevel,
+    SimulationConfig,
+)
 from codetoreum.ports.exceptions import ValidationError
-from codetoreum.ports.output.llm_provider import ExecutionContext, ToolDefinition
+from codetoreum.ports.output.llm_provider import ToolDefinition
 
 
 @pytest.mark.asyncio
@@ -42,6 +48,7 @@ class TestMockLLMAdapter:
         adapter = MockLLMAdapter(delay_seconds=0.01)
 
         import time
+
         start = time.time()
         await adapter.execute("Test")
         duration = time.time() - start
@@ -77,9 +84,7 @@ class TestMockLLMAdapter:
 
     async def test_create_conversation(self, adapter):
         """Test creating a conversation."""
-        conv_id = await adapter.create_conversation(
-            system_prompt="You are a helpful assistant"
-        )
+        conv_id = await adapter.create_conversation(system_prompt="You are a helpful assistant")
 
         assert conv_id is not None
 
@@ -153,3 +158,97 @@ class TestMockLLMAdapter:
 
         result2 = await adapter.execute("goodbye friend")
         assert result2.content == "See you later!"
+
+    async def test_proportional_timing_low_fidelity(self):
+        """Test LOW fidelity level has zero delay."""
+        config = SimulationConfig.create_fast_config(
+            "test",
+            fidelity_level=FidelityLevel.LOW,
+            ms_per_token=50.0,
+        )
+        adapter = MockLLMAdapter(config=config)
+
+        start = time.time()
+        await adapter.execute("short prompt")
+        duration = time.time() - start
+
+        # LOW fidelity should have minimal delay
+        assert duration < 0.05
+
+    async def test_proportional_timing_medium_fidelity_scales_with_tokens(self):
+        """Test MEDIUM fidelity latency scales with token count."""
+        config = SimulationConfig.create_fast_config(
+            "test",
+            fidelity_level=FidelityLevel.MEDIUM,
+            ms_per_token=10.0,  # Reduced for fast test
+            speed_multiplier=1.0,  # Real-time for measurement
+        )
+        adapter = MockLLMAdapter(config=config)
+        # Register a response pattern to ensure we get the long response
+        adapter.add_response_pattern(
+            r"test.*test",
+            "ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok",
+        )
+
+        # Short prompt (estimated ~50 tokens total)
+        short_prompt = "test"
+        start = time.time()
+        await adapter.execute(short_prompt)
+        duration_short = time.time() - start
+
+        # Long prompt (estimated ~500+ tokens total)
+        long_prompt = "test " * 50
+        start = time.time()
+        await adapter.execute(long_prompt)
+        duration_long = time.time() - start
+
+        # Latency should scale approximately with token count
+        # Longer response should take noticeably more time
+        assert duration_long > duration_short * 2, f"Expected ~5x+ scaling, got {duration_long / duration_short:.1f}x"
+
+    async def test_proportional_timing_high_fidelity_scales_with_tokens(self):
+        """Test HIGH fidelity latency scales with token count."""
+        config = SimulationConfig.create_fast_config(
+            "test",
+            fidelity_level=FidelityLevel.HIGH,
+            ms_per_token=50.0,
+            speed_multiplier=1.0,  # Real-time for measurement
+        )
+        adapter = MockLLMAdapter(config=config)
+
+        # Short prompt
+        short_prompt = "test"
+        start = time.time()
+        await adapter.execute(short_prompt)
+        duration_short = time.time() - start
+
+        # Long prompt
+        long_prompt = "test " * 100
+        start = time.time()
+        await adapter.execute(long_prompt)
+        duration_long = time.time() - start
+
+        # Latency should scale with tokens
+        assert duration_long > duration_short * 3
+
+    async def test_proportional_timing_with_custom_clock(self):
+        """Test proportional timing works with SimulationClock."""
+        from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
+
+        config = SimulationConfig.create_fast_config(
+            "test",
+            fidelity_level=FidelityLevel.MEDIUM,
+            ms_per_token=100.0,
+            speed_multiplier=10.0,  # 10x faster
+        )
+        clock = SimulationClock(speed_multiplier=10.0)
+
+        adapter = MockLLMAdapter(config=config, clock=clock)
+
+        start = time.time()
+        await adapter.execute("short test")
+        duration = time.time() - start
+
+        # With 10x multiplier, delays should be ~1/10th of real time
+        # We expect minimal delay due to simulated fast execution
+        assert duration < 0.5

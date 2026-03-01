@@ -4,20 +4,17 @@ Agent List Endpoints
 Provides endpoints for listing and filtering agents.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, HTTPException, Query, status
-
-from codetoreum.config import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, DEFAULT_OFFSET
 
 from codetoreum.adapters.primary.agent_dtos import AgentListResponse
 from codetoreum.adapters.primary.agent_mappers import AgentMapper
+from codetoreum.config import DEFAULT_OFFSET, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from codetoreum.domain.agent import AgentType
 from codetoreum.ports.input.agent_query import (
-    IAgentQueryPort,
     AgentFilters,
     AgentPaginationParams,
     AgentSortField,
+    IAgentQueryPort,
     SortOrder,
 )
 
@@ -38,18 +35,32 @@ def register_list_endpoints(router: APIRouter, query_port: IAgentQueryPort) -> N
         response_description="List of agents in registry",
         responses={
             200: {"description": "List of agents with pagination metadata"},
-            400: {"description": "Bad Request - Invalid filter parameters", "content": {"application/json": {"example": {"detail": "Invalid agent type: invalid_type"}}}},
-            401: {"description": "Unauthorized - Authentication required", "content": {"application/json": {"example": {"detail": "Not authenticated"}}}},
+            400: {
+                "description": "Bad Request - Invalid filter parameters",
+                "content": {"application/json": {"example": {"detail": "Invalid agent type: invalid_type"}}},
+            },
+            401: {
+                "description": "Unauthorized - Authentication required",
+                "content": {"application/json": {"example": {"detail": "Not authenticated"}}},
+            },
         },
     )
     async def list_agents(
-        capability: Optional[str] = Query(None, description="Filter by capability/skill"),
-        agent_type: Optional[str] = Query(None, description="Filter by agent type (maker, reviewer, etc.)"),
-        requires_docker: Optional[bool] = Query(None, description="Filter by Docker requirement"),
-        makes_code_changes: Optional[bool] = Query(None, description="Filter by code modification capability"),
+        capability: str | None = Query(None, description="Filter by capability/skill"),
+        agent_type: str | None = Query(None, description="Filter by agent type (maker, reviewer, etc.)"),
+        requires_docker: bool | None = Query(None, description="Filter by Docker requirement"),
+        makes_code_changes: bool | None = Query(None, description="Filter by code modification capability"),
         offset: int = Query(DEFAULT_OFFSET, ge=0, description="Offset for pagination"),
-        limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description=f"Limit for pagination (max {MAX_PAGE_SIZE})"),
-        sort_by: str = Query("updated_at", description="Sort field (name, display_name, agent_type, created_at, updated_at)"),
+        limit: int = Query(
+            DEFAULT_PAGE_SIZE,
+            ge=1,
+            le=MAX_PAGE_SIZE,
+            description=f"Limit for pagination (max {MAX_PAGE_SIZE})",
+        ),
+        sort_by: str = Query(
+            "updated_at",
+            description="Sort field (name, display_name, agent_type, created_at, updated_at)",
+        ),
         sort_order: str = Query("desc", description="Sort order (asc, desc)"),
     ) -> AgentListResponse:
         """
@@ -136,7 +147,7 @@ def register_list_endpoints(router: APIRouter, query_port: IAgentQueryPort) -> N
             # Known validation or attribute errors
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to list agents: {str(e)}",
+                detail=f"Failed to list agents: {e!s}",
             )
 
     @router.get(
@@ -146,8 +157,16 @@ def register_list_endpoints(router: APIRouter, query_port: IAgentQueryPort) -> N
         response_description="Agent details including capabilities and execution statistics",
         responses={
             200: {"description": "Agent details with capabilities and optional stats"},
-            401: {"description": "Unauthorized - Authentication required", "content": {"application/json": {"example": {"detail": "Not authenticated"}}}},
-            404: {"description": "Not Found - Agent not found", "content": {"application/json": {"example": {"detail": "Agent not found: agent with ID 'agent-123' not found"}}}},
+            401: {
+                "description": "Unauthorized - Authentication required",
+                "content": {"application/json": {"example": {"detail": "Not authenticated"}}},
+            },
+            404: {
+                "description": "Not Found - Agent not found",
+                "content": {
+                    "application/json": {"example": {"detail": "Agent not found: agent with ID 'agent-123' not found"}}
+                },
+            },
         },
     )
     async def get_agent(
@@ -190,9 +209,9 @@ def register_list_endpoints(router: APIRouter, query_port: IAgentQueryPort) -> N
             if "not found" in str(e).lower():
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Agent not found: {str(e)}",
+                    detail=f"Agent not found: {e!s}",
                 )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to get agent: {str(e)}",
+                detail=f"Failed to get agent: {e!s}",
             )

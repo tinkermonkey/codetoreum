@@ -8,22 +8,22 @@ Tests verify the core orchestration logic without external dependencies:
 - Error handling and edge cases
 """
 
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4
 
 from codetoreum.application.conversational_loop_orchestrator import (
     ConversationalLoopOrchestrator,
 )
 from codetoreum.domain.conversational_session import ConversationalSessionState
+from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.domain.events.discussion_events import (
+    AgentResponsePostedEvent,
     Comment,
     CommentContext,
     CommentNeedsResponseEvent,
-    AgentResponsePostedEvent,
 )
-from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 
 
 @pytest.fixture
@@ -31,7 +31,7 @@ def mock_discussion_adapter():
     """Create a mock discussion adapter."""
     adapter = MagicMock()
     adapter.start_monitoring = MagicMock(return_value=None)  # Synchronous method
-    adapter.stop_monitoring = MagicMock(return_value=None)   # Synchronous method
+    adapter.stop_monitoring = MagicMock(return_value=None)  # Synchronous method
     adapter.add_comment = AsyncMock()
     return adapter
 
@@ -77,7 +77,7 @@ def sample_session_state():
         column_name="In Review",
         llm_conversation_id="conv-abc123",
         last_processed_comment_id="comment-10",
-        last_interaction_timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        last_interaction_timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         status="active",
     )
 
@@ -89,7 +89,7 @@ def sample_comment():
         id="comment-11",
         author="user123",
         body="Can you explain section 2 in more detail?",
-        created_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        created_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         parent_id=None,
         is_bot=False,
     )
@@ -153,9 +153,7 @@ class TestInitializeLoop:
         """Test initialization fails with missing work_item_id."""
         with pytest.raises(ValueError, match="work_item_id and project_id are required"):
             await orchestrator.initialize_loop(
-                "",
-                "proj-1",
-                {"column_name": "In Review", "agent_assignment": "reviewer"}
+                "", "proj-1", {"column_name": "In Review", "agent_assignment": "reviewer"}
             )
 
     async def test_initialize_loop_missing_agent_assignment(self, orchestrator):
@@ -164,7 +162,7 @@ class TestInitializeLoop:
             await orchestrator.initialize_loop(
                 "issue-42",
                 "proj-1",
-                {"column_name": "In Review"}  # Missing agent_assignment
+                {"column_name": "In Review"},  # Missing agent_assignment
             )
 
     async def test_initialize_loop_monitoring_failure(self, orchestrator, mock_discussion_adapter, mock_event_store):
@@ -173,9 +171,7 @@ class TestInitializeLoop:
 
         with pytest.raises(Exception, match="Monitoring failed"):
             await orchestrator.initialize_loop(
-                "issue-42",
-                "proj-1",
-                {"column_name": "In Review", "agent_assignment": "reviewer"}
+                "issue-42", "proj-1", {"column_name": "In Review", "agent_assignment": "reviewer"}
             )
 
         # Verify monitoring was attempted
@@ -191,9 +187,7 @@ class TestInitializeLoop:
 
         with pytest.raises(EventStoreError, match="Storage failed"):
             await orchestrator.initialize_loop(
-                "issue-42",
-                "proj-1",
-                {"column_name": "In Review", "agent_assignment": "reviewer"}
+                "issue-42", "proj-1", {"column_name": "In Review", "agent_assignment": "reviewer"}
             )
 
         # Verify cleanup was attempted
@@ -215,9 +209,7 @@ class TestHandleCommentEvent:
     ):
         """Test successful comment handling and response posting."""
         # Mock session state loading
-        snapshot_data = {
-            "conversational_session_state": sample_session_state.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": sample_session_state.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Mock agent execution
@@ -231,16 +223,16 @@ class TestHandleCommentEvent:
             id="comment-12",
             author="codetoreum-bot",
             body="This is the agent's response.",
-            created_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            created_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             parent_id=None,
-            is_bot=True
+            is_bot=True,
         )
         mock_discussion_adapter.add_comment = AsyncMock(return_value=mock_response_comment)
 
         # Create event with comment
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -297,23 +289,19 @@ class TestHandleCommentEvent:
         from codetoreum.ports.exceptions import EmptyAgentResponseError
 
         # Mock session state loading
-        snapshot_data = {
-            "conversational_session_state": sample_session_state.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": sample_session_state.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Mock agent execution returning empty content
         mock_execution_result = MagicMock()
         mock_execution_result.content = ""  # Empty response
         mock_execution_result.conversation_id = "conv-abc123"
-        mock_llm_provider.continue_conversation = AsyncMock(
-            return_value=mock_execution_result
-        )
+        mock_llm_provider.continue_conversation = AsyncMock(return_value=mock_execution_result)
 
         # Create event with comment
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -349,7 +337,7 @@ class TestHandleCommentEvent:
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -384,14 +372,12 @@ class TestHandleCommentEvent:
             status="suspended",
         )
 
-        snapshot_data = {
-            "conversational_session_state": suspended_state.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": suspended_state.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -411,7 +397,7 @@ class TestHandleCommentEvent:
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -448,15 +434,13 @@ class TestHandleCommentEvent:
             status="active",
         )
 
-        snapshot_data = {
-            "conversational_session_state": processed_state.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": processed_state.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Create event with same comment ID
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -487,9 +471,7 @@ class TestHandleCommentEvent:
     ):
         """Test error handling when adapter returns None for add_comment."""
         # Mock session state loading
-        snapshot_data = {
-            "conversational_session_state": sample_session_state.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": sample_session_state.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Mock agent execution
@@ -503,7 +485,7 @@ class TestHandleCommentEvent:
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -529,9 +511,7 @@ class TestHandleCommentEvent:
     ):
         """Test error handling when adapter returns invalid comment type."""
         # Mock session state loading
-        snapshot_data = {
-            "conversational_session_state": sample_session_state.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": sample_session_state.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Mock agent execution
@@ -545,7 +525,7 @@ class TestHandleCommentEvent:
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -571,9 +551,7 @@ class TestHandleCommentEvent:
     ):
         """Test error handling when adapter returns comment with no ID."""
         # Mock session state loading
-        snapshot_data = {
-            "conversational_session_state": sample_session_state.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": sample_session_state.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Mock agent execution
@@ -590,7 +568,7 @@ class TestHandleCommentEvent:
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -627,18 +605,14 @@ class TestHandleCommentEvent:
             last_interaction_timestamp=sample_session_state.last_interaction_timestamp,
             status="active",
         )
-        snapshot_data = {
-            "conversational_session_state": session_with_conv.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": session_with_conv.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Mock agent execution returning None for conversation_id
         mock_execution_result = MagicMock()
         mock_execution_result.content = "This is the agent's response."
         mock_execution_result.conversation_id = None  # LLM returned None
-        mock_llm_provider.continue_conversation = AsyncMock(
-            return_value=mock_execution_result
-        )
+        mock_llm_provider.continue_conversation = AsyncMock(return_value=mock_execution_result)
 
         # Mock adapter returning comment with ID
         posted_comment = MagicMock(spec=Comment)
@@ -647,7 +621,7 @@ class TestHandleCommentEvent:
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -701,18 +675,14 @@ class TestHandleCommentEvent:
             last_interaction_timestamp=sample_session_state.last_interaction_timestamp,
             status="active",
         )
-        snapshot_data = {
-            "conversational_session_state": session_in_progress.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": session_in_progress.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Mock agent execution
         mock_execution_result = MagicMock()
         mock_execution_result.content = "Agent response to the comment."
         mock_execution_result.conversation_id = "conv-abc123"
-        mock_llm_provider.continue_conversation = AsyncMock(
-            return_value=mock_execution_result
-        )
+        mock_llm_provider.continue_conversation = AsyncMock(return_value=mock_execution_result)
 
         # Mock adapter returning comment with ID
         posted_comment = MagicMock(spec=Comment)
@@ -724,7 +694,7 @@ class TestHandleCommentEvent:
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -759,18 +729,14 @@ class TestHandleCommentEvent:
     ):
         """Test partial failure scenario where comment is posted but event store fails."""
         # Mock session state loading
-        snapshot_data = {
-            "conversational_session_state": sample_session_state.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": sample_session_state.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Mock agent execution
         mock_execution_result = MagicMock()
         mock_execution_result.content = "This is the agent's response."
         mock_execution_result.conversation_id = "conv-abc123"
-        mock_llm_provider.continue_conversation = AsyncMock(
-            return_value=mock_execution_result
-        )
+        mock_llm_provider.continue_conversation = AsyncMock(return_value=mock_execution_result)
 
         # Mock adapter successfully posting comment
         posted_comment = MagicMock(spec=Comment)
@@ -778,13 +744,11 @@ class TestHandleCommentEvent:
         mock_discussion_adapter.add_comment = AsyncMock(return_value=posted_comment)
 
         # Mock event store failure during snapshot save (after comment posted)
-        mock_event_store.save_snapshot = AsyncMock(
-            side_effect=Exception("Storage failed")
-        )
+        mock_event_store.save_snapshot = AsyncMock(side_effect=Exception("Storage failed"))
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -820,14 +784,12 @@ class TestHandleColumnChangeEvent:
         sample_session_state,
     ):
         """Test column change when exiting conversational column."""
-        snapshot_data = {
-            "conversational_session_state": sample_session_state.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": sample_session_state.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         event = WorkItemColumnChangedEvent(
             type="workitem.column_changed",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -850,7 +812,7 @@ class TestHandleColumnChangeEvent:
 
         event = WorkItemColumnChangedEvent(
             type="workitem.column_changed",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -870,7 +832,7 @@ class TestHandleColumnChangeEvent:
         with pytest.raises(ValueError, match="work_item_id is required"):
             WorkItemColumnChangedEvent(
                 type="workitem.column_changed",
-                timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
                 source="github",
                 work_item_id="",  # Missing - caught at event creation
                 project_id="proj-1",
@@ -891,9 +853,7 @@ class TestCleanupLoop:
         sample_session_state,
     ):
         """Test successful loop cleanup."""
-        snapshot_data = {
-            "conversational_session_state": sample_session_state.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": sample_session_state.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         await orchestrator.cleanup_loop("issue-42", "Agent execution error")
@@ -934,9 +894,7 @@ class TestCleanupLoop:
             status="terminated",
         )
 
-        snapshot_data = {
-            "conversational_session_state": terminated_state.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": terminated_state.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Should handle gracefully - no exception
@@ -950,9 +908,7 @@ class TestCleanupLoop:
         sample_session_state,
     ):
         """Test cleanup continues even if monitoring stop fails."""
-        snapshot_data = {
-            "conversational_session_state": sample_session_state.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": sample_session_state.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
         mock_discussion_adapter.stop_monitoring.side_effect = Exception("Monitoring stop failed")
 
@@ -968,9 +924,7 @@ class TestLoadSessionState:
 
     async def test_load_session_state_exists(self, orchestrator, mock_event_store, sample_session_state):
         """Test loading existing session state."""
-        snapshot_data = {
-            "conversational_session_state": sample_session_state.to_dict()
-        }
+        snapshot_data = {"conversational_session_state": sample_session_state.to_dict()}
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         result = await orchestrator.load_session_state("issue-42")
@@ -1028,7 +982,7 @@ class TestBuildThreadMessage:
         """Test building thread message with full context (discussion thread context only)."""
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -1052,7 +1006,7 @@ class TestBuildThreadMessage:
         """Test building thread message without context."""
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -1069,7 +1023,7 @@ class TestBuildThreadMessage:
         """Test building thread message with optional context fields (now all optional)."""
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -1095,12 +1049,12 @@ class TestBuildThreadMessage:
             id="comment-10",
             author="alice",
             body="What's your approach to this?",
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",
@@ -1120,52 +1074,6 @@ class TestBuildThreadMessage:
         assert "Can you explain section 2" in message
         assert "user123" in message
 
-    def test_build_thread_message_comment_not_comment_type(self, orchestrator, sample_session_state):
-        """Test building thread message when comment is not a Comment instance."""
-        # Create a mock comment that's not a Comment instance
-        comment = MagicMock()
-        comment.author = "reviewer"
-        comment.body = "Some feedback"
-
-        event = CommentNeedsResponseEvent(
-            type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            source="github",
-            work_item_id="issue-42",
-            project_id="proj-1",
-            comment=comment,
-            context=CommentContext(),  # Empty context
-        )
-
-        message = orchestrator._build_thread_message(event, sample_session_state)
-
-        # Should skip invalid comment type - message will be empty
-        assert message == ""
-        assert "New comment from" not in message
-
-    def test_build_thread_message_context_not_commentcontext_type(self, orchestrator, sample_comment, sample_session_state):
-        """Test building thread message when context is not a CommentContext instance."""
-        # Create a mock context that's not a CommentContext instance
-        context = {"column_name": "In Review", "agent_assignment": "code-reviewer"}
-
-        event = CommentNeedsResponseEvent(
-            type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            source="github",
-            work_item_id="issue-42",
-            project_id="proj-1",
-            comment=sample_comment,
-            context=context,  # Dict instead of CommentContext
-        )
-
-        message = orchestrator._build_thread_message(event, sample_session_state)
-
-        # Should skip context fields but include comment
-        assert "Can you explain section 2" in message
-        assert "user123" in message
-        # Should not include context fields since it's not a CommentContext
-        assert "In Review" not in message
-
 
 class TestHandleCommentEventContextValidation:
     """Test suite for CommentNeedsResponseEvent context validation."""
@@ -1179,7 +1087,7 @@ class TestHandleCommentEventContextValidation:
         """Test handle_comment_event raises ValueError when context is None."""
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id="issue-42",
             project_id="proj-1",

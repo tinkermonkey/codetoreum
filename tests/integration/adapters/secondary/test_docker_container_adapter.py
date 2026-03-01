@@ -8,13 +8,11 @@ These tests interact with the actual Docker daemon and require:
 import gc
 import os
 import shutil
-import tempfile
 from pathlib import Path
 
 import pytest
 
 from codetoreum.adapters.secondary import DockerConfig, DockerContainerAdapter
-from codetoreum.domain.types import ContainerId
 from codetoreum.ports.exceptions import (
     ContainerError,
     ContainerNotRunningError,

@@ -14,7 +14,7 @@ import sys
 import httpx
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="View simulation board status")
     parser.add_argument("--server", default="http://localhost:8000", help="Simulation server URL")
     parser.add_argument("--board-id", required=True, help="Board ID")

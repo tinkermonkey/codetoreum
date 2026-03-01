@@ -2,11 +2,11 @@
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 
 class WorkspaceType(Enum):
     """Type of workspace for execution."""
+
     ISSUE = "issue"  # Feature branches + PRs
     DISCUSSION = "discussion"  # Discussion comments only
     HYBRID = "hybrid"  # Can use both
@@ -30,11 +30,11 @@ class WorkspaceContext:
     work_item_id: str
 
     # Issue workspace
-    branch_name: Optional[str]
+    branch_name: str | None
     create_pr: bool
 
     # Discussion workspace
-    discussion_id: Optional[str]
+    discussion_id: str | None
 
     # Configuration
     allow_code_changes: bool
@@ -46,30 +46,26 @@ class WorkspaceContext:
         # Validate workspace type specific requirements
         if self.workspace_type in [WorkspaceType.ISSUE, WorkspaceType.HYBRID]:
             if not self.branch_name:
-                raise ValueError(
-                    f"branch_name is required for {self.workspace_type.value} workspace"
-                )
+                msg = f"branch_name is required for {self.workspace_type.value} workspace"
+                raise ValueError(msg)
 
         if self.workspace_type in [WorkspaceType.DISCUSSION, WorkspaceType.HYBRID]:
             if not self.discussion_id:
-                raise ValueError(
-                    f"discussion_id is required for {self.workspace_type.value} workspace"
-                )
+                msg = f"discussion_id is required for {self.workspace_type.value} workspace"
+                raise ValueError(msg)
 
         # Validate project and work item IDs
         if not self.project_id or not self.project_id.strip():
-            raise ValueError("project_id cannot be empty")
+            msg = "project_id cannot be empty"
+            raise ValueError(msg)
 
         if not self.work_item_id or not self.work_item_id.strip():
-            raise ValueError("work_item_id cannot be empty")
+            msg = "work_item_id cannot be empty"
+            raise ValueError(msg)
 
     @classmethod
     def for_issue(
-        cls,
-        project_id: str,
-        work_item_id: str,
-        branch_name: str,
-        create_pr: bool = True
+        cls, project_id: str, work_item_id: str, branch_name: str, create_pr: bool = True
     ) -> "WorkspaceContext":
         """
         Create workspace context for issue-based work.
@@ -95,16 +91,11 @@ class WorkspaceContext:
             discussion_id=None,
             allow_code_changes=True,
             create_commits=True,
-            post_comments=True
+            post_comments=True,
         )
 
     @classmethod
-    def for_discussion(
-        cls,
-        project_id: str,
-        work_item_id: str,
-        discussion_id: str
-    ) -> "WorkspaceContext":
+    def for_discussion(cls, project_id: str, work_item_id: str, discussion_id: str) -> "WorkspaceContext":
         """
         Create workspace context for discussion-based work.
 
@@ -128,17 +119,11 @@ class WorkspaceContext:
             discussion_id=discussion_id,
             allow_code_changes=False,
             create_commits=False,
-            post_comments=True
+            post_comments=True,
         )
 
     @classmethod
-    def for_hybrid(
-        cls,
-        project_id: str,
-        work_item_id: str,
-        branch_name: str,
-        discussion_id: str
-    ) -> "WorkspaceContext":
+    def for_hybrid(cls, project_id: str, work_item_id: str, branch_name: str, discussion_id: str) -> "WorkspaceContext":
         """
         Create workspace context for hybrid work.
 
@@ -162,7 +147,7 @@ class WorkspaceContext:
             discussion_id=discussion_id,
             allow_code_changes=True,
             create_commits=True,
-            post_comments=True
+            post_comments=True,
         )
 
     # Query methods

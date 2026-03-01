@@ -1,14 +1,15 @@
 """Unit tests for discussion and comment events."""
 
-import pytest
 from dataclasses import FrozenInstanceError
 
+import pytest
+
 from codetoreum.domain.events import (
+    AgentResponsePostedEvent,
     Comment,
     CommentContext,
     CommentNeedsResponseEvent,
     CommentPostedEvent,
-    AgentResponsePostedEvent,
     now_iso,
 )
 
@@ -108,35 +109,20 @@ class TestComment:
 
     def test_comment_created_at_with_z_suffix(self):
         """Test that ISO 8601 format with 'Z' suffix is accepted."""
-        comment = Comment(
-            id="c1",
-            author="alice",
-            body="text",
-            created_at="2024-01-15T10:30:00Z"
-        )
+        comment = Comment(id="c1", author="alice", body="text", created_at="2024-01-15T10:30:00Z")
         assert comment.created_at == "2024-01-15T10:30:00Z"
 
     def test_comment_created_at_with_timezone_offset(self):
         """Test that ISO 8601 format with timezone offset is accepted."""
-        comment = Comment(
-            id="c1",
-            author="alice",
-            body="text",
-            created_at="2024-01-15T10:30:00+00:00"
-        )
+        comment = Comment(id="c1", author="alice", body="text", created_at="2024-01-15T10:30:00+00:00")
         assert comment.created_at == "2024-01-15T10:30:00+00:00"
 
     def test_comment_immutability(self):
         """Test that Comment instances are immutable."""
-        comment = Comment(
-            id="c1",
-            author="alice",
-            body="text",
-            created_at=now_iso()
-        )
+        comment = Comment(id="c1", author="alice", body="text", created_at=now_iso())
 
         with pytest.raises(FrozenInstanceError):
-            comment.id = "c2"
+            comment.id = "c2"  # type: ignore
 
 
 class TestCommentContext:
@@ -224,27 +210,23 @@ class TestCommentContext:
         context = CommentContext.from_dict(d)
 
         assert context.thread_id == "t1"
-        assert context.parent_comment is not None
-        assert context.parent_comment.id == "p1"
+        parent = context.parent_comment
+        assert parent is not None
+        assert parent.id == "p1"
         assert context.is_initial_request is False
 
     def test_context_immutability(self):
         """Test that CommentContext instances are immutable."""
-        context = CommentContext(
-            thread_id="t1",
-            column_name="Backlog"
-        )
+        context = CommentContext(thread_id="t1", column_name="Backlog")
 
         with pytest.raises(FrozenInstanceError):
-            context.thread_id = "t2"
+            context.thread_id = "t2"  # type: ignore
 
     def test_context_with_invalid_parent_comment_raises_error(self):
         """Test that CommentContext with invalid parent Comment raises error."""
         # The invalid comment will raise during Comment.__post_init__
         with pytest.raises(ValueError, match="Comment id is required"):
-            CommentContext(
-                parent_comment=Comment(id="", author="alice", body="test", created_at=now_iso())
-            )
+            CommentContext(parent_comment=Comment(id="", author="alice", body="test", created_at=now_iso()))
 
     def test_context_initial_request_with_parent_raises_error(self):
         """Test that is_initial_request=True with parent_comment raises ValueError."""
@@ -315,7 +297,12 @@ class TestCommentContext:
         assert restored.is_initial_request == original.is_initial_request
         assert restored.column_name == original.column_name
         assert restored.agent_assignment == original.agent_assignment
-        assert restored.parent_comment.id == original.parent_comment.id
+
+        restored_parent = restored.parent_comment
+        original_parent = original.parent_comment
+        assert restored_parent is not None
+        assert original_parent is not None
+        assert restored_parent.id == original_parent.id
 
     def test_context_factory_for_initial_request(self):
         """Test factory method for creating initial request context."""
@@ -379,10 +366,12 @@ class TestCommentContext:
 
     def test_context_factory_for_reply_missing_parent_comment(self):
         """Test that factory raises error if parent_comment is None."""
+        from typing import cast
+
         with pytest.raises(ValueError, match="parent_comment cannot be None"):
             CommentContext.for_reply(
                 thread_id="t1",
-                parent_comment=None,
+                parent_comment=cast("Comment", None),
             )
 
 
@@ -415,8 +404,12 @@ class TestCommentNeedsResponseEvent:
         )
 
         assert event.work_item_id == "123"
-        assert event.comment.author == "alice"
-        assert event.context.column_name == "Review"
+        event_comment = event.comment
+        assert event_comment is not None
+        assert event_comment.author == "alice"
+        event_context = event.context
+        assert event_context is not None
+        assert event_context.column_name == "Review"
 
     def test_missing_work_item_id(self):
         """Test that work_item_id is required."""
@@ -497,7 +490,11 @@ class TestCommentNeedsResponseEvent:
         restored = CommentNeedsResponseEvent.from_dict(d)
 
         assert restored.work_item_id == original.work_item_id
-        assert restored.comment.author == original.comment.author
+        restored_comment = restored.comment
+        original_comment = original.comment
+        assert restored_comment is not None
+        assert original_comment is not None
+        assert restored_comment.author == original_comment.author
 
 
 class TestCommentPostedEvent:
@@ -523,7 +520,9 @@ class TestCommentPostedEvent:
         )
 
         assert event.work_item_id == "123"
-        assert event.comment.author == "alice"
+        event_comment = event.comment
+        assert event_comment is not None
+        assert event_comment.author == "alice"
 
     def test_comment_posted_bot(self):
         """Test comment posted by bot."""
@@ -544,7 +543,9 @@ class TestCommentPostedEvent:
             comment=comment,
         )
 
-        assert event.comment.is_bot is True
+        event_comment = event.comment
+        assert event_comment is not None
+        assert event_comment.is_bot is True
 
     def test_comment_posted_serialization(self):
         """Test comment posted event serialization."""
@@ -594,7 +595,11 @@ class TestCommentPostedEvent:
         restored = CommentPostedEvent.from_dict(d)
 
         assert restored.work_item_id == original.work_item_id
-        assert restored.comment.body == original.comment.body
+        restored_comment = restored.comment
+        original_comment = original.comment
+        assert restored_comment is not None
+        assert original_comment is not None
+        assert restored_comment.body == original_comment.body
         assert restored.source == "jira"
 
 
@@ -696,11 +701,15 @@ class TestCommentContextImmutability:
 
         # Verify nested comment is preserved
         assert context.parent_comment == parent
-        assert context.parent_comment.id == "p1"
+        parent_comment = context.parent_comment
+        assert parent_comment is not None
+        assert parent_comment.id == "p1"
 
         # Nested comment is also frozen, so modification should fail
+        parent_comment = context.parent_comment
+        assert parent_comment is not None
         with pytest.raises(FrozenInstanceError):
-            context.parent_comment.author = "bob"  # type: ignore
+            parent_comment.author = "bob"  # type: ignore
 
         # And the context field itself cannot be reassigned
         with pytest.raises(FrozenInstanceError):
@@ -737,8 +746,12 @@ class TestCommentNeedsResponseEventImmutability:
 
         # Verify the event is properly created
         assert event.work_item_id == "123"
-        assert event.comment.author == "alice"
-        assert event.context.column_name == "Review"
+        event_comment = event.comment
+        assert event_comment is not None
+        assert event_comment.author == "alice"
+        event_context = event.context
+        assert event_context is not None
+        assert event_context.column_name == "Review"
 
         # CommentNeedsResponseEvent is a frozen dataclass, so attempting to modify
         # any attribute should raise FrozenInstanceError
@@ -776,8 +789,10 @@ class TestCommentPostedEventImmutability:
 
         # Verify the event is properly created
         assert event.work_item_id == "123"
-        assert event.comment.author == "alice"
-        assert event.comment.is_bot is False
+        event_comment = event.comment
+        assert event_comment is not None
+        assert event_comment.author == "alice"
+        assert event_comment.is_bot is False
 
         # CommentPostedEvent is a frozen dataclass, so attempting to modify
         # any attribute should raise FrozenInstanceError
@@ -807,15 +822,17 @@ class TestCommentPostedEventImmutability:
         )
 
         # Verify bot comment is properly stored
-        assert event.comment.is_bot is True
-        assert event.comment.author == "codetoreum-bot"
+        event_comment = event.comment
+        assert event_comment is not None
+        assert event_comment.is_bot is True
+        assert event_comment.author == "codetoreum-bot"
 
         # Nested comment is frozen, so modification should fail
         with pytest.raises(FrozenInstanceError):
-            event.comment.is_bot = False  # type: ignore
+            event_comment.is_bot = False  # type: ignore
 
         with pytest.raises(FrozenInstanceError):
-            event.comment.author = "alice"  # type: ignore
+            event_comment.author = "alice"  # type: ignore
 
 
 class TestAgentResponsePostedEvent:

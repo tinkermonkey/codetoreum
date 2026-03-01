@@ -10,12 +10,15 @@ import logging
 import os
 import re
 from contextvars import ContextVar
-from typing import Any, Dict, Optional
+from typing import Any
 
 # Import TraceContextInjector for OpenTelemetry trace correlation
 # Note: Import is conditional - TraceContextInjector gracefully handles when OTel is not initialized
 try:
-    from codetoreum.infrastructure.observability.logging_integration import TraceContextInjector
+    from codetoreum.infrastructure.observability.logging_integration import (
+        TraceContextInjector,
+    )
+
     TRACE_CONTEXT_AVAILABLE = True
 except ImportError:
     # Observability module not available yet (e.g., during initial setup)
@@ -23,9 +26,7 @@ except ImportError:
     TraceContextInjector = None  # type: ignore
 
 # Context variable for correlation ID
-correlation_id_context: ContextVar[Optional[str]] = ContextVar(
-    "correlation_id", default=None
-)
+correlation_id_context: ContextVar[str | None] = ContextVar("correlation_id", default=None)
 
 
 class SensitiveDataFilter(logging.Filter):
@@ -47,36 +48,63 @@ class SensitiveDataFilter(logging.Filter):
     # Default patterns for sensitive data
     DEFAULT_PATTERNS = [
         # API keys, tokens, secrets (various formats)
-        (re.compile(r'(?i)(api[_-]?key|token|secret|password|passwd|pwd)[\s:=]+["\']?([^\s"\']+)["\']?'), r'\1=***REDACTED***'),
+        (
+            re.compile(r'(?i)(api[_-]?key|token|secret|password|passwd|pwd)[\s:=]+["\']?([^\s"\']+)["\']?'),
+            r"\1=***REDACTED***",
+        ),
         # JWT tokens (starts with eyJ)
-        (re.compile(r'\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b'), r'***REDACTED_JWT***'),
+        (
+            re.compile(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b"),
+            r"***REDACTED_JWT***",
+        ),
         # Bearer tokens
-        (re.compile(r'(?i)bearer\s+([^\s]+)'), r'Bearer ***REDACTED***'),
+        (re.compile(r"(?i)bearer\s+([^\s]+)"), r"Bearer ***REDACTED***"),
         # Basic auth
-        (re.compile(r'(?i)basic\s+([^\s]+)'), r'Basic ***REDACTED***'),
+        (re.compile(r"(?i)basic\s+([^\s]+)"), r"Basic ***REDACTED***"),
         # Email addresses (show first 2 chars + domain)
-        (re.compile(r'\b([a-zA-Z0-9]{1,2})[a-zA-Z0-9._%+-]*@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b'), r'\1***@\2'),
+        (
+            re.compile(r"\b([a-zA-Z0-9]{1,2})[a-zA-Z0-9._%+-]*@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b"),
+            r"\1***@\2",
+        ),
         # Credit card numbers
-        (re.compile(r'\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b'), r'****-****-****-****'),
+        (re.compile(r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b"), r"****-****-****-****"),
         # Social security numbers
-        (re.compile(r'\b\d{3}-\d{2}-\d{4}\b'), r'***-**-****'),
+        (re.compile(r"\b\d{3}-\d{2}-\d{4}\b"), r"***-**-****"),
         # AWS keys
-        (re.compile(r'(?i)(AKIA|A3T|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}'), r'***REDACTED_AWS_KEY***'),
+        (
+            re.compile(r"(?i)(AKIA|A3T|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}"),
+            r"***REDACTED_AWS_KEY***",
+        ),
         # GitHub tokens
-        (re.compile(r'ghp_[a-zA-Z0-9]{36}'), r'***REDACTED_GITHUB_TOKEN***'),
+        (re.compile(r"ghp_[a-zA-Z0-9]{36}"), r"***REDACTED_GITHUB_TOKEN***"),
         # Database connection strings
-        (re.compile(r'(?i)(postgres|mysql|mongodb|redis)://[^:]+:([^@]+)@'), r'\1://user:***REDACTED***@'),
+        (
+            re.compile(r"(?i)(postgres|mysql|mongodb|redis)://[^:]+:([^@]+)@"),
+            r"\1://user:***REDACTED***@",
+        ),
         # Private keys
-        (re.compile(r'-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----[^-]+-----END\s+(?:RSA\s+)?PRIVATE\s+KEY-----'), r'***REDACTED_PRIVATE_KEY***'),
+        (
+            re.compile(r"-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----[^-]+-----END\s+(?:RSA\s+)?PRIVATE\s+KEY-----"),
+            r"***REDACTED_PRIVATE_KEY***",
+        ),
         # Slack webhooks
-        (re.compile(r'https://hooks\.slack\.com/services/[A-Z0-9/]+'), r'***REDACTED_SLACK_WEBHOOK***'),
+        (
+            re.compile(r"https://hooks\.slack\.com/services/[A-Z0-9/]+"),
+            r"***REDACTED_SLACK_WEBHOOK***",
+        ),
         # Discord webhooks
-        (re.compile(r'https://discord(?:app)?\.com/api/webhooks/\d+/[A-Za-z0-9_-]+'), r'***REDACTED_DISCORD_WEBHOOK***'),
+        (
+            re.compile(r"https://discord(?:app)?\.com/api/webhooks/\d+/[A-Za-z0-9_-]+"),
+            r"***REDACTED_DISCORD_WEBHOOK***",
+        ),
         # Generic tokens
-        (re.compile(r'(?i)(key|token|secret)["\']\s*:\s*["\']([^"\']{8,})["\']'), r'\1": "***REDACTED***"'),
+        (
+            re.compile(r'(?i)(key|token|secret)["\']\s*:\s*["\']([^"\']{8,})["\']'),
+            r'\1": "***REDACTED***"',
+        ),
     ]
 
-    def __init__(self, custom_patterns: Optional[list] = None):
+    def __init__(self, custom_patterns: list | None = None):
         """
         Initialize filter with optional custom patterns.
 
@@ -104,10 +132,7 @@ class SensitiveDataFilter(logging.Filter):
 
         # Scrub args
         if record.args:
-            record.args = tuple(
-                self._scrub(str(arg)) if isinstance(arg, (str, bytes)) else arg
-                for arg in record.args
-            )
+            record.args = tuple(self._scrub(str(arg)) if isinstance(arg, (str, bytes)) else arg for arg in record.args)
 
         return True
 
@@ -151,7 +176,7 @@ class JSONFormatter(logging.Formatter):
         Returns:
             JSON-formatted log string
         """
-        log_data: Dict[str, Any] = {
+        log_data: dict[str, Any] = {
             "timestamp": self.formatTime(record, self.datefmt),
             "level": record.levelname,
             "logger": record.name,
@@ -164,7 +189,7 @@ class JSONFormatter(logging.Formatter):
             log_data["correlation_id"] = correlation_id
 
         # Add trace context if available (from TraceContextInjector)
-        if hasattr(record, 'trace_id') and record.trace_id != "N/A":
+        if hasattr(record, "trace_id") and record.trace_id != "N/A":
             log_data["trace_id"] = record.trace_id
             log_data["span_id"] = record.span_id
 
@@ -200,10 +225,10 @@ class CorrelationIdFilter(logging.Filter):
 
 
 def configure_logging(
-    level: Optional[int] = None,
+    level: int | None = None,
     json_format: bool = False,
     scrub_sensitive: bool = True,
-    custom_patterns: Optional[list] = None,
+    custom_patterns: list | None = None,
 ) -> None:
     """
     Configure application logging with security best practices.
@@ -269,20 +294,20 @@ def configure_logging(
             level=logging.INFO,
             format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         )
-        logging.error(f"Failed to configure structured logging, using basic config: {e}")
+        logging.exception(f"Failed to configure structured logging, using basic config: {e}")
 
 
-def set_correlation_id(correlation_id: str) -> None:
+def set_correlation_id(correlation_id: str | None) -> None:
     """
     Set correlation ID for the current context.
 
     Args:
-        correlation_id: Correlation ID to set
+        correlation_id: Correlation ID to set (None to clear)
     """
     correlation_id_context.set(correlation_id)
 
 
-def get_correlation_id() -> Optional[str]:
+def get_correlation_id() -> str | None:
     """
     Get correlation ID from current context.
 

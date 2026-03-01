@@ -25,17 +25,16 @@ def create_config() -> SimulationConfig:
         speed_multiplier=100.0,
     )
 
-    config.scenario_description = (
-        "Single work item through 3-stage workflow: "
-        "Code Generation -> Review -> Testing"
-    )
+    config.scenario_description = "Single work item through 3-stage workflow: Code Generation -> Review -> Testing"
 
     # Configurable test output values
-    config.metadata.update({
-        "tests_passed": 10,
-        "tests_failed": 0,
-        "coverage_percent": 95,
-    })
+    config.metadata.update(
+        {
+            "tests_passed": 10,
+            "tests_failed": 0,
+            "coverage_percent": 95,
+        }
+    )
 
     # Configure code generator agent
     config.add_agent_response_pattern(
@@ -55,12 +54,7 @@ def create_config() -> SimulationConfig:
     config.add_agent_response_pattern(
         agent_id="code-reviewer",
         pattern=r".*review.*",
-        response=(
-            "Code review feedback:\n"
-            "- Implementation looks good\n"
-            "- OAuth2 flow is correct\n"
-            "- LGTM!"
-        ),
+        response=("Code review feedback:\n- Implementation looks good\n- OAuth2 flow is correct\n- LGTM!"),
     )
 
     # Configure test runner agent
@@ -105,18 +99,21 @@ async def run_scenario(runner: SimulationRunner) -> None:
     # In a real scenario, this would call WorkflowOrchestrator
     # For now, we'll simulate by capturing events manually
 
-    from codetoreum.domain.events import DomainEvent
+    from codetoreum.domain.events import (
+        AgentExecutionCompleted,
+        AgentExecutionStarted,
+        WorkflowCompleted,
+        WorkflowStarted,
+    )
 
     # Simulate workflow start
-    workflow_started = DomainEvent(
+    workflow_started = WorkflowStarted(
         aggregate_id="ISSUE-123",
-        aggregate_type="WorkItem",
         payload={
             "workflow_id": "basic-workflow",
             "stage": "Code Generation",
         },
     )
-    workflow_started.event_type = "WorkflowStarted"
     runner.capture_event(workflow_started)
 
     runner.assert_event_occurred(
@@ -129,94 +126,80 @@ async def run_scenario(runner: SimulationRunner) -> None:
     await runner.advance_time(timedelta(minutes=5))
 
     # Simulate agent execution for code generation
-    execution_started_1 = DomainEvent(
+    execution_started_1 = AgentExecutionStarted(
         aggregate_id="exec-1",
-        aggregate_type="AgentExecution",
         payload={
             "agent_id": "code-generator",
             "work_item_id": "ISSUE-123",
         },
     )
-    execution_started_1.event_type = "AgentExecutionStarted"
     runner.capture_event(execution_started_1)
 
     await runner.advance_time(timedelta(minutes=2))
 
-    execution_completed_1 = DomainEvent(
+    execution_completed_1 = AgentExecutionCompleted(
         aggregate_id="exec-1",
-        aggregate_type="AgentExecution",
         payload={
             "agent_id": "code-generator",
             "status": "completed",
         },
     )
-    execution_completed_1.event_type = "AgentExecutionCompleted"
     runner.capture_event(execution_completed_1)
 
     # Advance time for stage 2 execution (code review)
     await runner.advance_time(timedelta(minutes=1))
 
-    execution_started_2 = DomainEvent(
+    execution_started_2 = AgentExecutionStarted(
         aggregate_id="exec-2",
-        aggregate_type="AgentExecution",
         payload={
             "agent_id": "code-reviewer",
             "work_item_id": "ISSUE-123",
         },
     )
-    execution_started_2.event_type = "AgentExecutionStarted"
     runner.capture_event(execution_started_2)
 
     await runner.advance_time(timedelta(minutes=3))
 
-    execution_completed_2 = DomainEvent(
+    execution_completed_2 = AgentExecutionCompleted(
         aggregate_id="exec-2",
-        aggregate_type="AgentExecution",
         payload={
             "agent_id": "code-reviewer",
             "status": "completed",
         },
     )
-    execution_completed_2.event_type = "AgentExecutionCompleted"
     runner.capture_event(execution_completed_2)
 
     # Advance time for stage 3 execution (testing)
     await runner.advance_time(timedelta(minutes=1))
 
-    execution_started_3 = DomainEvent(
+    execution_started_3 = AgentExecutionStarted(
         aggregate_id="exec-3",
-        aggregate_type="AgentExecution",
         payload={
             "agent_id": "test-runner",
             "work_item_id": "ISSUE-123",
         },
     )
-    execution_started_3.event_type = "AgentExecutionStarted"
     runner.capture_event(execution_started_3)
 
     await runner.advance_time(timedelta(minutes=4))
 
-    execution_completed_3 = DomainEvent(
+    execution_completed_3 = AgentExecutionCompleted(
         aggregate_id="exec-3",
-        aggregate_type="AgentExecution",
         payload={
             "agent_id": "test-runner",
             "status": "completed",
         },
     )
-    execution_completed_3.event_type = "AgentExecutionCompleted"
     runner.capture_event(execution_completed_3)
 
     # Workflow completes
-    workflow_completed = DomainEvent(
+    workflow_completed = WorkflowCompleted(
         aggregate_id="ISSUE-123",
-        aggregate_type="WorkItem",
         payload={
             "workflow_id": "basic-workflow",
             "final_stage": "Testing",
         },
     )
-    workflow_completed.event_type = "WorkflowCompleted"
     runner.capture_event(workflow_completed)
 
     # Final assertions
@@ -264,13 +247,12 @@ async def test_simple_workflow():
     assert result.events_captured == 8
 
     # Verify performance goal (10-100x faster)
-    assert result.speed_multiplier >= 10.0, (
-        f"Speed multiplier {result.speed_multiplier:.1f}x is below 10x target"
-    )
+    assert result.speed_multiplier >= 10.0, f"Speed multiplier {result.speed_multiplier:.1f}x is below 10x target"
 
     print(f"\n✓ Scenario completed {result.speed_multiplier:.1f}x faster than real time")
 
 
 if __name__ == "__main__":
     import asyncio
+
     asyncio.run(test_simple_workflow())

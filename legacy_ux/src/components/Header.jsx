@@ -10,26 +10,21 @@ import HeaderClaudeUsage from './HeaderClaudeUsage'
 import HeaderStatsCard from './HeaderStatsCard'
 
 export default function Header() {
-  const { connected, stats } = useSocket()
+  const { connected } = useSocket()
   const { theme, toggleTheme } = useTheme()
-  
+
   // Use centralized state hooks
-  const { 
-    systemHealth, 
-    unhealthyComponents, 
-    isHealthy, 
-    isDegraded, 
-    isUnhealthy, 
-    isStarting,
-    status: healthStatus 
+  const {
+    systemHealth,
+    unhealthyComponents,
+    status: healthStatus
   } = useSystemHealth()
-  
-  const { 
-    circuitBreakers, 
-    summary: cbSummary, 
-    hasOpenBreakers, 
+
+  const {
+    summary: cbSummary,
+    hasOpenBreakers,
     hasHalfOpenBreakers,
-    problematicBreakers 
+    problematicBreakers
   } = useCircuitBreakers()
 
   // Helper for display in alert banners
@@ -43,7 +38,7 @@ export default function Header() {
         return null
     }
   }
-  
+
   const getStateColor = (state) => {
     switch (state) {
       case 'closed':

@@ -6,21 +6,22 @@ in tests and simulation.
 """
 
 import pytest
-from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
-from codetoreum.adapters.secondary.mock_discussion_adapter import MockDiscussionAdapter
-from codetoreum.adapters.secondary.mock_code_review_adapter import MockCodeReviewAdapter
-from codetoreum.adapters.secondary.in_memory_pipeline_lock_service import (
-    InMemoryPipelineLockService,
-)
+
 from codetoreum.adapters.secondary.configurable_identity_service import (
     ConfigurableIdentityService,
 )
-from codetoreum.ports.output.event_emitter import IEventEmitter
+from codetoreum.adapters.secondary.in_memory_pipeline_lock_service import (
+    InMemoryPipelineLockService,
+)
+from codetoreum.adapters.secondary.mock_code_review_adapter import MockCodeReviewAdapter
+from codetoreum.adapters.testing import MockDiscussionAdapter
+from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
 from codetoreum.ports.output.board_service import IBoardService
-from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.code_review_service import ICodeReviewService
-from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
+from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
+from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.identity_service import IIdentityService
+from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
 
 
 class TestMockBoardAdapterContract:
@@ -39,27 +40,27 @@ class TestMockBoardAdapterContract:
     def test_implements_board_operations(self):
         """MockBoardAdapter should implement all board operations."""
         adapter = MockBoardAdapter()
-        assert hasattr(adapter, 'get_board')
-        assert hasattr(adapter, 'get_columns')
-        assert hasattr(adapter, 'get_items_in_column')
-        assert hasattr(adapter, 'get_item_position')
-        assert hasattr(adapter, 'move_item_to_column')
-        assert hasattr(adapter, 'reconcile_board')
+        assert hasattr(adapter, "get_board")
+        assert hasattr(adapter, "get_columns")
+        assert hasattr(adapter, "get_items_in_column")
+        assert hasattr(adapter, "get_item_position")
+        assert hasattr(adapter, "move_item_to_column")
+        assert hasattr(adapter, "reconcile_board")
 
     def test_implements_monitoring_operations(self):
         """MockBoardAdapter should implement monitoring operations."""
         adapter = MockBoardAdapter()
-        assert hasattr(adapter, 'start_monitoring')
-        assert hasattr(adapter, 'stop_monitoring')
-        assert hasattr(adapter, 'get_monitoring_status')
+        assert hasattr(adapter, "start_monitoring")
+        assert hasattr(adapter, "stop_monitoring")
+        assert hasattr(adapter, "get_monitoring_status")
 
     def test_implements_event_emitter_operations(self):
         """MockBoardAdapter should implement IEventEmitter operations."""
         adapter = MockBoardAdapter()
-        assert hasattr(adapter, 'on')
-        assert hasattr(adapter, 'off')
-        assert hasattr(adapter, 'emit')
-        assert hasattr(adapter, 'once')
+        assert hasattr(adapter, "on")
+        assert hasattr(adapter, "off")
+        assert hasattr(adapter, "emit")
+        assert hasattr(adapter, "once")
 
 
 class TestMockDiscussionAdapterContract:
@@ -78,17 +79,17 @@ class TestMockDiscussionAdapterContract:
     def test_implements_discussion_operations(self):
         """MockDiscussionAdapter should implement all discussion operations."""
         adapter = MockDiscussionAdapter(ConfigurableIdentityService())
-        assert hasattr(adapter, 'get_thread')
-        assert hasattr(adapter, 'add_comment')
-        assert hasattr(adapter, 'start_monitoring')
-        assert hasattr(adapter, 'stop_monitoring')
+        assert hasattr(adapter, "get_thread")
+        assert hasattr(adapter, "add_comment")
+        assert hasattr(adapter, "start_monitoring")
+        assert hasattr(adapter, "stop_monitoring")
 
     def test_implements_event_emitter_operations(self):
         """MockDiscussionAdapter should implement IEventEmitter operations."""
         adapter = MockDiscussionAdapter(ConfigurableIdentityService())
-        assert hasattr(adapter, 'on')
-        assert hasattr(adapter, 'off')
-        assert hasattr(adapter, 'emit')
+        assert hasattr(adapter, "on")
+        assert hasattr(adapter, "off")
+        assert hasattr(adapter, "emit")
 
 
 class TestMockCodeReviewAdapterContract:
@@ -107,25 +108,25 @@ class TestMockCodeReviewAdapterContract:
     def test_implements_code_review_operations(self):
         """MockCodeReviewAdapter should implement all code review operations."""
         adapter = MockCodeReviewAdapter()
-        assert hasattr(adapter, 'get_review_for_work_item')
-        assert hasattr(adapter, 'get_review_status')
-        assert hasattr(adapter, 'get_review_comments')
-        assert hasattr(adapter, 'request_changes')
-        assert hasattr(adapter, 'approve')
+        assert hasattr(adapter, "get_review_for_work_item")
+        assert hasattr(adapter, "get_review_status")
+        assert hasattr(adapter, "get_review_comments")
+        assert hasattr(adapter, "request_changes")
+        assert hasattr(adapter, "approve")
 
     def test_implements_monitoring_operations(self):
         """MockCodeReviewAdapter should implement monitoring operations."""
         adapter = MockCodeReviewAdapter()
-        assert hasattr(adapter, 'start_monitoring')
-        assert hasattr(adapter, 'stop_monitoring')
-        assert hasattr(adapter, 'get_monitoring_status')
+        assert hasattr(adapter, "start_monitoring")
+        assert hasattr(adapter, "stop_monitoring")
+        assert hasattr(adapter, "get_monitoring_status")
 
     def test_implements_event_emitter_operations(self):
         """MockCodeReviewAdapter should implement IEventEmitter operations."""
         adapter = MockCodeReviewAdapter()
-        assert hasattr(adapter, 'on')
-        assert hasattr(adapter, 'off')
-        assert hasattr(adapter, 'emit')
+        assert hasattr(adapter, "on")
+        assert hasattr(adapter, "off")
+        assert hasattr(adapter, "emit")
 
 
 class TestInMemoryPipelineLockServiceContract:
@@ -144,17 +145,17 @@ class TestInMemoryPipelineLockServiceContract:
     def test_implements_lock_operations(self):
         """InMemoryPipelineLockService should implement all lock operations."""
         service = InMemoryPipelineLockService()
-        assert hasattr(service, 'get_lock')
-        assert hasattr(service, 'get_all_locks')
-        assert hasattr(service, 'try_acquire_lock')
-        assert hasattr(service, 'release_lock')
+        assert hasattr(service, "get_lock")
+        assert hasattr(service, "get_all_locks")
+        assert hasattr(service, "try_acquire_lock")
+        assert hasattr(service, "release_lock")
 
     def test_implements_event_emitter_operations(self):
         """InMemoryPipelineLockService should implement IEventEmitter operations."""
         service = InMemoryPipelineLockService()
-        assert hasattr(service, 'on')
-        assert hasattr(service, 'off')
-        assert hasattr(service, 'emit')
+        assert hasattr(service, "on")
+        assert hasattr(service, "off")
+        assert hasattr(service, "emit")
 
 
 class TestConfigurableIdentityServiceContract:
@@ -168,10 +169,10 @@ class TestConfigurableIdentityServiceContract:
     def test_implements_identity_operations(self):
         """ConfigurableIdentityService should implement all identity operations."""
         service = ConfigurableIdentityService()
-        assert hasattr(service, 'is_bot_user')
-        assert hasattr(service, 'get_bot_username')
-        assert hasattr(service, 'get_human_users')
-        assert hasattr(service, 'configure')
+        assert hasattr(service, "is_bot_user")
+        assert hasattr(service, "get_bot_username")
+        assert hasattr(service, "get_human_users")
+        assert hasattr(service, "configure")
 
     def test_does_not_emit_events(self):
         """ConfigurableIdentityService should NOT implement IEventEmitter."""
@@ -198,10 +199,10 @@ class TestEventEmitterContract:
         )
 
         emitter = MockEventEmitter()
-        assert hasattr(emitter, 'on')
-        assert hasattr(emitter, 'off')
-        assert hasattr(emitter, 'emit')
-        assert hasattr(emitter, 'once')
+        assert hasattr(emitter, "on")
+        assert hasattr(emitter, "off")
+        assert hasattr(emitter, "emit")
+        assert hasattr(emitter, "once")
 
 
 if __name__ == "__main__":

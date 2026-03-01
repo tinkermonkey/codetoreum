@@ -14,7 +14,7 @@ import time
 import httpx
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Run a full workflow simulation")
     parser.add_argument("--server", default="http://localhost:8000", help="Simulation server URL")
     parser.add_argument("--project-id", required=True, help="Project ID")
@@ -30,35 +30,44 @@ def main():
     try:
         # Step 1: Create ticket and place in Backlog
         print(f"[1/4] Creating ticket: {args.title}")
-        resp = client.post(f"{base}/issues", json={
-            "title": args.title,
-            "description": f"Automated simulation of: {args.title}",
-            "project_id": args.project_id,
-            "labels": ["simulation", "automated"],
-            "priority": "medium",
-            "board_id": args.board_id,
-            "column": "Backlog",
-        })
+        resp = client.post(
+            f"{base}/issues",
+            json={
+                "title": args.title,
+                "description": f"Automated simulation of: {args.title}",
+                "project_id": args.project_id,
+                "labels": ["simulation", "automated"],
+                "priority": "medium",
+                "board_id": args.board_id,
+                "column": "Backlog",
+            },
+        )
         resp.raise_for_status()
         issue = resp.json()
         issue_id = issue["id"]
         print(f"       Created: {issue_id} ({issue['title']})")
 
         # Step 2: Move to Ready
-        print(f"[2/4] Moving to Ready column...")
-        resp = client.post(f"{base}/issues/{issue_id}/move", json={
-            "target_column": "Ready",
-        })
+        print("[2/4] Moving to Ready column...")
+        resp = client.post(
+            f"{base}/issues/{issue_id}/move",
+            json={
+                "target_column": "Ready",
+            },
+        )
         resp.raise_for_status()
         move = resp.json()
         print(f"       Moved: {move['from_column']} -> {move['to_column']}")
 
         # Step 3: Add a comment
-        print(f"[3/4] Adding comment...")
-        resp = client.post(f"{base}/issues/{issue_id}/comment", json={
-            "body": "This issue is ready for orchestrator pickup.",
-            "author": "simulation-operator",
-        })
+        print("[3/4] Adding comment...")
+        resp = client.post(
+            f"{base}/issues/{issue_id}/comment",
+            json={
+                "body": "This issue is ready for orchestrator pickup.",
+                "author": "simulation-operator",
+            },
+        )
         resp.raise_for_status()
         comment = resp.json()
         print(f"       Comment added: {comment['id']}")
@@ -73,9 +82,9 @@ def main():
             if resp.status_code == 200:
                 board = resp.json()
                 summary = {col["name"]: col["item_count"] for col in board["columns"]}
-                print(f"       [{i+1}/{args.poll_count}] Board: {json.dumps(summary)}")
+                print(f"       [{i + 1}/{args.poll_count}] Board: {json.dumps(summary)}")
             else:
-                print(f"       [{i+1}/{args.poll_count}] Board query failed: {resp.status_code}")
+                print(f"       [{i + 1}/{args.poll_count}] Board query failed: {resp.status_code}")
 
             if i < args.poll_count - 1:
                 time.sleep(args.poll_interval)

@@ -1,13 +1,12 @@
 """Project Context aggregate root."""
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 from codetoreum.domain.events import DomainEvent
 from codetoreum.domain.exceptions import DomainError
-
 
 # =============================================================================
 # Project Context Events
@@ -17,7 +16,7 @@ from codetoreum.domain.exceptions import DomainError
 class ProjectContextCreated(DomainEvent):
     """Emitted when project context is created."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ProjectContextCreated event.
 
@@ -26,18 +25,13 @@ class ProjectContextCreated(DomainEvent):
         - repository_url: str
         - default_branch: str
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ProjectContext",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
 
 
 class ProjectTestConfigUpdated(DomainEvent):
     """Emitted when test configuration is updated."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ProjectTestConfigUpdated event.
 
@@ -45,18 +39,13 @@ class ProjectTestConfigUpdated(DomainEvent):
         - test_command: str
         - test_framework: Optional[str]
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ProjectContext",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
 
 
 class ProjectDockerConfigUpdated(DomainEvent):
     """Emitted when Docker configuration is updated."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ProjectDockerConfigUpdated event.
 
@@ -65,18 +54,13 @@ class ProjectDockerConfigUpdated(DomainEvent):
         - dockerfile_path: Optional[str]
         - requires_dev_container: bool
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ProjectContext",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
 
 
 class ProjectWorkflowMappingAdded(DomainEvent):
     """Emitted when custom workflow mapping is added."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ProjectWorkflowMappingAdded event.
 
@@ -84,12 +68,7 @@ class ProjectWorkflowMappingAdded(DomainEvent):
         - label: str
         - template_id: str
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ProjectContext",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
 
 
 # =============================================================================
@@ -118,39 +97,39 @@ class ProjectContext:
     branch_prefix: str
 
     # Technology stack
-    tech_stack: List[str]
+    tech_stack: list[str]
     primary_language: str
 
     # Testing configuration
-    test_command: Optional[str]
-    test_framework: Optional[str]
+    test_command: str | None
+    test_framework: str | None
     has_ci_cd: bool
 
     # Workflow configuration
     default_workflow_template_id: str
-    custom_workflows: Dict[str, str]  # label -> template_id
+    custom_workflows: dict[str, str]  # label -> template_id
 
     # Docker configuration
     has_dockerfile: bool
-    dockerfile_path: Optional[str]
+    dockerfile_path: str | None
     requires_dev_container: bool
 
     # Environment
-    environment_variables: Dict[str, str]
-    secrets: List[str]  # Names of required secrets
+    environment_variables: dict[str, str]
+    secrets: list[str]  # Names of required secrets
 
     # MCP servers
-    mcp_servers: List[str]
+    mcp_servers: list[str]
 
     # Metadata
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
     # Timestamps
     created_at: datetime
     updated_at: datetime
 
     # Event tracking
-    _events: List[DomainEvent] = field(default_factory=list, init=False, repr=False)
+    _events: list[DomainEvent] = field(default_factory=list, init=False, repr=False)
     _version: int = field(default=0, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -169,16 +148,20 @@ class ProjectContext:
         - If has_ci_cd is True, test_command should be set
         """
         if not self.name or not self.name.strip():
-            raise DomainError("Project context must have a non-empty name")
+            msg = "Project context must have a non-empty name"
+            raise DomainError(msg)
 
         if not self.repository_url or not self.repository_url.strip():
-            raise DomainError("Project context must have a repository URL")
+            msg = "Project context must have a repository URL"
+            raise DomainError(msg)
 
         if not self.default_branch or not self.default_branch.strip():
-            raise DomainError("Project context must have a default branch")
+            msg = "Project context must have a default branch"
+            raise DomainError(msg)
 
         if self.has_dockerfile and not self.dockerfile_path:
-            raise DomainError("Dockerfile path required when has_dockerfile is True")
+            msg = "Dockerfile path required when has_dockerfile is True"
+            raise DomainError(msg)
 
     # Creation
     @classmethod
@@ -188,9 +171,9 @@ class ProjectContext:
         display_name: str,
         repository_url: str,
         default_branch: str = "main",
-        tech_stack: Optional[List[str]] = None,
+        tech_stack: list[str] | None = None,
         primary_language: str = "python",
-        default_workflow_template_id: Optional[str] = None
+        default_workflow_template_id: str | None = None,
     ) -> "ProjectContext":
         """
         Factory method to create a new project context.
@@ -230,8 +213,8 @@ class ProjectContext:
             secrets=[],
             mcp_servers=[],
             metadata={},
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc)
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
 
         event = ProjectContextCreated(
@@ -241,19 +224,15 @@ class ProjectContext:
                 "display_name": display_name,
                 "repository_url": repository_url,
                 "default_branch": default_branch,
-                "primary_language": primary_language
-            }
+                "primary_language": primary_language,
+            },
         )
         project._add_event(event)
 
         return project
 
     # Configuration methods
-    def update_test_configuration(
-        self,
-        test_command: str,
-        test_framework: Optional[str] = None
-    ) -> None:
+    def update_test_configuration(self, test_command: str, test_framework: str | None = None) -> None:
         """
         Update testing configuration.
 
@@ -264,27 +243,25 @@ class ProjectContext:
         Emits: ProjectTestConfigUpdated event
         """
         if not test_command or not test_command.strip():
-            raise DomainError("Test command cannot be empty")
+            msg = "Test command cannot be empty"
+            raise DomainError(msg)
 
         self.test_command = test_command
         self.test_framework = test_framework
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = ProjectTestConfigUpdated(
             aggregate_id=self.id,
-            payload={
-                "test_command": test_command,
-                "test_framework": test_framework
-            }
+            payload={"test_command": test_command, "test_framework": test_framework},
         )
         self._add_event(event)
 
     def configure_docker(
         self,
         has_dockerfile: bool,
-        dockerfile_path: Optional[str] = None,
-        requires_dev_container: bool = False
+        dockerfile_path: str | None = None,
+        requires_dev_container: bool = False,
     ) -> None:
         """
         Configure Docker settings.
@@ -300,12 +277,13 @@ class ProjectContext:
         Emits: ProjectDockerConfigUpdated event
         """
         if has_dockerfile and not dockerfile_path:
-            raise DomainError("Dockerfile path required when has_dockerfile is True")
+            msg = "Dockerfile path required when has_dockerfile is True"
+            raise DomainError(msg)
 
         self.has_dockerfile = has_dockerfile
         self.dockerfile_path = dockerfile_path
         self.requires_dev_container = requires_dev_container
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = ProjectDockerConfigUpdated(
@@ -313,8 +291,8 @@ class ProjectContext:
             payload={
                 "has_dockerfile": has_dockerfile,
                 "dockerfile_path": dockerfile_path,
-                "requires_dev_container": requires_dev_container
-            }
+                "requires_dev_container": requires_dev_container,
+            },
         )
         self._add_event(event)
 
@@ -332,25 +310,21 @@ class ProjectContext:
         Emits: ProjectWorkflowMappingAdded event
         """
         if not label or not label.strip():
-            raise DomainError("Label cannot be empty")
+            msg = "Label cannot be empty"
+            raise DomainError(msg)
 
         if not template_id or not template_id.strip():
-            raise DomainError("Template ID cannot be empty")
+            msg = "Template ID cannot be empty"
+            raise DomainError(msg)
 
         self.custom_workflows[label] = template_id
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = ProjectWorkflowMappingAdded(
-            aggregate_id=self.id,
-            payload={
-                "label": label,
-                "template_id": template_id
-            }
-        )
+        event = ProjectWorkflowMappingAdded(aggregate_id=self.id, payload={"label": label, "template_id": template_id})
         self._add_event(event)
 
-    def get_workflow_template_for_labels(self, labels: List[str]) -> str:
+    def get_workflow_template_for_labels(self, labels: list[str]) -> str:
         """
         Get workflow template ID based on work item labels.
 
@@ -378,7 +352,7 @@ class ProjectContext:
         """
         self._events.append(event)
 
-    def get_pending_events(self) -> List[DomainEvent]:
+    def get_pending_events(self) -> list[DomainEvent]:
         """
         Get all pending events.
 

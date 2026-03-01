@@ -1,7 +1,6 @@
 """Wire up event bus to application services and handlers."""
 
 import logging
-from typing import Optional
 
 from codetoreum.application.event_handlers import (
     ExecutionEventHandler,
@@ -22,8 +21,6 @@ logger = logging.getLogger(__name__)
 class EventBusWiringError(Exception):
     """Raised when event bus wiring fails."""
 
-    pass
-
 
 class EventBusRegistry:
     """
@@ -38,7 +35,7 @@ class EventBusRegistry:
 
     def __init__(
         self,
-        event_bus: Optional[EventBus] = None,
+        event_bus: EventBus | None = None,
         max_retries: int = 3,
         retry_delay_seconds: float = 1.0,
     ):
@@ -61,11 +58,11 @@ class EventBusRegistry:
 
     def register_services(
         self,
-        workflow_orchestrator: Optional[WorkflowOrchestrator] = None,
-        execution_service: Optional[ExecutionService] = None,
-        review_service: Optional[ReviewService] = None,
-        repair_cycle: Optional[IRepairCycle] = None,
-        clock: Optional[SimulationClock] = None,
+        workflow_orchestrator: WorkflowOrchestrator | None = None,
+        execution_service: ExecutionService | None = None,
+        review_service: ReviewService | None = None,
+        repair_cycle: IRepairCycle | None = None,
+        clock: SimulationClock | None = None,
     ) -> None:
         """
         Register application services.
@@ -102,7 +99,8 @@ class EventBusRegistry:
                 logger.info("Registered simulation clock")
 
         except Exception as e:
-            raise EventBusWiringError(f"Failed to register services: {e}") from e
+            message = f"Failed to register services: {e}"
+            raise EventBusWiringError(message) from e
 
     def register_handlers(
         self,
@@ -136,25 +134,22 @@ class EventBusRegistry:
             if register_repair_cycle:
                 self._register_repair_cycle_handler()
 
-            logger.info(
-                f"Registered {len(self._handlers)} event handlers with event bus"
-            )
+            logger.info(f"Registered {len(self._handlers)} event handlers with event bus")
 
         except Exception as e:
-            raise EventBusWiringError(f"Failed to register handlers: {e}") from e
+            message = f"Failed to register handlers: {e}"
+            raise EventBusWiringError(message) from e
 
     def _register_workflow_handler(self) -> None:
         """Register workflow event handler."""
         if "workflow_orchestrator" not in self._services:
             logger.warning(
                 "Skipping workflow handler registration: orchestrator not registered",
-                extra={"error_id": "ERR_EVENTBUS_WORKFLOW_SERVICE_NOT_FOUND"}
+                extra={"error_id": "ERR_EVENTBUS_WORKFLOW_SERVICE_NOT_FOUND"},
             )
             return
 
-        handler = WorkflowEventHandler(
-            orchestrator=self._services["workflow_orchestrator"]
-        )
+        handler = WorkflowEventHandler(orchestrator=self._services["workflow_orchestrator"])
 
         self.event_bus.register_handler(handler)
         self._handlers["workflow"] = handler
@@ -166,13 +161,11 @@ class EventBusRegistry:
         if "execution_service" not in self._services:
             logger.warning(
                 "Skipping execution handler registration: service not registered",
-                extra={"error_id": "ERR_EVENTBUS_EXECUTION_SERVICE_NOT_FOUND"}
+                extra={"error_id": "ERR_EVENTBUS_EXECUTION_SERVICE_NOT_FOUND"},
             )
             return
 
-        handler = ExecutionEventHandler(
-            execution_service=self._services["execution_service"]
-        )
+        handler = ExecutionEventHandler(execution_service=self._services["execution_service"])
 
         self.event_bus.register_handler(handler)
         self._handlers["execution"] = handler
@@ -184,7 +177,7 @@ class EventBusRegistry:
         if "review_service" not in self._services:
             logger.warning(
                 "Skipping review handler registration: service not registered",
-                extra={"error_id": "ERR_EVENTBUS_REVIEW_SERVICE_NOT_FOUND"}
+                extra={"error_id": "ERR_EVENTBUS_REVIEW_SERVICE_NOT_FOUND"},
             )
             return
 
@@ -200,7 +193,7 @@ class EventBusRegistry:
         if "repair_cycle" not in self._services:
             logger.warning(
                 "Skipping repair cycle handler registration: adapter not registered",
-                extra={"error_id": "ERR_EVENTBUS_REPAIR_CYCLE_NOT_FOUND"}
+                extra={"error_id": "ERR_EVENTBUS_REPAIR_CYCLE_NOT_FOUND"},
             )
             return
 
@@ -251,11 +244,11 @@ class EventBusRegistry:
 
 
 def setup_event_bus(
-    workflow_orchestrator: Optional[WorkflowOrchestrator] = None,
-    execution_service: Optional[ExecutionService] = None,
-    review_service: Optional[ReviewService] = None,
-    repair_cycle: Optional[IRepairCycle] = None,
-    clock: Optional[SimulationClock] = None,
+    workflow_orchestrator: WorkflowOrchestrator | None = None,
+    execution_service: ExecutionService | None = None,
+    review_service: ReviewService | None = None,
+    repair_cycle: IRepairCycle | None = None,
+    clock: SimulationClock | None = None,
     max_retries: int = 3,
     retry_delay_seconds: float = 1.0,
 ) -> EventBusRegistry:

@@ -4,7 +4,6 @@ These tests use testcontainers to spin up a real Elasticsearch instance.
 """
 
 import asyncio
-from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
@@ -21,8 +20,8 @@ from codetoreum.ports.output.config_store import (
     WorkflowTemplate,
 )
 from tests.conftest import (
-    docker_available,
     ModernElasticsearchContainer,
+    docker_available,
     wait_for_condition,
     wait_for_elasticsearch_indexing,
 )
@@ -207,9 +206,7 @@ async def test_get_project_config_by_name(config_storage, sample_project_config)
     await wait_for_elasticsearch_indexing(es_client)
 
     # Retrieve by name
-    retrieved = await config_storage.get_project_config_by_name(
-        sample_project_config.name
-    )
+    retrieved = await config_storage.get_project_config_by_name(sample_project_config.name)
 
     assert retrieved.id == sample_project_config.id
     assert retrieved.name == sample_project_config.name
@@ -258,9 +255,7 @@ async def test_save_and_get_agent_config(config_storage, sample_agent_config):
     await wait_for_elasticsearch_indexing(es_client)
 
     # Retrieve agent config
-    retrieved = await config_storage.get_agent_config(
-        sample_agent_config.project_id, sample_agent_config.agent_name
-    )
+    retrieved = await config_storage.get_agent_config(sample_agent_config.project_id, sample_agent_config.agent_name)
 
     assert retrieved.project_id == sample_agent_config.project_id
     assert retrieved.agent_name == sample_agent_config.agent_name
@@ -282,9 +277,7 @@ async def test_save_and_get_pipeline_config(config_storage, sample_pipeline_conf
     await wait_for_elasticsearch_indexing(es_client)
 
     # Retrieve pipeline config
-    retrieved = await config_storage.get_pipeline_config(
-        sample_pipeline_config.project_id, sample_pipeline_config.name
-    )
+    retrieved = await config_storage.get_pipeline_config(sample_pipeline_config.project_id, sample_pipeline_config.name)
 
     assert retrieved.id == sample_pipeline_config.id
     assert retrieved.project_id == sample_pipeline_config.project_id
@@ -305,9 +298,7 @@ async def test_save_and_get_workflow_template(config_storage, sample_workflow_te
     await wait_for_elasticsearch_indexing(es_client)
 
     # Retrieve workflow template
-    retrieved = await config_storage.get_workflow_template(
-        sample_workflow_template.name
-    )
+    retrieved = await config_storage.get_workflow_template(sample_workflow_template.name)
 
     assert retrieved.id == sample_workflow_template.id
     assert retrieved.name == sample_workflow_template.name
@@ -387,9 +378,7 @@ async def test_search_configs(config_storage, sample_project_config):
     await wait_for_elasticsearch_indexing(es_client, timeout=10.0)
 
     # Search for project
-    results = await config_storage.search_configs(
-        query="Unique Project", config_type="project"
-    )
+    results = await config_storage.search_configs(query="Unique Project", config_type="project")
 
     assert len(results) > 0
     assert any(r.get("id") == project.id for r in results)
@@ -469,23 +458,17 @@ async def test_delete_agent_config(config_storage, sample_agent_config):
     await wait_for_elasticsearch_indexing(es_client)
 
     # Delete agent
-    await config_storage.delete_agent_config(
-        sample_agent_config.project_id, sample_agent_config.agent_name
-    )
+    await config_storage.delete_agent_config(sample_agent_config.project_id, sample_agent_config.agent_name)
     await wait_for_elasticsearch_indexing(es_client)
 
     # Try to get deleted agent
     with pytest.raises(ConfigNotFoundError):
-        await config_storage.get_agent_config(
-            sample_agent_config.project_id, sample_agent_config.agent_name
-        )
+        await config_storage.get_agent_config(sample_agent_config.project_id, sample_agent_config.agent_name)
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_exists_returns_true_for_existing_project(
-    config_storage, sample_project_config
-):
+async def test_exists_returns_true_for_existing_project(config_storage, sample_project_config):
     """Test that exists() returns True for existing project."""
     # Save project
     await config_storage.save_project_config(sample_project_config)
@@ -504,9 +487,7 @@ async def test_exists_returns_false_for_nonexistent_project(config_storage):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_concurrent_updates_increment_versions(
-    config_storage, sample_project_config
-):
+async def test_concurrent_updates_increment_versions(config_storage, sample_project_config):
     """Test that concurrent updates properly increment versions."""
     # Save initial version
     await config_storage.save_project_config(sample_project_config)

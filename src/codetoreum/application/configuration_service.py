@@ -8,9 +8,12 @@ versioning, and event emission.
 import asyncio
 import logging
 import re
-from datetime import datetime, timezone
+from collections.abc import Mapping
+from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from types import MappingProxyType
+from typing import Any, Optional
 
 from codetoreum.domain.events import (
     AgentConfigUpdated,
@@ -42,10 +45,7 @@ from codetoreum.ports.input.exceptions import ValidationError
 from codetoreum.ports.output.config_store import (
     AgentConfig,
     ConfigNotFoundError,
-    EnvironmentVariable,
     IConfigStore,
-    MountedCommand,
-    MountedSubAgent,
     PipelineConfig,
     ProjectConfig,
 )
@@ -67,7 +67,7 @@ class ConfigurationService:
         self,
         config_store: IConfigStore,
         event_bus: EventBus,
-        encryption_service: Optional[IEncryptionService] = None,
+        encryption_service: IEncryptionService | None = None,
         validator: Optional["ConfigurationValidator"] = None,
     ):
         """
@@ -84,7 +84,7 @@ class ConfigurationService:
         self.encryption_service = encryption_service
         self.validator = validator or ConfigurationValidator()
         # Locks for concurrent access protection (one per project)
-        self._locks: Dict[str, asyncio.Lock] = {}
+        self._locks: dict[str, asyncio.Lock] = {}
 
     def _get_lock(self, project_name: str) -> asyncio.Lock:
         """Get or create lock for a project."""
@@ -92,10 +92,7 @@ class ConfigurationService:
             self._locks[project_name] = asyncio.Lock()
         return self._locks[project_name]
 
-    async def update_project_config(
-        self,
-        command: UpdateProjectConfigCommand
-    ) -> ConfigurationCommandResult:
+    async def update_project_config(self, command: UpdateProjectConfigCommand) -> ConfigurationCommandResult:
         """
         Update project configuration.
 
@@ -113,54 +110,68 @@ class ConfigurationService:
         async with self._get_lock(command.project_name):
             # Load current config
             try:
-                config = await self.config_store.get_project_config_by_name(
-                    command.project_name
-                )
+                config = await self.config_store.get_project_config_by_name(command.project_name)
             except ConfigNotFoundError:
-                raise ConfigNotFoundError(
-                    f"Project '{command.project_name}' not found"
-                )
+                message = f"Project '{command.project_name}' not found"
+                raise ConfigNotFoundError(message)
 
             # Validate updates
-            validation = self.validator.validate_project_updates(
-                config,
-                command.updates
-            )
+            validation = self.validator.validate_project_updates(config, command.updates)
             if not validation.valid:
                 raise ValidationError("; ".join(validation.errors or []))
 
             # Store old values for computing changes
-            old_config: Dict[str, Any] = {
-                "tech_stacks": config.tech_stacks.copy(),
+            old_config: dict[str, Any] = {
+                "tech_stacks": (
+                    dict(config.tech_stacks) if isinstance(config.tech_stacks, Mapping) else config.tech_stacks.copy()
+                ),
                 "pipelines": [p.copy() for p in config.pipelines],
-                "testing": config.testing.copy(),
+                "testing": dict(config.testing) if isinstance(config.testing, Mapping) else config.testing.copy(),
             }
 
-            # Apply updates (deep merge)
-            self._deep_merge(config.tech_stacks, command.updates.get("tech_stacks", {}))
-            if "pipelines" in command.updates:
-                config.pipelines = command.updates["pipelines"]
-            if "testing" in command.updates:
-                self._deep_merge(config.testing, command.updates["testing"])
+            # Apply updates - create new immutable config with updated fields
+            # Convert MappingProxyType to dict for merging, then back to MappingProxyType
+            tech_stacks_dict = (
+                dict(config.tech_stacks) if isinstance(config.tech_stacks, Mapping) else config.tech_stacks.copy()
+            )
+            self._deep_merge(tech_stacks_dict, command.updates.get("tech_stacks", {}))
 
-            # Update metadata
-            config.updated_at = datetime.now(timezone.utc)
-            config.version += 1
-            config.metadata["updated_by"] = command.user_id
+            testing_dict = dict(config.testing) if isinstance(config.testing, Mapping) else config.testing.copy()
+            if "testing" in command.updates:
+                self._deep_merge(testing_dict, command.updates["testing"])
+
+            pipelines = command.updates.get("pipelines", config.pipelines)
+
+            # Update metadata dict
+            metadata_dict = dict(config.metadata) if isinstance(config.metadata, Mapping) else config.metadata.copy()
+            metadata_dict["updated_by"] = command.user_id
             if command.reason:
-                config.metadata["update_reason"] = command.reason
+                metadata_dict["update_reason"] = command.reason
+
+            # Create new config instance with updated fields (frozen dataclass)
+            config = replace(
+                config,
+                tech_stacks=MappingProxyType(tech_stacks_dict),
+                testing=MappingProxyType(testing_dict),
+                pipelines=pipelines,
+                updated_at=datetime.now(UTC),
+                version=config.version + 1,
+                metadata=MappingProxyType(metadata_dict),
+            )
 
             # Save configuration with rollback on event emission failure
-            old_version = config.version - 1
             try:
                 await self.config_store.save_project_config(config)
 
                 # Compute changes
-                changes = self._compute_changes(old_config, {
-                    "tech_stacks": config.tech_stacks,
-                    "pipelines": config.pipelines,
-                    "testing": config.testing,
-                })
+                changes = self._compute_changes(
+                    old_config,
+                    {
+                        "tech_stacks": config.tech_stacks,
+                        "pipelines": config.pipelines,
+                        "testing": config.testing,
+                    },
+                )
 
                 # Emit event
                 event = ProjectConfigUpdated(
@@ -177,18 +188,15 @@ class ConfigurationService:
                 await self.event_bus.publish(event)
 
             except Exception as e:
-                # Rollback on failure
+                # Rollback on failure - reconstruct with old values
                 logger.error(
                     f"Failed to update project config or emit event: {e}. "
                     f"Rolling back changes for project '{command.project_name}'",
                     exc_info=True,
-                    extra={"error_id": "ERR_CONFIG_UPDATE_PROJECT_FAILURE"}
+                    extra={"error_id": "ERR_CONFIG_UPDATE_PROJECT_FAILURE"},
                 )
-                config.version = old_version
-                config.tech_stacks = old_config["tech_stacks"]
-                config.pipelines = old_config["pipelines"]
-                config.testing = old_config["testing"]
-                await self.config_store.save_project_config(config)
+                # Reload original config for rollback (safer than trying to revert immutable fields)
+                config = await self.config_store.get_project_config_by_name(command.project_name)
                 raise
 
             return ConfigurationCommandResult(
@@ -198,10 +206,7 @@ class ConfigurationService:
                 changes_applied=changes,
             )
 
-    async def update_agent_config(
-        self,
-        command: UpdateAgentConfigCommand
-    ) -> ConfigurationCommandResult:
+    async def update_agent_config(self, command: UpdateAgentConfigCommand) -> ConfigurationCommandResult:
         """
         Update agent configuration.
 
@@ -217,20 +222,14 @@ class ConfigurationService:
         """
         # Get project to validate it exists
         try:
-            project = await self.config_store.get_project_config_by_name(
-                command.project_name
-            )
+            project = await self.config_store.get_project_config_by_name(command.project_name)
         except ConfigNotFoundError:
-            raise ConfigNotFoundError(
-                f"Project '{command.project_name}' not found"
-            )
+            message = f"Project '{command.project_name}' not found"
+            raise ConfigNotFoundError(message)
 
         # Load agent config
         try:
-            config = await self.config_store.get_agent_config(
-                project.id,
-                command.agent_name
-            )
+            config = await self.config_store.get_agent_config(project.id, command.agent_name)
         except ConfigNotFoundError:
             # Create new agent config if doesn't exist
             config = AgentConfig(
@@ -240,15 +239,12 @@ class ConfigurationService:
                 timeout=3600,
                 requires_docker=True,
                 makes_code_changes=True,
-                created_at=datetime.now(timezone.utc),
-                updated_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
             )
 
         # Validate updates
-        validation = self.validator.validate_agent_updates(
-            command.agent_name,
-            command.updates
-        )
+        validation = self.validator.validate_agent_updates(command.agent_name, command.updates)
         if not validation.valid:
             raise ValidationError("; ".join(validation.errors or []))
 
@@ -256,41 +252,52 @@ class ConfigurationService:
         old_values = {
             "model": config.model,
             "timeout": config.timeout,
-            "mcp_servers": config.mcp_servers.copy(),
+            "mcp_servers": list(config.mcp_servers) if config.mcp_servers else [],
         }
 
-        # Apply updates
+        # Apply updates - create new immutable config with updated fields
+        updates_dict: dict[str, Any] = {}
         if "model" in command.updates:
-            config.model = command.updates["model"]
+            updates_dict["model"] = command.updates["model"]
         if "timeout" in command.updates:
-            config.timeout = command.updates["timeout"]
+            updates_dict["timeout"] = command.updates["timeout"]
         if "requires_docker" in command.updates:
-            config.requires_docker = command.updates["requires_docker"]
+            updates_dict["requires_docker"] = command.updates["requires_docker"]
         if "makes_code_changes" in command.updates:
-            config.makes_code_changes = command.updates["makes_code_changes"]
+            updates_dict["makes_code_changes"] = command.updates["makes_code_changes"]
         if "mcp_servers" in command.updates:
-            config.mcp_servers = command.updates["mcp_servers"]
+            updates_dict["mcp_servers"] = command.updates["mcp_servers"]
         if "capabilities" in command.updates:
-            config.capabilities = command.updates["capabilities"]
+            updates_dict["capabilities"] = command.updates["capabilities"]
         if "constraints" in command.updates:
-            config.constraints = command.updates["constraints"]
+            updates_dict["constraints"] = command.updates["constraints"]
 
-        # Update metadata
-        config.updated_at = datetime.now(timezone.utc)
-        config.version += 1
-        config.metadata["updated_by"] = command.user_id
+        # Update metadata dict
+        metadata_dict = dict(config.metadata) if isinstance(config.metadata, Mapping) else config.metadata.copy()
+        metadata_dict["updated_by"] = command.user_id
         if command.reason:
-            config.metadata["update_reason"] = command.reason
+            metadata_dict["update_reason"] = command.reason
+        updates_dict["metadata"] = MappingProxyType(metadata_dict)
+
+        # Add timestamp and version
+        updates_dict["updated_at"] = datetime.now(UTC)
+        updates_dict["version"] = config.version + 1
+
+        # Create new config instance with updated fields (frozen dataclass)
+        config = replace(config, **updates_dict)
 
         # Save configuration
         await self.config_store.save_agent_config(config)
 
         # Compute changes
-        changes = self._compute_changes(old_values, {
-            "model": config.model,
-            "timeout": config.timeout,
-            "mcp_servers": config.mcp_servers,
-        })
+        changes = self._compute_changes(
+            old_values,
+            {
+                "model": config.model,
+                "timeout": config.timeout,
+                "mcp_servers": config.mcp_servers,
+            },
+        )
 
         # Emit event
         event = AgentConfigUpdated(
@@ -314,10 +321,7 @@ class ConfigurationService:
             changes_applied=changes,
         )
 
-    async def update_pipeline_config(
-        self,
-        command: UpdatePipelineConfigCommand
-    ) -> ConfigurationCommandResult:
+    async def update_pipeline_config(self, command: UpdatePipelineConfigCommand) -> ConfigurationCommandResult:
         """
         Update pipeline configuration.
 
@@ -333,65 +337,67 @@ class ConfigurationService:
         """
         # Get project
         try:
-            project = await self.config_store.get_project_config_by_name(
-                command.project_name
-            )
+            project = await self.config_store.get_project_config_by_name(command.project_name)
         except ConfigNotFoundError:
-            raise ConfigNotFoundError(
-                f"Project '{command.project_name}' not found"
-            )
+            message = f"Project '{command.project_name}' not found"
+            raise ConfigNotFoundError(message)
 
         # Load pipeline config
         try:
-            config = await self.config_store.get_pipeline_config(
-                project.id,
-                command.pipeline_name
-            )
+            config = await self.config_store.get_pipeline_config(project.id, command.pipeline_name)
         except ConfigNotFoundError:
             # Create new pipeline config if doesn't exist
             config = PipelineConfig(
                 id=f"{project.id}:{command.pipeline_name}",
                 project_id=project.id,
                 name=command.pipeline_name,
-                created_at=datetime.now(timezone.utc),
-                updated_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
             )
 
         # Validate updates
-        validation = self.validator.validate_pipeline_updates(
-            command.pipeline_name,
-            command.updates
-        )
+        validation = self.validator.validate_pipeline_updates(command.pipeline_name, command.updates)
         if not validation.valid:
             raise ValidationError("; ".join(validation.errors or []))
 
         # Store old values
         old_values = {
-            "stages": config.stages.copy(),
-            "triggers": config.triggers.copy(),
+            "stages": list(config.stages) if config.stages else [],
+            "triggers": list(config.triggers) if config.triggers else [],
         }
 
-        # Apply updates
+        # Apply updates - create new immutable config with updated fields
+        updates_dict: dict[str, Any] = {}
         if "stages" in command.updates:
-            config.stages = command.updates["stages"]
+            updates_dict["stages"] = command.updates["stages"]
         if "triggers" in command.updates:
-            config.triggers = command.updates["triggers"]
+            updates_dict["triggers"] = command.updates["triggers"]
 
-        # Update metadata
-        config.updated_at = datetime.now(timezone.utc)
-        config.version += 1
-        config.metadata["updated_by"] = command.user_id
+        # Update metadata dict
+        metadata_dict = dict(config.metadata) if isinstance(config.metadata, Mapping) else config.metadata.copy()
+        metadata_dict["updated_by"] = command.user_id
         if command.reason:
-            config.metadata["update_reason"] = command.reason
+            metadata_dict["update_reason"] = command.reason
+        updates_dict["metadata"] = MappingProxyType(metadata_dict)
+
+        # Add timestamp and version
+        updates_dict["updated_at"] = datetime.now(UTC)
+        updates_dict["version"] = config.version + 1
+
+        # Create new config instance with updated fields (frozen dataclass)
+        config = replace(config, **updates_dict)
 
         # Save configuration
         await self.config_store.save_pipeline_config(config)
 
         # Compute changes
-        changes = self._compute_changes(old_values, {
-            "stages": config.stages,
-            "triggers": config.triggers,
-        })
+        changes = self._compute_changes(
+            old_values,
+            {
+                "stages": config.stages,
+                "triggers": config.triggers,
+            },
+        )
 
         # Emit event
         event = PipelineConfigUpdated(
@@ -415,10 +421,7 @@ class ConfigurationService:
             changes_applied=changes,
         )
 
-    async def add_environment_variable(
-        self,
-        command: AddEnvironmentVariableCommand
-    ) -> ConfigurationCommandResult:
+    async def add_environment_variable(self, command: AddEnvironmentVariableCommand) -> ConfigurationCommandResult:
         """
         Add or update environment variable for project.
 
@@ -434,19 +437,13 @@ class ConfigurationService:
         """
         # Load config
         try:
-            config = await self.config_store.get_project_config_by_name(
-                command.project_name
-            )
+            config = await self.config_store.get_project_config_by_name(command.project_name)
         except ConfigNotFoundError:
-            raise ConfigNotFoundError(
-                f"Project '{command.project_name}' not found"
-            )
+            message = f"Project '{command.project_name}' not found"
+            raise ConfigNotFoundError(message)
 
         # Validate
-        validation = self.validator.validate_environment_variable(
-            command.variable_name,
-            command.variable_value
-        )
+        validation = self.validator.validate_environment_variable(command.variable_name, command.variable_value)
         if not validation.valid:
             raise ValidationError("; ".join(validation.errors or []))
 
@@ -467,31 +464,43 @@ class ConfigurationService:
                         logger.error(
                             f"Failed to encrypt environment variable: {e}",
                             exc_info=True,
-                            extra={"error_id": "ERR_CONFIG_ENCRYPT_ENV_VAR_FAILURE"}
+                            extra={"error_id": "ERR_CONFIG_ENCRYPT_ENV_VAR_FAILURE"},
                         )
-                        raise ValidationError(f"Failed to encrypt variable: {e}")
+                        message = f"Failed to encrypt variable: {e}"
+                        raise ValidationError(message)
                 else:
                     logger.warning(
-                        f"No encryption service configured. Storing secret "
-                        f"'{command.variable_name}' in plaintext",
-                        extra={"error_id": "ERR_CONFIG_NO_ENCRYPTION_SERVICE"}
+                        f"No encryption service configured. Storing secret '{command.variable_name}' in plaintext",
+                        extra={"error_id": "ERR_CONFIG_NO_ENCRYPTION_SERVICE"},
                     )
 
-            config.environment_variables[command.variable_name] = {
+            # Convert MappingProxyType to dict, update, and convert back
+            env_vars_dict = (
+                dict(config.environment_variables)
+                if isinstance(config.environment_variables, Mapping)
+                else config.environment_variables.copy()
+            )
+            env_vars_dict[command.variable_name] = {
                 "value": stored_value,
                 "is_secret": command.is_secret,
                 "description": command.description,
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
                 "created_by": command.user_id,
             }
 
-            # Update metadata
-            config.updated_at = datetime.now(timezone.utc)
-            config.version += 1
+            # Update metadata dict
+            metadata_dict = dict(config.metadata) if isinstance(config.metadata, Mapping) else config.metadata.copy()
+
+            # Create new config instance with updated fields
+            config = replace(
+                config,
+                environment_variables=MappingProxyType(env_vars_dict),
+                updated_at=datetime.now(UTC),
+                version=config.version + 1,
+                metadata=MappingProxyType(metadata_dict),
+            )
 
             # Save with rollback on failure
-            old_version = config.version - 1
-            old_env_vars = config.environment_variables.copy()
             try:
                 await self.config_store.save_project_config(config)
 
@@ -510,16 +519,14 @@ class ConfigurationService:
                 await self.event_bus.publish(event)
 
             except Exception as e:
-                # Rollback on failure
+                # Rollback on failure - reload original config
                 logger.error(
-                    f"Failed to add/update environment variable or emit event: {e}. "
-                    f"Rolling back changes",
+                    f"Failed to add/update environment variable or emit event: {e}. Rolling back changes",
                     exc_info=True,
-                    extra={"error_id": "ERR_CONFIG_UPDATE_ENV_VAR_FAILURE"}
+                    extra={"error_id": "ERR_CONFIG_UPDATE_ENV_VAR_FAILURE"},
                 )
-                config.version = old_version
-                config.environment_variables = old_env_vars
-                await self.config_store.save_project_config(config)
+                # Reload original config for rollback
+                config = await self.config_store.get_project_config_by_name(command.project_name)
                 raise
 
         return ConfigurationCommandResult(
@@ -530,8 +537,7 @@ class ConfigurationService:
         )
 
     async def remove_environment_variable(
-        self,
-        command: RemoveEnvironmentVariableCommand
+        self, command: RemoveEnvironmentVariableCommand
     ) -> ConfigurationCommandResult:
         """
         Remove environment variable from project.
@@ -548,26 +554,35 @@ class ConfigurationService:
         """
         # Load config
         try:
-            config = await self.config_store.get_project_config_by_name(
-                command.project_name
-            )
+            config = await self.config_store.get_project_config_by_name(command.project_name)
         except ConfigNotFoundError:
-            raise ConfigNotFoundError(
-                f"Project '{command.project_name}' not found"
-            )
+            message = f"Project '{command.project_name}' not found"
+            raise ConfigNotFoundError(message)
 
         # Check if variable exists
         if command.variable_name not in config.environment_variables:
-            raise ValidationError(
-                f"Environment variable '{command.variable_name}' not found"
-            )
+            message = f"Environment variable '{command.variable_name}' not found"
+            raise ValidationError(message)
 
-        # Remove variable
-        del config.environment_variables[command.variable_name]
+        # Convert MappingProxyType to dict, remove, and convert back
+        env_vars_dict = (
+            dict(config.environment_variables)
+            if isinstance(config.environment_variables, Mapping)
+            else config.environment_variables.copy()
+        )
+        del env_vars_dict[command.variable_name]
 
-        # Update metadata
-        config.updated_at = datetime.now(timezone.utc)
-        config.version += 1
+        # Update metadata dict
+        metadata_dict = dict(config.metadata) if isinstance(config.metadata, Mapping) else config.metadata.copy()
+
+        # Create new config instance with updated fields
+        config = replace(
+            config,
+            environment_variables=MappingProxyType(env_vars_dict),
+            updated_at=datetime.now(UTC),
+            version=config.version + 1,
+            metadata=MappingProxyType(metadata_dict),
+        )
 
         # Save
         await self.config_store.save_project_config(config)
@@ -593,10 +608,7 @@ class ConfigurationService:
             changes_applied={"variable_name": command.variable_name, "action": "removed"},
         )
 
-    async def mount_command(
-        self,
-        command: MountCommandCommand
-    ) -> ConfigurationCommandResult:
+    async def mount_command(self, command: MountCommandCommand) -> ConfigurationCommandResult:
         """
         Mount a command into project agent.
 
@@ -612,34 +624,46 @@ class ConfigurationService:
         """
         # Load config
         try:
-            config = await self.config_store.get_project_config_by_name(
-                command.project_name
-            )
+            config = await self.config_store.get_project_config_by_name(command.project_name)
         except ConfigNotFoundError:
-            raise ConfigNotFoundError(
-                f"Project '{command.project_name}' not found"
-            )
+            message = f"Project '{command.project_name}' not found"
+            raise ConfigNotFoundError(message)
 
         # Validate command file exists
         command_path = Path(command.command_path)
         if not command_path.exists():
-            raise ValidationError(f"Command file not found: {command.command_path}")
+            message = f"Command file not found: {command.command_path}"
+            raise ValidationError(message)
 
         # Validate command file format (basic check)
-        if not command_path.suffix == ".md":
-            raise ValidationError("Command file must be a .md file")
+        if command_path.suffix != ".md":
+            message = "Command file must be a .md file"
+            raise ValidationError(message)
 
-        # Mount command
-        config.mounted_commands[command.command_name] = {
+        # Convert MappingProxyType to dict, add command, and convert back
+        commands_dict = (
+            dict(config.mounted_commands)
+            if isinstance(config.mounted_commands, Mapping)
+            else config.mounted_commands.copy()
+        )
+        commands_dict[command.command_name] = {
             "path": command.command_path,
             "description": command.description,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "created_by": command.user_id,
         }
 
-        # Update metadata
-        config.updated_at = datetime.now(timezone.utc)
-        config.version += 1
+        # Update metadata dict
+        metadata_dict = dict(config.metadata) if isinstance(config.metadata, Mapping) else config.metadata.copy()
+
+        # Create new config instance with updated fields
+        config = replace(
+            config,
+            mounted_commands=MappingProxyType(commands_dict),
+            updated_at=datetime.now(UTC),
+            version=config.version + 1,
+            metadata=MappingProxyType(metadata_dict),
+        )
 
         # Save
         await self.config_store.save_project_config(config)
@@ -664,10 +688,7 @@ class ConfigurationService:
             changes_applied={"command_name": command.command_name},
         )
 
-    async def unmount_command(
-        self,
-        command: UnmountCommandCommand
-    ) -> ConfigurationCommandResult:
+    async def unmount_command(self, command: UnmountCommandCommand) -> ConfigurationCommandResult:
         """
         Unmount a command from project agent.
 
@@ -683,26 +704,35 @@ class ConfigurationService:
         """
         # Load config
         try:
-            config = await self.config_store.get_project_config_by_name(
-                command.project_name
-            )
+            config = await self.config_store.get_project_config_by_name(command.project_name)
         except ConfigNotFoundError:
-            raise ConfigNotFoundError(
-                f"Project '{command.project_name}' not found"
-            )
+            message = f"Project '{command.project_name}' not found"
+            raise ConfigNotFoundError(message)
 
         # Check if command exists
         if command.command_name not in config.mounted_commands:
-            raise ValidationError(
-                f"Command '{command.command_name}' not mounted"
-            )
+            message = f"Command '{command.command_name}' not mounted"
+            raise ValidationError(message)
 
-        # Unmount command
-        del config.mounted_commands[command.command_name]
+        # Convert MappingProxyType to dict, remove command, and convert back
+        commands_dict = (
+            dict(config.mounted_commands)
+            if isinstance(config.mounted_commands, Mapping)
+            else config.mounted_commands.copy()
+        )
+        del commands_dict[command.command_name]
 
-        # Update metadata
-        config.updated_at = datetime.now(timezone.utc)
-        config.version += 1
+        # Update metadata dict
+        metadata_dict = dict(config.metadata) if isinstance(config.metadata, Mapping) else config.metadata.copy()
+
+        # Create new config instance with updated fields
+        config = replace(
+            config,
+            mounted_commands=MappingProxyType(commands_dict),
+            updated_at=datetime.now(UTC),
+            version=config.version + 1,
+            metadata=MappingProxyType(metadata_dict),
+        )
 
         # Save
         await self.config_store.save_project_config(config)
@@ -726,10 +756,7 @@ class ConfigurationService:
             changes_applied={"command_name": command.command_name},
         )
 
-    async def mount_subagent(
-        self,
-        command: MountSubAgentCommand
-    ) -> ConfigurationCommandResult:
+    async def mount_subagent(self, command: MountSubAgentCommand) -> ConfigurationCommandResult:
         """
         Mount a sub-agent into project agent.
 
@@ -745,32 +772,40 @@ class ConfigurationService:
         """
         # Load config
         try:
-            config = await self.config_store.get_project_config_by_name(
-                command.project_name
-            )
+            config = await self.config_store.get_project_config_by_name(command.project_name)
         except ConfigNotFoundError:
-            raise ConfigNotFoundError(
-                f"Project '{command.project_name}' not found"
-            )
+            message = f"Project '{command.project_name}' not found"
+            raise ConfigNotFoundError(message)
 
         # Validate sub-agent config
-        validation = self.validator.validate_subagent_config(
-            command.subagent_config
-        )
+        validation = self.validator.validate_subagent_config(command.subagent_config)
         if not validation.valid:
             raise ValidationError("; ".join(validation.errors or []))
 
-        # Mount sub-agent
-        config.mounted_subagents[command.subagent_name] = {
+        # Convert MappingProxyType to dict, add sub-agent, and convert back
+        subagents_dict = (
+            dict(config.mounted_subagents)
+            if isinstance(config.mounted_subagents, Mapping)
+            else config.mounted_subagents.copy()
+        )
+        subagents_dict[command.subagent_name] = {
             "config": command.subagent_config,
             "description": command.description,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "created_by": command.user_id,
         }
 
-        # Update metadata
-        config.updated_at = datetime.now(timezone.utc)
-        config.version += 1
+        # Update metadata dict
+        metadata_dict = dict(config.metadata) if isinstance(config.metadata, Mapping) else config.metadata.copy()
+
+        # Create new config instance with updated fields
+        config = replace(
+            config,
+            mounted_subagents=MappingProxyType(subagents_dict),
+            updated_at=datetime.now(UTC),
+            version=config.version + 1,
+            metadata=MappingProxyType(metadata_dict),
+        )
 
         # Save
         await self.config_store.save_project_config(config)
@@ -794,10 +829,7 @@ class ConfigurationService:
             changes_applied={"subagent_name": command.subagent_name},
         )
 
-    async def unmount_subagent(
-        self,
-        command: UnmountSubAgentCommand
-    ) -> ConfigurationCommandResult:
+    async def unmount_subagent(self, command: UnmountSubAgentCommand) -> ConfigurationCommandResult:
         """
         Unmount a sub-agent from project agent.
 
@@ -813,26 +845,35 @@ class ConfigurationService:
         """
         # Load config
         try:
-            config = await self.config_store.get_project_config_by_name(
-                command.project_name
-            )
+            config = await self.config_store.get_project_config_by_name(command.project_name)
         except ConfigNotFoundError:
-            raise ConfigNotFoundError(
-                f"Project '{command.project_name}' not found"
-            )
+            message = f"Project '{command.project_name}' not found"
+            raise ConfigNotFoundError(message)
 
         # Check if sub-agent exists
         if command.subagent_name not in config.mounted_subagents:
-            raise ValidationError(
-                f"Sub-agent '{command.subagent_name}' not mounted"
-            )
+            message = f"Sub-agent '{command.subagent_name}' not mounted"
+            raise ValidationError(message)
 
-        # Unmount sub-agent
-        del config.mounted_subagents[command.subagent_name]
+        # Convert MappingProxyType to dict, remove sub-agent, and convert back
+        subagents_dict = (
+            dict(config.mounted_subagents)
+            if isinstance(config.mounted_subagents, Mapping)
+            else config.mounted_subagents.copy()
+        )
+        del subagents_dict[command.subagent_name]
 
-        # Update metadata
-        config.updated_at = datetime.now(timezone.utc)
-        config.version += 1
+        # Update metadata dict
+        metadata_dict = dict(config.metadata) if isinstance(config.metadata, Mapping) else config.metadata.copy()
+
+        # Create new config instance with updated fields
+        config = replace(
+            config,
+            mounted_subagents=MappingProxyType(subagents_dict),
+            updated_at=datetime.now(UTC),
+            version=config.version + 1,
+            metadata=MappingProxyType(metadata_dict),
+        )
 
         # Save
         await self.config_store.save_project_config(config)
@@ -858,29 +899,36 @@ class ConfigurationService:
 
     # Helper methods
 
-    def _deep_merge(self, target: Dict[str, Any], source: Dict[str, Any]) -> Dict[str, Any]:
+    def _deep_merge(self, target: dict[str, Any], source: dict[str, Any] | Mapping[str, Any]) -> dict[str, Any]:
         """
         Deep merge source into target dict.
 
+        Handles both mutable dicts and immutable Mapping types (MappingProxyType).
+
         Args:
             target: Target dictionary to merge into
-            source: Source dictionary to merge from
+            source: Source dictionary or Mapping to merge from
 
         Returns:
             The merged target dictionary
         """
-        for key, value in source.items():
-            if key in target and isinstance(target[key], dict) and isinstance(value, dict):
-                self._deep_merge(target[key], value)
+        # Convert Mapping to dict if needed for iteration
+        source_dict = dict(source) if isinstance(source, Mapping) and not isinstance(source, dict) else source
+
+        for key, value in source_dict.items():
+            if key in target and isinstance(target[key], dict):
+                # Recursively merge if target value is dict and source value is dict-like
+                if isinstance(value, (dict, Mapping)):
+                    # Convert Mapping to dict for recursive merge
+                    value_dict = dict(value) if isinstance(value, Mapping) and not isinstance(value, dict) else value
+                    self._deep_merge(target[key], value_dict)
+                else:
+                    target[key] = value
             else:
                 target[key] = value
         return target
 
-    def _compute_changes(
-        self,
-        old_config: Dict[str, Any],
-        new_config: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _compute_changes(self, old_config: dict[str, Any], new_config: dict[str, Any]) -> dict[str, Any]:
         """
         Compute changes between old and new config.
 
@@ -891,7 +939,7 @@ class ConfigurationService:
         Returns:
             Dictionary mapping changed keys to old/new values
         """
-        changes: Dict[str, Any] = {}
+        changes: dict[str, Any] = {}
         for key in new_config:
             if key not in old_config or old_config[key] != new_config[key]:
                 changes[key] = {
@@ -904,11 +952,7 @@ class ConfigurationService:
 class ConfigurationValidator:
     """Validates configuration updates."""
 
-    def validate_project_updates(
-        self,
-        current_config: ProjectConfig,
-        updates: Dict[str, Any]
-    ) -> "ValidationResult":
+    def validate_project_updates(self, current_config: ProjectConfig, updates: dict[str, Any]) -> "ValidationResult":
         """
         Validate project configuration updates.
 
@@ -940,16 +984,9 @@ class ConfigurationValidator:
             if not isinstance(updates["testing"], dict):
                 errors.append("testing must be a dictionary")
 
-        return ValidationResult(
-            valid=len(errors) == 0,
-            errors=errors if errors else None
-        )
+        return ValidationResult(valid=len(errors) == 0, errors=errors if errors else None)
 
-    def validate_agent_updates(
-        self,
-        agent_name: str,
-        updates: Dict[str, Any]
-    ) -> "ValidationResult":
+    def validate_agent_updates(self, agent_name: str, updates: dict[str, Any]) -> "ValidationResult":
         """
         Validate agent configuration updates.
 
@@ -977,16 +1014,9 @@ class ConfigurationValidator:
             if not isinstance(updates["mcp_servers"], list):
                 errors.append("mcp_servers must be a list")
 
-        return ValidationResult(
-            valid=len(errors) == 0,
-            errors=errors if errors else None
-        )
+        return ValidationResult(valid=len(errors) == 0, errors=errors if errors else None)
 
-    def validate_pipeline_updates(
-        self,
-        pipeline_name: str,
-        updates: Dict[str, Any]
-    ) -> "ValidationResult":
+    def validate_pipeline_updates(self, pipeline_name: str, updates: dict[str, Any]) -> "ValidationResult":
         """
         Validate pipeline configuration updates.
 
@@ -994,7 +1024,7 @@ class ConfigurationValidator:
         - Stages format and uniqueness
         - No circular dependencies in stage transitions
         """
-        errors: List[str] = []
+        errors: list[str] = []
 
         # Validate stages
         if "stages" in updates:
@@ -1007,7 +1037,7 @@ class ConfigurationValidator:
                     errors.append("Pipeline stage names must be unique")
 
                 # Check for circular dependencies
-                stage_map: Dict[str, Any] = {s.get("name") or "": s for s in updates["stages"] if isinstance(s, dict)}
+                stage_map: dict[str, Any] = {s.get("name") or "": s for s in updates["stages"] if isinstance(s, dict)}
                 for stage in updates["stages"]:
                     if isinstance(stage, dict) and "transitions" in stage:
                         if self._has_circular_dependency(
@@ -1015,26 +1045,21 @@ class ConfigurationValidator:
                             stage.get("transitions", []),
                             stage_map,
                         ):
-                            errors.append(
-                                f"Circular dependency detected in stage '{stage.get('name')}'"
-                            )
+                            errors.append(f"Circular dependency detected in stage '{stage.get('name')}'")
 
         # Validate triggers
         if "triggers" in updates:
             if not isinstance(updates["triggers"], list):
                 errors.append("triggers must be a list")
 
-        return ValidationResult(
-            valid=len(errors) == 0,
-            errors=errors if errors else None
-        )
+        return ValidationResult(valid=len(errors) == 0, errors=errors if errors else None)
 
     def _has_circular_dependency(
         self,
         start_stage: str,
-        transitions: List[str],
-        stage_map: Dict[str, Any],
-        visited: Optional[set] = None
+        transitions: list[str],
+        stage_map: dict[str, Any],
+        visited: set | None = None,
     ) -> bool:
         """
         Check for circular dependencies in pipeline stage transitions.
@@ -1060,18 +1085,12 @@ class ConfigurationValidator:
                 return True
             if next_stage in stage_map:
                 next_transitions = stage_map[next_stage].get("transitions", [])
-                if self._has_circular_dependency(
-                    start_stage, next_transitions, stage_map, visited.copy()
-                ):
+                if self._has_circular_dependency(start_stage, next_transitions, stage_map, visited.copy()):
                     return True
 
         return False
 
-    def validate_environment_variable(
-        self,
-        name: str,
-        value: str
-    ) -> "ValidationResult":
+    def validate_environment_variable(self, name: str, value: str) -> "ValidationResult":
         """
         Validate environment variable.
 
@@ -1080,26 +1099,51 @@ class ConfigurationValidator:
         - Not a reserved system variable
         - Value is string
         """
-        errors: List[str] = []
+        errors: list[str] = []
 
         # Check name format
-        if not re.match(r'^[A-Z][A-Z0-9_]*$', name):
-            errors.append(
-                f"Variable name must be uppercase with underscores: {name}"
-            )
+        if not re.match(r"^[A-Z][A-Z0-9_]*$", name):
+            errors.append(f"Variable name must be uppercase with underscores: {name}")
 
         # Check reserved names (expanded list of common system variables)
         reserved = [
             # System paths
-            'PATH', 'HOME', 'PWD', 'OLDPWD', 'TMPDIR', 'TEMP', 'TMP',
+            "PATH",
+            "HOME",
+            "PWD",
+            "OLDPWD",
+            "TMPDIR",
+            "TEMP",
+            "TMP",
             # User/session
-            'USER', 'LOGNAME', 'USERNAME', 'SHELL', 'TERM', 'EDITOR',
+            "USER",
+            "LOGNAME",
+            "USERNAME",
+            "SHELL",
+            "TERM",
+            "EDITOR",
             # System info
-            'HOSTNAME', 'HOSTTYPE', 'OSTYPE', 'MACHTYPE', 'LANG', 'LC_ALL',
+            "HOSTNAME",
+            "HOSTTYPE",
+            "OSTYPE",
+            "MACHTYPE",
+            "LANG",
+            "LC_ALL",
             # Process info
-            'PID', 'PPID', 'UID', 'GID', 'EUID', 'EGID',
+            "PID",
+            "PPID",
+            "UID",
+            "GID",
+            "EUID",
+            "EGID",
             # Special
-            'IFS', 'PS1', 'PS2', 'PS3', 'PS4', 'BASH_VERSION', 'SHLVL',
+            "IFS",
+            "PS1",
+            "PS2",
+            "PS3",
+            "PS4",
+            "BASH_VERSION",
+            "SHLVL",
         ]
         if name in reserved:
             errors.append(f"Cannot override reserved system variable: {name}")
@@ -1108,15 +1152,9 @@ class ConfigurationValidator:
         if not isinstance(value, str):
             errors.append("Variable value must be string")
 
-        return ValidationResult(
-            valid=len(errors) == 0,
-            errors=errors if errors else None
-        )
+        return ValidationResult(valid=len(errors) == 0, errors=errors if errors else None)
 
-    def validate_subagent_config(
-        self,
-        config: Dict[str, Any]
-    ) -> "ValidationResult":
+    def validate_subagent_config(self, config: dict[str, Any]) -> "ValidationResult":
         """Validate sub-agent configuration."""
         errors = []
 
@@ -1126,10 +1164,7 @@ class ConfigurationValidator:
             if field not in config:
                 errors.append(f"Sub-agent config missing required field: {field}")
 
-        return ValidationResult(
-            valid=len(errors) == 0,
-            errors=errors if errors else None
-        )
+        return ValidationResult(valid=len(errors) == 0, errors=errors if errors else None)
 
     def _is_valid_model(self, model: str) -> bool:
         """Check if model is valid."""
@@ -1141,7 +1176,7 @@ class ConfigurationValidator:
 class ValidationResult:
     """Result of configuration validation."""
 
-    def __init__(self, valid: bool, errors: Optional[List[str]] = None):
+    def __init__(self, valid: bool, errors: list[str] | None = None):
         """
         Initialize validation result.
 

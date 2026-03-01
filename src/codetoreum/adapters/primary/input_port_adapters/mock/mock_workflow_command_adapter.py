@@ -4,18 +4,17 @@ Mock Workflow Command Adapter
 In-memory implementation of IWorkflowCommandPort for development and testing.
 """
 
-from datetime import datetime, timezone
-from typing import Dict
+from datetime import UTC, datetime
 from threading import RLock
 from uuid import uuid4
 
 from codetoreum.ports.input.workflow_command import (
+    CancelWorkflowCommand,
     IWorkflowCommandPort,
-    StartWorkflowCommand,
     PauseWorkflowCommand,
     ResumeWorkflowCommand,
-    CancelWorkflowCommand,
     RetryStageCommand,
+    StartWorkflowCommand,
     WorkflowCommandResult,
 )
 
@@ -26,7 +25,7 @@ class MockWorkflowCommandAdapter(IWorkflowCommandPort):
     """
 
     def __init__(self, workflow_orchestrator=None):
-        self._workflows: Dict[str, Dict] = {}
+        self._workflows: dict[str, dict] = {}
         self._lock = RLock()
         self._orchestrator = workflow_orchestrator
 
@@ -39,7 +38,7 @@ class MockWorkflowCommandAdapter(IWorkflowCommandPort):
                 "work_item_id": command.work_item_id,
                 "workflow_id": command.workflow_id,
                 "state": "STARTED",
-                "started_at": datetime.now(timezone.utc),
+                "started_at": datetime.now(UTC),
             }
 
             return WorkflowCommandResult(

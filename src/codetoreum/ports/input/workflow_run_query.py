@@ -6,15 +6,17 @@ including retrieving workflow execution runs, their status, and events.
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from types import MappingProxyType
-from typing import List, Optional, Mapping, Tuple
+from typing import Any
 
 
 class WorkflowRunStatus(Enum):
     """Status enumeration for workflow runs"""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -24,6 +26,7 @@ class WorkflowRunStatus(Enum):
 
 class WorkflowRunSortField(Enum):
     """Fields available for sorting workflow run lists"""
+
     STARTED_AT = "startedAt"
     COMPLETED_AT = "completedAt"
     DURATION = "duration"
@@ -31,6 +34,7 @@ class WorkflowRunSortField(Enum):
 
 class SortOrder(Enum):
     """Sort order"""
+
     ASC = "asc"
     DESC = "desc"
 
@@ -38,28 +42,34 @@ class SortOrder(Enum):
 @dataclass(frozen=True)
 class WorkflowRunFilters:
     """Filters for listing workflow runs"""
-    status: Optional[Tuple[WorkflowRunStatus, ...]] = None  # Filter by status (comma-separated)
-    project_id: Optional[str] = None  # Filter by project
-    work_item_id: Optional[str] = None  # Filter by work item
-    workflow_id: Optional[str] = None  # Filter by workflow template
+
+    status: tuple[WorkflowRunStatus, ...] | None = None  # Filter by status (comma-separated)
+    project_id: str | None = None  # Filter by project
+    work_item_id: str | None = None  # Filter by work item
+    workflow_id: str | None = None  # Filter by workflow template
 
     def __post_init__(self) -> None:
         """Validate filter fields."""
         # Validate non-empty string IDs
         if self.project_id is not None and not self.project_id.strip():
-            raise ValueError("project_id must be non-empty if provided")
+            msg = "project_id must be non-empty if provided"
+            raise ValueError(msg)
         if self.work_item_id is not None and not self.work_item_id.strip():
-            raise ValueError("work_item_id must be non-empty if provided")
+            msg = "work_item_id must be non-empty if provided"
+            raise ValueError(msg)
         if self.workflow_id is not None and not self.workflow_id.strip():
-            raise ValueError("workflow_id must be non-empty if provided")
+            msg = "workflow_id must be non-empty if provided"
+            raise ValueError(msg)
         # Validate non-empty status tuple
         if self.status is not None and len(self.status) == 0:
-            raise ValueError("status must be non-empty if provided")
+            msg = "status must be non-empty if provided"
+            raise ValueError(msg)
 
 
 @dataclass
 class WorkflowRunPaginationParams:
     """Pagination parameters for workflow run queries"""
+
     offset: int = 0
     limit: int = 20
     sort_by: WorkflowRunSortField = WorkflowRunSortField.STARTED_AT
@@ -68,92 +78,99 @@ class WorkflowRunPaginationParams:
     def __post_init__(self) -> None:
         """Validate pagination parameters."""
         if self.offset < 0:
-            raise ValueError(f"offset must be >= 0, got {self.offset}")
+            msg = f"offset must be >= 0, got {self.offset}"
+            raise ValueError(msg)
         if self.limit <= 0:
-            raise ValueError(f"limit must be > 0, got {self.limit}")
+            msg = f"limit must be > 0, got {self.limit}"
+            raise ValueError(msg)
         if self.limit > 1000:
-            raise ValueError(f"limit must be <= 1000 to prevent excessive memory usage, got {self.limit}")
+            msg = f"limit must be <= 1000 to prevent excessive memory usage, got {self.limit}"
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True)
 class WorkflowRunStageInfo:
     """Information about a workflow run stage"""
+
     name: str
     agent_name: str
     status: str  # pending, running, completed, failed
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
-    execution_id: Optional[str]
-    output: Optional[str] = None
-    error_message: Optional[str] = None
-    metadata: Optional[Mapping] = None
+    started_at: datetime | None
+    completed_at: datetime | None
+    execution_id: str | None
+    output: str | None = None
+    error_message: str | None = None
+    metadata: Mapping[str, Any] | None = None
 
     def __post_init__(self) -> None:
         """Initialize metadata and validate fields."""
         # Validate name is non-empty
         if not self.name or not self.name.strip():
-            raise ValueError("name must be a non-empty string")
+            msg = "name must be a non-empty string"
+            raise ValueError(msg)
 
         # Validate temporal consistency
         if self.started_at is not None and self.completed_at is not None:
             if self.completed_at < self.started_at:
-                raise ValueError(
-                    f"completedAt ({self.completed_at}) must be >= startedAt ({self.started_at})"
-                )
+                msg = f"completedAt ({self.completed_at}) must be >= startedAt ({self.started_at})"
+                raise ValueError(msg)
 
         # Initialize metadata to empty immutable mapping if None
         if self.metadata is None:
             # Use object.__setattr__ since this is a frozen dataclass
             # Use MappingProxyType for true immutability
-            object.__setattr__(self, 'metadata', MappingProxyType({}))
+            object.__setattr__(self, "metadata", MappingProxyType({}))
 
 
 @dataclass
 class WorkflowRunInfo:
     """Complete workflow run information"""
+
     id: str
     work_item_id: str
     workflow_id: str
     project_id: str
     status: WorkflowRunStatus
     current_stage_index: int
-    current_stage_name: Optional[str]
-    stages: List[WorkflowRunStageInfo]
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
-    duration: Optional[int]  # Duration in seconds
-    issue_title: Optional[str]
-    issue_number: Optional[int]
-    project: Optional[str]
-    triggered_by: Optional[str]
-    priority: Optional[str]
-    metadata: dict
+    current_stage_name: str | None
+    stages: list[WorkflowRunStageInfo]
+    started_at: datetime | None
+    completed_at: datetime | None
+    duration: float | None  # Duration in seconds
+    issue_title: str | None
+    issue_number: int | None
+    project: str | None
+    triggered_by: str | None
+    priority: str | None
+    metadata: dict[str, Any]
 
 
 @dataclass
 class WorkflowRunSummary:
     """Summary information for workflow run list"""
+
     id: str
     work_item_id: str
     workflow_id: str
     project_id: str
     status: WorkflowRunStatus
     current_stage_index: int
-    current_stage_name: Optional[str]
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
-    duration: Optional[int]
-    issue_title: Optional[str]
-    issue_number: Optional[int]
-    project: Optional[str]
-    triggered_by: Optional[str]
-    priority: Optional[str]
+    current_stage_name: str | None
+    started_at: datetime | None
+    completed_at: datetime | None
+    duration: float | None
+    issue_title: str | None
+    issue_number: int | None
+    project: str | None
+    triggered_by: str | None
+    priority: str | None
 
 
 @dataclass
 class WorkflowRunListResult:
     """Result of listing workflow runs"""
-    runs: List[WorkflowRunSummary]
+
+    runs: list[WorkflowRunSummary]
     total_count: int
     offset: int
     limit: int
@@ -163,7 +180,8 @@ class WorkflowRunListResult:
 @dataclass
 class WorkflowRunEventsResult:
     """Result of querying workflow run events"""
-    events: List[dict]  # List of event dictionaries
+
+    events: list[dict[str, Any]]  # List of event dictionaries
     total_count: int
     offset: int
     limit: int
@@ -172,20 +190,24 @@ class WorkflowRunEventsResult:
     def __post_init__(self) -> None:
         """Validate pagination parameters."""
         if self.offset < 0:
-            raise ValueError(f"offset must be non-negative, got {self.offset}")
+            msg = f"offset must be non-negative, got {self.offset}"
+            raise ValueError(msg)
         if self.limit < 0:
-            raise ValueError(f"limit must be non-negative, got {self.limit}")
+            msg = f"limit must be non-negative, got {self.limit}"
+            raise ValueError(msg)
         if self.total_count < 0:
-            raise ValueError(f"total_count must be non-negative, got {self.total_count}")
+            msg = f"total_count must be non-negative, got {self.total_count}"
+            raise ValueError(msg)
 
 
 @dataclass
 class WorkflowRunAuditResult:
     """Result of querying workflow run audit information"""
+
     workflow_run: WorkflowRunSummary
-    events: List[dict]  # List of event dictionaries
-    stages: List[dict]  # List of stage information dictionaries
-    validation: Optional[dict]  # Validation result dictionary (None if not requested)
+    events: list[dict[str, Any]]  # List of event dictionaries
+    stages: list[dict[str, Any]]  # List of stage information dictionaries
+    validation: dict[str, Any] | None  # Validation result dictionary (None if not requested)
     total_count: int
     offset: int
     limit: int
@@ -194,11 +216,14 @@ class WorkflowRunAuditResult:
     def __post_init__(self) -> None:
         """Validate pagination parameters."""
         if self.offset < 0:
-            raise ValueError(f"offset must be non-negative, got {self.offset}")
+            msg = f"offset must be non-negative, got {self.offset}"
+            raise ValueError(msg)
         if self.limit < 0:
-            raise ValueError(f"limit must be non-negative, got {self.limit}")
+            msg = f"limit must be non-negative, got {self.limit}"
+            raise ValueError(msg)
         if self.total_count < 0:
-            raise ValueError(f"total_count must be non-negative, got {self.total_count}")
+            msg = f"total_count must be non-negative, got {self.total_count}"
+            raise ValueError(msg)
 
 
 class IWorkflowRunQueryPort(ABC):
@@ -216,10 +241,7 @@ class IWorkflowRunQueryPort(ABC):
     """
 
     @abstractmethod
-    async def get_workflow_run(
-        self,
-        workflow_run_id: str
-    ) -> WorkflowRunInfo:
+    async def get_workflow_run(self, workflow_run_id: str) -> WorkflowRunInfo:
         """
         Retrieves a workflow run by ID.
 
@@ -232,13 +254,12 @@ class IWorkflowRunQueryPort(ABC):
         Raises:
             WorkflowRunNotFoundError: If workflow run doesn't exist
         """
-        pass
 
     @abstractmethod
     async def list_workflow_runs(
         self,
-        filters: Optional[WorkflowRunFilters] = None,
-        pagination: Optional[WorkflowRunPaginationParams] = None
+        filters: WorkflowRunFilters | None = None,
+        pagination: WorkflowRunPaginationParams | None = None,
     ) -> WorkflowRunListResult:
         """
         Lists workflow runs matching the specified criteria.
@@ -253,7 +274,6 @@ class IWorkflowRunQueryPort(ABC):
         Raises:
             ValidationError: If parameters are invalid
         """
-        pass
 
     @abstractmethod
     async def get_workflow_run_events(
@@ -261,8 +281,8 @@ class IWorkflowRunQueryPort(ABC):
         workflow_run_id: str,
         offset: int = 0,
         limit: int = 50,
-        event_types: Optional[List[str]] = None,
-        since: Optional[datetime] = None
+        event_types: list[str] | None = None,
+        since: datetime | None = None,
     ) -> WorkflowRunEventsResult:
         """
         Retrieves events for a specific workflow run.
@@ -280,7 +300,6 @@ class IWorkflowRunQueryPort(ABC):
         Raises:
             WorkflowRunNotFoundError: If workflow run doesn't exist
         """
-        pass
 
     @abstractmethod
     async def get_workflow_run_audit(
@@ -319,4 +338,3 @@ class IWorkflowRunQueryPort(ABC):
         Raises:
             WorkflowRunNotFoundError: If workflow run doesn't exist
         """
-        pass

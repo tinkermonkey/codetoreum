@@ -4,8 +4,6 @@ Execution Logs Endpoints
 Handles retrieving container logs for executions.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, HTTPException, Query
 from fastapi import status as http_status
 
@@ -33,8 +31,8 @@ def register_logs_endpoints(
     )
     async def get_execution_logs(
         execution_id: str,
-        stage: Optional[str] = Query(None, description="Filter logs by stage name"),
-        tail: Optional[int] = Query(None, ge=1, le=10000, description="Return last N lines (max 10000)"),
+        stage: str | None = Query(None, description="Filter logs by stage name"),
+        tail: int | None = Query(None, ge=1, le=10000, description="Return last N lines (max 10000)"),
     ) -> ExecutionLogsResponse:
         """
         Get container logs for an execution.
@@ -82,9 +80,9 @@ def register_logs_endpoints(
             if "not found" in str(e).lower():
                 raise HTTPException(
                     status_code=http_status.HTTP_404_NOT_FOUND,
-                    detail=f"Execution not found: {str(e)}",
+                    detail=f"Execution not found: {e!s}",
                 )
             raise HTTPException(
                 status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to get execution logs: {str(e)}",
+                detail=f"Failed to get execution logs: {e!s}",
             )

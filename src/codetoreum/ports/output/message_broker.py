@@ -1,10 +1,10 @@
 """IMessageBroker output port interface."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, List
+from collections.abc import Callable
+from typing import Any
 
 from codetoreum.domain.events import DomainEvent
-
 
 # ============================================================================
 # Port Interface
@@ -27,7 +27,6 @@ class IMessageBroker(ABC):
         Raises:
             MessageBrokerError: If initialization fails
         """
-        pass
 
     @abstractmethod
     async def publish_event(self, event: DomainEvent) -> None:
@@ -40,12 +39,9 @@ class IMessageBroker(ABC):
         Raises:
             MessageBrokerError: If publish fails
         """
-        pass
 
     @abstractmethod
-    async def publish_control_message(
-        self, message_type: str, data: Dict[str, Any]
-    ) -> None:
+    async def publish_control_message(self, message_type: str, data: dict[str, Any]) -> None:
         """
         Publish a control message to all subscribers.
 
@@ -59,7 +55,6 @@ class IMessageBroker(ABC):
         Raises:
             MessageBrokerError: If publish fails
         """
-        pass
 
     @abstractmethod
     async def subscribe(self, channel: str, callback: Callable) -> None:
@@ -74,7 +69,6 @@ class IMessageBroker(ABC):
         Raises:
             MessageBrokerError: If subscription fails
         """
-        pass
 
     @abstractmethod
     async def unsubscribe(self, channel: str, callback: Callable) -> None:
@@ -88,24 +82,20 @@ class IMessageBroker(ABC):
         Raises:
             MessageBrokerError: If unsubscription fails
         """
-        pass
 
     @abstractmethod
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """
         Get message broker statistics.
 
         Returns:
             Dictionary with statistics (messages published/received, errors, etc.)
         """
-        pass
 
     @abstractmethod
     def reset_stats(self) -> None:
         """Reset message broker statistics."""
-        pass
 
     @abstractmethod
     async def close(self) -> None:
         """Close message broker connection and cleanup resources."""
-        pass

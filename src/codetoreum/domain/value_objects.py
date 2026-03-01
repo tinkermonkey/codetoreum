@@ -1,15 +1,16 @@
 """Value objects for the domain layer."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, TypeVar, Generic
+from datetime import UTC, datetime
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, Generic, Self, TypeVar
 from uuid import uuid4
 
 if TYPE_CHECKING:
     from codetoreum.domain.agent import AgentCapability
 
 from codetoreum.domain.exceptions import DomainError
-
 
 # ============================================================================
 # Project Configuration Value Object
@@ -52,11 +53,14 @@ class ProjectConfig:
     def __post_init__(self) -> None:
         """Validate project configuration."""
         if not self.repo_url or not self.repo_url.strip():
-            raise DomainError("ProjectConfig.repo_url cannot be empty")
+            msg = "ProjectConfig.repo_url cannot be empty"
+            raise DomainError(msg)
         if not self.branch or not self.branch.strip():
-            raise DomainError("ProjectConfig.branch cannot be empty")
+            msg = "ProjectConfig.branch cannot be empty"
+            raise DomainError(msg)
         if not self.org or not self.org.strip():
-            raise DomainError("ProjectConfig.org cannot be empty")
+            msg = "ProjectConfig.org cannot be empty"
+            raise DomainError(msg)
 
 
 # ============================================================================
@@ -77,15 +81,16 @@ class TypeSafeId(Generic[T]):
         """Validate identifier."""
         if not self.value:
             object.__setattr__(self, "_type_name", self.__class__.__name__)
-            raise DomainError(f"{self._type_name} cannot be empty")
+            msg = f"{self._type_name} cannot be empty"
+            raise DomainError(msg)
 
     @classmethod
-    def generate(cls: type[T]) -> T:
+    def generate(cls) -> Self:
         """Generate new unique identifier."""
         return cls(value=str(uuid4()))
 
     @classmethod
-    def from_string(cls: type[T], value: str) -> T:
+    def from_string(cls, value: str) -> Self:
         """Create from string value."""
         return cls(value=value)
 
@@ -98,28 +103,20 @@ class TypeSafeId(Generic[T]):
 class WorkItemId(TypeSafeId["WorkItemId"]):
     """Type-safe identifier for work items."""
 
-    pass
-
 
 @dataclass(frozen=True)
 class WorkflowId(TypeSafeId["WorkflowId"]):
     """Type-safe identifier for workflows."""
-
-    pass
 
 
 @dataclass(frozen=True)
 class AgentId(TypeSafeId["AgentId"]):
     """Type-safe identifier for agents."""
 
-    pass
-
 
 @dataclass(frozen=True)
 class ExecutionId(TypeSafeId["ExecutionId"]):
     """Type-safe identifier for agent executions."""
-
-    pass
 
 
 # ============================================================================
@@ -138,7 +135,8 @@ class Requirement:
     def __post_init__(self) -> None:
         """Validate proficiency range."""
         if not 0.0 <= self.min_proficiency <= 1.0:
-            raise DomainError("Min proficiency must be between 0.0 and 1.0")
+            msg = "Min proficiency must be between 0.0 and 1.0"
+            raise DomainError(msg)
 
     def is_satisfied_by(self, capability: "AgentCapability") -> bool:
         """
@@ -150,12 +148,8 @@ class Requirement:
         Returns:
             True if capability meets requirement
         """
-        from codetoreum.domain.agent import AgentCapability
 
-        return (
-            capability.skill == self.skill
-            and capability.proficiency >= self.min_proficiency
-        )
+        return capability.skill == self.skill and capability.proficiency >= self.min_proficiency
 
 
 # ============================================================================
@@ -168,6 +162,11 @@ class ExecutionResult:
     """
     Execution Result value object.
 
+    **IMMUTABILITY**: Frozen dataclass with immutable collection types (tuples instead of lists).
+    All collections are immutable: file lists use tuples and metadata dict is wrapped in
+    MappingProxyType to prevent in-place mutations. This prevents breaking the immutability
+    contract while still allowing field reassignment to be blocked by dataclass frozen=True.
+
     Immutable representation of agent execution outcome.
     """
 
@@ -177,35 +176,40 @@ class ExecutionResult:
 
     # Output
     output: str
-    error_message: Optional[str]
+    error_message: str | None
 
-    # Files modified (for code changes)
-    modified_files: List[str]
-    added_files: List[str]
-    deleted_files: List[str]
-
-    # Metrics
+    # Metrics (required fields before optional)
     input_tokens: int
     output_tokens: int
     duration_seconds: float
 
-    # Session continuity
-    session_id: Optional[str]
-
-    # Metadata
-    metadata: Dict[str, Any]
-
     # Timestamp
     timestamp: datetime
 
+    # Files modified (for code changes) - immutable tuples instead of mutable lists
+    modified_files: tuple[str, ...] = ()
+    added_files: tuple[str, ...] = ()
+    deleted_files: tuple[str, ...] = ()
+
+    # Session continuity
+    session_id: str | None = None
+
+    # Metadata - wrapped in MappingProxyType for deep immutability
+    metadata: dict[str, Any] = field(default_factory=dict)
+
     def __post_init__(self) -> None:
-        """Validate execution result."""
+        """Validate execution result and wrap mutable collections."""
         if self.input_tokens < 0:
-            raise DomainError("Input tokens cannot be negative")
+            msg = "Input tokens cannot be negative"
+            raise DomainError(msg)
         if self.output_tokens < 0:
-            raise DomainError("Output tokens cannot be negative")
+            msg = "Output tokens cannot be negative"
+            raise DomainError(msg)
         if self.duration_seconds < 0:
-            raise DomainError("Duration cannot be negative")
+            msg = "Duration cannot be negative"
+            raise DomainError(msg)
+        # Wrap metadata dict in MappingProxyType for immutability
+        object.__setattr__(self, "metadata", MappingProxyType(self.metadata))
 
     @classmethod
     def success_result(
@@ -214,11 +218,11 @@ class ExecutionResult:
         input_tokens: int,
         output_tokens: int,
         duration_seconds: float,
-        modified_files: Optional[List[str]] = None,
-        added_files: Optional[List[str]] = None,
-        deleted_files: Optional[List[str]] = None,
-        session_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        modified_files: list[str] | None = None,
+        added_files: list[str] | None = None,
+        deleted_files: list[str] | None = None,
+        session_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> "ExecutionResult":
         """Create successful execution result."""
         return cls(
@@ -226,15 +230,15 @@ class ExecutionResult:
             exit_code=0,
             output=output,
             error_message=None,
-            modified_files=modified_files or [],
-            added_files=added_files or [],
-            deleted_files=deleted_files or [],
+            modified_files=tuple(modified_files or []),
+            added_files=tuple(added_files or []),
+            deleted_files=tuple(deleted_files or []),
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             duration_seconds=duration_seconds,
             session_id=session_id,
             metadata=metadata or {},
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
     @classmethod
@@ -246,7 +250,7 @@ class ExecutionResult:
         duration_seconds: float = 0.0,
         input_tokens: int = 0,
         output_tokens: int = 0,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> "ExecutionResult":
         """Create failed execution result."""
         return cls(
@@ -254,15 +258,15 @@ class ExecutionResult:
             exit_code=exit_code,
             output=output,
             error_message=error_message,
-            modified_files=[],
-            added_files=[],
-            deleted_files=[],
+            modified_files=(),
+            added_files=(),
+            deleted_files=(),
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             duration_seconds=duration_seconds,
             session_id=None,
             metadata=metadata or {},
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
     def get_total_tokens(self) -> int:
@@ -273,28 +277,26 @@ class ExecutionResult:
         """Check if execution made file changes."""
         return bool(self.modified_files or self.added_files or self.deleted_files)
 
-    def get_all_affected_files(self) -> List[str]:
+    def get_all_affected_files(self) -> list[str]:
         """Get all files affected by execution."""
-        return list(
-            set(self.modified_files + self.added_files + self.deleted_files)
-        )
+        return list(set(self.modified_files + self.added_files + self.deleted_files))
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "success": self.success,
             "exit_code": self.exit_code,
             "output": self.output,
             "error_message": self.error_message,
-            "modified_files": self.modified_files,
-            "added_files": self.added_files,
-            "deleted_files": self.deleted_files,
+            "modified_files": list(self.modified_files),
+            "added_files": list(self.added_files),
+            "deleted_files": list(self.deleted_files),
             "input_tokens": self.input_tokens,
             "output_tokens": self.output_tokens,
             "total_tokens": self.get_total_tokens(),
             "duration_seconds": self.duration_seconds,
             "session_id": self.session_id,
-            "metadata": self.metadata,
+            "metadata": dict(self.metadata),
             "timestamp": self.timestamp.isoformat(),
         }
 
@@ -306,45 +308,116 @@ class ExecutionResult:
 
 @dataclass(frozen=True)
 class ContainerConfig:
-    """Configuration for container creation."""
+    """Configuration for container creation.
+
+    **IMMUTABILITY**: Frozen dataclass with immutable collection types (tuples instead of lists).
+    All collections are immutable: command and entrypoint use tuples, and environment and
+    volumes dicts are wrapped in MappingProxyType to prevent in-place mutations.
+    """
 
     image: str  # Image name:tag
-    name: Optional[str] = None  # Container name
-    command: Optional[List[str]] = None  # Command to run
-    entrypoint: Optional[List[str]] = None
+    name: str | None = None  # Container name
+    command: tuple[str, ...] | None = None  # Command to run - immutable tuple
+    entrypoint: tuple[str, ...] | None = None  # Immutable tuple
     working_dir: str = "/workspace"
     user: str = "1000:1000"  # UID:GID
-    environment: Optional[Dict[str, str]] = None
-    volumes: Optional[Dict[str, Dict[str, str]]] = None  # {host: {bind: path, mode}}
-    network: Optional[str] = None
+    environment: Mapping[str, str] | None = None  # Wrapped in MappingProxyType in __post_init__
+    volumes: Mapping[str, Mapping[str, str]] | None = None  # {host: {bind: path, mode}} - wrapped in __post_init__
+    network: str | None = None
     auto_remove: bool = False  # --rm flag
     detached: bool = False  # -d flag
     stdin_open: bool = False  # -i flag
     tty: bool = False  # -t flag
 
     def __post_init__(self) -> None:
-        """Validate container configuration."""
+        """Validate container configuration and wrap mutable collections."""
         if not self.image:
-            raise DomainError("Container image cannot be empty")
+            msg = "Container image cannot be empty"
+            raise DomainError(msg)
+        # Convert lists to tuples for immutability
+        if self.command is not None and isinstance(self.command, list):
+            object.__setattr__(self, "command", tuple(self.command))
+        if self.entrypoint is not None and isinstance(self.entrypoint, list):
+            object.__setattr__(self, "entrypoint", tuple(self.entrypoint))
+        # Wrap environment dict in MappingProxyType for immutability
+        if self.environment is not None:
+            object.__setattr__(self, "environment", MappingProxyType(self.environment))
+        # Wrap volumes dict and nested dicts in MappingProxyType for deep immutability
         if self.volumes:
             for host_path, config in self.volumes.items():
                 if "bind" not in config:
-                    raise DomainError(f"Volume config for {host_path} must have 'bind'")
+                    msg = f"Volume config for {host_path} must have 'bind'"
+                    raise DomainError(msg)
                 mode = config.get("mode", "rw")
                 if mode not in ["rw", "ro"]:
-                    raise DomainError(f"Volume mode must be 'rw' or 'ro', got {mode}")
+                    msg = f"Volume mode must be 'rw' or 'ro', got {mode}"
+                    raise DomainError(msg)
+            # Wrap nested volume configs in MappingProxyType, then wrap the outer dict
+            wrapped_volumes = {host: MappingProxyType(config) for host, config in self.volumes.items()}
+            object.__setattr__(self, "volumes", MappingProxyType(wrapped_volumes))
 
-    def to_dict(self) -> Dict[str, Any]:
+    def get_command_as_list(self) -> list[str] | None:
+        """Get command as mutable list for adapter compatibility.
+
+        Converts immutable tuple to mutable list for passing to port interfaces
+        that expect mutable types, while maintaining domain layer immutability.
+
+        Returns:
+            list[str] | None: Command as list, or None if not set
+        """
+        return list(self.command) if self.command else None
+
+    def get_environment_as_dict(self) -> dict[str, str] | None:
+        """Get environment as mutable dict for adapter compatibility.
+
+        Converts immutable Mapping to mutable dict for passing to port interfaces
+        that expect mutable types, while maintaining domain layer immutability.
+
+        Returns:
+            dict[str, str] | None: Environment as dict, or None if not set
+        """
+        return dict(self.environment) if self.environment else None
+
+    def get_volumes_as_dict(self) -> dict[str, str] | None:
+        """Get volumes as mutable dict for adapter compatibility.
+
+        Converts immutable nested Mapping to mutable dict in adapter format for passing to port
+        interfaces that expect mutable types, while maintaining domain layer immutability.
+
+        Format: {host_path: "container_path:mode"} (e.g., {"/host/path": "/container/path:ro"})
+
+        Returns:
+            dict[str, str] | None: Volumes as dict in adapter format, or None if not set
+        """
+        if not self.volumes:
+            return None
+        result = {}
+        for host, config in self.volumes.items():
+            container_path = config["bind"]
+            mode = config.get("mode", "rw")
+            result[host] = f"{container_path}:{mode}"
+        return result
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
+        # Convert tuples to lists for serialization
+        command = list(self.command) if self.command else None
+        entrypoint = list(self.entrypoint) if self.entrypoint else None
+        # Convert MappingProxyType dicts to regular dicts for serialization
+        environment = dict(self.environment) if self.environment else {}
+        volumes = {}
+        if self.volumes:
+            for host, config in self.volumes.items():
+                volumes[host] = dict(config)
         return {
             "image": self.image,
             "name": self.name,
-            "command": self.command,
-            "entrypoint": self.entrypoint,
+            "command": command,
+            "entrypoint": entrypoint,
             "working_dir": self.working_dir,
             "user": self.user,
-            "environment": self.environment or {},
-            "volumes": self.volumes or {},
+            "environment": environment,
+            "volumes": volumes,
             "network": self.network,
             "auto_remove": self.auto_remove,
             "detached": self.detached,
@@ -360,7 +433,12 @@ class ContainerConfig:
 
 @dataclass(frozen=True)
 class ExecutionContext:
-    """Complete context for agent execution."""
+    """Complete context for agent execution.
+
+    **IMMUTABILITY**: Frozen dataclass with immutable collection types (tuples instead of lists).
+    All collections are immutable: tech_stack and mcp_servers use tuples, and metadata dict is
+    wrapped in MappingProxyType to prevent in-place mutations.
+    """
 
     # Work context
     work_item_id: str
@@ -374,40 +452,46 @@ class ExecutionContext:
 
     # Workspace context
     workspace_type: str
-    branch_name: Optional[str]
-    discussion_id: Optional[str]
+    branch_name: str | None
+    discussion_id: str | None
 
     # Project context
     project_id: str
     repository_url: str
-    tech_stack: List[str]
+    tech_stack: tuple[str, ...] = ()
 
     # Permissions
-    filesystem_write_allowed: bool
-    can_make_commits: bool
-    requires_docker: bool
+    filesystem_write_allowed: bool = False
+    can_make_commits: bool = False
+    requires_docker: bool = False
 
-    # MCP servers
-    mcp_servers: List[str]
+    # MCP servers - immutable tuple instead of mutable list
+    mcp_servers: tuple[str, ...] = ()
 
     # Session continuity
-    previous_session_id: Optional[str]
+    previous_session_id: str | None = None
 
     # Metadata
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        """Validate execution context."""
+        """Validate execution context and wrap mutable collections."""
         if self.timeout_seconds <= 0:
-            raise DomainError("Timeout must be positive")
+            msg = "Timeout must be positive"
+            raise DomainError(msg)
         if not self.work_item_id:
-            raise DomainError("Work item ID cannot be empty")
+            msg = "Work item ID cannot be empty"
+            raise DomainError(msg)
         if not self.workflow_id:
-            raise DomainError("Workflow ID cannot be empty")
+            msg = "Workflow ID cannot be empty"
+            raise DomainError(msg)
         if not self.agent_id:
-            raise DomainError("Agent ID cannot be empty")
+            msg = "Agent ID cannot be empty"
+            raise DomainError(msg)
+        # Wrap metadata dict in MappingProxyType for immutability
+        object.__setattr__(self, "metadata", MappingProxyType(self.metadata))
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         return {
             "work_item_id": self.work_item_id,
@@ -421,13 +505,13 @@ class ExecutionContext:
             "discussion_id": self.discussion_id,
             "project_id": self.project_id,
             "repository_url": self.repository_url,
-            "tech_stack": self.tech_stack,
+            "tech_stack": list(self.tech_stack),
             "filesystem_write_allowed": self.filesystem_write_allowed,
             "can_make_commits": self.can_make_commits,
             "requires_docker": self.requires_docker,
-            "mcp_servers": self.mcp_servers,
+            "mcp_servers": list(self.mcp_servers),
             "previous_session_id": self.previous_session_id,
-            "metadata": self.metadata,
+            "metadata": dict(self.metadata),
         }
 
 
@@ -446,7 +530,8 @@ class TimeRange:
     def __post_init__(self) -> None:
         """Validate time range."""
         if self.end < self.start:
-            raise DomainError("End time must be after start time")
+            msg = "End time must be after start time"
+            raise DomainError(msg)
 
     def duration_seconds(self) -> float:
         """Get duration in seconds."""
@@ -476,7 +561,8 @@ class TokenUsage:
     def __post_init__(self) -> None:
         """Validate token counts."""
         if self.input_tokens < 0 or self.output_tokens < 0:
-            raise DomainError("Token counts cannot be negative")
+            msg = "Token counts cannot be negative"
+            raise DomainError(msg)
 
     @property
     def total_tokens(self) -> int:
@@ -490,7 +576,7 @@ class TokenUsage:
             output_tokens=self.output_tokens + other.output_tokens,
         )
 
-    def to_dict(self) -> Dict[str, int]:
+    def to_dict(self) -> dict[str, int]:
         """Serialize to dictionary."""
         return {
             "input_tokens": self.input_tokens,

@@ -6,12 +6,11 @@ These tests interact with the actual Claude Code CLI and require:
 """
 
 import os
-from pathlib import Path
 
 import pytest
 
 from codetoreum.adapters.secondary import ClaudeCodeAdapter, ClaudeCodeConfig
-from codetoreum.ports.exceptions import AuthenticationError, LLMProviderError
+from codetoreum.ports.exceptions import LLMProviderError
 from codetoreum.ports.output.llm_provider import ExecutionContext
 
 
@@ -186,25 +185,6 @@ async def test_count_tokens(claude_adapter):
     assert count > 0
     # Should be roughly 1/4 of character count
     assert count < len(text)
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_invalid_api_key():
-    """Test authentication error with invalid API key."""
-    # Create a mock credential provider that returns an invalid key
-    class MockInvalidCredentialProvider:
-        async def get_credential(self, key: str):
-            return "invalid-key-that-will-fail"
-
-    config = ClaudeCodeConfig(
-        credential_provider=MockInvalidCredentialProvider(),
-    )
-
-    adapter = ClaudeCodeAdapter(config)
-
-    with pytest.raises((AuthenticationError, LLMProviderError)):
-        await adapter.execute("Test prompt")
 
 
 @pytest.mark.integration

@@ -4,28 +4,35 @@ Provides mock implementations that track calls but don't add delays,
 enabling fast simulation tests.
 """
 
-import time
 import asyncio
-from datetime import datetime, timezone
-from typing import List, Tuple, Optional, Callable, TypeVar, Dict, Any
+import time
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any, TypeVar
 
+from .exceptions import CircuitBreakerOpenError
+from .exceptions import TimeoutError as ResilienceTimeoutError
 from .interfaces import (
-    IRateLimiter, RateLimitStats,
-    ICircuitBreaker, CircuitState, CircuitBreakerStats,
-    IRetryPolicy, RetryStats,
-    ITimeout, TimeoutStats
+    CircuitBreakerStats,
+    CircuitState,
+    ICircuitBreaker,
+    IRateLimiter,
+    IRetryPolicy,
+    ITimeout,
+    RateLimitStats,
+    RetryStats,
+    TimeoutStats,
 )
-from .exceptions import CircuitBreakerOpenError, TimeoutError as ResilienceTimeoutError
 from .rate_limiter import TokenBucketRateLimiter
 from .retry_policy import ExponentialBackoffRetry
 
-
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 # ============================================================================
 # Mock Rate Limiter
 # ============================================================================
+
 
 class MockRateLimiter(IRateLimiter):
     """
@@ -47,19 +54,16 @@ class MockRateLimiter(IRateLimiter):
         self.enforce_limits = enforce_limits
         self.simulated_delay_ms = simulated_delay_ms
 
-        self.acquire_calls: List[Tuple[str, int, datetime]] = []
-        self._delegate: Optional[IRateLimiter] = None
+        self.acquire_calls: list[tuple[str, int, datetime]] = []
+        self._delegate: IRateLimiter | None = None
 
         if enforce_limits:
             # Delegate to real implementation
-            self._delegate = TokenBucketRateLimiter(
-                max_requests=1000,
-                window_seconds=60
-            )
+            self._delegate = TokenBucketRateLimiter(max_requests=1000, window_seconds=60)
 
     async def acquire(self, operation: str, cost: int = 1) -> None:
         """Record acquire call and optionally enforce limits."""
-        self.acquire_calls.append((operation, cost, datetime.now(timezone.utc)))
+        self.acquire_calls.append((operation, cost, datetime.now(UTC)))
 
         if self._delegate:
             await self._delegate.acquire(operation, cost)
@@ -68,7 +72,7 @@ class MockRateLimiter(IRateLimiter):
 
     def try_acquire(self, operation: str, cost: int = 1) -> bool:
         """Always succeeds in mock mode."""
-        self.acquire_calls.append((operation, cost, datetime.now(timezone.utc)))
+        self.acquire_calls.append((operation, cost, datetime.now(UTC)))
 
         if self._delegate:
             return self._delegate.try_acquire(operation, cost)
@@ -86,7 +90,7 @@ class MockRateLimiter(IRateLimiter):
             max_tokens=None,
             window_seconds=60,
             utilization=0.0,
-            next_available=None
+            next_available=None,
         )
 
     def reset(self) -> None:
@@ -106,6 +110,7 @@ class MockRateLimiter(IRateLimiter):
 # Mock Circuit Breaker
 # ============================================================================
 
+
 class MockCircuitBreaker(ICircuitBreaker):
     """
     Mock circuit breaker for simulation and testing.
@@ -115,11 +120,7 @@ class MockCircuitBreaker(ICircuitBreaker):
     - Can simulate failures
     """
 
-    def __init__(
-        self,
-        initial_state: CircuitState = CircuitState.CLOSED,
-        fail_after_calls: Optional[int] = None
-    ):
+    def __init__(self, initial_state: CircuitState = CircuitState.CLOSED, fail_after_calls: int | None = None):
         """
         Initialize mock circuit breaker.
 
@@ -130,29 +131,26 @@ class MockCircuitBreaker(ICircuitBreaker):
         self._state = initial_state
         self.fail_after_calls = fail_after_calls
 
-        self.call_history: List[Dict[str, Any]] = []
+        self.call_history: list[dict[str, Any]] = []
         self._call_count = 0
 
-    async def call(
-        self,
-        operation: Callable[..., T],
-        operation_name: str,
-        *args,
-        **kwargs
-    ) -> T:
+    async def call(self, operation: Callable[..., T], operation_name: str, *args, **kwargs) -> T:
         """Execute with configurable behavior."""
         self._call_count += 1
 
-        self.call_history.append({
-            "operation": operation_name,
-            "state": self._state,
-            "timestamp": datetime.now(timezone.utc),
-            "call_number": self._call_count
-        })
+        self.call_history.append(
+            {
+                "operation": operation_name,
+                "state": self._state,
+                "timestamp": datetime.now(UTC),
+                "call_number": self._call_count,
+            }
+        )
 
         # Check state first
         if self._state == CircuitState.OPEN:
-            raise CircuitBreakerOpenError(f"Circuit open: {operation_name}")
+            message = f"Circuit open: {operation_name}"
+            raise CircuitBreakerOpenError(message)
 
         # Execute operation
         result = await operation(*args, **kwargs)
@@ -174,10 +172,10 @@ class MockCircuitBreaker(ICircuitBreaker):
             failure_count=0,
             success_count=self._call_count,
             last_failure_time=None,
-            last_success_time=datetime.now(timezone.utc),
+            last_success_time=datetime.now(UTC),
             total_calls=self._call_count,
             total_failures=0,
-            total_successes=self._call_count
+            total_successes=self._call_count,
         )
 
     def reset(self) -> None:
@@ -209,6 +207,7 @@ class MockCircuitBreaker(ICircuitBreaker):
 # Mock Retry Policy
 # ============================================================================
 
+
 class MockRetryPolicy(IRetryPolicy):
     """
     Mock retry policy for simulation and testing.
@@ -218,11 +217,7 @@ class MockRetryPolicy(IRetryPolicy):
     - Configurable to simulate retry behavior
     """
 
-    def __init__(
-        self,
-        simulate_retries: bool = False,
-        max_retries: int = 3
-    ):
+    def __init__(self, simulate_retries: bool = False, max_retries: int = 3):
         """
         Initialize mock retry policy.
 
@@ -233,35 +228,25 @@ class MockRetryPolicy(IRetryPolicy):
         self.simulate_retries = simulate_retries
         self.max_retries = max_retries
 
-        self.execution_history: List[Dict[str, Any]] = []
-        self._delegate: Optional[IRetryPolicy] = None
+        self.execution_history: list[dict[str, Any]] = []
+        self._delegate: IRetryPolicy | None = None
 
         if simulate_retries:
             self._delegate = ExponentialBackoffRetry(
                 max_retries=max_retries,
-                base_delay=0.01  # Very short delays for testing
+                base_delay=0.01,  # Very short delays for testing
             )
 
-    async def execute(
-        self,
-        operation: Callable[..., T],
-        operation_name: str,
-        *args,
-        **kwargs
-    ) -> T:
+    async def execute(self, operation: Callable[..., T], operation_name: str, *args, **kwargs) -> T:
         """Execute with optional retry simulation."""
-        self.execution_history.append({
-            "operation": operation_name,
-            "timestamp": datetime.now(timezone.utc)
-        })
+        self.execution_history.append({"operation": operation_name, "timestamp": datetime.now(UTC)})
 
         if self._delegate:
             return await self._delegate.execute(operation, operation_name, *args, **kwargs)
-        else:
-            # No retries, just execute once
-            return await operation(*args, **kwargs)
+        # No retries, just execute once
+        return await operation(*args, **kwargs)
 
-    def should_retry(self, exception: Exception) -> bool:
+    def should_retry(self, exception: BaseException) -> bool:
         """Always returns True in mock mode."""
         return True
 
@@ -275,7 +260,7 @@ class MockRetryPolicy(IRetryPolicy):
             total_retries=0,
             total_successes=len(self.execution_history),
             total_failures=0,
-            average_attempts=1.0
+            average_attempts=1.0,
         )
 
     def reset(self) -> None:
@@ -288,6 +273,7 @@ class MockRetryPolicy(IRetryPolicy):
 # ============================================================================
 # Mock Timeout
 # ============================================================================
+
 
 class MockTimeout(ITimeout):
     """
@@ -306,7 +292,7 @@ class MockTimeout(ITimeout):
             simulate_timeouts: If True, actually enforces timeouts
         """
         self.simulate_timeouts = simulate_timeouts
-        self.execution_history: List[Dict[str, Any]] = []
+        self.execution_history: list[dict[str, Any]] = []
 
     async def execute(
         self,
@@ -314,7 +300,7 @@ class MockTimeout(ITimeout):
         timeout_seconds: float,
         operation_name: str,
         *args,
-        **kwargs
+        **kwargs,
     ) -> T:
         """Execute with optional timeout enforcement."""
         start_time = time.time()
@@ -322,30 +308,32 @@ class MockTimeout(ITimeout):
         if self.simulate_timeouts:
             # Actually enforce timeout
             try:
-                result = await asyncio.wait_for(
-                    operation(*args, **kwargs),
-                    timeout=timeout_seconds
-                )
-            except asyncio.TimeoutError:
+                result = await asyncio.wait_for(operation(*args, **kwargs), timeout=timeout_seconds)
+            except TimeoutError:
                 duration = time.time() - start_time
-                self.execution_history.append({
-                    "operation": operation_name,
-                    "timeout_seconds": timeout_seconds,
-                    "duration_seconds": duration,
-                    "timed_out": True
-                })
-                raise ResilienceTimeoutError(f"Operation {operation_name} timed out")
+                self.execution_history.append(
+                    {
+                        "operation": operation_name,
+                        "timeout_seconds": timeout_seconds,
+                        "duration_seconds": duration,
+                        "timed_out": True,
+                    }
+                )
+                message = f"Operation {operation_name} timed out"
+                raise ResilienceTimeoutError(message)
         else:
             # No timeout, just execute
             result = await operation(*args, **kwargs)
 
         duration = time.time() - start_time
-        self.execution_history.append({
-            "operation": operation_name,
-            "timeout_seconds": timeout_seconds,
-            "duration_seconds": duration,
-            "timed_out": False
-        })
+        self.execution_history.append(
+            {
+                "operation": operation_name,
+                "timeout_seconds": timeout_seconds,
+                "duration_seconds": duration,
+                "timed_out": False,
+            }
+        )
 
         return result
 
@@ -358,5 +346,5 @@ class MockTimeout(ITimeout):
             total_operations=len(self.execution_history),
             total_timeouts=timeouts,
             average_duration_ms=sum(durations) / len(durations) if durations else 0,
-            max_duration_ms=max(durations) if durations else 0
+            max_duration_ms=max(durations) if durations else 0,
         )

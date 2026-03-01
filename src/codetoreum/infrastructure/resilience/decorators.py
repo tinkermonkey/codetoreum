@@ -3,13 +3,23 @@
 Provides decorators that wrap port interfaces with resilience patterns.
 """
 
-import time
+from collections.abc import AsyncIterator, Callable
 from datetime import datetime
-from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Tuple, TypeVar
+from typing import Any, TypeVar
 
 from codetoreum.domain.comment import Comment
-from codetoreum.domain.types import ExecutionId, ProjectId, UserId, WorkItemId
+from codetoreum.domain.types import ProjectId, UserId, WorkItemId
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
+from codetoreum.ports.output.board_service import (
+    BoardColumn,
+    BoardConfig,
+    IBoardService,
+    MovedByType,
+    ProjectBoard,
+    ReconciliationResult,
+    WorkItemPosition,
+)
+from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.llm_provider import (
     ExecutionContext,
     ExecutionResult,
@@ -20,28 +30,18 @@ from codetoreum.ports.output.llm_provider import (
     ToolDefinition,
     UsageStats,
 )
-from codetoreum.ports.output.ticket_system import ITicketSystem
-from codetoreum.ports.output.board_service import (
-    IBoardService,
-    ProjectBoard,
-    BoardColumn,
-    ReconciliationResult,
-    BoardConfig,
-    WorkItemPosition,
-    MovedByType,
-)
-from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.monitoring import MonitoringConfig, MonitoringStatus
+from codetoreum.ports.output.ticket_system import ITicketSystem
 
 from .interfaces import ICircuitBreaker, IRateLimiter, IRetryPolicy, ITimeout
 
-
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 # ============================================================================
 # Resilient Ticket System Decorator
 # ============================================================================
+
 
 class ResilientTicketSystemDecorator(ITicketSystem):
     """
@@ -54,11 +54,11 @@ class ResilientTicketSystemDecorator(ITicketSystem):
     def __init__(
         self,
         wrapped: ITicketSystem,
-        rate_limiter: Optional[IRateLimiter] = None,
-        circuit_breaker: Optional[ICircuitBreaker] = None,
-        retry_policy: Optional[IRetryPolicy] = None,
-        timeout: Optional[ITimeout] = None,
-        default_timeout_seconds: float = 30.0
+        rate_limiter: IRateLimiter | None = None,
+        circuit_breaker: ICircuitBreaker | None = None,
+        retry_policy: IRetryPolicy | None = None,
+        timeout: ITimeout | None = None,
+        default_timeout_seconds: float = 30.0,
     ):
         """
         Initialize resilient decorator.
@@ -83,7 +83,7 @@ class ResilientTicketSystemDecorator(ITicketSystem):
         return await self._execute_resilient(
             operation=lambda: self._wrapped.get_work_item(item_id),
             operation_name="get_work_item",
-            rate_limit_cost=1
+            rate_limit_cost=1,
         )
 
     async def create_work_item(
@@ -91,10 +91,10 @@ class ResilientTicketSystemDecorator(ITicketSystem):
         title: str,
         description: str,
         project_id: ProjectId,
-        labels: Optional[List[str]] = None,
-        assignee: Optional[UserId] = None,
-        priority: Optional[WorkItemPriority] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        labels: list[str] | None = None,
+        assignee: UserId | None = None,
+        priority: WorkItemPriority | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> WorkItem:
         """Create work item with resilience."""
         return await self._execute_resilient(
@@ -102,17 +102,15 @@ class ResilientTicketSystemDecorator(ITicketSystem):
                 title, description, project_id, labels, assignee, priority, metadata
             ),
             operation_name="create_work_item",
-            rate_limit_cost=2  # Writes cost more
+            rate_limit_cost=2,  # Writes cost more
         )
 
-    async def update_work_item(
-        self, item_id: WorkItemId, updates: Dict[str, Any]
-    ) -> WorkItem:
+    async def update_work_item(self, item_id: WorkItemId, updates: dict[str, Any]) -> WorkItem:
         """Update work item with resilience."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.update_work_item(item_id, updates),
             operation_name="update_work_item",
-            rate_limit_cost=2
+            rate_limit_cost=2,
         )
 
     async def delete_work_item(self, item_id: WorkItemId) -> None:
@@ -120,59 +118,59 @@ class ResilientTicketSystemDecorator(ITicketSystem):
         return await self._execute_resilient(
             operation=lambda: self._wrapped.delete_work_item(item_id),
             operation_name="delete_work_item",
-            rate_limit_cost=2
+            rate_limit_cost=2,
         )
 
     async def update_status(
         self,
         item_id: WorkItemId,
         status: WorkItemStatus,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> WorkItem:
         """Update status with resilience."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.update_status(item_id, status, reason),
             operation_name="update_status",
-            rate_limit_cost=2
+            rate_limit_cost=2,
         )
 
     async def list_work_items(
         self,
-        project_id: Optional[ProjectId] = None,
-        status: Optional[WorkItemStatus] = None,
-        assignee: Optional[UserId] = None,
-        labels: Optional[List[str]] = None,
-        created_after: Optional[datetime] = None,
-        updated_after: Optional[datetime] = None,
+        project_id: ProjectId | None = None,
+        status: WorkItemStatus | None = None,
+        assignee: UserId | None = None,
+        labels: list[str] | None = None,
+        created_after: datetime | None = None,
+        updated_after: datetime | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[WorkItem]:
+    ) -> list[WorkItem]:
         """List work items with resilience."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.list_work_items(
                 project_id, status, assignee, labels, created_after, updated_after, limit, offset
             ),
             operation_name="list_work_items",
-            rate_limit_cost=1
+            rate_limit_cost=1,
         )
 
     async def search_work_items(
         self,
         query: str,
-        project_id: Optional[ProjectId] = None,
+        project_id: ProjectId | None = None,
         limit: int = 100,
-    ) -> List[WorkItem]:
+    ) -> list[WorkItem]:
         """Search work items with resilience."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.search_work_items(query, project_id, limit),
             operation_name="search_work_items",
-            rate_limit_cost=1
+            rate_limit_cost=1,
         )
 
     async def get_work_item_stream(
         self,
-        project_id: Optional[ProjectId] = None,
-        since: Optional[datetime] = None,
+        project_id: ProjectId | None = None,
+        since: datetime | None = None,
     ) -> AsyncIterator[WorkItem]:
         """Stream work items (streaming doesn't work well with retries)."""
         # Streaming operations don't benefit from retries
@@ -181,40 +179,38 @@ class ResilientTicketSystemDecorator(ITicketSystem):
             await self._rate_limiter.acquire("get_work_item_stream", 1)
 
         if self._circuit_breaker:
+
             async def stream_operation():
                 return self._wrapped.get_work_item_stream(project_id, since)
-            return await self._circuit_breaker.call(
-                stream_operation,
-                "get_work_item_stream"
-            )
-        else:
-            return self._wrapped.get_work_item_stream(project_id, since)
+
+            return await self._circuit_breaker.call(stream_operation, "get_work_item_stream")
+        return self._wrapped.get_work_item_stream(project_id, since)
 
     async def add_comment(
         self,
         item_id: WorkItemId,
         body: str,
-        author: Optional[UserId] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        author: UserId | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> Comment:
         """Add comment with resilience."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.add_comment(item_id, body, author, metadata),
             operation_name="add_comment",
-            rate_limit_cost=1
+            rate_limit_cost=1,
         )
 
     async def get_comments(
         self,
         item_id: WorkItemId,
-        since: Optional[datetime] = None,
+        since: datetime | None = None,
         limit: int = 100,
-    ) -> List[Comment]:
+    ) -> list[Comment]:
         """Get comments with resilience."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.get_comments(item_id, since, limit),
             operation_name="get_comments",
-            rate_limit_cost=1
+            rate_limit_cost=1,
         )
 
     async def link_work_items(
@@ -227,32 +223,32 @@ class ResilientTicketSystemDecorator(ITicketSystem):
         return await self._execute_resilient(
             operation=lambda: self._wrapped.link_work_items(source_id, target_id, relationship),
             operation_name="link_work_items",
-            rate_limit_cost=2
+            rate_limit_cost=2,
         )
 
     async def get_related_items(
         self,
         item_id: WorkItemId,
-        relationship: Optional[str] = None,
-    ) -> List[WorkItem]:
+        relationship: str | None = None,
+    ) -> list[WorkItem]:
         """Get related items with resilience."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.get_related_items(item_id, relationship),
             operation_name="get_related_items",
-            rate_limit_cost=1
+            rate_limit_cost=1,
         )
 
     async def register_webhook(
         self,
         url: str,
-        events: List[str],
-        project_id: Optional[ProjectId] = None,
+        events: list[str],
+        project_id: ProjectId | None = None,
     ) -> str:
         """Register webhook with resilience."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.register_webhook(url, events, project_id),
             operation_name="register_webhook",
-            rate_limit_cost=2
+            rate_limit_cost=2,
         )
 
     async def unregister_webhook(self, webhook_id: str) -> None:
@@ -260,7 +256,7 @@ class ResilientTicketSystemDecorator(ITicketSystem):
         return await self._execute_resilient(
             operation=lambda: self._wrapped.unregister_webhook(webhook_id),
             operation_name="unregister_webhook",
-            rate_limit_cost=2
+            rate_limit_cost=2,
         )
 
     async def _execute_resilient(
@@ -268,7 +264,7 @@ class ResilientTicketSystemDecorator(ITicketSystem):
         operation: Callable[[], T],
         operation_name: str,
         rate_limit_cost: int = 1,
-        timeout_seconds: Optional[float] = None
+        timeout_seconds: float | None = None,
     ) -> T:
         """
         Execute operation with all resilience patterns.
@@ -290,46 +286,33 @@ class ResilientTicketSystemDecorator(ITicketSystem):
                 operation_name,
                 operation,
                 operation_name,
-                timeout_seconds or self._default_timeout
+                timeout_seconds or self._default_timeout,
             )
-        else:
-            return await self._execute_with_timeout_and_retry(
-                operation,
-                operation_name,
-                timeout_seconds or self._default_timeout
-            )
+        return await self._execute_with_timeout_and_retry(
+            operation, operation_name, timeout_seconds or self._default_timeout
+        )
 
     async def _execute_with_timeout_and_retry(
-        self,
-        operation: Callable[[], T],
-        operation_name: str,
-        timeout_seconds: float
+        self, operation: Callable[[], T], operation_name: str, timeout_seconds: float
     ) -> T:
         """Apply timeout and retry."""
+
         # 3. Timeout wraps operation
         async def timed_operation():
             if self._timeout:
-                return await self._timeout.execute(
-                    operation,
-                    timeout_seconds,
-                    operation_name
-                )
-            else:
-                return await operation()
+                return await self._timeout.execute(operation, timeout_seconds, operation_name)
+            return await operation()
 
         # 4. Retry wraps timeout
         if self._retry_policy:
-            return await self._retry_policy.execute(
-                timed_operation,
-                operation_name
-            )
-        else:
-            return await timed_operation()
+            return await self._retry_policy.execute(timed_operation, operation_name)
+        return await timed_operation()
 
 
 # ============================================================================
 # Resilient LLM Provider Decorator
 # ============================================================================
+
 
 class ResilientLLMProviderDecorator(ILLMProvider):
     """
@@ -344,11 +327,11 @@ class ResilientLLMProviderDecorator(ILLMProvider):
     def __init__(
         self,
         wrapped: ILLMProvider,
-        rate_limiter: Optional[IRateLimiter] = None,
-        circuit_breaker: Optional[ICircuitBreaker] = None,
-        retry_policy: Optional[IRetryPolicy] = None,
-        timeout: Optional[ITimeout] = None,
-        default_timeout_seconds: float = 300.0  # 5 minutes for LLM
+        rate_limiter: IRateLimiter | None = None,
+        circuit_breaker: ICircuitBreaker | None = None,
+        retry_policy: IRetryPolicy | None = None,
+        timeout: ITimeout | None = None,
+        default_timeout_seconds: float = 300.0,  # 5 minutes for LLM
     ):
         self._wrapped = wrapped
         self._rate_limiter = rate_limiter
@@ -360,8 +343,8 @@ class ResilientLLMProviderDecorator(ILLMProvider):
     async def execute(
         self,
         prompt: str,
-        context: Optional[ExecutionContext] = None,
-        stream_callback: Optional[StreamCallback] = None,
+        context: ExecutionContext | None = None,
+        stream_callback: StreamCallback | None = None,
     ) -> ExecutionResult:
         """Execute with resilience."""
         # Estimate token cost for rate limiting
@@ -370,15 +353,15 @@ class ResilientLLMProviderDecorator(ILLMProvider):
         return await self._execute_resilient(
             operation=lambda: self._wrapped.execute(prompt, context, stream_callback),
             operation_name="llm_execute",
-            rate_limit_cost=estimated_tokens
+            rate_limit_cost=estimated_tokens,
         )
 
     async def execute_with_tools(
         self,
         prompt: str,
-        tools: List[ToolDefinition],
-        context: Optional[ExecutionContext] = None,
-        stream_callback: Optional[StreamCallback] = None,
+        tools: list[ToolDefinition],
+        context: ExecutionContext | None = None,
+        stream_callback: StreamCallback | None = None,
     ) -> ExecutionResult:
         """Execute with tools and resilience."""
         estimated_tokens = self._estimate_tokens(prompt)
@@ -386,13 +369,13 @@ class ResilientLLMProviderDecorator(ILLMProvider):
         return await self._execute_resilient(
             operation=lambda: self._wrapped.execute_with_tools(prompt, tools, context, stream_callback),
             operation_name="llm_execute_with_tools",
-            rate_limit_cost=estimated_tokens
+            rate_limit_cost=estimated_tokens,
         )
 
     async def stream_completion(
         self,
         prompt: str,
-        context: Optional[ExecutionContext] = None,
+        context: ExecutionContext | None = None,
     ) -> AsyncIterator[StreamChunk]:
         """Stream completion (less resilience for streaming)."""
         # Streaming doesn't work well with retries
@@ -401,32 +384,30 @@ class ResilientLLMProviderDecorator(ILLMProvider):
             await self._rate_limiter.acquire("stream_completion", estimated_tokens)
 
         if self._circuit_breaker:
+
             async def stream_operation():
                 return self._wrapped.stream_completion(prompt, context)
-            return await self._circuit_breaker.call(
-                stream_operation,
-                "stream_completion"
-            )
-        else:
-            return self._wrapped.stream_completion(prompt, context)
+
+            return await self._circuit_breaker.call(stream_operation, "stream_completion")
+        return self._wrapped.stream_completion(prompt, context)
 
     async def create_conversation(
         self,
-        system_prompt: Optional[str] = None,
-        parameters: Optional[ExecutionContext] = None,
+        system_prompt: str | None = None,
+        parameters: ExecutionContext | None = None,
     ) -> str:
         """Create conversation with resilience."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.create_conversation(system_prompt, parameters),
             operation_name="create_conversation",
-            rate_limit_cost=1
+            rate_limit_cost=1,
         )
 
     async def continue_conversation(
         self,
         conversation_id: str,
         message: str,
-        stream_callback: Optional[StreamCallback] = None,
+        stream_callback: StreamCallback | None = None,
     ) -> ExecutionResult:
         """Continue conversation with resilience."""
         estimated_tokens = self._estimate_tokens(message)
@@ -434,7 +415,7 @@ class ResilientLLMProviderDecorator(ILLMProvider):
         return await self._execute_resilient(
             operation=lambda: self._wrapped.continue_conversation(conversation_id, message, stream_callback),
             operation_name="continue_conversation",
-            rate_limit_cost=estimated_tokens
+            rate_limit_cost=estimated_tokens,
         )
 
     async def get_model_info(self) -> ModelInfo:
@@ -442,46 +423,41 @@ class ResilientLLMProviderDecorator(ILLMProvider):
         return await self._execute_resilient(
             operation=lambda: self._wrapped.get_model_info(),
             operation_name="get_model_info",
-            rate_limit_cost=1
+            rate_limit_cost=1,
         )
 
-    async def list_available_models(self) -> List[ModelInfo]:
+    async def list_available_models(self) -> list[ModelInfo]:
         """List models with resilience."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.list_available_models(),
             operation_name="list_available_models",
-            rate_limit_cost=1
+            rate_limit_cost=1,
         )
 
     async def count_tokens(
         self,
         text: str,
-        model: Optional[str] = None,
+        model: str | None = None,
     ) -> int:
         """Count tokens with resilience."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.count_tokens(text, model),
             operation_name="count_tokens",
-            rate_limit_cost=1
+            rate_limit_cost=1,
         )
 
     async def get_usage_stats(
         self,
-        since: Optional[datetime] = None,
+        since: datetime | None = None,
     ) -> UsageStats:
         """Get usage stats with resilience."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.get_usage_stats(since),
             operation_name="get_usage_stats",
-            rate_limit_cost=1
+            rate_limit_cost=1,
         )
 
-    async def _execute_resilient(
-        self,
-        operation: Callable[[], T],
-        operation_name: str,
-        rate_limit_cost: int
-    ) -> T:
+    async def _execute_resilient(self, operation: Callable[[], T], operation_name: str, rate_limit_cost: int) -> T:
         """Execute with resilience patterns."""
         # Rate limiting with token cost
         if self._rate_limiter:
@@ -490,37 +466,21 @@ class ResilientLLMProviderDecorator(ILLMProvider):
         # Circuit breaker
         if self._circuit_breaker:
             return await self._circuit_breaker.call(
-                self._execute_with_timeout_and_retry,
-                operation_name,
-                operation,
-                operation_name
+                self._execute_with_timeout_and_retry, operation_name, operation, operation_name
             )
-        else:
-            return await self._execute_with_timeout_and_retry(
-                operation,
-                operation_name
-            )
+        return await self._execute_with_timeout_and_retry(operation, operation_name)
 
-    async def _execute_with_timeout_and_retry(
-        self,
-        operation: Callable[[], T],
-        operation_name: str
-    ) -> T:
+    async def _execute_with_timeout_and_retry(self, operation: Callable[[], T], operation_name: str) -> T:
         """Apply timeout and retry."""
+
         async def timed_operation():
             if self._timeout:
-                return await self._timeout.execute(
-                    operation,
-                    self._default_timeout,
-                    operation_name
-                )
-            else:
-                return await operation()
+                return await self._timeout.execute(operation, self._default_timeout, operation_name)
+            return await operation()
 
         if self._retry_policy:
             return await self._retry_policy.execute(timed_operation, operation_name)
-        else:
-            return await timed_operation()
+        return await timed_operation()
 
     def _estimate_tokens(self, text: str) -> int:
         """Rough token estimation (4 chars per token)."""
@@ -530,6 +490,7 @@ class ResilientLLMProviderDecorator(ILLMProvider):
 # ============================================================================
 # Resilient Board Service Decorator
 # ============================================================================
+
 
 class ResilientBoardServiceDecorator(IBoardService):
     """
@@ -542,11 +503,11 @@ class ResilientBoardServiceDecorator(IBoardService):
     def __init__(
         self,
         wrapped: IBoardService,
-        rate_limiter: Optional[IRateLimiter] = None,
-        circuit_breaker: Optional[ICircuitBreaker] = None,
-        retry_policy: Optional[IRetryPolicy] = None,
-        timeout: Optional[ITimeout] = None,
-        default_timeout_seconds: float = 30.0
+        rate_limiter: IRateLimiter | None = None,
+        circuit_breaker: ICircuitBreaker | None = None,
+        retry_policy: IRetryPolicy | None = None,
+        timeout: ITimeout | None = None,
+        default_timeout_seconds: float = 30.0,
     ):
         """
         Initialize resilient board service decorator.
@@ -582,14 +543,12 @@ class ResilientBoardServiceDecorator(IBoardService):
 
     # IMonitoredService implementation
 
-    async def start_monitoring(
-        self, project_id: str, config: MonitoringConfig
-    ) -> None:
+    async def start_monitoring(self, project_id: str, config: MonitoringConfig) -> None:
         """Start monitoring with resilience."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.start_monitoring(project_id, config),
             operation_name="start_monitoring",
-            rate_limit_cost=1
+            rate_limit_cost=1,
         )
 
     async def stop_monitoring(self, project_id: str) -> None:
@@ -597,7 +556,7 @@ class ResilientBoardServiceDecorator(IBoardService):
         return await self._execute_resilient(
             operation=lambda: self._wrapped.stop_monitoring(project_id),
             operation_name="stop_monitoring",
-            rate_limit_cost=1
+            rate_limit_cost=1,
         )
 
     async def get_monitoring_status(self, project_id: str) -> MonitoringStatus:
@@ -611,25 +570,23 @@ class ResilientBoardServiceDecorator(IBoardService):
         return await self._execute_resilient(
             operation=lambda: self._wrapped.get_board(project_id, board_id),
             operation_name="get_board",
-            rate_limit_cost=1
+            rate_limit_cost=1,
         )
 
-    async def get_columns(self, board_id: str) -> List[BoardColumn]:
+    async def get_columns(self, board_id: str) -> list[BoardColumn]:
         """Get columns with resilience (1 GraphQL credit)."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.get_columns(board_id),
             operation_name="get_columns",
-            rate_limit_cost=1
+            rate_limit_cost=1,
         )
 
-    async def get_items_in_column(
-        self, board_id: str, column_name: str
-    ):
+    async def get_items_in_column(self, board_id: str, column_name: str):
         """Get items in column with resilience (1 GraphQL credit)."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.get_items_in_column(board_id, column_name),
             operation_name="get_items_in_column",
-            rate_limit_cost=1
+            rate_limit_cost=1,
         )
 
     async def get_item_position(self, work_item_id: str) -> WorkItemPosition:
@@ -637,19 +594,17 @@ class ResilientBoardServiceDecorator(IBoardService):
         return await self._execute_resilient(
             operation=lambda: self._wrapped.get_item_position(work_item_id),
             operation_name="get_item_position",
-            rate_limit_cost=1
+            rate_limit_cost=1,
         )
 
     # Command Operations
 
-    async def move_item_to_column(
-        self, work_item_id: str, target_column: str, moved_by: MovedByType
-    ):
+    async def move_item_to_column(self, work_item_id: str, target_column: str, moved_by: MovedByType):
         """Move item with resilience (1 GraphQL mutation)."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.move_item_to_column(work_item_id, target_column, moved_by),
             operation_name="move_item_to_column",
-            rate_limit_cost=1
+            rate_limit_cost=1,
         )
 
     async def reconcile_board(self, board_id: str, config: BoardConfig) -> ReconciliationResult:
@@ -657,7 +612,7 @@ class ResilientBoardServiceDecorator(IBoardService):
         return await self._execute_resilient(
             operation=lambda: self._wrapped.reconcile_board(board_id, config),
             operation_name="reconcile_board",
-            rate_limit_cost=5  # May create multiple columns
+            rate_limit_cost=5,  # May create multiple columns
         )
 
     # Webhook Handler
@@ -674,7 +629,7 @@ class ResilientBoardServiceDecorator(IBoardService):
         operation: Callable[[], T],
         operation_name: str,
         rate_limit_cost: int = 1,
-        timeout_seconds: Optional[float] = None
+        timeout_seconds: float | None = None,
     ) -> T:
         """
         Execute operation with all resilience patterns.
@@ -696,46 +651,33 @@ class ResilientBoardServiceDecorator(IBoardService):
                 operation_name,
                 operation,
                 operation_name,
-                timeout_seconds or self._default_timeout
+                timeout_seconds or self._default_timeout,
             )
-        else:
-            return await self._execute_with_timeout_and_retry(
-                operation,
-                operation_name,
-                timeout_seconds or self._default_timeout
-            )
+        return await self._execute_with_timeout_and_retry(
+            operation, operation_name, timeout_seconds or self._default_timeout
+        )
 
     async def _execute_with_timeout_and_retry(
-        self,
-        operation: Callable[[], T],
-        operation_name: str,
-        timeout_seconds: float
+        self, operation: Callable[[], T], operation_name: str, timeout_seconds: float
     ) -> T:
         """Apply timeout and retry."""
+
         # 3. Timeout wraps operation
         async def timed_operation():
             if self._timeout:
-                return await self._timeout.execute(
-                    operation,
-                    timeout_seconds,
-                    operation_name
-                )
-            else:
-                return await operation()
+                return await self._timeout.execute(operation, timeout_seconds, operation_name)
+            return await operation()
 
         # 4. Retry wraps timeout
         if self._retry_policy:
-            return await self._retry_policy.execute(
-                timed_operation,
-                operation_name
-            )
-        else:
-            return await timed_operation()
+            return await self._retry_policy.execute(timed_operation, operation_name)
+        return await timed_operation()
 
 
 # ============================================================================
 # Resilient Discussion Adapter Decorator
 # ============================================================================
+
 
 class ResilientDiscussionAdapterDecorator(IDiscussionAdapter):
     """
@@ -748,11 +690,11 @@ class ResilientDiscussionAdapterDecorator(IDiscussionAdapter):
     def __init__(
         self,
         wrapped,
-        rate_limiter: Optional[IRateLimiter] = None,
-        circuit_breaker: Optional[ICircuitBreaker] = None,
-        retry_policy: Optional[IRetryPolicy] = None,
-        timeout: Optional[ITimeout] = None,
-        default_timeout_seconds: float = 30.0
+        rate_limiter: IRateLimiter | None = None,
+        circuit_breaker: ICircuitBreaker | None = None,
+        retry_policy: IRetryPolicy | None = None,
+        timeout: ITimeout | None = None,
+        default_timeout_seconds: float = 30.0,
     ):
         """
         Initialize resilient decorator.
@@ -777,20 +719,20 @@ class ResilientDiscussionAdapterDecorator(IDiscussionAdapter):
         return await self._execute_resilient(
             operation=lambda: self._wrapped.get_thread(work_item_id),
             operation_name="discussion_get_thread",
-            rate_limit_cost=1
+            rate_limit_cost=1,
         )
 
     async def add_comment(
         self,
         work_item_id: str,
         content: str,
-        parent_id: Optional[str] = None,
+        parent_id: str | None = None,
     ):
         """Add comment with resilience."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.add_comment(work_item_id, content, parent_id),
             operation_name="discussion_add_comment",
-            rate_limit_cost=2  # Writes cost more
+            rate_limit_cost=2,  # Writes cost more
         )
 
     def start_monitoring(self, work_item_id: str, config) -> None:
@@ -806,7 +748,7 @@ class ResilientDiscussionAdapterDecorator(IDiscussionAdapter):
         return await self._execute_resilient(
             operation=lambda: self._wrapped.handle_webhook(payload),
             operation_name="discussion_handle_webhook",
-            rate_limit_cost=1
+            rate_limit_cost=1,
         )
 
     def on(self, event_type: str, handler) -> None:
@@ -839,7 +781,7 @@ class ResilientDiscussionAdapterDecorator(IDiscussionAdapter):
         operation: Callable[[], T],
         operation_name: str,
         rate_limit_cost: int = 1,
-        timeout_seconds: Optional[float] = None
+        timeout_seconds: float | None = None,
     ) -> T:
         """
         Execute operation with all resilience patterns.
@@ -861,38 +803,24 @@ class ResilientDiscussionAdapterDecorator(IDiscussionAdapter):
                 operation_name,
                 operation,
                 operation_name,
-                timeout_seconds or self._default_timeout
+                timeout_seconds or self._default_timeout,
             )
-        else:
-            return await self._execute_with_timeout_and_retry(
-                operation,
-                operation_name,
-                timeout_seconds or self._default_timeout
-            )
+        return await self._execute_with_timeout_and_retry(
+            operation, operation_name, timeout_seconds or self._default_timeout
+        )
 
     async def _execute_with_timeout_and_retry(
-        self,
-        operation: Callable[[], T],
-        operation_name: str,
-        timeout_seconds: float
+        self, operation: Callable[[], T], operation_name: str, timeout_seconds: float
     ) -> T:
         """Apply timeout and retry."""
+
         # 3. Timeout wraps operation
         async def timed_operation():
             if self._timeout:
-                return await self._timeout.execute(
-                    operation,
-                    timeout_seconds,
-                    operation_name
-                )
-            else:
-                return await operation()
+                return await self._timeout.execute(operation, timeout_seconds, operation_name)
+            return await operation()
 
         # 4. Retry wraps timeout
         if self._retry_policy:
-            return await self._retry_policy.execute(
-                timed_operation,
-                operation_name
-            )
-        else:
-            return await timed_operation()
+            return await self._retry_policy.execute(timed_operation, operation_name)
+        return await timed_operation()

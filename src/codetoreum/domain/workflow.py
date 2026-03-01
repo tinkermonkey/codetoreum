@@ -1,9 +1,9 @@
 """Workflow aggregate root and value objects."""
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 if TYPE_CHECKING:
@@ -58,24 +58,24 @@ class Workflow:
     status: WorkflowStatus
 
     # Stage tracking
-    stages: List[PipelineStage]
+    stages: list[PipelineStage]
     current_stage_index: int
-    completed_stages: List[str]
+    completed_stages: list[str]
 
     # Execution tracking
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
-    paused_at: Optional[datetime]
+    started_at: datetime | None
+    completed_at: datetime | None
+    paused_at: datetime | None
 
     # Metadata
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
     # Timestamps
     created_at: datetime
     updated_at: datetime
 
     # Event tracking
-    _events: List[DomainEvent] = field(default_factory=list, init=False, repr=False)
+    _events: list[DomainEvent] = field(default_factory=list, init=False, repr=False)
     _version: int = field(default=0, init=False, repr=False)
     _skip_validation: bool = field(default=False, init=False, repr=False)
 
@@ -95,16 +95,20 @@ class Workflow:
         - All dependencies must be satisfied
         """
         if len(self.stages) < 1:
-            raise DomainError("Workflow must have at least one stage")
+            msg = "Workflow must have at least one stage"
+            raise DomainError(msg)
 
         if self._count_parallel_stages() > MAX_PARALLEL_STAGES:
-            raise DomainError(f"Cannot exceed {MAX_PARALLEL_STAGES} parallel stages")
+            msg = f"Cannot exceed {MAX_PARALLEL_STAGES} parallel stages"
+            raise DomainError(msg)
 
         if self._has_circular_dependencies():
-            raise DomainError("Workflow has circular stage dependencies")
+            msg = "Workflow has circular stage dependencies"
+            raise DomainError(msg)
 
         if not self._all_dependencies_satisfied():
-            raise DomainError("Not all stage dependencies are satisfied")
+            msg = "Not all stage dependencies are satisfied"
+            raise DomainError(msg)
 
     @classmethod
     def create(
@@ -139,8 +143,8 @@ class Workflow:
             completed_at=None,
             paused_at=None,
             metadata={},
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
 
         # Set workflow_id on all stages
@@ -175,13 +179,15 @@ class Workflow:
         Emits: WorkflowStarted event
         """
         if self.status != WorkflowStatus.PENDING:
-            raise DomainError(f"Cannot start workflow in status {self.status.value}")
+            msg = f"Cannot start workflow in status {self.status.value}"
+            raise DomainError(msg)
 
         if not self.stages:
-            raise DomainError("Cannot start workflow with no stages")
+            msg = "Cannot start workflow with no stages"
+            raise DomainError(msg)
 
         self.status = WorkflowStatus.RUNNING
-        self.started_at = datetime.now(timezone.utc)
+        self.started_at = datetime.now(UTC)
         self.updated_at = self.started_at
         self._version += 1
 
@@ -209,11 +215,13 @@ class Workflow:
         Emits: WorkflowStageAdvanced event (or WorkflowCompleted if last stage)
         """
         if self.status != WorkflowStatus.RUNNING:
-            raise DomainError("Cannot advance non-running workflow")
+            msg = "Cannot advance non-running workflow"
+            raise DomainError(msg)
 
         current_stage = self.get_current_stage()
         if not current_stage.is_completed():
-            raise DomainError("Cannot advance: current stage not completed")
+            msg = "Cannot advance: current stage not completed"
+            raise DomainError(msg)
 
         # Mark current stage as completed
         self.completed_stages.append(current_stage.name)
@@ -227,7 +235,7 @@ class Workflow:
         old_stage = current_stage.name
         self.current_stage_index += 1
         new_stage = self.get_current_stage().name
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = WorkflowStageAdvanced(
@@ -255,19 +263,17 @@ class Workflow:
         Emits: WorkflowCompleted event
         """
         if self.status != WorkflowStatus.RUNNING:
-            raise DomainError(
-                f"Cannot complete workflow in status {self.status.value}"
-            )
+            msg = f"Cannot complete workflow in status {self.status.value}"
+            raise DomainError(msg)
 
         # Verify all stages completed
         for stage in self.stages:
             if not stage.is_completed():
-                raise DomainError(
-                    f"Cannot complete: stage {stage.name} not completed"
-                )
+                msg = f"Cannot complete: stage {stage.name} not completed"
+                raise DomainError(msg)
 
         self.status = WorkflowStatus.COMPLETED
-        self.completed_at = datetime.now(timezone.utc)
+        self.completed_at = datetime.now(UTC)
         self.updated_at = self.completed_at
         self._version += 1
 
@@ -281,7 +287,7 @@ class Workflow:
         )
         self._add_event(event)
 
-    def fail(self, reason: str, failed_stage: Optional[str] = None) -> None:
+    def fail(self, reason: str, failed_stage: str | None = None) -> None:
         """
         Mark workflow as failed.
 
@@ -295,12 +301,11 @@ class Workflow:
         Emits: WorkflowFailed event
         """
         if self.status in [WorkflowStatus.COMPLETED, WorkflowStatus.CANCELLED]:
-            raise DomainError(
-                f"Cannot fail workflow in terminal status {self.status.value}"
-            )
+            msg = f"Cannot fail workflow in terminal status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = WorkflowStatus.FAILED
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = WorkflowFailed(
@@ -327,10 +332,11 @@ class Workflow:
         Emits: WorkflowPaused event
         """
         if self.status != WorkflowStatus.RUNNING:
-            raise DomainError("Can only pause running workflows")
+            msg = "Can only pause running workflows"
+            raise DomainError(msg)
 
         self.status = WorkflowStatus.PAUSED
-        self.paused_at = datetime.now(timezone.utc)
+        self.paused_at = datetime.now(UTC)
         self.updated_at = self.paused_at
         self._version += 1
 
@@ -354,10 +360,11 @@ class Workflow:
         Emits: WorkflowResumed event
         """
         if self.status != WorkflowStatus.PAUSED:
-            raise DomainError("Can only resume paused workflows")
+            msg = "Can only resume paused workflows"
+            raise DomainError(msg)
 
         self.status = WorkflowStatus.RUNNING
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = WorkflowResumed(
@@ -382,12 +389,11 @@ class Workflow:
         Emits: WorkflowCancelled event
         """
         if self.status in [WorkflowStatus.COMPLETED, WorkflowStatus.FAILED]:
-            raise DomainError(
-                f"Cannot cancel workflow in terminal status {self.status.value}"
-            )
+            msg = f"Cannot cancel workflow in terminal status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = WorkflowStatus.CANCELLED
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = WorkflowCancelled(
@@ -412,10 +418,11 @@ class Workflow:
             DomainError: If stage index is invalid
         """
         if self.current_stage_index >= len(self.stages):
-            raise DomainError("Invalid stage index")
+            msg = "Invalid stage index"
+            raise DomainError(msg)
         return self.stages[self.current_stage_index]
 
-    def get_stage_by_name(self, name: str) -> Optional[PipelineStage]:
+    def get_stage_by_name(self, name: str) -> PipelineStage | None:
         """
         Get stage by name.
 
@@ -445,11 +452,12 @@ class Workflow:
         """
         stage = self.get_stage_by_name(stage_name)
         if not stage:
-            raise DomainError(f"Stage {stage_name} not found")
+            msg = f"Stage {stage_name} not found"
+            raise DomainError(msg)
 
         old_status = stage.status.value
         stage.update_status(status)
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = WorkflowStageStatusUpdated(
@@ -502,7 +510,7 @@ class Workflow:
             return 0.0
         return (len(self.completed_stages) / len(self.stages)) * 100
 
-    def get_duration_seconds(self) -> Optional[int]:
+    def get_duration_seconds(self) -> float | None:
         """
         Get workflow duration in seconds.
 
@@ -512,8 +520,8 @@ class Workflow:
         if not self.started_at:
             return None
 
-        end_time = self.completed_at or datetime.now(timezone.utc)
-        return int((end_time - self.started_at).total_seconds())
+        end_time = self.completed_at or datetime.now(UTC)
+        return (end_time - self.started_at).total_seconds()
 
     # Validation helpers
     def _count_parallel_stages(self) -> int:
@@ -584,7 +592,7 @@ class Workflow:
         """
         self._events.append(event)
 
-    def get_pending_events(self) -> List[DomainEvent]:
+    def get_pending_events(self) -> list[DomainEvent]:
         """
         Get all pending events.
 
@@ -599,7 +607,7 @@ class Workflow:
 
     # Event sourcing support
     @classmethod
-    def from_events(cls, events: List[DomainEvent]) -> "Workflow":
+    def from_events(cls, events: list[DomainEvent]) -> "Workflow":
         """
         Reconstruct workflow from event stream.
 
@@ -617,11 +625,13 @@ class Workflow:
             to reconstruct stages from template or events.
         """
         if not events:
-            raise DomainError("Cannot reconstruct workflow from empty event stream")
+            msg = "Cannot reconstruct workflow from empty event stream"
+            raise DomainError(msg)
 
         first_event = events[0]
         if not isinstance(first_event, WorkflowCreated):
-            raise DomainError("First event must be WorkflowCreated")
+            msg = "First event must be WorkflowCreated"
+            raise DomainError(msg)
 
         # This is simplified - actual implementation would need to
         # reconstruct stages from template or events
@@ -660,13 +670,13 @@ class Workflow:
         template_id: str,
         project_id: str,
         status: WorkflowStatus,
-        stages: List[PipelineStage],
+        stages: list[PipelineStage],
         current_stage_index: int,
-        completed_stages: List[str],
-        started_at: Optional[datetime],
-        completed_at: Optional[datetime],
-        paused_at: Optional[datetime],
-        metadata: Dict[str, Any],
+        completed_stages: list[str],
+        started_at: datetime | None,
+        completed_at: datetime | None,
+        paused_at: datetime | None,
+        metadata: dict[str, Any],
         created_at: datetime,
         updated_at: datetime,
     ) -> "Workflow":

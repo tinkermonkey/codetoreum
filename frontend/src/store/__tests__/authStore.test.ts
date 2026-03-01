@@ -4,7 +4,7 @@
  * Tests for the Zustand-based authentication store.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { useAuthStore, cleanupAuthStore, reinitAuthStore } from '../authStore'
 
 describe('authStore', () => {

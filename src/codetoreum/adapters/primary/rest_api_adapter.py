@@ -7,30 +7,22 @@ and configuration management.
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
+from pydantic import BaseModel, Field
 
+from codetoreum.adapters.primary.exception_mapper import map_exception_to_http
 from codetoreum.config import (
     SCHEDULER_DEFAULT_PAGE_SIZE,
     SCHEDULER_MAX_PAGE_SIZE,
     WORKSPACE_DEFAULT_PAGE_SIZE,
 )
-from pydantic import BaseModel, Field
-
-from codetoreum.adapters.primary.exception_mapper import map_exception_to_http
 from codetoreum.infrastructure.logging import get_logger
 from codetoreum.ports.input.config_command import (
     AddEnvironmentVariableCommand,
-    ConfigurationCommandResult,
     IConfigurationCommandPort,
-    MountCommandCommand,
-    MountSubAgentCommand,
     RemoveEnvironmentVariableCommand,
-    UnmountCommandCommand,
-    UnmountSubAgentCommand,
-    UpdateAgentConfigCommand,
-    UpdatePipelineConfigCommand,
     UpdateProjectConfigCommand,
 )
 from codetoreum.ports.input.task_query import (
@@ -64,15 +56,15 @@ class StartWorkflowRequest(BaseModel):
     project_name: str = Field(..., description="Project name")
     work_item_id: str = Field(..., description="Work item ID (issue number, etc.)")
     pipeline_name: str = Field(..., description="Pipeline name to execute")
-    stage_name: Optional[str] = Field(None, description="Starting stage (optional)")
+    stage_name: str | None = Field(None, description="Starting stage (optional)")
     priority: str = Field("MEDIUM", description="Priority: LOW, MEDIUM, HIGH, CRITICAL")
-    context: Optional[Dict[str, Any]] = Field(None, description="Additional context")
+    context: dict[str, Any] | None = Field(None, description="Additional context")
 
 
 class WorkflowActionRequest(BaseModel):
     """Request to perform an action on a workflow"""
 
-    reason: Optional[str] = Field(None, description="Reason for action")
+    reason: str | None = Field(None, description="Reason for action")
 
 
 class RetryStageRequest(BaseModel):
@@ -89,7 +81,7 @@ class WorkflowResponse(BaseModel):
     workflow_run_id: str
     message: str
     state: str
-    errors: Optional[List[str]] = None
+    errors: list[str] | None = None
 
 
 # ---------- Execution Query Models ----------
@@ -106,12 +98,12 @@ class ExecutionStatusResponse(BaseModel):
     stage_name: str
     agent_name: str
     status: str
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    duration_seconds: Optional[float] = None
-    error_message: Optional[str] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    duration_seconds: float | None = None
+    error_message: str | None = None
     retry_count: int = 0
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class ExecutionListItem(BaseModel):
@@ -123,14 +115,14 @@ class ExecutionListItem(BaseModel):
     stage_name: str
     agent_name: str
     status: str
-    started_at: Optional[datetime] = None
-    duration_seconds: Optional[float] = None
+    started_at: datetime | None = None
+    duration_seconds: float | None = None
 
 
 class ExecutionListResponse(BaseModel):
     """Response with list of executions"""
 
-    executions: List[ExecutionListItem]
+    executions: list[ExecutionListItem]
     total_count: int
     page: int
     page_size: int
@@ -147,14 +139,14 @@ class ArtifactInfo(BaseModel):
     path: str
     size_bytes: int
     created_at: datetime
-    mime_type: Optional[str] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    mime_type: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class ArtifactListResponse(BaseModel):
     """Response with list of artifacts"""
 
-    artifacts: List[ArtifactInfo]
+    artifacts: list[ArtifactInfo]
     total_count: int
 
 
@@ -164,17 +156,17 @@ class ArtifactListResponse(BaseModel):
 class UpdateProjectConfigRequest(BaseModel):
     """Request to update project configuration"""
 
-    updates: Dict[str, Any] = Field(..., description="Configuration updates")
+    updates: dict[str, Any] = Field(..., description="Configuration updates")
     user_id: str = Field(..., description="User making the change")
-    reason: Optional[str] = Field(None, description="Reason for change")
+    reason: str | None = Field(None, description="Reason for change")
 
 
 class UpdateAgentConfigRequest(BaseModel):
     """Request to update agent configuration"""
 
-    updates: Dict[str, Any] = Field(..., description="Agent configuration updates")
+    updates: dict[str, Any] = Field(..., description="Agent configuration updates")
     user_id: str = Field(..., description="User making the change")
-    reason: Optional[str] = Field(None, description="Reason for change")
+    reason: str | None = Field(None, description="Reason for change")
 
 
 class AddEnvironmentVariableRequest(BaseModel):
@@ -184,7 +176,7 @@ class AddEnvironmentVariableRequest(BaseModel):
     variable_value: str
     user_id: str
     is_secret: bool = False
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class MountCommandRequest(BaseModel):
@@ -193,16 +185,16 @@ class MountCommandRequest(BaseModel):
     command_name: str
     command_path: str
     user_id: str
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class MountSubAgentRequest(BaseModel):
     """Request to mount a sub-agent"""
 
     subagent_name: str
-    subagent_config: Dict[str, Any]
+    subagent_config: dict[str, Any]
     user_id: str
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class ConfigurationResponse(BaseModel):
@@ -211,8 +203,8 @@ class ConfigurationResponse(BaseModel):
     success: bool
     config_version: int
     message: str
-    changes_applied: Dict[str, Any]
-    errors: Optional[List[str]] = None
+    changes_applied: dict[str, Any]
+    errors: list[str] | None = None
 
 
 # ============================================================================
@@ -257,6 +249,7 @@ class RestAPIAdapter:
         }
         if auth_dependencies:
             from fastapi import Depends
+
             router_kwargs["dependencies"] = [Depends(auth_dependencies.require_auth)]
 
         self.router = APIRouter(**router_kwargs)
@@ -322,9 +315,7 @@ class RestAPIAdapter:
             response_model=WorkflowResponse,
             summary="Pause a running workflow",
         )
-        async def pause_workflow(
-            workflow_run_id: str, request: WorkflowActionRequest
-        ) -> WorkflowResponse:
+        async def pause_workflow(workflow_run_id: str, request: WorkflowActionRequest) -> WorkflowResponse:
             """
             Pauses an active workflow execution.
 
@@ -362,9 +353,7 @@ class RestAPIAdapter:
             response_model=WorkflowResponse,
             summary="Resume a paused workflow",
         )
-        async def resume_workflow(
-            workflow_run_id: str, request: WorkflowActionRequest
-        ) -> WorkflowResponse:
+        async def resume_workflow(workflow_run_id: str, request: WorkflowActionRequest) -> WorkflowResponse:
             """
             Resumes a paused workflow execution.
 
@@ -377,9 +366,7 @@ class RestAPIAdapter:
             - 409 Conflict: Workflow not paused
             """
             try:
-                command = ResumeWorkflowCommand(
-                    workflow_run_id=workflow_run_id, from_stage=None
-                )
+                command = ResumeWorkflowCommand(workflow_run_id=workflow_run_id, from_stage=None)
 
                 result = await self.workflow_port.resume_workflow(command)
 
@@ -400,9 +387,7 @@ class RestAPIAdapter:
             response_model=WorkflowResponse,
             summary="Cancel a workflow",
         )
-        async def cancel_workflow(
-            workflow_run_id: str, request: WorkflowActionRequest
-        ) -> WorkflowResponse:
+        async def cancel_workflow(workflow_run_id: str, request: WorkflowActionRequest) -> WorkflowResponse:
             """
             Cancels a workflow execution.
 
@@ -439,9 +424,7 @@ class RestAPIAdapter:
             response_model=WorkflowResponse,
             summary="Retry a failed stage",
         )
-        async def retry_stage(
-            workflow_run_id: str, request: RetryStageRequest
-        ) -> WorkflowResponse:
+        async def retry_stage(workflow_run_id: str, request: RetryStageRequest) -> WorkflowResponse:
             """
             Retries a failed workflow stage.
 
@@ -474,7 +457,10 @@ class RestAPIAdapter:
                 )
 
             except Exception as e:
-                logger.exception("Failed to retry stage", extra={"workflow_run_id": workflow_run_id, "stage_name": request.stage_name})
+                logger.exception(
+                    "Failed to retry stage",
+                    extra={"workflow_run_id": workflow_run_id, "stage_name": request.stage_name},
+                )
                 raise map_exception_to_http(e, "Failed to retry stage")
 
         # ====================================================================
@@ -487,10 +473,10 @@ class RestAPIAdapter:
             summary="List executions",
         )
         async def list_executions(
-            workflow_run_id: Optional[str] = Query(None),
-            work_item_id: Optional[str] = Query(None),
-            project_name: Optional[str] = Query(None),
-            status: Optional[str] = Query(None),
+            workflow_run_id: str | None = Query(None),
+            work_item_id: str | None = Query(None),
+            project_name: str | None = Query(None),
+            status: str | None = Query(None),
             page: int = Query(1, ge=1),
             page_size: int = Query(SCHEDULER_DEFAULT_PAGE_SIZE, ge=1, le=SCHEDULER_MAX_PAGE_SIZE),
         ) -> ExecutionListResponse:
@@ -593,7 +579,7 @@ class RestAPIAdapter:
             summary="Get execution artifacts",
         )
         async def get_execution_artifacts(
-            execution_id: str, artifact_type: Optional[str] = Query(None)
+            execution_id: str, artifact_type: str | None = Query(None)
         ) -> ArtifactListResponse:
             """
             Retrieves artifacts produced by an execution.
@@ -607,9 +593,7 @@ class RestAPIAdapter:
             - 404 Not Found: Execution not found
             """
             try:
-                result = await self.task_port.get_artifacts(
-                    execution_id, artifact_type=artifact_type
-                )
+                result = await self.task_port.get_artifacts(execution_id, artifact_type=artifact_type)
 
                 return ArtifactListResponse(
                     artifacts=[
@@ -779,10 +763,10 @@ class RestAPIAdapter:
 
         @self.router.get(
             "/configurations/projects/{project_name}",
-            response_model=Dict[str, Any],
+            response_model=dict[str, Any],
             summary="Get project configuration",
         )
-        async def get_project_config(project_name: str) -> Dict[str, Any]:
+        async def get_project_config(project_name: str) -> dict[str, Any]:
             """
             Retrieves the current configuration for a project.
 
@@ -802,12 +786,12 @@ class RestAPIAdapter:
 
         @self.router.get(
             "/configurations/agents",
-            response_model=List[Dict[str, Any]],
+            response_model=list[dict[str, Any]],
             summary="List all agent configurations",
         )
         async def list_agent_configs(
-            project_name: Optional[str] = Query(None)
-        ) -> List[Dict[str, Any]]:
+            project_name: str | None = Query(None),
+        ) -> list[dict[str, Any]]:
             """
             Lists all agent configurations, optionally filtered by project.
 
@@ -818,9 +802,7 @@ class RestAPIAdapter:
             - 200 OK: List of agent configurations
             """
             try:
-                result = await self.config_port.list_agent_configs(
-                    project_name=project_name
-                )
+                result = await self.config_port.list_agent_configs(project_name=project_name)
                 return result
             except Exception as e:
                 logger.exception("Request failed", extra={"status_code": 400})
@@ -828,10 +810,10 @@ class RestAPIAdapter:
 
         @self.router.get(
             "/configurations/agents/{agent_name}",
-            response_model=Dict[str, Any],
+            response_model=dict[str, Any],
             summary="Get agent configuration",
         )
-        async def get_agent_config(agent_name: str) -> Dict[str, Any]:
+        async def get_agent_config(agent_name: str) -> dict[str, Any]:
             """
             Retrieves configuration for a specific agent.
 
@@ -851,12 +833,12 @@ class RestAPIAdapter:
 
         @self.router.get(
             "/configurations/pipelines",
-            response_model=List[Dict[str, Any]],
+            response_model=list[dict[str, Any]],
             summary="List all pipeline configurations",
         )
         async def list_pipeline_configs(
-            project_name: Optional[str] = Query(None)
-        ) -> List[Dict[str, Any]]:
+            project_name: str | None = Query(None),
+        ) -> list[dict[str, Any]]:
             """
             Lists all pipeline (workflow) configurations, optionally filtered by project.
 
@@ -867,9 +849,7 @@ class RestAPIAdapter:
             - 200 OK: List of pipeline configurations
             """
             try:
-                result = await self.config_port.list_pipeline_configs(
-                    project_name=project_name
-                )
+                result = await self.config_port.list_pipeline_configs(project_name=project_name)
                 return result
             except Exception as e:
                 logger.exception("Request failed", extra={"status_code": 400})
@@ -877,10 +857,10 @@ class RestAPIAdapter:
 
         @self.router.get(
             "/configurations/pipelines/{pipeline_name}",
-            response_model=Dict[str, Any],
+            response_model=dict[str, Any],
             summary="Get pipeline configuration",
         )
-        async def get_pipeline_config(pipeline_name: str) -> Dict[str, Any]:
+        async def get_pipeline_config(pipeline_name: str) -> dict[str, Any]:
             """
             Retrieves configuration for a specific pipeline.
 
@@ -900,17 +880,15 @@ class RestAPIAdapter:
 
         @self.router.get(
             "/configurations/history",
-            response_model=List[Dict[str, Any]],
+            response_model=list[dict[str, Any]],
             summary="Get configuration change history",
         )
         async def get_configuration_history(
-            project_name: Optional[str] = Query(None),
-            config_type: Optional[str] = Query(
-                None, description="Filter by type: project, agent, pipeline"
-            ),
+            project_name: str | None = Query(None),
+            config_type: str | None = Query(None, description="Filter by type: project, agent, pipeline"),
             limit: int = Query(WORKSPACE_DEFAULT_PAGE_SIZE, ge=1, le=500),
             offset: int = Query(0, ge=0),
-        ) -> List[Dict[str, Any]]:
+        ) -> list[dict[str, Any]]:
             """
             Retrieves configuration change history.
 
@@ -941,7 +919,7 @@ class RestAPIAdapter:
             summary="Rollback configuration change",
         )
         async def rollback_configuration(
-            change_id: str, user_id: str = Query(...), reason: Optional[str] = Query(None)
+            change_id: str, user_id: str = Query(...), reason: str | None = Query(None)
         ) -> ConfigurationResponse:
             """
             Rolls back a configuration change to a previous version.

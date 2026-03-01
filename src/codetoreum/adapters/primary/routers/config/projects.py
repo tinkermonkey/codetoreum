@@ -4,20 +4,9 @@ Project Configuration Endpoints
 Handles CRUD operations for project configurations including environment variables.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, HTTPException, Query, status
 
-from codetoreum.config import (
-    DEFAULT_PAGE_SIZE,
-    MAX_PAGE_SIZE,
-    DEFAULT_OFFSET,
-    VERSIONS_DEFAULT_LIMIT,
-    VERSIONS_MAX_LIMIT,
-)
-
 from codetoreum.adapters.primary.config_dtos import (
-    AddEnvironmentVariableRequest,
     ConfigurationCommandResponse,
     ConfigVersionHistoryResponse,
     ProjectConfigResponse,
@@ -25,12 +14,17 @@ from codetoreum.adapters.primary.config_dtos import (
     UpdateProjectConfigRequest,
 )
 from codetoreum.adapters.primary.exception_mapper import map_exception_to_http
+from codetoreum.config import (
+    DEFAULT_OFFSET,
+    DEFAULT_PAGE_SIZE,
+    MAX_PAGE_SIZE,
+    VERSIONS_DEFAULT_LIMIT,
+    VERSIONS_MAX_LIMIT,
+)
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.ports.exceptions import PortError
 from codetoreum.ports.input.config_command import (
-    AddEnvironmentVariableCommand,
     IConfigurationCommandPort,
-    RemoveEnvironmentVariableCommand,
     UpdateProjectConfigCommand,
 )
 from codetoreum.ports.input.config_query import (
@@ -70,7 +64,7 @@ def register_project_endpoints(
         try:
             config = await query_port.get_project_config(
                 project_id=project_id,
-                include_secrets=False  # Never expose secrets via API
+                include_secrets=False,  # Never expose secrets via API
             )
 
             return ProjectConfigResponse(
@@ -101,7 +95,7 @@ def register_project_endpoints(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve project config: {str(e)}",
+                detail=f"Failed to retrieve project config: {e!s}",
             )
 
     @router.put(
@@ -159,7 +153,7 @@ def register_project_endpoints(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to update project config: {str(e)}",
+                detail=f"Failed to update project config: {e!s}",
             )
 
     @router.get(
@@ -170,7 +164,12 @@ def register_project_endpoints(
     )
     async def list_projects(
         offset: int = Query(DEFAULT_OFFSET, ge=0, description="Pagination offset"),
-        limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description=f"Pagination limit (max {MAX_PAGE_SIZE})"),
+        limit: int = Query(
+            DEFAULT_PAGE_SIZE,
+            ge=1,
+            le=MAX_PAGE_SIZE,
+            description=f"Pagination limit (max {MAX_PAGE_SIZE})",
+        ),
     ) -> ProjectListResponse:
         """
         List all projects with pagination.
@@ -190,20 +189,22 @@ def register_project_endpoints(
             # Convert to response DTOs
             projects = []
             for config in configs:
-                projects.append(ProjectConfigResponse(
-                    id=config.id,
-                    name=config.name,
-                    description=config.description,
-                    github_org=config.github_org,
-                    github_repo=config.github_repo,
-                    version=config.version,
-                    created_at=config.created_at,
-                    updated_at=config.updated_at,
-                    environment_variables=[],
-                    mounted_commands=[],
-                    mounted_subagents=[],
-                    metadata=config.metadata,
-                ))
+                projects.append(
+                    ProjectConfigResponse(
+                        id=config.id,
+                        name=config.name,
+                        description=config.description,
+                        github_org=config.github_org,
+                        github_repo=config.github_repo,
+                        version=config.version,
+                        created_at=config.created_at,
+                        updated_at=config.updated_at,
+                        environment_variables=[],
+                        mounted_commands=[],
+                        mounted_subagents=[],
+                        metadata=config.metadata,
+                    )
+                )
 
             # Get total count
             total = await query_port.count_configs(config_type="project")
@@ -216,7 +217,7 @@ def register_project_endpoints(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to list projects: {str(e)}",
+                detail=f"Failed to list projects: {e!s}",
             )
 
     @router.get(
@@ -227,7 +228,12 @@ def register_project_endpoints(
     )
     async def get_project_config_history(
         project_id: str,
-        limit: int = Query(VERSIONS_DEFAULT_LIMIT, ge=1, le=VERSIONS_MAX_LIMIT, description=f"Maximum versions to return (max {VERSIONS_MAX_LIMIT})"),
+        limit: int = Query(
+            VERSIONS_DEFAULT_LIMIT,
+            ge=1,
+            le=VERSIONS_MAX_LIMIT,
+            description=f"Maximum versions to return (max {VERSIONS_MAX_LIMIT})",
+        ),
     ) -> ConfigVersionHistoryResponse:
         """
         Get version history for project configuration.
@@ -278,5 +284,5 @@ def register_project_endpoints(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve version history: {str(e)}",
+                detail=f"Failed to retrieve version history: {e!s}",
             )

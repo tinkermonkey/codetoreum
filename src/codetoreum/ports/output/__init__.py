@@ -2,12 +2,6 @@
 
 from codetoreum.domain.value_objects import ProjectConfig
 from codetoreum.ports.output.agent_executor import IAgentExecutor
-from codetoreum.ports.output.container_recovery import (
-    ContainerMetadata,
-    IAgentContainerRecoveryService,
-    RecoveryAssessment,
-    RecoveryResult,
-)
 from codetoreum.ports.output.board_service import (
     BoardColumn,
     BoardConfig,
@@ -29,6 +23,12 @@ from codetoreum.ports.output.container import (
     ContainerResult,
     ContainerStatus,
     IContainer,
+)
+from codetoreum.ports.output.container_recovery import (
+    ContainerMetadata,
+    IAgentContainerRecoveryService,
+    RecoveryAssessment,
+    RecoveryResult,
 )
 from codetoreum.ports.output.discussion_adapter import (
     DiscussionMonitoringConfig,
@@ -80,18 +80,18 @@ from codetoreum.ports.output.pipeline_lock_service import (
     IPipelineLockService,
     PipelineLock,
 )
-from codetoreum.ports.output.project_manager_service import IProjectManagerService
 from codetoreum.ports.output.pipeline_queue_service import (
     IPipelineQueueService,
     PipelineQueueEntry,
     QueueEntry,  # Backward compatibility alias
 )
+from codetoreum.ports.output.project_manager_service import IProjectManagerService
+from codetoreum.ports.output.repair_cycle_checkpoint_store import (
+    IRepairCycleCheckpointStore,
+)
 from codetoreum.ports.output.repair_cycle_service import (
     IRepairCycle,
     RepairCycleContext,
-)
-from codetoreum.ports.output.repair_cycle_checkpoint_store import (
-    IRepairCycleCheckpointStore,
 )
 from codetoreum.ports.output.repository import (
     IRepository,

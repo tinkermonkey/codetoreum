@@ -1,8 +1,7 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { systemApi } from '../services/systemApi'
 import { startPolling, POLLING_INTERVALS } from '../utils/polling'
-
-const SystemStateContext = createContext()
+import { SystemStateContext } from './SystemStateContextValue'
 
 /**
  * SystemStateProvider - Manages system health and circuit breaker state
@@ -91,15 +90,4 @@ export function SystemStateProvider({ children }) {
       {children}
     </SystemStateContext.Provider>
   )
-}
-
-/**
- * Hook to access system state
- */
-export function useSystemState() {
-  const context = useContext(SystemStateContext)
-  if (!context) {
-    throw new Error('useSystemState must be used within SystemStateProvider')
-  }
-  return context
 }

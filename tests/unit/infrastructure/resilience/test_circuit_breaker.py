@@ -59,7 +59,7 @@ class TestCircuitBreaker:
         breaker = CircuitBreaker(
             failure_threshold=2,
             timeout_seconds=0.5,  # Short timeout for testing
-            success_threshold=1
+            success_threshold=1,
         )
 
         async def failing_operation():
@@ -87,11 +87,7 @@ class TestCircuitBreaker:
     @pytest.mark.asyncio
     async def test_closes_from_half_open_on_success(self):
         """Test that circuit closes from HALF_OPEN after success threshold."""
-        breaker = CircuitBreaker(
-            failure_threshold=2,
-            timeout_seconds=0.5,
-            success_threshold=2
-        )
+        breaker = CircuitBreaker(failure_threshold=2, timeout_seconds=0.5, success_threshold=2)
 
         async def failing_operation():
             raise Exception("Simulated failure")
@@ -118,10 +114,7 @@ class TestCircuitBreaker:
     @pytest.mark.asyncio
     async def test_reopens_from_half_open_on_failure(self):
         """Test that circuit reopens from HALF_OPEN on any failure."""
-        breaker = CircuitBreaker(
-            failure_threshold=2,
-            timeout_seconds=0.5
-        )
+        breaker = CircuitBreaker(failure_threshold=2, timeout_seconds=0.5)
 
         async def failing_operation():
             raise Exception("Simulated failure")
@@ -263,8 +256,12 @@ class TestMockCircuitBreaker:
             return None
 
         # Manually add to history for testing
-        breaker.call_history.append({"operation": "op1", "state": CircuitState.CLOSED, "timestamp": None, "call_number": 1})
-        breaker.call_history.append({"operation": "op1", "state": CircuitState.CLOSED, "timestamp": None, "call_number": 2})
+        breaker.call_history.append(
+            {"operation": "op1", "state": CircuitState.CLOSED, "timestamp": None, "call_number": 1}
+        )
+        breaker.call_history.append(
+            {"operation": "op1", "state": CircuitState.CLOSED, "timestamp": None, "call_number": 2}
+        )
 
         # Should pass
         breaker.assert_called("op1", min_count=2)

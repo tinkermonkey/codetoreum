@@ -6,7 +6,8 @@ Supports event type filtering and wildcard subscriptions.
 """
 
 import logging
-from typing import Callable, Dict, List
+from collections.abc import Callable
+
 from codetoreum.ports.output.event_emitter import IEventEmitter
 
 logger = logging.getLogger(__name__)
@@ -40,9 +41,9 @@ class CapturingMockEventEmitter(IEventEmitter):
 
     def __init__(self) -> None:
         """Initialize the mock event emitter."""
-        self._events: List = []  # All emitted events
-        self._handlers: Dict[str, List[Callable]] = {}  # Event type -> handlers
-        self._wildcard_handlers: List[Callable] = []  # Handlers for all events
+        self._events: list = []  # All emitted events
+        self._handlers: dict[str, list[Callable]] = {}  # Event type -> handlers
+        self._wildcard_handlers: list[Callable] = []  # Handlers for all events
 
     def on(self, event_type: str, handler: Callable) -> None:
         """Subscribe to events of a specific type.
@@ -55,9 +56,11 @@ class CapturingMockEventEmitter(IEventEmitter):
             ValueError: If event_type is invalid or handler is not callable
         """
         if not event_type:
-            raise ValueError("event_type cannot be empty")
+            msg = "event_type cannot be empty"
+            raise ValueError(msg)
         if not callable(handler):
-            raise ValueError("handler must be callable")
+            msg = "handler must be callable"
+            raise ValueError(msg)
 
         if event_type == "*":
             self._wildcard_handlers.append(handler)
@@ -78,13 +81,13 @@ class CapturingMockEventEmitter(IEventEmitter):
         """
         if event_type == "*":
             if handler not in self._wildcard_handlers:
-                raise ValueError(f"Handler not subscribed to {event_type}")
+                msg = f"Handler not subscribed to {event_type}"
+                raise ValueError(msg)
             self._wildcard_handlers.remove(handler)
         else:
-            if event_type not in self._handlers or handler not in self._handlers[
-                event_type
-            ]:
-                raise ValueError(f"Handler not subscribed to {event_type}")
+            if event_type not in self._handlers or handler not in self._handlers[event_type]:
+                msg = f"Handler not subscribed to {event_type}"
+                raise ValueError(msg)
             self._handlers[event_type].remove(handler)
 
     def emit(self, event) -> None:  # type: ignore
@@ -97,7 +100,8 @@ class CapturingMockEventEmitter(IEventEmitter):
             ValueError: If event is invalid or not a CodetoreumEvent
         """
         if event is None:
-            raise ValueError("event cannot be None")
+            msg = "event cannot be None"
+            raise ValueError(msg)
 
         # Store event for later inspection
         self._events.append(event)
@@ -122,7 +126,7 @@ class CapturingMockEventEmitter(IEventEmitter):
     # Test Helper Methods
     # =========================================================================
 
-    def get_events(self) -> List:
+    def get_events(self) -> list:
         """Get all emitted events.
 
         Returns:
@@ -130,7 +134,7 @@ class CapturingMockEventEmitter(IEventEmitter):
         """
         return self._events.copy()
 
-    def get_events_by_type(self, event_type: str) -> List:
+    def get_events_by_type(self, event_type: str) -> list:
         """Get all emitted events of a specific type.
 
         Args:
@@ -168,6 +172,4 @@ class CapturingMockEventEmitter(IEventEmitter):
         Returns:
             True if at least one event of that type was emitted
         """
-        return any(
-            getattr(e, "type", None) == event_type for e in self._events
-        )
+        return any(getattr(e, "type", None) == event_type for e in self._events)

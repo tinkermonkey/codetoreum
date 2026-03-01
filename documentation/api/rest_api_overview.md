@@ -76,7 +76,7 @@ Endpoints:
 - `DELETE /{id}` - Delete work item
 - `GET /{id}/history` - Get work item history
 
-Dependencies: 
+Dependencies:
 - `IWorkItemCommandPort` - Create/update/delete operations
 - `IWorkItemQueryPort` - Read operations
 
@@ -160,39 +160,39 @@ Location: `/workspace/src/codetoreum/ports/input/`
 ```python
 class IConfigurationCommandPort(ABC):
     """Input port for configuration commands"""
-    
+
     @abstractmethod
     async def update_project_config(self, command: UpdateProjectConfigCommand) -> ConfigurationCommandResult:
         pass
-    
+
     @abstractmethod
     async def update_agent_config(self, command: UpdateAgentConfigCommand) -> ConfigurationCommandResult:
         pass
-    
+
     @abstractmethod
     async def update_pipeline_config(self, command: UpdatePipelineConfigCommand) -> ConfigurationCommandResult:
         pass
-    
+
     @abstractmethod
     async def add_environment_variable(self, command: AddEnvironmentVariableCommand) -> ConfigurationCommandResult:
         pass
-    
+
     @abstractmethod
     async def remove_environment_variable(self, command: RemoveEnvironmentVariableCommand) -> ConfigurationCommandResult:
         pass
-    
+
     @abstractmethod
     async def mount_command(self, command: MountCommandCommand) -> ConfigurationCommandResult:
         pass
-    
+
     @abstractmethod
     async def unmount_command(self, command: UnmountCommandCommand) -> ConfigurationCommandResult:
         pass
-    
+
     @abstractmethod
     async def mount_subagent(self, command: MountSubAgentCommand) -> ConfigurationCommandResult:
         pass
-    
+
     @abstractmethod
     async def unmount_subagent(self, command: UnmountSubAgentCommand) -> ConfigurationCommandResult:
         pass
@@ -301,7 +301,7 @@ Location: `/workspace/src/codetoreum/ports/output/`
 ```python
 class IMetrics(ABC):
     """Interface for metrics collection"""
-    
+
     async def increment_counter(name: str, value: int, labels: Dict[str, str])
     async def set_gauge(name: str, value: float, labels: Dict[str, str])
     async def record_histogram(name: str, value: float, labels: Dict[str, str])
@@ -488,7 +488,7 @@ Features:
 ```python
 class SimpleAuthDependencies:
     """FastAPI dependencies for simple token authentication"""
-    
+
     async def require_auth(
         self,
         authorization: Optional[str] = Header(None),
@@ -496,7 +496,7 @@ class SimpleAuthDependencies:
     ) -> bool:
         """Require authentication - raises 401 if missing/invalid"""
         pass
-    
+
     async def optional_auth(
         self,
         authorization: Optional[str] = Header(None),
@@ -551,13 +551,13 @@ def create_work_items_router(
     """Create configured router with dependencies injected"""
     # Create router with optional auth
     router = APIRouter(...)
-    
+
     # Register endpoints using injected dependencies
     @router.get("")
     async def list_work_items(...):
         # Use ports
         result = await query_port.list_work_items(...)
-    
+
     return router
 ```
 
@@ -671,7 +671,7 @@ Each domain has a mapper class:
 ```python
 class WorkItemMapper:
     """Convert between WorkItem domain objects and DTOs"""
-    
+
     @staticmethod
     def to_response(domain_obj: WorkItem) -> WorkItemResponse:
         """Convert domain object to API response"""
@@ -680,7 +680,7 @@ class WorkItemMapper:
             project_id=domain_obj.project_id,
             # ... field mappings ...
         )
-    
+
     @staticmethod
     def to_create_command(request: CreateWorkItemRequest) -> CreateWorkItemCommand:
         """Convert API request to domain command"""
@@ -923,21 +923,21 @@ def create_configurations_router(
     auth_deps: Optional[SimpleAuthDependencies] = None,
 ) -> APIRouter:
     """Create configurations REST API router"""
-    
+
     router_kwargs = {
         "prefix": "/api/v2/configurations",
         "tags": ["configurations"],
     }
     if auth_deps:
         router_kwargs["dependencies"] = [Depends(auth_deps.require_auth)]
-    
+
     router = APIRouter(**router_kwargs)
-    
+
     @router.get("", summary="List configurations")
     async def list_configurations(...):
         """Implementation"""
         pass
-    
+
     return router
 ```
 

@@ -1,7 +1,6 @@
 """Event handler for execution-related events."""
 
 import logging
-from typing import Dict, List, Optional
 
 from codetoreum.application.execution_service import ExecutionService
 from codetoreum.domain.events import (
@@ -12,8 +11,8 @@ from codetoreum.domain.events import (
     ExecutionStarted,
     ExecutionTimeout,
 )
-from codetoreum.infrastructure.event_bus import EventHandler, event_handler
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.infrastructure.event_bus import EventHandler, event_handler
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +46,7 @@ class ExecutionEventHandler(EventHandler):
         self.execution_service = execution_service
 
         # Track execution metrics
-        self._metrics: Dict[str, int] = {
+        self._metrics: dict[str, int] = {
             "total_executions": 0,
             "active_executions": 0,
             "completed_executions": 0,
@@ -56,7 +55,7 @@ class ExecutionEventHandler(EventHandler):
         }
 
         # Track active executions by ID
-        self._active_executions: Dict[str, str] = {}  # execution_id -> work_item_id
+        self._active_executions: dict[str, str] = {}  # execution_id -> work_item_id
 
     async def handle(self, event: DomainEvent) -> None:
         """
@@ -79,9 +78,7 @@ class ExecutionEventHandler(EventHandler):
         elif isinstance(event, ExecutionTimeout):
             await self._handle_execution_timeout(event)
         else:
-            logger.warning(
-                f"ExecutionEventHandler received unexpected event type: {event.event_type}"
-            )
+            logger.warning(f"ExecutionEventHandler received unexpected event type: {event.event_type}")
 
     async def _handle_execution_initialized(self, event: ExecutionInitialized) -> None:
         """
@@ -99,8 +96,7 @@ class ExecutionEventHandler(EventHandler):
         )
 
         logger.debug(
-            f"Total executions: {self._metrics['total_executions']}, "
-            f"Active: {self._metrics['active_executions']}"
+            f"Total executions: {self._metrics['total_executions']}, Active: {self._metrics['active_executions']}"
         )
 
     async def _handle_execution_started(self, event: ExecutionStarted) -> None:
@@ -114,13 +110,11 @@ class ExecutionEventHandler(EventHandler):
         self._active_executions[event.aggregate_id] = event.aggregate_id  # Track by execution ID
 
         logger.info(
-            f"Execution started: {event.aggregate_id} "
-            f"(container: {event.payload.get('container_name') or 'none'})"
+            f"Execution started: {event.aggregate_id} (container: {event.payload.get('container_name') or 'none'})"
         )
 
         logger.debug(
-            f"Active executions: {self._metrics['active_executions']}, "
-            f"Total: {self._metrics['total_executions']}"
+            f"Active executions: {self._metrics['active_executions']}, Total: {self._metrics['total_executions']}"
         )
 
         # Note: In a full implementation, this would:
@@ -140,8 +134,8 @@ class ExecutionEventHandler(EventHandler):
         self._metrics["active_executions"] -= 1
         self._active_executions.pop(event.aggregate_id, None)
 
-        input_tokens = event.payload.get('input_tokens', 0)
-        output_tokens = event.payload.get('output_tokens', 0)
+        input_tokens = event.payload.get("input_tokens", 0)
+        output_tokens = event.payload.get("output_tokens", 0)
         logger.info(
             f"Execution completed: {event.aggregate_id} "
             f"(tokens: input={input_tokens}, output={output_tokens}, "
@@ -172,12 +166,11 @@ class ExecutionEventHandler(EventHandler):
         self._active_executions.pop(event.aggregate_id, None)
 
         logger.error(
-            f"Execution failed: {event.aggregate_id}, "
-            f"error: {event.payload.get('error_message')}",
-            extra={"error_id": "ERR_EXECUTION_FAILED"}
+            f"Execution failed: {event.aggregate_id}, error: {event.payload.get('error_message')}",
+            extra={"error_id": "ERR_EXECUTION_FAILED"},
         )
 
-        exit_code = event.payload.get('exit_code')
+        exit_code = event.payload.get("exit_code")
         if exit_code:
             logger.error(f"Exit code: {exit_code}", extra={"error_id": ErrorRegistry.ERR_EXECUTION_ERROR})
 
@@ -208,7 +201,7 @@ class ExecutionEventHandler(EventHandler):
 
         logger.error(
             f"Execution timed out: {event.aggregate_id}",
-            extra={"error_id": ErrorRegistry.ERR_EXECUTION_TIMEOUT}
+            extra={"error_id": ErrorRegistry.ERR_EXECUTION_TIMEOUT},
         )
 
         logger.warning(
@@ -228,31 +221,21 @@ class ExecutionEventHandler(EventHandler):
         """Calculate success rate percentage."""
         if self._metrics["total_executions"] == 0:
             return 0.0
-        return (
-            self._metrics["completed_executions"]
-            / self._metrics["total_executions"]
-            * 100
-        )
+        return self._metrics["completed_executions"] / self._metrics["total_executions"] * 100
 
     def _get_failure_rate(self) -> float:
         """Calculate failure rate percentage."""
         if self._metrics["total_executions"] == 0:
             return 0.0
-        return (
-            self._metrics["failed_executions"] / self._metrics["total_executions"] * 100
-        )
+        return self._metrics["failed_executions"] / self._metrics["total_executions"] * 100
 
     def _get_timeout_rate(self) -> float:
         """Calculate timeout rate percentage."""
         if self._metrics["total_executions"] == 0:
             return 0.0
-        return (
-            self._metrics["timed_out_executions"]
-            / self._metrics["total_executions"]
-            * 100
-        )
+        return self._metrics["timed_out_executions"] / self._metrics["total_executions"] * 100
 
-    def get_metrics(self) -> Dict[str, float]:
+    def get_metrics(self) -> dict[str, float]:
         """
         Get execution metrics.
 
@@ -266,7 +249,7 @@ class ExecutionEventHandler(EventHandler):
             "timeout_rate": self._get_timeout_rate(),
         }
 
-    def get_active_executions(self) -> Dict[str, str]:
+    def get_active_executions(self) -> dict[str, str]:
         """
         Get currently active executions.
 

@@ -3,25 +3,61 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from types import MappingProxyType
+from typing import Any
 
 from codetoreum.domain.types import MetricName
-
 
 # ============================================================================
 # Data Models
 # ============================================================================
 
 
-@dataclass
+@dataclass(frozen=True)
 class MetricData:
-    """Metric data point."""
+    """Metric data point.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. Labels dict is converted
+    to MappingProxyType for immutability.
+    """
 
     timestamp: datetime
     name: MetricName
     value: float
-    labels: Dict[str, str]
+    labels: MappingProxyType
     metric_type: str  # counter, gauge, histogram, summary
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        # Coerce dict to MappingProxyType for labels
+        if isinstance(self.labels, dict):
+            object.__setattr__(self, "labels", MappingProxyType(self.labels))
+
+        if not isinstance(self.timestamp, datetime):
+            msg = "timestamp must be a datetime instance"
+            raise ValueError(msg)
+
+        if not isinstance(self.name, str) or not self.name:
+            msg = "name must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.value, (int, float)):
+            msg = "value must be a number"
+            raise ValueError(msg)
+
+        if not isinstance(self.labels, MappingProxyType):
+            msg = "labels must be a dict or MappingProxyType"
+            raise ValueError(msg)
+
+        for k, v in self.labels.items():
+            if not isinstance(k, str) or not isinstance(v, str):
+                msg = "all label keys and values must be strings"
+                raise ValueError(msg)
+
+        if self.metric_type not in ("counter", "gauge", "histogram", "summary"):
+            msg = f"metric_type must be one of: counter, gauge, histogram, summary. Got: {self.metric_type}"
+            raise ValueError(msg)
 
 
 # ============================================================================
@@ -37,7 +73,7 @@ class IMetrics(ABC):
         self,
         name: str,
         value: int = 1,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         """
         Increment a counter metric.
@@ -51,14 +87,13 @@ class IMetrics(ABC):
             ValidationError: Invalid metric name or labels
             MetricsError: Recording failed
         """
-        pass
 
     @abstractmethod
     async def set_gauge(
         self,
         name: str,
         value: float,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         """
         Set a gauge metric.
@@ -72,14 +107,13 @@ class IMetrics(ABC):
             ValidationError: Invalid metric name or labels
             MetricsError: Recording failed
         """
-        pass
 
     @abstractmethod
     async def record_histogram(
         self,
         name: str,
         value: float,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         """
         Record a histogram value.
@@ -93,14 +127,13 @@ class IMetrics(ABC):
             ValidationError: Invalid metric name or labels
             MetricsError: Recording failed
         """
-        pass
 
     @abstractmethod
     async def record_summary(
         self,
         name: str,
         value: float,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         """
         Record a summary value.
@@ -114,7 +147,6 @@ class IMetrics(ABC):
             ValidationError: Invalid metric name or labels
             MetricsError: Recording failed
         """
-        pass
 
     @abstractmethod
     async def start_timer(self, name: str) -> str:
@@ -130,13 +162,12 @@ class IMetrics(ABC):
         Raises:
             MetricsError: Timer creation failed
         """
-        pass
 
     @abstractmethod
     async def stop_timer(
         self,
         timer_id: str,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> float:
         """
         Stop a timer and record duration.
@@ -152,14 +183,13 @@ class IMetrics(ABC):
             ResourceNotFoundError: Timer doesn't exist
             MetricsError: Recording failed
         """
-        pass
 
     @abstractmethod
     async def record_duration(
         self,
         name: str,
         duration_seconds: float,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         """
         Record a duration metric.
@@ -173,7 +203,6 @@ class IMetrics(ABC):
             ValidationError: Invalid metric name or duration
             MetricsError: Recording failed
         """
-        pass
 
     @abstractmethod
     async def record_custom_metric(
@@ -181,7 +210,7 @@ class IMetrics(ABC):
         name: str,
         value: Any,
         metric_type: str,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         """
         Record a custom metric.
@@ -196,7 +225,6 @@ class IMetrics(ABC):
             ValidationError: Invalid metric configuration
             MetricsError: Recording failed
         """
-        pass
 
     @abstractmethod
     async def query_metrics(
@@ -204,9 +232,9 @@ class IMetrics(ABC):
         name: str,
         start_time: datetime,
         end_time: datetime,
-        labels: Optional[Dict[str, str]] = None,
-        aggregation: Optional[str] = None,
-    ) -> List[MetricData]:
+        labels: dict[str, str] | None = None,
+        aggregation: str | None = None,
+    ) -> list[MetricData]:
         """
         Query metric data.
 
@@ -224,13 +252,12 @@ class IMetrics(ABC):
             ValidationError: Invalid query parameters
             MetricsError: Query failed
         """
-        pass
 
     @abstractmethod
     async def get_metric_names(
         self,
-        prefix: Optional[str] = None,
-    ) -> List[str]:
+        prefix: str | None = None,
+    ) -> list[str]:
         """
         Get list of metric names.
 
@@ -243,14 +270,13 @@ class IMetrics(ABC):
         Raises:
             MetricsError: Query failed
         """
-        pass
 
     @abstractmethod
     async def get_label_values(
         self,
         label_name: str,
-        metric_name: Optional[str] = None,
-    ) -> List[str]:
+        metric_name: str | None = None,
+    ) -> list[str]:
         """
         Get all values for a label.
 
@@ -264,13 +290,12 @@ class IMetrics(ABC):
         Raises:
             MetricsError: Query failed
         """
-        pass
 
     @abstractmethod
     async def delete_metric(
         self,
         name: str,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         """
         Delete a metric or metric series.
@@ -283,7 +308,6 @@ class IMetrics(ABC):
             ResourceNotFoundError: Metric doesn't exist
             MetricsError: Delete failed
         """
-        pass
 
     @abstractmethod
     async def get_statistics(
@@ -291,8 +315,8 @@ class IMetrics(ABC):
         name: str,
         start_time: datetime,
         end_time: datetime,
-        labels: Optional[Dict[str, str]] = None,
-    ) -> Dict[str, float]:
+        labels: dict[str, str] | None = None,
+    ) -> dict[str, float]:
         """
         Get statistics for a metric.
 
@@ -309,12 +333,11 @@ class IMetrics(ABC):
             ResourceNotFoundError: Metric doesn't exist
             MetricsError: Query failed
         """
-        pass
 
     @abstractmethod
     async def record_batch(
         self,
-        metrics: List[Dict[str, Any]],
+        metrics: list[dict[str, Any]],
     ) -> None:
         """
         Record multiple metrics in a batch.
@@ -326,7 +349,6 @@ class IMetrics(ABC):
             ValidationError: Invalid metric data
             MetricsError: Batch recording failed
         """
-        pass
 
     @abstractmethod
     async def flush(self) -> None:
@@ -336,7 +358,6 @@ class IMetrics(ABC):
         Raises:
             MetricsError: Flush failed
         """
-        pass
 
     @abstractmethod
     async def health_check(self) -> bool:
@@ -349,4 +370,3 @@ class IMetrics(ABC):
         Raises:
             MetricsError: Health check failed
         """
-        pass

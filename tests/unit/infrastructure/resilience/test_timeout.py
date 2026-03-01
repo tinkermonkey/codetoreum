@@ -19,11 +19,7 @@ class TestAsyncTimeout:
             await asyncio.sleep(0.1)
             return "success"
 
-        result = await timeout_handler.execute(
-            fast_operation,
-            timeout_seconds=1.0,
-            operation_name="test_op"
-        )
+        result = await timeout_handler.execute(fast_operation, timeout_seconds=1.0, operation_name="test_op")
 
         assert result == "success"
 
@@ -41,11 +37,7 @@ class TestAsyncTimeout:
             return "success"
 
         with pytest.raises(TimeoutError) as exc_info:
-            await timeout_handler.execute(
-                slow_operation,
-                timeout_seconds=0.5,
-                operation_name="test_op"
-            )
+            await timeout_handler.execute(slow_operation, timeout_seconds=0.5, operation_name="test_op")
 
         assert "exceeded timeout of 0.5s" in str(exc_info.value)
 
@@ -62,11 +54,7 @@ class TestAsyncTimeout:
             await asyncio.sleep(0.1)
             return "success"
 
-        await timeout_handler.execute(
-            timed_operation,
-            timeout_seconds=1.0,
-            operation_name="test_op"
-        )
+        await timeout_handler.execute(timed_operation, timeout_seconds=1.0, operation_name="test_op")
 
         stats = timeout_handler.get_stats()
         # Duration should be approximately 100ms
@@ -78,7 +66,7 @@ class TestAsyncTimeout:
         """Test statistics across multiple operations."""
         timeout_handler = AsyncTimeout()
 
-        async def operation(delay: float):
+        async def operation(delay: float) -> str:
             await asyncio.sleep(delay)
             return "success"
 
@@ -105,11 +93,7 @@ class TestMockTimeout:
             return "success"
 
         # Should succeed even though timeout is very short
-        result = await timeout_handler.execute(
-            slow_operation,
-            timeout_seconds=0.01,
-            operation_name="test_op"
-        )
+        result = await timeout_handler.execute(slow_operation, timeout_seconds=0.01, operation_name="test_op")
 
         assert result == "success"
 
@@ -140,11 +124,7 @@ class TestMockTimeout:
             return "success"
 
         with pytest.raises(TimeoutError):
-            await timeout_handler.execute(
-                slow_operation,
-                timeout_seconds=0.1,
-                operation_name="test_op"
-            )
+            await timeout_handler.execute(slow_operation, timeout_seconds=0.1, operation_name="test_op")
 
         assert len(timeout_handler.execution_history) == 1
         assert timeout_handler.execution_history[0]["timed_out"] is True

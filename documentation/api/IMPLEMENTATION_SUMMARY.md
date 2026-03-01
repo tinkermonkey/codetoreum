@@ -16,10 +16,9 @@ Enhanced OpenAPI specification generator with comprehensive examples for all 80+
 
 Created 11 comprehensive code examples across three languages:
 
-**Python** (4 files):
+**Python** (3 files):
 - `examples/python/create_agent.py`
 - `examples/python/list_executions.py`
-- `examples/python/websocket_events.py`
 - `examples/python/start_workflow.py`
 
 **TypeScript** (3 files):
@@ -86,8 +85,8 @@ documentation/api/
 
 ## Summary
 
-**Files Created**: 33 new files
-**Lines of Code**: ~5,000+ lines
+**Files Created**: 32 new files (websocket_events.py removed - implementation not yet complete)
+**Lines of Code**: ~4,750+ lines
 
 All action items from PR feedback completed successfully. The API now has comprehensive documentation across multiple formats (OpenAPI, examples, SDK, Postman) to support different developer workflows.
 

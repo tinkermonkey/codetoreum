@@ -5,27 +5,26 @@ Tests all security functions comprehensively to ensure proper protection
 against common vulnerabilities.
 """
 
-import pytest
-from pathlib import Path
-from fastapi import HTTPException, UploadFile
 from io import BytesIO
-from typing import AsyncGenerator
+from typing import cast
+
+import pytest
+from fastapi import HTTPException, UploadFile
 
 from codetoreum.infrastructure.security.input_validation import (
-    PathTraversalError,
     InvalidInputError,
+    PathTraversalError,
     safe_path_join,
-    validate_upload,
-    sanitize_string,
-    validate_env_var_name,
-    validate_agent_name,
-    validate_labels,
-    validate_url,
-    validate_integer_range,
-    validate_float_range,
     sanitize_search_query,
+    sanitize_string,
+    validate_agent_name,
+    validate_env_var_name,
+    validate_float_range,
+    validate_integer_range,
+    validate_labels,
+    validate_upload,
+    validate_url,
 )
-
 
 # ============================================================================
 # Path Traversal Protection Tests
@@ -101,26 +100,18 @@ class TestValidateUpload:
     @pytest.mark.asyncio
     async def test_validate_upload_valid_json(self):
         """Test valid JSON file upload"""
-        file = MockUploadFile(
-            filename="config.json",
-            content=b'{"key": "value"}',
-            content_type="application/json"
-        )
+        file = MockUploadFile(filename="config.json", content=b'{"key": "value"}', content_type="application/json")
 
         # Should not raise
-        await validate_upload(file)
+        await validate_upload(cast("UploadFile", file))
 
     @pytest.mark.asyncio
     async def test_validate_upload_valid_yaml(self):
         """Test valid YAML file upload"""
-        file = MockUploadFile(
-            filename="config.yaml",
-            content=b'key: value\n',
-            content_type="application/yaml"
-        )
+        file = MockUploadFile(filename="config.yaml", content=b"key: value\n", content_type="application/yaml")
 
         # Should not raise
-        await validate_upload(file)
+        await validate_upload(cast("UploadFile", file))
 
     @pytest.mark.asyncio
     async def test_validate_upload_invalid_content_type(self):
@@ -128,23 +119,19 @@ class TestValidateUpload:
         file = MockUploadFile(
             filename="script.sh",
             content=b'#!/bin/bash\necho "test"',
-            content_type="application/x-sh"
+            content_type="application/x-sh",
         )
 
         with pytest.raises(HTTPException, match="Invalid file type"):
-            await validate_upload(file)
+            await validate_upload(cast("UploadFile", file))
 
     @pytest.mark.asyncio
     async def test_validate_upload_path_traversal_in_filename(self):
         """Test rejection of path traversal in filename"""
-        file = MockUploadFile(
-            filename="../../../etc/passwd",
-            content=b'test content',
-            content_type="text/plain"
-        )
+        file = MockUploadFile(filename="../../../etc/passwd", content=b"test content", content_type="text/plain")
 
         with pytest.raises(HTTPException, match="path separators not allowed"):
-            await validate_upload(file)
+            await validate_upload(cast("UploadFile", file))
 
     @pytest.mark.asyncio
     async def test_validate_upload_invalid_filename_chars(self):
@@ -152,36 +139,28 @@ class TestValidateUpload:
         file = MockUploadFile(
             filename="config<script>.json",
             content=b'{"key": "value"}',
-            content_type="application/json"
+            content_type="application/json",
         )
 
         with pytest.raises(HTTPException, match="only alphanumeric"):
-            await validate_upload(file)
+            await validate_upload(cast("UploadFile", file))
 
     @pytest.mark.asyncio
     async def test_validate_upload_file_too_large(self):
         """Test rejection of oversized files"""
-        large_content = b'x' * (11 * 1024 * 1024)  # 11 MB
-        file = MockUploadFile(
-            filename="large.json",
-            content=large_content,
-            content_type="application/json"
-        )
+        large_content = b"x" * (11 * 1024 * 1024)  # 11 MB
+        file = MockUploadFile(filename="large.json", content=large_content, content_type="application/json")
 
         with pytest.raises(HTTPException, match="File too large"):
-            await validate_upload(file)
+            await validate_upload(cast("UploadFile", file))
 
     @pytest.mark.asyncio
     async def test_validate_upload_empty_file(self):
         """Test rejection of empty files"""
-        file = MockUploadFile(
-            filename="empty.json",
-            content=b'',
-            content_type="application/json"
-        )
+        file = MockUploadFile(filename="empty.json", content=b"", content_type="application/json")
 
         with pytest.raises(HTTPException, match="File is empty"):
-            await validate_upload(file)
+            await validate_upload(cast("UploadFile", file))
 
 
 # ============================================================================

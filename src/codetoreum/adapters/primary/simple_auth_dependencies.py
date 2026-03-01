@@ -4,12 +4,16 @@ FastAPI Simple Authentication Dependencies
 Provides FastAPI dependencies for the simplified JupyterLab-style token authentication.
 """
 
-from typing import Optional
+import os
 
-from fastapi import Depends, HTTPException, Header, Query, Cookie, Response, status
+from fastapi import Cookie, Header, HTTPException, Query, Response, status
 
+from codetoreum.infrastructure.audit import (
+    AuditEventType,
+    AuditLogger,
+    get_audit_logger,
+)
 from codetoreum.infrastructure.auth import SimpleTokenAuthManager
-from codetoreum.infrastructure.audit import AuditLogger, AuditEventType, get_audit_logger
 
 
 class SimpleAuthDependencies:
@@ -26,7 +30,7 @@ class SimpleAuthDependencies:
     def __init__(
         self,
         auth_manager: SimpleTokenAuthManager,
-        audit_logger: Optional[AuditLogger] = None,
+        audit_logger: AuditLogger | None = None,
     ):
         """
         Initialize auth dependencies.
@@ -53,10 +57,10 @@ class SimpleAuthDependencies:
         """
         if not token or len(token) < 20 or len(token) > 2000:
             return False
-        if '.' not in token:
+        if "." not in token:
             return False
         # JWT should have 3 parts separated by dots
-        parts = token.count('.')
+        parts = token.count(".")
         if parts != 2:
             return False
         return True
@@ -64,9 +68,9 @@ class SimpleAuthDependencies:
     async def require_auth(
         self,
         response: Response,
-        codetoreum_token: Optional[str] = Cookie(None),
-        authorization: Optional[str] = Header(None),
-        token: Optional[str] = Query(None),
+        codetoreum_token: str | None = Cookie(None),
+        authorization: str | None = Header(None),
+        token: str | None = Query(None),
     ) -> bool:
         """
         Require authentication for the endpoint.
@@ -165,7 +169,6 @@ class SimpleAuthDependencies:
 
             if self.auth_manager.validate_token(token):
                 # Set httpOnly cookie for future requests
-                import os
                 use_https = os.getenv("API_USE_HTTPS", "false").lower() == "true"
                 response.set_cookie(
                     key="codetoreum_token",
@@ -283,9 +286,9 @@ class SimpleAuthDependencies:
     async def optional_auth(
         self,
         response: Response,
-        codetoreum_token: Optional[str] = Cookie(None),
-        authorization: Optional[str] = Header(None),
-        token: Optional[str] = Query(None),
+        codetoreum_token: str | None = Cookie(None),
+        authorization: str | None = Header(None),
+        token: str | None = Query(None),
     ) -> bool:
         """
         Optional authentication for the endpoint.

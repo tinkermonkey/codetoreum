@@ -4,13 +4,14 @@ Tests for Audit Stores
 Tests the different audit store implementations (in-memory, file-based).
 """
 
-import pytest
-import tempfile
 import os
-from datetime import datetime, timedelta, timezone
+import tempfile
+from datetime import UTC, datetime, timedelta
 
-from codetoreum.infrastructure.audit.stores import InMemoryAuditStore, FileAuditStore
+import pytest
+
 from codetoreum.infrastructure.audit.interfaces import AuditQueryFilters
+from codetoreum.infrastructure.audit.stores import FileAuditStore, InMemoryAuditStore
 
 
 @pytest.mark.asyncio
@@ -22,7 +23,7 @@ class TestInMemoryAuditStore:
         store = InMemoryAuditStore()
 
         event_id = await store.store_event(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             event_type="agent_created",
             resource_type="agent",
             resource_id="agent-123",
@@ -41,7 +42,7 @@ class TestInMemoryAuditStore:
         store = InMemoryAuditStore()
 
         event_id = await store.store_event(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             event_type="agent_created",
             resource_type="agent",
             resource_id="agent-123",
@@ -66,7 +67,7 @@ class TestInMemoryAuditStore:
         # Store multiple events
         for i in range(5):
             await store.store_event(
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 event_type="agent_created",
                 resource_type="agent",
                 resource_id=f"agent-{i}",
@@ -88,7 +89,7 @@ class TestInMemoryAuditStore:
 
         # Store different event types
         await store.store_event(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             event_type="agent_created",
             resource_type="agent",
             resource_id="agent-1",
@@ -100,7 +101,7 @@ class TestInMemoryAuditStore:
         )
 
         await store.store_event(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             event_type="agent_deleted",
             resource_type="agent",
             resource_id="agent-2",
@@ -123,7 +124,7 @@ class TestInMemoryAuditStore:
 
         # Store events for different users
         await store.store_event(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             event_type="agent_created",
             resource_type="agent",
             resource_id="agent-1",
@@ -135,7 +136,7 @@ class TestInMemoryAuditStore:
         )
 
         await store.store_event(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             event_type="agent_created",
             resource_type="agent",
             resource_id="agent-2",
@@ -158,7 +159,7 @@ class TestInMemoryAuditStore:
 
         # Store successful and failed events
         await store.store_event(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             event_type="agent_created",
             resource_type="agent",
             resource_id="agent-1",
@@ -170,7 +171,7 @@ class TestInMemoryAuditStore:
         )
 
         await store.store_event(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             event_type="agent_created",
             resource_type="agent",
             resource_id="agent-2",
@@ -198,7 +199,7 @@ class TestInMemoryAuditStore:
         """Test querying events within a time range."""
         store = InMemoryAuditStore()
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         yesterday = now - timedelta(days=1)
         two_days_ago = now - timedelta(days=2)
 
@@ -241,7 +242,7 @@ class TestInMemoryAuditStore:
         # Store multiple events
         for i in range(10):
             await store.store_event(
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 event_type="agent_created",
                 resource_type="agent",
                 resource_id=f"agent-{i}",
@@ -261,7 +262,7 @@ class TestInMemoryAuditStore:
         """Test cleaning up old events."""
         store = InMemoryAuditStore()
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         old_date = now - timedelta(days=100)
 
         # Store old event
@@ -308,7 +309,7 @@ class TestInMemoryAuditStore:
         # Store 10 events
         for i in range(10):
             await store.store_event(
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 event_type="agent_created",
                 resource_type="agent",
                 resource_id=f"agent-{i}",
@@ -338,7 +339,7 @@ class TestInMemoryAuditStore:
         event_ids = []
         for i in range(5):
             event_id = await store.store_event(
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 event_type="agent_created",
                 resource_type="agent",
                 resource_id=f"agent-{i}",
@@ -357,7 +358,7 @@ class TestInMemoryAuditStore:
 
         # Add one more event, should evict oldest (first) event
         new_event_id = await store.store_event(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             event_type="agent_created",
             resource_type="agent",
             resource_id="agent-5",
@@ -393,7 +394,7 @@ class TestInMemoryAuditStore:
         # Add 5 events (should keep only last 3)
         for i in range(5):
             await store.store_event(
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 event_type="agent_created",
                 resource_type="agent",
                 resource_id=f"agent-{i}",
@@ -422,7 +423,7 @@ class TestFileAuditStore:
             store = FileAuditStore(file_path)
 
             event_id = await store.store_event(
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 event_type="agent_created",
                 resource_type="agent",
                 resource_id="agent-123",
@@ -437,7 +438,7 @@ class TestFileAuditStore:
 
             # Verify file exists and has content
             assert os.path.exists(file_path)
-            with open(file_path, "r") as f:
+            with open(file_path) as f:
                 content = f.read()
                 assert "agent_created" in content
 
@@ -456,7 +457,7 @@ class TestFileAuditStore:
             # Store multiple events
             for i in range(3):
                 await store.store_event(
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                     event_type="agent_created",
                     resource_type="agent",
                     resource_id=f"agent-{i}",
@@ -485,7 +486,7 @@ class TestFileAuditStore:
         try:
             store = FileAuditStore(file_path)
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             old_date = now - timedelta(days=100)
 
             # Store old and new events

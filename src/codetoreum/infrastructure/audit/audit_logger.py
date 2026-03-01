@@ -6,17 +6,17 @@ structured event data, user context, and correlation ID support.
 """
 
 import logging
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Optional, Dict, Any
+from typing import Any
 
+from codetoreum.infrastructure.audit.interfaces import IAuditStore
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.logging import (
     get_correlation_id,
     get_logger,
 )
-from codetoreum.infrastructure.audit.interfaces import IAuditStore
-from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 
 class AuditEventType(str, Enum):
@@ -92,12 +92,12 @@ class AuditEvent:
     resource_id: str
     action: str
     user_id: str = "system"
-    correlation_id: Optional[str] = None
+    correlation_id: str | None = None
     success: bool = True
-    error_message: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    error_message: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for storage/serialization."""
         data = asdict(self)
         data["event_type"] = self.event_type.value
@@ -146,8 +146,8 @@ class AuditLogger:
 
     def __init__(
         self,
-        logger: Optional[logging.Logger] = None,
-        audit_store: Optional[IAuditStore] = None,
+        logger: logging.Logger | None = None,
+        audit_store: IAuditStore | None = None,
     ):
         """
         Initialize audit logger.
@@ -165,10 +165,10 @@ class AuditLogger:
         resource_type: str,
         resource_id: str,
         action: str,
-        user_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        user_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
         success: bool = True,
-        error_message: Optional[str] = None,
+        error_message: str | None = None,
     ) -> AuditEvent:
         """
         Log an audit event.
@@ -197,7 +197,7 @@ class AuditLogger:
 
         # Create audit event
         event = AuditEvent(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             event_type=event_type,
             resource_type=resource_type,
             resource_id=resource_id,
@@ -282,8 +282,10 @@ class AuditLogger:
             # Never let audit logging failures affect the operation
             self.logger.error(
                 f"Failed to store audit event: {e}",
-                extra={"event_type": event.event_type.value,
-                    "error_id": ErrorRegistry.ERR_AUDIT_ERROR},
+                extra={
+                    "event_type": event.event_type.value,
+                    "error_id": ErrorRegistry.ERR_AUDIT_ERROR,
+                },
             )
 
     # Convenience methods for common audit events
@@ -292,12 +294,10 @@ class AuditLogger:
         self,
         user_id: str,
         success: bool,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> AuditEvent:
         """Log an authentication attempt."""
-        event_type = (
-            AuditEventType.AUTH_SUCCESS if success else AuditEventType.AUTH_FAILURE
-        )
+        event_type = AuditEventType.AUTH_SUCCESS if success else AuditEventType.AUTH_FAILURE
         return self.log_event(
             event_type=event_type,
             resource_type="auth",
@@ -312,7 +312,7 @@ class AuditLogger:
         self,
         agent_id: str,
         user_id: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> AuditEvent:
         """Log agent creation."""
         return self.log_event(
@@ -328,7 +328,7 @@ class AuditLogger:
         self,
         agent_id: str,
         user_id: str,
-        changes: Dict[str, Any],
+        changes: dict[str, Any],
     ) -> AuditEvent:
         """Log agent update."""
         return self.log_event(
@@ -345,7 +345,7 @@ class AuditLogger:
         agent_id: str,
         user_id: str,
         success: bool = True,
-        error_message: Optional[str] = None,
+        error_message: str | None = None,
     ) -> AuditEvent:
         """Log agent deletion."""
         return self.log_event(
@@ -362,7 +362,7 @@ class AuditLogger:
         self,
         execution_id: str,
         user_id: str,
-        reason: Optional[str] = None,
+        reason: str | None = None,
         success: bool = True,
     ) -> AuditEvent:
         """Log execution termination."""
@@ -382,8 +382,8 @@ class AuditLogger:
         config_type: str,
         config_id: str,
         user_id: str,
-        changes: Dict[str, Any],
-        reason: Optional[str] = None,
+        changes: dict[str, Any],
+        reason: str | None = None,
     ) -> AuditEvent:
         """Log configuration change."""
         event_type_map = {
@@ -391,9 +391,7 @@ class AuditLogger:
             "agent": AuditEventType.CONFIG_AGENT_UPDATED,
             "pipeline": AuditEventType.CONFIG_PIPELINE_UPDATED,
         }
-        event_type = event_type_map.get(
-            config_type, AuditEventType.SYSTEM_CONFIG_CHANGED
-        )
+        event_type = event_type_map.get(config_type, AuditEventType.SYSTEM_CONFIG_CHANGED)
 
         metadata = {"changes": changes}
         if reason:
@@ -410,7 +408,7 @@ class AuditLogger:
 
 
 # Global audit logger instance (initialized in main app)
-_audit_logger: Optional[AuditLogger] = None
+_audit_logger: AuditLogger | None = None
 
 
 def get_audit_logger() -> AuditLogger:

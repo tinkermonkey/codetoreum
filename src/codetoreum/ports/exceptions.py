@@ -1,12 +1,8 @@
 """Port layer exceptions."""
 
-from typing import Optional
-
 
 class PortError(Exception):
     """Base exception for port operations."""
-
-    pass
 
 
 class ResourceNotFoundError(PortError):
@@ -28,8 +24,6 @@ class ResourceNotFoundError(PortError):
 class ValidationError(PortError):
     """Invalid input or configuration."""
 
-    pass
-
 
 class ExternalServiceError(PortError):
     """External service failure."""
@@ -49,25 +43,19 @@ class ExternalServiceError(PortError):
 class AuthenticationError(PortError):
     """Authentication failure."""
 
-    pass
-
 
 class PermissionError(PortError):
     """Permission denied."""
-
-    pass
 
 
 class ConcurrencyConflictError(PortError):
     """Concurrent modification detected."""
 
-    pass
-
 
 class RateLimitError(PortError):
     """Rate limit exceeded."""
 
-    def __init__(self, retry_after: Optional[int] = None):
+    def __init__(self, retry_after: int | None = None):
         """
         Initialize RateLimitError.
 
@@ -81,8 +69,6 @@ class RateLimitError(PortError):
 class TimeoutError(PortError):
     """Operation timed out."""
 
-    pass
-
 
 # Ticket System Errors
 
@@ -90,25 +76,17 @@ class TimeoutError(PortError):
 class TicketSystemError(PortError):
     """Ticket system operation failed."""
 
-    pass
-
 
 class WorkItemNotFoundError(TicketSystemError):
     """Work item doesn't exist."""
-
-    pass
 
 
 class ColumnNotFoundError(TicketSystemError):
     """Column doesn't exist."""
 
-    pass
-
 
 class ProjectNotFoundError(TicketSystemError):
     """Project doesn't exist."""
-
-    pass
 
 
 # LLM Provider Errors
@@ -116,8 +94,6 @@ class ProjectNotFoundError(TicketSystemError):
 
 class LLMProviderError(PortError):
     """LLM provider operation failed."""
-
-    pass
 
 
 class PromptTooLongError(LLMProviderError):
@@ -139,31 +115,21 @@ class PromptTooLongError(LLMProviderError):
 class ToolExecutionError(LLMProviderError):
     """Tool execution failed."""
 
-    pass
-
 
 class UnsupportedFeatureError(LLMProviderError):
     """Provider doesn't support requested feature."""
-
-    pass
 
 
 class StreamingError(LLMProviderError):
     """Streaming operation failed."""
 
-    pass
-
 
 class ConversationNotFoundError(LLMProviderError):
     """Conversation doesn't exist."""
 
-    pass
-
 
 class ConversationExpiredError(LLMProviderError):
     """Conversation has expired."""
-
-    pass
 
 
 class EmptyAgentResponseError(LLMProviderError):
@@ -176,9 +142,7 @@ class EmptyAgentResponseError(LLMProviderError):
         Args:
             work_item_id: ID of the work item the agent was responding to
         """
-        super().__init__(
-            f"Agent returned empty response for work item: {work_item_id}"
-        )
+        super().__init__(f"Agent returned empty response for work item: {work_item_id}")
         self.work_item_id = work_item_id
 
 
@@ -188,13 +152,9 @@ class EmptyAgentResponseError(LLMProviderError):
 class RepositoryError(PortError):
     """Repository operation failed."""
 
-    pass
-
 
 class MergeConflictError(RepositoryError):
     """Merge conflict detected."""
-
-    pass
 
 
 # Container Errors
@@ -203,31 +163,21 @@ class MergeConflictError(RepositoryError):
 class ContainerError(PortError):
     """Container operation failed."""
 
-    pass
-
 
 class ContainerExecutionError(ContainerError):
     """Container execution failed."""
-
-    pass
 
 
 class ContainerTimeoutError(ContainerError):
     """Container execution timed out."""
 
-    pass
-
 
 class ImageNotFoundError(ContainerError):
     """Container image doesn't exist."""
 
-    pass
-
 
 class ContainerNotRunningError(ContainerError):
     """Container is not running."""
-
-    pass
 
 
 # Event Store Errors
@@ -236,19 +186,13 @@ class ContainerNotRunningError(ContainerError):
 class EventStoreError(PortError):
     """Event store operation failed."""
 
-    pass
-
 
 class StreamNotFoundError(EventStoreError):
     """Event stream doesn't exist."""
 
-    pass
-
 
 class SnapshotNotFoundError(EventStoreError):
     """Snapshot doesn't exist."""
-
-    pass
 
 
 # Storage Errors
@@ -257,16 +201,12 @@ class SnapshotNotFoundError(EventStoreError):
 class StorageError(PortError):
     """Storage operation failed."""
 
-    pass
-
 
 # Metrics Errors
 
 
 class MetricsError(PortError):
     """Metrics operation failed."""
-
-    pass
 
 
 # Notifier Errors
@@ -275,25 +215,17 @@ class MetricsError(PortError):
 class NotificationError(PortError):
     """Notification operation failed."""
 
-    pass
-
 
 class UnsupportedChannelError(NotificationError):
     """Notification channel not supported."""
-
-    pass
 
 
 class ChannelNotFoundError(NotificationError):
     """Notification channel doesn't exist."""
 
-    pass
-
 
 class TemplateNotFoundError(NotificationError):
     """Notification template doesn't exist."""
-
-    pass
 
 
 class MetricNotFoundError(MetricsError):

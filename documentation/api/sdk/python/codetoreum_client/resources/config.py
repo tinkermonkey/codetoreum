@@ -1,15 +1,18 @@
 """Configuration resource client"""
-from typing import Dict, List, Optional
-from ..exceptions import CodetoreumError
+
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from ..client import CodetoreumClient
 
 
 class ConfigurationResource:
     """Client for configuration endpoints."""
 
-    def __init__(self, client):
+    def __init__(self, client: "CodetoreumClient") -> None:
         self.client = client
 
-    def get_project(self, project_id: str) -> dict:
+    def get_project(self, project_id: str) -> dict[str, Any]:
         """
         Get project configuration by ID.
 
@@ -32,7 +35,7 @@ class ConfigurationResource:
 
         return self.client.get(f"/api/v2/config/projects/{project_id}")
 
-    def list_projects(self, limit: int = 100, offset: int = 0) -> dict:
+    def list_projects(self, limit: int = 100, offset: int = 0) -> dict[str, Any]:
         """
         List all project configurations.
 
@@ -53,13 +56,8 @@ class ConfigurationResource:
         return data
 
     def create_project(
-        self,
-        project_id: str,
-        name: str,
-        repository_url: str,
-        branch: str = "main",
-        **config
-    ) -> dict:
+        self, project_id: str, name: str, repository_url: str, branch: str = "main", **config: Any
+    ) -> dict[str, Any]:
         """
         Create a new project configuration.
 
@@ -106,11 +104,11 @@ class ConfigurationResource:
     def update_project(
         self,
         project_id: str,
-        name: Optional[str] = None,
-        repository_url: Optional[str] = None,
-        branch: Optional[str] = None,
-        **updates
-    ) -> dict:
+        name: str | None = None,
+        repository_url: str | None = None,
+        branch: str | None = None,
+        **updates: Any,
+    ) -> dict[str, Any]:
         """
         Update project configuration.
 
@@ -162,7 +160,7 @@ class ConfigurationResource:
 
         return self.client.patch(f"/api/v2/config/projects/{project_id}", json=payload)
 
-    def delete_project(self, project_id: str) -> dict:
+    def delete_project(self, project_id: str) -> dict[str, Any]:
         """
         Delete a project configuration.
 
@@ -185,7 +183,7 @@ class ConfigurationResource:
 
         return self.client.delete(f"/api/v2/config/projects/{project_id}")
 
-    def get_env_vars(self, project_id: str) -> List[dict]:
+    def get_env_vars(self, project_id: str) -> list[dict[str, Any]]:
         """
         Get environment variables for a project.
 
@@ -208,15 +206,9 @@ class ConfigurationResource:
             raise ValueError("project_id must be a non-empty string")
 
         data = self.client.get(f"/api/v2/config/projects/{project_id}/env-vars")
-        return data.get("env_vars", [])
+        return cast("list[dict[str, Any]]", data.get("env_vars", []))
 
-    def set_env_var(
-        self,
-        project_id: str,
-        name: str,
-        value: str,
-        is_secret: bool = False
-    ) -> dict:
+    def set_env_var(self, project_id: str, name: str, value: str, is_secret: bool = False) -> dict[str, Any]:
         """
         Set an environment variable for a project.
 
@@ -248,18 +240,11 @@ class ConfigurationResource:
         if not isinstance(value, str):
             raise ValueError("value must be a string")
 
-        payload = {
-            "name": name.strip(),
-            "value": value,
-            "is_secret": is_secret
-        }
+        payload = {"name": name.strip(), "value": value, "is_secret": is_secret}
 
-        return self.client.post(
-            f"/api/v2/config/projects/{project_id}/env-vars",
-            json=payload
-        )
+        return self.client.post(f"/api/v2/config/projects/{project_id}/env-vars", json=payload)
 
-    def delete_env_var(self, project_id: str, name: str) -> dict:
+    def delete_env_var(self, project_id: str, name: str) -> dict[str, Any]:
         """
         Delete an environment variable from a project.
 

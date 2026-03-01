@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Eye, EyeOff, Save } from 'lucide-react'
+import { Plus, Trash2, Eye, EyeOff } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import {
@@ -14,8 +14,7 @@ import { projectConfigApi } from '../api/client'
 import type { ProjectConfig } from '../types'
 
 export default function ProjectConfigPage() {
-  const [selectedProjectIndex, setSelectedProjectIndex] = useState(0)
-  const queryClient = useQueryClient()
+  const [selectedProjectIndex] = useState(0)
 
   // Fetch project list (each item already contains full config)
   const { data: projects = [], isLoading, error } = useQuery({
@@ -63,10 +62,10 @@ export default function ProjectConfigPage() {
 
       {config && (
         <>
-          <EnvironmentVariablesSection config={config} queryClient={queryClient} />
-          <MountedCommandsSection config={config} queryClient={queryClient} />
-          <MountedSubAgentsSection config={config} queryClient={queryClient} />
-          <RepositorySettingsSection config={config} queryClient={queryClient} />
+          <EnvironmentVariablesSection config={config} />
+          <MountedCommandsSection config={config} />
+          <MountedSubAgentsSection config={config} />
+          <RepositorySettingsSection config={config} />
         </>
       )}
     </div>
@@ -76,11 +75,10 @@ export default function ProjectConfigPage() {
 // Environment Variables Section
 function EnvironmentVariablesSection({
   config,
-  queryClient,
 }: {
   config: ProjectConfig
-  queryClient: any
 }) {
+  const queryClient = useQueryClient()
   const [newVarName, setNewVarName] = useState('')
   const [newVarValue, setNewVarValue] = useState('')
   const [newVarDescription, setNewVarDescription] = useState('')
@@ -231,11 +229,10 @@ function EnvironmentVariablesSection({
 // Mounted Commands Section
 function MountedCommandsSection({
   config,
-  queryClient,
 }: {
   config: ProjectConfig
-  queryClient: any
 }) {
+  const queryClient = useQueryClient()
   const [newCommandName, setNewCommandName] = useState('')
   const [newCommandPath, setNewCommandPath] = useState('')
   const [newCommandDescription, setNewCommandDescription] = useState('')
@@ -338,10 +335,8 @@ function MountedCommandsSection({
 // Mounted Sub-Agents Section
 function MountedSubAgentsSection({
   config,
-  queryClient,
 }: {
   config: ProjectConfig
-  queryClient: any
 }) {
   return (
     <Card>
@@ -376,10 +371,8 @@ function MountedSubAgentsSection({
 // Repository Settings Section
 function RepositorySettingsSection({
   config,
-  queryClient,
 }: {
   config: ProjectConfig
-  queryClient: any
 }) {
   return (
     <Card>

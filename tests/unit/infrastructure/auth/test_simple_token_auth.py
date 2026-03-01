@@ -5,11 +5,11 @@ Tests the JupyterLab-style token generation, validation, and security properties
 """
 
 import os
-import pytest
-import secrets
-from datetime import datetime, timedelta, timezone
-from jose import jwt
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
+
+import pytest
+from jose import jwt
 
 from codetoreum.infrastructure.auth import SimpleTokenAuthManager
 
@@ -32,9 +32,7 @@ class TestSimpleTokenAuthManager:
         manager = SimpleTokenAuthManager(secret_key=secret_key)
 
         # Decode token to verify structure
-        payload = jwt.decode(
-            manager.server_token, secret_key, algorithms=["HS256"]
-        )
+        payload = jwt.decode(manager.server_token, secret_key, algorithms=["HS256"])
 
         assert payload["sub"] == "codetoreum-server"
         assert payload["type"] == "access"
@@ -45,18 +43,14 @@ class TestSimpleTokenAuthManager:
         """Test that token has correct expiration time"""
         secret_key = "test-secret-key"
         expiry_days = 30
-        manager = SimpleTokenAuthManager(
-            secret_key=secret_key, token_expiry_days=expiry_days
-        )
+        manager = SimpleTokenAuthManager(secret_key=secret_key, token_expiry_days=expiry_days)
 
         # Decode token
-        payload = jwt.decode(
-            manager.server_token, secret_key, algorithms=["HS256"]
-        )
+        payload = jwt.decode(manager.server_token, secret_key, algorithms=["HS256"])
 
         # Check expiration is approximately correct (within 1 second tolerance)
         expected_exp = manager.server_start_time + timedelta(days=expiry_days)
-        actual_exp = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
+        actual_exp = datetime.fromtimestamp(payload["exp"], tz=UTC)
         time_diff = abs((actual_exp - expected_exp).total_seconds())
 
         assert time_diff < 1, f"Expiration time differs by {time_diff} seconds"
@@ -79,11 +73,7 @@ class TestSimpleTokenAuthManager:
         assert manager.validate_token("not-a-valid-token") is False
 
         # Valid JWT structure but wrong signature
-        fake_token = jwt.encode(
-            {"sub": "codetoreum-server", "type": "access"},
-            "wrong-secret-key",
-            algorithm="HS256"
-        )
+        fake_token = jwt.encode({"sub": "codetoreum-server", "type": "access"}, "wrong-secret-key", algorithm="HS256")
         assert manager.validate_token(fake_token) is False
 
     def test_validate_token_wrong_subject(self):
@@ -96,11 +86,11 @@ class TestSimpleTokenAuthManager:
             {
                 "sub": "wrong-subject",
                 "type": "access",
-                "iat": datetime.now(timezone.utc),
-                "exp": datetime.now(timezone.utc) + timedelta(days=1),
+                "iat": datetime.now(UTC),
+                "exp": datetime.now(UTC) + timedelta(days=1),
             },
             secret_key,
-            algorithm="HS256"
+            algorithm="HS256",
         )
 
         assert manager.validate_token(wrong_token) is False
@@ -115,11 +105,11 @@ class TestSimpleTokenAuthManager:
             {
                 "sub": "codetoreum-server",
                 "type": "refresh",  # Wrong type
-                "iat": datetime.now(timezone.utc),
-                "exp": datetime.now(timezone.utc) + timedelta(days=1),
+                "iat": datetime.now(UTC),
+                "exp": datetime.now(UTC) + timedelta(days=1),
             },
             secret_key,
-            algorithm="HS256"
+            algorithm="HS256",
         )
 
         assert manager.validate_token(wrong_token) is False
@@ -133,11 +123,11 @@ class TestSimpleTokenAuthManager:
             {
                 "sub": "codetoreum-server",
                 "type": "access",
-                "iat": datetime.now(timezone.utc) - timedelta(days=2),
-                "exp": datetime.now(timezone.utc) - timedelta(days=1),  # Expired yesterday
+                "iat": datetime.now(UTC) - timedelta(days=2),
+                "exp": datetime.now(UTC) - timedelta(days=1),  # Expired yesterday
             },
             secret_key,
-            algorithm="HS256"
+            algorithm="HS256",
         )
 
         manager = SimpleTokenAuthManager(secret_key=secret_key)
@@ -309,6 +299,7 @@ class TestSecretKeyValidation:
     def test_development_allows_auto_generated_secret(self, caplog):
         """Test that development mode allows auto-generated secret key"""
         import logging
+
         caplog.set_level(logging.WARNING)
 
         manager = SimpleTokenAuthManager()
@@ -318,15 +309,14 @@ class TestSecretKeyValidation:
         assert len(manager.secret_key) > 20
 
         # Should log a warning
-        assert any("auto-generated secret key" in record.message.lower()
-                   for record in caplog.records)
-        assert any("CODETOREUM_SECRET_KEY" in record.message
-                   for record in caplog.records)
+        assert any("auto-generated secret key" in record.message.lower() for record in caplog.records)
+        assert any("CODETOREUM_SECRET_KEY" in record.message for record in caplog.records)
 
     @patch.dict(os.environ, {"CODETOREUM_ENV": "development"}, clear=False)
     def test_development_accepts_explicit_secret_key(self, caplog):
         """Test that development mode works with explicit secret key"""
         import logging
+
         caplog.set_level(logging.WARNING)
 
         secret_key = "my-dev-secret-key"
@@ -335,13 +325,13 @@ class TestSecretKeyValidation:
         assert manager.secret_key == secret_key
 
         # Should NOT log a warning when explicit key is provided
-        assert not any("auto-generated" in record.message.lower()
-                       for record in caplog.records)
+        assert not any("auto-generated" in record.message.lower() for record in caplog.records)
 
     @patch.dict(os.environ, {}, clear=False)
     def test_default_environment_is_development(self, caplog):
         """Test that default environment (no CODETOREUM_ENV) behaves as development"""
         import logging
+
         caplog.set_level(logging.WARNING)
 
         # Remove CODETOREUM_ENV if it exists
@@ -354,13 +344,13 @@ class TestSecretKeyValidation:
         assert manager.server_token
 
         # Should log warning about auto-generated key
-        assert any("auto-generated" in record.message.lower()
-                   for record in caplog.records)
+        assert any("auto-generated" in record.message.lower() for record in caplog.records)
 
     @patch.dict(os.environ, {"CODETOREUM_ENV": "staging"}, clear=False)
     def test_non_production_environment_allows_auto_generated_secret(self, caplog):
         """Test that non-production environments (staging, test, etc.) allow auto-generated secrets"""
         import logging
+
         caplog.set_level(logging.WARNING)
 
         manager = SimpleTokenAuthManager()
@@ -370,8 +360,7 @@ class TestSecretKeyValidation:
         assert manager.server_token
 
         # Should log warning
-        assert any("auto-generated" in record.message.lower()
-                   for record in caplog.records)
+        assert any("auto-generated" in record.message.lower() for record in caplog.records)
 
     def test_error_message_includes_generation_instructions(self):
         """Test that production error message includes instructions for generating secret key"""

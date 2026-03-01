@@ -1,15 +1,20 @@
 """Events resource client (WebSocket)"""
+
 import json
-from typing import AsyncIterator, Callable, Iterator, Optional
+from collections.abc import AsyncIterator, Iterator
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ..client import CodetoreumClient
 
 
 class EventsResource:
     """Client for real-time event streaming via WebSocket."""
 
-    def __init__(self, client):
+    def __init__(self, client: "CodetoreumClient") -> None:
         self.client = client
 
-    def stream(self) -> Iterator[dict]:
+    def stream(self) -> Iterator[dict[str, Any]]:
         """
         Stream real-time events via WebSocket (synchronous interface).
 
@@ -31,13 +36,11 @@ class EventsResource:
             an existing async context. Always use stream_async() in async code.
         """
         try:
-            import websockets
             import asyncio
+
+            import websockets
         except ImportError:
-            raise ImportError(
-                "WebSocket support requires 'websockets' library. "
-                "Install with: pip install websockets"
-            )
+            raise ImportError("WebSocket support requires 'websockets' library. Install with: pip install websockets")
 
         # Check if we're already in an event loop
         try:
@@ -53,7 +56,7 @@ class EventsResource:
         ws_url = self.client.base_url.replace("http://", "ws://").replace("https://", "wss://")
         ws_url = f"{ws_url}/api/v2/events/stream?token={self.client.api_token}"
 
-        async def _stream():
+        async def _stream() -> AsyncIterator[dict[str, Any]]:
             async with websockets.connect(ws_url) as websocket:
                 async for message in websocket:
                     yield json.loads(message)
@@ -73,7 +76,7 @@ class EventsResource:
         finally:
             loop.close()
 
-    async def stream_async(self) -> AsyncIterator[dict]:
+    async def stream_async(self) -> AsyncIterator[dict[str, Any]]:
         """
         Stream real-time events via WebSocket (async interface).
 
@@ -92,10 +95,7 @@ class EventsResource:
         try:
             import websockets
         except ImportError:
-            raise ImportError(
-                "WebSocket support requires 'websockets' library. "
-                "Install with: pip install websockets"
-            )
+            raise ImportError("WebSocket support requires 'websockets' library. Install with: pip install websockets")
 
         ws_url = self.client.base_url.replace("http://", "ws://").replace("https://", "wss://")
         ws_url = f"{ws_url}/api/v2/events/stream?token={self.client.api_token}"

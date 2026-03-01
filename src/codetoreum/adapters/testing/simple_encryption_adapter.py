@@ -14,12 +14,11 @@ For production use, consider:
 import base64
 import logging
 import os
-from typing import Dict, Optional
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from codetoreum.ports.output import DecryptionError, EncryptionError, IEncryptionService
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.ports.output import DecryptionError, EncryptionError, IEncryptionService
 
 logger = logging.getLogger(__name__)
 
@@ -40,25 +39,26 @@ class SimpleEncryptionAdapter(IEncryptionService):
     - Example: "default:aGVsbG8=:Y2lwaGVy..."
     """
 
-    def __init__(self, default_key: Optional[bytes] = None):
+    def __init__(self, default_key: bytes | None = None):
         """
         Initialize the encryption adapter.
 
         Args:
             default_key: Default 32-byte encryption key. If None, generates a random key.
         """
-        self._keys: Dict[str, bytes] = {}
+        self._keys: dict[str, bytes] = {}
 
         # Initialize default key
         if default_key is None:
             default_key = AESGCM.generate_key(bit_length=256)
         elif len(default_key) != 32:
-            raise ValueError("Encryption key must be 32 bytes for AES-256")
+            msg = "Encryption key must be 32 bytes for AES-256"
+            raise ValueError(msg)
 
         self._keys["default"] = default_key
         logger.debug("SimpleEncryptionAdapter initialized with default key")
 
-    async def encrypt(self, plaintext: str, key_id: Optional[str] = None) -> str:
+    async def encrypt(self, plaintext: str, key_id: str | None = None) -> str:
         """
         Encrypt a plaintext string using AES-256-GCM.
 
@@ -79,7 +79,8 @@ class SimpleEncryptionAdapter(IEncryptionService):
 
             # Get encryption key
             if key_id not in self._keys:
-                raise EncryptionError(f"Unknown encryption key: {key_id}")
+                msg = f"Unknown encryption key: {key_id}"
+                raise EncryptionError(msg)
 
             key = self._keys[key_id]
 
@@ -101,8 +102,12 @@ class SimpleEncryptionAdapter(IEncryptionService):
         except EncryptionError:
             raise
         except Exception as e:
-            logger.error(f"Encryption failed: {e}", extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR})
-            raise EncryptionError(f"Encryption failed: {e}") from e
+            logger.error(
+                f"Encryption failed: {e}",
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
+            )
+            msg = f"Encryption failed: {e}"
+            raise EncryptionError(msg) from e
 
     async def decrypt(self, ciphertext: str) -> str:
         """
@@ -121,15 +126,15 @@ class SimpleEncryptionAdapter(IEncryptionService):
             # Parse encrypted format: key_id:nonce:ciphertext
             parts = ciphertext.split(":")
             if len(parts) != 3:
-                raise DecryptionError(
-                    "Invalid encrypted format. Expected: key_id:nonce:ciphertext"
-                )
+                msg = "Invalid encrypted format. Expected: key_id:nonce:ciphertext"
+                raise DecryptionError(msg)
 
             key_id, nonce_b64, ciphertext_b64 = parts
 
             # Get decryption key
             if key_id not in self._keys:
-                raise DecryptionError(f"Unknown encryption key: {key_id}")
+                msg = f"Unknown encryption key: {key_id}"
+                raise DecryptionError(msg)
 
             key = self._keys[key_id]
 
@@ -148,8 +153,12 @@ class SimpleEncryptionAdapter(IEncryptionService):
         except DecryptionError:
             raise
         except Exception as e:
-            logger.error(f"Decryption failed: {e}", extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR})
-            raise DecryptionError(f"Decryption failed: {e}") from e
+            logger.error(
+                f"Decryption failed: {e}",
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
+            )
+            msg = f"Decryption failed: {e}"
+            raise DecryptionError(msg) from e
 
     async def rotate_key(self, old_key_id: str, new_key_id: str) -> None:
         """
@@ -167,10 +176,12 @@ class SimpleEncryptionAdapter(IEncryptionService):
         """
         try:
             if old_key_id not in self._keys:
-                raise EncryptionError(f"Unknown old key: {old_key_id}")
+                msg = f"Unknown old key: {old_key_id}"
+                raise EncryptionError(msg)
 
             if new_key_id in self._keys:
-                raise EncryptionError(f"New key already exists: {new_key_id}")
+                msg = f"New key already exists: {new_key_id}"
+                raise EncryptionError(msg)
 
             # Generate new key
             new_key = AESGCM.generate_key(bit_length=256)
@@ -181,8 +192,12 @@ class SimpleEncryptionAdapter(IEncryptionService):
         except EncryptionError:
             raise
         except Exception as e:
-            logger.error(f"Key rotation failed: {e}", extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR})
-            raise EncryptionError(f"Key rotation failed: {e}") from e
+            logger.error(
+                f"Key rotation failed: {e}",
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
+            )
+            msg = f"Key rotation failed: {e}"
+            raise EncryptionError(msg) from e
 
     def add_key(self, key_id: str, key: bytes) -> None:
         """
@@ -196,10 +211,12 @@ class SimpleEncryptionAdapter(IEncryptionService):
             ValueError: If key is invalid
         """
         if len(key) != 32:
-            raise ValueError("Encryption key must be 32 bytes for AES-256")
+            msg = "Encryption key must be 32 bytes for AES-256"
+            raise ValueError(msg)
 
         if key_id in self._keys:
-            raise ValueError(f"Key already exists: {key_id}")
+            msg = f"Key already exists: {key_id}"
+            raise ValueError(msg)
 
         self._keys[key_id] = key
         logger.debug(f"Added encryption key '{key_id}'")
@@ -215,10 +232,12 @@ class SimpleEncryptionAdapter(IEncryptionService):
             ValueError: If attempting to remove default key
         """
         if key_id == "default":
-            raise ValueError("Cannot remove default key")
+            msg = "Cannot remove default key"
+            raise ValueError(msg)
 
         if key_id not in self._keys:
-            raise ValueError(f"Unknown key: {key_id}")
+            msg = f"Unknown key: {key_id}"
+            raise ValueError(msg)
 
         del self._keys[key_id]
         logger.debug(f"Removed encryption key '{key_id}'")

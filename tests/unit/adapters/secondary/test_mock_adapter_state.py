@@ -8,6 +8,7 @@ Tests verify that:
 """
 
 import asyncio
+
 import pytest
 
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
@@ -61,18 +62,13 @@ class TestMockAdapterStateConsistency:
             adapter.add_item_to_column("board-1", "Backlog", f"item-{i}")
 
         # Move items concurrently
-        tasks = [
-            adapter.move_item_to_column(f"item-{i}", "In Progress", MovedByType.HUMAN)
-            for i in range(5)
-        ]
+        tasks = [adapter.move_item_to_column(f"item-{i}", "In Progress", MovedByType.HUMAN) for i in range(5)]
 
         await asyncio.gather(*tasks)
 
         # Verify all items are in In Progress
         board = await adapter.get_board("proj-1", "board-1")
-        in_progress_items = [
-            item for col in board.columns if col.name == "In Progress" for item in col.work_item_ids
-        ]
+        in_progress_items = [item for col in board.columns if col.name == "In Progress" for item in col.work_item_ids]
 
         assert len(in_progress_items) == 5
         for i in range(5):
@@ -118,12 +114,8 @@ class TestMockAdapterStateConsistency:
         # Verify final state consistency
         board = await adapter.get_board("proj-1", "board-1")
 
-        backlog_items = [
-            item for col in board.columns if col.name == "Backlog" for item in col.work_item_ids
-        ]
-        in_progress_items = [
-            item for col in board.columns if col.name == "In Progress" for item in col.work_item_ids
-        ]
+        backlog_items = [item for col in board.columns if col.name == "Backlog" for item in col.work_item_ids]
+        in_progress_items = [item for col in board.columns if col.name == "In Progress" for item in col.work_item_ids]
         done_items = [item for col in board.columns if col.name == "Done" for item in col.work_item_ids]
 
         # Verify each item is in exactly one column

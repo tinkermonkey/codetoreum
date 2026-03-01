@@ -4,20 +4,18 @@ Mock Workflow Query Adapter
 In-memory implementation of IWorkflowQueryPort for development and testing.
 """
 
-from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from datetime import UTC, datetime
 from threading import RLock
 
 from codetoreum.ports.input.workflow_query import (
     IWorkflowQueryPort,
+    StageInfo,
     WorkflowDefinitionInfo,
-    WorkflowSummaryInfo,
     WorkflowListResult,
+    WorkflowSummaryInfo,
+    WorkflowValidationResult,
     WorkflowVersionHistoryResult,
     WorkflowVersionInfo,
-    WorkflowValidationResult,
-    StageInfo,
-    StageTransitionInfo,
 )
 
 
@@ -27,12 +25,10 @@ class MockWorkflowQueryAdapter(IWorkflowQueryPort):
     """
 
     def __init__(self):
-        self._workflows: Dict[str, Dict] = {}
+        self._workflows: dict[str, dict] = {}
         self._lock = RLock()
 
-    async def get_workflow(
-        self, workflow_id: str, version: Optional[int] = None
-    ) -> WorkflowDefinitionInfo:
+    async def get_workflow(self, workflow_id: str, version: int | None = None) -> WorkflowDefinitionInfo:
         """Get a workflow definition."""
         return WorkflowDefinitionInfo(
             id=workflow_id,
@@ -54,14 +50,12 @@ class MockWorkflowQueryAdapter(IWorkflowQueryPort):
             work_item_types=["issue"],
             is_template=False,
             is_active=True,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
             metadata={},
         )
 
-    async def list_workflows(
-        self, filters=None, pagination=None
-    ) -> WorkflowListResult:
+    async def list_workflows(self, filters=None, pagination=None) -> WorkflowListResult:
         """List workflows."""
         summary = WorkflowSummaryInfo(
             id="wf-mock-123",
@@ -73,8 +67,8 @@ class MockWorkflowQueryAdapter(IWorkflowQueryPort):
             work_item_types=["issue"],
             is_template=False,
             is_active=True,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
 
         return WorkflowListResult(
@@ -85,16 +79,14 @@ class MockWorkflowQueryAdapter(IWorkflowQueryPort):
             has_next=False,
         )
 
-    async def get_workflow_versions(
-        self, workflow_id: str, limit: int = 10
-    ) -> WorkflowVersionHistoryResult:
+    async def get_workflow_versions(self, workflow_id: str, limit: int = 10) -> WorkflowVersionHistoryResult:
         """Get workflow version history."""
         return WorkflowVersionHistoryResult(
             workflow_id=workflow_id,
             versions=[
                 WorkflowVersionInfo(
                     version=1,
-                    created_at=datetime.now(timezone.utc),
+                    created_at=datetime.now(UTC),
                     created_by=None,
                     changes_summary="Initial version",
                 )
@@ -102,9 +94,7 @@ class MockWorkflowQueryAdapter(IWorkflowQueryPort):
             total_count=1,
         )
 
-    async def validate_workflow(
-        self, workflow_id: str, version: Optional[int] = None
-    ) -> WorkflowValidationResult:
+    async def validate_workflow(self, workflow_id: str, version: int | None = None) -> WorkflowValidationResult:
         """Validate a workflow."""
         return WorkflowValidationResult(
             is_valid=True,
@@ -113,8 +103,8 @@ class MockWorkflowQueryAdapter(IWorkflowQueryPort):
         )
 
     async def get_workflows_for_work_item_type(
-        self, work_item_type: str, project_id: Optional[str] = None
-    ) -> List[WorkflowSummaryInfo]:
+        self, work_item_type: str, project_id: str | None = None
+    ) -> list[WorkflowSummaryInfo]:
         """Get workflows for a work item type."""
         return []
 

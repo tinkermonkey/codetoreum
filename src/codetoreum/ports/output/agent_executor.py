@@ -21,4 +21,3 @@ class IAgentExecutor(ABC):
         Raises:
             Exception: If agent execution fails (logs but doesn't re-raise)
         """
-        pass

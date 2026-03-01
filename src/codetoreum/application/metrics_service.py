@@ -6,8 +6,8 @@ health status, and performance statistics.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from codetoreum.ports.exceptions import ComponentNotFoundError, MetricNotFoundError
 from codetoreum.ports.input.metrics_query import (
@@ -25,6 +25,12 @@ from codetoreum.ports.input.metrics_query import (
 from codetoreum.ports.output.event_store import IEventStore
 
 logger = logging.getLogger(__name__)
+
+# Claude API pricing (tokens per 1K tokens)
+# NOTE: These rates should be configurable via environment or config store
+# Currently hardcoded but must be updated when Claude pricing changes
+CLAUDE_INPUT_COST_PER_1K_TOKENS = 0.003
+CLAUDE_OUTPUT_COST_PER_1K_TOKENS = 0.015
 
 
 class MetricsService(IMetricsQueryPort):
@@ -59,7 +65,7 @@ class MetricsService(IMetricsQueryPort):
         """
         self.event_store = event_store
         # Normalize start_time to UTC-aware datetime
-        self.start_time = start_time if start_time.tzinfo is not None else start_time.replace(tzinfo=timezone.utc)
+        self.start_time = start_time if start_time.tzinfo is not None else start_time.replace(tzinfo=UTC)
         self.version = version
 
     async def get_system_health(self) -> SystemHealthInfo:
@@ -72,7 +78,7 @@ class MetricsService(IMetricsQueryPort):
         logger.debug("Getting system health")
 
         # Check components
-        components: List[ComponentHealthInfo] = []
+        components: list[ComponentHealthInfo] = []
 
         # Event store health
         event_store_health = await self._check_event_store_health()
@@ -87,12 +93,12 @@ class MetricsService(IMetricsQueryPort):
             overall_status = ComponentHealth.DEGRADED
 
         # Calculate uptime
-        uptime_seconds = (datetime.now(timezone.utc) - self.start_time).total_seconds()
+        uptime_seconds = (datetime.now(UTC) - self.start_time).total_seconds()
 
         return SystemHealthInfo(
             status=overall_status,
             components=components,
-            checked_at=datetime.now(timezone.utc),
+            checked_at=datetime.now(UTC),
             uptime_seconds=uptime_seconds,
             version=self.version,
         )
@@ -112,8 +118,7 @@ class MetricsService(IMetricsQueryPort):
         """
         if component_name == "event_store":
             return await self._check_event_store_health()
-        else:
-            raise ComponentNotFoundError(component_name)
+        raise ComponentNotFoundError(component_name)
 
     async def get_performance_metrics(
         self,
@@ -188,9 +193,7 @@ class MetricsService(IMetricsQueryPort):
             aggregation_window_seconds=aggregation_window_seconds,
         )
 
-    async def get_resilience_metrics(
-        self, start_time: datetime, end_time: datetime
-    ) -> ResilienceMetrics:
+    async def get_resilience_metrics(self, start_time: datetime, end_time: datetime) -> ResilienceMetrics:
         """
         Get resilience infrastructure metrics.
 
@@ -203,15 +206,40 @@ class MetricsService(IMetricsQueryPort):
         """
         logger.debug(f"Getting resilience metrics from {start_time} to {end_time}")
 
-        # TODO: Integrate with resilience infrastructure to get real metrics
+        # Query retry and timeout events from event store
+        retry_events = await self.event_store.get_events_by_type(
+            event_type="ExecutionRetried",
+            since=start_time,
+            limit=10000,
+        )
+
+        timeout_events = await self.event_store.get_events_by_type(
+            event_type="ExecutionTimeout",
+            since=start_time,
+            limit=10000,
+        )
+
+        # Filter to time range (end_time boundary)
+        retry_events = [e for e in retry_events if e.occurred_at <= end_time]
+        timeout_events = [e for e in timeout_events if e.occurred_at <= end_time]
+
+        # Count retry attempts and outcomes
+        retry_attempts = len(retry_events)
+        retry_successes = sum(1 for e in retry_events if e.payload.get("success", False))
+        retry_failures = retry_attempts - retry_successes
+
+        # Calculate timeout metrics
+        timeout_durations = [e.payload.get("duration_ms", 0) for e in timeout_events if "duration_ms" in e.payload]
+        avg_timeout_duration = sum(timeout_durations) / len(timeout_durations) if timeout_durations else 0.0
+
         return ResilienceMetrics(
-            circuit_breakers={},
-            rate_limiters={},
-            retry_attempts_total=0,
-            retry_successes_total=0,
-            retry_failures_total=0,
-            timeout_count=0,
-            avg_timeout_duration_ms=0.0,
+            circuit_breakers={},  # Would be populated from resilience infrastructure
+            rate_limiters={},  # Would be populated from resilience infrastructure
+            retry_attempts_total=retry_attempts,
+            retry_successes_total=retry_successes,
+            retry_failures_total=retry_failures,
+            timeout_count=len(timeout_events),
+            avg_timeout_duration_ms=avg_timeout_duration,
             start_time=start_time,
             end_time=end_time,
         )
@@ -229,30 +257,75 @@ class MetricsService(IMetricsQueryPort):
         event_store_connected = True
         event_store_latency = None
         try:
-            check_start = datetime.now(timezone.utc)
+            check_start = datetime.now(UTC)
             await self.event_store.get_statistics()
-            event_store_latency = (datetime.now(timezone.utc) - check_start).total_seconds() * 1000
+            event_store_latency = (datetime.now(UTC) - check_start).total_seconds() * 1000
         except Exception as e:
             logger.warning(
                 f"Event store health check failed: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_METRICS_EVENTSTORE_HEALTH_CHECK_FAILURE"}
+                extra={"error_id": "ERR_METRICS_EVENTSTORE_HEALTH_CHECK_FAILURE"},
             )
             event_store_connected = False
 
+        # Check GitHub connectivity via recent adapter events
+        github_connected = False
+        github_webhook_health = ComponentHealth.UNKNOWN
+        try:
+            recent_time = datetime.now(UTC) - timedelta(hours=1)
+            github_events = await self.event_store.get_events_by_type(
+                event_type="GitHubAdapterEvent",
+                since=recent_time,
+                limit=100,
+            )
+            if github_events:
+                # If we have recent GitHub events, assume it's connected
+                failed_events = [e for e in github_events if e.payload.get("success") is False]
+                if failed_events:
+                    github_webhook_health = ComponentHealth.DEGRADED
+                else:
+                    github_webhook_health = ComponentHealth.HEALTHY
+                github_connected = True
+        except Exception as e:
+            logger.debug(f"Could not check GitHub connectivity: {e}")
+
+        # Check Docker connectivity via recent container events
+        docker_connected = False
+        docker_containers_running = 0
+        try:
+            recent_time = datetime.now(UTC) - timedelta(hours=1)
+            container_events = await self.event_store.get_events_by_type(
+                event_type="ContainerStarted",
+                since=recent_time,
+                limit=1000,
+            )
+            container_stopped = await self.event_store.get_events_by_type(
+                event_type="ContainerStopped",
+                since=recent_time,
+                limit=1000,
+            )
+            if container_events or container_stopped:
+                docker_connected = True
+                # Track running containers by ID (containers may start/stop multiple times)
+                started_ids = {e.payload.get("container_id") for e in container_events if "container_id" in e.payload}
+                stopped_ids = {e.payload.get("container_id") for e in container_stopped if "container_id" in e.payload}
+                docker_containers_running = len(started_ids - stopped_ids)
+        except Exception as e:
+            logger.debug(f"Could not check Docker connectivity: {e}")
+
         return IntegrationStatus(
-            github_connected=False,  # TODO: Check GitHub connection
+            github_connected=github_connected,
             github_api_calls_remaining=None,
             github_rate_limit_reset=None,
-            github_webhook_health=ComponentHealth.UNKNOWN,
-            docker_connected=False,  # TODO: Check Docker connection
+            github_webhook_health=github_webhook_health,
+            docker_connected=docker_connected,
             docker_version=None,
-            docker_containers_running=0,
+            docker_containers_running=docker_containers_running,
             event_store_connected=event_store_connected,
             event_store_latency_ms=event_store_latency,
-            config_store_connected=False,  # TODO: Check config store connection
+            config_store_connected=False,  # Not yet integrated
             config_store_latency_ms=None,
-            checked_at=datetime.now(timezone.utc),
+            checked_at=datetime.now(UTC),
         )
 
     async def get_simulation_mode_info(self) -> SimulationModeInfo:
@@ -262,7 +335,27 @@ class MetricsService(IMetricsQueryPort):
         Returns:
             Simulation mode information
         """
-        # TODO: Integrate with simulation infrastructure
+        # Query for simulation configuration events
+        try:
+            sim_events = await self.event_store.get_events_by_type(
+                event_type="SimulationConfigured",
+                limit=1,
+            )
+            if sim_events:
+                config = sim_events[0].payload
+                return SimulationModeInfo(
+                    enabled=config.get("enabled", False),
+                    time_multiplier=config.get("time_multiplier", 1.0),
+                    deterministic_responses=config.get("deterministic_responses", False),
+                    mock_external_services=config.get("mock_external_services", False),
+                    event_replay_enabled=config.get("event_replay_enabled", False),
+                    current_simulation_time=config.get("current_simulation_time"),
+                    started_at=config.get("started_at"),
+                )
+        except Exception as e:
+            logger.debug(f"Could not retrieve simulation config: {e}")
+
+        # Default to non-simulation mode
         return SimulationModeInfo(
             enabled=False,
             time_multiplier=1.0,
@@ -278,11 +371,17 @@ class MetricsService(IMetricsQueryPort):
         metric_name: str,
         start_time: datetime,
         end_time: datetime,
-        labels: Optional[Dict[str, str]] = None,
-        aggregation: Optional[str] = None,
+        labels: dict[str, str] | None = None,
+        aggregation: str | None = None,
     ) -> MetricTimeSeries:
         """
         Get time series data for a specific metric.
+
+        Supports querying common metrics from the event store:
+        - execution_count: Number of agent executions
+        - execution_success_rate: Percentage of successful executions
+        - execution_avg_duration: Average execution duration
+        - error_rate: Percentage of failed executions
 
         Args:
             metric_name: Name of metric to query
@@ -297,10 +396,100 @@ class MetricsService(IMetricsQueryPort):
         Raises:
             MetricNotFoundError: If metric doesn't exist
         """
-        # TODO: Integrate with time series database (Prometheus, InfluxDB, etc.)
-        raise MetricNotFoundError(metric_name)
+        # Map metric names to event types and data extraction logic
+        metric_mapping = {
+            "execution_count": ("AgentExecutionStarted", "count"),
+            "execution_success_rate": ("AgentExecutionCompleted", "rate"),
+            "execution_avg_duration": ("AgentExecutionCompleted", "duration"),
+            "error_rate": ("AgentExecutionFailed", "rate"),
+        }
 
-    async def list_metric_names(self, prefix: Optional[str] = None) -> List[str]:
+        if metric_name not in metric_mapping:
+            raise MetricNotFoundError(metric_name)
+
+        event_type, calculation_type = metric_mapping[metric_name]
+
+        # Query events for the metric
+        events = await self.event_store.get_events_by_type(
+            event_type=event_type,
+            since=start_time,
+            limit=10000,
+        )
+
+        # Filter to time range
+        filtered_events = [e for e in events if e.occurred_at <= end_time]
+
+        # Calculate time series data
+        data_points: list[MetricTimeSeriesPoint] = []
+        if calculation_type == "count":
+            data_points = [
+                MetricTimeSeriesPoint(
+                    timestamp=start_time,
+                    value=float(len(filtered_events)),
+                    labels=labels or {},
+                )
+            ]
+        elif calculation_type == "rate":
+            # For rate calculations, query the denominator separately
+            if metric_name == "execution_success_rate":
+                # Success rate = completed / started
+                started_events = await self.event_store.get_events_by_type(
+                    event_type="AgentExecutionStarted",
+                    since=start_time,
+                    limit=10000,
+                )
+                started_events = [e for e in started_events if e.occurred_at <= end_time]
+                total_started = len(started_events)
+                total_completed = len(filtered_events)
+                rate = (total_completed / total_started * 100) if total_started > 0 else 0.0
+                data_points = [
+                    MetricTimeSeriesPoint(
+                        timestamp=start_time,
+                        value=rate,
+                        labels=labels or {},
+                    )
+                ]
+            elif metric_name == "error_rate":
+                # Error rate = failed / started
+                started_events = await self.event_store.get_events_by_type(
+                    event_type="AgentExecutionStarted",
+                    since=start_time,
+                    limit=10000,
+                )
+                started_events = [e for e in started_events if e.occurred_at <= end_time]
+                total_started = len(started_events)
+                total_failed = len(filtered_events)
+                rate = (total_failed / total_started * 100) if total_started > 0 else 0.0
+                data_points = [
+                    MetricTimeSeriesPoint(
+                        timestamp=start_time,
+                        value=rate,
+                        labels=labels or {},
+                    )
+                ]
+        elif calculation_type == "duration":
+            durations = [
+                e.payload.get("duration_seconds", 0) for e in filtered_events if "duration_seconds" in e.payload
+            ]
+            if durations:
+                avg_duration = sum(durations) / len(durations)
+                data_points = [
+                    MetricTimeSeriesPoint(
+                        timestamp=start_time,
+                        value=avg_duration,
+                        labels=labels or {},
+                    )
+                ]
+
+        return MetricTimeSeries(
+            metric_name=metric_name,
+            data_points=data_points,
+            aggregation=aggregation or "raw",
+            start_time=start_time,
+            end_time=end_time,
+        )
+
+    async def list_metric_names(self, prefix: str | None = None) -> list[str]:
         """
         List available metric names.
 
@@ -310,15 +499,24 @@ class MetricsService(IMetricsQueryPort):
         Returns:
             List of metric names
         """
-        # TODO: Integrate with metrics infrastructure
-        return []
+        # List of metrics available via get_metric_time_series
+        available_metrics = [
+            "execution_count",
+            "execution_success_rate",
+            "execution_avg_duration",
+            "error_rate",
+        ]
+
+        if prefix:
+            return [m for m in available_metrics if m.startswith(prefix)]
+        return available_metrics
 
     async def get_api_endpoint_metrics(
         self,
-        endpoint_path: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-    ) -> Dict[str, Any]:
+        endpoint_path: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+    ) -> dict[str, Any]:
         """
         Get per-endpoint API metrics.
 
@@ -330,15 +528,74 @@ class MetricsService(IMetricsQueryPort):
         Returns:
             Dict mapping endpoint paths to metrics
         """
-        # TODO: Integrate with API monitoring
-        return {}
+        if start_time is None:
+            start_time = datetime.now(UTC) - timedelta(hours=1)
+        if end_time is None:
+            end_time = datetime.now(UTC)
+
+        logger.debug(f"Getting API endpoint metrics from {start_time} to {end_time}")
+
+        # Query API request events from event store
+        api_events = await self.event_store.get_events_by_type(
+            event_type="APIRequestProcessed",
+            since=start_time,
+            limit=10000,
+        )
+
+        # Group metrics by endpoint
+        endpoints: dict[str, dict[str, Any]] = {}
+
+        for event in api_events:
+            ep = event.payload.get("endpoint_path", "unknown")
+
+            # Filter by endpoint if specified
+            if endpoint_path and ep != endpoint_path:
+                continue
+
+            if ep not in endpoints:
+                endpoints[ep] = {
+                    "requests": 0,
+                    "errors": 0,
+                    "total_latency_ms": 0,
+                    "min_latency_ms": None,
+                    "max_latency_ms": 0,
+                }
+
+            endpoints[ep]["requests"] += 1
+            if event.payload.get("error"):
+                endpoints[ep]["errors"] += 1
+
+            latency = event.payload.get("latency_ms", 0)
+            endpoints[ep]["total_latency_ms"] += latency
+            if endpoints[ep]["min_latency_ms"] is None:
+                endpoints[ep]["min_latency_ms"] = latency
+            else:
+                endpoints[ep]["min_latency_ms"] = min(endpoints[ep]["min_latency_ms"], latency)
+            endpoints[ep]["max_latency_ms"] = max(endpoints[ep]["max_latency_ms"], latency)
+
+        # Calculate averages and error rates
+        for ep_metrics in endpoints.values():
+            if ep_metrics["requests"] > 0:
+                ep_metrics["avg_latency_ms"] = ep_metrics["total_latency_ms"] / ep_metrics["requests"]
+                ep_metrics["error_rate"] = ep_metrics["errors"] / ep_metrics["requests"]
+                # Ensure min_latency_ms is a number (shouldn't be None given requests > 0, but be safe)
+                if ep_metrics["min_latency_ms"] is None:
+                    ep_metrics["min_latency_ms"] = 0
+            else:
+                ep_metrics["avg_latency_ms"] = 0
+                ep_metrics["error_rate"] = 0
+
+            # Clean up temporary values
+            ep_metrics.pop("total_latency_ms", None)
+
+        return endpoints if endpoints else {}
 
     async def get_agent_execution_metrics(
         self,
-        agent_name: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-    ) -> Dict[str, Any]:
+        agent_name: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+    ) -> dict[str, Any]:
         """
         Get agent execution metrics.
 
@@ -351,13 +608,12 @@ class MetricsService(IMetricsQueryPort):
             Dict with execution counts, success rates, duration stats per agent
         """
         if start_time is None:
-            start_time = datetime.now(timezone.utc) - timedelta(hours=1)
+            start_time = datetime.now(UTC) - timedelta(hours=1)
         if end_time is None:
-            end_time = datetime.now(timezone.utc)
+            end_time = datetime.now(UTC)
 
         logger.debug(
-            f"Getting agent execution metrics for {agent_name or 'all agents'} "
-            f"from {start_time} to {end_time}"
+            f"Getting agent execution metrics for {agent_name or 'all agents'} from {start_time} to {end_time}"
         )
 
         # Query execution events from event store
@@ -381,15 +637,9 @@ class MetricsService(IMetricsQueryPort):
 
         # Filter by agent name if specified
         if agent_name:
-            execution_events = [
-                e for e in execution_events if e.payload.get("agent_name") == agent_name
-            ]
-            completed_events = [
-                e for e in completed_events if e.payload.get("agent_name") == agent_name
-            ]
-            failed_events = [
-                e for e in failed_events if e.payload.get("agent_name") == agent_name
-            ]
+            execution_events = [e for e in execution_events if e.payload.get("agent_name") == agent_name]
+            completed_events = [e for e in completed_events if e.payload.get("agent_name") == agent_name]
+            failed_events = [e for e in failed_events if e.payload.get("agent_name") == agent_name]
 
         # Calculate metrics
         total_executions = len(execution_events)
@@ -397,16 +647,10 @@ class MetricsService(IMetricsQueryPort):
         total_failed = len(failed_events)
         total_active = total_executions - total_completed - total_failed
 
-        success_rate = (
-            total_completed / total_executions if total_executions > 0 else 0.0
-        )
+        success_rate = total_completed / total_executions if total_executions > 0 else 0.0
 
         # Calculate duration stats from completed executions
-        durations = [
-            e.payload["duration_seconds"]
-            for e in completed_events
-            if "duration_seconds" in e.payload
-        ]
+        durations = [e.payload["duration_seconds"] for e in completed_events if "duration_seconds" in e.payload]
 
         avg_duration = sum(durations) / len(durations) if durations else 0.0
         min_duration = min(durations) if durations else 0.0
@@ -426,7 +670,7 @@ class MetricsService(IMetricsQueryPort):
             "end_time": end_time.isoformat(),
         }
 
-    async def get_active_agents(self) -> Dict[str, Any]:
+    async def get_active_agents(self) -> dict[str, Any]:
         """
         Get currently active agent executions.
 
@@ -436,7 +680,7 @@ class MetricsService(IMetricsQueryPort):
         logger.debug("Getting active agents")
 
         # Query for recent execution started events
-        recent_time = datetime.now(timezone.utc) - timedelta(hours=24)
+        recent_time = datetime.now(UTC) - timedelta(hours=24)
         execution_events = await self.event_store.get_events_by_type(
             event_type="AgentExecutionStarted",
             since=recent_time,
@@ -468,24 +712,26 @@ class MetricsService(IMetricsQueryPort):
             execution_id = event.payload.get("execution_id")
             if execution_id and execution_id not in finished_ids:
                 # Normalize event.occurred_at to aware datetime if needed
-                occurred_at = event.occurred_at if event.occurred_at.tzinfo is not None else event.occurred_at.replace(tzinfo=timezone.utc)
+                occurred_at = (
+                    event.occurred_at if event.occurred_at.tzinfo is not None else event.occurred_at.replace(tzinfo=UTC)
+                )
                 active_agents.append(
                     {
                         "execution_id": execution_id,
                         "agent_name": event.payload.get("agent_name"),
                         "work_item_id": event.payload.get("work_item_id"),
                         "started_at": occurred_at.isoformat(),
-                        "duration_seconds": (datetime.now(timezone.utc) - occurred_at).total_seconds(),
+                        "duration_seconds": (datetime.now(UTC) - occurred_at).total_seconds(),
                     }
                 )
 
         return {
             "count": len(active_agents),
             "agents": active_agents,
-            "checked_at": datetime.now(timezone.utc).isoformat(),
+            "checked_at": datetime.now(UTC).isoformat(),
         }
 
-    async def get_api_usage(self) -> Dict[str, Any]:
+    async def get_api_usage(self) -> dict[str, Any]:
         """
         Get API usage and quota information.
 
@@ -494,37 +740,48 @@ class MetricsService(IMetricsQueryPort):
         """
         logger.debug("Getting API usage")
 
-        # TODO: Integrate with actual Claude API usage tracking
-        # This would typically query usage metrics from the LLM provider adapter
-        # or from a dedicated usage tracking service
+        # Query LLM execution events to calculate token usage
+        today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        llm_events = await self.event_store.get_events_by_type(
+            event_type="AgentExecutionCompleted",
+            since=today,
+            limit=10000,
+        )
 
-        # Query for recent LLM API calls from events
-        recent_time = datetime.now(timezone.utc) - timedelta(days=1)
+        # Calculate token usage
+        input_tokens_today = sum(e.payload.get("input_tokens", 0) for e in llm_events)
+        output_tokens_today = sum(e.payload.get("output_tokens", 0) for e in llm_events)
+        total_tokens_today = input_tokens_today + output_tokens_today
 
-        # For now, return placeholder data
+        # Estimate cost based on configured rates
+        estimated_cost = (input_tokens_today / 1000 * CLAUDE_INPUT_COST_PER_1K_TOKENS) + (
+            output_tokens_today / 1000 * CLAUDE_OUTPUT_COST_PER_1K_TOKENS
+        )
+
         return {
             "claude_api": {
-                "requests_today": 0,
-                "tokens_input_today": 0,
-                "tokens_output_today": 0,
-                "quota_remaining": None,
+                "requests_today": len(llm_events),
+                "tokens_input_today": input_tokens_today,
+                "tokens_output_today": output_tokens_today,
+                "tokens_total_today": total_tokens_today,
+                "quota_remaining": None,  # Would be provided by Claude API
                 "quota_reset_time": None,
-                "estimated_cost_usd": 0.0,
+                "estimated_cost_usd": round(estimated_cost, 4),
             },
             "github_api": {
-                "requests_remaining": None,
+                "requests_remaining": None,  # Would be checked from GitHub API response headers
                 "quota_limit": None,
                 "quota_reset_time": None,
             },
-            "checked_at": datetime.now(timezone.utc).isoformat(),
+            "checked_at": datetime.now(UTC).isoformat(),
         }
 
     async def get_repair_cycle_metrics(
         self,
-        agent_name: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None
-    ) -> Dict[str, Any]:
+        agent_name: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+    ) -> dict[str, Any]:
         """
         Get repair cycle metrics.
 
@@ -537,14 +794,11 @@ class MetricsService(IMetricsQueryPort):
             Dict with repair cycle statistics
         """
         if start_time is None:
-            start_time = datetime.now(timezone.utc) - timedelta(hours=1)
+            start_time = datetime.now(UTC) - timedelta(hours=1)
         if end_time is None:
-            end_time = datetime.now(timezone.utc)
+            end_time = datetime.now(UTC)
 
-        logger.debug(
-            f"Getting repair cycle metrics for {agent_name or 'all agents'} "
-            f"from {start_time} to {end_time}"
-        )
+        logger.debug(f"Getting repair cycle metrics for {agent_name or 'all agents'} from {start_time} to {end_time}")
 
         # Query repair cycle events
         started_events = await self.event_store.get_events_by_type(
@@ -617,7 +871,7 @@ class MetricsService(IMetricsQueryPort):
                 agent_calls.append(agent_calls_count)
 
         # Calculate per-test-type metrics
-        test_types: Dict[str, Dict[str, int]] = {}
+        test_types: dict[str, dict[str, int]] = {}
         for event in test_execution_events:
             test_type = event.payload.get("test_type", "unknown")
             if test_type not in test_types:
@@ -634,7 +888,7 @@ class MetricsService(IMetricsQueryPort):
                     test_types[test_type]["iterations"] += iterations_per_type
 
         # Calculate file fix metrics
-        files_fixed: Dict[str, int] = {}
+        files_fixed: dict[str, int] = {}
         files_fixed_total = 0
         for event in file_fix_events:
             if event.payload.get("fixed"):
@@ -643,23 +897,32 @@ class MetricsService(IMetricsQueryPort):
                 files_fixed_total += 1
 
         # Calculate warning metrics
-        warnings_reviewed_total = sum(
-            event.payload.get("warnings_reviewed", 0)
-            for event in warning_review_events
-        )
+        warnings_reviewed_total = sum(event.payload.get("warnings_reviewed", 0) for event in warning_review_events)
 
         # Calculate per-agent metrics
-        agents: Dict[str, Dict[str, int]] = {}
+        agents: dict[str, dict[str, int]] = {}
         for event in started_events:
             agent = event.payload.get("agent_name", "unknown")
             if agent not in agents:
-                agents[agent] = {"started": 0, "completed": 0, "successful": 0, "failed": 0, "fast_failed": 0}
+                agents[agent] = {
+                    "started": 0,
+                    "completed": 0,
+                    "successful": 0,
+                    "failed": 0,
+                    "fast_failed": 0,
+                }
             agents[agent]["started"] += 1
 
         for event in completed_events:
             agent = event.payload.get("agent_name", "unknown")
             if agent not in agents:
-                agents[agent] = {"started": 0, "completed": 0, "successful": 0, "failed": 0, "fast_failed": 0}
+                agents[agent] = {
+                    "started": 0,
+                    "completed": 0,
+                    "successful": 0,
+                    "failed": 0,
+                    "fast_failed": 0,
+                }
             agents[agent]["completed"] += 1
             if event.payload.get("overall_success"):
                 agents[agent]["successful"] += 1
@@ -669,7 +932,13 @@ class MetricsService(IMetricsQueryPort):
         for event in fast_fail_events:
             agent = event.payload.get("agent_name", "unknown")
             if agent not in agents:
-                agents[agent] = {"started": 0, "completed": 0, "successful": 0, "failed": 0, "fast_failed": 0}
+                agents[agent] = {
+                    "started": 0,
+                    "completed": 0,
+                    "successful": 0,
+                    "failed": 0,
+                    "fast_failed": 0,
+                }
             agents[agent]["fast_failed"] += 1
 
         # Calculate averages
@@ -703,31 +972,31 @@ class MetricsService(IMetricsQueryPort):
         Returns:
             Component health info for event store
         """
-        check_start = datetime.now(timezone.utc)
+        check_start = datetime.now(UTC)
 
         try:
             # Attempt to get stats from event store
             stats = await self.event_store.get_statistics()
 
-            response_time_ms = (datetime.now(timezone.utc) - check_start).total_seconds() * 1000
+            response_time_ms = (datetime.now(UTC) - check_start).total_seconds() * 1000
 
             return ComponentHealthInfo(
                 component_name="event_store",
                 status=ComponentHealth.HEALTHY,
                 message="Event store is operational",
-                last_check=datetime.now(timezone.utc),
+                last_check=datetime.now(UTC),
                 response_time_ms=response_time_ms,
                 details=stats,
             )
 
         except Exception as e:
-            response_time_ms = (datetime.now(timezone.utc) - check_start).total_seconds() * 1000
+            response_time_ms = (datetime.now(UTC) - check_start).total_seconds() * 1000
 
             return ComponentHealthInfo(
                 component_name="event_store",
                 status=ComponentHealth.UNHEALTHY,
                 message=f"Event store health check failed: {e}",
-                last_check=datetime.now(timezone.utc),
+                last_check=datetime.now(UTC),
                 response_time_ms=response_time_ms,
                 details={"error": str(e)},
             )

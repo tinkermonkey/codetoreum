@@ -7,36 +7,58 @@ These tests verify:
 - Integration with event store and event emitter
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
+from typing import TypeVar
 
 import pytest
 
+from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.adapters.testing.mock_container_recovery_adapter import (
     MockContainerRecoveryAdapter,
 )
 from codetoreum.application.container_recovery_service import (
     ContainerRecoveryService,
 )
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.domain.events.container_recovery_events import (
     ContainerKilledEvent,
     ContainerRecoveredEvent,
     ContainerRecoveryCompletedEvent,
 )
 
+T = TypeVar("T", bound=CodetoreumEvent)
 
-class MockEventEmitter:
-    """Mock event emitter for testing."""
 
-    def __init__(self):
-        """Initialize mock event emitter."""
-        self.events = []
+class EventCollector(MockEventEmitter):
+    """Event emitter that collects events for testing.
 
-    def emit(self, event):
-        """Emit an event."""
+    Extends MockEventEmitter to add event collection capability,
+    allowing tests to verify events were emitted.
+    """
+
+    def __init__(self) -> None:
+        """Initialize the event collector."""
+        super().__init__()
+        self.events: list[CodetoreumEvent] = []
+
+    def emit(self, event: CodetoreumEvent) -> None:
+        """Emit an event and collect it for testing.
+
+        Args:
+            event: CodetoreumEvent instance to emit
+        """
         self.events.append(event)
+        super().emit(event)
 
-    def get_events_by_type(self, event_type):
-        """Get all events of a specific type."""
+    def get_events_by_type(self, event_type: type[T]) -> list[T]:
+        """Get all events of a specific type.
+
+        Args:
+            event_type: The event class to filter by
+
+        Returns:
+            List of events matching the given type
+        """
         return [e for e in self.events if isinstance(e, event_type)]
 
 
@@ -53,7 +75,7 @@ class TestContainerRecoveryWorkflowWithMocks:
         - 1 orphan (should kill)
         """
         # Setup event emitter
-        event_emitter = MockEventEmitter()
+        event_emitter = EventCollector()
 
         # Setup mock adapter
         mock_adapter = MockContainerRecoveryAdapter()
@@ -151,35 +173,25 @@ class TestContainerRecoveryWorkflowWithMocks:
         # Verify events
         recovered_events = event_emitter.get_events_by_type(ContainerRecoveredEvent)
         killed_events = event_emitter.get_events_by_type(ContainerKilledEvent)
-        completion_events = event_emitter.get_events_by_type(
-            ContainerRecoveryCompletedEvent
-        )
+        completion_events = event_emitter.get_events_by_type(ContainerRecoveryCompletedEvent)
 
         assert len(recovered_events) == 2
         assert len(killed_events) == 2
         assert len(completion_events) == 1
 
         # Verify recovery event details
-        recovery_with_monitoring = [
-            e for e in recovered_events if e.container_id == "container-1"
-        ][0]
+        recovery_with_monitoring = [e for e in recovered_events if e.container_id == "container-1"][0]
         assert recovery_with_monitoring.recovery_action == "reconnect_with_monitoring"
         assert recovery_with_monitoring.project_id == "proj-1"
 
-        recovery_limited = [
-            e for e in recovered_events if e.container_id == "container-2"
-        ][0]
+        recovery_limited = [e for e in recovered_events if e.container_id == "container-2"][0]
         assert recovery_limited.recovery_action == "reconnect_limited"
 
         # Verify kill event details
-        killed_by_timeout = [
-            e for e in killed_events if e.container_id == "container-3"
-        ][0]
+        killed_by_timeout = [e for e in killed_events if e.container_id == "container-3"][0]
         assert killed_by_timeout.kill_reason == "container_timeout"
 
-        killed_orphan = [
-            e for e in killed_events if e.container_id == "container-4"
-        ][0]
+        killed_orphan = [e for e in killed_events if e.container_id == "container-4"][0]
         assert killed_orphan.kill_reason == "no_execution_found"
 
         # Verify completion event
@@ -192,7 +204,7 @@ class TestContainerRecoveryWorkflowWithMocks:
     @pytest.mark.asyncio
     async def test_recovery_with_partial_failures(self):
         """Test recovery when some actions fail."""
-        event_emitter = MockEventEmitter()
+        event_emitter = EventCollector()
 
         mock_adapter = MockContainerRecoveryAdapter()
 
@@ -258,7 +270,7 @@ class TestContainerRecoveryWorkflowWithMocks:
     @pytest.mark.asyncio
     async def test_recovery_with_repair_cycles(self):
         """Test recovery processes orphaned repair cycle results."""
-        event_emitter = MockEventEmitter()
+        event_emitter = EventCollector()
 
         mock_adapter = MockContainerRecoveryAdapter()
 
@@ -277,16 +289,14 @@ class TestContainerRecoveryWorkflowWithMocks:
         assert result.repair_cycles_processed == 5
 
         # Verify completion event includes repair cycles
-        completion_events = event_emitter.get_events_by_type(
-            ContainerRecoveryCompletedEvent
-        )
+        completion_events = event_emitter.get_events_by_type(ContainerRecoveryCompletedEvent)
         assert len(completion_events) == 1
         assert completion_events[0].repair_cycles_processed == 5
 
     @pytest.mark.asyncio
     async def test_recovery_event_timestamp_ordering(self):
         """Test that events have proper timestamps in chronological order."""
-        event_emitter = MockEventEmitter()
+        event_emitter = EventCollector()
 
         mock_adapter = MockContainerRecoveryAdapter()
 

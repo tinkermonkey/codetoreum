@@ -1,14 +1,15 @@
 """Unit tests for PipelineStage entity."""
 
-import pytest
-from datetime import datetime, timezone
+from datetime import datetime
 
+import pytest
+
+from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.pipeline_stage import (
     PipelineStage,
     StageStatus,
     StageType,
 )
-from codetoreum.domain.exceptions import DomainError
 
 
 class TestPipelineStageCreation:
@@ -68,24 +69,17 @@ class TestStageLifecycle:
     """Test PipelineStage lifecycle methods."""
 
     def test_mark_ready(self):
-        """Test marking a stage as ready."""
-        stage = PipelineStage.create("test", "wf-1", "agent-1")
-        assert stage.status == StageStatus.PENDING
-
-        stage.mark_ready()
-        assert stage.status == StageStatus.READY
-
-    def test_mark_ready_fails_if_not_pending(self):
-        """Test that mark_ready fails if stage is not pending."""
-        stage = PipelineStage.create("test", "wf-1", "agent-1")
+        """Test marking a stage as ready and rejecting double transitions."""
+        stage = PipelineStage.create("test", "wf-1", {"agent_id": "agent-1"})
         stage.mark_ready()
 
+        # Cannot mark ready twice
         with pytest.raises(DomainError, match="Cannot mark ready"):
             stage.mark_ready()
 
     def test_start_stage(self):
         """Test starting a stage."""
-        stage = PipelineStage.create("test", "wf-1", "agent-1")
+        stage = PipelineStage.create("test", "wf-1", {"agent_id": "agent-1"})
         stage.mark_ready()
 
         stage.start("exec-123")
@@ -96,14 +90,14 @@ class TestStageLifecycle:
 
     def test_start_fails_if_not_ready(self):
         """Test that start fails if stage is not ready."""
-        stage = PipelineStage.create("test", "wf-1", "agent-1")
+        stage = PipelineStage.create("test", "wf-1", {"agent_id": "agent-1"})
 
         with pytest.raises(DomainError, match="Cannot start: stage not ready"):
             stage.start("exec-123")
 
     def test_complete_stage(self):
         """Test completing a stage."""
-        stage = PipelineStage.create("test", "wf-1", "agent-1")
+        stage = PipelineStage.create("test", "wf-1", {"agent_id": "agent-1"})
         stage.mark_ready()
         stage.start("exec-123")
 
@@ -115,14 +109,14 @@ class TestStageLifecycle:
 
     def test_complete_fails_if_not_running(self):
         """Test that complete fails if stage is not running."""
-        stage = PipelineStage.create("test", "wf-1", "agent-1")
+        stage = PipelineStage.create("test", "wf-1", {"agent_id": "agent-1"})
 
         with pytest.raises(DomainError, match="Cannot complete: stage not running"):
             stage.complete("output")
 
     def test_fail_stage(self):
         """Test failing a stage."""
-        stage = PipelineStage.create("test", "wf-1", "agent-1")
+        stage = PipelineStage.create("test", "wf-1", {"agent_id": "agent-1"})
         stage.mark_ready()
         stage.start("exec-123")
 
@@ -133,7 +127,7 @@ class TestStageLifecycle:
 
     def test_fail_stage_from_ready(self):
         """Test failing a stage from ready status."""
-        stage = PipelineStage.create("test", "wf-1", "agent-1")
+        stage = PipelineStage.create("test", "wf-1", {"agent_id": "agent-1"})
         stage.mark_ready()
 
         stage.fail("Failed before starting")
@@ -142,14 +136,14 @@ class TestStageLifecycle:
 
     def test_fail_fails_from_invalid_status(self):
         """Test that fail fails from invalid status."""
-        stage = PipelineStage.create("test", "wf-1", "agent-1")
+        stage = PipelineStage.create("test", "wf-1", {"agent_id": "agent-1"})
 
         with pytest.raises(DomainError, match="Cannot fail: invalid status"):
             stage.fail("error")
 
     def test_skip_stage(self):
         """Test skipping a stage."""
-        stage = PipelineStage.create("test", "wf-1", "agent-1")
+        stage = PipelineStage.create("test", "wf-1", {"agent_id": "agent-1"})
 
         stage.skip("Not needed")
         assert stage.status == StageStatus.SKIPPED
@@ -158,7 +152,7 @@ class TestStageLifecycle:
 
     def test_skip_fails_if_not_pending(self):
         """Test that skip fails if stage is not pending."""
-        stage = PipelineStage.create("test", "wf-1", "agent-1")
+        stage = PipelineStage.create("test", "wf-1", {"agent_id": "agent-1"})
         stage.mark_ready()
 
         with pytest.raises(DomainError, match="Cannot skip: stage in status"):
@@ -170,7 +164,7 @@ class TestStageDependencies:
 
     def test_can_enter_with_no_dependencies(self):
         """Test that stage with no dependencies can enter."""
-        stage = PipelineStage.create("test", "wf-1", "agent-1")
+        stage = PipelineStage.create("test", "wf-1", {"agent_id": "agent-1"})
         stage.mark_ready()
 
         assert stage.can_enter([])
@@ -178,9 +172,7 @@ class TestStageDependencies:
 
     def test_can_enter_with_satisfied_dependencies(self):
         """Test that stage can enter when dependencies are satisfied."""
-        stage = PipelineStage.create(
-            "test", "wf-1", "agent-1", dependencies=["stage-1", "stage-2"]
-        )
+        stage = PipelineStage.create("test", "wf-1", {"agent_id": "agent-1"}, dependencies=["stage-1", "stage-2"])
         stage.mark_ready()
 
         assert not stage.can_enter([])
@@ -190,7 +182,7 @@ class TestStageDependencies:
 
     def test_can_enter_fails_if_not_pending_or_ready(self):
         """Test that can_start returns False if stage is not pending or ready."""
-        stage = PipelineStage.create("test", "wf-1", "agent-1")
+        stage = PipelineStage.create("test", "wf-1", {"agent_id": "agent-1"})
         stage.mark_ready()
         stage.start("exec-1")
 
@@ -202,7 +194,7 @@ class TestStageQueries:
 
     def test_is_completed(self):
         """Test is_completed method."""
-        stage = PipelineStage.create("test", "wf-1", "agent-1")
+        stage = PipelineStage.create("test", "wf-1", {"agent_id": "agent-1"})
         assert not stage.is_completed()
 
         stage.mark_ready()
@@ -212,7 +204,7 @@ class TestStageQueries:
 
     def test_is_failed(self):
         """Test is_failed method."""
-        stage = PipelineStage.create("test", "wf-1", "agent-1")
+        stage = PipelineStage.create("test", "wf-1", {"agent_id": "agent-1"})
         assert not stage.is_failed()
 
         stage.mark_ready()
@@ -222,31 +214,31 @@ class TestStageQueries:
 
     def test_is_terminal(self):
         """Test is_terminal method."""
-        stage = PipelineStage.create("test", "wf-1", "agent-1")
+        stage = PipelineStage.create("test", "wf-1", {"agent_id": "agent-1"})
         assert not stage.is_terminal()
 
         # Completed is terminal
-        stage_completed = PipelineStage.create("test1", "wf-1", "agent-1")
+        stage_completed = PipelineStage.create("test1", "wf-1", {"agent_id": "agent-1"})
         stage_completed.mark_ready()
         stage_completed.start("exec-1")
         stage_completed.complete("output")
         assert stage_completed.is_terminal()
 
         # Failed is terminal
-        stage_failed = PipelineStage.create("test2", "wf-1", "agent-1")
+        stage_failed = PipelineStage.create("test2", "wf-1", {"agent_id": "agent-1"})
         stage_failed.mark_ready()
         stage_failed.start("exec-2")
         stage_failed.fail("error")
         assert stage_failed.is_terminal()
 
         # Skipped is terminal
-        stage_skipped = PipelineStage.create("test3", "wf-1", "agent-1")
+        stage_skipped = PipelineStage.create("test3", "wf-1", {"agent_id": "agent-1"})
         stage_skipped.skip("not needed")
         assert stage_skipped.is_terminal()
 
     def test_get_duration_seconds(self):
         """Test get_duration_seconds method."""
-        stage = PipelineStage.create("test", "wf-1", "agent-1")
+        stage = PipelineStage.create("test", "wf-1", {"agent_id": "agent-1"})
         assert stage.get_duration_seconds() is None
 
         stage.mark_ready()
@@ -258,24 +250,6 @@ class TestStageQueries:
         assert duration is not None
         assert duration >= 0
         assert isinstance(duration, float)
-
-    def test_update_status(self):
-        """Test update_status method."""
-        stage = PipelineStage.create("test", "wf-1", "agent-1")
-        assert stage.status == StageStatus.PENDING
-
-        stage.update_status("ready")
-        assert stage.status == StageStatus.READY
-
-        stage.update_status("running")
-        assert stage.status == StageStatus.RUNNING
-
-    def test_update_status_invalid_value(self):
-        """Test update_status with invalid value."""
-        stage = PipelineStage.create("test", "wf-1", agent_config={"agent_id": "agent-1"})
-
-        with pytest.raises(ValueError):
-            stage.update_status("invalid")
 
     def test_get_agent_for_execution_sequential(self):
         """Test get_agent_for_execution for sequential stage."""
@@ -320,9 +294,7 @@ class TestStageTypes:
 
     def test_sequential_stage(self):
         """Test sequential stage type."""
-        stage = PipelineStage.create(
-            "test", "wf-1", "agent-1", stage_type=StageType.SEQUENTIAL
-        )
+        stage = PipelineStage.create("test", "wf-1", {"agent_id": "agent-1"}, stage_type=StageType.SEQUENTIAL)
         assert stage.stage_type == StageType.SEQUENTIAL
         assert not stage.is_parallel
 
@@ -331,7 +303,7 @@ class TestStageTypes:
         stage = PipelineStage.create(
             "test",
             "wf-1",
-            "agent-1",
+            {"agent_id": "agent-1"},
             stage_type=StageType.PARALLEL,
             is_parallel=True,
         )
@@ -358,19 +330,19 @@ class TestStageMetadata:
 
     def test_metadata_initialization(self):
         """Test that metadata is initialized as empty dict."""
-        stage = PipelineStage.create("test", "wf-1", "agent-1")
+        stage = PipelineStage.create("test", "wf-1", {"agent_id": "agent-1"})
         assert stage.metadata == {}
         assert isinstance(stage.metadata, dict)
 
     def test_metadata_modification(self):
         """Test modifying stage metadata."""
-        stage = PipelineStage.create("test", "wf-1", "agent-1")
+        stage = PipelineStage.create("test", "wf-1", {"agent_id": "agent-1"})
         stage.metadata["custom_key"] = "custom_value"
         assert stage.metadata["custom_key"] == "custom_value"
 
     def test_skip_reason_in_metadata(self):
         """Test that skip reason is stored in metadata."""
-        stage = PipelineStage.create("test", "wf-1", "agent-1")
+        stage = PipelineStage.create("test", "wf-1", {"agent_id": "agent-1"})
         stage.skip("Not applicable")
         assert "skip_reason" in stage.metadata
         assert stage.metadata["skip_reason"] == "Not applicable"

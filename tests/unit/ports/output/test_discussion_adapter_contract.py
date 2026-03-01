@@ -22,7 +22,6 @@ class TestDiscussionAdapterContract(ABC):
     @abstractmethod
     async def create_adapter(self) -> IDiscussionAdapter:
         """Create and return an IDiscussionAdapter instance for testing."""
-        pass
 
     @pytest.mark.asyncio
     async def test_add_comment_returns_comment_with_id(self):

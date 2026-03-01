@@ -13,11 +13,10 @@ The service is responsible for:
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional
 
 from codetoreum.domain.conversational_session import ConversationalSessionState
-from codetoreum.domain.events.discussion_events import CommentNeedsResponseEvent
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
+from codetoreum.domain.events.discussion_events import CommentNeedsResponseEvent
 
 
 class IConversationalLoopService(ABC):
@@ -48,10 +47,7 @@ class IConversationalLoopService(ABC):
 
     @abstractmethod
     async def initialize_loop(
-        self,
-        work_item_id: str,
-        project_id: str,
-        column_config: dict
+        self, work_item_id: str, project_id: str, column_config: dict
     ) -> ConversationalSessionState:
         """Initialize a conversational loop when work item enters a conversational column.
 
@@ -81,13 +77,9 @@ class IConversationalLoopService(ABC):
         - PortError: If starting monitoring fails
         - EventStoreError: If persisting session state fails
         """
-        pass
 
     @abstractmethod
-    async def handle_comment_event(
-        self,
-        event: CommentNeedsResponseEvent
-    ) -> None:
+    async def handle_comment_event(self, event: CommentNeedsResponseEvent) -> None:
         """Handle a human comment requiring an agent response.
 
         This operation processes a comment that needs a response by:
@@ -127,13 +119,9 @@ class IConversationalLoopService(ABC):
         - LLMProviderError: If agent execution fails
         - ValidationError: If event data is invalid or missing
         """
-        pass
 
     @abstractmethod
-    async def handle_column_change_event(
-        self,
-        event: WorkItemColumnChangedEvent
-    ) -> None:
+    async def handle_column_change_event(self, event: WorkItemColumnChangedEvent) -> None:
         """Handle work item column transition (entry/exit of conversational column).
 
         This operation responds to work item movement between board columns by:
@@ -170,14 +158,9 @@ class IConversationalLoopService(ABC):
         - ValidationError: If event data is invalid
         - PortError: If starting/stopping monitoring fails
         """
-        pass
 
     @abstractmethod
-    async def cleanup_loop(
-        self,
-        work_item_id: str,
-        reason: str
-    ) -> None:
+    async def cleanup_loop(self, work_item_id: str, reason: str) -> None:
         """Clean up loop state due to error handling or manual termination.
 
         This operation performs cleanup when a conversational loop needs to be
@@ -202,13 +185,9 @@ class IConversationalLoopService(ABC):
         **Raises**:
         - PortError: If stopping monitoring fails (should not prevent cleanup)
         """
-        pass
 
     @abstractmethod
-    async def load_session_state(
-        self,
-        work_item_id: str
-    ) -> Optional[ConversationalSessionState]:
+    async def load_session_state(self, work_item_id: str) -> ConversationalSessionState | None:
         """Load persisted session state from storage.
 
         Retrieves the current session state for a work item from the event store,
@@ -230,13 +209,9 @@ class IConversationalLoopService(ABC):
         - ValidationError: If work_item_id is invalid or empty
         - EventStoreError: If storage retrieval fails
         """
-        pass
 
     @abstractmethod
-    async def save_session_state(
-        self,
-        state: ConversationalSessionState
-    ) -> None:
+    async def save_session_state(self, state: ConversationalSessionState) -> None:
         """Persist session state to storage.
 
         Saves the session state to the event store, enabling:
@@ -257,4 +232,3 @@ class IConversationalLoopService(ABC):
         - ValidationError: If state is invalid (validation happens in ConversationalSessionState)
         - EventStoreError: If storage operation fails
         """
-        pass

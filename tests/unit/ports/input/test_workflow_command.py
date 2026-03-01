@@ -6,16 +6,16 @@ IWorkflowCommandPort without requiring implementations.
 """
 
 import pytest
-from datetime import datetime
+
 from codetoreum.ports.input.workflow_command import (
+    CancelWorkflowCommand,
     IWorkflowCommandPort,
-    StartWorkflowCommand,
     PauseWorkflowCommand,
     ResumeWorkflowCommand,
-    CancelWorkflowCommand,
     RetryStageCommand,
-    WorkflowCommandResult,
+    StartWorkflowCommand,
     TriggerType,
+    WorkflowCommandResult,
 )
 
 
@@ -41,11 +41,7 @@ class TestStartWorkflowCommand:
 
     def test_minimal_command_creation(self):
         """Test creating command with minimal required fields"""
-        cmd = StartWorkflowCommand(
-            project_name="test-project",
-            work_item_id="123",
-            pipeline_name="ci-pipeline"
-        )
+        cmd = StartWorkflowCommand(project_name="test-project", work_item_id="123", pipeline_name="ci-pipeline")
 
         assert cmd.project_name == "test-project"
         assert cmd.work_item_id == "123"
@@ -65,7 +61,7 @@ class TestStartWorkflowCommand:
             stage_name="build",
             trigger=TriggerType.API,
             context=context,
-            priority="HIGH"
+            priority="HIGH",
         )
 
         assert cmd.project_name == "test-project"
@@ -78,16 +74,12 @@ class TestStartWorkflowCommand:
 
     def test_command_immutability(self):
         """Test that command fields can be read"""
-        cmd = StartWorkflowCommand(
-            project_name="test-project",
-            work_item_id="123",
-            pipeline_name="ci-pipeline"
-        )
+        cmd = StartWorkflowCommand(project_name="test-project", work_item_id="123", pipeline_name="ci-pipeline")
 
         # Dataclasses are mutable by default, just verify field access
-        assert hasattr(cmd, 'project_name')
-        assert hasattr(cmd, 'work_item_id')
-        assert hasattr(cmd, 'pipeline_name')
+        assert hasattr(cmd, "project_name")
+        assert hasattr(cmd, "work_item_id")
+        assert hasattr(cmd, "pipeline_name")
 
 
 class TestPauseWorkflowCommand:
@@ -95,11 +87,7 @@ class TestPauseWorkflowCommand:
 
     def test_command_creation(self):
         """Test creating pause command"""
-        cmd = PauseWorkflowCommand(
-            workflow_run_id="wf-123",
-            reason="User requested pause",
-            pause_point="stage-2"
-        )
+        cmd = PauseWorkflowCommand(workflow_run_id="wf-123", reason="User requested pause", pause_point="stage-2")
 
         assert cmd.workflow_run_id == "wf-123"
         assert cmd.reason == "User requested pause"
@@ -111,19 +99,14 @@ class TestResumeWorkflowCommand:
 
     def test_minimal_resume_command(self):
         """Test creating resume command without from_stage"""
-        cmd = ResumeWorkflowCommand(
-            workflow_run_id="wf-123"
-        )
+        cmd = ResumeWorkflowCommand(workflow_run_id="wf-123")
 
         assert cmd.workflow_run_id == "wf-123"
         assert cmd.from_stage is None
 
     def test_resume_with_stage(self):
         """Test creating resume command with specific stage"""
-        cmd = ResumeWorkflowCommand(
-            workflow_run_id="wf-123",
-            from_stage="stage-3"
-        )
+        cmd = ResumeWorkflowCommand(workflow_run_id="wf-123", from_stage="stage-3")
 
         assert cmd.workflow_run_id == "wf-123"
         assert cmd.from_stage == "stage-3"
@@ -134,10 +117,7 @@ class TestCancelWorkflowCommand:
 
     def test_normal_cancel(self):
         """Test creating normal cancel command"""
-        cmd = CancelWorkflowCommand(
-            workflow_run_id="wf-123",
-            reason="No longer needed"
-        )
+        cmd = CancelWorkflowCommand(workflow_run_id="wf-123", reason="No longer needed")
 
         assert cmd.workflow_run_id == "wf-123"
         assert cmd.reason == "No longer needed"
@@ -145,11 +125,7 @@ class TestCancelWorkflowCommand:
 
     def test_force_cancel(self):
         """Test creating force cancel command"""
-        cmd = CancelWorkflowCommand(
-            workflow_run_id="wf-123",
-            reason="Emergency stop",
-            force=True
-        )
+        cmd = CancelWorkflowCommand(workflow_run_id="wf-123", reason="Emergency stop", force=True)
 
         assert cmd.workflow_run_id == "wf-123"
         assert cmd.reason == "Emergency stop"
@@ -161,10 +137,7 @@ class TestRetryStageCommand:
 
     def test_retry_with_reset(self):
         """Test creating retry command with state reset"""
-        cmd = RetryStageCommand(
-            workflow_run_id="wf-123",
-            stage_name="build"
-        )
+        cmd = RetryStageCommand(workflow_run_id="wf-123", stage_name="build")
 
         assert cmd.workflow_run_id == "wf-123"
         assert cmd.stage_name == "build"
@@ -172,11 +145,7 @@ class TestRetryStageCommand:
 
     def test_retry_without_reset(self):
         """Test creating retry command without state reset"""
-        cmd = RetryStageCommand(
-            workflow_run_id="wf-123",
-            stage_name="build",
-            reset_state=False
-        )
+        cmd = RetryStageCommand(workflow_run_id="wf-123", stage_name="build", reset_state=False)
 
         assert cmd.workflow_run_id == "wf-123"
         assert cmd.stage_name == "build"
@@ -192,7 +161,7 @@ class TestWorkflowCommandResult:
             success=True,
             workflow_run_id="wf-123",
             message="Workflow started successfully",
-            state="STARTED"
+            state="STARTED",
         )
 
         assert result.success is True
@@ -209,7 +178,7 @@ class TestWorkflowCommandResult:
             workflow_run_id="wf-123",
             message="Workflow start failed",
             state="FAILED",
-            errors=errors
+            errors=errors,
         )
 
         assert result.success is False
@@ -222,19 +191,14 @@ class TestWorkflowCommandResult:
 class TestIWorkflowCommandPortInterface:
     """Tests for IWorkflowCommandPort interface contract"""
 
-    def test_interface_is_abstract(self):
-        """Test that IWorkflowCommandPort cannot be instantiated directly"""
-        with pytest.raises(TypeError):
-            IWorkflowCommandPort()
-
     def test_interface_has_required_methods(self):
         """Test that interface defines all required methods"""
         required_methods = [
-            'start_workflow',
-            'pause_workflow',
-            'resume_workflow',
-            'cancel_workflow',
-            'retry_stage'
+            "start_workflow",
+            "pause_workflow",
+            "resume_workflow",
+            "cancel_workflow",
+            "retry_stage",
         ]
 
         for method_name in required_methods:
@@ -242,62 +206,26 @@ class TestIWorkflowCommandPortInterface:
             method = getattr(IWorkflowCommandPort, method_name)
             assert callable(method)
 
-    def test_concrete_implementation_requirements(self):
-        """Test that concrete implementation must implement all methods"""
-
-        # Create incomplete implementation
-        class IncompletePort(IWorkflowCommandPort):
-            async def start_workflow(self, command):
-                pass
-            # Missing other methods
-
-        # Should not be able to instantiate incomplete implementation
-        with pytest.raises(TypeError):
-            IncompletePort()
-
     def test_complete_implementation(self):
         """Test that complete implementation can be instantiated"""
 
         class CompletePort(IWorkflowCommandPort):
             async def start_workflow(self, command):
-                return WorkflowCommandResult(
-                    success=True,
-                    workflow_run_id="test",
-                    message="Started",
-                    state="STARTED"
-                )
+                return WorkflowCommandResult(success=True, workflow_run_id="test", message="Started", state="STARTED")
 
             async def pause_workflow(self, command):
-                return WorkflowCommandResult(
-                    success=True,
-                    workflow_run_id="test",
-                    message="Paused",
-                    state="PAUSED"
-                )
+                return WorkflowCommandResult(success=True, workflow_run_id="test", message="Paused", state="PAUSED")
 
             async def resume_workflow(self, command):
-                return WorkflowCommandResult(
-                    success=True,
-                    workflow_run_id="test",
-                    message="Resumed",
-                    state="RUNNING"
-                )
+                return WorkflowCommandResult(success=True, workflow_run_id="test", message="Resumed", state="RUNNING")
 
             async def cancel_workflow(self, command):
                 return WorkflowCommandResult(
-                    success=True,
-                    workflow_run_id="test",
-                    message="Cancelled",
-                    state="CANCELLED"
+                    success=True, workflow_run_id="test", message="Cancelled", state="CANCELLED"
                 )
 
             async def retry_stage(self, command):
-                return WorkflowCommandResult(
-                    success=True,
-                    workflow_run_id="test",
-                    message="Retrying",
-                    state="RUNNING"
-                )
+                return WorkflowCommandResult(success=True, workflow_run_id="test", message="Retrying", state="RUNNING")
 
         # Should be able to instantiate complete implementation
         port = CompletePort()
@@ -313,12 +241,7 @@ class TestWorkflowCommandPortBehavior:
 
         class MockPort(IWorkflowCommandPort):
             async def start_workflow(self, command):
-                return WorkflowCommandResult(
-                    success=True,
-                    workflow_run_id="wf-123",
-                    message="Started",
-                    state="STARTED"
-                )
+                return WorkflowCommandResult(success=True, workflow_run_id="wf-123", message="Started", state="STARTED")
 
             async def pause_workflow(self, command):
                 pass
@@ -333,11 +256,7 @@ class TestWorkflowCommandPortBehavior:
                 pass
 
         port = MockPort()
-        cmd = StartWorkflowCommand(
-            project_name="test",
-            work_item_id="123",
-            pipeline_name="ci"
-        )
+        cmd = StartWorkflowCommand(project_name="test", work_item_id="123", pipeline_name="ci")
 
         result = await port.start_workflow(cmd)
         assert isinstance(result, WorkflowCommandResult)

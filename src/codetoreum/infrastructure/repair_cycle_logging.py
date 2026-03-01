@@ -11,21 +11,22 @@ Provides structured logging for repair cycle stages with:
 import logging
 import time
 from contextlib import contextmanager
-from dataclasses import dataclass, asdict
-from datetime import datetime, timezone
-from typing import Dict, Any, Optional, List
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from enum import Enum
+from typing import Any
+
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    "RepairCycleLogLevel",
-    "RepairCycleLogContext",
-    "RepairCycleLogger",
-    "RepairCyclePerformanceLogger",
     "RepairCycleErrorLogger",
+    "RepairCycleLogContext",
+    "RepairCycleLogLevel",
+    "RepairCycleLogger",
     "RepairCycleLoggingContext",
+    "RepairCyclePerformanceLogger",
 ]
 
 
@@ -46,20 +47,20 @@ class RepairCycleLogContext:
     workflow_run_id: str
     stage_name: str
     agent_name: str
-    test_type: Optional[str] = None
+    test_type: str | None = None
     iteration: int = 0
-    file_path: Optional[str] = None
-    correlation_id: Optional[str] = None
-    user_id: Optional[str] = None
-    project_id: Optional[str] = None
-    timestamp: Optional[datetime] = None
+    file_path: str | None = None
+    correlation_id: str | None = None
+    user_id: str | None = None
+    project_id: str | None = None
+    timestamp: datetime | None = None
 
     def __post_init__(self):
         """Initialize timestamp if not provided."""
         if self.timestamp is None:
-            self.timestamp = datetime.now(timezone.utc)
+            self.timestamp = datetime.now(UTC)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert context to dictionary for structured logging."""
         data = asdict(self)
         data["timestamp"] = data["timestamp"].isoformat()
@@ -79,7 +80,7 @@ class RepairCycleLogger:
         self.context = context
         self.logger = logging.getLogger(f"repair_cycle.{context.stage_name}")
 
-    def _format_message(self, message: str, data: Optional[Dict[str, Any]] = None) -> str:
+    def _format_message(self, message: str, data: dict[str, Any] | None = None) -> str:
         """Format structured message with context."""
         context_dict = self.context.to_dict()
         context_str = " | ".join(f"{k}={v}" for k, v in context_dict.items())
@@ -89,28 +90,32 @@ class RepairCycleLogger:
             return f"{message} | {context_str} | {data_str}"
         return f"{message} | {context_str}"
 
-    def debug(self, message: str, data: Optional[Dict[str, Any]] = None) -> None:
+    def debug(self, message: str, data: dict[str, Any] | None = None) -> None:
         """Log debug message."""
         self.logger.debug(self._format_message(message, data))
 
-    def info(self, message: str, data: Optional[Dict[str, Any]] = None) -> None:
+    def info(self, message: str, data: dict[str, Any] | None = None) -> None:
         """Log info message."""
         self.logger.info(self._format_message(message, data))
 
-    def warning(self, message: str, data: Optional[Dict[str, Any]] = None) -> None:
+    def warning(self, message: str, data: dict[str, Any] | None = None) -> None:
         """Log warning message."""
         self.logger.warning(self._format_message(message, data))
 
-    def error(self, message: str, data: Optional[Dict[str, Any]] = None, exc_info: bool = True) -> None:
+    def error(self, message: str, data: dict[str, Any] | None = None, exc_info: bool = True) -> None:
         """Log error message with full exception info by default (per project requirements)."""
-        self.logger.error(self._format_message(message, data), exc_info=exc_info, extra={"error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR})
+        self.logger.error(
+            self._format_message(message, data),
+            exc_info=exc_info,
+            extra={"error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
+        )
 
-    def critical(self, message: str, data: Optional[Dict[str, Any]] = None, exc_info: bool = True) -> None:
+    def critical(self, message: str, data: dict[str, Any] | None = None, exc_info: bool = True) -> None:
         """Log critical message with full exception info by default (per project requirements)."""
         self.logger.critical(self._format_message(message, data), exc_info=exc_info)
 
     @contextmanager
-    def log_duration(self, operation: str, data: Optional[Dict[str, Any]] = None):
+    def log_duration(self, operation: str, data: dict[str, Any] | None = None):
         """
         Context manager to log operation duration.
 
@@ -126,19 +131,24 @@ class RepairCycleLogger:
             duration = time.time() - start_time
             self.info(
                 f"{operation} completed",
-                {**(data or {}), "duration_seconds": round(duration, 3), "status": "success"}
+                {**(data or {}), "duration_seconds": round(duration, 3), "status": "success"},
             )
         except Exception as e:
             duration = time.time() - start_time
             self.error(
                 f"{operation} failed",
-                {**(data or {}), "duration_seconds": round(duration, 3), "status": "failed", "error": str(e)},
-                exc_info=True
+                {
+                    **(data or {}),
+                    "duration_seconds": round(duration, 3),
+                    "status": "failed",
+                    "error": str(e),
+                },
+                exc_info=True,
             )
             raise
 
     @contextmanager
-    def log_stage(self, stage_name: str, data: Optional[Dict[str, Any]] = None):
+    def log_stage(self, stage_name: str, data: dict[str, Any] | None = None):
         """
         Context manager to log repair cycle stage execution.
 
@@ -162,7 +172,7 @@ class RepairCyclePerformanceLogger:
         """
         self.context = context
         self.logger = logging.getLogger(f"repair_cycle.performance.{context.stage_name}")
-        self._timings: Dict[str, List[float]] = {}
+        self._timings: dict[str, list[float]] = {}
 
     def record_timing(self, operation: str, duration_seconds: float) -> None:
         """
@@ -187,7 +197,7 @@ class RepairCyclePerformanceLogger:
         operation: str,
         duration_seconds: float,
         threshold_seconds: float,
-        data: Optional[Dict[str, Any]] = None
+        data: dict[str, Any] | None = None,
     ) -> None:
         """
         Log slow operation warning.
@@ -199,7 +209,6 @@ class RepairCyclePerformanceLogger:
             data: Additional context data
         """
         if duration_seconds > threshold_seconds:
-            context_dict = self.context.to_dict()
             msg = (
                 f"slow_operation_detected | operation={operation} | "
                 f"duration={duration_seconds}s | threshold={threshold_seconds}s"
@@ -208,7 +217,7 @@ class RepairCyclePerformanceLogger:
                 msg += " | " + " | ".join(f"{k}={v}" for k, v in data.items())
             self.logger.warning(msg)
 
-    def log_resource_usage(self, data: Dict[str, Any]) -> None:
+    def log_resource_usage(self, data: dict[str, Any]) -> None:
         """
         Log resource usage during repair cycle.
 
@@ -218,7 +227,7 @@ class RepairCyclePerformanceLogger:
         msg = "resource_usage | " + " | ".join(f"{k}={v}" for k, v in data.items())
         self.logger.debug(msg)
 
-    def get_statistics(self) -> Dict[str, Dict[str, float]]:
+    def get_statistics(self) -> dict[str, dict[str, float]]:
         """
         Get timing statistics.
 
@@ -250,14 +259,14 @@ class RepairCycleErrorLogger:
         """
         self.context = context
         self.logger = logging.getLogger(f"repair_cycle.errors.{context.stage_name}")
-        self._error_counts: Dict[str, int] = {}
+        self._error_counts: dict[str, int] = {}
 
     def log_test_failure(
         self,
         test_type: str,
         test_file: str,
         failure_message: str,
-        failure_details: Optional[Dict[str, Any]] = None
+        failure_details: dict[str, Any] | None = None,
     ) -> None:
         """
         Log test failure.
@@ -270,22 +279,19 @@ class RepairCycleErrorLogger:
         """
         self._error_counts["test_failure"] = self._error_counts.get("test_failure", 0) + 1
 
-        msg = (
-            f"test_failure | test_type={test_type} | test_file={test_file} | "
-            f"message={failure_message}"
-        )
+        msg = f"test_failure | test_type={test_type} | test_file={test_file} | message={failure_message}"
         if failure_details:
             msg += " | " + " | ".join(f"{k}={v}" for k, v in failure_details.items())
 
-        self.logger.error(msg, extra={"error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR})
+        self.logger.error(msg, exc_info=True)
 
     def log_fix_attempt(
         self,
         file_path: str,
         attempt_number: int,
         success: bool,
-        agent_response: Optional[str] = None,
-        error: Optional[str] = None
+        agent_response: str | None = None,
+        error: str | None = None,
     ) -> None:
         """
         Log file fix attempt.
@@ -298,10 +304,7 @@ class RepairCycleErrorLogger:
             error: Error message if failed
         """
         status = "success" if success else "failed"
-        msg = (
-            f"fix_attempt | file={file_path} | attempt={attempt_number} | "
-            f"status={status}"
-        )
+        msg = f"fix_attempt | file={file_path} | attempt={attempt_number} | status={status}"
 
         if agent_response:
             msg += f" | response_len={len(agent_response)}"
@@ -312,7 +315,7 @@ class RepairCycleErrorLogger:
         level = "info" if success else "warning"
         getattr(self.logger, level)(msg)
 
-    def log_circuit_breaker_triggered(self, reason: str, context_data: Optional[Dict[str, Any]] = None) -> None:
+    def log_circuit_breaker_triggered(self, reason: str, context_data: dict[str, Any] | None = None) -> None:
         """
         Log circuit breaker triggered.
 
@@ -326,9 +329,9 @@ class RepairCycleErrorLogger:
         if context_data:
             msg += " | " + " | ".join(f"{k}={v}" for k, v in context_data.items())
 
-        self.logger.critical(msg)
+        self.logger.critical(msg, exc_info=True)
 
-    def log_checkpoint_created(self, checkpoint_id: str, data: Dict[str, Any]) -> None:
+    def log_checkpoint_created(self, checkpoint_id: str, data: dict[str, Any]) -> None:
         """
         Log checkpoint creation.
 
@@ -336,12 +339,10 @@ class RepairCycleErrorLogger:
             checkpoint_id: Checkpoint identifier
             data: Checkpoint data
         """
-        msg = f"checkpoint_created | checkpoint_id={checkpoint_id} | " + " | ".join(
-            f"{k}={v}" for k, v in data.items()
-        )
+        msg = f"checkpoint_created | checkpoint_id={checkpoint_id} | " + " | ".join(f"{k}={v}" for k, v in data.items())
         self.logger.info(msg)
 
-    def log_checkpoint_restored(self, checkpoint_id: str, data: Dict[str, Any]) -> None:
+    def log_checkpoint_restored(self, checkpoint_id: str, data: dict[str, Any]) -> None:
         """
         Log checkpoint restoration.
 
@@ -354,7 +355,7 @@ class RepairCycleErrorLogger:
         )
         self.logger.info(msg)
 
-    def get_error_summary(self) -> Dict[str, int]:
+    def get_error_summary(self) -> dict[str, int]:
         """Get summary of errors encountered."""
         return self._error_counts.copy()
 
@@ -378,13 +379,13 @@ class RepairCycleLoggingContext:
         """Exit context."""
         if exc_type:
             self.error_logger.logger.error(
-                f"repair_cycle_context_failed | error_type={exc_type.__name__} | error={str(exc_val)}",
+                f"repair_cycle_context_failed | error_type={exc_type.__name__} | error={exc_val!s}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
             )
         else:
             self.logger.info("repair_cycle_context_completed")
 
-    def log_operation(self, operation: str, data: Optional[Dict[str, Any]] = None):
+    def log_operation(self, operation: str, data: dict[str, Any] | None = None):
         """Context manager to log operation with timing."""
         return self.logger.log_duration(operation, data)

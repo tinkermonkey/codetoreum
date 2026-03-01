@@ -3,24 +3,22 @@
 import asyncio
 import logging
 import signal
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.redis_event_buffer import (
     RedisEventBuffer,
     RedisEventBufferError,
 )
 from codetoreum.ports.exceptions import EventStoreError
 from codetoreum.ports.output.event_store import IEventStore
-from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 
 
 class EventPersistenceWorkerError(Exception):
     """Raised when worker operations fail."""
-
-    pass
 
 
 class EventPersistenceWorker:
@@ -94,12 +92,11 @@ class EventPersistenceWorker:
             EventPersistenceWorkerError: If worker is already running
         """
         if self._running:
-            raise EventPersistenceWorkerError(
-                f"Worker {self.worker_id} is already running"
-            )
+            message = f"Worker {self.worker_id} is already running"
+            raise EventPersistenceWorkerError(message)
 
         self._running = True
-        self._stats["started_at"] = datetime.now(timezone.utc)
+        self._stats["started_at"] = datetime.now(UTC)
 
         logger.info(
             f"Starting event persistence worker '{self.worker_id}' "
@@ -119,8 +116,10 @@ class EventPersistenceWorker:
             raise
 
         except Exception as e:
-            logger.error(f"Worker {self.worker_id} failed with error: {e}", exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
+            logger.error(
+                f"Worker {self.worker_id} failed with error: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
             )
 
         finally:
@@ -174,11 +173,11 @@ class EventPersistenceWorker:
                 logger.error(
                     f"Worker {self.worker_id} error in main loop: {e}",
                     exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
-            )
+                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                )
                 await asyncio.sleep(self.retry_delay_seconds)
 
-    async def _process_batch(self, batch: List[Dict[str, Any]]) -> None:
+    async def _process_batch(self, batch: list[dict[str, Any]]) -> None:
         """
         Process a batch of events: persist to Elasticsearch and acknowledge.
 
@@ -217,11 +216,10 @@ class EventPersistenceWorker:
                 # Update statistics
                 self._stats["events_processed"] += len(events)
                 self._stats["batches_processed"] += 1
-                self._stats["last_batch_at"] = datetime.now(timezone.utc)
+                self._stats["last_batch_at"] = datetime.now(UTC)
 
                 logger.debug(
-                    f"Worker {self.worker_id} persisted {len(events)} events "
-                    f"across {len(events_by_stream)} streams"
+                    f"Worker {self.worker_id} persisted {len(events)} events across {len(events_by_stream)} streams"
                 )
 
                 return  # Success!
@@ -229,17 +227,17 @@ class EventPersistenceWorker:
             except (EventStoreError, RedisEventBufferError) as e:
                 logger.warning(
                     f"Worker {self.worker_id} failed to process batch "
-                    f"(attempt {attempt + 1}/{self.max_retries + 1}): {e}"
+                    f"(attempt {attempt + 1}/{self.max_retries + 1}): {e}",
+                    exc_info=True,
                 )
 
             except Exception as e:
                 logger.error(
                     f"Worker {self.worker_id} unexpected error processing batch "
                     f"(attempt {attempt + 1}/{self.max_retries + 1}): {e}",
-                    exc_info=True
-,
-                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
-            )
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                )
             if attempt < self.max_retries:
                 # Wait before retrying
                 await asyncio.sleep(self.retry_delay_seconds * (attempt + 1))
@@ -254,13 +252,11 @@ class EventPersistenceWorker:
                     f"{self.max_retries + 1} attempts. Events will remain in "
                     f"pending state for manual recovery.",
                     exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
-            )
-                raise
+                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                )
+                raise  # noqa: PLE0704 - re-raises exception from enclosing loop's except block
 
-    def _group_events_by_stream(
-        self, events: List[Any]
-    ) -> Dict[str, List[Any]]:
+    def _group_events_by_stream(self, events: list[Any]) -> dict[str, list[Any]]:
         """
         Group events by stream ID (aggregate ID) for efficient batch appending.
 
@@ -270,7 +266,7 @@ class EventPersistenceWorker:
         Returns:
             Dictionary mapping stream_id to list of events
         """
-        events_by_stream: Dict[str, List[Any]] = {}
+        events_by_stream: dict[str, list[Any]] = {}
 
         for event in events:
             stream_id = event.aggregate_id
@@ -282,7 +278,7 @@ class EventPersistenceWorker:
 
         return events_by_stream
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """
         Get worker statistics.
 
@@ -298,16 +294,12 @@ class EventPersistenceWorker:
 
         # Calculate runtime
         if stats["started_at"]:
-            runtime_seconds = (
-                datetime.now(timezone.utc) - stats["started_at"]
-            ).total_seconds()
+            runtime_seconds = (datetime.now(UTC) - stats["started_at"]).total_seconds()
             stats["runtime_seconds"] = runtime_seconds
 
             # Calculate throughput
             if runtime_seconds > 0:
-                stats["events_per_second"] = (
-                    stats["events_processed"] / runtime_seconds
-                )
+                stats["events_per_second"] = stats["events_processed"] / runtime_seconds
             else:
                 stats["events_per_second"] = 0
         else:
@@ -359,8 +351,8 @@ class EventPersistenceWorkerPool:
         self.worker_prefix = worker_prefix
         self.worker_kwargs = worker_kwargs
 
-        self.workers: List[EventPersistenceWorker] = []
-        self.tasks: List[asyncio.Task] = []
+        self.workers: list[EventPersistenceWorker] = []
+        self.tasks: list[asyncio.Task] = []
 
     async def start(self) -> None:
         """Start all workers in the pool."""
@@ -398,7 +390,7 @@ class EventPersistenceWorkerPool:
 
         logger.info("Worker pool stopped")
 
-    def get_pool_statistics(self) -> Dict[str, Any]:
+    def get_pool_statistics(self) -> dict[str, Any]:
         """
         Get aggregated statistics for the pool.
 

@@ -9,7 +9,7 @@ These tests verify:
 - Integration with checkpoint store
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -23,11 +23,10 @@ from codetoreum.adapters.secondary.docker_container_recovery_adapter import (
 from codetoreum.adapters.testing.in_memory_checkpoint_store import (
     InMemoryCheckpointStore,
 )
+from codetoreum.ports.exceptions import StorageError
 from codetoreum.ports.output.container_recovery import (
     ContainerMetadata,
-    RecoveryAssessment,
 )
-from codetoreum.ports.exceptions import StorageError
 
 
 class TestGetRunningRepairCycleContainers:
@@ -71,9 +70,7 @@ class TestGetRunningRepairCycleContainers:
         # Verify Docker API was called with correct filter
         mock_client.containers.list.assert_called_once()
         call_args = mock_client.containers.list.call_args
-        assert call_args[1]["filters"]["label"] == [
-            "org.codetoreum.type=repair-cycle"
-        ]
+        assert call_args[1]["filters"]["label"] == ["org.codetoreum.type=repair-cycle"]
         assert call_args[1]["all"] is False
 
         # Verify container was returned
@@ -131,12 +128,14 @@ class TestRepairCycleContainerAssessment:
             project_id="proj-1",
             agent_id="repair-agent",
             task_id="task-1",
-            created_at=datetime.now(timezone.utc) - timedelta(hours=1),
-            labels=MappingProxyType({
-                "org.codetoreum.type": "repair-cycle",
-                "org.codetoreum.project": "proj-1",
-                "org.codetoreum.agent": "repair-agent",
-            }),
+            created_at=datetime.now(UTC) - timedelta(hours=1),
+            labels=MappingProxyType(
+                {
+                    "org.codetoreum.type": "repair-cycle",
+                    "org.codetoreum.project": "proj-1",
+                    "org.codetoreum.agent": "repair-agent",
+                }
+            ),
             work_item_id="100",
             workflow_run_id="run-abc",
             execution_id="exec-123",
@@ -147,7 +146,6 @@ class TestRepairCycleContainerAssessment:
         assert assessment.action == "kill"
         assert assessment.reason == "completed_during_downtime"
         assert assessment.with_monitoring is False
-
 
     @pytest.mark.asyncio
     async def test_kills_if_no_checkpoint_and_old_container(self):
@@ -170,12 +168,14 @@ class TestRepairCycleContainerAssessment:
             project_id="proj-1",
             agent_id="repair-agent",
             task_id="task-1",
-            created_at=datetime.now(timezone.utc) - timedelta(hours=3),  # 3h old
-            labels=MappingProxyType({
-                "org.codetoreum.type": "repair-cycle",
-                "org.codetoreum.project": "proj-1",
-                "org.codetoreum.agent": "repair-agent",
-            }),
+            created_at=datetime.now(UTC) - timedelta(hours=3),  # 3h old
+            labels=MappingProxyType(
+                {
+                    "org.codetoreum.type": "repair-cycle",
+                    "org.codetoreum.project": "proj-1",
+                    "org.codetoreum.agent": "repair-agent",
+                }
+            ),
             work_item_id="100",
             workflow_run_id="run-abc",
             execution_id="exec-123",
@@ -186,7 +186,6 @@ class TestRepairCycleContainerAssessment:
         assert assessment.action == "kill"
         assert assessment.reason == "no_checkpoint"
         assert assessment.with_monitoring is False
-
 
     @pytest.mark.asyncio
     async def test_reconnects_if_container_recent(self):
@@ -209,12 +208,14 @@ class TestRepairCycleContainerAssessment:
             project_id="proj-1",
             agent_id="repair-agent",
             task_id="task-1",
-            created_at=datetime.now(timezone.utc) - timedelta(minutes=30),  # 30 min
-            labels=MappingProxyType({
-                "org.codetoreum.type": "repair-cycle",
-                "org.codetoreum.project": "proj-1",
-                "org.codetoreum.agent": "repair-agent",
-            }),
+            created_at=datetime.now(UTC) - timedelta(minutes=30),  # 30 min
+            labels=MappingProxyType(
+                {
+                    "org.codetoreum.type": "repair-cycle",
+                    "org.codetoreum.project": "proj-1",
+                    "org.codetoreum.agent": "repair-agent",
+                }
+            ),
             work_item_id="100",
             workflow_run_id="run-abc",
             execution_id="exec-123",
@@ -245,12 +246,14 @@ class TestRepairCycleContainerAssessment:
             project_id="proj-1",
             agent_id="repair-agent",
             task_id="task-1",
-            created_at=datetime.now(timezone.utc) - timedelta(hours=1),
-            labels=MappingProxyType({
-                "org.codetoreum.type": "repair-cycle",
-                "org.codetoreum.project": "proj-1",
-                "org.codetoreum.agent": "repair-agent",
-            }),
+            created_at=datetime.now(UTC) - timedelta(hours=1),
+            labels=MappingProxyType(
+                {
+                    "org.codetoreum.type": "repair-cycle",
+                    "org.codetoreum.project": "proj-1",
+                    "org.codetoreum.agent": "repair-agent",
+                }
+            ),
             work_item_id="100",
             workflow_run_id="run-abc",
             execution_id="exec-123",
@@ -269,11 +272,11 @@ class TestCheckpointStalenessThresholds:
 
     def test_checkpoint_staleness_threshold_is_60_minutes(self):
         """CHECKPOINT_STALENESS_THRESHOLD should be 60 minutes."""
-        assert CHECKPOINT_STALENESS_THRESHOLD == timedelta(minutes=60)
+        assert timedelta(minutes=60) == CHECKPOINT_STALENESS_THRESHOLD
 
     def test_repair_cycle_age_threshold_is_2_hours(self):
         """REPAIR_CYCLE_AGE_THRESHOLD should be 2 hours."""
-        assert REPAIR_CYCLE_AGE_THRESHOLD == timedelta(hours=2)
+        assert timedelta(hours=2) == REPAIR_CYCLE_AGE_THRESHOLD
 
 
 class TestOrphanedRepairResultsProcessing:

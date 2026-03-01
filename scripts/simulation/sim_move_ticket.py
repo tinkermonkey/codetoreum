@@ -12,7 +12,7 @@ import sys
 import httpx
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Move a simulation ticket between columns")
     parser.add_argument("--server", default="http://localhost:8000", help="Simulation server URL")
     parser.add_argument("--work-item-id", required=True, help="Work item ID to move")

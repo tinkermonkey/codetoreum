@@ -14,11 +14,11 @@ Benefits:
 """
 
 from enum import Enum
-from typing import Dict, Set
 
 
 class ErrorCategory(str, Enum):
     """Error categories for Sentry tracking and grouping."""
+
     VALIDATION = "VALIDATION"
     AUTHENTICATION = "AUTHENTICATION"
     AUTHORIZATION = "AUTHORIZATION"
@@ -207,13 +207,14 @@ class ErrorRegistry:
     # Review errors
     ERR_REVIEW_ERROR = "ERR_REVIEW_ERROR"
     ERR_REVIEW_STATUS_ERROR = "ERR_REVIEW_STATUS_ERROR"
+    ERR_REVIEW_CYCLE_ERROR = "ERR_REVIEW_CYCLE_ERROR"
 
     # Discussion errors
     ERR_DISCUSSION_ERROR = "ERR_DISCUSSION_ERROR"
     ERR_COMMENT_ERROR = "ERR_COMMENT_ERROR"
 
     @classmethod
-    def get_all_error_ids(cls) -> Set[str]:
+    def get_all_error_ids(cls) -> set[str]:
         """Get all registered error IDs."""
         return {
             value
@@ -242,11 +243,13 @@ def get_error_id_category(error_id: str) -> ErrorCategory:
     """
     # Extract category from error ID (e.g., ERR_VALIDATION_FAILED -> VALIDATION)
     if not error_id.startswith("ERR_"):
-        raise ValueError(f"Invalid error ID format: {error_id}")
+        message = f"Invalid error ID format: {error_id}"
+        raise ValueError(message)
 
     parts = error_id.split("_")
     if len(parts) < 2:
-        raise ValueError(f"Invalid error ID format: {error_id}")
+        message = f"Invalid error ID format: {error_id}"
+        raise ValueError(message)
 
     # Try to find matching category
     category_name = parts[1]

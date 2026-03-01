@@ -1,12 +1,11 @@
 """IEventStore output port interface."""
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from datetime import datetime
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any
 
 from codetoreum.domain.events import DomainEvent
-from codetoreum.domain.types import CorrelationId, EventId, StreamId
-
 
 # ============================================================================
 # Port Interface
@@ -20,8 +19,8 @@ class IEventStore(ABC):
     async def append(
         self,
         stream_id: str,
-        events: List[DomainEvent],
-        expected_version: Optional[int] = None,
+        events: list[DomainEvent],
+        expected_version: int | None = None,
     ) -> None:
         """
         Append events to a stream.
@@ -35,15 +34,14 @@ class IEventStore(ABC):
             ConcurrencyConflictError: Version mismatch
             EventStoreError: Persistence failure
         """
-        pass
 
     @abstractmethod
     async def get_events(
         self,
         stream_id: str,
         from_version: int = 0,
-        to_version: Optional[int] = None,
-    ) -> List[DomainEvent]:
+        to_version: int | None = None,
+    ) -> list[DomainEvent]:
         """
         Get events from a stream.
 
@@ -59,14 +57,13 @@ class IEventStore(ABC):
             ResourceNotFoundError: Stream doesn't exist
             EventStoreError: Retrieval failure
         """
-        pass
 
     @abstractmethod
     async def get_events_since(
         self,
         since: datetime,
-        stream_id: Optional[str] = None,
-    ) -> List[DomainEvent]:
+        stream_id: str | None = None,
+    ) -> list[DomainEvent]:
         """
         Get events since a timestamp.
 
@@ -80,12 +77,11 @@ class IEventStore(ABC):
         Raises:
             EventStoreError: Retrieval failure
         """
-        pass
 
     @abstractmethod
     async def stream_events(
         self,
-        stream_id: Optional[str] = None,
+        stream_id: str | None = None,
         from_version: int = 0,
     ) -> AsyncIterator[DomainEvent]:
         """
@@ -101,7 +97,6 @@ class IEventStore(ABC):
         Raises:
             EventStoreError: Streaming failure
         """
-        pass
 
     @abstractmethod
     async def get_stream_version(self, stream_id: str) -> int:
@@ -117,7 +112,6 @@ class IEventStore(ABC):
         Raises:
             EventStoreError: Query failure
         """
-        pass
 
     @abstractmethod
     async def stream_exists(self, stream_id: str) -> bool:
@@ -133,14 +127,13 @@ class IEventStore(ABC):
         Raises:
             EventStoreError: Query failure
         """
-        pass
 
     @abstractmethod
     async def save_snapshot(
         self,
         stream_id: str,
         version: int,
-        snapshot: Dict[str, Any],
+        snapshot: dict[str, Any],
     ) -> None:
         """
         Save a snapshot for faster replay.
@@ -153,13 +146,12 @@ class IEventStore(ABC):
         Raises:
             EventStoreError: Snapshot save failure
         """
-        pass
 
     @abstractmethod
     async def get_latest_snapshot(
         self,
         stream_id: str,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Get most recent snapshot.
 
@@ -172,7 +164,6 @@ class IEventStore(ABC):
         Raises:
             EventStoreError: Snapshot retrieval failure
         """
-        pass
 
     @abstractmethod
     async def delete_stream(self, stream_id: str) -> None:
@@ -186,13 +177,12 @@ class IEventStore(ABC):
             ResourceNotFoundError: Stream doesn't exist
             EventStoreError: Delete operation failed
         """
-        pass
 
     @abstractmethod
     async def get_all_stream_ids(
         self,
-        aggregate_type: Optional[str] = None,
-    ) -> List[str]:
+        aggregate_type: str | None = None,
+    ) -> list[str]:
         """
         Get all stream IDs.
 
@@ -205,15 +195,14 @@ class IEventStore(ABC):
         Raises:
             EventStoreError: Query failure
         """
-        pass
 
     @abstractmethod
     async def get_events_by_type(
         self,
         event_type: str,
-        since: Optional[datetime] = None,
+        since: datetime | None = None,
         limit: int = 1000,
-    ) -> List[DomainEvent]:
+    ) -> list[DomainEvent]:
         """
         Get events by event type.
 
@@ -228,13 +217,12 @@ class IEventStore(ABC):
         Raises:
             EventStoreError: Query failure
         """
-        pass
 
     @abstractmethod
     async def get_events_by_correlation_id(
         self,
         correlation_id: str,
-    ) -> List[DomainEvent]:
+    ) -> list[DomainEvent]:
         """
         Get all events with a specific correlation ID.
 
@@ -247,14 +235,13 @@ class IEventStore(ABC):
         Raises:
             EventStoreError: Query failure
         """
-        pass
 
     @abstractmethod
     async def replay_events(
         self,
         stream_id: str,
         from_version: int = 0,
-        to_version: Optional[int] = None,
+        to_version: int | None = None,
     ) -> AsyncIterator[DomainEvent]:
         """
         Replay events from a stream for debugging/recovery.
@@ -271,10 +258,9 @@ class IEventStore(ABC):
             ResourceNotFoundError: Stream doesn't exist
             EventStoreError: Replay failure
         """
-        pass
 
     @abstractmethod
-    async def get_statistics(self) -> Dict[str, Any]:
+    async def get_statistics(self) -> dict[str, Any]:
         """
         Get event store statistics.
 
@@ -284,4 +270,3 @@ class IEventStore(ABC):
         Raises:
             EventStoreError: Query failure
         """
-        pass

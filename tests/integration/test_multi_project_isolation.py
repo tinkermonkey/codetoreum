@@ -5,13 +5,14 @@ actual MultiProjectOrchestrator code with mock adapters. Each project maintains
 independent orchestration state without cross-project interference.
 """
 
-import pytest
 from unittest.mock import AsyncMock
 
-from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
+import pytest
+
 from codetoreum.adapters.testing.mock_project_manager_adapter import (
     MockProjectManagerAdapter,
 )
+from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
 from codetoreum.domain.value_objects import ProjectConfig
 
 
@@ -65,9 +66,7 @@ class TestMultiProjectNamespaceIsolation:
     """
 
     @pytest.mark.asyncio
-    async def test_orchestrator_processes_multiple_projects(
-        self, orchestrator, project_manager, workflow_orchestrator
-    ):
+    async def test_orchestrator_processes_multiple_projects(self, orchestrator, project_manager, workflow_orchestrator):
         """Verify orchestrator processes each project independently.
 
         Tests the core responsibility: when orchestrator runs a cycle,
@@ -120,9 +119,7 @@ class TestMultiProjectNamespaceIsolation:
             # Different result for each project to verify isolation
             return 10 if project_name == "project1" else 20
 
-        workflow_orchestrator.orchestrate_project = AsyncMock(
-            side_effect=orchestrate_project_side_effect
-        )
+        workflow_orchestrator.orchestrate_project = AsyncMock(side_effect=orchestrate_project_side_effect)
 
         # Execute: Run orchestration cycle
         result = await orchestrator.run_orchestration_cycle()
@@ -138,20 +135,14 @@ class TestMultiProjectNamespaceIsolation:
         assert len(set(workspaces_passed)) == 2, "Each project should have separate workspace"
 
     @pytest.mark.asyncio
-    async def test_project_configuration_independence(
-        self, orchestrator, project_manager
-    ):
+    async def test_project_configuration_independence(self, orchestrator, project_manager):
         """Verify project configurations remain independent.
 
         When updating one project's config, it doesn't affect other projects.
         """
         # Setup: Create two projects with different branches
-        config_proj1 = create_project_config(
-            "https://github.com/org/project1.git", branch="main"
-        )
-        config_proj2 = create_project_config(
-            "https://github.com/org/project2.git", branch="develop"
-        )
+        config_proj1 = create_project_config("https://github.com/org/project1.git", branch="main")
+        config_proj2 = create_project_config("https://github.com/org/project2.git", branch="develop")
 
         project_manager.add_project("project1", config_proj1)
         project_manager.add_project("project2", config_proj2)
@@ -164,9 +155,7 @@ class TestMultiProjectNamespaceIsolation:
         assert status_p2_before.branch == "develop"
 
         # Execute: Update project1 configuration
-        new_config_p1 = create_project_config(
-            "https://github.com/org/project1.git", branch="release"
-        )
+        new_config_p1 = create_project_config("https://github.com/org/project1.git", branch="release")
         project_manager.update_project("project1", new_config_p1)
 
         # Verify: Project1 changed, project2 unaffected
@@ -177,9 +166,7 @@ class TestMultiProjectNamespaceIsolation:
         assert status_p2_after.branch == "develop", "Project2 branch should remain unchanged"
 
     @pytest.mark.asyncio
-    async def test_disabled_projects_not_orchestrated(
-        self, orchestrator, project_manager, workflow_orchestrator
-    ):
+    async def test_disabled_projects_not_orchestrated(self, orchestrator, project_manager, workflow_orchestrator):
         """Verify disabled projects are skipped in orchestration cycles.
 
         When a project is disabled, the orchestrator should not call

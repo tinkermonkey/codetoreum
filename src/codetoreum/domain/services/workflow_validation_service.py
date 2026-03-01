@@ -1,7 +1,5 @@
 """Workflow validation service for validating workflow configurations."""
 
-from typing import List
-
 from codetoreum.domain.workflow_template import WorkflowTemplate
 
 
@@ -13,7 +11,7 @@ class WorkflowValidationService:
     """
 
     @staticmethod
-    def validate_workflow_template(template: WorkflowTemplate) -> List[str]:
+    def validate_workflow_template(template: WorkflowTemplate) -> list[str]:
         """
         Validate workflow template.
 
@@ -38,9 +36,7 @@ class WorkflowValidationService:
         for stage in template.stage_templates:
             for dep in stage.dependencies:
                 if dep not in stage_names:
-                    errors.append(
-                        f"Stage '{stage.name}' has invalid dependency '{dep}'"
-                    )
+                    errors.append(f"Stage '{stage.name}' has invalid dependency '{dep}'")
 
         # Check for cycles
         if WorkflowValidationService._has_circular_dependencies(template):
@@ -52,20 +48,14 @@ class WorkflowValidationService:
                 if not stage.maker_agent_id:
                     errors.append(f"Review stage '{stage.name}' missing maker agent")
                 if not stage.reviewer_agent_id:
-                    errors.append(
-                        f"Review stage '{stage.name}' missing reviewer agent"
-                    )
+                    errors.append(f"Review stage '{stage.name}' missing reviewer agent")
                 if stage.maker_agent_id == stage.reviewer_agent_id:
-                    errors.append(
-                        f"Review stage '{stage.name}' has same maker and reviewer"
-                    )
+                    errors.append(f"Review stage '{stage.name}' has same maker and reviewer")
 
         # Check parallel stages limit
         parallel_count = sum(1 for st in template.stage_templates if st.is_parallel)
         if parallel_count > 10:
-            errors.append(
-                f"Too many parallel stages ({parallel_count}), max is 10"
-            )
+            errors.append(f"Too many parallel stages ({parallel_count}), max is 10")
 
         # Validate stage names (must be unique)
         if len(stage_names) != len(template.stage_templates):

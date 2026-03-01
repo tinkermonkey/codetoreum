@@ -2,12 +2,11 @@
 
 import pytest
 
+from codetoreum.domain.exceptions import DomainError
+from codetoreum.domain.pipeline_stage import StageType
 from codetoreum.domain.workflow_template import (
     WorkflowTemplate,
-    StageTemplate,
 )
-from codetoreum.domain.pipeline_stage import StageType
-from codetoreum.domain.exceptions import DomainError
 
 
 class TestWorkflowTemplateCreation:
@@ -380,6 +379,7 @@ class TestTemplateMetadata:
 
         # Add a small delay to ensure time difference
         import time
+
         time.sleep(0.01)
 
         template.add_stage("stage1", "agent-1")

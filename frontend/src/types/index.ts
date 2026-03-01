@@ -2,12 +2,9 @@
 // API Error Types
 // ============================================================================
 
-export interface ApiError {
-  message: string
-  statusCode: number
-  details?: Record<string, unknown>
-  timestamp: string
-}
+import type { ApiError } from './errors'
+
+export type { ApiError } from './errors'
 
 // ============================================================================
 // Work Item Types

@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { AlertTriangle, XCircle, Activity } from 'lucide-react'
 import { useActiveAgents } from '../hooks/useActiveAgents'
 import { useAgentActions } from '../hooks/useAgentActions'
+import { useAgentState } from '../contexts/AgentStateContext'
 import { formatDuration, getRuntimeMs } from '../utils/stateHelpers'
 
 /**
@@ -22,7 +23,7 @@ const formatAgentName = (agentName) => {
 const getAgentStatusColor = (startedAt) => {
   const runtimeMs = getRuntimeMs(startedAt)
   const runtimeMinutes = runtimeMs / (1000 * 60)
-  
+
   if (runtimeMinutes < 5) {
     return 'bg-green-500'
   } else if (runtimeMinutes < 15) {
@@ -41,7 +42,8 @@ const ActiveAgents = ({
   ContainerComponent = 'div',
   containerClassName = 'bg-gh-canvas p-3 rounded-md border border-gh-border'
 }) => {
-  const { agents: activeAgents, agentCount, loading, fetchError } = useActiveAgents()
+  const { agents: activeAgents } = useActiveAgents()
+  const { fetchError } = useAgentState()
   const { killAgent, isKillingAgent, error: actionError, clearError } = useAgentActions()
   const [showKillModal, setShowKillModal] = useState(false)
   const [selectedAgent, setSelectedAgent] = useState(null)
@@ -79,10 +81,10 @@ const ActiveAgents = ({
   // Render a single agent card
   const renderAgentCard = (agent, idx) => {
     const readableName = formatAgentName(agent.agent)
-    const containerProps = typeof ContainerComponent === 'string' 
+    const containerProps = typeof ContainerComponent === 'string'
       ? { className: containerClassName }
       : { title: readableName, minWidth: 'min-w-[200px]' }
-    
+
     const statusColor = getAgentStatusColor(agent.started_at)
 
     return (
@@ -90,7 +92,7 @@ const ActiveAgents = ({
         <div className="space-y-2">
           {/* Status indicator with candy stripe animation */}
           <div className="relative h-1 bg-gh-canvas-subtle rounded-full overflow-hidden">
-            <div 
+            <div
               className={`absolute inset-0 ${statusColor} animate-pulse`}
               style={{
                 backgroundImage: 'linear-gradient(45deg, rgba(255,255,255,.2) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.2) 50%, rgba(255,255,255,.2) 75%, transparent 75%, transparent)',
@@ -130,7 +132,7 @@ const ActiveAgents = ({
               <span>Running:</span>
               <span className="font-medium text-gh-fg-default">{formatDuration(agent.started_at)}</span>
             </div>
-            
+
             {agent.container_name && (
               <div className="flex items-center justify-between">
                 <span>Container:</span>

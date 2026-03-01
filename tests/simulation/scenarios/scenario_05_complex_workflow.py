@@ -14,7 +14,12 @@ Expected outcome:
 
 from datetime import timedelta
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events import (
+    AgentExecutionCompleted,
+    WorkflowBranchSelected,
+    WorkflowCompleted,
+    WorkflowStarted,
+)
 from codetoreum.infrastructure.simulation import (
     SimulationConfig,
     SimulationRunner,
@@ -31,11 +36,13 @@ def create_config() -> SimulationConfig:
     config.scenario_description = "Multi-stage workflow with conditional branches"
 
     # Configurable test output values
-    config.metadata.update({
-        "analysis_approach": "approach B (refactoring)",
-        "test_status": "All tests passed",
-        "validation_status": "Validation successful",
-    })
+    config.metadata.update(
+        {
+            "analysis_approach": "approach B (refactoring)",
+            "test_status": "All tests passed",
+            "validation_status": "Validation successful",
+        }
+    )
 
     # Configure multiple agents
     config.add_agent_response_pattern(
@@ -70,32 +77,26 @@ async def run_scenario(runner: SimulationRunner) -> None:
     work_item_id = "ISSUE-400"
 
     # Start workflow
-    event = DomainEvent(
+    event = WorkflowStarted(
         aggregate_id=work_item_id,
-        aggregate_type="WorkItem",
         payload={"workflow_id": "complex-workflow"},
     )
-    event.event_type = "WorkflowStarted"
     runner.capture_event(event)
 
     # Stage 1: Analysis
     await runner.advance_time(timedelta(minutes=5))
 
-    event = DomainEvent(
+    event = AgentExecutionCompleted(
         aggregate_id="exec-1",
-        aggregate_type="AgentExecution",
         payload={"agent_id": "analyzer", "stage": "analysis"},
     )
-    event.event_type = "AgentExecutionCompleted"
     runner.capture_event(event)
 
     # Branch decision
-    event = DomainEvent(
+    event = WorkflowBranchSelected(
         aggregate_id=work_item_id,
-        aggregate_type="Workflow",
         payload={"branch": "refactoring", "reason": "Complex codebase"},
     )
-    event.event_type = "WorkflowBranchSelected"
     runner.capture_event(event)
 
     runner.assert_event_occurred("WorkflowBranchSelected", assertion_name="branch_selected")
@@ -103,46 +104,38 @@ async def run_scenario(runner: SimulationRunner) -> None:
     # Stage 2a: Refactoring (Branch B)
     await runner.advance_time(timedelta(minutes=10))
 
-    event = DomainEvent(
+    event = AgentExecutionCompleted(
         aggregate_id="exec-2",
-        aggregate_type="AgentExecution",
         payload={"agent_id": "refactorer", "stage": "refactoring"},
     )
-    event.event_type = "AgentExecutionCompleted"
     runner.capture_event(event)
 
     # Stage 3: Testing
     await runner.advance_time(timedelta(minutes=8))
 
-    event = DomainEvent(
+    event = AgentExecutionCompleted(
         aggregate_id="exec-3",
-        aggregate_type="AgentExecution",
         payload={"agent_id": "tester", "stage": "testing"},
     )
-    event.event_type = "AgentExecutionCompleted"
     runner.capture_event(event)
 
     # Stage 4: Validation
     await runner.advance_time(timedelta(minutes=5))
 
-    event = DomainEvent(
+    event = AgentExecutionCompleted(
         aggregate_id="exec-4",
-        aggregate_type="AgentExecution",
         payload={"agent_id": "validator", "stage": "validation"},
     )
-    event.event_type = "AgentExecutionCompleted"
     runner.capture_event(event)
 
     # Workflow completes
-    event = DomainEvent(
+    event = WorkflowCompleted(
         aggregate_id=work_item_id,
-        aggregate_type="WorkItem",
         payload={
             "total_stages": 4,
             "branch_taken": "refactoring",
         },
     )
-    event.event_type = "WorkflowCompleted"
     runner.capture_event(event)
 
     # Assertions
@@ -175,4 +168,5 @@ async def test_complex_workflow():
 
 if __name__ == "__main__":
     import asyncio
+
     asyncio.run(test_complex_workflow())

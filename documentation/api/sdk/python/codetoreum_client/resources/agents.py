@@ -1,16 +1,23 @@
 """Agents resource client"""
-from typing import Dict, List, Optional
+
+from __future__ import annotations
+
+import builtins
+from typing import TYPE_CHECKING, Any
+
 from ..models import Agent, PaginatedResponse
-from ..exceptions import CodetoreumError
+
+if TYPE_CHECKING:
+    from ..client import CodetoreumClient
 
 
 class AgentsResource:
     """Client for agents endpoints."""
 
-    def __init__(self, client):
+    def __init__(self, client: CodetoreumClient) -> None:
         self.client = client
 
-    def _validate_agent_params(self, name: str, description: str, agent_type: str):
+    def _validate_agent_params(self, name: str, description: str, agent_type: str) -> None:
         """Validate agent creation/update parameters."""
         if not name or not isinstance(name, str) or not name.strip():
             raise ValueError("name must be a non-empty string")
@@ -28,21 +35,19 @@ class AgentsResource:
             "test_engineer",
             "documentation_specialist",
             "devops_engineer",
-            "custom"
+            "custom",
         ]
         if agent_type not in valid_types:
-            raise ValueError(
-                f"agent_type must be one of {valid_types}, got '{agent_type}'"
-            )
+            raise ValueError(f"agent_type must be one of {valid_types}, got '{agent_type}'")
 
     def create(
         self,
         name: str,
         description: str,
         agent_type: str,
-        capabilities: Optional[List[str]] = None,
-        config: Optional[Dict] = None,
-        **kwargs
+        capabilities: builtins.list[str] | None = None,
+        config: dict[str, Any] | None = None,
+        **kwargs: Any,
     ) -> Agent:
         """
         Create a new agent.
@@ -73,7 +78,7 @@ class AgentsResource:
         """
         self._validate_agent_params(name, description, agent_type)
 
-        payload = {
+        payload: dict[str, Any] = {
             "name": name.strip(),
             "description": description.strip(),
             "agent_type": agent_type,
@@ -91,16 +96,16 @@ class AgentsResource:
 
         payload.update(kwargs)
 
-        data = self.client.post("/api/v2/agents/", json=payload)
+        data: dict[str, Any] = self.client.post("/api/v2/agents/", json=payload)
         return Agent.from_dict(data)
 
     def list(
         self,
-        agent_type: Optional[str] = None,
-        status: Optional[str] = None,
+        agent_type: str | None = None,
+        status: str | None = None,
         limit: int = 100,
         offset: int = 0,
-        **filters
+        **filters: Any,
     ) -> PaginatedResponse:
         """
         List agents with optional filtering.
@@ -124,7 +129,7 @@ class AgentsResource:
             >>> for agent in agents.items:
             ...     print(f"{agent.name}: {agent.description}")
         """
-        params = {"limit": limit, "offset": offset}
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
 
         if agent_type:
             params["agent_type"] = agent_type
@@ -133,7 +138,7 @@ class AgentsResource:
 
         params.update(filters)
 
-        data = self.client.get("/api/v2/agents/", params=params)
+        data: dict[str, Any] = self.client.get("/api/v2/agents/", params=params)
         return PaginatedResponse.from_dict(data, Agent)
 
     def get(self, agent_id: str) -> Agent:
@@ -163,12 +168,12 @@ class AgentsResource:
     def update(
         self,
         agent_id: str,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        capabilities: Optional[List[str]] = None,
-        config: Optional[Dict] = None,
-        status: Optional[str] = None,
-        **updates
+        name: str | None = None,
+        description: str | None = None,
+        capabilities: builtins.list[str] | None = None,
+        config: dict[str, Any] | None = None,
+        status: str | None = None,
+        **updates: Any,
     ) -> Agent:
         """
         Update an agent.
@@ -199,7 +204,7 @@ class AgentsResource:
         if not agent_id or not isinstance(agent_id, str) or not agent_id.strip():
             raise ValueError("agent_id must be a non-empty string")
 
-        payload = {}
+        payload: dict[str, Any] = {}
 
         if name is not None:
             if not isinstance(name, str) or not name.strip():
@@ -231,10 +236,10 @@ class AgentsResource:
         if not payload:
             raise ValueError("At least one field must be provided for update")
 
-        data = self.client.put(f"/api/v2/agents/{agent_id}", json=payload)
+        data: dict[str, Any] = self.client.put(f"/api/v2/agents/{agent_id}", json=payload)
         return Agent.from_dict(data)
 
-    def delete(self, agent_id: str) -> dict:
+    def delete(self, agent_id: str) -> dict[str, Any]:
         """
         Delete an agent.
 
@@ -255,14 +260,15 @@ class AgentsResource:
         if not agent_id or not isinstance(agent_id, str) or not agent_id.strip():
             raise ValueError("agent_id must be a non-empty string")
 
-        return self.client.delete(f"/api/v2/agents/{agent_id}")
+        result: dict[str, Any] = self.client.delete(f"/api/v2/agents/{agent_id}")
+        return result
 
     def get_executions(
         self,
         agent_id: str,
-        status: Optional[str] = None,
+        status: str | None = None,
         limit: int = 100,
-        offset: int = 0
+        offset: int = 0,
     ) -> PaginatedResponse:
         """
         Get execution history for an agent.
@@ -290,10 +296,11 @@ class AgentsResource:
         if not agent_id or not isinstance(agent_id, str) or not agent_id.strip():
             raise ValueError("agent_id must be a non-empty string")
 
-        params = {"limit": limit, "offset": offset}
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
         if status:
             params["status"] = status
 
         from ..models import Execution
-        data = self.client.get(f"/api/v2/agents/{agent_id}/executions", params=params)
+
+        data: dict[str, Any] = self.client.get(f"/api/v2/agents/{agent_id}/executions", params=params)
         return PaginatedResponse.from_dict(data, Execution)

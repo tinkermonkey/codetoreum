@@ -6,17 +6,14 @@ These tests interact with actual git repositories and require:
 """
 
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 
 from codetoreum.adapters.secondary import GitConfig, GitRepositoryAdapter
-from codetoreum.domain.types import BranchName, CommitHash
+from codetoreum.domain.types import BranchName
 from codetoreum.ports.exceptions import (
-    MergeConflictError,
-    RepositoryError,
-    ResourceNotFoundError,
     ValidationError,
 )
 
@@ -132,6 +129,9 @@ async def test_commit_workflow(git_adapter, temp_repo):
     assert status.is_dirty is True
     assert "test.txt" in status.untracked_files
 
+    # Stage the file
+    await git_adapter.stage_files(repo_path, ["test.txt"])
+
     # Commit
     commit_sha = await git_adapter.commit(
         repo_path,
@@ -169,6 +169,8 @@ async def test_get_commit_info(git_adapter, temp_repo):
     test_file = repo_path / "test.txt"
     test_file.write_text("Test content")
 
+    # Stage and commit
+    await git_adapter.stage_files(repo_path, ["test.txt"])
     commit_sha = await git_adapter.commit(
         repo_path,
         message="Test commit",
@@ -179,11 +181,11 @@ async def test_get_commit_info(git_adapter, temp_repo):
     # Get commit info
     commit_info = await git_adapter.get_commit_info(repo_path, commit_sha)
 
-    assert commit_info["sha"] == commit_sha
-    assert commit_info["author_name"] == "Test User"
-    assert commit_info["author_email"] == "test@example.com"
-    assert commit_info["subject"] == "Test commit"
-    assert isinstance(commit_info["timestamp"], datetime)
+    assert commit_info.sha == commit_sha
+    assert commit_info.author.name == "Test User"
+    assert commit_info.author.email == "test@example.com"
+    assert commit_info.message == "Test commit"
+    assert isinstance(commit_info.timestamp, datetime)
 
 
 @pytest.mark.integration
@@ -209,6 +211,8 @@ async def test_get_commit_history(git_adapter, temp_repo):
         test_file = repo_path / f"file{i}.txt"
         test_file.write_text(f"Content {i}")
 
+        # Stage and commit
+        await git_adapter.stage_files(repo_path, [f"file{i}.txt"])
         await git_adapter.commit(
             repo_path,
             message=f"Commit {i}",
@@ -220,8 +224,8 @@ async def test_get_commit_history(git_adapter, temp_repo):
     history = await git_adapter.get_commit_history(repo_path, limit=10)
 
     assert len(history) == 3
-    assert history[0]["subject"] == "Commit 2"  # Most recent first
-    assert history[2]["subject"] == "Commit 0"
+    assert history[0].message == "Commit 2"  # Most recent first
+    assert history[2].message == "Commit 0"
 
 
 @pytest.mark.integration
@@ -244,6 +248,7 @@ async def test_merge_branches(git_adapter, temp_repo):
 
     # Create initial commit on main
     (repo_path / "main.txt").write_text("Main")
+    await git_adapter.stage_files(repo_path, ["main.txt"])
     await git_adapter.commit(
         repo_path,
         message="Main commit",
@@ -257,6 +262,7 @@ async def test_merge_branches(git_adapter, temp_repo):
 
     # Create commit on feature branch
     (repo_path / "feature.txt").write_text("Feature")
+    await git_adapter.stage_files(repo_path, ["feature.txt"])
     await git_adapter.commit(
         repo_path,
         message="Feature commit",
@@ -295,6 +301,7 @@ async def test_diff(git_adapter, temp_repo):
 
     # Create first commit
     (repo_path / "file.txt").write_text("Version 1")
+    await git_adapter.stage_files(repo_path, ["file.txt"])
     commit1 = await git_adapter.commit(
         repo_path,
         message="First",
@@ -304,6 +311,7 @@ async def test_diff(git_adapter, temp_repo):
 
     # Create second commit
     (repo_path / "file.txt").write_text("Version 2")
+    await git_adapter.stage_files(repo_path, ["file.txt"])
     commit2 = await git_adapter.commit(
         repo_path,
         message="Second",
@@ -338,6 +346,7 @@ async def test_get_file_content(git_adapter, temp_repo):
 
     # Create and commit file
     (repo_path / "test.txt").write_text("Test content")
+    await git_adapter.stage_files(repo_path, ["test.txt"])
     commit_sha = await git_adapter.commit(
         repo_path,
         message="Add file",

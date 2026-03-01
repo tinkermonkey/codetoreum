@@ -3,14 +3,13 @@
 Provides token bucket rate limiting with sliding window support.
 """
 
-import time
 import asyncio
+import time
 from collections import deque
 from datetime import datetime
-from typing import Optional
 
-from .interfaces import IRateLimiter, RateLimitStats
 from .exceptions import RateLimitExceededError
+from .interfaces import IRateLimiter, RateLimitStats
 
 
 class TokenBucketRateLimiter(IRateLimiter):
@@ -27,8 +26,8 @@ class TokenBucketRateLimiter(IRateLimiter):
         self,
         max_requests: int,
         window_seconds: int = 60,
-        max_tokens: Optional[int] = None,
-        max_wait_seconds: Optional[float] = None
+        max_tokens: int | None = None,
+        max_wait_seconds: float | None = None,
     ):
         """
         Initialize rate limiter.
@@ -60,9 +59,8 @@ class TokenBucketRateLimiter(IRateLimiter):
                 if self.max_wait_seconds:
                     elapsed = now - start_time
                     if elapsed > self.max_wait_seconds:
-                        raise RateLimitExceededError(
-                            f"Rate limit wait exceeded {self.max_wait_seconds}s for {operation}"
-                        )
+                        message = f"Rate limit wait exceeded {self.max_wait_seconds}s for {operation}"
+                        raise RateLimitExceededError(message)
 
                 # Remove expired entries
                 cutoff = now - self.window_seconds
@@ -154,7 +152,7 @@ class TokenBucketRateLimiter(IRateLimiter):
             max_tokens=self.max_tokens,
             window_seconds=self.window_seconds,
             utilization=utilization,
-            next_available=next_available
+            next_available=next_available,
         )
 
     def reset(self) -> None:

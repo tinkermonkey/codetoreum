@@ -15,25 +15,25 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends
 
-from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
-from codetoreum.ports.input.agent_command import IAgentCommandPort
-from codetoreum.ports.input.agent_query import IAgentQueryPort
-
-# Import sub-module registration functions
-from codetoreum.adapters.primary.routers.agents.list import register_list_endpoints
-from codetoreum.adapters.primary.routers.agents.crud import register_crud_endpoints
 from codetoreum.adapters.primary.routers.agents.capabilities import (
     register_capability_endpoints,
 )
+from codetoreum.adapters.primary.routers.agents.crud import register_crud_endpoints
+
+# Import sub-module registration functions
+from codetoreum.adapters.primary.routers.agents.list import register_list_endpoints
 from codetoreum.adapters.primary.routers.agents.mcp_servers import (
     register_mcp_server_endpoints,
 )
+from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
+from codetoreum.ports.input.agent_command import IAgentCommandPort
+from codetoreum.ports.input.agent_query import IAgentQueryPort
 
 
 def create_agents_router(
     command_port: IAgentCommandPort,
     query_port: IAgentQueryPort,
-    auth_deps: Optional[SimpleAuthDependencies] = None,
+    auth_deps: SimpleAuthDependencies | None = None,
 ) -> APIRouter:
     """
     Create the agents REST API router.

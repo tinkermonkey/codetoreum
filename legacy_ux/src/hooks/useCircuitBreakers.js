@@ -2,7 +2,7 @@
  * Selector hook for circuit breaker data
  */
 import { useMemo } from 'react'
-import { useSystemState } from '../contexts/SystemStateContext'
+import { useSystemState } from './useSystemState'
 
 export function useCircuitBreakers() {
   const {

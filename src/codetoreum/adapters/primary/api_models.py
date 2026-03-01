@@ -5,13 +5,13 @@ Base classes and common DTOs for API requests and responses.
 These decouple external API contracts from internal domain models.
 """
 
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer
-from codetoreum.infrastructure.error_ids import ErrorRegistry
+from pydantic import BaseModel, ConfigDict, Field
 
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 # ============================================================================
 # Base Response Models
@@ -29,7 +29,7 @@ class SuccessResponse(BaseResponse):
 
     success: bool = Field(True, description="Whether the operation succeeded")
     message: str = Field(..., description="Success message")
-    data: Optional[Dict[str, Any]] = Field(None, description="Optional response data")
+    data: dict[str, Any] | None = Field(None, description="Optional response data")
 
     model_config = ConfigDict()
 
@@ -37,9 +37,9 @@ class SuccessResponse(BaseResponse):
 class ErrorDetail(BaseModel):
     """Detailed error information"""
 
-    field: Optional[str] = Field(None, description="Field that caused the error")
+    field: str | None = Field(None, description="Field that caused the error")
     message: str = Field(..., description="Error message")
-    code: Optional[str] = Field(None, description="Error code")
+    code: str | None = Field(None, description="Error code")
 
     model_config = ConfigDict()
 
@@ -49,19 +49,11 @@ class ErrorResponse(BaseResponse):
 
     error: str = Field(..., description="Error type/category")
     message: str = Field(..., description="Human-readable error message")
-    details: Optional[List[ErrorDetail]] = Field(
-        None, description="Detailed error information"
-    )
-    error_id: Optional[str] = Field(
-        None, description="Error ID for Sentry tracking and issue categorization"
-    )
-    correlation_id: str = Field(
-        default_factory=lambda: str(uuid4()), description="Request correlation ID"
-    )
-    timestamp: datetime = Field(
-        default_factory=datetime.utcnow, description="Error timestamp"
-    )
-    path: Optional[str] = Field(None, description="Request path that caused the error")
+    details: list[ErrorDetail] | None = Field(None, description="Detailed error information")
+    error_id: str | None = Field(None, description="Error ID for Sentry tracking and issue categorization")
+    correlation_id: str = Field(default_factory=lambda: str(uuid4()), description="Request correlation ID")
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC), description="Error timestamp")
+    path: str | None = Field(None, description="Request path that caused the error")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -95,9 +87,19 @@ class HealthCheckResponse(BaseResponse):
     status: str = Field(..., description="Health status (healthy, degraded, unhealthy)")
     service: str = Field("codetoreum-api", description="Service name")
     version: str = Field(..., description="API version")
-    timestamp: datetime = Field(
-        default_factory=datetime.utcnow, description="Check timestamp"
-    )
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC), description="Check timestamp")
+
+    model_config = ConfigDict()
+
+
+class DependencyStatus(BaseModel):
+    """Status of a single dependency"""
+
+    name: str = Field(..., description="Dependency name")
+    status: str = Field(..., description="Dependency status (healthy, degraded, unhealthy)")
+    message: str | None = Field(None, description="Optional status message")
+    response_time_ms: float | None = Field(None, description="Response time in milliseconds")
+    details: dict[str, Any] = Field(default_factory=dict, description="Additional details")
 
     model_config = ConfigDict()
 
@@ -107,12 +109,10 @@ class ReadinessCheckResponse(BaseResponse):
 
     status: str = Field(..., description="Readiness status (ready, not-ready)")
     service: str = Field("codetoreum-api", description="Service name")
-    dependencies: Dict[str, str] = Field(
-        default_factory=dict, description="Dependency statuses"
-    )
-    timestamp: datetime = Field(
-        default_factory=datetime.utcnow, description="Check timestamp"
-    )
+    dependencies: list[DependencyStatus] = Field(default_factory=list, description="Dependency statuses")
+    checked_at: datetime = Field(default_factory=lambda: datetime.now(UTC), description="Check timestamp")
+    uptime_seconds: float | None = Field(None, description="System uptime in seconds")
+    version: str | None = Field(None, description="API version")
 
     model_config = ConfigDict()
 
@@ -175,8 +175,8 @@ class TimestampFields(BaseModel):
 class AuditFields(TimestampFields):
     """Common audit fields"""
 
-    created_by: Optional[str] = Field(None, description="Creator identifier")
-    updated_by: Optional[str] = Field(None, description="Last updater identifier")
+    created_by: str | None = Field(None, description="Creator identifier")
+    updated_by: str | None = Field(None, description="Last updater identifier")
 
     model_config = ConfigDict()
 

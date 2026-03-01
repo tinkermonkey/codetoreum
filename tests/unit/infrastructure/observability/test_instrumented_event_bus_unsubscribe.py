@@ -5,10 +5,6 @@ Tests that callbacks can be properly unsubscribed after being wrapped
 for instrumentation, preventing memory leaks.
 """
 
-import pytest
-from typing import Optional, Any
-from unittest import mock
-
 from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.observability.event_bus_instrumentation import (
@@ -48,9 +44,7 @@ class TestInstrumentedEventBusUnsubscribe:
         instrumented_bus.unsubscribe(None, my_callback)
 
         # Verify callback was removed
-        assert (
-            len(event_bus._wildcard_callbacks) == 0
-        ), "Callback was not properly unsubscribed"
+        assert len(event_bus._wildcard_callbacks) == 0, "Callback was not properly unsubscribed"
 
     def test_unsubscribe_event_type_specific_callback(self):
         """Test unsubscribing a callback for a specific event type."""

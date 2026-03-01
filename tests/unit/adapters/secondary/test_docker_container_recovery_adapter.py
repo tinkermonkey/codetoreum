@@ -7,7 +7,7 @@ These tests verify:
 - Error handling
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -25,7 +25,7 @@ from codetoreum.domain.types import (
     CONTAINER_LABEL_WORK_ITEM_ID,
     CONTAINER_TYPE_AGENT,
 )
-from codetoreum.ports.exceptions import ContainerError, StorageError
+from codetoreum.ports.exceptions import StorageError
 
 
 class TestDockerContainerRecoveryAdapterInitialization:
@@ -36,9 +36,7 @@ class TestDockerContainerRecoveryAdapterInitialization:
         execution_tracker = MagicMock()
         tracking_storage = MagicMock()
 
-        adapter = DockerContainerRecoveryAdapter(
-            execution_tracker=execution_tracker, tracking_storage=tracking_storage
-        )
+        adapter = DockerContainerRecoveryAdapter(execution_tracker=execution_tracker, tracking_storage=tracking_storage)
 
         assert adapter.execution_tracker is execution_tracker
         assert adapter.tracking_storage is tracking_storage
@@ -66,9 +64,7 @@ class TestDockerContainerMetadataExtraction:
         execution_tracker = MagicMock()
         tracking_storage = MagicMock()
 
-        adapter = DockerContainerRecoveryAdapter(
-            execution_tracker=execution_tracker, tracking_storage=tracking_storage
-        )
+        adapter = DockerContainerRecoveryAdapter(execution_tracker=execution_tracker, tracking_storage=tracking_storage)
 
         # Mock Docker container
         container = MagicMock()
@@ -105,9 +101,7 @@ class TestDockerContainerMetadataExtraction:
         execution_tracker = MagicMock()
         tracking_storage = MagicMock()
 
-        adapter = DockerContainerRecoveryAdapter(
-            execution_tracker=execution_tracker, tracking_storage=tracking_storage
-        )
+        adapter = DockerContainerRecoveryAdapter(execution_tracker=execution_tracker, tracking_storage=tracking_storage)
 
         # Mock Docker container without required labels
         container = MagicMock()
@@ -138,7 +132,7 @@ class TestDockerContainerAssessment:
         )
 
         # Create metadata for a 3-hour-old container
-        created_at = datetime.now(timezone.utc) - timedelta(hours=3)
+        created_at = datetime.now(UTC) - timedelta(hours=3)
         from codetoreum.ports.output.container_recovery import ContainerMetadata
 
         metadata = ContainerMetadata(
@@ -148,11 +142,13 @@ class TestDockerContainerAssessment:
             agent_id="agent-1",
             task_id="task-1",
             created_at=created_at,
-            labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
+            labels=MappingProxyType(
+                {
+                    CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
+                    CONTAINER_LABEL_PROJECT: "proj-1",
+                    CONTAINER_LABEL_AGENT: "agent-1",
+                }
+            ),
         )
 
         assessment = await adapter.assess_container(metadata)
@@ -166,11 +162,9 @@ class TestDockerContainerAssessment:
         execution_tracker = MagicMock()
         tracking_storage = MagicMock()
 
-        adapter = DockerContainerRecoveryAdapter(
-            execution_tracker=execution_tracker, tracking_storage=tracking_storage
-        )
+        adapter = DockerContainerRecoveryAdapter(execution_tracker=execution_tracker, tracking_storage=tracking_storage)
 
-        created_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        created_at = datetime.now(UTC) - timedelta(hours=1)
         from codetoreum.ports.output.container_recovery import ContainerMetadata
 
         metadata = ContainerMetadata(
@@ -180,11 +174,13 @@ class TestDockerContainerAssessment:
             agent_id="agent-1",
             task_id="task-1",
             created_at=created_at,
-            labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
+            labels=MappingProxyType(
+                {
+                    CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
+                    CONTAINER_LABEL_PROJECT: "proj-1",
+                    CONTAINER_LABEL_AGENT: "agent-1",
+                }
+            ),
             work_item_id=None,  # No work item
         )
 
@@ -201,11 +197,9 @@ class TestDockerContainerAssessment:
         execution_tracker = AsyncMock()
         tracking_storage = MagicMock()
 
-        adapter = DockerContainerRecoveryAdapter(
-            execution_tracker=execution_tracker, tracking_storage=tracking_storage
-        )
+        adapter = DockerContainerRecoveryAdapter(execution_tracker=execution_tracker, tracking_storage=tracking_storage)
 
-        created_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        created_at = datetime.now(UTC) - timedelta(hours=1)
         from codetoreum.ports.output.container_recovery import ContainerMetadata
 
         metadata = ContainerMetadata(
@@ -215,11 +209,13 @@ class TestDockerContainerAssessment:
             agent_id="agent-1",
             task_id="task-1",
             created_at=created_at,
-            labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
+            labels=MappingProxyType(
+                {
+                    CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
+                    CONTAINER_LABEL_PROJECT: "proj-1",
+                    CONTAINER_LABEL_AGENT: "agent-1",
+                }
+            ),
             work_item_id="work-123",
             execution_id="exec-456",
         )
@@ -241,11 +237,9 @@ class TestDockerContainerAssessment:
         execution_tracker = AsyncMock()
         tracking_storage = MagicMock()
 
-        adapter = DockerContainerRecoveryAdapter(
-            execution_tracker=execution_tracker, tracking_storage=tracking_storage
-        )
+        adapter = DockerContainerRecoveryAdapter(execution_tracker=execution_tracker, tracking_storage=tracking_storage)
 
-        created_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        created_at = datetime.now(UTC) - timedelta(hours=1)
         from codetoreum.ports.output.container_recovery import ContainerMetadata
 
         metadata = ContainerMetadata(
@@ -255,11 +249,13 @@ class TestDockerContainerAssessment:
             agent_id="agent-1",
             task_id="task-1",
             created_at=created_at,
-            labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
+            labels=MappingProxyType(
+                {
+                    CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
+                    CONTAINER_LABEL_PROJECT: "proj-1",
+                    CONTAINER_LABEL_AGENT: "agent-1",
+                }
+            ),
             work_item_id="work-123",
             execution_id="exec-456",
         )
@@ -281,11 +277,9 @@ class TestDockerContainerAssessment:
         execution_tracker = AsyncMock()
         tracking_storage = MagicMock()
 
-        adapter = DockerContainerRecoveryAdapter(
-            execution_tracker=execution_tracker, tracking_storage=tracking_storage
-        )
+        adapter = DockerContainerRecoveryAdapter(execution_tracker=execution_tracker, tracking_storage=tracking_storage)
 
-        created_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        created_at = datetime.now(UTC) - timedelta(hours=1)
         from codetoreum.ports.output.container_recovery import ContainerMetadata
 
         metadata = ContainerMetadata(
@@ -295,11 +289,13 @@ class TestDockerContainerAssessment:
             agent_id="agent-1",
             task_id="task-1",
             created_at=created_at,
-            labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
+            labels=MappingProxyType(
+                {
+                    CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
+                    CONTAINER_LABEL_PROJECT: "proj-1",
+                    CONTAINER_LABEL_AGENT: "agent-1",
+                }
+            ),
             work_item_id="work-123",
             execution_id="exec-456",
         )
@@ -529,11 +525,9 @@ class TestDockerContainerRecoveryAction:
         execution_tracker = AsyncMock()
         tracking_storage = MagicMock()
 
-        adapter = DockerContainerRecoveryAdapter(
-            execution_tracker=execution_tracker, tracking_storage=tracking_storage
-        )
+        adapter = DockerContainerRecoveryAdapter(execution_tracker=execution_tracker, tracking_storage=tracking_storage)
 
-        created_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        created_at = datetime.now(UTC) - timedelta(hours=1)
         from codetoreum.ports.output.container_recovery import ContainerMetadata
 
         metadata = ContainerMetadata(
@@ -543,19 +537,19 @@ class TestDockerContainerRecoveryAction:
             agent_id="agent-1",
             task_id="task-1",
             created_at=created_at,
-            labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
+            labels=MappingProxyType(
+                {
+                    CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
+                    CONTAINER_LABEL_PROJECT: "proj-1",
+                    CONTAINER_LABEL_AGENT: "agent-1",
+                }
+            ),
             work_item_id="work-123",
             execution_id="exec-456",
         )
 
         # Mock execution state lookup failure
-        execution_tracker.load_state.side_effect = StorageError(
-            "Failed to load execution state"
-        )
+        execution_tracker.load_state.side_effect = StorageError("Failed to load execution state")
 
         assessment = await adapter.assess_container(metadata)
 
@@ -568,13 +562,11 @@ class TestDockerContainerRecoveryAction:
         execution_tracker = AsyncMock()
         tracking_storage = MagicMock()
 
-        adapter = DockerContainerRecoveryAdapter(
-            execution_tracker=execution_tracker, tracking_storage=tracking_storage
-        )
+        adapter = DockerContainerRecoveryAdapter(execution_tracker=execution_tracker, tracking_storage=tracking_storage)
 
-        created_at = datetime.now(timezone.utc) - timedelta(hours=1)
-        from codetoreum.ports.output.container_recovery import ContainerMetadata
+        created_at = datetime.now(UTC) - timedelta(hours=1)
         from codetoreum.domain.types import CONTAINER_TYPE_REPAIR_CYCLE
+        from codetoreum.ports.output.container_recovery import ContainerMetadata
 
         metadata = ContainerMetadata(
             container_id="container-1",
@@ -583,11 +575,13 @@ class TestDockerContainerRecoveryAction:
             agent_id="agent-1",
             task_id="task-1",
             created_at=created_at,
-            labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: CONTAINER_TYPE_REPAIR_CYCLE,
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
+            labels=MappingProxyType(
+                {
+                    CONTAINER_LABEL_TYPE: CONTAINER_TYPE_REPAIR_CYCLE,
+                    CONTAINER_LABEL_PROJECT: "proj-1",
+                    CONTAINER_LABEL_AGENT: "agent-1",
+                }
+            ),
             work_item_id="work-123",
             execution_id="exec-456",
         )
@@ -606,9 +600,7 @@ class TestTimestampParsingErrors:
         execution_tracker = MagicMock()
         tracking_storage = MagicMock()
 
-        adapter = DockerContainerRecoveryAdapter(
-            execution_tracker=execution_tracker, tracking_storage=tracking_storage
-        )
+        adapter = DockerContainerRecoveryAdapter(execution_tracker=execution_tracker, tracking_storage=tracking_storage)
 
         # Mock Docker container with invalid timestamp
         container = MagicMock()
@@ -641,9 +633,7 @@ class TestTimestampParsingErrors:
         execution_tracker = MagicMock()
         tracking_storage = MagicMock()
 
-        adapter = DockerContainerRecoveryAdapter(
-            execution_tracker=execution_tracker, tracking_storage=tracking_storage
-        )
+        adapter = DockerContainerRecoveryAdapter(execution_tracker=execution_tracker, tracking_storage=tracking_storage)
 
         # Mock Docker container without Created field
         container = MagicMock()
@@ -675,9 +665,7 @@ class TestTimestampParsingErrors:
         execution_tracker = MagicMock()
         tracking_storage = MagicMock()
 
-        adapter = DockerContainerRecoveryAdapter(
-            execution_tracker=execution_tracker, tracking_storage=tracking_storage
-        )
+        adapter = DockerContainerRecoveryAdapter(execution_tracker=execution_tracker, tracking_storage=tracking_storage)
 
         # Mock Docker container with null Created field
         container = MagicMock()
@@ -718,7 +706,7 @@ class TestTimestampParsingErrors:
         )
 
         # Recent container (within 2 hours) with old container age check
-        created_at = datetime.now(timezone.utc) - timedelta(hours=3)
+        created_at = datetime.now(UTC) - timedelta(hours=3)
         from codetoreum.ports.output.container_recovery import ContainerMetadata
 
         metadata = ContainerMetadata(
@@ -728,11 +716,13 @@ class TestTimestampParsingErrors:
             agent_id="agent-1",
             task_id="task-1",
             created_at=created_at,
-            labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: "repair-cycle",
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
+            labels=MappingProxyType(
+                {
+                    CONTAINER_LABEL_TYPE: "repair-cycle",
+                    CONTAINER_LABEL_PROJECT: "proj-1",
+                    CONTAINER_LABEL_AGENT: "agent-1",
+                }
+            ),
             work_item_id="work-123",
             workflow_run_id="run-456",
             execution_id="exec-789",
@@ -769,7 +759,7 @@ class TestTimestampParsingErrors:
         )
 
         # Old container (beyond 2 hours) with null checkpoint timestamp
-        created_at = datetime.now(timezone.utc) - timedelta(hours=3)
+        created_at = datetime.now(UTC) - timedelta(hours=3)
         from codetoreum.ports.output.container_recovery import ContainerMetadata
 
         metadata = ContainerMetadata(
@@ -779,11 +769,13 @@ class TestTimestampParsingErrors:
             agent_id="agent-1",
             task_id="task-1",
             created_at=created_at,
-            labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: "repair-cycle",
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
+            labels=MappingProxyType(
+                {
+                    CONTAINER_LABEL_TYPE: "repair-cycle",
+                    CONTAINER_LABEL_PROJECT: "proj-1",
+                    CONTAINER_LABEL_AGENT: "agent-1",
+                }
+            ),
             work_item_id="work-123",
             workflow_run_id="run-456",
             execution_id="exec-789",

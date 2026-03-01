@@ -9,7 +9,7 @@ Terminology (vendor-agnostic):
 """
 
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Literal
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
@@ -54,21 +54,26 @@ class LockAcquiredEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.project_id:
-            raise ValueError("project_id is required")
+            msg = "project_id is required"
+            raise ValueError(msg)
         if not self.board_id:
-            raise ValueError("board_id is required")
+            msg = "board_id is required"
+            raise ValueError(msg)
         if not self.work_item_id:
-            raise ValueError("work_item_id is required")
+            msg = "work_item_id is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "project_id": self.project_id,
-            "board_id": self.board_id,
-            "work_item_id": self.work_item_id,
-            "acquisition_method": self.acquisition_method,
-        })
+        d.update(
+            {
+                "project_id": self.project_id,
+                "board_id": self.board_id,
+                "work_item_id": self.work_item_id,
+                "acquisition_method": self.acquisition_method,
+            }
+        )
         return d
 
     @classmethod
@@ -123,28 +128,33 @@ class LockReleasedEvent(CodetoreumEvent):
     board_id: str = ""
     work_item_id: str = ""
     reason: Literal["completed", "exit_column", "timeout", "manual"] = "completed"
-    next_in_queue: Optional[str] = None
+    next_in_queue: str | None = None
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""
         super().__post_init__()
         if not self.project_id:
-            raise ValueError("project_id is required")
+            msg = "project_id is required"
+            raise ValueError(msg)
         if not self.board_id:
-            raise ValueError("board_id is required")
+            msg = "board_id is required"
+            raise ValueError(msg)
         if not self.work_item_id:
-            raise ValueError("work_item_id is required")
+            msg = "work_item_id is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "project_id": self.project_id,
-            "board_id": self.board_id,
-            "work_item_id": self.work_item_id,
-            "reason": self.reason,
-            "next_in_queue": self.next_in_queue,
-        })
+        d.update(
+            {
+                "project_id": self.project_id,
+                "board_id": self.board_id,
+                "work_item_id": self.work_item_id,
+                "reason": self.reason,
+                "next_in_queue": self.next_in_queue,
+            }
+        )
         return d
 
     @classmethod
@@ -204,23 +214,29 @@ class LockStaleDetectedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.project_id:
-            raise ValueError("project_id is required")
+            msg = "project_id is required"
+            raise ValueError(msg)
         if not self.board_id:
-            raise ValueError("board_id is required")
+            msg = "board_id is required"
+            raise ValueError(msg)
         if not self.work_item_id:
-            raise ValueError("work_item_id is required")
+            msg = "work_item_id is required"
+            raise ValueError(msg)
         if not self.lock_acquired_at:
-            raise ValueError("lock_acquired_at is required")
+            msg = "lock_acquired_at is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "project_id": self.project_id,
-            "board_id": self.board_id,
-            "work_item_id": self.work_item_id,
-            "lock_acquired_at": self.lock_acquired_at,
-        })
+        d.update(
+            {
+                "project_id": self.project_id,
+                "board_id": self.board_id,
+                "work_item_id": self.work_item_id,
+                "lock_acquired_at": self.lock_acquired_at,
+            }
+        )
         return d
 
     @classmethod
@@ -282,21 +298,26 @@ class PipelineLockAcquiredEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.project_id:
-            raise ValueError("project_id is required")
+            msg = "project_id is required"
+            raise ValueError(msg)
         if not self.work_item_id:
-            raise ValueError("work_item_id is required")
+            msg = "work_item_id is required"
+            raise ValueError(msg)
         if not self.board_id:
-            raise ValueError("board_id is required")
+            msg = "board_id is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "project_id": self.project_id,
-            "work_item_id": self.work_item_id,
-            "board_id": self.board_id,
-            "queue_length_at_acquire": self.queue_length_at_acquire,
-        })
+        d.update(
+            {
+                "project_id": self.project_id,
+                "work_item_id": self.work_item_id,
+                "board_id": self.board_id,
+                "queue_length_at_acquire": self.queue_length_at_acquire,
+            }
+        )
         return d
 
     @classmethod
@@ -351,27 +372,32 @@ class PipelineLockReleasedEvent(CodetoreumEvent):
     project_id: str = ""
     work_item_id: str = ""
     board_id: str = ""
-    next_work_item_id: Optional[str] = None
+    next_work_item_id: str | None = None
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""
         super().__post_init__()
         if not self.project_id:
-            raise ValueError("project_id is required")
+            msg = "project_id is required"
+            raise ValueError(msg)
         if not self.work_item_id:
-            raise ValueError("work_item_id is required")
+            msg = "work_item_id is required"
+            raise ValueError(msg)
         if not self.board_id:
-            raise ValueError("board_id is required")
+            msg = "board_id is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "project_id": self.project_id,
-            "work_item_id": self.work_item_id,
-            "board_id": self.board_id,
-            "next_work_item_id": self.next_work_item_id,
-        })
+        d.update(
+            {
+                "project_id": self.project_id,
+                "work_item_id": self.work_item_id,
+                "board_id": self.board_id,
+                "next_work_item_id": self.next_work_item_id,
+            }
+        )
         return d
 
     @classmethod
@@ -430,20 +456,25 @@ class WorkItemQueuedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.work_item_id:
-            raise ValueError("work_item_id is required")
+            msg = "work_item_id is required"
+            raise ValueError(msg)
         if not self.board_id:
-            raise ValueError("board_id is required")
+            msg = "board_id is required"
+            raise ValueError(msg)
         if self.queue_position < 0:
-            raise ValueError("queue_position must be non-negative")
+            msg = "queue_position must be non-negative"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "work_item_id": self.work_item_id,
-            "board_id": self.board_id,
-            "queue_position": self.queue_position,
-        })
+        d.update(
+            {
+                "work_item_id": self.work_item_id,
+                "board_id": self.board_id,
+                "queue_position": self.queue_position,
+            }
+        )
         return d
 
     @classmethod

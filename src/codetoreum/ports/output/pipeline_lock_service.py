@@ -11,14 +11,17 @@ multi-agent orchestration system.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Literal, Optional, Tuple
+from typing import Literal
 
 from .event_emitter import IEventEmitter
 
 
-@dataclass
+@dataclass(frozen=True)
 class PipelineLock:
     """Represents a lock held on a work item.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation.
 
     Attributes:
         project_id: Project containing the locked work item
@@ -36,6 +39,32 @@ class PipelineLock:
     locked_by_work_item: str
     lock_acquired_at: str
     lock_status: Literal["locked", "unlocked"]
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.project_id, str) or not self.project_id:
+            msg = "project_id must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.board_id, str) or not self.board_id:
+            msg = "board_id must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.work_item_id, str) or not self.work_item_id:
+            msg = "work_item_id must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.locked_by_work_item, str) or not self.locked_by_work_item:
+            msg = "locked_by_work_item must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.lock_acquired_at, str) or not self.lock_acquired_at:
+            msg = "lock_acquired_at must be a non-empty string"
+            raise ValueError(msg)
+
+        if self.lock_status not in ("locked", "unlocked"):
+            msg = f"lock_status must be 'locked' or 'unlocked', got: {self.lock_status}"
+            raise ValueError(msg)
 
 
 class IPipelineLockService(IEventEmitter, ABC):
@@ -98,9 +127,7 @@ class IPipelineLockService(IEventEmitter, ABC):
     # Query Operations
 
     @abstractmethod
-    async def get_lock(
-        self, project_id: str, board_id: str
-    ) -> Optional[PipelineLock]:
+    async def get_lock(self, project_id: str, board_id: str) -> PipelineLock | None:
         """Query current lock state for a project's board.
 
         Returns the active lock if one exists, or None if no lock is held.
@@ -116,10 +143,9 @@ class IPipelineLockService(IEventEmitter, ABC):
             ResourceNotFoundError: Project or board doesn't exist
             ExternalServiceError: Service communication failure
         """
-        pass
 
     @abstractmethod
-    async def get_all_locks(self) -> List[PipelineLock]:
+    async def get_all_locks(self) -> list[PipelineLock]:
         """Retrieve all active locks across all projects and boards.
 
         Useful for operational visibility and detecting lock contention.
@@ -130,14 +156,11 @@ class IPipelineLockService(IEventEmitter, ABC):
         Raises:
             ExternalServiceError: Service communication failure
         """
-        pass
 
     # Command Operations
 
     @abstractmethod
-    async def try_acquire_lock(
-        self, project_id: str, board_id: str, work_item_id: str
-    ) -> Tuple[bool, str]:
+    async def try_acquire_lock(self, project_id: str, board_id: str, work_item_id: str) -> tuple[bool, str]:
         """Attempt to acquire lock for exclusive work item access.
 
         Tries to acquire a lock on the work item. If successful, the caller
@@ -171,12 +194,9 @@ class IPipelineLockService(IEventEmitter, ABC):
             If a stale lock is detected and forcibly released, emits that event
             with acquisition_method='stale_recovery'
         """
-        pass
 
     @abstractmethod
-    async def release_lock(
-        self, project_id: str, board_id: str, work_item_id: str
-    ) -> bool:
+    async def release_lock(self, project_id: str, board_id: str, work_item_id: str) -> bool:
         """Release lock held on a work item.
 
         Releases the lock if it's currently held by this work_item_id.
@@ -197,4 +217,3 @@ class IPipelineLockService(IEventEmitter, ABC):
         Events:
             Emits 'lock.released' event on successful release
         """
-        pass

@@ -3,6 +3,7 @@ Unit tests for workflow run query input port types.
 """
 
 import pytest
+
 from codetoreum.ports.input.workflow_run_query import (
     WorkflowRunFilters,
     WorkflowRunPaginationParams,
@@ -16,7 +17,7 @@ class TestWorkflowRunFilters:
     def test_valid_filters(self):
         """Test creating valid filters."""
         filters = WorkflowRunFilters(
-            status=[WorkflowRunStatus.RUNNING],
+            status=(WorkflowRunStatus.RUNNING,),
             project_id="project-123",
             work_item_id="work-456",
             workflow_id="workflow-789",
@@ -24,44 +25,47 @@ class TestWorkflowRunFilters:
         assert filters.project_id == "project-123"
         assert filters.work_item_id == "work-456"
         assert filters.workflow_id == "workflow-789"
+        assert filters.status == (WorkflowRunStatus.RUNNING,)
 
     def test_empty_project_id_raises_error(self):
         """Test that empty project_id raises ValueError."""
-        with pytest.raises(ValueError, match="project_id must be non-empty"):
+        with pytest.raises(ValueError, match="project_id must be non-empty if provided"):
             WorkflowRunFilters(project_id="")
 
     def test_whitespace_project_id_raises_error(self):
         """Test that whitespace-only project_id raises ValueError."""
-        with pytest.raises(ValueError, match="project_id must be non-empty"):
+        with pytest.raises(ValueError, match="project_id must be non-empty if provided"):
             WorkflowRunFilters(project_id="   ")
 
     def test_empty_work_item_id_raises_error(self):
         """Test that empty work_item_id raises ValueError."""
-        with pytest.raises(ValueError, match="work_item_id must be non-empty"):
+        with pytest.raises(ValueError, match="work_item_id must be non-empty if provided"):
             WorkflowRunFilters(work_item_id="")
 
     def test_whitespace_work_item_id_raises_error(self):
         """Test that whitespace-only work_item_id raises ValueError."""
-        with pytest.raises(ValueError, match="work_item_id must be non-empty"):
+        with pytest.raises(ValueError, match="work_item_id must be non-empty if provided"):
             WorkflowRunFilters(work_item_id="   ")
 
     def test_empty_workflow_id_raises_error(self):
         """Test that empty workflow_id raises ValueError."""
-        with pytest.raises(ValueError, match="workflow_id must be non-empty"):
+        with pytest.raises(ValueError, match="workflow_id must be non-empty if provided"):
             WorkflowRunFilters(workflow_id="")
 
     def test_whitespace_workflow_id_raises_error(self):
         """Test that whitespace-only workflow_id raises ValueError."""
-        with pytest.raises(ValueError, match="workflow_id must be non-empty"):
+        with pytest.raises(ValueError, match="workflow_id must be non-empty if provided"):
             WorkflowRunFilters(workflow_id="   ")
 
     def test_filters_are_immutable(self):
         """Test that WorkflowRunFilters is immutable (frozen)."""
+        from dataclasses import FrozenInstanceError
+
         filters = WorkflowRunFilters(project_id="project-123")
 
         # Attempt to modify should raise FrozenInstanceError
-        with pytest.raises(Exception):  # dataclasses.FrozenInstanceError
-            filters.project_id = "new-value"
+        with pytest.raises(FrozenInstanceError):
+            filters.project_id = "new-value"  # type: ignore
 
 
 class TestWorkflowRunPaginationParams:

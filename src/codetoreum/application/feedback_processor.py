@@ -4,7 +4,6 @@ import logging
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
 
 from codetoreum.domain.review_cycle import ReviewDecision
 
@@ -38,8 +37,8 @@ class ParsedIssue:
     title: str
     description: str
     severity: Severity
-    line_number: Optional[int] = None
-    file_path: Optional[str] = None
+    line_number: int | None = None
+    file_path: str | None = None
 
 
 @dataclass
@@ -48,9 +47,9 @@ class ParsedFeedback:
 
     decision: ReviewDecision
     comment: str
-    issues: List[ParsedIssue]
-    suggestions: List[str]
-    summary: Optional[str] = None
+    issues: list[ParsedIssue]
+    suggestions: list[str]
+    summary: str | None = None
     raw_output: str = ""
 
 
@@ -61,7 +60,7 @@ class ActionableItem:
     type: str  # 'fix', 'improve', 'investigate'
     description: str
     priority: int  # 1-5, where 1 is highest
-    related_issue: Optional[ParsedIssue] = None
+    related_issue: ParsedIssue | None = None
 
 
 @dataclass
@@ -69,10 +68,10 @@ class FeedbackProcessingResult:
     """Result from feedback processing."""
 
     success: bool
-    parsed_feedback: Optional[ParsedFeedback] = None
-    actionable_items: Optional[List[ActionableItem]] = None
+    parsed_feedback: ParsedFeedback | None = None
+    actionable_items: list[ActionableItem] | None = None
     should_create_work_items: bool = False
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class FeedbackProcessor:
@@ -106,9 +105,9 @@ class FeedbackProcessor:
 
     def __init__(
         self,
-        approval_patterns: Optional[List[str]] = None,
-        escalation_patterns: Optional[List[str]] = None,
-        severity_keywords: Optional[Dict[Severity, List[str]]] = None,
+        approval_patterns: list[str] | None = None,
+        escalation_patterns: list[str] | None = None,
+        severity_keywords: dict[Severity, list[str]] | None = None,
     ):
         """
         Initialize FeedbackProcessor.
@@ -138,9 +137,7 @@ class FeedbackProcessor:
         # Severity keywords (use custom or default)
         self.severity_keywords = severity_keywords or self.DEFAULT_SEVERITY_KEYWORDS.copy()
 
-    async def parse_review_output(
-        self, review_output: str
-    ) -> FeedbackProcessingResult:
+    async def parse_review_output(self, review_output: str) -> FeedbackProcessingResult:
         """
         Parse reviewer output into structured feedback.
 
@@ -190,16 +187,14 @@ class FeedbackProcessor:
             logger.error(
                 f"Failed to parse review output: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_FEEDBACK_PARSE_FAILURE"}
+                extra={"error_id": "ERR_FEEDBACK_PARSE_FAILURE"},
             )
             return FeedbackProcessingResult(
                 success=False,
                 error=str(e),
             )
 
-    async def extract_actionable_items(
-        self, parsed_feedback: ParsedFeedback
-    ) -> FeedbackProcessingResult:
+    async def extract_actionable_items(self, parsed_feedback: ParsedFeedback) -> FeedbackProcessingResult:
         """
         Extract actionable items from parsed feedback.
 
@@ -210,7 +205,7 @@ class FeedbackProcessor:
             FeedbackProcessingResult with actionable items
         """
         try:
-            actionable_items: List[ActionableItem] = []
+            actionable_items: list[ActionableItem] = []
 
             # Convert issues to actionable items
             for issue in parsed_feedback.issues:
@@ -240,14 +235,9 @@ class FeedbackProcessor:
 
             # Determine if should create work items
             # Create work items for critical/high severity issues
-            should_create = any(
-                item.priority <= 2 for item in actionable_items
-            )
+            should_create = any(item.priority <= 2 for item in actionable_items)
 
-            logger.info(
-                f"Extracted {len(actionable_items)} actionable items, "
-                f"should_create_work_items={should_create}"
-            )
+            logger.info(f"Extracted {len(actionable_items)} actionable items, should_create_work_items={should_create}")
 
             return FeedbackProcessingResult(
                 success=True,
@@ -260,7 +250,7 @@ class FeedbackProcessor:
             logger.error(
                 f"Failed to extract actionable items: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_FEEDBACK_EXTRACT_ITEMS_FAILURE"}
+                extra={"error_id": "ERR_FEEDBACK_EXTRACT_ITEMS_FAILURE"},
             )
             return FeedbackProcessingResult(
                 success=False,
@@ -295,16 +285,13 @@ class FeedbackProcessor:
             return ReviewDecision.REQUEST_CHANGES
 
         # Default to request changes if contains error/bug keywords
-        if any(
-            keyword in output_lower
-            for keyword in ["error", "bug", "issue", "problem", "incorrect"]
-        ):
+        if any(keyword in output_lower for keyword in ["error", "bug", "issue", "problem", "incorrect"]):
             return ReviewDecision.REQUEST_CHANGES
 
         # Default to approve if no issues detected
         return ReviewDecision.APPROVE
 
-    def _extract_section(self, text: str, section_name: str) -> Optional[str]:
+    def _extract_section(self, text: str, section_name: str) -> str | None:
         """
         Extract content from a markdown section.
 
@@ -324,7 +311,7 @@ class FeedbackProcessor:
 
         return None
 
-    def _extract_issues(self, review_output: str) -> List[ParsedIssue]:
+    def _extract_issues(self, review_output: str) -> list[ParsedIssue]:
         """
         Extract issues from review output.
 
@@ -341,7 +328,7 @@ class FeedbackProcessor:
         Returns:
             List of ParsedIssue objects
         """
-        issues: List[ParsedIssue] = []
+        issues: list[ParsedIssue] = []
 
         issues_section = self._extract_section(review_output, "Issues")
         if not issues_section:
@@ -386,7 +373,7 @@ class FeedbackProcessor:
 
         return issues
 
-    def _extract_suggestions(self, review_output: str) -> List[str]:
+    def _extract_suggestions(self, review_output: str) -> list[str]:
         """
         Extract suggestions from review output.
 
@@ -398,7 +385,7 @@ class FeedbackProcessor:
         Returns:
             List of suggestion strings
         """
-        suggestions: List[str] = []
+        suggestions: list[str] = []
 
         suggestions_section = self._extract_section(review_output, "Suggestions")
         if not suggestions_section:
@@ -477,7 +464,7 @@ class FeedbackProcessor:
         # Default to medium
         return Severity.MEDIUM
 
-    def _extract_location(self, description: str) -> "Tuple[Optional[str], Optional[int]]":
+    def _extract_location(self, description: str) -> "tuple[str | None, int | None]":
         """
         Extract file path and line number from description.
 
@@ -543,9 +530,7 @@ class FeedbackProcessor:
 
         return severity_to_priority_map.get(severity, 3)
 
-    def format_feedback_for_maker(
-        self, parsed_feedback: ParsedFeedback
-    ) -> str:
+    def format_feedback_for_maker(self, parsed_feedback: ParsedFeedback) -> str:
         """
         Format parsed feedback for presentation to maker agent.
 
@@ -578,9 +563,7 @@ class FeedbackProcessor:
                         location += f":{issue.line_number}"
                     location += ")"
 
-                lines.append(
-                    f"{i}. **{issue.title}** [{issue.severity.value}]{location}"
-                )
+                lines.append(f"{i}. **{issue.title}** [{issue.severity.value}]{location}")
                 lines.append(f"   {issue.description}")
                 lines.append("")
 

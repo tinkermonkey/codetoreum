@@ -5,9 +5,9 @@ In-memory implementation of IMetricsQueryPort for development and testing.
 Integrates with InMemoryMetricsAdapter for actual metrics storage.
 """
 
-from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from datetime import UTC, datetime, timedelta
 from threading import RLock
+from typing import TYPE_CHECKING, Any, Optional
 
 from codetoreum.ports.input.metrics_query import (
     ComponentHealth,
@@ -23,9 +23,11 @@ from codetoreum.ports.input.metrics_query import (
 )
 
 if TYPE_CHECKING:
-    from codetoreum.adapters.testing.in_memory_metrics_adapter import InMemoryMetricsAdapter
-    from codetoreum.ports.output.event_store import IEventStore
+    from codetoreum.adapters.testing.in_memory_metrics_adapter import (
+        InMemoryMetricsAdapter,
+    )
     from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
+    from codetoreum.ports.output.event_store import IEventStore
 
 
 class MockMetricsQueryAdapter(IMetricsQueryPort):
@@ -55,12 +57,12 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
         self._metrics_adapter = metrics_adapter
         self._event_store = event_store
         self._clock = clock
-        self._component_health: Dict[str, ComponentHealthInfo] = {}
-        self._metrics_data: Dict[str, List[MetricTimeSeriesPoint]] = {}
-        self._integration_status: Optional[IntegrationStatus] = None
-        self._simulation_mode: Optional[SimulationModeInfo] = None
+        self._component_health: dict[str, ComponentHealthInfo] = {}
+        self._metrics_data: dict[str, list[MetricTimeSeriesPoint]] = {}
+        self._integration_status: IntegrationStatus | None = None
+        self._simulation_mode: SimulationModeInfo | None = None
         self._lock = RLock()
-        self._start_time = datetime.now(timezone.utc)
+        self._start_time = datetime.now(UTC)
 
     @property
     def clock(self) -> Optional["SimulationClock"]:
@@ -84,12 +86,12 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
             else:
                 overall_status = ComponentHealth.HEALTHY
 
-            uptime = (datetime.now(timezone.utc) - self._start_time).total_seconds()
+            uptime = (datetime.now(UTC) - self._start_time).total_seconds()
 
             return SystemHealthInfo(
                 status=overall_status,
                 components=components,
-                checked_at=datetime.now(timezone.utc),
+                checked_at=datetime.now(UTC),
                 uptime_seconds=uptime,
                 version="1.0.0-dev",
             )
@@ -105,7 +107,7 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
                 component_name=component_name,
                 status=ComponentHealth.HEALTHY,
                 message=None,
-                last_check=datetime.now(timezone.utc),
+                last_check=datetime.now(UTC),
                 response_time_ms=10.0,
                 details={},
             )
@@ -139,9 +141,7 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
             aggregation_window_seconds=aggregation_window_seconds,
         )
 
-    async def get_resilience_metrics(
-        self, start_time: datetime, end_time: datetime
-    ) -> ResilienceMetrics:
+    async def get_resilience_metrics(self, start_time: datetime, end_time: datetime) -> ResilienceMetrics:
         """Get resilience infrastructure metrics."""
         return ResilienceMetrics(
             circuit_breakers={
@@ -170,7 +170,7 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
         return IntegrationStatus(
             github_connected=True,
             github_api_calls_remaining=4500,
-            github_rate_limit_reset=datetime.now(timezone.utc) + timedelta(hours=1),
+            github_rate_limit_reset=datetime.now(UTC) + timedelta(hours=1),
             github_webhook_health=ComponentHealth.HEALTHY,
             docker_connected=True,
             docker_version="20.10.0",
@@ -179,7 +179,7 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
             event_store_latency_ms=5.0,
             config_store_connected=True,
             config_store_latency_ms=3.0,
-            checked_at=datetime.now(timezone.utc),
+            checked_at=datetime.now(UTC),
         )
 
     async def get_simulation_mode_info(self) -> SimulationModeInfo:
@@ -215,8 +215,8 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
         metric_name: str,
         start_time: datetime,
         end_time: datetime,
-        labels: Optional[Dict[str, str]] = None,
-        aggregation: Optional[str] = None,
+        labels: dict[str, str] | None = None,
+        aggregation: str | None = None,
     ) -> MetricTimeSeries:
         """Get time series data for a specific metric."""
         # If metrics adapter is available, query it directly
@@ -254,17 +254,11 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
             data_points = self._metrics_data.get(metric_name, [])
 
             # Filter by time range
-            data_points = [
-                dp for dp in data_points if start_time <= dp.timestamp <= end_time
-            ]
+            data_points = [dp for dp in data_points if start_time <= dp.timestamp <= end_time]
 
             # Filter by labels if provided
             if labels:
-                data_points = [
-                    dp
-                    for dp in data_points
-                    if all(dp.labels.get(k) == v for k, v in labels.items())
-                ]
+                data_points = [dp for dp in data_points if all(dp.labels.get(k) == v for k, v in labels.items())]
 
             return MetricTimeSeries(
                 metric_name=metric_name,
@@ -274,7 +268,7 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
                 end_time=end_time,
             )
 
-    async def list_metric_names(self, prefix: Optional[str] = None) -> List[str]:
+    async def list_metric_names(self, prefix: str | None = None) -> list[str]:
         """List available metric names."""
         # If metrics adapter is available, query it
         if self._metrics_adapter:
@@ -292,10 +286,10 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
 
     async def get_api_endpoint_metrics(
         self,
-        endpoint_path: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-    ) -> Dict[str, Any]:
+        endpoint_path: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+    ) -> dict[str, Any]:
         """Get per-endpoint API metrics."""
         return {
             "endpoints": {
@@ -318,10 +312,10 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
 
     async def get_agent_execution_metrics(
         self,
-        agent_name: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-    ) -> Dict[str, Any]:
+        agent_name: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+    ) -> dict[str, Any]:
         """Get agent execution metrics."""
         return {
             "agents": {
@@ -342,7 +336,7 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
             }
         }
 
-    async def get_active_agents(self) -> Dict[str, Any]:
+    async def get_active_agents(self) -> dict[str, Any]:
         """
         Get currently active agent executions.
 
@@ -351,11 +345,9 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
         """
         # Return empty list in mock implementation
         # Real implementation would query execution tracking system
-        return {
-            "agents": []
-        }
+        return {"agents": []}
 
-    async def get_api_usage(self) -> Dict[str, Any]:
+    async def get_api_usage(self) -> dict[str, Any]:
         """
         Get API usage and quota information.
 
@@ -376,10 +368,10 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
 
     async def get_repair_cycle_metrics(
         self,
-        agent_name: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-    ) -> Dict[str, Any]:
+        agent_name: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+    ) -> dict[str, Any]:
         """Get repair cycle metrics."""
         # Return mock repair cycle metrics data
         return {
@@ -424,16 +416,14 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
         metric_name: str,
         value: float,
         timestamp: datetime,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ):
         """Helper method to record a metric data point (for testing)."""
         with self._lock:
             if metric_name not in self._metrics_data:
                 self._metrics_data[metric_name] = []
 
-            data_point = MetricTimeSeriesPoint(
-                timestamp=timestamp, value=value, labels=labels or {}
-            )
+            data_point = MetricTimeSeriesPoint(timestamp=timestamp, value=value, labels=labels or {})
             self._metrics_data[metric_name].append(data_point)
 
     def set_integration_status(self, status: IntegrationStatus):
@@ -454,9 +444,9 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
             self._integration_status = None
             self._simulation_mode = None
 
-    def _default_components(self) -> List[ComponentHealthInfo]:
+    def _default_components(self) -> list[ComponentHealthInfo]:
         """Return default component health info."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return [
             ComponentHealthInfo(
                 component_name="event_store",

@@ -4,8 +4,6 @@ Configuration Import/Export Endpoints
 Handles file uploads for configuration imports (YAML, JSON, etc.).
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
 
@@ -14,10 +12,11 @@ from codetoreum.infrastructure.security import validate_upload
 
 class ImportResponse(BaseModel):
     """Response for import operations"""
+
     success: bool
     message: str
-    imported_count: Optional[int] = None
-    errors: Optional[list[str]] = None
+    imported_count: int | None = None
+    errors: list[str] | None = None
 
 
 def register_import_export_endpoints(router: APIRouter) -> None:
@@ -29,11 +28,11 @@ def register_import_export_endpoints(router: APIRouter) -> None:
         status_code=status.HTTP_200_OK,
         summary="Upload configuration file",
         description="Upload YAML or JSON configuration file for import. "
-                    "Supports project, agent, and pipeline configurations.",
+        "Supports project, agent, and pipeline configurations.",
         tags=["import-export"],
     )
     async def upload_configuration_file(
-        file: UploadFile = File(..., description="Configuration file (YAML or JSON)")
+        file: UploadFile = File(..., description="Configuration file (YAML or JSON)"),
     ):
         """
         Upload and validate a configuration file.
@@ -64,9 +63,9 @@ def register_import_export_endpoints(router: APIRouter) -> None:
             return ImportResponse(
                 success=True,
                 message=f"File '{file.filename}' uploaded and validated successfully. "
-                        f"Size: {len(content)} bytes. Import logic pending implementation.",
+                f"Size: {len(content)} bytes. Import logic pending implementation.",
                 imported_count=0,
-                errors=None
+                errors=None,
             )
 
         except HTTPException:
@@ -76,7 +75,7 @@ def register_import_export_endpoints(router: APIRouter) -> None:
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to process upload: {str(e)}"
+                detail=f"Failed to process upload: {e!s}",
             )
 
         finally:

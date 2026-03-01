@@ -13,7 +13,14 @@ Expected outcome:
 
 from datetime import timedelta
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events import (
+    AgentExecutionCompleted,
+    AgentExecutionFailed,
+    AgentExecutionStarted,
+    ExecutionRetryScheduled,
+    WorkflowCompleted,
+    WorkflowStarted,
+)
 from codetoreum.infrastructure.simulation import (
     SimulationConfig,
     SimulationRunner,
@@ -52,34 +59,28 @@ async def run_scenario(runner: SimulationRunner) -> None:
     work_item_id = "ISSUE-300"
 
     # Start workflow
-    event = DomainEvent(
+    event = WorkflowStarted(
         aggregate_id=work_item_id,
-        aggregate_type="WorkItem",
         payload={"workflow_id": "build-workflow"},
     )
-    event.event_type = "WorkflowStarted"
     runner.capture_event(event)
 
     # First execution attempt
     await runner.advance_time(timedelta(minutes=2))
 
-    event = DomainEvent(
+    event = AgentExecutionStarted(
         aggregate_id="exec-1",
-        aggregate_type="AgentExecution",
         payload={"agent_id": "flaky-agent", "attempt": 1},
     )
-    event.event_type = "AgentExecutionStarted"
     runner.capture_event(event)
 
     await runner.advance_time(timedelta(minutes=3))
 
     # First execution fails
-    event = DomainEvent(
+    event = AgentExecutionFailed(
         aggregate_id="exec-1",
-        aggregate_type="AgentExecution",
         payload={"status": "failed", "error": "Network timeout"},
     )
-    event.event_type = "AgentExecutionFailed"
     runner.capture_event(event)
 
     runner.assert_event_occurred("AgentExecutionFailed", assertion_name="first_attempt_failed")
@@ -87,45 +88,37 @@ async def run_scenario(runner: SimulationRunner) -> None:
     # Retry scheduled
     await runner.advance_time(timedelta(minutes=1))
 
-    event = DomainEvent(
+    event = ExecutionRetryScheduled(
         aggregate_id="exec-1",
-        aggregate_type="AgentExecution",
         payload={"retry_attempt": 1},
     )
-    event.event_type = "ExecutionRetryScheduled"
     runner.capture_event(event)
 
     # Second execution attempt
     await runner.advance_time(timedelta(minutes=2))
 
-    event = DomainEvent(
+    event = AgentExecutionStarted(
         aggregate_id="exec-2",
-        aggregate_type="AgentExecution",
         payload={"agent_id": "flaky-agent", "attempt": 2},
     )
-    event.event_type = "AgentExecutionStarted"
     runner.capture_event(event)
 
     await runner.advance_time(timedelta(minutes=3))
 
     # Second execution succeeds
-    event = DomainEvent(
+    event = AgentExecutionCompleted(
         aggregate_id="exec-2",
-        aggregate_type="AgentExecution",
         payload={"status": "completed"},
     )
-    event.event_type = "AgentExecutionCompleted"
     runner.capture_event(event)
 
     runner.assert_event_occurred("AgentExecutionCompleted", assertion_name="retry_succeeded")
 
     # Workflow completes
-    event = DomainEvent(
+    event = WorkflowCompleted(
         aggregate_id=work_item_id,
-        aggregate_type="WorkItem",
         payload={"total_attempts": 2},
     )
-    event.event_type = "WorkflowCompleted"
     runner.capture_event(event)
 
     # Assertions
@@ -150,4 +143,5 @@ async def test_execution_failure():
 
 if __name__ == "__main__":
     import asyncio
+
     asyncio.run(test_execution_failure())

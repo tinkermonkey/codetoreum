@@ -1,9 +1,14 @@
 """Integration tests for event processing and handlers."""
 
-import pytest
-from datetime import datetime, timezone
-from typing import List
+from datetime import UTC, datetime
 
+import pytest
+
+from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
+from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
+from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
+from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
+from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
 from codetoreum.application.event_bus_wiring import EventBusRegistry, setup_event_bus
 from codetoreum.application.event_handlers import (
     ExecutionEventHandler,
@@ -13,8 +18,6 @@ from codetoreum.application.event_handlers import (
 from codetoreum.application.execution_service import ExecutionService
 from codetoreum.application.review_service import ReviewService
 from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator
-from codetoreum.domain.agent import Agent
-from codetoreum.domain.agent_execution import AgentExecution
 from codetoreum.domain.events import (
     ExecutionCompleted,
     ExecutionFailed,
@@ -30,13 +33,8 @@ from codetoreum.domain.events import (
     WorkItemCreated,
 )
 from codetoreum.domain.review_cycle import ReviewDecision
-from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
+from codetoreum.domain.work_item import WorkItemPriority
 from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
-from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
-from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
-from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
-from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
 
 
 @pytest.fixture
@@ -103,10 +101,10 @@ def review_service(event_store):
 def workflow_orchestrator(event_store, ticket_system):
     """Create workflow orchestrator with mock dependencies."""
     from codetoreum.application.workflow_orchestrator import (
-        ITaskQueue,
-        IProjectConfiguration,
-        IWorkflowStateManager,
         IDecisionEvents,
+        IProjectConfiguration,
+        ITaskQueue,
+        IWorkflowStateManager,
     )
 
     # Create mock implementations for testing
@@ -121,8 +119,8 @@ def workflow_orchestrator(event_store, ticket_system):
     class MockProjectConfiguration(IProjectConfiguration):
         async def get_workflow_config(self, project, board):
             from codetoreum.application.workflow_orchestrator import (
-                WorkflowConfig,
                 ColumnConfig,
+                WorkflowConfig,
             )
 
             return WorkflowConfig(
@@ -171,9 +169,7 @@ def workflow_orchestrator(event_store, ticket_system):
             from codetoreum.application.workflow_orchestrator import WorkflowState
 
             if issue_id not in self.states:
-                self.states[issue_id] = WorkflowState(
-                    in_progress_tasks={}, current_column=None, current_agent=None
-                )
+                self.states[issue_id] = WorkflowState(in_progress_tasks={}, current_column=None, current_agent=None)
             return self.states[issue_id]
 
         async def update_workflow_state(self, issue_id, state):
@@ -214,9 +210,7 @@ def event_bus():
 
 
 @pytest.fixture
-def event_registry(
-    event_bus, workflow_orchestrator, execution_service, review_service
-):
+def event_registry(event_bus, workflow_orchestrator, execution_service, review_service):
     """Create event bus registry with all handlers."""
     registry = EventBusRegistry(event_bus=event_bus)
 
@@ -263,9 +257,7 @@ class TestEventHandlerRegistration:
         stats = event_registry.get_statistics()
         assert stats["total_handlers"] == 0
 
-    async def test_setup_event_bus_convenience(
-        self, workflow_orchestrator, execution_service, review_service
-    ):
+    async def test_setup_event_bus_convenience(self, workflow_orchestrator, execution_service, review_service):
         """Test convenience setup function."""
         registry = setup_event_bus(
             workflow_orchestrator=workflow_orchestrator,
@@ -322,7 +314,7 @@ class TestExecutionEventHandling:
         start_event = ExecutionStarted(
             aggregate_id="exec-123",
             payload={
-                "started_at": datetime.now(timezone.utc).isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
                 "container_name": "test-container",
             },
         )
@@ -352,7 +344,7 @@ class TestExecutionEventHandling:
         start_event = ExecutionStarted(
             aggregate_id="exec-123",
             payload={
-                "started_at": datetime.now(timezone.utc).isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
                 "container_name": "test-container",
             },
         )
@@ -362,7 +354,7 @@ class TestExecutionEventHandling:
         complete_event = ExecutionCompleted(
             aggregate_id="exec-123",
             payload={
-                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(UTC).isoformat(),
                 "input_tokens": 100,
                 "output_tokens": 200,
                 "duration_seconds": 10.5,
@@ -397,7 +389,7 @@ class TestExecutionEventHandling:
         start_event = ExecutionStarted(
             aggregate_id="exec-123",
             payload={
-                "started_at": datetime.now(timezone.utc).isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
                 "container_name": "test-container",
             },
         )
@@ -407,7 +399,7 @@ class TestExecutionEventHandling:
         fail_event = ExecutionFailed(
             aggregate_id="exec-123",
             payload={
-                "failed_at": datetime.now(timezone.utc).isoformat(),
+                "failed_at": datetime.now(UTC).isoformat(),
                 "error_message": "Test error",
                 "exit_code": 1,
                 "duration_seconds": 5.0,
@@ -440,7 +432,7 @@ class TestExecutionEventHandling:
         start_event = ExecutionStarted(
             aggregate_id="exec-123",
             payload={
-                "started_at": datetime.now(timezone.utc).isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
                 "container_name": "test-container",
             },
         )
@@ -450,7 +442,7 @@ class TestExecutionEventHandling:
         timeout_event = ExecutionTimeout(
             aggregate_id="exec-123",
             payload={
-                "timeout_at": datetime.now(timezone.utc).isoformat(),
+                "timeout_at": datetime.now(UTC).isoformat(),
                 "duration_seconds": 120.0,
             },
         )
@@ -540,7 +532,7 @@ class TestReviewEventHandling:
             aggregate_id="review-123",
             payload={
                 "total_iterations": 2,
-                "approved_at": datetime.now(timezone.utc).isoformat(),
+                "approved_at": datetime.now(UTC).isoformat(),
             },
         )
         await event_registry.event_bus.publish(approve_event)
@@ -572,7 +564,7 @@ class TestReviewEventHandling:
         reject_event = ReviewCycleRejected(
             aggregate_id="review-123",
             payload={
-                "rejected_at": datetime.now(timezone.utc).isoformat(),
+                "rejected_at": datetime.now(UTC).isoformat(),
                 "final_iteration": 3,
                 "reviewer_id": "agent-reviewer",
                 "rejection_reason": "Max iterations reached",
@@ -607,7 +599,7 @@ class TestReviewEventHandling:
             payload={
                 "reason": "Reviewer requested human review",
                 "total_iterations": 2,
-                "escalated_at": datetime.now(timezone.utc).isoformat(),
+                "escalated_at": datetime.now(UTC).isoformat(),
             },
         )
         await event_registry.event_bus.publish(escalate_event)
@@ -657,7 +649,7 @@ class TestEndToEndEventFlow:
         start_event = ExecutionStarted(
             aggregate_id="exec-123",
             payload={
-                "started_at": datetime.now(timezone.utc).isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
                 "container_name": "test-container",
             },
         )
@@ -667,7 +659,7 @@ class TestEndToEndEventFlow:
         complete_event = ExecutionCompleted(
             aggregate_id="exec-123",
             payload={
-                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(UTC).isoformat(),
                 "input_tokens": 100,
                 "output_tokens": 200,
                 "duration_seconds": 10.5,
@@ -715,7 +707,7 @@ class TestEndToEndEventFlow:
             aggregate_id="review-123",
             payload={
                 "iteration_number": 1,
-                "submitted_at": datetime.now(timezone.utc).isoformat(),
+                "submitted_at": datetime.now(UTC).isoformat(),
                 "feedback": "Looks good!",
                 "decision": ReviewDecision.APPROVE.value,
                 "reviewer_id": "exec-456",
@@ -729,7 +721,7 @@ class TestEndToEndEventFlow:
             aggregate_id="review-123",
             payload={
                 "total_iterations": 1,
-                "approved_at": datetime.now(timezone.utc).isoformat(),
+                "approved_at": datetime.now(UTC).isoformat(),
             },
         )
         await event_registry.event_bus.publish(approve_event)
@@ -773,7 +765,7 @@ class TestEndToEndEventFlow:
             aggregate_id="review-123",
             payload={
                 "iteration_number": 1,
-                "submitted_at": datetime.now(timezone.utc).isoformat(),
+                "submitted_at": datetime.now(UTC).isoformat(),
                 "feedback": "Needs improvement",
                 "decision": ReviewDecision.REQUEST_CHANGES.value,
                 "reviewer_id": "exec-456",
@@ -796,7 +788,7 @@ class TestEndToEndEventFlow:
             aggregate_id="review-123",
             payload={
                 "iteration_number": 2,
-                "submitted_at": datetime.now(timezone.utc).isoformat(),
+                "submitted_at": datetime.now(UTC).isoformat(),
                 "feedback": "Much better!",
                 "decision": ReviewDecision.APPROVE.value,
                 "reviewer_id": "exec-012",
@@ -809,7 +801,7 @@ class TestEndToEndEventFlow:
             aggregate_id="review-123",
             payload={
                 "total_iterations": 2,
-                "approved_at": datetime.now(timezone.utc).isoformat(),
+                "approved_at": datetime.now(UTC).isoformat(),
             },
         )
         await event_registry.event_bus.publish(approve_event)

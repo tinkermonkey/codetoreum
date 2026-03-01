@@ -19,9 +19,7 @@ Architecture:
 
 import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import Optional
-from uuid import uuid4
+from datetime import UTC, datetime
 
 from codetoreum.domain.conversational_session import ConversationalSessionState
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
@@ -31,9 +29,12 @@ from codetoreum.domain.events.discussion_events import (
     CommentContext,
     CommentNeedsResponseEvent,
 )
-from codetoreum.ports.exceptions import EmptyAgentResponseError
-from codetoreum.ports.exceptions import EventStoreError
-from codetoreum.ports.exceptions import PortError
+from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.ports.exceptions import (
+    EmptyAgentResponseError,
+    EventStoreError,
+    PortError,
+)
 from codetoreum.ports.input.conversational_loop_service import (
     IConversationalLoopService,
 )
@@ -43,7 +44,6 @@ from codetoreum.ports.output import (
     ILLMProvider,
 )
 from codetoreum.ports.output.discussion_adapter import DiscussionMonitoringConfig
-from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -131,19 +131,21 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
         """
         # Validate inputs
         if not work_item_id or not project_id:
-            raise ValueError("work_item_id and project_id are required")
+            message = "work_item_id and project_id are required"
+            raise ValueError(message)
 
         agent_assignment = column_config.get("agent_assignment", "")
         column_name = column_config.get("column_name")
 
         if not agent_assignment:
-            raise ValueError("column_config must include agent_assignment")
+            message = "column_config must include agent_assignment"
+            raise ValueError(message)
 
         # Create unique session identifier
-        session_id = f"conv_session_{work_item_id}_{int(datetime.now(timezone.utc).timestamp())}"
+        session_id = f"conv_session_{work_item_id}_{int(datetime.now(UTC).timestamp())}"
 
         # Initialize session state
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = datetime.now(UTC).isoformat()
         session_state = ConversationalSessionState(
             session_id=session_id,
             work_item_id=work_item_id,
@@ -170,7 +172,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 work_item_id,
                 str(e),
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_CONVERSATIONAL_MONITORING_START_FAILURE}
+                extra={"error_id": ErrorRegistry.ERR_CONVERSATIONAL_MONITORING_START_FAILURE},
             )
             raise
 
@@ -183,7 +185,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 work_item_id,
                 str(e),
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR},
             )
             # Attempt cleanup on persistence failure
             try:
@@ -193,7 +195,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     "Failed to clean up monitoring after persistence error: %s",
                     str(cleanup_error),
                     exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR}
+                    extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR},
                 )
             except Exception as cleanup_error:
                 # Unexpected error during cleanup - log but re-raise original persistence error
@@ -201,7 +203,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     "UNEXPECTED error during cleanup after persistence error: %s",
                     str(cleanup_error),
                     exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
+                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
                 )
             raise
 
@@ -249,13 +251,14 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
 
         # Validate event
         if not work_item_id or not project_id:
-            raise ValueError("CommentNeedsResponseEvent must have work_item_id and project_id")
+            message = "CommentNeedsResponseEvent must have work_item_id and project_id"
+            raise ValueError(message)
 
         if not event.comment or not event.comment.id:
             logger.warning(
                 "Received CommentNeedsResponseEvent without comment for work item %s",
                 work_item_id,
-                extra={"error_id": ErrorRegistry.ERR_VALIDATION_FAILED}
+                extra={"error_id": ErrorRegistry.ERR_VALIDATION_FAILED},
             )
             return
 
@@ -264,9 +267,10 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 "[%s] CommentNeedsResponseEvent missing context for work item %s",
                 "ERR_CONVERSATIONAL_MISSING_CONTEXT",
                 work_item_id,
-                extra={"error_id": ErrorRegistry.ERR_CONVERSATIONAL_LOOP_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_CONVERSATIONAL_LOOP_ERROR},
             )
-            raise ValueError("CommentNeedsResponseEvent must have context")
+            message = "CommentNeedsResponseEvent must have context"
+            raise ValueError(message)
 
         # Load active session state
         session_state = await self.load_session_state(work_item_id)
@@ -275,7 +279,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
             logger.warning(
                 "No active session found for work item %s, skipping comment response",
                 work_item_id,
-                extra={"error_id": ErrorRegistry.ERR_CONVERSATIONAL_LOOP_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_CONVERSATIONAL_LOOP_ERROR},
             )
 
             # Notify user that no session exists for this work item
@@ -303,7 +307,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     work_item_id,
                     str(e),
                     exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR}
+                    extra={"error_id": ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR},
                 )
             except Exception as e:
                 # Unexpected error posting notification - log but continue
@@ -312,7 +316,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     work_item_id,
                     str(e),
                     exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
+                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
                 )
 
             return
@@ -323,7 +327,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 "Session for work item %s is %s, skipping comment response",
                 work_item_id,
                 session_state.status,
-                extra={"error_id": ErrorRegistry.ERR_CONVERSATIONAL_LOOP_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_CONVERSATIONAL_LOOP_ERROR},
             )
 
             # Notify user that session is not active
@@ -355,7 +359,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     work_item_id,
                     str(e),
                     exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR}
+                    extra={"error_id": ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR},
                 )
             except Exception as e:
                 # Unexpected error posting notification - log but continue
@@ -364,7 +368,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     work_item_id,
                     str(e),
                     exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
+                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
                 )
 
             return
@@ -395,16 +399,16 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                         conversation_id=session_state.llm_conversation_id or "",
                         message=thread_message,
                     ),
-                    timeout=_LLM_PROVIDER_TIMEOUT_SECONDS
+                    timeout=_LLM_PROVIDER_TIMEOUT_SECONDS,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.error(
                     "[%s] LLM provider timeout for work item %s after %d seconds",
                     "ERR_CONVERSATIONAL_LLM_TIMEOUT",
                     work_item_id,
                     _LLM_PROVIDER_TIMEOUT_SECONDS,
-                    extra={"error_id": ErrorRegistry.ERR_CONVERSATIONAL_LOOP_ERROR}
-            )
+                    extra={"error_id": ErrorRegistry.ERR_CONVERSATIONAL_LOOP_ERROR},
+                )
                 try:
                     await self.discussion_adapter.add_comment(
                         work_item_id=work_item_id,
@@ -417,7 +421,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                         work_item_id,
                         str(e),
                         exc_info=True,
-                        extra={"error_id": "ERR_EXTERNAL_SERVICE_TIMEOUT"}
+                        extra={"error_id": "ERR_EXTERNAL_SERVICE_TIMEOUT"},
                     )
                 raise EmptyAgentResponseError(work_item_id)
 
@@ -425,7 +429,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 logger.error(
                     "Agent execution returned empty response for work item %s",
                     work_item_id,
-                    extra={"error_id": ErrorRegistry.ERR_EXTERNAL_SERVICE_ERROR}
+                    extra={"error_id": ErrorRegistry.ERR_EXTERNAL_SERVICE_ERROR},
                 )
                 raise EmptyAgentResponseError(work_item_id)
 
@@ -441,29 +445,32 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 logger.error(
                     "Discussion adapter returned None for add_comment for work item %s",
                     work_item_id,
-                    extra={"error_id": ErrorRegistry.ERR_EXTERNAL_SERVICE_ERROR}
+                    extra={"error_id": ErrorRegistry.ERR_EXTERNAL_SERVICE_ERROR},
                 )
-                raise ValueError(f"Discussion adapter returned None comment for work item {work_item_id}")
+                message = f"Discussion adapter returned None comment for work item {work_item_id}"
+                raise ValueError(message)
 
             if not isinstance(response_comment, Comment):
                 logger.error(
                     "Discussion adapter returned invalid comment type %s for work item %s",
                     type(response_comment).__name__,
                     work_item_id,
-                    extra={"error_id": ErrorRegistry.ERR_VALIDATION_FAILED}
+                    extra={"error_id": ErrorRegistry.ERR_VALIDATION_FAILED},
                 )
-                raise ValueError(f"Discussion adapter returned invalid comment type for work item {work_item_id}")
+                message = f"Discussion adapter returned invalid comment type for work item {work_item_id}"
+                raise ValueError(message)
 
             if not response_comment.id:
                 logger.error(
                     "Discussion adapter returned comment with empty ID for work item %s",
                     work_item_id,
-                    extra={"error_id": ErrorRegistry.ERR_VALIDATION_FAILED}
+                    extra={"error_id": ErrorRegistry.ERR_VALIDATION_FAILED},
                 )
-                raise ValueError(f"Discussion adapter returned comment with empty ID for work item {work_item_id}")
+                message = f"Discussion adapter returned comment with empty ID for work item {work_item_id}"
+                raise ValueError(message)
 
             # Update session state
-            now_iso = datetime.now(timezone.utc).isoformat()
+            now_iso = datetime.now(UTC).isoformat()
             updated_session = ConversationalSessionState(
                 session_id=session_state.session_id,
                 work_item_id=session_state.work_item_id,
@@ -505,7 +512,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 work_item_id,
                 str(e),
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_HANDLER_EXECUTION}
+                extra={"error_id": ErrorRegistry.ERR_HANDLER_EXECUTION},
             )
             # FR-7.1: Error is logged with full context (exc_info=True) for observability
             # Don't clean up session on transient errors - let it retry
@@ -517,7 +524,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 work_item_id,
                 str(e),
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_HANDLER_EXECUTION}
+                extra={"error_id": ErrorRegistry.ERR_HANDLER_EXECUTION},
             )
             raise
 
@@ -562,7 +569,8 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
         to_column = getattr(event, "to_column", "")
 
         if not work_item_id or not project_id:
-            raise ValueError("WorkItemColumnChangedEvent must have work_item_id and project_id")
+            message = "WorkItemColumnChangedEvent must have work_item_id and project_id"
+            raise ValueError(message)
 
         logger.info(
             "Handling column change for work item %s: %s → %s",
@@ -585,7 +593,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     work_item_id,
                     str(e),
                     exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_CONVERSATIONAL_SESSION_CLEANUP_FAILURE}
+                    extra={"error_id": ErrorRegistry.ERR_CONVERSATIONAL_SESSION_CLEANUP_FAILURE},
                 )
             except Exception as e:
                 # Unexpected error during monitoring stop - log but continue
@@ -594,11 +602,11 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     work_item_id,
                     str(e),
                     exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
+                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
                 )
 
             # Mark session as terminated
-            now_iso = datetime.now(timezone.utc).isoformat()
+            now_iso = datetime.now(UTC).isoformat()
             terminated_session = ConversationalSessionState(
                 session_id=session_state.session_id,
                 work_item_id=session_state.work_item_id,
@@ -619,7 +627,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     work_item_id,
                     str(e),
                     exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR}
+                    extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR},
                 )
                 raise
 
@@ -637,7 +645,11 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     project_id=project_id,
                     column_config={
                         "column_name": to_column,
-                        "agent_assignment": getattr(event.context, "agent_assignment", "default-agent") if hasattr(event, "context") else "default-agent",
+                        "agent_assignment": (
+                            getattr(event.context, "agent_assignment", "default-agent")
+                            if hasattr(event, "context")
+                            else "default-agent"
+                        ),
                     },
                 )
                 logger.info(
@@ -650,7 +662,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     work_item_id,
                     str(e),
                     exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_CONVERSATIONAL_LOOP_ERROR}
+                    extra={"error_id": ErrorRegistry.ERR_CONVERSATIONAL_LOOP_ERROR},
                 )
 
                 # Post error comment to work item so user is notified
@@ -658,7 +670,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     error_comment = (
                         f"❌ **Conversational Mode Failed to Initialize**\n\n"
                         f"The AI agent failed to start monitoring this work item for conversational feedback.\n\n"
-                        f"**Error Details**: {str(e)}\n\n"
+                        f"**Error Details**: {e!s}\n\n"
                         f"**Next Steps**:\n"
                         f"1. Move the work item to a different column\n"
                         f"2. Contact support if the issue persists\n\n"
@@ -674,7 +686,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                         work_item_id,
                         str(comment_error),
                         exc_info=True,
-                        extra={"error_id": ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR}
+                        extra={"error_id": ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR},
                     )
                 except Exception as comment_error:
                     # Unexpected error posting comment - log but continue
@@ -683,7 +695,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                         work_item_id,
                         str(comment_error),
                         exc_info=True,
-                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
                     )
 
                 # Re-raise to trigger alerts and prevent execution from continuing
@@ -712,7 +724,8 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
             PortError: If stopping monitoring fails (should not prevent cleanup)
         """
         if not work_item_id:
-            raise ValueError("work_item_id is required")
+            message = "work_item_id is required"
+            raise ValueError(message)
 
         logger.info(
             "Cleaning up conversational loop for work item %s, reason: %s",
@@ -740,7 +753,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     work_item_id,
                     str(e),
                     exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_CONVERSATIONAL_MONITORING_START_FAILURE}
+                    extra={"error_id": ErrorRegistry.ERR_CONVERSATIONAL_MONITORING_START_FAILURE},
                 )
             except Exception as e:
                 # Unexpected error during best-effort cleanup - log but continue
@@ -749,12 +762,12 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     work_item_id,
                     str(e),
                     exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
+                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
                 )
 
             # Mark session as terminated if not already
             if session_state.status != "terminated":
-                now_iso = datetime.now(timezone.utc).isoformat()
+                now_iso = datetime.now(UTC).isoformat()
                 terminated_session = ConversationalSessionState(
                     session_id=session_state.session_id,
                     work_item_id=session_state.work_item_id,
@@ -775,7 +788,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                         work_item_id,
                         str(e),
                         exc_info=True,
-                        extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR}
+                        extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR},
                     )
                     raise
 
@@ -790,7 +803,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 work_item_id,
                 str(e),
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_HANDLER_EXECUTION}
+                extra={"error_id": ErrorRegistry.ERR_HANDLER_EXECUTION},
             )
             raise
         except Exception as e:
@@ -800,14 +813,14 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 work_item_id,
                 str(e),
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_HANDLER_EXECUTION}
+                extra={"error_id": ErrorRegistry.ERR_HANDLER_EXECUTION},
             )
             raise
 
     async def load_session_state(
         self,
         work_item_id: str,
-    ) -> Optional[ConversationalSessionState]:
+    ) -> ConversationalSessionState | None:
         """Load persisted session state from storage.
 
         Args:
@@ -821,7 +834,8 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
             EventStoreError: If storage retrieval fails
         """
         if not work_item_id:
-            raise ValueError("work_item_id is required")
+            message = "work_item_id is required"
+            raise ValueError(message)
 
         try:
             # Try to load session state from snapshot (fast path)
@@ -851,7 +865,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 work_item_id,
                 str(e),
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR},
             )
             raise
         except Exception as e:
@@ -861,7 +875,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 work_item_id,
                 str(e),
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
             )
             raise
 
@@ -879,7 +893,8 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
             EventStoreError: If storage operation fails
         """
         if not state:
-            raise ValueError("state is required")
+            message = "state is required"
+            raise ValueError(message)
 
         try:
             # Save session state as a snapshot in the event store
@@ -910,7 +925,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 state.work_item_id,
                 str(e),
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR},
             )
             raise
 

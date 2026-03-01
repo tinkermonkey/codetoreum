@@ -1,7 +1,7 @@
 /**
  * Selector hook for agent actions/operations
  */
-import { useAgentState } from '../contexts/AgentStateContext'
+import { useAgentState } from './useAgentState'
 
 export function useAgentActions() {
   const {

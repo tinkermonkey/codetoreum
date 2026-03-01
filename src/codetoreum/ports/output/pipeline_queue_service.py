@@ -30,11 +30,44 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
 
 # Type aliases for improved clarity
-PipelineId = Tuple[str, str]  # (project_id, board_id)
-NonNegativeInt = int  # Used for positions, counts, etc.
+PipelineId = tuple[str, str]  # (project_id, board_id)
+
+
+class NonNegativeInt(int):
+    """Type-safe non-negative integer wrapper.
+
+    Validates that the integer value is >= 0 at construction time.
+    Inherits from int for backward compatibility and natural integer semantics.
+
+    Explicitly rejects bool values (which are technically ints in Python) to enforce
+    strict type safety at the contract boundary.
+    """
+
+    def __new__(cls, value: int) -> "NonNegativeInt":
+        """Create a new NonNegativeInt instance with validation.
+
+        Args:
+            value: Integer value to validate
+
+        Returns:
+            NonNegativeInt instance
+
+        Raises:
+            ValueError: If value is negative, bool, or not an integer
+        """
+        # Explicitly reject bool (subclass of int) before checking int
+        if isinstance(value, bool):
+            msg = "NonNegativeInt requires an integer, got bool"
+            raise ValueError(msg)
+        if not isinstance(value, int):
+            msg = f"NonNegativeInt requires an integer, got {type(value).__name__}"
+            raise ValueError(msg)
+        if value < 0:
+            msg = f"NonNegativeInt must be >= 0, got {value}"
+            raise ValueError(msg)
+        return super().__new__(cls, value)
 
 
 class QueueStatus(str, Enum):
@@ -43,34 +76,30 @@ class QueueStatus(str, Enum):
     Provides type-safe status values for queue entries, preventing typos and
     enabling IDE autocomplete.
     """
+
     WAITING = "waiting"  # Work item in queue, waiting for lock
-    ACTIVE = "active"    # Work item holds the pipeline lock
+    ACTIVE = "active"  # Work item holds the pipeline lock
 
 
 # Domain-specific exceptions for queue service operations
 class QueueServiceError(Exception):
     """Base exception for queue service errors."""
-    pass
 
 
 class QueueValidationError(QueueServiceError):
     """Invalid parameters provided to queue service."""
-    pass
 
 
 class DuplicateQueueEntryError(QueueServiceError):
     """Work item already exists in queue."""
-    pass
 
 
 class QueueItemNotFoundError(QueueServiceError):
     """Work item not found in queue."""
-    pass
 
 
 class InvalidQueueStateError(QueueServiceError):
     """Invalid state transition attempted."""
-    pass
 
 
 @dataclass(frozen=True)
@@ -80,6 +109,9 @@ class PipelineQueueEntry:
     Tracks a work item waiting to acquire or actively holding a pipeline lock.
     Board position is used to determine execution order - the topmost item in
     a column has the highest priority.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation.
 
     Attributes:
         project_id: Project identifier for the pipeline
@@ -94,10 +126,40 @@ class PipelineQueueEntry:
     project_id: str
     board_id: str
     work_item_id: str
-    position_in_column: int
+    position_in_column: NonNegativeInt
     status: QueueStatus
     queued_at: datetime
     last_position_check: datetime
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.project_id, str) or not self.project_id:
+            msg = "project_id must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.board_id, str) or not self.board_id:
+            msg = "board_id must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.work_item_id, str) or not self.work_item_id:
+            msg = "work_item_id must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.position_in_column, NonNegativeInt):
+            msg = f"position_in_column must be a NonNegativeInt, got {type(self.position_in_column).__name__}"
+            raise ValueError(msg)
+
+        if not isinstance(self.status, QueueStatus):
+            msg = f"status must be a QueueStatus, got {type(self.status).__name__}"
+            raise ValueError(msg)
+
+        if not isinstance(self.queued_at, datetime):
+            msg = "queued_at must be a datetime object"
+            raise ValueError(msg)
+
+        if not isinstance(self.last_position_check, datetime):
+            msg = "last_position_check must be a datetime object"
+            raise ValueError(msg)
 
 
 # Backward compatibility alias for existing code
@@ -166,7 +228,6 @@ class IPipelineQueueService(ABC):
         Raises:
             QueueValidationError: Invalid work_item_id
         """
-        pass
 
     @abstractmethod
     async def enqueue_item(
@@ -193,7 +254,6 @@ class IPipelineQueueService(ABC):
             QueueValidationError: Invalid parameters
             DuplicateQueueEntryError: Item already exists in queue
         """
-        pass
 
     @abstractmethod
     async def mark_item_active(self, work_item_id: str) -> None:
@@ -211,7 +271,6 @@ class IPipelineQueueService(ABC):
             QueueItemNotFoundError: Item not in queue
             InvalidQueueStateError: Item already marked active
         """
-        pass
 
     @abstractmethod
     async def remove_from_queue(self, work_item_id: str) -> bool:
@@ -233,12 +292,9 @@ class IPipelineQueueService(ABC):
         Raises:
             QueueValidationError: Invalid work_item_id
         """
-        pass
 
     @abstractmethod
-    async def get_next_waiting_item(
-        self, project_id: str, board_id: str
-    ) -> Optional[PipelineQueueEntry]:
+    async def get_next_waiting_item(self, project_id: str, board_id: str) -> PipelineQueueEntry | None:
         """Get the next waiting item from the queue based on board position.
 
         Before selecting the next item, this method syncs with the board state
@@ -268,12 +324,9 @@ class IPipelineQueueService(ABC):
             QueueValidationError: Invalid parameters
             QueueServiceError: Board service communication failure
         """
-        pass
 
     @abstractmethod
-    async def get_queue_entries(
-        self, project_id: str, board_id: str
-    ) -> List[PipelineQueueEntry]:
+    async def get_queue_entries(self, project_id: str, board_id: str) -> list[PipelineQueueEntry]:
         """Get all queue entries for a pipeline.
 
         Returns all queue entries (both WAITING and ACTIVE) for the specified
@@ -295,12 +348,9 @@ class IPipelineQueueService(ABC):
         Raises:
             QueueValidationError: Invalid parameters
         """
-        pass
 
     @abstractmethod
-    async def sync_queue_with_board(
-        self, project_id: str, board_id: str, column: str
-    ) -> None:
+    async def sync_queue_with_board(self, project_id: str, board_id: str, column: str) -> None:
         """Synchronize queue state with current board column state.
 
         Ensures queue entries match the actual work items in the trigger column.
@@ -327,4 +377,3 @@ class IPipelineQueueService(ABC):
             QueueValidationError: Invalid parameters
             QueueServiceError: Board service communication failure
         """
-        pass

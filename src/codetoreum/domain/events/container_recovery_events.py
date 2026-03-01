@@ -8,8 +8,7 @@ audit trail integrity and enable observability integration.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Literal, Optional
+from typing import Literal
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
@@ -40,8 +39,8 @@ class ContainerRecoveredEvent(CodetoreumEvent):
     container_name: str = ""
     project_id: str = ""
     agent_id: str = ""
-    work_item_id: Optional[str] = None
-    execution_id: Optional[str] = None
+    work_item_id: str | None = None
+    execution_id: str | None = None
     uptime_seconds: float = 0.0
     recovery_action: Literal["reconnect_with_monitoring", "reconnect_limited"] = "reconnect_with_monitoring"
 
@@ -49,31 +48,39 @@ class ContainerRecoveredEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.container_id:
-            raise ValueError("container_id is required")
+            msg = "container_id is required"
+            raise ValueError(msg)
         if not self.container_name:
-            raise ValueError("container_name is required")
+            msg = "container_name is required"
+            raise ValueError(msg)
         if not self.project_id:
-            raise ValueError("project_id is required")
+            msg = "project_id is required"
+            raise ValueError(msg)
         if not self.agent_id:
-            raise ValueError("agent_id is required")
+            msg = "agent_id is required"
+            raise ValueError(msg)
         if self.uptime_seconds < 0:
-            raise ValueError("uptime_seconds must be >= 0")
+            msg = "uptime_seconds must be >= 0"
+            raise ValueError(msg)
         if self.recovery_action not in ("reconnect_with_monitoring", "reconnect_limited"):
-            raise ValueError("recovery_action must be one of: reconnect_with_monitoring, reconnect_limited")
+            msg = "recovery_action must be one of: reconnect_with_monitoring, reconnect_limited"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "container_id": self.container_id,
-            "container_name": self.container_name,
-            "project_id": self.project_id,
-            "agent_id": self.agent_id,
-            "work_item_id": self.work_item_id,
-            "execution_id": self.execution_id,
-            "uptime_seconds": self.uptime_seconds,
-            "recovery_action": self.recovery_action,
-        })
+        d.update(
+            {
+                "container_id": self.container_id,
+                "container_name": self.container_name,
+                "project_id": self.project_id,
+                "agent_id": self.agent_id,
+                "work_item_id": self.work_item_id,
+                "execution_id": self.execution_id,
+                "uptime_seconds": self.uptime_seconds,
+                "recovery_action": self.recovery_action,
+            }
+        )
         return d
 
     @classmethod
@@ -132,9 +139,9 @@ class ContainerKilledEvent(CodetoreumEvent):
 
     container_id: str = ""
     container_name: str = ""
-    project_id: Optional[str] = None
-    agent_id: Optional[str] = None
-    work_item_id: Optional[str] = None
+    project_id: str | None = None
+    agent_id: str | None = None
+    work_item_id: str | None = None
     kill_reason: Literal[
         "container_timeout",
         "agent_mismatch",
@@ -146,7 +153,7 @@ class ContainerKilledEvent(CodetoreumEvent):
         "repair_cycle_wrong_assessment_path",
         "completed_during_downtime",
         "checkpoint_stale",
-        "no_checkpoint"
+        "no_checkpoint",
     ] = "unmanaged"
     uptime_seconds: float = 0.0
     execution_marked_failed: bool = False
@@ -155,11 +162,14 @@ class ContainerKilledEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.container_id:
-            raise ValueError("container_id is required")
+            msg = "container_id is required"
+            raise ValueError(msg)
         if not self.container_name:
-            raise ValueError("container_name is required")
+            msg = "container_name is required"
+            raise ValueError(msg)
         if self.uptime_seconds < 0:
-            raise ValueError("uptime_seconds must be >= 0")
+            msg = "uptime_seconds must be >= 0"
+            raise ValueError(msg)
         valid_reasons = (
             "container_timeout",
             "agent_mismatch",
@@ -171,24 +181,27 @@ class ContainerKilledEvent(CodetoreumEvent):
             "repair_cycle_wrong_assessment_path",
             "completed_during_downtime",
             "checkpoint_stale",
-            "no_checkpoint"
+            "no_checkpoint",
         )
         if self.kill_reason not in valid_reasons:
-            raise ValueError(f"kill_reason must be one of: {', '.join(valid_reasons)}")
+            msg = f"kill_reason must be one of: {', '.join(valid_reasons)}"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "container_id": self.container_id,
-            "container_name": self.container_name,
-            "project_id": self.project_id,
-            "agent_id": self.agent_id,
-            "work_item_id": self.work_item_id,
-            "kill_reason": self.kill_reason,
-            "uptime_seconds": self.uptime_seconds,
-            "execution_marked_failed": self.execution_marked_failed,
-        })
+        d.update(
+            {
+                "container_id": self.container_id,
+                "container_name": self.container_name,
+                "project_id": self.project_id,
+                "agent_id": self.agent_id,
+                "work_item_id": self.work_item_id,
+                "kill_reason": self.kill_reason,
+                "uptime_seconds": self.uptime_seconds,
+                "execution_marked_failed": self.execution_marked_failed,
+            }
+        )
         return d
 
     @classmethod
@@ -243,32 +256,41 @@ class ContainerRecoveryCompletedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if self.containers_recovered < 0:
-            raise ValueError("containers_recovered must be >= 0")
+            msg = "containers_recovered must be >= 0"
+            raise ValueError(msg)
         if self.containers_killed < 0:
-            raise ValueError("containers_killed must be >= 0")
+            msg = "containers_killed must be >= 0"
+            raise ValueError(msg)
         if self.errors_encountered < 0:
-            raise ValueError("errors_encountered must be >= 0")
+            msg = "errors_encountered must be >= 0"
+            raise ValueError(msg)
         if self.repair_cycles_processed < 0:
-            raise ValueError("repair_cycles_processed must be >= 0")
+            msg = "repair_cycles_processed must be >= 0"
+            raise ValueError(msg)
         if not self.started_at:
-            raise ValueError("started_at is required")
+            msg = "started_at is required"
+            raise ValueError(msg)
         if not self.completed_at:
-            raise ValueError("completed_at is required")
+            msg = "completed_at is required"
+            raise ValueError(msg)
         if self.duration_seconds < 0:
-            raise ValueError("duration_seconds must be >= 0")
+            msg = "duration_seconds must be >= 0"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "containers_recovered": self.containers_recovered,
-            "containers_killed": self.containers_killed,
-            "errors_encountered": self.errors_encountered,
-            "repair_cycles_processed": self.repair_cycles_processed,
-            "started_at": self.started_at,
-            "completed_at": self.completed_at,
-            "duration_seconds": self.duration_seconds,
-        })
+        d.update(
+            {
+                "containers_recovered": self.containers_recovered,
+                "containers_killed": self.containers_killed,
+                "errors_encountered": self.errors_encountered,
+                "repair_cycles_processed": self.repair_cycles_processed,
+                "started_at": self.started_at,
+                "completed_at": self.completed_at,
+                "duration_seconds": self.duration_seconds,
+            }
+        )
         return d
 
     @classmethod

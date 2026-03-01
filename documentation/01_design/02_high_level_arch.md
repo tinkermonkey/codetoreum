@@ -108,7 +108,7 @@ class WorkItem:
         self.description = description
         self.status = WorkItemStatus.NEW
         self.events = []
-    
+
     def assign_to_agent(self, agent: Agent) -> DomainEvent:
         # Pure business logic
         event = WorkItemAssigned(self.id, agent.id)
@@ -136,18 +136,18 @@ class WorkflowOrchestrator:
         self.ticket_system = ticket_system
         self.agent_scheduler = agent_scheduler
         self.event_store = event_store
-    
+
     async def handle_card_movement(self, event: CardMovedEvent):
         # Orchestration logic
         work_item = await self.ticket_system.get_work_item(event.item_id)
         agent = self.determine_agent(event.column)
-        
+
         # Create domain event
         assignment_event = work_item.assign_to_agent(agent)
-        
+
         # Store event
         await self.event_store.append(assignment_event)
-        
+
         # Schedule execution
         await self.agent_scheduler.schedule(work_item, agent)
 ```
@@ -162,27 +162,27 @@ class ITicketSystem(ABC):
     @abstractmethod
     async def get_work_item(self, item_id: str) -> WorkItem:
         pass
-    
+
     @abstractmethod
     async def update_work_item(self, item: WorkItem) -> None:
         pass
-    
+
     @abstractmethod
     async def create_comment(self, item_id: str, comment: str) -> str:
         pass
 
 class ILLMProvider(ABC):
     @abstractmethod
-    async def execute_prompt(self, 
-                            prompt: str, 
+    async def execute_prompt(self,
+                            prompt: str,
                             context: Dict,
                             stream_callback: Callable) -> ExecutionResult:
         pass
 
 class IContainer(ABC):
     @abstractmethod
-    async def run(self, 
-                  image: str, 
+    async def run(self,
+                  image: str,
                   command: List[str],
                   volumes: Dict,
                   environment: Dict) -> ContainerResult:
@@ -197,7 +197,7 @@ Swappable implementations for different environments:
 class GitHubTicketAdapter(ITicketSystem):
     def __init__(self, github_client: GitHubClient):
         self.client = github_client
-    
+
     async def get_work_item(self, item_id: str) -> WorkItem:
         issue = await self.client.get_issue(item_id)
         return WorkItem(
@@ -210,10 +210,10 @@ class GitHubTicketAdapter(ITicketSystem):
 class InMemoryTicketAdapter(ITicketSystem):
     def __init__(self):
         self.items = {}
-    
+
     async def get_work_item(self, item_id: str) -> WorkItem:
         return self.items.get(item_id)
-    
+
     def add_test_item(self, item: WorkItem):
         self.items[item.id] = item
 ```
@@ -227,9 +227,9 @@ Test pure business logic without any dependencies:
 def test_work_item_assignment():
     work_item = WorkItem("123", "Test", "Description")
     agent = Agent("agent-1", "BusinessAnalyst")
-    
+
     event = work_item.assign_to_agent(agent)
-    
+
     assert isinstance(event, WorkItemAssigned)
     assert event.work_item_id == "123"
     assert event.agent_id == "agent-1"
@@ -244,23 +244,23 @@ async def test_workflow_orchestration():
     ticket_system = InMemoryTicketAdapter()
     event_store = InMemoryEventStore()
     agent_scheduler = MockAgentScheduler()
-    
+
     # Create test data
     work_item = WorkItem("123", "Test Issue", "Description")
     ticket_system.add_test_item(work_item)
-    
+
     # Create orchestrator with mocks
     orchestrator = WorkflowOrchestrator(
-        ticket_system, 
+        ticket_system,
         agent_scheduler,
         event_store
     )
-    
+
     # Test card movement
     await orchestrator.handle_card_movement(
         CardMovedEvent("123", "Requirements Analysis")
     )
-    
+
     # Verify
     assert agent_scheduler.scheduled_count == 1
     assert len(event_store.events) == 1
@@ -274,7 +274,7 @@ class SimulationRunner:
     def __init__(self, config: SimulationConfig):
         self.config = config
         self.setup_mock_adapters()
-    
+
     def setup_mock_adapters(self):
         # Create all mock adapters
         self.ticket_system = InMemoryTicketAdapter()
@@ -283,12 +283,12 @@ class SimulationRunner:
             responses=self.config.predefined_responses
         )
         self.container = FakeContainerAdapter()
-        
+
     async def run_scenario(self, scenario: TestScenario):
         # Load scenario events
         for event in scenario.events:
             await self.process_event(event)
-            
+
         # Verify outcomes
         return self.verify_scenario_outcomes(scenario.expected)
 ```
@@ -377,10 +377,10 @@ class SimulationClock(IClock):
     def __init__(self, speed_multiplier: float = 1.0):
         self.speed_multiplier = speed_multiplier
         self.current_time = datetime.now()
-    
+
     def now(self) -> datetime:
         return self.current_time
-    
+
     def advance(self, seconds: float):
         self.current_time += timedelta(seconds=seconds * self.speed_multiplier)
 ```
@@ -391,17 +391,17 @@ class MockLLMProvider(ILLMProvider):
     def __init__(self, responses: Dict[str, str]):
         self.responses = responses
         self.call_count = 0
-    
+
     async def execute_prompt(self, prompt: str, context: Dict, callback):
         # Return predetermined response based on prompt hash
         response_key = self.hash_prompt(prompt)
         response = self.responses.get(response_key, "Default response")
-        
+
         # Simulate streaming
         for chunk in response.split():
             await callback(chunk)
             await asyncio.sleep(0.01)  # Simulate delay
-        
+
         return ExecutionResult(response)
 ```
 
@@ -410,15 +410,15 @@ class MockLLMProvider(ILLMProvider):
 class EventReplayer:
     def __init__(self, event_store: IEventStore):
         self.event_store = event_store
-    
-    async def replay_from(self, 
+
+    async def replay_from(self,
                          timestamp: datetime,
                          until: datetime = None):
         events = await self.event_store.get_events(
             from_time=timestamp,
             to_time=until
         )
-        
+
         for event in events:
             await self.process_event(event)
 ```
@@ -430,10 +430,10 @@ class EventReplayer:
 class TicketSystemRegistry:
     def __init__(self):
         self.adapters = {}
-    
+
     def register(self, name: str, adapter_class: Type[ITicketSystem]):
         self.adapters[name] = adapter_class
-    
+
     def create(self, name: str, config: Dict) -> ITicketSystem:
         adapter_class = self.adapters[name]
         return adapter_class(**config)

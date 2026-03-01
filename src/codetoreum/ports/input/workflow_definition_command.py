@@ -7,56 +7,61 @@ including creating, updating, and deleting workflow definitions.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 @dataclass
 class StageDefinition:
     """Stage definition for workflow"""
+
     name: str
     agent_name: str
-    timeout_seconds: Optional[int] = None
+    timeout_seconds: int | None = None
     retry_count: int = 0
-    entry_conditions: List[Dict[str, Any]] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    entry_conditions: list[dict[str, Any]] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class StageTransitionDefinition:
     """Stage transition definition"""
+
     from_stage: str
     to_stage: str
-    condition: Optional[str] = None
+    condition: str | None = None
 
 
 @dataclass
 class CreateWorkflowDefinitionCommand:
     """Command to create a new workflow definition"""
+
     name: str
     description: str
     project_id: str
-    stages: List[StageDefinition]
-    transitions: List[StageTransitionDefinition] = field(default_factory=list)
-    work_item_types: List[str] = field(default_factory=list)
+    stages: list[StageDefinition]
+    transitions: list[StageTransitionDefinition] = field(default_factory=list)
+    work_item_types: list[str] = field(default_factory=list)
     is_template: bool = False
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class UpdateWorkflowDefinitionCommand:
     """Command to update an existing workflow definition"""
+
     workflow_id: str
-    name: Optional[str] = None
-    description: Optional[str] = None
-    stages: Optional[List[StageDefinition]] = None
-    transitions: Optional[List[StageTransitionDefinition]] = None
-    work_item_types: Optional[List[str]] = None
-    metadata: Optional[Dict[str, Any]] = None
+    name: str | None = None
+    description: str | None = None
+    stages: list[StageDefinition] | None = None
+    transitions: list[StageTransitionDefinition] | None = None
+    work_item_types: list[str] | None = None
+    metadata: dict[str, Any] | None = None
 
 
 @dataclass
 class DeleteWorkflowDefinitionCommand:
     """Command to delete a workflow definition"""
+
     workflow_id: str
     force: bool = False  # If True, delete even if active executions exist
 
@@ -64,11 +69,12 @@ class DeleteWorkflowDefinitionCommand:
 @dataclass
 class WorkflowDefinitionCommandResult:
     """Result of executing a workflow definition command"""
+
     success: bool
     workflow_id: str
     message: str
-    version: Optional[int] = None  # New version number for updates
-    errors: Optional[List[str]] = field(default=None)
+    version: int | None = None  # New version number for updates
+    errors: list[str] | None = field(default=None)
 
 
 class IWorkflowDefinitionCommandPort(ABC):
@@ -91,8 +97,7 @@ class IWorkflowDefinitionCommandPort(ABC):
 
     @abstractmethod
     async def create_workflow_definition(
-        self,
-        command: CreateWorkflowDefinitionCommand
+        self, command: CreateWorkflowDefinitionCommand
     ) -> WorkflowDefinitionCommandResult:
         """
         Creates a new workflow definition.
@@ -115,12 +120,10 @@ class IWorkflowDefinitionCommandPort(ABC):
             CircularDependencyError: If stage transitions create a cycle
             ValidationError: If command parameters invalid
         """
-        pass
 
     @abstractmethod
     async def update_workflow_definition(
-        self,
-        command: UpdateWorkflowDefinitionCommand
+        self, command: UpdateWorkflowDefinitionCommand
     ) -> WorkflowDefinitionCommandResult:
         """
         Updates an existing workflow definition.
@@ -145,12 +148,10 @@ class IWorkflowDefinitionCommandPort(ABC):
             CircularDependencyError: If stage transitions create a cycle
             ValidationError: If command parameters invalid
         """
-        pass
 
     @abstractmethod
     async def delete_workflow_definition(
-        self,
-        command: DeleteWorkflowDefinitionCommand
+        self, command: DeleteWorkflowDefinitionCommand
     ) -> WorkflowDefinitionCommandResult:
         """
         Deletes a workflow definition.
@@ -174,13 +175,9 @@ class IWorkflowDefinitionCommandPort(ABC):
             WorkflowNotFoundError: If workflow doesn't exist
             ActiveExecutionsExistError: If active executions exist and force=False
         """
-        pass
 
     @abstractmethod
-    async def activate_workflow_definition(
-        self,
-        workflow_id: str
-    ) -> WorkflowDefinitionCommandResult:
+    async def activate_workflow_definition(self, workflow_id: str) -> WorkflowDefinitionCommandResult:
         """
         Activates a workflow definition.
 
@@ -195,13 +192,9 @@ class IWorkflowDefinitionCommandPort(ABC):
         Raises:
             WorkflowNotFoundError: If workflow doesn't exist
         """
-        pass
 
     @abstractmethod
-    async def deactivate_workflow_definition(
-        self,
-        workflow_id: str
-    ) -> WorkflowDefinitionCommandResult:
+    async def deactivate_workflow_definition(self, workflow_id: str) -> WorkflowDefinitionCommandResult:
         """
         Deactivates a workflow definition.
 
@@ -217,4 +210,3 @@ class IWorkflowDefinitionCommandPort(ABC):
         Raises:
             WorkflowNotFoundError: If workflow doesn't exist
         """
-        pass

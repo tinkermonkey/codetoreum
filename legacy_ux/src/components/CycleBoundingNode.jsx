@@ -18,8 +18,6 @@ const CycleBoundingNode = ({ data }) => {
     width,
     height,
     cyclePadding = 40,
-    startTime,
-    endTime,
   } = data
 
   // Get cycle type styling
@@ -51,14 +49,14 @@ const CycleBoundingNode = ({ data }) => {
   }
 
   const style = cycleTypeStyles[cycleType] || cycleTypeStyles.unknown
-  
+
   const handleToggle = (e) => {
     e.stopPropagation()
     if (onToggleCollapse) {
       onToggleCollapse(cycleId)
     }
   }
-  
+
   return (
     <div
       style={{
@@ -77,31 +75,31 @@ const CycleBoundingNode = ({ data }) => {
       {/* Handles for connections when collapsed */}
       {isCollapsed && (
         <>
-          <Handle 
-            type="target" 
-            position={Position.Top} 
+          <Handle
+            type="target"
+            position={Position.Top}
             id={`${cycleId}-target`}
-            style={{ 
+            style={{
               background: style.borderColor,
               width: '10px',
               height: '10px',
               border: '2px solid white',
-            }} 
+            }}
           />
-          <Handle 
-            type="source" 
-            position={Position.Bottom} 
+          <Handle
+            type="source"
+            position={Position.Bottom}
             id={`${cycleId}-source`}
-            style={{ 
+            style={{
               background: style.borderColor,
               width: '10px',
               height: '10px',
               border: '2px solid white',
-            }} 
+            }}
           />
         </>
       )}
-      
+
       {/* Header bar */}
       <div
         style={{
@@ -141,7 +139,7 @@ const CycleBoundingNode = ({ data }) => {
           <ChevronDown className="w-4 h-4" />
         )}
       </div>
-      
+
       {/* Collapsed state content */}
       {isCollapsed && (
         <div
@@ -180,7 +178,7 @@ const CycleBoundingNode = ({ data }) => {
           </div>
         </div>
       )}
-      
+
       {/* Expanded state - shows iteration markers */}
       {!isCollapsed && (
         <div
@@ -213,7 +211,7 @@ const CycleBoundingNode = ({ data }) => {
           ))}
         </div>
       )}
-      
+
       {/* Corner decorations */}
       <div
         style={{

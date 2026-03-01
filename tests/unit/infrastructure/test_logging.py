@@ -7,8 +7,6 @@ import logging
 import os
 from unittest.mock import patch
 
-import pytest
-
 from codetoreum.infrastructure.logging import (
     CorrelationIdFilter,
     JSONFormatter,
@@ -294,7 +292,7 @@ class TestSensitiveDataFilter:
         import re
 
         custom_patterns = [
-            (re.compile(r'customer_id=(\d+)'), r'customer_id=***'),
+            (re.compile(r"customer_id=(\d+)"), r"customer_id=***"),
         ]
         filter_obj = SensitiveDataFilter(custom_patterns=custom_patterns)
         record = logging.LogRecord(
@@ -368,6 +366,7 @@ class TestJSONFormatter:
             raise ValueError("Test error")
         except ValueError:
             import sys
+
             exc_info = sys.exc_info()
 
         record = logging.LogRecord(
@@ -409,6 +408,7 @@ class TestCorrelationIdFilter:
         result = filter_obj.filter(record)
 
         assert result is True
+        assert hasattr(record, "correlation_id")
         assert record.correlation_id == correlation_id
 
     def test_handles_missing_correlation_id(self):
@@ -429,6 +429,7 @@ class TestCorrelationIdFilter:
         result = filter_obj.filter(record)
 
         assert result is True
+        assert hasattr(record, "correlation_id")
         assert record.correlation_id == "N/A"
 
 
@@ -475,9 +476,7 @@ class TestLoggingConfiguration:
         handler = root_logger.handlers[0]
 
         # Check that SensitiveDataFilter is in the filter chain
-        has_sensitive_filter = any(
-            isinstance(f, SensitiveDataFilter) for f in handler.filters
-        )
+        has_sensitive_filter = any(isinstance(f, SensitiveDataFilter) for f in handler.filters)
         assert has_sensitive_filter
 
 

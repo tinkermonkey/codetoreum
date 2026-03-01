@@ -9,11 +9,12 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class ExecutionPriority(Enum):
     """Execution priority levels"""
+
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
@@ -23,16 +24,18 @@ class ExecutionPriority(Enum):
 @dataclass
 class StartExecutionCommand:
     """Command to start a workflow execution"""
+
     work_item_id: str
     workflow_id: str
-    stage_name: Optional[str] = None  # If None, start from first stage
+    stage_name: str | None = None  # If None, start from first stage
     priority: ExecutionPriority = ExecutionPriority.MEDIUM
-    context: Dict[str, Any] = field(default_factory=dict)
+    context: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class CancelExecutionCommand:
     """Command to cancel a workflow execution"""
+
     workflow_run_id: str
     reason: str
     force: bool = False  # If True, immediate cancellation without cleanup
@@ -41,6 +44,7 @@ class CancelExecutionCommand:
 @dataclass
 class PauseExecutionCommand:
     """Command to pause a workflow execution"""
+
     workflow_run_id: str
     reason: str
 
@@ -48,29 +52,32 @@ class PauseExecutionCommand:
 @dataclass
 class ResumeExecutionCommand:
     """Command to resume a paused workflow execution"""
+
     workflow_run_id: str
-    from_stage: Optional[str] = None  # If None, resume from paused stage
+    from_stage: str | None = None  # If None, resume from paused stage
 
 
 @dataclass
 class OrchestrationCommandResult:
     """Result of executing an orchestration command"""
+
     success: bool
     execution_id: str
     workflow_run_id: str
     status: str  # ACCEPTED, STARTED, PAUSED, RESUMED, CANCELLED
     message: str
-    started_at: Optional[datetime] = None
-    errors: Optional[List[str]] = field(default=None)
+    started_at: datetime | None = None
+    errors: list[str] | None = field(default=None)
 
 
 @dataclass
 class EntryConditionCheckResult:
     """Result of checking entry conditions"""
+
     can_start: bool
     stage_name: str
-    blocking_conditions: List[str]
-    condition_details: List[Dict[str, Any]]
+    blocking_conditions: list[str]
+    condition_details: list[dict[str, Any]]
 
 
 class IOrchestrationCommandPort(ABC):
@@ -89,10 +96,7 @@ class IOrchestrationCommandPort(ABC):
     """
 
     @abstractmethod
-    async def start_execution(
-        self,
-        command: StartExecutionCommand
-    ) -> OrchestrationCommandResult:
+    async def start_execution(self, command: StartExecutionCommand) -> OrchestrationCommandResult:
         """
         Starts a new workflow execution for a work item.
 
@@ -115,13 +119,9 @@ class IOrchestrationCommandPort(ABC):
             EntryConditionNotMetError: If entry conditions not satisfied
             ValidationError: If command parameters invalid
         """
-        pass
 
     @abstractmethod
-    async def cancel_execution(
-        self,
-        command: CancelExecutionCommand
-    ) -> OrchestrationCommandResult:
+    async def cancel_execution(self, command: CancelExecutionCommand) -> OrchestrationCommandResult:
         """
         Cancels an active workflow execution.
 
@@ -143,13 +143,9 @@ class IOrchestrationCommandPort(ABC):
         Raises:
             WorkflowNotFoundError: If workflow run doesn't exist
         """
-        pass
 
     @abstractmethod
-    async def pause_execution(
-        self,
-        command: PauseExecutionCommand
-    ) -> OrchestrationCommandResult:
+    async def pause_execution(self, command: PauseExecutionCommand) -> OrchestrationCommandResult:
         """
         Pauses an active workflow execution.
 
@@ -166,13 +162,9 @@ class IOrchestrationCommandPort(ABC):
             WorkflowNotFoundError: If workflow run doesn't exist
             WorkflowNotActiveError: If workflow not in active state
         """
-        pass
 
     @abstractmethod
-    async def resume_execution(
-        self,
-        command: ResumeExecutionCommand
-    ) -> OrchestrationCommandResult:
+    async def resume_execution(self, command: ResumeExecutionCommand) -> OrchestrationCommandResult:
         """
         Resumes a paused workflow execution.
 
@@ -188,14 +180,10 @@ class IOrchestrationCommandPort(ABC):
             WorkflowNotFoundError: If workflow run doesn't exist
             WorkflowNotPausedError: If workflow not in paused state
         """
-        pass
 
     @abstractmethod
     async def check_entry_conditions(
-        self,
-        work_item_id: str,
-        workflow_id: str,
-        stage_name: Optional[str] = None
+        self, work_item_id: str, workflow_id: str, stage_name: str | None = None
     ) -> EntryConditionCheckResult:
         """
         Checks whether entry conditions are met for starting a workflow.
@@ -215,4 +203,3 @@ class IOrchestrationCommandPort(ABC):
             WorkflowNotFoundError: If workflow doesn't exist
             WorkItemNotFoundError: If work item doesn't exist
         """
-        pass

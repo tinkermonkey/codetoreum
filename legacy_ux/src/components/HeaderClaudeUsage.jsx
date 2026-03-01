@@ -6,7 +6,7 @@ import { useSystemHealth } from '../hooks/useSystemHealth'
 
 export default function HeaderClaudeUsage() {
   const { systemHealth } = useSystemHealth()
-  
+
   const usage = systemHealth?.orchestrator?.checks?.claude_usage
 
   if (!usage?.available) {

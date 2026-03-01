@@ -5,10 +5,9 @@ Data Transfer Objects for workspace status API endpoints.
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from pydantic import BaseModel, Field
-
+from pydantic import BaseModel
 
 # ============================================================================
 # Response DTOs
@@ -17,6 +16,7 @@ from pydantic import BaseModel, Field
 
 class MountedFileInfo(BaseModel):
     """Mounted file information"""
+
     source_path: str
     container_path: str
     read_only: bool
@@ -25,18 +25,20 @@ class MountedFileInfo(BaseModel):
 
 class ResourceUsageInfo(BaseModel):
     """Container resource usage"""
+
     cpu_percent: float
     memory_mb: float
-    memory_limit_mb: Optional[float]
-    memory_percent: Optional[float]
+    memory_limit_mb: float | None
+    memory_percent: float | None
     disk_usage_mb: float
-    disk_limit_mb: Optional[float]
+    disk_limit_mb: float | None
     network_rx_bytes: int
     network_tx_bytes: int
 
 
 class WorkspaceResponse(BaseModel):
     """Workspace information response"""
+
     workspace_id: str
     execution_id: str
     agent_id: str
@@ -45,49 +47,51 @@ class WorkspaceResponse(BaseModel):
     project_id: str
 
     # Container details
-    container_id: Optional[str]
-    container_name: Optional[str]
+    container_id: str | None
+    container_name: str | None
     image_name: str
     status: str  # initializing, running, paused, stopped, failed, cleanup
 
     # Resource usage
-    resource_usage: Optional[ResourceUsageInfo]
+    resource_usage: ResourceUsageInfo | None
 
     # Mounted files and context
-    mounted_files: List[MountedFileInfo]
+    mounted_files: list[MountedFileInfo]
     context_path: str
-    artifacts_path: Optional[str]
+    artifacts_path: str | None
 
     # Environment
-    environment_variables: Dict[str, str]  # Without sensitive values
+    environment_variables: dict[str, str]  # Without sensitive values
     working_directory: str
 
     # Timestamps
     created_at: datetime
-    started_at: Optional[datetime]
-    stopped_at: Optional[datetime]
-    last_activity: Optional[datetime]
+    started_at: datetime | None
+    stopped_at: datetime | None
+    last_activity: datetime | None
 
     # Metadata
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
 
 class WorkspaceListItemResponse(BaseModel):
     """Workspace list item (lightweight)"""
+
     workspace_id: str
     execution_id: str
     agent_name: str
     work_item_id: str
     status: str
-    cpu_percent: Optional[float]
-    memory_mb: Optional[float]
+    cpu_percent: float | None
+    memory_mb: float | None
     created_at: datetime
-    last_activity: Optional[datetime]
+    last_activity: datetime | None
 
 
 class WorkspaceListResponse(BaseModel):
     """List of workspaces response"""
-    workspaces: List[WorkspaceListItemResponse]
+
+    workspaces: list[WorkspaceListItemResponse]
     total_count: int
     active_count: int
     total_cpu_percent: float
@@ -96,6 +100,7 @@ class WorkspaceListResponse(BaseModel):
 
 class ResourceUsageSummaryResponse(BaseModel):
     """Resource usage summary"""
+
     total_workspaces: int
     active_workspaces: int
     stopped_workspaces: int
@@ -109,7 +114,8 @@ class ResourceUsageSummaryResponse(BaseModel):
 
 class WorkspaceLogsResponse(BaseModel):
     """Workspace container logs"""
+
     workspace_id: str
-    logs: List[str]
+    logs: list[str]
     total_lines: int
     truncated: bool

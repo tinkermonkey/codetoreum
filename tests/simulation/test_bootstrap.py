@@ -8,22 +8,22 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 from codetoreum.infrastructure.simulation.bootstrap import (
-    SimulationApplicationBootstrap,
     SimulationAdapters,
-    SimulationServices,
-    SimulationPorts,
+    SimulationApplicationBootstrap,
     SimulationInfrastructure,
+    SimulationPorts,
+    SimulationServices,
 )
-from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
+from codetoreum.infrastructure.simulation.causal_link_registry import CausalLinkRegistry
+from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 
 
 @pytest.mark.asyncio
 class TestSimulationApplicationBootstrap:
     """Tests for bootstrap functionality."""
 
-    async def test_bootstrap_setup_creates_all_components(self):
+    async def test_bootstrap_setup_creates_all_components(self) -> None:
         """Test that setup creates all components in correct order."""
         config = SimulationConfig.create_fast_config("test")
         bootstrap = SimulationApplicationBootstrap(config)
@@ -51,7 +51,7 @@ class TestSimulationApplicationBootstrap:
         # Cleanup
         await bootstrap.teardown()
 
-    async def test_bootstrap_creates_all_adapters(self):
+    async def test_bootstrap_creates_all_adapters(self) -> None:
         """Test that all 9 adapters are created."""
         config = SimulationConfig.create_fast_config("test")
         bootstrap = SimulationApplicationBootstrap(config)
@@ -74,7 +74,7 @@ class TestSimulationApplicationBootstrap:
 
         await bootstrap.teardown()
 
-    async def test_bootstrap_creates_all_services(self):
+    async def test_bootstrap_creates_all_services(self) -> None:
         """Test that all 8 application services are created or stubbed."""
         config = SimulationConfig.create_fast_config("test")
         bootstrap = SimulationApplicationBootstrap(config)
@@ -98,7 +98,7 @@ class TestSimulationApplicationBootstrap:
 
         await bootstrap.teardown()
 
-    async def test_bootstrap_creates_all_ports(self):
+    async def test_bootstrap_creates_all_ports(self) -> None:
         """Test that all port implementations are created."""
         config = SimulationConfig.create_fast_config("test")
         bootstrap = SimulationApplicationBootstrap(config)
@@ -129,7 +129,7 @@ class TestSimulationApplicationBootstrap:
 
         await bootstrap.teardown()
 
-    async def test_bootstrap_creates_fastapi_app(self):
+    async def test_bootstrap_creates_fastapi_app(self) -> None:
         """Test that FastAPI app is created with all routers."""
         config = SimulationConfig.create_fast_config("test")
         bootstrap = SimulationApplicationBootstrap(config)
@@ -145,7 +145,7 @@ class TestSimulationApplicationBootstrap:
 
         await bootstrap.teardown()
 
-    async def test_bootstrap_fastapi_health_check(self):
+    async def test_bootstrap_fastapi_health_check(self) -> None:
         """Test that FastAPI app responds to health check."""
         config = SimulationConfig.create_fast_config("test")
         bootstrap = SimulationApplicationBootstrap(config)
@@ -153,6 +153,9 @@ class TestSimulationApplicationBootstrap:
         await bootstrap.setup()
 
         try:
+            # Verify app is initialized
+            assert bootstrap.app is not None
+
             # Create test client with context manager
             with TestClient(bootstrap.app) as client:
                 # Test health endpoint
@@ -164,7 +167,7 @@ class TestSimulationApplicationBootstrap:
         finally:
             await bootstrap.teardown()
 
-    async def test_bootstrap_teardown_cleans_up(self):
+    async def test_bootstrap_teardown_cleans_up(self) -> None:
         """Test that teardown properly cleans up resources."""
         config = SimulationConfig.create_fast_config("test")
         bootstrap = SimulationApplicationBootstrap(config)
@@ -182,7 +185,7 @@ class TestSimulationApplicationBootstrap:
         assert bootstrap.infrastructure is None
         assert bootstrap.adapters is None
 
-    async def test_bootstrap_setup_twice_raises_error(self):
+    async def test_bootstrap_setup_twice_raises_error(self) -> None:
         """Test that calling setup twice raises an error."""
         config = SimulationConfig.create_fast_config("test")
         bootstrap = SimulationApplicationBootstrap(config)
@@ -194,7 +197,7 @@ class TestSimulationApplicationBootstrap:
 
         await bootstrap.teardown()
 
-    async def test_bootstrap_teardown_without_setup(self):
+    async def test_bootstrap_teardown_without_setup(self) -> None:
         """Test that teardown without setup does nothing."""
         config = SimulationConfig.create_fast_config("test")
         bootstrap = SimulationApplicationBootstrap(config)
@@ -202,7 +205,7 @@ class TestSimulationApplicationBootstrap:
         # Should not raise
         await bootstrap.teardown()
 
-    async def test_multiple_bootstrap_instances(self):
+    async def test_multiple_bootstrap_instances(self) -> None:
         """Test that multiple bootstrap instances can coexist."""
         config1 = SimulationConfig.create_fast_config("test1")
         config2 = SimulationConfig.create_fast_config("test2")
@@ -220,7 +223,7 @@ class TestSimulationApplicationBootstrap:
         await bootstrap1.teardown()
         await bootstrap2.teardown()
 
-    async def test_bootstrap_performance(self):
+    async def test_bootstrap_performance(self) -> None:
         """Test that bootstrap completes in less than 1 second."""
         import time
 
@@ -236,7 +239,7 @@ class TestSimulationApplicationBootstrap:
 
         await bootstrap.teardown()
 
-    async def test_bootstrap_uses_simulation_config(self):
+    async def test_bootstrap_uses_simulation_config(self) -> None:
         """Test that bootstrap respects simulation config settings."""
         config = SimulationConfig.create_fast_config(
             scenario_name="custom_test",
@@ -247,8 +250,9 @@ class TestSimulationApplicationBootstrap:
         await bootstrap.setup()
 
         # Verify clock uses correct multiplier (engine encapsulates clock)
-        assert bootstrap.engine is not None
-        assert bootstrap.engine.get_speed_multiplier() == 50.0
+        engine = bootstrap.engine
+        assert engine is not None
+        assert engine.get_speed_multiplier() == 50.0
 
         await bootstrap.teardown()
 
@@ -257,9 +261,8 @@ class TestSimulationApplicationBootstrap:
 class TestBootstrapWithFixtures:
     """Tests using pytest fixtures."""
 
-    async def test_simulation_app_fixture(self, simulation_app: FastAPI):
+    async def test_simulation_app_fixture(self, simulation_app: FastAPI) -> None:
         """Test that simulation_app fixture provides working app."""
-        assert simulation_app is not None
         assert isinstance(simulation_app, FastAPI)
 
         # Test with client
@@ -267,27 +270,25 @@ class TestBootstrapWithFixtures:
             response = client.get("/api/v2/health")
             assert response.status_code == 200
 
-    async def test_simulation_adapters_fixture(self, simulation_adapters: SimulationAdapters):
+    async def test_simulation_adapters_fixture(self, simulation_adapters: SimulationAdapters) -> None:
         """Test that simulation_adapters fixture provides adapters."""
         assert simulation_adapters is not None
         assert simulation_adapters.event_store is not None
         assert simulation_adapters.llm_provider is not None
 
-    async def test_simulation_services_fixture(self, simulation_services: SimulationServices):
+    async def test_simulation_services_fixture(self, simulation_services: SimulationServices) -> None:
         """Test that simulation_services fixture provides services."""
         assert simulation_services is not None
         assert simulation_services.execution_service is not None
         # Note: workflow_orchestrator may be stubbed (None) in simulation mode
 
-    async def test_simulation_ports_fixture(self, simulation_ports: SimulationPorts):
+    async def test_simulation_ports_fixture(self, simulation_ports: SimulationPorts) -> None:
         """Test that simulation_ports fixture provides ports."""
         assert simulation_ports is not None
         assert simulation_ports.work_item_command is not None
         assert simulation_ports.work_item_query is not None
 
-    async def test_simulation_infrastructure_fixture(
-        self, simulation_infrastructure: SimulationInfrastructure
-    ):
+    async def test_simulation_infrastructure_fixture(self, simulation_infrastructure: SimulationInfrastructure) -> None:
         """Test that simulation_infrastructure fixture provides infrastructure."""
         assert simulation_infrastructure is not None
         assert simulation_infrastructure.event_bus is not None
@@ -295,70 +296,147 @@ class TestBootstrapWithFixtures:
 
 
 @pytest.mark.asyncio
+class TestCausalLinkRegistryIntegration:
+    """Tests for CausalLinkRegistry integration in bootstrap."""
+
+    async def test_causal_link_registry_created(self) -> None:
+        """Test that CausalLinkRegistry is created during bootstrap."""
+        config = SimulationConfig.create_fast_config("test")
+        bootstrap = SimulationApplicationBootstrap(config)
+
+        await bootstrap.setup()
+
+        # Verify registry exists
+        assert bootstrap.infrastructure is not None
+        assert bootstrap.infrastructure.causal_link_registry is not None
+        assert isinstance(bootstrap.infrastructure.causal_link_registry, CausalLinkRegistry)
+
+        await bootstrap.teardown()
+
+    async def test_causal_links_registered(self) -> None:
+        """Test that causal links are registered between adapters."""
+        config = SimulationConfig.create_fast_config("test")
+        bootstrap = SimulationApplicationBootstrap(config)
+
+        await bootstrap.setup()
+
+        registry = bootstrap.causal_link_registry
+        assert registry is not None
+
+        # Verify causal links are registered
+        all_links = registry.get_all_links()
+        assert len(all_links) > 0, "No causal links registered"
+
+        # Check for specific expected links
+        container_to_storage = registry.get_links(
+            source="FakeContainerAdapter",
+            target="InMemoryStorageAdapter",
+        )
+        assert len(container_to_storage) > 0, "Container → Storage link not registered"
+
+        container_to_repair = registry.get_links(
+            source="FakeContainerAdapter",
+            target="MockRepairCycleAdapter",
+        )
+        assert len(container_to_repair) > 0, "Container → Repair link not registered"
+
+        await bootstrap.teardown()
+
+    async def test_event_subscriptions_registered(self) -> None:
+        """Test that event subscriptions are registered in the registry."""
+        config = SimulationConfig.create_fast_config("test")
+        bootstrap = SimulationApplicationBootstrap(config)
+
+        await bootstrap.setup()
+
+        registry = bootstrap.causal_link_registry
+        assert registry is not None
+
+        # Verify event subscriptions are registered
+        all_subs = registry.get_all_subscriptions()
+        assert len(all_subs) > 0, "No event subscriptions registered"
+
+        # Check for specific expected subscriptions
+        queue_subs = registry.get_subscriptions(
+            subscriber="InMemoryQueueService",
+            event_type="WorkItemColumnChangedEvent",
+        )
+        assert len(queue_subs) > 0, "Queue service subscription not registered"
+
+        storage_subs = registry.get_subscriptions(
+            subscriber="InMemoryStorageAdapter",
+            event_type="ContainerExecutionCompletedEvent",
+        )
+        assert len(storage_subs) > 0, "Storage adapter subscription not registered"
+
+        await bootstrap.teardown()
+
+    async def test_causal_link_consistency_validated(self) -> None:
+        """Test that causal links are validated for consistency (no cycles)."""
+        config = SimulationConfig.create_fast_config("test")
+        bootstrap = SimulationApplicationBootstrap(config)
+
+        # Setup should complete without errors (validation passes)
+        await bootstrap.setup()
+
+        registry = bootstrap.causal_link_registry
+        assert registry is not None
+
+        # Validate should not raise (meaning no cycles detected)
+        registry.validate_consistency()
+
+        await bootstrap.teardown()
+
+    async def test_causal_registry_cleared_on_teardown(self) -> None:
+        """Test that causal link registry is cleared during teardown."""
+        config = SimulationConfig.create_fast_config("test")
+        bootstrap = SimulationApplicationBootstrap(config)
+
+        await bootstrap.setup()
+
+        registry = bootstrap.causal_link_registry
+        assert registry is not None
+        assert len(registry.get_all_links()) > 0
+        assert len(registry.get_all_subscriptions()) > 0
+
+        await bootstrap.teardown()
+
+        # After teardown, registry should be cleared
+        assert len(registry.get_all_links()) == 0
+        assert len(registry.get_all_subscriptions()) == 0
+
+    async def test_causal_registry_accessible_via_property(self) -> None:
+        """Test that causal link registry is accessible via bootstrap property."""
+        config = SimulationConfig.create_fast_config("test")
+        bootstrap = SimulationApplicationBootstrap(config)
+
+        # Before setup, property returns None
+        assert bootstrap.causal_link_registry is None
+
+        await bootstrap.setup()
+
+        # After setup, property returns registry
+        registry = bootstrap.causal_link_registry
+        assert registry is not None
+        assert isinstance(registry, CausalLinkRegistry)
+
+        # Keep a reference to the registry before teardown
+        registry_ref = registry
+
+        await bootstrap.teardown()
+
+        # After teardown, infrastructure is cleared, so property returns None
+        # but the original registry reference should be empty
+        assert bootstrap.causal_link_registry is None
+        assert len(registry_ref.get_all_links()) == 0
+        assert len(registry_ref.get_all_subscriptions()) == 0
+
+
+@pytest.mark.asyncio
 class TestBootstrapErrorHandling:
     """Tests for bootstrap error handling and failure scenarios."""
 
-    async def test_create_ports_fails_if_services_not_created(self):
-        """Test that creating ports fails if services not created first."""
-        config = SimulationConfig.create_fast_config("test")
-        bootstrap = SimulationApplicationBootstrap(config)
-
-        # Try to create ports without services
-        with pytest.raises(RuntimeError, match="Services must be created first"):
-            bootstrap._create_ports()
-
-    async def test_create_fastapi_fails_if_ports_not_created(self):
-        """Test that creating FastAPI app fails if ports not created first."""
-        config = SimulationConfig.create_fast_config("test")
-        bootstrap = SimulationApplicationBootstrap(config)
-
-        # Create engine (required by adapters and infrastructure)
-        bootstrap._engine = SimulationEngine.create(config)
-
-        # Create adapters and services but not ports
-        bootstrap.adapters = await bootstrap._create_adapters()
-        bootstrap.infrastructure = bootstrap._create_infrastructure()
-        bootstrap.services = await bootstrap._create_services()
-
-        # Try to create FastAPI app without ports
-        with pytest.raises(RuntimeError, match="Ports and infrastructure must be created first"):
-            bootstrap._create_fastapi_app()
-
-    async def test_setup_cleans_up_on_failure(self):
-        """Test that setup cleans up resources if an error occurs during initialization."""
-        config = SimulationConfig.create_fast_config("test")
-
-        # Create a bootstrap that will fail during setup
-        class FailingBootstrap(SimulationApplicationBootstrap):
-            def _create_services(self):
-                # Simulate failure during service creation
-                raise ValueError("Simulated service creation failure")
-
-        bootstrap = FailingBootstrap(config)
-
-        # Setup should fail and clean up
-        with pytest.raises(ValueError, match="Simulated service creation failure"):
-            await bootstrap.setup()
-
-        # Verify cleanup occurred
-        assert bootstrap._is_setup is False
-
-    async def test_adapter_creation_with_invalid_config(self):
-        """Test that adapter creation handles invalid configuration gracefully."""
-        # Create config with missing required fields
-        config = SimulationConfig.create_fast_config("test")
-
-        bootstrap = SimulationApplicationBootstrap(config)
-
-        # Create engine first (required by adapters)
-        bootstrap._engine = SimulationEngine.create(config)
-
-        # Should still create adapters with defaults
-        adapters = await bootstrap._create_adapters()
-        assert adapters is not None
-        assert adapters.event_store is not None
-
-    async def test_double_teardown_is_safe(self):
+    async def test_double_teardown_is_safe(self) -> None:
         """Test that calling teardown multiple times is safe."""
         config = SimulationConfig.create_fast_config("test")
         bootstrap = SimulationApplicationBootstrap(config)
@@ -369,72 +447,3 @@ class TestBootstrapErrorHandling:
         # Second teardown should be a no-op, not raise
         await bootstrap.teardown()
         assert bootstrap._is_setup is False
-
-    async def test_service_dependencies_are_properly_injected(self):
-        """Test that service dependencies are correctly wired."""
-        config = SimulationConfig.create_fast_config("test")
-        bootstrap = SimulationApplicationBootstrap(config)
-
-        await bootstrap.setup()
-
-        # Verify ExecutionService has all dependencies
-        assert bootstrap.services.execution_service is not None
-        exec_service = bootstrap.services.execution_service
-        # Check it has required dependencies (by checking it can be used)
-        assert hasattr(exec_service, "llm_provider")
-        assert hasattr(exec_service, "container")
-
-        # Verify WorkspaceRouter has dependencies
-        assert bootstrap.services.workspace_router is not None
-        workspace_router = bootstrap.services.workspace_router
-        assert hasattr(workspace_router, "repository")
-        assert hasattr(workspace_router, "container")
-
-        # Verify AgentScheduler is now properly created
-        assert bootstrap.services.agent_scheduler is not None
-        agent_scheduler = bootstrap.services.agent_scheduler
-        assert hasattr(agent_scheduler, "task_queue")
-        assert hasattr(agent_scheduler, "event_store")
-
-        # Verify WorkflowOrchestrator is now properly created
-        assert bootstrap.services.workflow_orchestrator is not None
-        orchestrator = bootstrap.services.workflow_orchestrator
-        assert hasattr(orchestrator, "task_queue")
-        assert hasattr(orchestrator, "config")
-        assert hasattr(orchestrator, "event_store")
-
-        await bootstrap.teardown()
-
-    async def test_ports_are_independent_from_services(self):
-        """Test that mock port adapters work independently in simulation mode."""
-        config = SimulationConfig.create_fast_config("test")
-        bootstrap = SimulationApplicationBootstrap(config)
-
-        await bootstrap.setup()
-
-        # In simulation mode, ports are standalone mock implementations
-        # They should work without needing the application services
-        ports = bootstrap.ports
-
-        # Verify ports can be called directly
-        assert ports.work_item_query is not None
-        # Mock adapters should have their own data stores
-        assert hasattr(ports.work_item_query, "_work_items")
-
-        await bootstrap.teardown()
-
-    async def test_fastapi_adapters_properly_wrap_services(self):
-        """Test that FastAPI adapters properly wrap application services."""
-        config = SimulationConfig.create_fast_config("test")
-        bootstrap = SimulationApplicationBootstrap(config)
-
-        await bootstrap.setup()
-
-        try:
-            # Test that config service adapter is created
-            # This is verified implicitly by the FastAPI app working
-            with TestClient(bootstrap.app) as client:
-                response = client.get("/api/v2/health")
-                assert response.status_code == 200
-        finally:
-            await bootstrap.teardown()

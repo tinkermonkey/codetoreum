@@ -4,11 +4,12 @@ Mock Work Item Command Adapter
 In-memory implementation of IWorkItemCommandPort for development and testing.
 """
 
-from datetime import datetime, timezone
-from typing import Dict
+from datetime import UTC, datetime
 from threading import RLock
 from uuid import uuid4
 
+from codetoreum.domain.exceptions import WorkItemNotFoundError
+from codetoreum.domain.work_item import WorkItem, WorkItemStatus
 from codetoreum.ports.input.work_item_command import (
     AssignAgentCommand,
     AttachWorkflowCommand,
@@ -20,8 +21,6 @@ from codetoreum.ports.input.work_item_command import (
     UpdateWorkItemCommand,
     WorkItemCommandResult,
 )
-from codetoreum.domain.work_item import WorkItem, WorkItemStatus
-from codetoreum.domain.exceptions import WorkItemNotFoundError, DomainError
 
 
 class MockWorkItemCommandAdapter(IWorkItemCommandPort):
@@ -30,13 +29,13 @@ class MockWorkItemCommandAdapter(IWorkItemCommandPort):
     """
 
     def __init__(self):
-        self._work_items: Dict[str, WorkItem] = {}
+        self._work_items: dict[str, WorkItem] = {}
         self._lock = RLock()
 
     async def create_work_item(self, command: CreateWorkItemCommand) -> WorkItem:
         """Creates a new work item."""
         with self._lock:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
 
             work_item = WorkItem(
                 id=str(uuid4()),
@@ -83,7 +82,7 @@ class MockWorkItemCommandAdapter(IWorkItemCommandPort):
             if command.priority is not None:
                 work_item.update_priority(command.priority)
 
-            work_item.updated_at = datetime.now(timezone.utc)
+            work_item.updated_at = datetime.now(UTC)
             return work_item
 
     async def delete_work_item(self, work_item_id: str) -> WorkItemCommandResult:
@@ -148,7 +147,7 @@ class MockWorkItemCommandAdapter(IWorkItemCommandPort):
             work_item = self._work_items[command.work_item_id]
             # Note: Direct assignment for current_workflow_id as domain model doesn't enforce validation
             work_item.current_workflow_id = command.workflow_id
-            work_item.updated_at = datetime.now(timezone.utc)
+            work_item.updated_at = datetime.now(UTC)
 
             return work_item
 

@@ -7,36 +7,32 @@ and dependency injection.
 
 import pytest
 
-from codetoreum.infrastructure.adapters import (
-    AdapterFactory,
-    AdapterFactoryConfig
-)
-from codetoreum.infrastructure.resilience import (
-    OperationMode,
-    ServiceResilienceConfig,
-    RateLimitConfig,
-    CircuitBreakerConfig,
-    RetryConfig,
-    TimeoutConfig
-)
-from codetoreum.ports.output.ticket_system import ITicketSystem
-from codetoreum.ports.output.llm_provider import ILLMProvider
-from codetoreum.ports.output.container import IContainer
-from codetoreum.ports.output.repository import IRepository
-from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.adapters.secondary import (
-    GitHubConfig,
     ClaudeCodeConfig,
     DockerConfig,
-    GitConfig
+    GitConfig,
+    GitHubConfig,
 )
 from codetoreum.adapters.testing import (
-    InMemoryTicketAdapter,
-    MockLLMAdapter,
     FakeContainerAdapter,
+    InMemoryEventStore,
     InMemoryRepositoryAdapter,
-    InMemoryEventStore
+    InMemoryTicketAdapter,
 )
+from codetoreum.infrastructure.adapters import AdapterFactory, AdapterFactoryConfig
+from codetoreum.infrastructure.resilience import (
+    CircuitBreakerConfig,
+    OperationMode,
+    RateLimitConfig,
+    RetryConfig,
+    ServiceResilienceConfig,
+    TimeoutConfig,
+)
+from codetoreum.ports.output.container import IContainer
+from codetoreum.ports.output.event_store import IEventStore
+from codetoreum.ports.output.llm_provider import ILLMProvider
+from codetoreum.ports.output.repository import IRepository
+from codetoreum.ports.output.ticket_system import ITicketSystem
 
 
 class TestAdapterFactoryConfig:
@@ -57,14 +53,14 @@ class TestAdapterFactoryConfig:
                 rate_limit=RateLimitConfig(max_requests=100, window_seconds=60),
                 circuit_breaker=CircuitBreakerConfig(failure_threshold=3),
                 retry=RetryConfig(max_retries=2),
-                timeout=TimeoutConfig(default_timeout_seconds=30)
+                timeout=TimeoutConfig(default_timeout_seconds=30),
             )
         }
 
         config = AdapterFactoryConfig(
             operation_mode=OperationMode.SIMULATION,
             enable_resilience=False,
-            custom_resilience_configs=custom_resilience
+            custom_resilience_configs=custom_resilience,
         )
 
         assert config.operation_mode == OperationMode.SIMULATION
@@ -83,10 +79,7 @@ class TestAdapterFactory:
 
     def test_initialization_with_config(self):
         """Test factory initialization with custom config."""
-        config = AdapterFactoryConfig(
-            operation_mode=OperationMode.SIMULATION,
-            enable_resilience=False
-        )
+        config = AdapterFactoryConfig(operation_mode=OperationMode.SIMULATION, enable_resilience=False)
 
         factory = AdapterFactory(config)
         assert factory.get_operation_mode() == OperationMode.SIMULATION
@@ -138,11 +131,7 @@ class TestTicketSystemCreation:
         """Test creating default ticket system adapter."""
         factory = AdapterFactory()
 
-        github_config = GitHubConfig(
-            token="test_token",
-            organization="test_org",
-            repository="test_repo"
-        )
+        github_config = GitHubConfig(token="test_token", organization="test_org", repository="test_repo")
 
         adapter = factory.create_ticket_system(adapter_config=github_config)
         assert isinstance(adapter, ITicketSystem)
@@ -186,10 +175,7 @@ class TestLLMProviderCreation:
         """Test creating default LLM provider adapter."""
         factory = AdapterFactory()
 
-        claude_config = ClaudeCodeConfig(
-            api_key_credential_name="ANTHROPIC_API_KEY",
-            default_model="claude-sonnet-4"
-        )
+        claude_config = ClaudeCodeConfig(api_key_credential_name="ANTHROPIC_API_KEY", default_model="claude-sonnet-4")
 
         adapter = factory.create_llm_provider(adapter_config=claude_config)
         assert isinstance(adapter, ILLMProvider)
@@ -211,13 +197,10 @@ class TestLLMProviderCreation:
             rate_limit=RateLimitConfig(max_requests=10, window_seconds=60),
             circuit_breaker=CircuitBreakerConfig(failure_threshold=2),
             retry=RetryConfig(max_retries=1),
-            timeout=TimeoutConfig(default_timeout_seconds=60)
+            timeout=TimeoutConfig(default_timeout_seconds=60),
         )
 
-        adapter = factory.create_llm_provider(
-            adapter_name="mock",
-            resilience_config=custom_resilience
-        )
+        adapter = factory.create_llm_provider(adapter_name="mock", resilience_config=custom_resilience)
         assert isinstance(adapter, ILLMProvider)
 
 
@@ -394,10 +377,7 @@ class TestFactoryIntegration:
 
     def test_simulation_mode_workflow(self):
         """Test complete simulation mode workflow."""
-        config = AdapterFactoryConfig(
-            operation_mode=OperationMode.SIMULATION,
-            enable_resilience=True
-        )
+        config = AdapterFactoryConfig(operation_mode=OperationMode.SIMULATION, enable_resilience=True)
         factory = AdapterFactory(config)
 
         # Create adapters for simulation
@@ -412,10 +392,7 @@ class TestFactoryIntegration:
 
     def test_production_mode_workflow(self):
         """Test production mode workflow with resilience."""
-        config = AdapterFactoryConfig(
-            operation_mode=OperationMode.PRODUCTION,
-            enable_resilience=True
-        )
+        config = AdapterFactoryConfig(operation_mode=OperationMode.PRODUCTION, enable_resilience=True)
         factory = AdapterFactory(config)
 
         # Create test adapters (using in-memory for test isolation)
@@ -452,14 +429,10 @@ class TestFactoryIntegration:
             rate_limit=RateLimitConfig(max_requests=1000, window_seconds=3600),
             circuit_breaker=CircuitBreakerConfig(failure_threshold=10),
             retry=RetryConfig(max_retries=5),
-            timeout=TimeoutConfig(default_timeout_seconds=120)
+            timeout=TimeoutConfig(default_timeout_seconds=120),
         )
 
-        config = AdapterFactoryConfig(
-            custom_resilience_configs={
-                "ticket_system": custom_config
-            }
-        )
+        config = AdapterFactoryConfig(custom_resilience_configs={"ticket_system": custom_config})
 
         factory = AdapterFactory(config)
 
@@ -475,7 +448,7 @@ class TestFactoryIntegration:
             name="custom",
             adapter_type=InMemoryTicketAdapter,
             description="Custom adapter",
-            tags=["custom"]
+            tags=["custom"],
         )
 
         # Create instance of custom adapter

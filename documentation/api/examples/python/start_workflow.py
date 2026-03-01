@@ -4,9 +4,10 @@ Example: Start workflow execution for a work item
 This example demonstrates how to create a work item and start
 a workflow execution.
 """
-import requests
-from typing import Dict, Any, Optional
 
+from typing import Any
+
+import requests
 
 # Configuration
 BASE_URL = "http://localhost:8000"
@@ -17,10 +18,10 @@ def create_work_item(
     title: str,
     description: str,
     project_id: str,
-    labels: list[str] = None,
+    labels: list[str] | None = None,
     priority: str = "medium",
-    external_id: Optional[str] = None
-) -> Dict[str, Any]:
+    external_id: str | None = None,
+) -> dict[str, Any]:
     """
     Create a new work item.
 
@@ -37,10 +38,7 @@ def create_work_item(
     """
     url = f"{BASE_URL}/api/v2/work-items/"
 
-    headers = {
-        "Authorization": f"Bearer {API_TOKEN}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bearer {API_TOKEN}", "Content-Type": "application/json"}
 
     payload = {
         "title": title,
@@ -48,7 +46,7 @@ def create_work_item(
         "project_id": project_id,
         "labels": labels or [],
         "priority": priority,
-        "status": "pending"
+        "status": "pending",
     }
 
     if external_id:
@@ -57,15 +55,15 @@ def create_work_item(
     response = requests.post(url, json=payload, headers=headers)
     response.raise_for_status()
 
-    work_item = response.json()
+    work_item: dict[str, Any] = response.json()
     print(f"✓ Created work item: {work_item['id']}")
     return work_item
 
 
 def start_workflow(
     work_item_id: str,
-    workflow_id: Optional[str] = None
-) -> Dict[str, Any]:
+    workflow_id: str | None = None,
+) -> dict[str, Any]:
     """
     Start workflow execution for a work item.
 
@@ -81,14 +79,9 @@ def start_workflow(
     """
     url = f"{BASE_URL}/api/v2/orchestrator/start"
 
-    headers = {
-        "Authorization": f"Bearer {API_TOKEN}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bearer {API_TOKEN}", "Content-Type": "application/json"}
 
-    payload = {
-        "work_item_id": work_item_id
-    }
+    payload = {"work_item_id": work_item_id}
 
     if workflow_id:
         payload["workflow_id"] = workflow_id
@@ -96,15 +89,15 @@ def start_workflow(
     response = requests.post(url, json=payload, headers=headers)
     response.raise_for_status()
 
-    workflow_run = response.json()
+    workflow_run: dict[str, Any] = response.json()
     print(f"✓ Started workflow run: {workflow_run['workflow_run_id']}")
     return workflow_run
 
 
 def check_entry_conditions(
     work_item_id: str,
-    stage_name: str
-) -> Dict[str, Any]:
+    stage_name: str,
+) -> dict[str, Any]:
     """
     Check if entry conditions are met for a stage.
 
@@ -117,23 +110,18 @@ def check_entry_conditions(
     """
     url = f"{BASE_URL}/api/v2/orchestrator/check-entry-conditions"
 
-    headers = {
-        "Authorization": f"Bearer {API_TOKEN}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bearer {API_TOKEN}", "Content-Type": "application/json"}
 
-    payload = {
-        "work_item_id": work_item_id,
-        "stage_name": stage_name
-    }
+    payload = {"work_item_id": work_item_id, "stage_name": stage_name}
 
     response = requests.post(url, json=payload, headers=headers)
     response.raise_for_status()
 
-    return response.json()
+    result: dict[str, Any] = response.json()
+    return result
 
 
-def pause_workflow(workflow_run_id: str) -> Dict[str, Any]:
+def pause_workflow(workflow_run_id: str) -> dict[str, Any]:
     """
     Pause a running workflow.
 
@@ -145,18 +133,17 @@ def pause_workflow(workflow_run_id: str) -> Dict[str, Any]:
     """
     url = f"{BASE_URL}/api/v2/orchestrator/{workflow_run_id}/pause"
 
-    headers = {
-        "Authorization": f"Bearer {API_TOKEN}"
-    }
+    headers = {"Authorization": f"Bearer {API_TOKEN}"}
 
     response = requests.post(url, headers=headers)
     response.raise_for_status()
 
     print(f"✓ Paused workflow run: {workflow_run_id}")
-    return response.json()
+    result: dict[str, Any] = response.json()
+    return result
 
 
-def resume_workflow(workflow_run_id: str) -> Dict[str, Any]:
+def resume_workflow(workflow_run_id: str) -> dict[str, Any]:
     """
     Resume a paused workflow.
 
@@ -168,18 +155,17 @@ def resume_workflow(workflow_run_id: str) -> Dict[str, Any]:
     """
     url = f"{BASE_URL}/api/v2/orchestrator/{workflow_run_id}/resume"
 
-    headers = {
-        "Authorization": f"Bearer {API_TOKEN}"
-    }
+    headers = {"Authorization": f"Bearer {API_TOKEN}"}
 
     response = requests.post(url, headers=headers)
     response.raise_for_status()
 
     print(f"✓ Resumed workflow run: {workflow_run_id}")
-    return response.json()
+    result: dict[str, Any] = response.json()
+    return result
 
 
-def cancel_workflow(workflow_run_id: str) -> Dict[str, Any]:
+def cancel_workflow(workflow_run_id: str) -> dict[str, Any]:
     """
     Cancel a workflow execution.
 
@@ -191,18 +177,17 @@ def cancel_workflow(workflow_run_id: str) -> Dict[str, Any]:
     """
     url = f"{BASE_URL}/api/v2/orchestrator/{workflow_run_id}/cancel"
 
-    headers = {
-        "Authorization": f"Bearer {API_TOKEN}"
-    }
+    headers = {"Authorization": f"Bearer {API_TOKEN}"}
 
     response = requests.post(url, headers=headers)
     response.raise_for_status()
 
     print(f"✓ Cancelled workflow run: {workflow_run_id}")
-    return response.json()
+    result: dict[str, Any] = response.json()
+    return result
 
 
-def main():
+def main() -> None:
     """Example usage."""
     try:
         # Example 1: Create work item and start workflow
@@ -220,7 +205,7 @@ def main():
             project_id="my-api-project",
             labels=["feature", "api", "backend"],
             priority="high",
-            external_id="GH-456"
+            external_id="GH-456",
         )
 
         print(f"\nWork Item ID: {work_item['id']}")
@@ -230,14 +215,14 @@ def main():
         # Check entry conditions (optional)
         print("\n=== Checking Entry Conditions ===\n")
         try:
-            conditions = check_entry_conditions(work_item['id'], "development")
+            conditions = check_entry_conditions(work_item["id"], "development")
             print(f"Conditions met: {conditions['conditions_met']}")
         except requests.exceptions.HTTPError as e:
             print(f"Warning: Could not check entry conditions (HTTP {e.response.status_code})")
 
         # Start workflow
         print("\n=== Starting Workflow ===\n")
-        workflow_run = start_workflow(work_item['id'])
+        workflow_run = start_workflow(work_item["id"])
 
         print(f"\nWorkflow Run ID: {workflow_run['workflow_run_id']}")
         print(f"Workflow: {workflow_run.get('workflow_name', 'auto-selected')}")
@@ -276,13 +261,13 @@ def main():
         print(f"\n✗ Connection Error: Unable to connect to {BASE_URL}")
         print("  Ensure the API server is running")
     except requests.exceptions.Timeout:
-        print(f"\n✗ Timeout Error: Request took too long")
+        print("\n✗ Timeout Error: Request took too long")
     except requests.exceptions.RequestException as e:
-        print(f"\n✗ Request Error: {str(e)}")
+        print(f"\n✗ Request Error: {e!s}")
     except KeyError as e:
         print(f"\n✗ Data Error: Missing expected field {e} in API response")
     except Exception as e:
-        print(f"\n✗ Unexpected Error: {type(e).__name__}: {str(e)}")
+        print(f"\n✗ Unexpected Error: {type(e).__name__}: {e!s}")
 
 
 if __name__ == "__main__":

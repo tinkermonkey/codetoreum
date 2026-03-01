@@ -3,13 +3,14 @@
 import asyncio
 import re
 import threading
-from datetime import datetime, timezone
-from typing import AsyncIterator, Dict, List, Optional, Pattern
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime
+from re import Pattern
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from codetoreum.ports.exceptions import (
     RateLimitError,
-    UnsupportedFeatureError,
     ValidationError,
 )
 from codetoreum.ports.output.llm_provider import (
@@ -23,6 +24,13 @@ from codetoreum.ports.output.llm_provider import (
     ToolDefinition,
     UsageStats,
 )
+
+if TYPE_CHECKING:
+    from codetoreum.infrastructure.simulation.proportional_delay_calculator import (
+        ProportionalDelayCalculator,
+    )
+    from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
+    from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 
 
 class MockLLMAdapter(ILLMProvider):
@@ -51,6 +59,8 @@ class MockLLMAdapter(ILLMProvider):
         cost_per_output_token: float = 0.0,
         context_window: int = 100000,
         max_output_tokens: int = 4096,
+        config: "SimulationConfig | None" = None,
+        clock: "SimulationClock | None" = None,
     ):
         """
         Initialize the mock LLM adapter.
@@ -64,16 +74,24 @@ class MockLLMAdapter(ILLMProvider):
             cost_per_output_token: Cost per output token (default: 0.0 for testing)
             context_window: Maximum context window size
             max_output_tokens: Maximum output tokens
+            config: Optional SimulationConfig for fidelity-based timing
+            clock: Optional SimulationClock for time manipulation
         """
         if delay_seconds < 0:
-            raise ValidationError("Delay seconds cannot be negative")
+            msg = "Delay seconds cannot be negative"
+            raise ValidationError(msg)
 
         self._default_response = default_response
         self._delay_seconds = delay_seconds
         self._simulate_rate_limits = simulate_rate_limits
+        self._config = config
+        self._clock = clock
+
+        # Lazy-load delay calculator to avoid circular import
+        self._delay_calculator: ProportionalDelayCalculator | None = None
 
         # Pattern-based responses
-        self._response_patterns: List[tuple[Pattern, str]] = []
+        self._response_patterns: list[tuple[Pattern, str]] = []
 
         # Usage tracking
         self._total_requests = 0
@@ -82,7 +100,7 @@ class MockLLMAdapter(ILLMProvider):
         self._output_tokens = 0
 
         # Conversations
-        self._conversations: Dict[str, List[Dict[str, str]]] = {}
+        self._conversations: dict[str, list[dict[str, str]]] = {}
 
         # Model info (configurable)
         self._model_info = ModelInfo(
@@ -100,6 +118,9 @@ class MockLLMAdapter(ILLMProvider):
         # Thread safety
         self._lock = threading.Lock()
 
+        # Counter for probabilistic failures (deterministic for reproducibility)
+        self._execution_counter = 0
+
     def add_response_pattern(self, pattern: str, response: str) -> None:
         """
         Add a pattern-based response.
@@ -112,13 +133,41 @@ class MockLLMAdapter(ILLMProvider):
             ValidationError: If pattern or response is empty
         """
         if not pattern:
-            raise ValidationError("Pattern cannot be empty")
+            msg = "Pattern cannot be empty"
+            raise ValidationError(msg)
         if not response:
-            raise ValidationError("Response cannot be empty")
+            msg = "Response cannot be empty"
+            raise ValidationError(msg)
 
         compiled_pattern = re.compile(pattern, re.IGNORECASE | re.DOTALL)
         with self._lock:
             self._response_patterns.append((compiled_pattern, response))
+
+    def _should_fail_for_high_fidelity(self) -> bool:
+        """
+        Determine if execution should fail based on HIGH fidelity probabilistic failures.
+
+        Uses counter-based approach for reproducibility in tests (not random).
+        Only applies to HIGH fidelity level.
+
+        Returns:
+            True if execution should timeout/fail, False otherwise
+        """
+        if not self._config:
+            return False
+
+        from codetoreum.infrastructure.simulation.simulation_config import FidelityLevel
+
+        if self._config.fidelity_level != FidelityLevel.HIGH:
+            return False
+
+        # Counter-based: fail approximately every 25 executions (~4% failure rate)
+        # This is deterministic for reproducibility
+        with self._lock:
+            self._execution_counter += 1
+            should_fail = self._execution_counter % 25 == 0
+
+        return should_fail
 
     def _get_response_for_prompt(self, prompt: str) -> str:
         """
@@ -136,11 +185,36 @@ class MockLLMAdapter(ILLMProvider):
                     return response
             return self._default_response
 
+    def _calculate_delay_seconds(self, prompt: str, response: str) -> float:
+        """
+        Calculate delay based on fidelity level and token count.
+
+        Uses ProportionalDelayCalculator for centralized fidelity-aware timing.
+        Falls back to fixed delay_seconds if no config provided.
+
+        Args:
+            prompt: The input prompt
+            response: The generated response
+
+        Returns:
+            Delay in seconds
+        """
+        if not self._config:
+            return self._delay_seconds
+
+        if self._delay_calculator is None:
+            from codetoreum.infrastructure.simulation.proportional_delay_calculator import (
+                ProportionalDelayCalculator,
+            )
+
+            self._delay_calculator = ProportionalDelayCalculator(self._config)
+        return self._delay_calculator.calculate_llm_delay(prompt, response)
+
     async def execute(
         self,
         prompt: str,
-        context: Optional[ExecutionContext] = None,
-        stream_callback: Optional[StreamCallback] = None,
+        context: ExecutionContext | None = None,
+        stream_callback: StreamCallback | None = None,
     ) -> ExecutionResult:
         """
         Execute a prompt with the LLM.
@@ -155,23 +229,38 @@ class MockLLMAdapter(ILLMProvider):
 
         Raises:
             ValidationError: If prompt is empty
-            RateLimitError: If rate limits are simulated and exceeded
+            RateLimitError: If rate limits are simulated and exceeded or HIGH fidelity
         """
         if not prompt or not prompt.strip():
-            raise ValidationError("Prompt cannot be empty")
+            msg = "Prompt cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             if self._simulate_rate_limits and self._total_requests >= 100:
-                raise RateLimitError("Mock rate limit exceeded (100 requests)")
+                msg = "Mock rate limit exceeded (100 requests)"
+                raise RateLimitError(msg)
 
-        # Simulate delay
-        if self._delay_seconds > 0:
-            await asyncio.sleep(self._delay_seconds)
+        # HIGH fidelity: probabilistic timeout/failure
+        if self._should_fail_for_high_fidelity():
+            msg = "LLM execution timeout (HIGH fidelity probabilistic failure)"
+            raise RateLimitError(msg)
 
-        started_at = datetime.now(timezone.utc)
+        started_at = datetime.now(UTC)
 
         # Get response
         response = self._get_response_for_prompt(prompt)
+
+        # Calculate delay based on fidelity level
+        delay_seconds = self._calculate_delay_seconds(prompt, response)
+
+        # Apply delay using clock if available, otherwise use asyncio.sleep
+        if delay_seconds > 0:
+            if self._clock:
+                # Use simulated clock for time manipulation support
+                await self._clock.sleep(delay_seconds)
+            else:
+                # Fall back to asyncio.sleep for real-time execution
+                await asyncio.sleep(delay_seconds)
 
         # Calculate mock tokens
         prompt_tokens = len(prompt.split())
@@ -184,7 +273,7 @@ class MockLLMAdapter(ILLMProvider):
             self._output_tokens += completion_tokens
             self._total_tokens += prompt_tokens + completion_tokens
 
-        completed_at = datetime.now(timezone.utc)
+        completed_at = datetime.now(UTC)
         duration_ms = int((completed_at - started_at).total_seconds() * 1000)
 
         # If streaming callback provided, simulate streaming
@@ -210,9 +299,9 @@ class MockLLMAdapter(ILLMProvider):
     async def execute_with_tools(
         self,
         prompt: str,
-        tools: List[ToolDefinition],
-        context: Optional[ExecutionContext] = None,
-        stream_callback: Optional[StreamCallback] = None,
+        tools: list[ToolDefinition],
+        context: ExecutionContext | None = None,
+        stream_callback: StreamCallback | None = None,
     ) -> ExecutionResult:
         """
         Execute prompt with tool/function calling capabilities.
@@ -230,7 +319,8 @@ class MockLLMAdapter(ILLMProvider):
             ValidationError: If prompt is empty or tools list is invalid
         """
         if not tools:
-            raise ValidationError("Tools list cannot be empty for tool execution")
+            msg = "Tools list cannot be empty for tool execution"
+            raise ValidationError(msg)
 
         # For mock, just execute normally and optionally include tool calls
         result = await self.execute(prompt, context, stream_callback)
@@ -248,13 +338,13 @@ class MockLLMAdapter(ILLMProvider):
                     )
                 )
 
-        result.tool_calls = tool_calls
+        object.__setattr__(result, "tool_calls", tuple(tool_calls))
         return result
 
     async def stream_completion(
         self,
         prompt: str,
-        context: Optional[ExecutionContext] = None,
+        context: ExecutionContext | None = None,
     ) -> AsyncIterator[StreamChunk]:
         """
         Stream completion tokens as they're generated.
@@ -270,7 +360,8 @@ class MockLLMAdapter(ILLMProvider):
             ValidationError: If prompt is empty
         """
         if not prompt or not prompt.strip():
-            raise ValidationError("Prompt cannot be empty")
+            msg = "Prompt cannot be empty"
+            raise ValidationError(msg)
 
         # Get response
         response = self._get_response_for_prompt(prompt)
@@ -285,7 +376,7 @@ class MockLLMAdapter(ILLMProvider):
                 content=word + (" " if i < len(words) - 1 else ""),
                 chunk_index=i,
                 is_final=(i == len(words) - 1),
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
             yield chunk
 
@@ -312,8 +403,8 @@ class MockLLMAdapter(ILLMProvider):
 
     async def create_conversation(
         self,
-        system_prompt: Optional[str] = None,
-        parameters: Optional[ExecutionContext] = None,
+        system_prompt: str | None = None,
+        parameters: ExecutionContext | None = None,
     ) -> str:
         """
         Create a new conversation session.
@@ -331,10 +422,12 @@ class MockLLMAdapter(ILLMProvider):
             self._conversations[conversation_id] = []
 
             if system_prompt:
-                self._conversations[conversation_id].append({
-                    "role": "system",
-                    "content": system_prompt,
-                })
+                self._conversations[conversation_id].append(
+                    {
+                        "role": "system",
+                        "content": system_prompt,
+                    }
+                )
 
         return conversation_id
 
@@ -342,7 +435,7 @@ class MockLLMAdapter(ILLMProvider):
         self,
         conversation_id: str,
         message: str,
-        stream_callback: Optional[StreamCallback] = None,
+        stream_callback: StreamCallback | None = None,
     ) -> ExecutionResult:
         """
         Continue an existing conversation.
@@ -360,18 +453,23 @@ class MockLLMAdapter(ILLMProvider):
             ValidationError: If message is empty
         """
         if not message or not message.strip():
-            raise ValidationError("Message cannot be empty")
+            msg = "Message cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             if conversation_id not in self._conversations:
                 from codetoreum.ports.exceptions import ResourceNotFoundError
-                raise ResourceNotFoundError("Conversation", conversation_id)
+
+                msg = "Conversation"
+                raise ResourceNotFoundError(msg, conversation_id)
 
             # Add user message
-            self._conversations[conversation_id].append({
-                "role": "user",
-                "content": message,
-            })
+            self._conversations[conversation_id].append(
+                {
+                    "role": "user",
+                    "content": message,
+                }
+            )
 
         # Execute
         context = ExecutionContext(conversation_id=conversation_id)
@@ -379,10 +477,12 @@ class MockLLMAdapter(ILLMProvider):
 
         # Add assistant response
         with self._lock:
-            self._conversations[conversation_id].append({
-                "role": "assistant",
-                "content": result.content,
-            })
+            self._conversations[conversation_id].append(
+                {
+                    "role": "assistant",
+                    "content": result.content,
+                }
+            )
 
         return result
 
@@ -395,7 +495,7 @@ class MockLLMAdapter(ILLMProvider):
         """
         return self._model_info
 
-    async def list_available_models(self) -> List[ModelInfo]:
+    async def list_available_models(self) -> list[ModelInfo]:
         """
         List all available models from this provider.
 
@@ -420,7 +520,7 @@ class MockLLMAdapter(ILLMProvider):
     async def count_tokens(
         self,
         text: str,
-        model: Optional[str] = None,
+        model: str | None = None,
     ) -> int:
         """
         Count tokens in text.
@@ -438,7 +538,7 @@ class MockLLMAdapter(ILLMProvider):
 
     async def get_usage_stats(
         self,
-        since: Optional[datetime] = None,
+        since: datetime | None = None,
     ) -> UsageStats:
         """
         Get usage statistics.
@@ -456,8 +556,8 @@ class MockLLMAdapter(ILLMProvider):
                 input_tokens=self._input_tokens,
                 output_tokens=self._output_tokens,
                 total_cost=0.0,
-                period_start=since or datetime.now(timezone.utc),
-                period_end=datetime.now(timezone.utc),
+                period_start=since or datetime.now(UTC),
+                period_end=datetime.now(UTC),
                 by_model={
                     self._model_info.model_id: {
                         "requests": self._total_requests,
@@ -497,7 +597,8 @@ class MockLLMAdapter(ILLMProvider):
             ValidationError: If response is empty
         """
         if not response:
-            raise ValidationError("Default response cannot be empty")
+            msg = "Default response cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             self._default_response = response

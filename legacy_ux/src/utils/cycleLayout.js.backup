@@ -13,15 +13,15 @@
 export function detectCycleBoundaries(events) {
   console.group('🔍 detectCycleBoundaries')
   console.log('📋 Total events:', events.length)
-  
+
   const cycles = []
   let openCycle = null
-  
+
   // Sort events chronologically
-  const sortedEvents = [...events].sort((a, b) => 
+  const sortedEvents = [...events].sort((a, b) =>
     new Date(a.timestamp) - new Date(b.timestamp)
   )
-  
+
   // Log decision events
   const decisionEvents = sortedEvents.filter(e => e.event_category === 'decision')
   console.log('🎯 Decision events:', decisionEvents.length)
@@ -31,47 +31,47 @@ export function detectCycleBoundaries(events) {
     type: e.event_type,
     agent: e.agent || e.decision?.agent_name || '-'
   })))
-  
+
   sortedEvents.forEach(event => {
     if (event.event_category !== 'decision') return
-    
+
     const category = event.decision_category
     const eventType = event.event_type
-    
+
     // Detect cycle start events
     const isCycleStart = (
       // Review cycle starts
-      (category === 'review_cycle' && 
-       (eventType === 'review_cycle_started' || 
+      (category === 'review_cycle' &&
+       (eventType === 'review_cycle_started' ||
         eventType === 'review_cycle_iteration' ||
         eventType === 'review_feedback_provided')) ||
-      
+
       // Error/repair cycle starts
-      (category === 'error_handling' && 
+      (category === 'error_handling' &&
        (eventType === 'error_encountered' ||
         eventType === 'circuit_breaker_opened')) ||
-      
+
       // Conversational loop starts
-      (category === 'conversational_loop' && 
+      (category === 'conversational_loop' &&
        (eventType === 'conversational_loop_started' ||
         eventType === 'conversational_question_routed'))
     )
-    
+
     // Detect cycle end events
     const isCycleEnd = (
       // Review cycle ends
-      (category === 'review_cycle' && 
+      (category === 'review_cycle' &&
        eventType === 'review_cycle_completed') ||
-      
+
       // Error recovered (cycle ends)
-      (category === 'error_handling' && 
+      (category === 'error_handling' &&
        eventType === 'error_recovered') ||
-      
+
       // Conversational loop ends
-      (category === 'conversational_loop' && 
+      (category === 'conversational_loop' &&
        eventType === 'conversational_loop_completed')
     )
-    
+
     // If a cycle is starting
     if (isCycleStart) {
       // Close any open cycle first
@@ -80,7 +80,7 @@ export function detectCycleBoundaries(events) {
         openCycle.endEvent = event
         cycles.push(openCycle)
       }
-      
+
       // Start new cycle
       openCycle = {
         id: `cycle-${cycles.length}`,
@@ -92,7 +92,7 @@ export function detectCycleBoundaries(events) {
         agentExecutions: [], // Will be populated later
       }
     }
-    
+
     // If a cycle is ending
     if (isCycleEnd && openCycle) {
       openCycle.endTime = event.timestamp
@@ -101,19 +101,19 @@ export function detectCycleBoundaries(events) {
       openCycle = null
     }
   })
-  
+
   // Close any remaining open cycle at the end
   if (openCycle) {
     openCycle.endTime = sortedEvents[sortedEvents.length - 1]?.timestamp
     cycles.push(openCycle)
   }
-  
+
   console.log('✅ Detected cycles:', cycles.length)
   cycles.forEach(cycle => {
     console.log(`  ${cycle.id}: ${cycle.type} (${cycle.startTime} → ${cycle.endTime || 'open'})`)
   })
   console.groupEnd()
-  
+
   return cycles
 }
 
@@ -126,23 +126,23 @@ export function detectCycleBoundaries(events) {
 export function groupExecutionsIntoCycles(cycleBoundaries, agentExecutions) {
   console.group('🔗 groupExecutionsIntoCycles')
   console.log('📊 Cycle boundaries:', cycleBoundaries.length)
-  console.log('👥 Agent executions:', Array.from(agentExecutions.entries()).map(([agent, execs]) => 
+  console.log('👥 Agent executions:', Array.from(agentExecutions.entries()).map(([agent, execs]) =>
     ({ agent, count: execs.length })
   ))
-  
+
   const cycleMap = new Map()
-  
+
   cycleBoundaries.forEach(cycle => {
     const cycleStart = new Date(cycle.startTime)
     const cycleEnd = cycle.endTime ? new Date(cycle.endTime) : new Date()
-    
+
     // Find all agent executions that fall within this cycle's time range
     const executionsInCycle = []
-    
+
     agentExecutions.forEach((executions, agent) => {
       executions.forEach(execution => {
         const execStart = new Date(execution.startTime)
-        
+
         // Check if this execution started within the cycle boundary
         if (execStart >= cycleStart && execStart <= cycleEnd) {
           executionsInCycle.push({
@@ -152,7 +152,7 @@ export function groupExecutionsIntoCycles(cycleBoundaries, agentExecutions) {
         }
       })
     })
-    
+
     // Only include cycles that have agent executions
     if (executionsInCycle.length > 0) {
       cycleMap.set(cycle.id, {
@@ -163,14 +163,14 @@ export function groupExecutionsIntoCycles(cycleBoundaries, agentExecutions) {
       })
     }
   })
-  
+
   console.log('✅ Cycles with executions:', cycleMap.size)
   cycleMap.forEach((cycle, cycleId) => {
-    console.log(`  ${cycleId}: ${cycle.agentExecutions.length} executions`, 
+    console.log(`  ${cycleId}: ${cycle.agentExecutions.length} executions`,
       cycle.agentExecutions.map(e => e.agent))
   })
   console.groupEnd()
-  
+
   return cycleMap
 }
 
@@ -183,7 +183,7 @@ export function groupExecutionsIntoCycles(cycleBoundaries, agentExecutions) {
  */
 export function identifyCyclesSimple(events, agentExecutions) {
   const cycles = new Map()
-  
+
   agentExecutions.forEach((executions, agent) => {
     if (executions.length > 1) {
       cycles.set(agent, {
@@ -195,7 +195,7 @@ export function identifyCyclesSimple(events, agentExecutions) {
       })
     }
   })
-  
+
   return cycles
 }
 
@@ -216,81 +216,81 @@ function identifyCyclesFromWorkflow(events, agentExecutions, workflowConfig) {
   console.log("🔍 identifyCyclesFromWorkflow called");
   console.log("Available agents in execution map:", Array.from(agentExecutions.keys()));
   console.log("Workflow columns:", workflowConfig.columns.map(c => ({ name: c.name, type: c.type, maker: c.maker_agent, agent: c.agent })));
-  
+
   const cycles = new Map();
-  
+
   // Find review cycle decision events to determine boundaries
-  const reviewCycleEvents = events.filter(e => 
-    e.event_category === 'decision' && 
+  const reviewCycleEvents = events.filter(e =>
+    e.event_category === 'decision' &&
     e.decision_category === 'review_cycle'
   );
-  
+
   console.log(`Found ${reviewCycleEvents.length} review cycle decision events`);
-  
+
   if (reviewCycleEvents.length === 0) {
     console.log("⚠️ No review cycle decision events found, cannot identify review cycles");
     return cycles;
   }
-  
+
   // Group events by review cycle start/end
   const reviewCycleStarts = reviewCycleEvents.filter(e => e.event_type === 'review_cycle_started');
   const reviewCycleEnds = reviewCycleEvents.filter(e => e.event_type === 'review_cycle_completed');
-  
+
   console.log(`Found ${reviewCycleStarts.length} review cycle starts, ${reviewCycleEnds.length} review cycle ends`);
-  
+
   // Process each review cycle
   reviewCycleStarts.forEach((startEvent, index) => {
     const endEvent = reviewCycleEnds[index]; // Match by index (assumes chronological order)
-    
+
     if (!endEvent) {
       console.log(`⚠️ No matching end event for review cycle start at ${startEvent.timestamp}`);
       return;
     }
-    
+
     const makerAgent = startEvent.inputs?.maker_agent;
     const reviewerAgent = startEvent.inputs?.reviewer_agent;
-    
+
     console.log(`\n📋 Processing review cycle ${index + 1}:`);
     console.log(`  Maker: "${makerAgent}", Reviewer: "${reviewerAgent}"`);
-    
+
     // The review cycle actually starts when the maker begins work, not when review_cycle_started fires
     // review_cycle_started fires when the reviewer starts, but we need to include the maker's work
     // Look for maker executions that completed BEFORE the review started
     const reviewStartTime = new Date(startEvent.timestamp).getTime();
     const reviewEndTime = new Date(endEvent.timestamp).getTime();
-    
+
     // Find all maker executions that are NOT part of a repair cycle and happened before this review started
     const makerExecutions = events.filter(e => {
       if (e.event_type !== 'agent_initialized') return false;
       if (e.agent !== makerAgent) return false;
       if (e.task_id && e.task_id.startsWith('repair_')) return false; // Exclude repair cycle work
-      
+
       const eventTime = new Date(e.timestamp).getTime();
       // Look backwards from review start to find the maker work that led to this review
       // Typically within the last hour before review started
       const oneHourBefore = reviewStartTime - (60 * 60 * 1000);
       return eventTime >= oneHourBefore && eventTime < reviewStartTime;
     });
-    
+
     // Find reviewer executions within the review cycle timeframe
     const reviewerExecutions = events.filter(e => {
       if (e.event_type !== 'agent_initialized') return false;
       if (e.agent !== reviewerAgent) return false;
-      
+
       const eventTime = new Date(e.timestamp).getTime();
       return eventTime >= reviewStartTime && eventTime <= reviewEndTime;
     });
-    
+
     console.log(`  Found ${makerExecutions.length} maker executions (before review)`);
     console.log(`  Found ${reviewerExecutions.length} reviewer executions (during review)`);
-    
+
     // Helper to find execution index in agentExecutions map
     const findExecutionIndex = (agent, taskId) => {
       const executions = agentExecutions.get(agent);
       if (!executions) return -1;
       return executions.findIndex(e => e.taskId === taskId);
     };
-    
+
     // Combine maker and reviewer executions with their indices
     const cycleExecutions = [
       ...makerExecutions.map(e => ({
@@ -310,14 +310,14 @@ function identifyCyclesFromWorkflow(events, agentExecutions, workflowConfig) {
         branch: e.branch_name,
       }))
     ].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-    
+
     console.log(`  Total executions in this review cycle: ${cycleExecutions.length}`);
-    
+
     if (cycleExecutions.length === 0) {
       console.log(`  ⚠️ No executions found in this time range`);
       return;
     }
-    
+
     // Create cycle
     const cycleId = `review_cycle_${index + 1}`;
     cycles.set(cycleId, {
@@ -335,20 +335,20 @@ function identifyCyclesFromWorkflow(events, agentExecutions, workflowConfig) {
         totalIterations: endEvent.total_iterations,
       },
     });
-    
+
     console.log(`  ✅ Created cycle "${cycleId}" with ${cycleExecutions.length} executions`);
   });
-  
+
   // Also detect repair cycles (they have distinct task IDs starting with "repair_")
-  const repairEvents = events.filter(e => 
-    e.event_type === 'agent_initialized' && 
-    e.task_id && 
+  const repairEvents = events.filter(e =>
+    e.event_type === 'agent_initialized' &&
+    e.task_id &&
     e.task_id.startsWith('repair_')
   );
-  
+
   if (repairEvents.length > 0) {
     console.log(`\n� Found ${repairEvents.length} repair cycle executions`);
-    
+
     const repairExecutions = repairEvents.map(e => ({
       agent: e.agent,
       taskId: e.task_id,
@@ -356,31 +356,31 @@ function identifyCyclesFromWorkflow(events, agentExecutions, workflowConfig) {
       containerId: e.container_name,
       branch: e.branch_name,
     })).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-    
+
     totalIterations: endEvent.total_iterations,
       },
     });
-    
+
     console.log(`  ✅ Created cycle "${cycleId}" with ${cycleExecutions.length} executions`);
   });
-  
+
   // Also detect repair cycles (they have distinct task IDs starting with "repair_")
-  const repairEvents = events.filter(e => 
-    e.event_type === 'agent_initialized' && 
-    e.task_id && 
+  const repairEvents = events.filter(e =>
+    e.event_type === 'agent_initialized' &&
+    e.task_id &&
     e.task_id.startsWith('repair_')
   );
-  
+
   if (repairEvents.length > 0) {
     console.log(`\n� Found ${repairEvents.length} repair cycle executions`);
-    
+
     // Helper to find execution index in agentExecutions map
     const findExecutionIndex = (agent, taskId) => {
       const executions = agentExecutions.get(agent);
       if (!executions) return -1;
       return executions.findIndex(e => e.taskId === taskId);
     };
-    
+
     const repairExecutions = repairEvents.map(e => ({
       agent: e.agent,
       taskId: e.task_id,
@@ -389,7 +389,7 @@ function identifyCyclesFromWorkflow(events, agentExecutions, workflowConfig) {
       containerId: e.container_name,
       branch: e.branch_name,
     })).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-    
+
     cycles.set('repair_cycle_1', {
       id: 'repair_cycle_1',
       type: 'error_handling',
@@ -401,29 +401,29 @@ function identifyCyclesFromWorkflow(events, agentExecutions, workflowConfig) {
         cycleType: 'test_repair',
       },
     });
-    
+
     console.log(`  ✅ Created repair cycle with ${repairExecutions.length} executions`);
   }
-  
+
   return cycles;
-  
+
   // Also detect repair cycles (they have distinct task IDs starting with "repair_")
-  const repairEvents = events.filter(e => 
-    e.event_type === 'agent_initialized' && 
-    e.task_id && 
+  const repairEvents = events.filter(e =>
+    e.event_type === 'agent_initialized' &&
+    e.task_id &&
     e.task_id.startsWith('repair_')
   );
-  
+
   if (repairEvents.length > 0) {
     console.log(`\n� Found ${repairEvents.length} repair cycle executions`);
-    
+
     // Helper to find execution index in agentExecutions map
     const findExecutionIndex = (agent, taskId) => {
       const executions = agentExecutions.get(agent);
       if (!executions) return -1;
       return executions.findIndex(e => e.taskId === taskId);
     };
-    
+
     const repairExecutions = repairEvents.map(e => ({
       agent: e.agent,
       taskId: e.task_id,
@@ -432,7 +432,7 @@ function identifyCyclesFromWorkflow(events, agentExecutions, workflowConfig) {
       containerId: e.container_name,
       branch: e.branch_name,
     })).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-    
+
     cycles.set('repair_cycle_1', {
       id: 'repair_cycle_1',
       type: 'error_handling',
@@ -444,11 +444,11 @@ function identifyCyclesFromWorkflow(events, agentExecutions, workflowConfig) {
         cycleType: 'test_repair',
       },
     });
-    
+
     console.log(`  ✅ Created repair cycle with ${repairExecutions.length} executions`);
   }
   }
-  
+
   return cycles;
 }
 
@@ -461,37 +461,37 @@ function identifyCyclesFromWorkflow(events, agentExecutions, workflowConfig) {
  */
 export function identifyCycles(events, agentExecutions, workflowConfig = null) {
   console.group('🎯 identifyCycles - Three-tier detection strategy')
-  
+
   // Strategy 1: Use workflow configuration if available (most accurate)
   if (workflowConfig) {
     console.log('✅ Strategy 1: Using workflow configuration (preferred)')
     const cycles = identifyCyclesFromWorkflow(events, agentExecutions, workflowConfig)
-    
+
     if (cycles.size > 0) {
       console.log(`✨ Success! Found ${cycles.size} cycles using workflow config`)
       console.groupEnd()
       return cycles
     }
-    
+
     console.log('⚠️ No cycles found with workflow config, falling back to decision events')
   } else {
     console.log('⚠️ No workflow config provided, skipping strategy 1')
   }
-  
+
   // Strategy 2: Use decision event boundaries (good accuracy)
   console.log('📋 Strategy 2: Using decision event boundaries')
   const boundaries = detectCycleBoundaries(events)
-  
+
   if (boundaries.length > 0) {
     const cycles = new Map()
-    
+
     boundaries.forEach((boundary, index) => {
       const cycleId = `${boundary.type}_${index + 1}`
-      
+
       // Find all agent executions within this time range
       const startTime = new Date(boundary.startTimestamp).getTime()
       const endTime = new Date(boundary.endTimestamp).getTime()
-      
+
       const cycleExecutions = []
       agentExecutions.forEach((executions, agent) => {
         executions.forEach(execution => {
@@ -504,7 +504,7 @@ export function identifyCycles(events, agentExecutions, workflowConfig = null) {
           }
         })
       })
-      
+
       cycles.set(cycleId, {
         id: cycleId,
         type: boundary.type,
@@ -514,20 +514,20 @@ export function identifyCycles(events, agentExecutions, workflowConfig = null) {
         isCollapsed: false,
       })
     })
-    
+
     console.log(`✨ Success! Found ${cycles.size} cycles using decision events`)
     console.groupEnd()
     return cycles
   }
-  
+
   console.log('⚠️ No cycles found with decision events, falling back to simple detection')
-  
+
   // Strategy 3: Simple agent repeat counting (basic)
   console.log('🔢 Strategy 3: Simple agent repeat counting (fallback)')
   const simpleCycles = identifyCyclesSimple(events, agentExecutions)
   console.log(`✨ Found ${simpleCycles.size} cycles using simple detection`)
   console.groupEnd()
-  
+
   return simpleCycles
 }
 
@@ -552,12 +552,12 @@ export function applyCycleLayout(nodes, edges, cycles, options = {}) {
     viewportWidth = 1200,
     centerX = null, // Auto-calculate if not provided
   } = options
-  
+
   // Debug logging
   console.group('🎨 applyCycleLayout - Debug Info')
   console.log('📊 Input nodes:', nodes.length)
   console.log('🔄 Detected cycles:', cycles.size)
-  
+
   // Log cycle details
   if (cycles.size > 0) {
     console.group('🔄 Cycle Details:')
@@ -573,24 +573,24 @@ export function applyCycleLayout(nodes, edges, cycles, options = {}) {
     })
     console.groupEnd()
   }
-  
+
   // Calculate or use provided center X for vertical layout
   const centerXPosition = centerX !== null ? centerX : viewportWidth / 2
-  
+
   // Group nodes by cycle membership (using agent executions in each cycle)
   const nodesByCycle = new Map()
   const standaloneNodes = []
-  
+
   nodes.forEach(node => {
     // Skip special nodes (created, completed, decision)
     if (node.id === 'created' || node.id === 'completed' || node.id.startsWith('decision-')) {
       standaloneNodes.push(node)
       return
     }
-    
+
     // Check if this node is part of a cycle
     let belongsToCycle = false
-    
+
     for (const [cycleId, cycleData] of cycles.entries()) {
       // Check if this node belongs to any agent execution in this cycle
       const inCycle = cycleData.agentExecutions?.some((execution) => {
@@ -598,7 +598,7 @@ export function applyCycleLayout(nodes, edges, cycles, options = {}) {
         // Match exactly by taskId to avoid matching all nodes from the same agent
         return node.id === `agent-${execution.agent}-${execution.taskId}`
       })
-      
+
       if (inCycle) {
         if (!nodesByCycle.has(cycleId)) {
           nodesByCycle.set(cycleId, [])
@@ -608,12 +608,12 @@ export function applyCycleLayout(nodes, edges, cycles, options = {}) {
         break
       }
     }
-    
+
     if (!belongsToCycle) {
       standaloneNodes.push(node)
     }
   })
-  
+
   // Debug: Log node grouping
   console.group('📦 Node Grouping:')
   console.log('  Standalone nodes:', standaloneNodes.map(n => n.id))
@@ -622,11 +622,11 @@ export function applyCycleLayout(nodes, edges, cycles, options = {}) {
     console.log(`    ${cycleId}:`, nodes.map(n => n.id))
   })
   console.groupEnd()
-  
+
   // Build vertical layout for root-level elements
   const layoutItems = [] // Array of { type, data, y }
   let currentY = 100 // Starting Y position
-  
+
   // Sort standalone nodes by their original position/order
   const sortedStandalone = [...standaloneNodes].sort((a, b) => {
     // Extract any sequence number from ID
@@ -636,7 +636,7 @@ export function applyCycleLayout(nodes, edges, cycles, options = {}) {
     }
     return getSequence(a.id) - getSequence(b.id)
   })
-  
+
   // Add 'created' node
   const createdNode = nodes.find(n => n.id === 'created')
   if (createdNode) {
@@ -647,7 +647,7 @@ export function applyCycleLayout(nodes, edges, cycles, options = {}) {
     })
     currentY += verticalSpacing
   }
-  
+
   // Add other standalone nodes
   sortedStandalone
     .filter(n => n.id !== 'created' && n.id !== 'completed')
@@ -659,13 +659,13 @@ export function applyCycleLayout(nodes, edges, cycles, options = {}) {
       })
       currentY += verticalSpacing
     })
-  
+
   // Add cycles with their internal horizontal layout
   const cycleNodes = []
   for (const [cycleId, cycleData] of cycles.entries()) {
     const cycleNodeList = nodesByCycle.get(cycleId) || []
     if (cycleNodeList.length === 0) continue
-    
+
     // Sort cycle nodes by iteration (chronologically)
     cycleNodeList.sort((a, b) => {
       const getIteration = (id) => {
@@ -674,20 +674,20 @@ export function applyCycleLayout(nodes, edges, cycles, options = {}) {
       }
       return getIteration(a.id) - getIteration(b.id)
     })
-    
+
     // Calculate cycle dimensions
     const cycleWidth = (cycleNodeList.length * (nodeWidth + horizontalSpacing)) - horizontalSpacing + (cyclePadding * 2)
     const cycleHeight = nodeHeight + (cyclePadding * 2)
-    
+
     // Position cycle centered horizontally
     const cycleX = centerXPosition - cycleWidth / 2
     const cycleY = currentY
-    
+
     // Layout nodes within the cycle horizontally (left to right)
     const cycleChildNodes = cycleNodeList.map((node, index) => {
       const relativeX = cyclePadding + (index * (nodeWidth + horizontalSpacing))
       const relativeY = cyclePadding
-      
+
       return {
         node,
         cycleId,
@@ -695,7 +695,7 @@ export function applyCycleLayout(nodes, edges, cycles, options = {}) {
         relativeY,
       }
     })
-    
+
     layoutItems.push({
       type: 'cycle',
       cycleId,
@@ -706,7 +706,7 @@ export function applyCycleLayout(nodes, edges, cycles, options = {}) {
       cycleHeight,
       childNodes: cycleChildNodes,
     })
-    
+
     // Get cycle type label
     const typeLabels = {
       'review_cycle': 'Review Cycle',
@@ -715,7 +715,7 @@ export function applyCycleLayout(nodes, edges, cycles, options = {}) {
       'unknown': 'Cycle',
     }
     const cycleLabel = typeLabels[cycleData.type] || 'Cycle'
-    
+
     // Create cycle bounding node (parent node)
     const cycleNode = {
       id: cycleId,
@@ -745,13 +745,13 @@ export function applyCycleLayout(nodes, edges, cycles, options = {}) {
       expandParent: !cycleData.isCollapsed, // Allow children outside bounds when expanded
       draggable: false,
     }
-    
+
     cycleNodes.push(cycleNode)
-    
+
     // Move Y position down for next element
     currentY += cycleHeight + cycleGap + verticalSpacing
   }
-  
+
   // Add 'completed' node
   const completedNode = nodes.find(n => n.id === 'completed')
   if (completedNode) {
@@ -761,10 +761,10 @@ export function applyCycleLayout(nodes, edges, cycles, options = {}) {
       y: currentY,
     })
   }
-  
+
   // Apply positions to all nodes
   const layoutedNodes = []
-  
+
   layoutItems.forEach(item => {
     if (item.type === 'standalone') {
       // Standalone nodes: center horizontally
@@ -796,10 +796,10 @@ export function applyCycleLayout(nodes, edges, cycles, options = {}) {
       })
     }
   })
-  
+
   // When using parent-child relationships, React Flow automatically handles
   // hiding children when parent is collapsed, so we don't need to filter
-  
+
   // Debug: Log final node structure
   console.group('🏗️ Final Node Structure:')
   const parentNodes = [...layoutedNodes, ...cycleNodes].filter(n => !n.parent)
@@ -808,7 +808,7 @@ export function applyCycleLayout(nodes, edges, cycles, options = {}) {
   console.log('  Child nodes:', childNodes.map(n => ({ id: n.id, parent: n.parent, pos: n.position })))
   console.groupEnd()
   console.groupEnd() // End applyCycleLayout group
-  
+
   return {
     nodes: [...layoutedNodes, ...cycleNodes],
     cycleNodes,
@@ -825,14 +825,14 @@ export function applyCycleLayout(nodes, edges, cycles, options = {}) {
 export function toggleCycleCollapsed(cycles, cycleId) {
   const updatedCycles = new Map(cycles)
   const cycleData = updatedCycles.get(cycleId)
-  
+
   if (cycleData) {
     updatedCycles.set(cycleId, {
       ...cycleData,
       isCollapsed: !cycleData.isCollapsed,
     })
   }
-  
+
   return updatedCycles
 }
 
@@ -866,15 +866,15 @@ export function filterEdgesForCollapsedCycles(edges, cycles) {
  */
 export function updateEdgesForCycles(edges, cycles, nodesByCycle) {
   const updatedEdges = []
-  
+
   edges.forEach(edge => {
     let newEdge = { ...edge }
-    
+
     // Check if source is in a collapsed cycle
     for (const [agent, cycleData] of cycles.entries()) {
       if (cycleData.isCollapsed) {
         const cyclePrefix = `agent-${agent}-`
-        
+
         if (edge.source.startsWith(cyclePrefix)) {
           // Redirect to cycle bounding node
           newEdge = {
@@ -882,7 +882,7 @@ export function updateEdgesForCycles(edges, cycles, nodesByCycle) {
             source: `cycle-${agent}`,
           }
         }
-        
+
         if (edge.target.startsWith(cyclePrefix)) {
           // Redirect to cycle bounding node
           newEdge = {
@@ -892,10 +892,10 @@ export function updateEdgesForCycles(edges, cycles, nodesByCycle) {
         }
       }
     }
-    
+
     updatedEdges.push(newEdge)
   })
-  
+
   // Remove duplicate edges (multiple iterations connecting to same external nodes)
   const edgeKeys = new Set()
   return updatedEdges.filter(edge => {

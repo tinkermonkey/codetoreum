@@ -13,9 +13,6 @@ List Work Items:
   x-security-policy-ref: security.authentication.jwt-token-auth
   security:
     - BearerAuth: []
-  x-security-policy-ref: security.authentication.jwt-token-auth
-  security:
-    - BearerAuth: []
   operationId: listWorkItems
   x-business-service-ref: application.service.work-item-service
   realizes: application.service.work-item-service
@@ -34,9 +31,6 @@ List Executions:
   x-security-policy-ref: security.authentication.jwt-token-auth
   security:
     - BearerAuth: []
-  x-security-policy-ref: security.authentication.jwt-token-auth
-  security:
-    - BearerAuth: []
 Get Project Config:
   id: api.operation.get-project-config
   method: GET
@@ -49,9 +43,6 @@ Get Project Config:
   paths: {}
   x-archimate-ref: application.service.configuration-service
   applicationServiceRef: application.service.configuration-service
-  x-security-policy-ref: security.authentication.jwt-token-auth
-  security:
-    - BearerAuth: []
   x-security-policy-ref: security.authentication.jwt-token-auth
   security:
     - BearerAuth: []
@@ -70,9 +61,6 @@ Update Project Config:
   x-security-policy-ref: security.authentication.jwt-token-auth
   security:
     - BearerAuth: []
-  x-security-policy-ref: security.authentication.jwt-token-auth
-  security:
-    - BearerAuth: []
 Add Environment Variable:
   id: api.operation.add-environment-variable
   method: POST
@@ -88,9 +76,6 @@ Add Environment Variable:
   x-security-policy-ref: security.authentication.jwt-token-auth
   security:
     - BearerAuth: []
-  x-security-policy-ref: security.authentication.jwt-token-auth
-  security:
-    - BearerAuth: []
 Remove Environment Variable:
   id: api.operation.remove-environment-variable
   method: DELETE
@@ -103,9 +88,6 @@ Remove Environment Variable:
   paths: {}
   x-archimate-ref: application.service.configuration-service
   applicationServiceRef: application.service.configuration-service
-  x-security-policy-ref: security.authentication.jwt-token-auth
-  security:
-    - BearerAuth: []
   x-security-policy-ref: security.authentication.jwt-token-auth
   security:
     - BearerAuth: []
@@ -331,9 +313,6 @@ Get System Health:
     version: 1.0.0
   paths: {}
   applicationServiceRef: application.service.execution-service
-  x-security-policy-ref: security.authentication.jwt-token-auth
-  security:
-    - BearerAuth: []
   x-security-policy-ref: security.authentication.jwt-token-auth
   security:
     - BearerAuth: []

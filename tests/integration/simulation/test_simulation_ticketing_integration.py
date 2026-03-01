@@ -35,13 +35,15 @@ class TestSimulationTicketingIntegration:
     @pytest.fixture
     def client(self, bootstrap):
         """TestClient for the bootstrapped FastAPI app."""
-        return TestClient(bootstrap.app)
+        with TestClient(bootstrap.app) as test_client:
+            yield test_client
 
     @pytest.fixture
     def seeded_client(self, seeded_bootstrap):
         """TestClient with seeded data."""
         bootstrap, seeder = seeded_bootstrap
-        return TestClient(bootstrap.app), seeder
+        with TestClient(bootstrap.app) as test_client:
+            yield test_client, seeder
 
     # =========================================================================
     # Bootstrap Integration Tests
@@ -68,15 +70,18 @@ class TestSimulationTicketingIntegration:
         client, seeder = seeded_client
         project_id = seeder._current_project_id
 
-        resp = client.post("/api/v2/simulation/ticketing/issues", json={
-            "title": "Integration test issue",
-            "description": "Created via API",
-            "project_id": project_id,
-            "labels": ["integration-test"],
-            "priority": "high",
-            "board_id": "board-1",
-            "column": "Backlog",
-        })
+        resp = client.post(
+            "/api/v2/simulation/ticketing/issues",
+            json={
+                "title": "Integration test issue",
+                "description": "Created via API",
+                "project_id": project_id,
+                "labels": ["integration-test"],
+                "priority": "high",
+                "board_id": "board-1",
+                "column": "Backlog",
+            },
+        )
         assert resp.status_code == 201
         data = resp.json()
         assert data["title"] == "Integration test issue"
@@ -89,18 +94,24 @@ class TestSimulationTicketingIntegration:
         project_id = seeder._current_project_id
 
         # Create and place on board
-        resp = client.post("/api/v2/simulation/ticketing/issues", json={
-            "title": "Event test issue",
-            "project_id": project_id,
-            "board_id": "board-1",
-            "column": "Backlog",
-        })
+        resp = client.post(
+            "/api/v2/simulation/ticketing/issues",
+            json={
+                "title": "Event test issue",
+                "project_id": project_id,
+                "board_id": "board-1",
+                "column": "Backlog",
+            },
+        )
         issue_id = resp.json()["id"]
 
         # Move to Ready
-        resp = client.post(f"/api/v2/simulation/ticketing/issues/{issue_id}/move", json={
-            "target_column": "Ready",
-        })
+        resp = client.post(
+            f"/api/v2/simulation/ticketing/issues/{issue_id}/move",
+            json={
+                "target_column": "Ready",
+            },
+        )
         assert resp.status_code == 200
 
         # Verify movement in board adapter history
@@ -116,37 +127,52 @@ class TestSimulationTicketingIntegration:
         project_id = seeder._current_project_id
 
         # Create ticket in Backlog
-        resp = client.post("/api/v2/simulation/ticketing/issues", json={
-            "title": "Full workflow issue",
-            "project_id": project_id,
-            "board_id": "board-1",
-            "column": "Backlog",
-        })
+        resp = client.post(
+            "/api/v2/simulation/ticketing/issues",
+            json={
+                "title": "Full workflow issue",
+                "project_id": project_id,
+                "board_id": "board-1",
+                "column": "Backlog",
+            },
+        )
         issue_id = resp.json()["id"]
 
         # Move Backlog -> Ready
-        resp = client.post(f"/api/v2/simulation/ticketing/issues/{issue_id}/move", json={
-            "target_column": "Ready",
-        })
+        resp = client.post(
+            f"/api/v2/simulation/ticketing/issues/{issue_id}/move",
+            json={
+                "target_column": "Ready",
+            },
+        )
         assert resp.status_code == 200
 
         # Move Ready -> In Progress
-        resp = client.post(f"/api/v2/simulation/ticketing/issues/{issue_id}/move", json={
-            "target_column": "In Progress",
-        })
+        resp = client.post(
+            f"/api/v2/simulation/ticketing/issues/{issue_id}/move",
+            json={
+                "target_column": "In Progress",
+            },
+        )
         assert resp.status_code == 200
 
         # Add comment
-        resp = client.post(f"/api/v2/simulation/ticketing/issues/{issue_id}/comment", json={
-            "body": "Work started on this issue",
-            "author": "dev-agent",
-        })
+        resp = client.post(
+            f"/api/v2/simulation/ticketing/issues/{issue_id}/comment",
+            json={
+                "body": "Work started on this issue",
+                "author": "dev-agent",
+            },
+        )
         assert resp.status_code == 200
 
         # Verify board state
-        resp = client.get("/api/v2/simulation/ticketing/board/board-1/columns", params={
-            "project_id": project_id,
-        })
+        resp = client.get(
+            "/api/v2/simulation/ticketing/board/board-1/columns",
+            params={
+                "project_id": project_id,
+            },
+        )
         data = resp.json()
         in_progress = next(c for c in data["columns"] if c["name"] == "In Progress")
         assert issue_id in in_progress["work_item_ids"]
@@ -163,9 +189,12 @@ class TestSimulationTicketingIntegration:
         client, seeder = seeded_client
         project_id = seeder._current_project_id
 
-        resp = client.get("/api/v2/simulation/ticketing/board/board-1/items", params={
-            "project_id": project_id,
-        })
+        resp = client.get(
+            "/api/v2/simulation/ticketing/board/board-1/items",
+            params={
+                "project_id": project_id,
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         # Default scenario creates 3 work items in Backlog

@@ -1,7 +1,6 @@
 """Unit tests for WorkItem aggregate root."""
 
 import pytest
-from datetime import datetime
 
 from codetoreum.domain import (
     AgentAssigned,
@@ -530,9 +529,7 @@ class TestWorkItemEventSourcing:
 
     def test_from_events_complex(self):
         """Test reconstructing work item from complex event stream."""
-        original = WorkItem.create(
-            "Test", "Desc", "proj-1", labels=["bug"], priority=WorkItemPriority.HIGH
-        )
+        original = WorkItem.create("Test", "Desc", "proj-1", labels=["bug"], priority=WorkItemPriority.HIGH)
         original.assign_agent("agent-1", "Assignment")
         original.start()
         original.mark_under_review()

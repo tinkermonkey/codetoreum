@@ -19,13 +19,12 @@ Expected Outcome:
 - Next waiting item correctly identified by position
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
 from codetoreum.adapters.testing.in_memory_queue_service import InMemoryQueueService
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
-from codetoreum.ports.output.board_service import BoardColumn
 
 
 @pytest.mark.asyncio
@@ -34,7 +33,7 @@ async def test_scenario_09_queue_position_ordering():
     # Setup
     queue_service = InMemoryQueueService()
     board_service = MockBoardAdapter()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Create board with trigger column
     board_service.current_project = "proj-1"
@@ -84,6 +83,7 @@ async def test_scenario_09_queue_position_ordering():
 
     # Verify next waiting item is the highest priority
     next_item = await queue_service.get_next_waiting_item("proj-1", "board-1")
+    assert next_item is not None
     assert next_item.work_item_id == "item-1"
     assert next_item.position_in_column == 0
 
@@ -94,6 +94,7 @@ async def test_scenario_09_queue_position_ordering():
 
     # Next waiting item should now be item-2
     next_waiting = await queue_service.get_next_waiting_item("proj-1", "board-1")
+    assert next_waiting is not None
     assert next_waiting.work_item_id == "item-2"
 
     # Simulate human reordering: drag item-3 to top
@@ -126,9 +127,8 @@ async def test_scenario_09_queue_position_ordering():
     assert all(e.work_item_id != "item-1" for e in remaining)
 
     # Verify next waiting item after removal
-    next_item_after_removal = await queue_service.get_next_waiting_item(
-        "proj-1", "board-1"
-    )
+    next_item_after_removal = await queue_service.get_next_waiting_item("proj-1", "board-1")
+    assert next_item_after_removal is not None
     assert next_item_after_removal.work_item_id == "item-2"
 
 
@@ -136,23 +136,15 @@ async def test_scenario_09_queue_position_ordering():
 async def test_scenario_09_parallel_queues():
     """Test independent queues for multiple boards."""
     queue_service = InMemoryQueueService()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Create items in project-1, board-1
-    await queue_service.enqueue_item(
-        "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-    )
-    await queue_service.enqueue_item(
-        "proj-1", "board-1", "item-2", position_in_column=1, timestamp=now
-    )
+    await queue_service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+    await queue_service.enqueue_item("proj-1", "board-1", "item-2", position_in_column=1, timestamp=now)
 
     # Create items in project-1, board-2
-    await queue_service.enqueue_item(
-        "proj-1", "board-2", "item-3", position_in_column=0, timestamp=now
-    )
-    await queue_service.enqueue_item(
-        "proj-1", "board-2", "item-4", position_in_column=1, timestamp=now
-    )
+    await queue_service.enqueue_item("proj-1", "board-2", "item-3", position_in_column=0, timestamp=now)
+    await queue_service.enqueue_item("proj-1", "board-2", "item-4", position_in_column=1, timestamp=now)
 
     # Verify independent queues
     queue1 = await queue_service.get_queue_entries("proj-1", "board-1")
@@ -167,6 +159,8 @@ async def test_scenario_09_parallel_queues():
     next1 = await queue_service.get_next_waiting_item("proj-1", "board-1")
     next2 = await queue_service.get_next_waiting_item("proj-1", "board-2")
 
+    assert next1 is not None
+    assert next2 is not None
     assert next1.work_item_id == "item-1"
     assert next2.work_item_id == "item-3"
 
@@ -175,9 +169,11 @@ async def test_scenario_09_parallel_queues():
 
     # Verify other queue unaffected
     next1_after = await queue_service.get_next_waiting_item("proj-1", "board-1")
+    assert next1_after is not None
     assert next1_after.work_item_id == "item-2"
 
     next2_after = await queue_service.get_next_waiting_item("proj-1", "board-2")
+    assert next2_after is not None
     assert next2_after.work_item_id == "item-3"  # Still waiting, unchanged
 
 
@@ -185,18 +181,12 @@ async def test_scenario_09_parallel_queues():
 async def test_scenario_09_position_changes_affect_priority():
     """Test that position changes affect queue ordering."""
     queue_service = InMemoryQueueService()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Add items with specific positions
-    await queue_service.enqueue_item(
-        "proj-1", "board-1", "item-a", position_in_column=0, timestamp=now
-    )
-    await queue_service.enqueue_item(
-        "proj-1", "board-1", "item-b", position_in_column=5, timestamp=now
-    )
-    await queue_service.enqueue_item(
-        "proj-1", "board-1", "item-c", position_in_column=2, timestamp=now
-    )
+    await queue_service.enqueue_item("proj-1", "board-1", "item-a", position_in_column=0, timestamp=now)
+    await queue_service.enqueue_item("proj-1", "board-1", "item-b", position_in_column=5, timestamp=now)
+    await queue_service.enqueue_item("proj-1", "board-1", "item-c", position_in_column=2, timestamp=now)
 
     # Verify sorted by position
     entries = await queue_service.get_queue_entries("proj-1", "board-1")
@@ -209,6 +199,7 @@ async def test_scenario_09_position_changes_affect_priority():
 
     # Verify item-c is now at top
     next_item = await queue_service.get_next_waiting_item("proj-1", "board-1")
+    assert next_item is not None
     assert next_item.work_item_id == "item-c"
 
     # Mark item-c as active
@@ -216,6 +207,7 @@ async def test_scenario_09_position_changes_affect_priority():
 
     # Item-b should be next waiting
     next_item = await queue_service.get_next_waiting_item("proj-1", "board-1")
+    assert next_item is not None
     assert next_item.work_item_id == "item-b"
 
 
@@ -224,7 +216,7 @@ async def test_scenario_09_with_board_service_sync():
     """Test queue synchronization with actual board service."""
     board_service = MockBoardAdapter()
     queue_service = InMemoryQueueService(board_service=board_service)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Create board
     board_service.current_project = "proj-1"
@@ -241,15 +233,9 @@ async def test_scenario_09_with_board_service_sync():
     board_service.add_item_to_column("board-1", "Trigger", "item-3")
 
     # Initial enqueue with positions
-    await queue_service.enqueue_item(
-        "proj-1", "board-1", "item-1", position_in_column=0, timestamp=now
-    )
-    await queue_service.enqueue_item(
-        "proj-1", "board-1", "item-2", position_in_column=1, timestamp=now
-    )
-    await queue_service.enqueue_item(
-        "proj-1", "board-1", "item-3", position_in_column=2, timestamp=now
-    )
+    await queue_service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+    await queue_service.enqueue_item("proj-1", "board-1", "item-2", position_in_column=1, timestamp=now)
+    await queue_service.enqueue_item("proj-1", "board-1", "item-3", position_in_column=2, timestamp=now)
 
     # Verify initial state
     entries = await queue_service.get_queue_entries("proj-1", "board-1")

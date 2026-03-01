@@ -20,7 +20,6 @@ from codetoreum.ports.input.execution_command import (
     ExecutionCommandResult as PortExecutionCommandResult,
 )
 from codetoreum.ports.input.execution_query import (
-    ErrorType,
     ExecutionHistory,
     ExecutionInfo,
     ExecutionListResult,
@@ -137,10 +136,7 @@ class ExecutionMapper:
         Returns:
             ExecutionListResponse DTO
         """
-        executions = [
-            ExecutionMapper.to_summary_response(execution)
-            for execution in result.executions
-        ]
+        executions = [ExecutionMapper.to_summary_response(execution) for execution in result.executions]
 
         return ExecutionListResponse(
             executions=executions,

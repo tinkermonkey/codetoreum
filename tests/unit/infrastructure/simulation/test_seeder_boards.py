@@ -1,12 +1,12 @@
 """Unit tests for simulation data seeder board operations."""
 
+from collections.abc import AsyncGenerator
+
 import pytest
 
-from codetoreum.infrastructure.simulation import (
-    SimulationApplicationBootstrap,
-    SimulationDataSeeder,
-    SimulationConfig,
-)
+from codetoreum.infrastructure.simulation import SimulationConfig
+from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
+from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
 from codetoreum.ports.exceptions import ValidationError
 
 
@@ -14,7 +14,7 @@ class TestSeederBoardOperations:
     """Test cases for board creation and item placement in SimulationDataSeeder."""
 
     @pytest.fixture
-    async def bootstrap(self):
+    async def bootstrap(self) -> AsyncGenerator[SimulationApplicationBootstrap, None]:
         """Create and setup bootstrap."""
         config = SimulationConfig.create_fast_config("test")
         bootstrap = SimulationApplicationBootstrap(config)
@@ -23,7 +23,7 @@ class TestSeederBoardOperations:
         await bootstrap.teardown()
 
     @pytest.fixture
-    async def seeder(self, bootstrap):
+    async def seeder(self, bootstrap: SimulationApplicationBootstrap) -> AsyncGenerator[SimulationDataSeeder, None]:
         """Create seeder instance with a project."""
         seeder = SimulationDataSeeder(bootstrap)
         await seeder.create_project(name="test-project", description="Test")
@@ -52,7 +52,9 @@ class TestSeederBoardOperations:
             board_name="Test Board",
             column_names=["Backlog", "Done"],
         )
-        assert seeder._board_adapter.current_project == seeder._current_project_id
+        project_id = seeder._current_project_id
+        assert project_id is not None
+        assert seeder._board_adapter.current_project == project_id
         assert seeder._board_adapter.current_board == "board-1"
 
     @pytest.mark.asyncio
@@ -74,9 +76,9 @@ class TestSeederBoardOperations:
             board_name="Test Board",
             column_names=["Backlog", "Ready", "In Progress", "Done"],
         )
-        board = await seeder._board_adapter.get_board(
-            seeder._current_project_id, "board-1"
-        )
+        project_id = seeder._current_project_id
+        assert project_id is not None
+        board = await seeder._board_adapter.get_board(project_id, "board-1")
         assert len(board.columns) == 4
         assert board.columns[0].name == "Backlog"
         assert board.columns[3].name == "Done"
@@ -121,9 +123,9 @@ class TestSeederBoardOperations:
         await seeder.seed_default_scenario()
 
         assert "board-1" in seeder.created_items.boards
-        board = await seeder._board_adapter.get_board(
-            seeder._current_project_id, "board-1"
-        )
+        project_id = seeder._current_project_id
+        assert project_id is not None
+        board = await seeder._board_adapter.get_board(project_id, "board-1")
         assert len(board.columns) == 5
 
     @pytest.mark.asyncio

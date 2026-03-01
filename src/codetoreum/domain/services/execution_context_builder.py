@@ -1,13 +1,13 @@
 """Execution context builder service for building execution contexts."""
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from codetoreum.domain.agent import Agent
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.project_context import ProjectContext
 from codetoreum.domain.value_objects import ExecutionContext
-from codetoreum.domain.workspace_context import WorkspaceContext, WorkspaceType
 from codetoreum.domain.work_item import WorkItem
+from codetoreum.domain.workspace_context import WorkspaceContext
 
 
 class ExecutionContextBuilder:
@@ -26,8 +26,8 @@ class ExecutionContextBuilder:
         agent: Agent,
         project: ProjectContext,
         workspace: WorkspaceContext,
-        previous_session_id: Optional[str] = None,
-        additional_metadata: Optional[Dict[str, Any]] = None,
+        previous_session_id: str | None = None,
+        additional_metadata: dict[str, Any] | None = None,
     ) -> ExecutionContext:
         """
         Build complete execution context from components.
@@ -49,21 +49,17 @@ class ExecutionContextBuilder:
             DomainError: If validation fails
         """
         # Validate inputs
-        ExecutionContextBuilder._validate_inputs(
-            work_item, workflow_id, stage_name, agent, project, workspace
-        )
+        ExecutionContextBuilder._validate_inputs(work_item, workflow_id, stage_name, agent, project, workspace)
 
         # Validate workspace and work item match
         if workspace.work_item_id != work_item.id:
-            raise DomainError(
-                f"Workspace work_item_id ({workspace.work_item_id}) does not match work item ID ({work_item.id})"
-            )
+            msg = f"Workspace work_item_id ({workspace.work_item_id}) does not match work item ID ({work_item.id})"
+            raise DomainError(msg)
 
         # Validate project IDs match
         if workspace.project_id != project.id:
-            raise DomainError(
-                f"Workspace project_id ({workspace.project_id}) does not match project ID ({project.id})"
-            )
+            msg = f"Workspace project_id ({workspace.project_id}) does not match project ID ({project.id})"
+            raise DomainError(msg)
 
         # Determine permissions
         filesystem_write_allowed = agent.filesystem_write_allowed and workspace.can_make_code_changes()
@@ -87,11 +83,11 @@ class ExecutionContextBuilder:
             discussion_id=workspace.discussion_id,
             project_id=project.id,
             repository_url=project.repository_url,
-            tech_stack=project.tech_stack,
+            tech_stack=tuple(project.tech_stack),
             filesystem_write_allowed=filesystem_write_allowed,
             can_make_commits=can_make_commits,
             requires_docker=agent.requires_docker,
-            mcp_servers=ExecutionContextBuilder._merge_mcp_servers(agent, project),
+            mcp_servers=tuple(ExecutionContextBuilder._merge_mcp_servers(agent, project)),
             previous_session_id=previous_session_id,
             metadata=metadata,
         )
@@ -120,10 +116,12 @@ class ExecutionContextBuilder:
             DomainError: If any validation fails
         """
         if not workflow_id or not workflow_id.strip():
-            raise DomainError("Workflow ID cannot be empty")
+            msg = "Workflow ID cannot be empty"
+            raise DomainError(msg)
 
         if not stage_name or not stage_name.strip():
-            raise DomainError("Stage name cannot be empty")
+            msg = "Stage name cannot be empty"
+            raise DomainError(msg)
 
         # Validate agent can execute in project environment
         if agent.requires_docker and not project.has_dockerfile and not project.requires_dev_container:
@@ -132,9 +130,8 @@ class ExecutionContextBuilder:
             pass
 
         if agent.requires_dev_container and not project.requires_dev_container:
-            raise DomainError(
-                f"Agent {agent.name} requires dev container but project {project.name} does not have one configured"
-            )
+            msg = f"Agent {agent.name} requires dev container but project {project.name} does not have one configured"
+            raise DomainError(msg)
 
     @staticmethod
     def _build_metadata(
@@ -142,8 +139,8 @@ class ExecutionContextBuilder:
         agent: Agent,
         project: ProjectContext,
         workspace: WorkspaceContext,
-        additional_metadata: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        additional_metadata: dict[str, Any],
+    ) -> dict[str, Any]:
         """
         Build metadata dictionary for execution context.
 
@@ -181,7 +178,7 @@ class ExecutionContextBuilder:
         return metadata
 
     @staticmethod
-    def _merge_mcp_servers(agent: Agent, project: ProjectContext) -> List[str]:
+    def _merge_mcp_servers(agent: Agent, project: ProjectContext) -> list[str]:
         """
         Merge MCP servers from agent and project.
 
@@ -210,11 +207,11 @@ class ExecutionContextBuilder:
         work_item: WorkItem,
         workflow_id: str,
         stage_name: str,
-        agents: List[Agent],
+        agents: list[Agent],
         agent_id: str,
         project: ProjectContext,
         workspace: WorkspaceContext,
-        previous_session_id: Optional[str] = None,
+        previous_session_id: str | None = None,
     ) -> ExecutionContext:
         """
         Build execution context for a specific stage.
@@ -240,7 +237,8 @@ class ExecutionContextBuilder:
         # Find agent
         agent = next((a for a in agents if a.id == agent_id), None)
         if not agent:
-            raise DomainError(f"Agent {agent_id} not found")
+            msg = f"Agent {agent_id} not found"
+            raise DomainError(msg)
 
         return ExecutionContextBuilder.build_context(
             work_item=work_item,

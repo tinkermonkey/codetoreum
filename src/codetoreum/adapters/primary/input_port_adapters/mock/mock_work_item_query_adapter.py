@@ -8,10 +8,11 @@ reads delegate to it. When no backing store is provided (unit tests), the adapte
 uses its own internal dictionaries.
 """
 
-from datetime import datetime, timezone
-from typing import Dict, List, Optional, TYPE_CHECKING
 from threading import RLock
+from typing import TYPE_CHECKING, Optional
 
+from codetoreum.domain.exceptions import WorkItemNotFoundError
+from codetoreum.domain.work_item import WorkItem
 from codetoreum.ports.input.work_item_query import (
     IWorkItemQueryPort,
     PaginationParams,
@@ -22,11 +23,11 @@ from codetoreum.ports.input.work_item_query import (
     WorkItemListResult,
     WorkItemSearchParams,
 )
-from codetoreum.domain.work_item import WorkItem
-from codetoreum.domain.exceptions import WorkItemNotFoundError
 
 if TYPE_CHECKING:
-    from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
+    from codetoreum.adapters.testing.in_memory_ticket_adapter import (
+        InMemoryTicketAdapter,
+    )
 
 
 class MockWorkItemQueryAdapter(IWorkItemQueryPort):
@@ -39,8 +40,8 @@ class MockWorkItemQueryAdapter(IWorkItemQueryPort):
 
     def __init__(self, ticket_adapter: Optional["InMemoryTicketAdapter"] = None):
         self._ticket_adapter = ticket_adapter
-        self._work_items: Dict[str, WorkItem] = {}
-        self._events: Dict[str, List[dict]] = {}  # work_item_id -> events
+        self._work_items: dict[str, WorkItem] = {}
+        self._events: dict[str, list[dict]] = {}  # work_item_id -> events
         self._lock = RLock()
 
     def add_work_item(self, work_item: WorkItem):
@@ -58,7 +59,7 @@ class MockWorkItemQueryAdapter(IWorkItemQueryPort):
             self._events[work_item_id].append(event)
 
     @property
-    def _all_work_items(self) -> Dict[str, WorkItem]:
+    def _all_work_items(self) -> dict[str, WorkItem]:
         """Return the work items dict, preferring the backing store if available."""
         if self._ticket_adapter:
             return self._ticket_adapter._work_items
@@ -70,13 +71,14 @@ class MockWorkItemQueryAdapter(IWorkItemQueryPort):
             return await self._ticket_adapter.get_work_item(work_item_id)
         with self._lock:
             if work_item_id not in self._work_items:
-                raise WorkItemNotFoundError(f"Work item with ID {work_item_id} not found")
+                msg = f"Work item with ID {work_item_id} not found"
+                raise WorkItemNotFoundError(msg)
             return self._work_items[work_item_id]
 
     async def list_work_items(
         self,
-        filters: Optional[WorkItemFilters] = None,
-        pagination: Optional[PaginationParams] = None,
+        filters: WorkItemFilters | None = None,
+        pagination: PaginationParams | None = None,
     ) -> WorkItemListResult:
         """Lists work items with optional filtering and pagination."""
         with self._lock:
@@ -111,9 +113,7 @@ class MockWorkItemQueryAdapter(IWorkItemQueryPort):
                 has_next=has_next,
             )
 
-    async def search_work_items(
-        self, search_params: WorkItemSearchParams
-    ) -> WorkItemListResult:
+    async def search_work_items(self, search_params: WorkItemSearchParams) -> WorkItemListResult:
         """Searches work items by title and description."""
         with self._lock:
             # Get all work items
@@ -122,9 +122,7 @@ class MockWorkItemQueryAdapter(IWorkItemQueryPort):
             # Apply search query (simple case-insensitive substring match)
             query_lower = search_params.query.lower()
             work_items = [
-                wi
-                for wi in work_items
-                if query_lower in wi.title.lower() or query_lower in wi.description.lower()
+                wi for wi in work_items if query_lower in wi.title.lower() or query_lower in wi.description.lower()
             ]
 
             # Apply filters if provided
@@ -151,14 +149,13 @@ class MockWorkItemQueryAdapter(IWorkItemQueryPort):
                 has_next=has_next,
             )
 
-    async def get_work_item_history(
-        self, work_item_id: str, limit: Optional[int] = None
-    ) -> WorkItemHistory:
+    async def get_work_item_history(self, work_item_id: str, limit: int | None = None) -> WorkItemHistory:
         """Retrieves work item history including all events."""
         with self._lock:
             items = self._all_work_items
             if work_item_id not in items:
-                raise WorkItemNotFoundError(f"Work item with ID {work_item_id} not found")
+                msg = f"Work item with ID {work_item_id} not found"
+                raise WorkItemNotFoundError(msg)
 
             work_item = items[work_item_id]
             events = self._events.get(work_item_id, [])
@@ -173,7 +170,7 @@ class MockWorkItemQueryAdapter(IWorkItemQueryPort):
                 total_events=len(self._events.get(work_item_id, [])),
             )
 
-    async def count_work_items(self, filters: Optional[WorkItemFilters] = None) -> int:
+    async def count_work_items(self, filters: WorkItemFilters | None = None) -> int:
         """Counts work items matching the given filters."""
         with self._lock:
             work_items = list(self._all_work_items.values())
@@ -183,9 +180,7 @@ class MockWorkItemQueryAdapter(IWorkItemQueryPort):
 
             return len(work_items)
 
-    def _apply_filters(
-        self, work_items: List[WorkItem], filters: WorkItemFilters
-    ) -> List[WorkItem]:
+    def _apply_filters(self, work_items: list[WorkItem], filters: WorkItemFilters) -> list[WorkItem]:
         """Apply filters to work item list."""
         result = work_items
 
@@ -226,9 +221,7 @@ class MockWorkItemQueryAdapter(IWorkItemQueryPort):
 
         return result
 
-    def _sort_work_items(
-        self, work_items: List[WorkItem], pagination: PaginationParams
-    ) -> List[WorkItem]:
+    def _sort_work_items(self, work_items: list[WorkItem], pagination: PaginationParams) -> list[WorkItem]:
         """Sort work items based on pagination parameters."""
         reverse = pagination.sort_order == SortOrder.DESC
 

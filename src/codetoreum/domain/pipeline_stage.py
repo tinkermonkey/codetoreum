@@ -1,9 +1,9 @@
 """Pipeline Stage entity and value objects."""
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from codetoreum.domain.exceptions import DomainError
 
@@ -42,47 +42,47 @@ class PipelineStage:
 
     # Configuration
     stage_type: StageType
-    agent_config: Dict[str, Any]
+    agent_config: dict[str, Any]
     description: str
 
     # Dependencies
-    dependencies: List[str]
+    dependencies: list[str]
     is_parallel: bool
 
     # Review configuration (if stage_type == REVIEW)
-    maker_agent_id: Optional[str]
-    reviewer_agent_id: Optional[str]
+    maker_agent_id: str | None
+    reviewer_agent_id: str | None
     max_review_iterations: int
 
     # Status
     status: StageStatus
 
     # Execution tracking
-    execution_id: Optional[str]
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
+    execution_id: str | None
+    started_at: datetime | None
+    completed_at: datetime | None
 
     # Results
-    output: Optional[str]
-    error_message: Optional[str]
+    output: str | None
+    error_message: str | None
 
     # Metadata
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def create(
         cls,
         name: str,
         workflow_id: str,
-        agent_config: Dict[str, Any],
+        agent_config: dict[str, Any],
         stage_type: StageType = StageType.SEQUENTIAL,
         description: str = "",
-        dependencies: Optional[List[str]] = None,
+        dependencies: list[str] | None = None,
         is_parallel: bool = False,
-        maker_agent_id: Optional[str] = None,
-        reviewer_agent_id: Optional[str] = None,
+        maker_agent_id: str | None = None,
+        reviewer_agent_id: str | None = None,
         max_review_iterations: int = 3,
-        id: Optional[str] = None,
+        id: str | None = None,
     ) -> "PipelineStage":
         """
         Create new pipeline stage.
@@ -111,9 +111,11 @@ class PipelineStage:
         # Validate review stages
         if stage_type == StageType.REVIEW:
             if not maker_agent_id or not reviewer_agent_id:
-                raise DomainError("Review stages require both maker and reviewer agents")
+                msg = "Review stages require both maker and reviewer agents"
+                raise DomainError(msg)
             if maker_agent_id == reviewer_agent_id:
-                raise DomainError("Review stages must have different maker and reviewer agents")
+                msg = "Review stages must have different maker and reviewer agents"
+                raise DomainError(msg)
 
         return cls(
             id=id or str(uuid4()),
@@ -136,7 +138,7 @@ class PipelineStage:
             metadata={},
         )
 
-    def can_enter(self, completed_stages: List[str]) -> bool:
+    def can_enter(self, completed_stages: list[str]) -> bool:
         """
         Check if stage entry conditions are met.
 
@@ -155,7 +157,7 @@ class PipelineStage:
 
         return all(dep in completed_stages for dep in self.dependencies)
 
-    def get_agent_for_execution(self) -> Dict[str, Any]:
+    def get_agent_for_execution(self) -> dict[str, Any]:
         """
         Get agent configuration for execution.
 
@@ -171,7 +173,8 @@ class PipelineStage:
         """
         if self.stage_type == StageType.REVIEW:
             if not self.maker_agent_id:
-                raise DomainError(f"Review stage {self.name} is missing maker agent")
+                msg = f"Review stage {self.name} is missing maker agent"
+                raise DomainError(msg)
             return {
                 **self.agent_config,
                 "agent_id": self.maker_agent_id,
@@ -188,9 +191,8 @@ class PipelineStage:
             DomainError: If stage is not in PENDING status
         """
         if self.status != StageStatus.PENDING:
-            raise DomainError(
-                f"Cannot mark ready: stage in status {self.status.value}"
-            )
+            msg = f"Cannot mark ready: stage in status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = StageStatus.READY
 
@@ -205,13 +207,12 @@ class PipelineStage:
             DomainError: If stage is not in READY status
         """
         if self.status != StageStatus.READY:
-            raise DomainError(
-                f"Cannot start: stage not ready (status: {self.status.value})"
-            )
+            msg = f"Cannot start: stage not ready (status: {self.status.value})"
+            raise DomainError(msg)
 
         self.status = StageStatus.RUNNING
         self.execution_id = execution_id
-        self.started_at = datetime.now(timezone.utc)
+        self.started_at = datetime.now(UTC)
 
     def complete(self, output: str) -> None:
         """
@@ -224,10 +225,11 @@ class PipelineStage:
             DomainError: If stage is not in RUNNING status
         """
         if self.status != StageStatus.RUNNING:
-            raise DomainError("Cannot complete: stage not running")
+            msg = "Cannot complete: stage not running"
+            raise DomainError(msg)
 
         self.status = StageStatus.COMPLETED
-        self.completed_at = datetime.now(timezone.utc)
+        self.completed_at = datetime.now(UTC)
         self.output = output
 
     def fail(self, error_message: str) -> None:
@@ -241,10 +243,11 @@ class PipelineStage:
             DomainError: If stage is not in READY or RUNNING status
         """
         if self.status not in [StageStatus.READY, StageStatus.RUNNING]:
-            raise DomainError(f"Cannot fail: invalid status {self.status.value}")
+            msg = f"Cannot fail: invalid status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = StageStatus.FAILED
-        self.completed_at = datetime.now(timezone.utc)
+        self.completed_at = datetime.now(UTC)
         self.error_message = error_message
 
     def skip(self, reason: str) -> None:
@@ -258,11 +261,12 @@ class PipelineStage:
             DomainError: If stage is not in PENDING status
         """
         if self.status != StageStatus.PENDING:
-            raise DomainError(f"Cannot skip: stage in status {self.status.value}")
+            msg = f"Cannot skip: stage in status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = StageStatus.SKIPPED
         self.metadata["skip_reason"] = reason
-        self.completed_at = datetime.now(timezone.utc)
+        self.completed_at = datetime.now(UTC)
 
     def is_completed(self) -> bool:
         """
@@ -295,7 +299,7 @@ class PipelineStage:
             StageStatus.SKIPPED,
         ]
 
-    def get_duration_seconds(self) -> Optional[float]:
+    def get_duration_seconds(self) -> float | None:
         """
         Get stage duration in seconds.
 

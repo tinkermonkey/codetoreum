@@ -9,125 +9,487 @@ database-backed configuration.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from types import MappingProxyType
+from typing import Any
 
 
-@dataclass
+@dataclass(frozen=True)
 class ProjectConfig:
-    """Project configuration aggregate."""
+    """Project configuration aggregate.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. Dict fields are converted
+    to MappingProxyType and list fields to tuples for immutability.
+    """
+
     id: str
     name: str
     github_org: str
     github_repo: str
-    tech_stacks: Dict[str, str] = field(default_factory=dict)
-    pipelines: List[Dict[str, Any]] = field(default_factory=list)
-    testing: Dict[str, Any] = field(default_factory=dict)
-    environment_variables: Dict[str, Any] = field(default_factory=dict)
-    mounted_commands: Dict[str, Any] = field(default_factory=dict)
-    mounted_subagents: Dict[str, Any] = field(default_factory=dict)
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    tech_stacks: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
+    pipelines: tuple[MappingProxyType, ...] = ()
+    testing: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
+    environment_variables: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
+    mounted_commands: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
+    mounted_subagents: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
     version: int = 1
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        # Coerce list to tuple and dicts to MappingProxyType for pipelines
+        if isinstance(self.pipelines, list):
+            object.__setattr__(
+                self, "pipelines", tuple(MappingProxyType(p) if isinstance(p, dict) else p for p in self.pipelines)
+            )
+
+        # Coerce dict to MappingProxyType for tech_stacks
+        if isinstance(self.tech_stacks, dict):
+            object.__setattr__(self, "tech_stacks", MappingProxyType(self.tech_stacks))
+
+        # Coerce dict to MappingProxyType for testing
+        if isinstance(self.testing, dict):
+            object.__setattr__(self, "testing", MappingProxyType(self.testing))
+
+        # Coerce dict to MappingProxyType for environment_variables
+        if isinstance(self.environment_variables, dict):
+            object.__setattr__(self, "environment_variables", MappingProxyType(self.environment_variables))
+
+        # Coerce dict to MappingProxyType for mounted_commands
+        if isinstance(self.mounted_commands, dict):
+            object.__setattr__(self, "mounted_commands", MappingProxyType(self.mounted_commands))
+
+        # Coerce dict to MappingProxyType for mounted_subagents
+        if isinstance(self.mounted_subagents, dict):
+            object.__setattr__(self, "mounted_subagents", MappingProxyType(self.mounted_subagents))
+
+        # Coerce dict to MappingProxyType for metadata
+        if isinstance(self.metadata, dict):
+            object.__setattr__(self, "metadata", MappingProxyType(self.metadata))
+
+        if not isinstance(self.id, str) or not self.id:
+            msg = "id must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.name, str) or not self.name:
+            msg = "name must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.github_org, str) or not self.github_org:
+            msg = "github_org must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.github_repo, str) or not self.github_repo:
+            msg = "github_repo must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.tech_stacks, MappingProxyType):
+            msg = "tech_stacks must be a dict or MappingProxyType"
+            raise ValueError(msg)
+
+        if not isinstance(self.pipelines, tuple):
+            msg = "pipelines must be a list or tuple of dicts or MappingProxyType"
+            raise ValueError(msg)
+
+        if not all(isinstance(p, (dict, MappingProxyType)) for p in self.pipelines):
+            msg = "all pipelines must be dicts or MappingProxyType"
+            raise ValueError(msg)
+
+        if not isinstance(self.testing, MappingProxyType):
+            msg = "testing must be a dict or MappingProxyType"
+            raise ValueError(msg)
+
+        if not isinstance(self.environment_variables, MappingProxyType):
+            msg = "environment_variables must be a dict or MappingProxyType"
+            raise ValueError(msg)
+
+        if not isinstance(self.mounted_commands, MappingProxyType):
+            msg = "mounted_commands must be a dict or MappingProxyType"
+            raise ValueError(msg)
+
+        if not isinstance(self.mounted_subagents, MappingProxyType):
+            msg = "mounted_subagents must be a dict or MappingProxyType"
+            raise ValueError(msg)
+
+        if self.created_at is not None:
+            if not isinstance(self.created_at, datetime):
+                msg = "created_at must be a datetime instance or None"
+                raise ValueError(msg)
+
+        if self.updated_at is not None:
+            if not isinstance(self.updated_at, datetime):
+                msg = "updated_at must be a datetime instance or None"
+                raise ValueError(msg)
+
+        if isinstance(self.version, bool) or not isinstance(self.version, int) or self.version < 1:
+            msg = "version must be a positive integer"
+            raise ValueError(msg)
+
+        if not isinstance(self.metadata, MappingProxyType):
+            msg = "metadata must be a dict or MappingProxyType"
+            raise ValueError(msg)
 
 
-@dataclass
+@dataclass(frozen=True)
 class AgentConfig:
-    """Agent configuration."""
+    """Agent configuration.
+
+    All fields validated at construction. Frozen for immutability.
+    Lists converted to tuples, dicts to MappingProxyType.
+    """
+
     project_id: str
     agent_name: str
     model: str
     timeout: int
     requires_docker: bool
     makes_code_changes: bool
-    mcp_servers: List[str] = field(default_factory=list)
-    capabilities: List[str] = field(default_factory=list)
-    constraints: Dict[str, bool] = field(default_factory=dict)
+    mcp_servers: tuple[str, ...] = ()
+    capabilities: tuple[str, ...] = ()
+    constraints: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
     version: int = 1
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    metadata: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        # Coerce list to tuple for mcp_servers
+        if isinstance(self.mcp_servers, list):
+            object.__setattr__(self, "mcp_servers", tuple(self.mcp_servers))
+
+        # Coerce list to tuple for capabilities
+        if isinstance(self.capabilities, list):
+            object.__setattr__(self, "capabilities", tuple(self.capabilities))
+
+        # Coerce dict to MappingProxyType for constraints
+        if isinstance(self.constraints, dict):
+            object.__setattr__(self, "constraints", MappingProxyType(self.constraints))
+
+        # Coerce dict to MappingProxyType for metadata
+        if isinstance(self.metadata, dict):
+            object.__setattr__(self, "metadata", MappingProxyType(self.metadata))
+
+        for field_name in ("project_id", "agent_name", "model"):
+            val = getattr(self, field_name)
+            if not isinstance(val, str) or not val:
+                msg = f"{field_name} must be a non-empty string"
+                raise ValueError(msg)
+
+        if isinstance(self.timeout, bool) or not isinstance(self.timeout, int) or self.timeout <= 0:
+            msg = "timeout must be a positive integer"
+            raise ValueError(msg)
+
+        if not isinstance(self.requires_docker, bool) or not isinstance(self.makes_code_changes, bool):
+            msg = "requires_docker and makes_code_changes must be booleans"
+            raise ValueError(msg)
+
+        if not isinstance(self.mcp_servers, tuple) or not all(isinstance(s, str) for s in self.mcp_servers):
+            msg = "mcp_servers must be a list or tuple of strings"
+            raise ValueError(msg)
+
+        if not isinstance(self.capabilities, tuple) or not all(isinstance(c, str) for c in self.capabilities):
+            msg = "capabilities must be a list or tuple of strings"
+            raise ValueError(msg)
+
+        if not isinstance(self.constraints, MappingProxyType):
+            msg = "constraints must be a dict or MappingProxyType"
+            raise ValueError(msg)
+
+        if isinstance(self.version, bool) or not isinstance(self.version, int) or self.version < 1:
+            msg = "version must be a positive integer"
+            raise ValueError(msg)
+
+        if self.metadata is not None and not isinstance(self.metadata, MappingProxyType):
+            msg = "metadata must be a dict or MappingProxyType"
+            raise ValueError(msg)
 
 
-@dataclass
+@dataclass(frozen=True)
 class PipelineConfig:
-    """Pipeline configuration."""
+    """Pipeline configuration.
+
+    All fields validated at construction. Frozen for immutability.
+    Lists converted to tuples, dicts to MappingProxyType.
+    """
+
     id: str
     project_id: str
     name: str
-    stages: List[Dict[str, Any]] = field(default_factory=list)
-    triggers: List[str] = field(default_factory=list)
+    stages: tuple[MappingProxyType, ...] = ()
+    triggers: tuple[str, ...] = ()
     version: int = 1
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    metadata: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        # Coerce list to tuple and dicts to MappingProxyType for stages
+        if isinstance(self.stages, list):
+            object.__setattr__(
+                self, "stages", tuple(MappingProxyType(s) if isinstance(s, dict) else s for s in self.stages)
+            )
+
+        # Coerce list to tuple for triggers
+        if isinstance(self.triggers, list):
+            object.__setattr__(self, "triggers", tuple(self.triggers))
+
+        # Coerce dict to MappingProxyType for metadata
+        if isinstance(self.metadata, dict):
+            object.__setattr__(self, "metadata", MappingProxyType(self.metadata))
+
+        for field_name in ("id", "project_id", "name"):
+            val = getattr(self, field_name)
+            if not isinstance(val, str) or not val:
+                msg = f"{field_name} must be a non-empty string"
+                raise ValueError(msg)
+
+        if not isinstance(self.stages, tuple):
+            msg = "stages must be a list or tuple of dicts or MappingProxyType"
+            raise ValueError(msg)
+
+        if not all(isinstance(s, (dict, MappingProxyType)) for s in self.stages):
+            msg = "all stages must be dicts or MappingProxyType"
+            raise ValueError(msg)
+
+        if not isinstance(self.triggers, tuple) or not all(isinstance(t, str) for t in self.triggers):
+            msg = "triggers must be a list or tuple of strings"
+            raise ValueError(msg)
+
+        if isinstance(self.version, bool) or not isinstance(self.version, int) or self.version < 1:
+            msg = "version must be a positive integer"
+            raise ValueError(msg)
+
+        if not isinstance(self.metadata, MappingProxyType):
+            msg = "metadata must be a dict or MappingProxyType"
+            raise ValueError(msg)
 
 
-@dataclass
+@dataclass(frozen=True)
 class WorkflowTemplate:
-    """Workflow template configuration."""
+    """Workflow template configuration.
+
+    All fields validated at construction. Frozen for immutability.
+    Lists converted to tuples, dicts to MappingProxyType.
+    """
+
     id: str
     name: str
     description: str
-    stages: List[Dict[str, Any]] = field(default_factory=list)
+    stages: tuple[MappingProxyType, ...] = ()
     version: int = 1
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    metadata: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        # Coerce list to tuple and dicts to MappingProxyType for stages
+        if isinstance(self.stages, list):
+            object.__setattr__(
+                self, "stages", tuple(MappingProxyType(s) if isinstance(s, dict) else s for s in self.stages)
+            )
+
+        # Coerce dict to MappingProxyType for metadata
+        if isinstance(self.metadata, dict):
+            object.__setattr__(self, "metadata", MappingProxyType(self.metadata))
+
+        for field_name in ("id", "name", "description"):
+            val = getattr(self, field_name)
+            if not isinstance(val, str) or not val:
+                msg = f"{field_name} must be a non-empty string"
+                raise ValueError(msg)
+
+        if not isinstance(self.stages, tuple):
+            msg = "stages must be a list or tuple of dicts or MappingProxyType"
+            raise ValueError(msg)
+
+        if not all(isinstance(s, (dict, MappingProxyType)) for s in self.stages):
+            msg = "all stages must be dicts or MappingProxyType"
+            raise ValueError(msg)
+
+        if isinstance(self.version, bool) or not isinstance(self.version, int) or self.version < 1:
+            msg = "version must be a positive integer"
+            raise ValueError(msg)
+
+        if not isinstance(self.metadata, MappingProxyType):
+            msg = "metadata must be a dict or MappingProxyType"
+            raise ValueError(msg)
 
 
-@dataclass
+@dataclass(frozen=True)
 class EnvironmentVariable:
-    """Environment variable configuration."""
+    """Environment variable configuration.
+
+    All fields validated at construction. Frozen for immutability.
+    """
+
     name: str
     value: str  # Encrypted if is_secret=True
     is_secret: bool = False
-    description: Optional[str] = None
-    created_at: Optional[datetime] = None
-    created_by: Optional[str] = None
-    updated_at: Optional[datetime] = None
-    updated_by: Optional[str] = None
+    description: str | None = None
+    created_at: datetime | None = None
+    created_by: str | None = None
+    updated_at: datetime | None = None
+    updated_by: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.name, str) or not self.name:
+            msg = "name must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.value, str) or not self.value:
+            msg = "value must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.is_secret, bool):
+            msg = "is_secret must be a boolean"
+            raise ValueError(msg)
+
+        if self.description is not None:
+            if not isinstance(self.description, str) or not self.description:
+                msg = "description must be a non-empty string or None"
+                raise ValueError(msg)
+
+        if self.created_by is not None:
+            if not isinstance(self.created_by, str) or not self.created_by:
+                msg = "created_by must be a non-empty string or None"
+                raise ValueError(msg)
+
+        if self.updated_by is not None:
+            if not isinstance(self.updated_by, str) or not self.updated_by:
+                msg = "updated_by must be a non-empty string or None"
+                raise ValueError(msg)
 
 
-@dataclass
+@dataclass(frozen=True)
 class MountedCommand:
-    """Mounted command configuration."""
+    """Mounted command configuration.
+
+    All fields validated at construction. Frozen for immutability.
+    """
+
     name: str
     path: str
-    description: Optional[str] = None
-    created_at: Optional[datetime] = None
-    created_by: Optional[str] = None
+    description: str | None = None
+    created_at: datetime | None = None
+    created_by: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.name, str) or not self.name:
+            msg = "name must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.path, str) or not self.path:
+            msg = "path must be a non-empty string"
+            raise ValueError(msg)
+
+        if self.description is not None:
+            if not isinstance(self.description, str) or not self.description:
+                msg = "description must be a non-empty string or None"
+                raise ValueError(msg)
+
+        if self.created_by is not None:
+            if not isinstance(self.created_by, str) or not self.created_by:
+                msg = "created_by must be a non-empty string or None"
+                raise ValueError(msg)
 
 
-@dataclass
+@dataclass(frozen=True)
 class MountedSubAgent:
-    """Mounted sub-agent configuration."""
+    """Mounted sub-agent configuration.
+
+    All fields validated at construction. Frozen for immutability.
+    Config dict converted to MappingProxyType for immutability.
+    """
+
     name: str
-    config: Dict[str, Any]
-    description: Optional[str] = None
-    created_at: Optional[datetime] = None
-    created_by: Optional[str] = None
+    config: MappingProxyType
+    description: str | None = None
+    created_at: datetime | None = None
+    created_by: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        # Coerce dict to MappingProxyType for config
+        if isinstance(self.config, dict):
+            object.__setattr__(self, "config", MappingProxyType(self.config))
+
+        if not isinstance(self.name, str) or not self.name:
+            msg = "name must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.config, MappingProxyType):
+            msg = "config must be a dict or MappingProxyType"
+            raise ValueError(msg)
+
+        if self.description is not None:
+            if not isinstance(self.description, str) or not self.description:
+                msg = "description must be a non-empty string or None"
+                raise ValueError(msg)
+
+        if self.created_by is not None:
+            if not isinstance(self.created_by, str) or not self.created_by:
+                msg = "created_by must be a non-empty string or None"
+                raise ValueError(msg)
 
 
-@dataclass
+@dataclass(frozen=True)
 class ConfigVersion:
-    """Configuration version metadata."""
+    """Configuration version metadata.
+
+    All fields validated at construction. Frozen for immutability.
+    Changes dict converted to MappingProxyType for immutability.
+    """
+
     version: int
     changed_at: datetime
     changed_by: str
     change_type: str
-    changes: Dict[str, Any]
-    reason: Optional[str] = None
+    changes: MappingProxyType
+    reason: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        # Coerce dict to MappingProxyType for changes
+        if isinstance(self.changes, dict):
+            object.__setattr__(self, "changes", MappingProxyType(self.changes))
+
+        if isinstance(self.version, bool) or not isinstance(self.version, int) or self.version < 1:
+            msg = "version must be a positive integer"
+            raise ValueError(msg)
+
+        if not isinstance(self.changed_at, datetime):
+            msg = "changed_at must be a datetime instance"
+            raise ValueError(msg)
+
+        for field_name in ("changed_by", "change_type"):
+            val = getattr(self, field_name)
+            if not isinstance(val, str) or not val:
+                msg = f"{field_name} must be a non-empty string"
+                raise ValueError(msg)
+
+        if not isinstance(self.changes, MappingProxyType):
+            msg = "changes must be a dict or MappingProxyType"
+            raise ValueError(msg)
+
+        if self.reason is not None:
+            if not isinstance(self.reason, str) or not self.reason:
+                msg = "reason must be a non-empty string or None"
+                raise ValueError(msg)
 
 
 class ConfigNotFoundError(Exception):
     """Raised when configuration is not found."""
-    pass
 
 
 class ConfigValidationError(Exception):
     """Raised when configuration validation fails."""
-    pass
 
 
 class IConfigStore(ABC):
@@ -154,7 +516,6 @@ class IConfigStore(ABC):
         Raises:
             ConfigNotFoundError: If project doesn't exist
         """
-        pass
 
     @abstractmethod
     async def get_project_config_by_name(self, project_name: str) -> ProjectConfig:
@@ -170,7 +531,6 @@ class IConfigStore(ABC):
         Raises:
             ConfigNotFoundError: If project doesn't exist
         """
-        pass
 
     @abstractmethod
     async def save_project_config(self, config: ProjectConfig) -> None:
@@ -182,14 +542,9 @@ class IConfigStore(ABC):
         Args:
             config: ProjectConfig to save
         """
-        pass
 
     @abstractmethod
-    async def get_agent_config(
-        self,
-        project_id: str,
-        agent_name: str
-    ) -> AgentConfig:
+    async def get_agent_config(self, project_id: str, agent_name: str) -> AgentConfig:
         """
         Get agent configuration for a project.
 
@@ -203,7 +558,6 @@ class IConfigStore(ABC):
         Raises:
             ConfigNotFoundError: If agent config doesn't exist
         """
-        pass
 
     @abstractmethod
     async def save_agent_config(self, config: AgentConfig) -> None:
@@ -213,14 +567,9 @@ class IConfigStore(ABC):
         Args:
             config: AgentConfig to save
         """
-        pass
 
     @abstractmethod
-    async def get_pipeline_config(
-        self,
-        project_id: str,
-        pipeline_name: str
-    ) -> PipelineConfig:
+    async def get_pipeline_config(self, project_id: str, pipeline_name: str) -> PipelineConfig:
         """
         Get pipeline configuration.
 
@@ -234,7 +583,6 @@ class IConfigStore(ABC):
         Raises:
             ConfigNotFoundError: If pipeline doesn't exist
         """
-        pass
 
     @abstractmethod
     async def save_pipeline_config(self, config: PipelineConfig) -> None:
@@ -244,7 +592,6 @@ class IConfigStore(ABC):
         Args:
             config: PipelineConfig to save
         """
-        pass
 
     @abstractmethod
     async def get_workflow_template(self, template_name: str) -> WorkflowTemplate:
@@ -260,7 +607,6 @@ class IConfigStore(ABC):
         Raises:
             ConfigNotFoundError: If template doesn't exist
         """
-        pass
 
     @abstractmethod
     async def save_workflow_template(self, template: WorkflowTemplate) -> None:
@@ -270,20 +616,18 @@ class IConfigStore(ABC):
         Args:
             template: WorkflowTemplate to save
         """
-        pass
 
     @abstractmethod
-    async def list_projects(self) -> List[ProjectConfig]:
+    async def list_projects(self) -> list[ProjectConfig]:
         """
         List all projects.
 
         Returns:
             List of ProjectConfig instances
         """
-        pass
 
     @abstractmethod
-    async def list_agents(self, project_id: str) -> List[AgentConfig]:
+    async def list_agents(self, project_id: str) -> list[AgentConfig]:
         """
         List all agents for a project.
 
@@ -293,10 +637,9 @@ class IConfigStore(ABC):
         Returns:
             List of AgentConfig instances
         """
-        pass
 
     @abstractmethod
-    async def list_pipelines(self, project_id: str) -> List[PipelineConfig]:
+    async def list_pipelines(self, project_id: str) -> list[PipelineConfig]:
         """
         List all pipelines for a project.
 
@@ -306,14 +649,9 @@ class IConfigStore(ABC):
         Returns:
             List of PipelineConfig instances
         """
-        pass
 
     @abstractmethod
-    async def search_configs(
-        self,
-        query: str,
-        config_type: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+    async def search_configs(self, query: str, config_type: str | None = None) -> list[dict[str, Any]]:
         """
         Search configurations using full-text search.
 
@@ -337,14 +675,9 @@ class IConfigStore(ABC):
         Returns:
             List of matching configurations (dictionaries with config data)
         """
-        pass
 
     @abstractmethod
-    async def get_config_version(
-        self,
-        config_id: str,
-        version: int
-    ) -> Dict[str, Any]:
+    async def get_config_version(self, config_id: str, version: int) -> dict[str, Any]:
         """
         Get specific version of a configuration.
 
@@ -358,14 +691,9 @@ class IConfigStore(ABC):
         Raises:
             ConfigNotFoundError: If version doesn't exist
         """
-        pass
 
     @abstractmethod
-    async def list_config_versions(
-        self,
-        config_id: str,
-        limit: int = 10
-    ) -> List[ConfigVersion]:
+    async def list_config_versions(self, config_id: str, limit: int = 10) -> list[ConfigVersion]:
         """
         List configuration version history.
 
@@ -376,7 +704,6 @@ class IConfigStore(ABC):
         Returns:
             List of ConfigVersion instances, newest first
         """
-        pass
 
     @abstractmethod
     async def delete_project_config(self, project_id: str) -> None:
@@ -389,14 +716,9 @@ class IConfigStore(ABC):
         Raises:
             ConfigNotFoundError: If project doesn't exist
         """
-        pass
 
     @abstractmethod
-    async def delete_agent_config(
-        self,
-        project_id: str,
-        agent_name: str
-    ) -> None:
+    async def delete_agent_config(self, project_id: str, agent_name: str) -> None:
         """
         Delete agent configuration.
 
@@ -407,7 +729,6 @@ class IConfigStore(ABC):
         Raises:
             ConfigNotFoundError: If agent config doesn't exist
         """
-        pass
 
     @abstractmethod
     async def exists(self, project_id: str) -> bool:
@@ -420,4 +741,3 @@ class IConfigStore(ABC):
         Returns:
             True if project exists, False otherwise
         """
-        pass

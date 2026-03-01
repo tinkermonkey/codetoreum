@@ -103,9 +103,9 @@ class TestBoardReconciliation:
         new_template = BoardWorkflowTemplate(
             id="workflow-1",
             name="Updated Workflow",
-            pipeline_trigger_columns=["Development"],
-            exit_columns=["Done"],
-            columns=[
+            pipeline_trigger_columns=("Development",),
+            exit_columns=("Done",),
+            columns=(
                 ColumnTemplate(
                     name="Backlog",
                     type=ColumnType.MANUAL,
@@ -151,7 +151,7 @@ class TestBoardReconciliation:
                     position=4,
                     auto_progress_on_completion=False,
                 ),
-            ],
+            ),
         )
 
         config_service.register_template("board-1", new_template)
@@ -210,9 +210,9 @@ class TestBoardReconciliation:
         new_template = BoardWorkflowTemplate(
             id="workflow-1",
             name="Simplified Workflow",
-            pipeline_trigger_columns=["Development"],
-            exit_columns=["Done"],
-            columns=[
+            pipeline_trigger_columns=("Development",),
+            exit_columns=("Done",),
+            columns=(
                 ColumnTemplate(
                     name="Backlog",
                     type=ColumnType.MANUAL,
@@ -250,7 +250,7 @@ class TestBoardReconciliation:
                     position=3,
                     auto_progress_on_completion=False,
                 ),
-            ],
+            ),
         )
 
         config_service.register_template("board-1", new_template)
@@ -300,9 +300,9 @@ class TestBoardReconciliation:
         new_template = BoardWorkflowTemplate(
             id="workflow-1",
             name="Simplified Workflow",
-            pipeline_trigger_columns=["Development"],
-            exit_columns=["Done"],
-            columns=[
+            pipeline_trigger_columns=("Development",),
+            exit_columns=("Done",),
+            columns=(
                 ColumnTemplate(
                     name="Backlog",
                     type=ColumnType.MANUAL,
@@ -340,7 +340,7 @@ class TestBoardReconciliation:
                     position=3,
                     auto_progress_on_completion=False,
                 ),
-            ],
+            ),
         )
 
         config_service.register_template("board-1", new_template)
@@ -377,9 +377,9 @@ class TestBoardReconciliation:
         new_template = BoardWorkflowTemplate(
             id="workflow-1",
             name="Modified Workflow",
-            pipeline_trigger_columns=["Development"],
-            exit_columns=["Done"],
-            columns=[
+            pipeline_trigger_columns=("Development",),
+            exit_columns=("Done",),
+            columns=(
                 ColumnTemplate(
                     name="Backlog",
                     type=ColumnType.MANUAL,
@@ -417,7 +417,7 @@ class TestBoardReconciliation:
                     position=3,
                     auto_progress_on_completion=False,
                 ),
-            ],
+            ),
         )
 
         config_service.register_template("board-1", new_template)
@@ -468,9 +468,9 @@ class TestBoardReconciliation:
         new_template = BoardWorkflowTemplate(
             id="workflow-1",
             name="Event Test Workflow",
-            pipeline_trigger_columns=["Development"],
-            exit_columns=["Done"],
-            columns=[
+            pipeline_trigger_columns=("Development",),
+            exit_columns=("Done",),
+            columns=(
                 ColumnTemplate(
                     name="Backlog",
                     type=ColumnType.MANUAL,
@@ -499,7 +499,7 @@ class TestBoardReconciliation:
                     position=2,
                     auto_progress_on_completion=False,
                 ),
-            ],
+            ),
         )
 
         config_service.register_template("board-1", new_template)
@@ -556,9 +556,9 @@ class TestManualColumns:
         template = BoardWorkflowTemplate(
             id="workflow-1",
             name="Test Workflow",
-            pipeline_trigger_columns=["Development"],
-            exit_columns=["Done"],
-            columns=[
+            pipeline_trigger_columns=("Development",),
+            exit_columns=("Done",),
+            columns=(
                 ColumnTemplate(
                     name="Backlog",
                     type=ColumnType.MANUAL,
@@ -595,7 +595,7 @@ class TestManualColumns:
                     position=3,
                     auto_progress_on_completion=False,
                 ),
-            ],
+            ),
         )
 
         config_service.register_template("board-1", template)
@@ -689,9 +689,9 @@ class TestQueuePositionUpdates:
         template = BoardWorkflowTemplate(
             id="workflow-1",
             name="Test Workflow",
-            pipeline_trigger_columns=["Development"],
-            exit_columns=["Done"],
-            columns=[
+            pipeline_trigger_columns=("Development",),
+            exit_columns=("Done",),
+            columns=(
                 ColumnTemplate(
                     name="Backlog",
                     type=ColumnType.MANUAL,
@@ -719,7 +719,7 @@ class TestQueuePositionUpdates:
                     position=2,
                     auto_progress_on_completion=False,
                 ),
-            ],
+            ),
         )
 
         config_service.register_template("board-1", template)

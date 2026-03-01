@@ -2,12 +2,18 @@
 
 import asyncio
 import gc
+import io
 import logging
+import tarfile
 import time
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
 
+import docker
+import docker.errors
 from dateutil import parser as dateparser
 
 from codetoreum.domain.types import ContainerId
@@ -16,8 +22,6 @@ from codetoreum.infrastructure.observability.instrumentation import (
     add_span_attributes,
     instrument_async_function,
 )
-
-logger = logging.getLogger(__name__)
 from codetoreum.ports.exceptions import (
     AuthenticationError,
     ContainerError,
@@ -34,25 +38,27 @@ from codetoreum.ports.output.container import (
     IContainer,
 )
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class DockerConfig:
     """Configuration for Docker adapter."""
 
     # Docker connection
-    docker_host: Optional[str] = None  # Defaults to local socket
+    docker_host: str | None = None  # Defaults to local socket
     tls_verify: bool = False
-    cert_path: Optional[str] = None
+    cert_path: str | None = None
 
     # Container defaults
     default_timeout: int = 300  # 5 minutes
     remove_on_completion: bool = True
-    default_user: Optional[str] = None
+    default_user: str | None = None
     default_network: str = "bridge"
 
     # Resource limits
-    memory_limit: Optional[str] = None  # e.g., "512m"
-    cpu_limit: Optional[float] = None  # e.g., 1.0 for 1 CPU
+    memory_limit: str | None = None  # e.g., "512m"
+    cpu_limit: float | None = None  # e.g., 1.0 for 1 CPU
 
     # Logging
     log_driver: str = "json-file"
@@ -80,8 +86,6 @@ class DockerContainerAdapter(IContainer):
         """Get or create Docker client."""
         if self._docker_client is None:
             try:
-                import docker
-
                 if self.config.docker_host:
                     self._docker_client = docker.DockerClient(
                         base_url=self.config.docker_host,
@@ -91,11 +95,12 @@ class DockerContainerAdapter(IContainer):
                     self._docker_client = docker.from_env()
 
             except Exception as e:
-                raise ContainerError(f"Failed to connect to Docker: {str(e)}")
+                msg = f"Failed to connect to Docker: {e!s}"
+                raise ContainerError(msg) from e
 
         return self._docker_client
 
-    def _parse_volume_spec(self, volumes: Dict[str, str]) -> Dict[str, Dict[str, str]]:
+    def _parse_volume_spec(self, volumes: dict[str, str]) -> dict[str, dict[str, str]]:
         """
         Parse volume specification with path traversal protection.
 
@@ -108,8 +113,6 @@ class DockerContainerAdapter(IContainer):
         Raises:
             ValidationError: If volume specification is invalid or contains unsafe paths
         """
-        from pathlib import Path
-
         docker_volumes = {}
 
         for host_path, spec in volumes.items():
@@ -119,14 +122,16 @@ class DockerContainerAdapter(IContainer):
 
                 # Ensure host path is absolute
                 if not resolved_host_path.is_absolute():
-                    raise ValidationError(f"Host path must be absolute: {host_path}")
+                    msg = f"Host path must be absolute: {host_path}"
+                    raise ValidationError(msg)
 
                 # Check if path exists (optional - comment out if you want to allow non-existent paths)
                 # if not resolved_host_path.exists():
                 #     raise ValidationError(f"Host path does not exist: {host_path}")
 
             except (OSError, RuntimeError) as e:
-                raise ValidationError(f"Invalid host path '{host_path}': {e}")
+                msg = f"Invalid host path '{host_path}': {e}"
+                raise ValidationError(msg) from e
 
             # Parse container_path:mode
             parts = spec.split(":")
@@ -136,19 +141,18 @@ class DockerContainerAdapter(IContainer):
             elif len(parts) == 2:
                 container_path, mode = parts
             else:
-                raise ValidationError(f"Invalid volume spec: {spec}")
+                msg = f"Invalid volume spec: {spec}"
+                raise ValidationError(msg)
 
             # Validate container path (should be absolute)
             if not container_path.startswith("/"):
-                raise ValidationError(
-                    f"Container path must be absolute (start with /): {container_path}"
-                )
+                msg = f"Container path must be absolute (start with /): {container_path}"
+                raise ValidationError(msg)
 
             # Validate mode
             if mode not in ["rw", "ro"]:
-                raise ValidationError(
-                    f"Invalid mount mode '{mode}'. Must be 'rw' (read-write) or 'ro' (read-only)"
-                )
+                msg = f"Invalid mount mode '{mode}'. Must be 'rw' (read-write) or 'ro' (read-only)"
+                raise ValidationError(msg)
 
             docker_volumes[str(resolved_host_path)] = {
                 "bind": container_path,
@@ -169,11 +173,11 @@ class DockerContainerAdapter(IContainer):
     async def run(
         self,
         image: str,
-        command: List[str],
-        volumes: Dict[str, str],
-        environment: Dict[str, str],
+        command: list[str] | tuple[str, ...],
+        volumes: dict[str, str] | Mapping[str, str],
+        environment: dict[str, str] | Mapping[str, str],
         timeout: int = 300,
-        stream_callback: Optional[Callable] = None,
+        stream_callback: Callable | None = None,
     ) -> ContainerResult:
         """Run a command in a container.
 
@@ -197,7 +201,8 @@ class DockerContainerAdapter(IContainer):
             ContainerExecutionError: On execution failure
         """
         if not image:
-            raise ValidationError("Image name is required")
+            msg = "Image name is required"
+            raise ValidationError(msg)
 
         client = self._get_client()
 
@@ -236,8 +241,13 @@ class DockerContainerAdapter(IContainer):
                 # Check if image exists locally
                 try:
                     client.images.get(image)
-                except Exception:
-                    raise ImageNotFoundError(f"Image not found: {image}")
+                except docker.errors.ImageNotFound as e:
+                    msg = f"Image not found: {image}"
+                    raise ImageNotFoundError(msg) from e
+                except docker.errors.APIError as e:
+                    # Re-raise other Docker errors as ContainerExecutionError
+                    msg = f"Failed to check image: {e!s}"
+                    raise ContainerExecutionError(msg) from e
 
                 # Create and start container with auto-removal enabled
                 container = client.containers.run(**container_config)
@@ -261,10 +271,11 @@ class DockerContainerAdapter(IContainer):
                                     exc_info=True,
                                     extra={
                                         "error_id": "ERR_CONTAINER_KILL_FAILED",
-                                        "container_id": container.short_id
-                                    }
+                                        "container_id": container.short_id,
+                                    },
                                 )
-                            raise ContainerTimeoutError(f"Container execution timed out after {timeout}s")
+                            msg = f"Container execution timed out after {timeout}s"
+                            raise ContainerTimeoutError(msg)
 
                         decoded_line = line.decode("utf-8", errors="replace")
                         log_buffer.append(decoded_line)
@@ -283,14 +294,28 @@ class DockerContainerAdapter(IContainer):
                     # If we get here due to timeout, re-raise it
                     if isinstance(e, ContainerTimeoutError):
                         raise
-                    # If container was removed during streaming, we might not get all logs
-                    # but we can still return what we captured
+                    # If container was removed during streaming, we cannot determine its exit status
+                    # The container may have been OOM-killed, force-removed, or crashed.
+                    # Reporting success (exit_code=0) would cause workflows to proceed with
+                    # potentially missing or incomplete artifacts - this is unacceptable.
                     if "404" in str(e) or "not found" in str(e).lower():
-                        # Container was removed, use what we have
-                        exit_code = 0  # Assume success if container completed and was removed
-                        container_id = ContainerId(container.short_id if container else "unknown")
-                    else:
-                        raise
+                        container_id_str = container.short_id if container else "unknown"
+                        msg = (
+                            f"Container disappeared during log streaming (possibly OOM-killed, "
+                            f"force-removed, or crashed). Cannot determine exit status. "
+                            f"Logs captured: {len(log_buffer)} lines. Container ID: {container_id_str}"
+                        )
+                        logger.error(
+                            msg,
+                            exc_info=True,
+                            extra={
+                                "error_id": "ERR_CONTAINER_DISAPPEARED_DURING_STREAMING",
+                                "container_id": container_id_str,
+                                "logs_captured": len(log_buffer),
+                            },
+                        )
+                        raise ContainerExecutionError(msg) from e
+                    raise
 
                 duration_ms = int((time.time() - start_time) * 1000)
 
@@ -307,7 +332,9 @@ class DockerContainerAdapter(IContainer):
                     container_id=container_id,
                 )
 
-            except ContainerTimeoutError:
+            except ContainerError:
+                # Re-raise port exceptions (ImageNotFoundError, ContainerExecutionError, ContainerTimeoutError)
+                # without reprocessing to preserve exception chain
                 raise
             except Exception as e:
                 # Cleanup container on error if it still exists and wasn't auto-removed
@@ -320,16 +347,12 @@ class DockerContainerAdapter(IContainer):
                             exc_info=True,
                             extra={
                                 "error_id": "ERR_CONTAINER_CLEANUP_FAILED",
-                                "container_id": container.short_id if container else "unknown"
-                            }
+                                "container_id": container.short_id if container else "unknown",
+                            },
                         )
 
-                if "timeout" in str(e).lower():
-                    raise ContainerTimeoutError(f"Container execution timed out after {timeout}s")
-                elif "not found" in str(e).lower() and "image" in str(e).lower():
-                    raise ImageNotFoundError(f"Image not found: {image}")
-                else:
-                    raise ContainerExecutionError(f"Container execution failed: {str(e)}")
+                msg = f"Container execution failed: {e!s}"
+                raise ContainerExecutionError(msg) from e
 
         try:
             # Create executor task for cancellation support
@@ -358,7 +381,8 @@ class DockerContainerAdapter(IContainer):
         except (ContainerError, ValidationError, ImageNotFoundError):
             raise
         except Exception as e:
-            raise ContainerExecutionError(f"Unexpected error: {str(e)}")
+            msg = f"Unexpected error: {e!s}"
+            raise ContainerExecutionError(msg) from e
 
     @instrument_async_function(
         name="container.create",
@@ -372,14 +396,14 @@ class DockerContainerAdapter(IContainer):
     async def create(
         self,
         image: str,
-        name: Optional[str] = None,
-        command: Optional[List[str]] = None,
-        volumes: Optional[Dict[str, str]] = None,
-        environment: Optional[Dict[str, str]] = None,
-        working_dir: Optional[str] = None,
-        user: Optional[str] = None,
-        network: Optional[str] = None,
-        labels: Optional[Dict[str, str]] = None,
+        name: str | None = None,
+        command: list[str] | tuple[str, ...] | None = None,
+        volumes: dict[str, str] | Mapping[str, str] | None = None,
+        environment: dict[str, str] | Mapping[str, str] | None = None,
+        working_dir: str | None = None,
+        user: str | None = None,
+        network: str | None = None,
+        labels: dict[str, str] | None = None,
     ) -> str:
         """Create a container without starting it.
 
@@ -427,16 +451,22 @@ class DockerContainerAdapter(IContainer):
                 # Check image exists
                 try:
                     client.images.get(image)
-                except Exception:
-                    raise ImageNotFoundError(f"Image not found: {image}")
+                except docker.errors.ImageNotFound as e:
+                    msg = f"Image not found: {image}"
+                    raise ImageNotFoundError(msg) from e
+                except docker.errors.APIError as e:
+                    # Re-raise other Docker errors as ContainerError
+                    msg = f"Failed to check image: {e!s}"
+                    raise ContainerError(msg) from e
 
                 container = client.containers.create(**container_config)
                 return container.id
 
+            except (ImageNotFoundError, ContainerError):
+                raise
             except Exception as e:
-                if "not found" in str(e).lower() and "image" in str(e).lower():
-                    raise ImageNotFoundError(f"Image not found: {image}")
-                raise ContainerError(f"Failed to create container: {str(e)}")
+                msg = f"Failed to create container: {e!s}"
+                raise ContainerError(msg) from e
 
         container_id = await loop.run_in_executor(None, _create)
 
@@ -488,8 +518,10 @@ class DockerContainerAdapter(IContainer):
                 container.start()
             except Exception as e:
                 if "not found" in str(e).lower():
-                    raise ResourceNotFoundError("Container", container_id)
-                raise ContainerError(f"Failed to start container: {str(e)}")
+                    msg = "Container"
+                    raise ResourceNotFoundError(msg, container_id) from e
+                msg = f"Failed to start container: {e!s}"
+                raise ContainerError(msg) from e
 
         await loop.run_in_executor(None, _start)
 
@@ -520,8 +552,10 @@ class DockerContainerAdapter(IContainer):
                 container.stop(timeout=timeout)
             except Exception as e:
                 if "not found" in str(e).lower():
-                    raise ResourceNotFoundError("Container", container_id)
-                raise ContainerError(f"Failed to stop container: {str(e)}")
+                    msg = "Container"
+                    raise ResourceNotFoundError(msg, container_id) from e
+                msg = f"Failed to stop container: {e!s}"
+                raise ContainerError(msg) from e
 
         await loop.run_in_executor(None, _stop)
 
@@ -553,8 +587,10 @@ class DockerContainerAdapter(IContainer):
             except Exception as e:
                 if "not found" in str(e).lower():
                     # Container already removed - still success
-                    raise ResourceNotFoundError("Container", container_id)
-                raise ContainerError(f"Failed to remove container: {str(e)}")
+                    msg = "Container"
+                    raise ResourceNotFoundError(msg, container_id) from e
+                msg = f"Failed to remove container: {e!s}"
+                raise ContainerError(msg) from e
 
         try:
             await loop.run_in_executor(None, _remove)
@@ -596,8 +632,10 @@ class DockerContainerAdapter(IContainer):
                 container.kill(signal=signal)
             except Exception as e:
                 if "not found" in str(e).lower():
-                    raise ResourceNotFoundError("Container", container_id)
-                raise ContainerError(f"Failed to kill container: {str(e)}")
+                    msg = "Container"
+                    raise ResourceNotFoundError(msg, container_id) from e
+                msg = f"Failed to kill container: {e!s}"
+                raise ContainerError(msg) from e
 
         await loop.run_in_executor(None, _kill)
 
@@ -615,8 +653,8 @@ class DockerContainerAdapter(IContainer):
         container_id: str,
         stream: bool = False,
         follow: bool = False,
-        tail: Optional[int] = None,
-        since: Optional[datetime] = None,
+        tail: int | None = None,
+        since: datetime | None = None,
     ) -> Any:
         """Get container logs."""
         client = self._get_client()
@@ -646,13 +684,14 @@ class DockerContainerAdapter(IContainer):
                             yield line.decode("utf-8", errors="replace")
 
                     return log_generator()
-                else:
-                    return logs.decode("utf-8", errors="replace")
+                return logs.decode("utf-8", errors="replace")
 
             except Exception as e:
                 if "not found" in str(e).lower():
-                    raise ResourceNotFoundError("Container", container_id)
-                raise ContainerError(f"Failed to get logs: {str(e)}")
+                    msg = "Container"
+                    raise ResourceNotFoundError(msg, container_id) from e
+                msg = f"Failed to get logs: {e!s}"
+                raise ContainerError(msg) from e
 
         return await loop.run_in_executor(None, _get_logs)
 
@@ -666,7 +705,13 @@ class DockerContainerAdapter(IContainer):
         capture_result=False,
     )
     async def status(self, container_id: str) -> ContainerStatus:
-        """Get container status."""
+        """Get container status.
+
+        NOTE: If date parsing fails for created_at, started_at, or finished_at, the method
+        falls back to datetime.now(UTC) for created_at and None for started_at/finished_at.
+        Callers should be aware that created_at may be a fabricated value if the original
+        date was unparseable (logged at WARN level with context).
+        """
         client = self._get_client()
         loop = asyncio.get_event_loop()
 
@@ -689,8 +734,8 @@ class DockerContainerAdapter(IContainer):
                             exc_info=True,
                             extra={
                                 "error_id": "ERR_DATE_PARSE_FAILED",
-                                "date_value": state.get("StartedAt")
-                            }
+                                "date_value": state.get("StartedAt"),
+                            },
                         )
 
                 finished_at = None
@@ -703,14 +748,22 @@ class DockerContainerAdapter(IContainer):
                             exc_info=True,
                             extra={
                                 "error_id": "ERR_DATE_PARSE_FAILED",
-                                "date_value": state.get("FinishedAt")
-                            }
+                                "date_value": state.get("FinishedAt"),
+                            },
                         )
 
                 try:
                     created_at = dateparser.isoparse(attrs["Created"])
-                except Exception:
-                    created_at = datetime.now(timezone.utc)  # Fallback
+                except Exception as parse_error:
+                    logger.warning(
+                        f"Failed to parse Created date, using current time: {parse_error}",
+                        exc_info=True,
+                        extra={
+                            "error_id": "ERR_DATE_PARSE_FAILED",
+                            "date_value": attrs.get("Created"),
+                        },
+                    )
+                    created_at = datetime.now(UTC)  # Fallback
 
                 return ContainerStatus(
                     id=ContainerId(container_id),
@@ -723,8 +776,10 @@ class DockerContainerAdapter(IContainer):
 
             except Exception as e:
                 if "not found" in str(e).lower():
-                    raise ResourceNotFoundError("Container", container_id)
-                raise ContainerError(f"Failed to get status: {str(e)}")
+                    msg = "Container"
+                    raise ResourceNotFoundError(msg, container_id) from e
+                msg = f"Failed to get status: {e!s}"
+                raise ContainerError(msg) from e
 
         return await loop.run_in_executor(None, _get_status)
 
@@ -740,10 +795,10 @@ class DockerContainerAdapter(IContainer):
     async def exec(
         self,
         container_id: str,
-        command: List[str],
-        user: Optional[str] = None,
-        working_dir: Optional[str] = None,
-        environment: Optional[Dict[str, str]] = None,
+        command: list[str] | tuple[str, ...],
+        user: str | None = None,
+        working_dir: str | None = None,
+        environment: dict[str, str] | Mapping[str, str] | None = None,
     ) -> ContainerResult:
         """Execute a command in a running container."""
         client = self._get_client()
@@ -755,7 +810,8 @@ class DockerContainerAdapter(IContainer):
 
                 # Check if container is running
                 if container.status != "running":
-                    raise ContainerNotRunningError(f"Container {container_id} is not running")
+                    msg = f"Container {container_id} is not running"
+                    raise ContainerNotRunningError(msg)
 
                 start_time = time.time()
 
@@ -784,8 +840,10 @@ class DockerContainerAdapter(IContainer):
                 raise
             except Exception as e:
                 if "not found" in str(e).lower():
-                    raise ResourceNotFoundError("Container", container_id)
-                raise ContainerError(f"Failed to execute command: {str(e)}")
+                    msg = "Container"
+                    raise ResourceNotFoundError(msg, container_id) from e
+                msg = f"Failed to execute command: {e!s}"
+                raise ContainerError(msg) from e
 
         return await loop.run_in_executor(None, _exec)
 
@@ -801,8 +859,8 @@ class DockerContainerAdapter(IContainer):
     async def list_containers(
         self,
         all: bool = False,
-        filters: Optional[Dict[str, Any]] = None,
-    ) -> List[ContainerStatus]:
+        filters: dict[str, Any] | None = None,
+    ) -> list[ContainerStatus]:
         """List containers."""
         client = self._get_client()
         loop = asyncio.get_event_loop()
@@ -827,8 +885,8 @@ class DockerContainerAdapter(IContainer):
                                 exc_info=True,
                                 extra={
                                     "error_id": "ERR_CONTAINER_DATE_PARSE_STARTED_AT",
-                                    "date_value": state.get("StartedAt")
-                                }
+                                    "date_value": state.get("StartedAt"),
+                                },
                             )
 
                     finished_at = None
@@ -841,8 +899,8 @@ class DockerContainerAdapter(IContainer):
                                 exc_info=True,
                                 extra={
                                     "error_id": "ERR_CONTAINER_DATE_PARSE_FINISHED_AT",
-                                    "date_value": state.get("FinishedAt")
-                                }
+                                    "date_value": state.get("FinishedAt"),
+                                },
                             )
 
                     try:
@@ -853,10 +911,10 @@ class DockerContainerAdapter(IContainer):
                             exc_info=True,
                             extra={
                                 "error_id": "ERR_CONTAINER_DATE_PARSE_CREATED",
-                                "date_value": attrs.get("Created")
-                            }
+                                "date_value": attrs.get("Created"),
+                            },
                         )
-                        created_at = datetime.now(timezone.utc)  # Fallback
+                        created_at = datetime.now(UTC)  # Fallback
 
                     statuses.append(
                         ContainerStatus(
@@ -872,7 +930,8 @@ class DockerContainerAdapter(IContainer):
                 return statuses
 
             except Exception as e:
-                raise ContainerError(f"Failed to list containers: {str(e)}")
+                msg = f"Failed to list containers: {e!s}"
+                raise ContainerError(msg) from e
 
         return await loop.run_in_executor(None, _list)
 
@@ -888,7 +947,7 @@ class DockerContainerAdapter(IContainer):
         self,
         image: str,
         tag: str = "latest",
-        stream_callback: Optional[Callable] = None,
+        stream_callback: Callable | None = None,
     ) -> None:
         """Pull a container image."""
         client = self._get_client()
@@ -896,8 +955,6 @@ class DockerContainerAdapter(IContainer):
 
         def _pull():
             try:
-                full_image = f"{image}:{tag}"
-
                 if stream_callback:
                     for line in client.api.pull(image, tag=tag, stream=True, decode=True):
                         stream_callback(str(line))
@@ -906,10 +963,13 @@ class DockerContainerAdapter(IContainer):
 
             except Exception as e:
                 if "not found" in str(e).lower():
-                    raise ImageNotFoundError(f"Image not found: {image}:{tag}")
-                elif "unauthorized" in str(e).lower() or "authentication" in str(e).lower():
-                    raise AuthenticationError(f"Authentication failed for image: {image}:{tag}")
-                raise ContainerError(f"Failed to pull image: {str(e)}")
+                    msg = f"Image not found: {image}:{tag}"
+                    raise ImageNotFoundError(msg) from e
+                if "unauthorized" in str(e).lower() or "authentication" in str(e).lower():
+                    msg = f"Authentication failed for image: {image}:{tag}"
+                    raise AuthenticationError(msg) from e
+                msg = f"Failed to pull image: {e!s}"
+                raise ContainerError(msg) from e
 
         await loop.run_in_executor(None, _pull)
 
@@ -932,8 +992,21 @@ class DockerContainerAdapter(IContainer):
                 full_image = f"{image}:{tag}"
                 client.images.get(full_image)
                 return True
-            except Exception:
+            except docker.errors.ImageNotFound:
                 return False
+            except docker.errors.APIError as e:
+                # For other errors (network, auth, etc), log and raise
+                logger.warning(
+                    f"Failed to check if image exists: {e}",
+                    exc_info=True,
+                    extra={
+                        "error_id": "ERR_IMAGE_CHECK_FAILED",
+                        "image": image,
+                        "tag": tag,
+                    },
+                )
+                msg = f"Failed to check if image exists: {e!s}"
+                raise ContainerError(msg) from e
 
         return await loop.run_in_executor(None, _check)
 
@@ -946,7 +1019,7 @@ class DockerContainerAdapter(IContainer):
         capture_args=True,
         capture_result=False,
     )
-    async def inspect(self, container_id: str) -> Dict[str, Any]:
+    async def inspect(self, container_id: str) -> dict[str, Any]:
         """Get detailed container information."""
         client = self._get_client()
         loop = asyncio.get_event_loop()
@@ -957,8 +1030,10 @@ class DockerContainerAdapter(IContainer):
                 return container.attrs
             except Exception as e:
                 if "not found" in str(e).lower():
-                    raise ResourceNotFoundError("Container", container_id)
-                raise ContainerError(f"Failed to inspect container: {str(e)}")
+                    msg = "Container"
+                    raise ResourceNotFoundError(msg, container_id) from e
+                msg = f"Failed to inspect container: {e!s}"
+                raise ContainerError(msg) from e
 
         return await loop.run_in_executor(None, _inspect)
 
@@ -974,7 +1049,7 @@ class DockerContainerAdapter(IContainer):
     async def wait(
         self,
         container_id: str,
-        timeout: Optional[int] = None,
+        timeout: int | None = None,
     ) -> int:
         """Wait for a container to stop."""
         client = self._get_client()
@@ -989,10 +1064,13 @@ class DockerContainerAdapter(IContainer):
                 return exit_code
             except Exception as e:
                 if "not found" in str(e).lower():
-                    raise ResourceNotFoundError("Container", container_id)
-                elif "timeout" in str(e).lower():
-                    raise ContainerTimeoutError(f"Wait timed out after {timeout}s")
-                raise ContainerError(f"Failed to wait for container: {str(e)}")
+                    msg = "Container"
+                    raise ResourceNotFoundError(msg, container_id) from e
+                if "timeout" in str(e).lower():
+                    msg = f"Wait timed out after {timeout}s"
+                    raise ContainerTimeoutError(msg) from e
+                msg = f"Failed to wait for container: {e!s}"
+                raise ContainerError(msg) from e
 
         exit_code = await loop.run_in_executor(None, _wait)
         duration_seconds = time.time() - start_time
@@ -1028,10 +1106,6 @@ class DockerContainerAdapter(IContainer):
 
         def _copy():
             try:
-                import tarfile
-                import io
-                from pathlib import Path
-
                 container = client.containers.get(container_id)
 
                 # Create tar archive of source
@@ -1044,8 +1118,10 @@ class DockerContainerAdapter(IContainer):
 
             except Exception as e:
                 if "not found" in str(e).lower() and "container" in str(e).lower():
-                    raise ResourceNotFoundError("Container", container_id)
-                raise ContainerError(f"Failed to copy to container: {str(e)}")
+                    msg = "Container"
+                    raise ResourceNotFoundError(msg, container_id) from e
+                msg = f"Failed to copy to container: {e!s}"
+                raise ContainerError(msg) from e
 
         await loop.run_in_executor(None, _copy)
 
@@ -1069,13 +1145,10 @@ class DockerContainerAdapter(IContainer):
 
         def _copy():
             try:
-                import tarfile
-                import io
-
                 container = client.containers.get(container_id)
 
                 # Get tar archive from container
-                bits, stat = container.get_archive(source)
+                bits, _stat = container.get_archive(source)
 
                 # Extract tar archive
                 tar_stream = io.BytesIO()
@@ -1088,62 +1161,138 @@ class DockerContainerAdapter(IContainer):
 
             except Exception as e:
                 if "not found" in str(e).lower() and "container" in str(e).lower():
-                    raise ResourceNotFoundError("Container", container_id)
-                raise ContainerError(f"Failed to copy from container: {str(e)}")
+                    msg = "Container"
+                    raise ResourceNotFoundError(msg, container_id) from e
+                msg = f"Failed to copy from container: {e!s}"
+                raise ContainerError(msg) from e
 
         await loop.run_in_executor(None, _copy)
+
+    @instrument_async_function(
+        name="container.get_file_content",
+        attributes={
+            "service": "docker_container_adapter",
+            "operation": "get_file_content",
+        },
+        capture_args=True,
+    )
+    async def get_file_content(
+        self,
+        container_id: str,
+        file_path: str,
+    ) -> bytes:
+        """
+        Get file content from a container's output directory.
+
+        Args:
+            container_id: Container identifier
+            file_path: Path to file within container (relative to /output/)
+
+        Returns:
+            File content as bytes
+
+        Raises:
+            ResourceNotFoundError: If container or file doesn't exist
+            ContainerError: If read operation failed
+        """
+        # Validate file_path to prevent traversal attacks
+        if ".." in file_path or file_path.startswith("/"):
+            msg = f"Invalid file path: {file_path}. Path must be relative to /output/ and cannot contain '..' or start with '/'"
+            raise ValidationError(msg)
+
+        client = self._get_client()
+        loop = asyncio.get_event_loop()
+
+        def _get_file():
+            try:
+                container = client.containers.get(container_id)
+
+                # Construct full path to file in /output/ directory
+                full_path = f"/output/{file_path}"
+
+                # Get file from container via tar archive
+                bits, _stat = container.get_archive(full_path)
+
+                # Extract tar archive to get file content
+                tar_stream = io.BytesIO()
+                for chunk in bits:
+                    tar_stream.write(chunk)
+
+                tar_stream.seek(0)
+                with tarfile.open(fileobj=tar_stream, mode="r") as tar:
+                    # Docker's get_archive returns a tar where the member name
+                    # is the basename, not the full path. Iterate through members
+                    # and select the first file-type member.
+                    for member in tar.getmembers():
+                        if member.isfile():
+                            extracted_file = tar.extractfile(member)
+                            if extracted_file is None:
+                                msg = f"Failed to extract file content: {file_path}"
+                                raise ContainerError(msg)
+                            return extracted_file.read()
+
+                    # No file found in archive
+                    msg = f"File not found in container output: {file_path}"
+                    raise ResourceNotFoundError(msg, file_path)
+
+            except (ContainerError, ResourceNotFoundError):
+                # Re-raise port exceptions without reprocessing to preserve exception chain
+                raise
+            except Exception as e:
+                if "not found" in str(e).lower():
+                    if "container" in str(e).lower():
+                        msg = "Container"
+                        raise ResourceNotFoundError(msg, container_id) from e
+                    msg = f"File not found in container output: {file_path}"
+                    raise ResourceNotFoundError(msg, file_path) from e
+                msg = f"Failed to get file content from container: {e!s}"
+                raise ContainerError(msg) from e
+
+        return await loop.run_in_executor(None, _get_file)
 
     def close(self) -> None:
         """Close Docker client and clean up all resources."""
         if self._docker_client is not None:
             try:
                 # Close the API client's session and adapter connection pools
-                if hasattr(self._docker_client, 'api'):
+                if hasattr(self._docker_client, "api"):
                     api = self._docker_client.api
                     # Close HTTP session
-                    if hasattr(api, '_session') and api._session:
+                    if hasattr(api, "_session") and api._session:
                         try:
                             api._session.close()
                         except Exception as e:
                             logger.warning(
                                 f"Error closing Docker API session: {e}",
                                 exc_info=True,
-                                extra={
-                                    "error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR
-                                }
+                                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
                             )
                     # Close adapters (which hold socket connections)
-                    if hasattr(api, '_adapters') and api._adapters:
+                    if hasattr(api, "_adapters") and api._adapters:
                         try:
                             for adapter in api._adapters.values():
-                                if hasattr(adapter, 'close'):
+                                if hasattr(adapter, "close"):
                                     adapter.close()
                         except Exception as e:
                             logger.warning(
                                 f"Error closing Docker API adapters: {e}",
                                 exc_info=True,
-                                extra={
-                                    "error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR
-                                }
+                                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
                             )
-                    if hasattr(api, 'close'):
+                    if hasattr(api, "close"):
                         try:
                             api.close()
                         except Exception as e:
                             logger.warning(
                                 f"Error closing Docker API: {e}",
                                 exc_info=True,
-                                extra={
-                                    "error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR
-                                }
+                                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
                             )
             except Exception as e:
                 logger.warning(
                     f"Error cleaning up Docker API client: {e}",
                     exc_info=True,
-                    extra={
-                        "error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR
-                    }
+                    extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
                 )
 
             try:
@@ -1152,9 +1301,7 @@ class DockerContainerAdapter(IContainer):
                 logger.warning(
                     f"Error closing Docker client: {e}",
                     exc_info=True,
-                    extra={
-                        "error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR
-                    }
+                    extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
                 )
             finally:
                 self._docker_client = None
@@ -1183,6 +1330,6 @@ class DockerContainerAdapter(IContainer):
             # but log for observability
             logger.debug(
                 f"Cleanup error in docker container context manager ({type(e).__name__}: {e}), suppressed to avoid masking original exception",
-                exc_info=True
+                exc_info=True,
             )
         return False  # Don't suppress exceptions

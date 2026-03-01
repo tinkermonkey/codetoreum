@@ -3,8 +3,8 @@
 import asyncio
 import re
 import threading
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 from codetoreum.ports.exceptions import (
@@ -56,23 +56,25 @@ class MockNotifierAdapter(INotifier):
             ValidationError: If parameters are invalid
         """
         if send_delay < 0:
-            raise ValidationError("Send delay cannot be negative")
+            msg = "Send delay cannot be negative"
+            raise ValidationError(msg)
         if not 0.0 <= failure_rate <= 1.0:
-            raise ValidationError("Failure rate must be between 0.0 and 1.0")
+            msg = "Failure rate must be between 0.0 and 1.0"
+            raise ValidationError(msg)
 
         self._send_delay = send_delay
         self._simulate_failures = simulate_failures
         self._failure_rate = failure_rate
 
         # Notification storage
-        self._notifications: Dict[str, Dict[str, Any]] = {}
-        self._templates: Dict[str, Dict[str, Any]] = {}
+        self._notifications: dict[str, dict[str, Any]] = {}
+        self._templates: dict[str, dict[str, Any]] = {}
 
         # Notification history
-        self._history: List[Dict[str, Any]] = []
+        self._history: list[dict[str, Any]] = []
 
         # Channel configuration
-        self._channel_config: Dict[NotificationChannel, Dict[str, Any]] = {}
+        self._channel_config: dict[NotificationChannel, dict[str, Any]] = {}
 
         # Statistics
         self._stats = {
@@ -112,20 +114,24 @@ class MockNotifierAdapter(INotifier):
             ValidationError: If recipient format is invalid
         """
         if not recipient or not recipient.strip():
-            raise ValidationError("Recipient cannot be empty")
+            msg = "Recipient cannot be empty"
+            raise ValidationError(msg)
 
         if channel == NotificationChannel.EMAIL:
             # Basic email validation
             if "@" not in recipient or "." not in recipient:
-                raise ValidationError(f"Invalid email address: {recipient}")
+                msg = f"Invalid email address: {recipient}"
+                raise ValidationError(msg)
         elif channel == NotificationChannel.SLACK:
             # Slack channel or user ID
             if not (recipient.startswith("#") or recipient.startswith("@") or recipient.startswith("U")):
-                raise ValidationError(f"Invalid Slack recipient: {recipient}")
+                msg = f"Invalid Slack recipient: {recipient}"
+                raise ValidationError(msg)
         elif channel == NotificationChannel.SMS:
             # Basic phone number validation
-            if not re.match(r'^\+?[0-9]{10,15}$', recipient.replace("-", "").replace(" ", "")):
-                raise ValidationError(f"Invalid phone number: {recipient}")
+            if not re.match(r"^\+?[0-9]{10,15}$", recipient.replace("-", "").replace(" ", "")):
+                msg = f"Invalid phone number: {recipient}"
+                raise ValidationError(msg)
 
     async def send(
         self,
@@ -134,7 +140,7 @@ class MockNotifierAdapter(INotifier):
         subject: str,
         message: str,
         priority: NotificationPriority = NotificationPriority.NORMAL,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> NotificationResult:
         """
         Send a notification.
@@ -156,10 +162,12 @@ class MockNotifierAdapter(INotifier):
         self._validate_recipient(channel, recipient)
 
         if not subject or not subject.strip():
-            raise ValidationError("Subject cannot be empty")
+            msg = "Subject cannot be empty"
+            raise ValidationError(msg)
 
         if not message or not message.strip():
-            raise ValidationError("Message cannot be empty")
+            msg = "Message cannot be empty"
+            raise ValidationError(msg)
 
         # Simulate delay
         if self._send_delay > 0:
@@ -168,7 +176,7 @@ class MockNotifierAdapter(INotifier):
         # Check if should fail
         if self._should_fail():
             notification_id = str(uuid4())
-            timestamp = datetime.now(timezone.utc)
+            timestamp = datetime.now(UTC)
 
             with self._lock:
                 self._stats["total_failed"] += 1
@@ -186,7 +194,7 @@ class MockNotifierAdapter(INotifier):
 
         # Create notification record
         notification_id = str(uuid4())
-        timestamp = datetime.now(timezone.utc)
+        timestamp = datetime.now(UTC)
 
         notification_record = {
             "id": notification_id,
@@ -244,10 +252,12 @@ class MockNotifierAdapter(INotifier):
         self._validate_recipient(channel, recipient)
 
         if not content.title:
-            raise ValidationError("Rich content title cannot be empty")
+            msg = "Rich content title cannot be empty"
+            raise ValidationError(msg)
 
         if not content.body:
-            raise ValidationError("Rich content body cannot be empty")
+            msg = "Rich content body cannot be empty"
+            raise ValidationError(msg)
 
         # Use standard send with rich content converted to message
         message = f"{content.body}"
@@ -274,8 +284,8 @@ class MockNotifierAdapter(INotifier):
 
     async def send_batch(
         self,
-        notifications: List[Notification],
-    ) -> List[NotificationResult]:
+        notifications: list[Notification],
+    ) -> list[NotificationResult]:
         """
         Send multiple notifications.
 
@@ -289,16 +299,20 @@ class MockNotifierAdapter(INotifier):
             ValidationError: Invalid notification data
         """
         if not notifications:
-            raise ValidationError("Notifications list cannot be empty")
+            msg = "Notifications list cannot be empty"
+            raise ValidationError(msg)
 
         # Validate all notifications have required fields before processing
         for i, notification in enumerate(notifications):
             if not notification.recipient:
-                raise ValidationError(f"Notification {i} missing recipient")
+                msg = f"Notification {i} missing recipient"
+                raise ValidationError(msg)
             if not notification.message:
-                raise ValidationError(f"Notification {i} missing message")
+                msg = f"Notification {i} missing message"
+                raise ValidationError(msg)
             if not notification.channel:
-                raise ValidationError(f"Notification {i} missing channel")
+                msg = f"Notification {i} missing channel"
+                raise ValidationError(msg)
 
         results = []
         for notification in notifications:
@@ -319,7 +333,7 @@ class MockNotifierAdapter(INotifier):
         channel: NotificationChannel,
         recipient: str,
         template_id: str,
-        variables: Dict[str, Any],
+        variables: dict[str, Any],
         priority: NotificationPriority = NotificationPriority.NORMAL,
     ) -> NotificationResult:
         """
@@ -341,16 +355,15 @@ class MockNotifierAdapter(INotifier):
         """
         with self._lock:
             if template_id not in self._templates:
-                raise ResourceNotFoundError("Template", template_id)
+                msg = "Template"
+                raise ResourceNotFoundError(msg, template_id)
 
             template = self._templates[template_id]
 
             # Check channel matches
             if template["channel"] != channel:
-                raise ValidationError(
-                    f"Template '{template_id}' is for {template['channel'].value}, "
-                    f"not {channel.value}"
-                )
+                msg = f"Template '{template_id}' is for {template['channel'].value}, not {channel.value}"
+                raise ValidationError(msg)
 
         # Simple variable substitution
         message = template["template"]
@@ -363,7 +376,8 @@ class MockNotifierAdapter(INotifier):
 
         # Check if any variables were not substituted
         if "{" in message or "{" in subject:
-            raise ValidationError("Not all template variables were provided")
+            msg = "Not all template variables were provided"
+            raise ValidationError(msg)
 
         return await self.send(
             channel=channel,
@@ -392,17 +406,18 @@ class MockNotifierAdapter(INotifier):
         """
         with self._lock:
             if notification_id not in self._notifications:
-                raise ResourceNotFoundError("Notification", notification_id)
+                msg = "Notification"
+                raise ResourceNotFoundError(msg, notification_id)
 
             return self._notifications[notification_id]["status"]
 
     async def get_notification_history(
         self,
-        recipient: Optional[str] = None,
-        channel: Optional[NotificationChannel] = None,
-        since: Optional[datetime] = None,
+        recipient: str | None = None,
+        channel: NotificationChannel | None = None,
+        since: datetime | None = None,
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get notification history.
 
@@ -416,7 +431,8 @@ class MockNotifierAdapter(INotifier):
             List[Dict[str, Any]]: List of notification records
         """
         if limit <= 0:
-            raise ValidationError("Limit must be positive")
+            msg = "Limit must be positive"
+            raise ValidationError(msg)
 
         with self._lock:
             history = list(self._history)
@@ -454,7 +470,8 @@ class MockNotifierAdapter(INotifier):
         """
         with self._lock:
             if notification_id not in self._notifications:
-                raise ResourceNotFoundError("Notification", notification_id)
+                msg = "Notification"
+                raise ResourceNotFoundError(msg, notification_id)
 
             notification = self._notifications[notification_id]
 
@@ -469,8 +486,8 @@ class MockNotifierAdapter(INotifier):
         template_id: str,
         channel: NotificationChannel,
         template: str,
-        subject_template: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        subject_template: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """
         Register a notification template.
@@ -486,10 +503,12 @@ class MockNotifierAdapter(INotifier):
             ValidationError: Invalid template
         """
         if not template_id or not template_id.strip():
-            raise ValidationError("Template ID cannot be empty")
+            msg = "Template ID cannot be empty"
+            raise ValidationError(msg)
 
         if not template or not template.strip():
-            raise ValidationError("Template cannot be empty")
+            msg = "Template cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             self._templates[template_id] = {
@@ -498,7 +517,7 @@ class MockNotifierAdapter(INotifier):
                 "template": template,
                 "subject_template": subject_template or "Notification",
                 "metadata": metadata or {},
-                "created_at": datetime.now(timezone.utc),
+                "created_at": datetime.now(UTC),
             }
 
     async def unregister_template(
@@ -516,14 +535,15 @@ class MockNotifierAdapter(INotifier):
         """
         with self._lock:
             if template_id not in self._templates:
-                raise ResourceNotFoundError("Template", template_id)
+                msg = "Template"
+                raise ResourceNotFoundError(msg, template_id)
 
             del self._templates[template_id]
 
     async def list_templates(
         self,
-        channel: Optional[NotificationChannel] = None,
-    ) -> List[Dict[str, Any]]:
+        channel: NotificationChannel | None = None,
+    ) -> list[dict[str, Any]]:
         """
         List registered templates.
 
@@ -564,9 +584,9 @@ class MockNotifierAdapter(INotifier):
 
     async def get_statistics(
         self,
-        since: Optional[datetime] = None,
-        channel: Optional[NotificationChannel] = None,
-    ) -> Dict[str, Any]:
+        since: datetime | None = None,
+        channel: NotificationChannel | None = None,
+    ) -> dict[str, Any]:
         """
         Get notification statistics.
 
@@ -603,7 +623,7 @@ class MockNotifierAdapter(INotifier):
     async def configure_channel(
         self,
         channel: NotificationChannel,
-        configuration: Dict[str, Any],
+        configuration: dict[str, Any],
     ) -> None:
         """
         Configure a notification channel.
@@ -616,12 +636,13 @@ class MockNotifierAdapter(INotifier):
             ValidationError: Invalid configuration
         """
         if not configuration:
-            raise ValidationError("Configuration cannot be empty")
+            msg = "Configuration cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             self._channel_config[channel] = configuration.copy()
 
-    async def health_check(self) -> Dict[NotificationChannel, bool]:
+    async def health_check(self) -> dict[NotificationChannel, bool]:
         """
         Check health of all configured channels.
 
@@ -654,9 +675,9 @@ class MockNotifierAdapter(INotifier):
 
     def get_sent_notifications(
         self,
-        recipient: Optional[str] = None,
-        channel: Optional[NotificationChannel] = None,
-    ) -> List[Dict[str, Any]]:
+        recipient: str | None = None,
+        channel: NotificationChannel | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Get all sent notifications.
 
@@ -688,7 +709,7 @@ class MockNotifierAdapter(INotifier):
         with self._lock:
             return len(self._notifications)
 
-    def get_last_notification(self) -> Optional[Dict[str, Any]]:
+    def get_last_notification(self) -> dict[str, Any] | None:
         """
         Get the most recent notification.
 
@@ -703,8 +724,8 @@ class MockNotifierAdapter(INotifier):
     def assert_notification_sent(
         self,
         recipient: str,
-        subject_contains: Optional[str] = None,
-        message_contains: Optional[str] = None,
+        subject_contains: str | None = None,
+        message_contains: str | None = None,
     ) -> bool:
         """
         Assert that a notification was sent matching criteria.

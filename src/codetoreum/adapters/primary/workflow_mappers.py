@@ -5,56 +5,53 @@ Maps between domain models/port objects and API DTOs for workflows and orchestra
 This keeps the domain layer independent of API concerns.
 """
 
-from datetime import datetime, timezone
-from typing import List
+from datetime import UTC, datetime
 
-from codetoreum.adapters.primary.workflow_dtos import (
-    CreateWorkflowRequest,
-    UpdateWorkflowRequest,
-    WorkflowResponse,
-    WorkflowSummaryResponse,
-    WorkflowListResponse,
-    WorkflowStageResponse,
-    StageTransition,
-    StageEntryCondition,
-    WorkflowCommandResult,
-    WorkflowVersionResponse,
-    WorkflowVersionListResponse,
-    WorkflowValidationError,
-    WorkflowValidationResponse,
-)
 from codetoreum.adapters.primary.orchestration_dtos import (
+    ConditionValidationResult,
+    EntryConditionValidationResponse,
+    ExecutionQueueResponse,
+    QueuedExecutionInfo,
     StartWorkflowExecutionRequest,
     StartWorkflowExecutionResponse,
     WorkflowExecutionResponse,
-    QueuedExecutionInfo,
-    ExecutionQueueResponse,
-    EntryConditionValidationResponse,
-    ConditionValidationResult,
 )
+from codetoreum.adapters.primary.workflow_dtos import (
+    CreateWorkflowRequest,
+    StageEntryCondition,
+    StageTransition,
+    UpdateWorkflowRequest,
+    WorkflowCommandResult,
+    WorkflowListResponse,
+    WorkflowResponse,
+    WorkflowStageResponse,
+    WorkflowSummaryResponse,
+    WorkflowValidationError,
+    WorkflowValidationResponse,
+    WorkflowVersionListResponse,
+    WorkflowVersionResponse,
+)
+from codetoreum.ports.input.orchestration_command import (
+    EntryConditionCheckResult,
+    ExecutionPriority,
+    OrchestrationCommandResult,
+    StartExecutionCommand,
+)
+from codetoreum.ports.input.task_query import ExecutionListResult
 from codetoreum.ports.input.workflow_definition_command import (
     CreateWorkflowDefinitionCommand,
-    UpdateWorkflowDefinitionCommand,
     StageDefinition,
     StageTransitionDefinition,
+    UpdateWorkflowDefinitionCommand,
     WorkflowDefinitionCommandResult,
 )
 from codetoreum.ports.input.workflow_query import (
     WorkflowDefinitionInfo,
-    WorkflowSummaryInfo,
     WorkflowListResult,
-    WorkflowVersionHistoryResult,
+    WorkflowSummaryInfo,
     WorkflowValidationResult,
-    StageInfo,
-    StageTransitionInfo,
+    WorkflowVersionHistoryResult,
 )
-from codetoreum.ports.input.orchestration_command import (
-    StartExecutionCommand,
-    ExecutionPriority,
-    OrchestrationCommandResult,
-    EntryConditionCheckResult,
-)
-from codetoreum.ports.input.task_query import ExecutionListResult, ExecutionListItem
 
 
 class WorkflowMapper:
@@ -79,10 +76,7 @@ class WorkflowMapper:
                 timeout_seconds=stage.timeout_seconds,
                 retry_count=stage.retry_count,
                 entry_conditions=[
-                    {
-                        "condition_type": cond.condition_type,
-                        "parameters": cond.parameters
-                    }
+                    {"condition_type": cond.condition_type, "parameters": cond.parameters}
                     for cond in stage.entry_conditions
                 ],
                 metadata=stage.metadata,
@@ -133,10 +127,7 @@ class WorkflowMapper:
                     timeout_seconds=stage.timeout_seconds,
                     retry_count=stage.retry_count,
                     entry_conditions=[
-                        {
-                            "condition_type": cond.condition_type,
-                            "parameters": cond.parameters
-                        }
+                        {"condition_type": cond.condition_type, "parameters": cond.parameters}
                         for cond in stage.entry_conditions
                     ],
                     metadata=stage.metadata,
@@ -187,7 +178,7 @@ class WorkflowMapper:
                 entry_conditions=[
                     StageEntryCondition(
                         condition_type=cond.get("condition_type", "unknown"),
-                        parameters=cond.get("parameters", {})
+                        parameters=cond.get("parameters", {}),
                     )
                     for cond in stage.entry_conditions
                 ],
@@ -258,10 +249,7 @@ class WorkflowMapper:
         Returns:
             List response DTO for API
         """
-        workflows = [
-            WorkflowMapper.to_summary_response(wf)
-            for wf in workflow_list.workflows
-        ]
+        workflows = [WorkflowMapper.to_summary_response(wf) for wf in workflow_list.workflows]
 
         return WorkflowListResponse(
             workflows=workflows,
@@ -291,7 +279,9 @@ class WorkflowMapper:
         )
 
     @staticmethod
-    def to_version_list_response(history: WorkflowVersionHistoryResult) -> WorkflowVersionListResponse:
+    def to_version_list_response(
+        history: WorkflowVersionHistoryResult,
+    ) -> WorkflowVersionListResponse:
         """
         Convert WorkflowVersionHistoryResult to WorkflowVersionListResponse DTO.
 
@@ -371,7 +361,9 @@ class OrchestrationMapper:
         )
 
     @staticmethod
-    def to_start_execution_response(result: OrchestrationCommandResult) -> StartWorkflowExecutionResponse:
+    def to_start_execution_response(
+        result: OrchestrationCommandResult,
+    ) -> StartWorkflowExecutionResponse:
         """
         Convert OrchestrationCommandResult to StartWorkflowExecutionResponse DTO.
 
@@ -386,7 +378,7 @@ class OrchestrationMapper:
             workflow_run_id=result.workflow_run_id,
             status=result.status,
             message=result.message,
-            started_at=result.started_at or datetime.now(timezone.utc),
+            started_at=result.started_at or datetime.now(UTC),
         )
 
     @staticmethod
@@ -413,7 +405,7 @@ class OrchestrationMapper:
 
     @staticmethod
     def to_entry_condition_validation_response(
-        check_result: EntryConditionCheckResult
+        check_result: EntryConditionCheckResult,
     ) -> EntryConditionValidationResponse:
         """
         Convert EntryConditionCheckResult to EntryConditionValidationResponse DTO.
@@ -442,10 +434,7 @@ class OrchestrationMapper:
         )
 
     @staticmethod
-    def to_queue_response(
-        execution_list: ExecutionListResult,
-        queue_stats: dict
-    ) -> ExecutionQueueResponse:
+    def to_queue_response(execution_list: ExecutionListResult, queue_stats: dict) -> ExecutionQueueResponse:
         """
         Convert ExecutionListResult to ExecutionQueueResponse DTO.
 
@@ -467,7 +456,7 @@ class OrchestrationMapper:
                 agent_name=exec.agent_name,
                 status=exec.status.value,
                 priority="MEDIUM",  # Would need to be in the execution data
-                queued_at=exec.started_at or datetime.now(timezone.utc),
+                queued_at=exec.started_at or datetime.now(UTC),
                 started_at=exec.started_at,
                 estimated_duration_seconds=int(exec.duration_seconds) if exec.duration_seconds else None,
             )

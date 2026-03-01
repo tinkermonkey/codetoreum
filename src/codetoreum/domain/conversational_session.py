@@ -11,7 +11,7 @@ The session state captures all information needed for:
 """
 
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Literal
 
 
 @dataclass(frozen=True)
@@ -82,8 +82,8 @@ class ConversationalSessionState:
     work_item_id: str
     project_id: str
     agent_assignment: str
-    column_name: Optional[str]
-    llm_conversation_id: Optional[str]
+    column_name: str | None
+    llm_conversation_id: str | None
     last_processed_comment_id: str
     last_interaction_timestamp: str
     status: Literal["active", "suspended", "terminated"]
@@ -91,26 +91,35 @@ class ConversationalSessionState:
     def __post_init__(self) -> None:
         """Validate session state after initialization."""
         if not self.session_id:
-            raise ValueError("session_id is required")
+            msg = "session_id is required"
+            raise ValueError(msg)
         if not self.work_item_id:
-            raise ValueError("work_item_id is required")
+            msg = "work_item_id is required"
+            raise ValueError(msg)
         if not self.project_id:
-            raise ValueError("project_id is required")
+            msg = "project_id is required"
+            raise ValueError(msg)
         if not self.agent_assignment:
-            raise ValueError("agent_assignment is required")
+            msg = "agent_assignment is required"
+            raise ValueError(msg)
         if not self.last_processed_comment_id:
-            raise ValueError("last_processed_comment_id is required")
+            msg = "last_processed_comment_id is required"
+            raise ValueError(msg)
         if not self.last_interaction_timestamp:
-            raise ValueError("last_interaction_timestamp is required")
+            msg = "last_interaction_timestamp is required"
+            raise ValueError(msg)
         # Validate ISO 8601 timestamp
         try:
             from datetime import datetime
+
             datetime.fromisoformat(self.last_interaction_timestamp.replace("Z", "+00:00"))
         except (ValueError, AttributeError) as e:
-            raise ValueError(f"last_interaction_timestamp must be ISO 8601 format: {e}")
+            msg = f"last_interaction_timestamp must be ISO 8601 format: {e}"
+            raise ValueError(msg)
         # Validate status is one of the allowed values
         if self.status not in ("active", "suspended", "terminated"):
-            raise ValueError(f"status must be one of: 'active', 'suspended', 'terminated', got '{self.status}'")
+            msg = f"status must be one of: 'active', 'suspended', 'terminated', got '{self.status}'"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary for storage."""

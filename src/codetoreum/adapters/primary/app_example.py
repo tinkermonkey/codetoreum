@@ -5,8 +5,8 @@ This example shows how to properly integrate the secure logging infrastructure
 and error handling middleware into a FastAPI application.
 """
 
+import uvicorn
 from fastapi import FastAPI
-from starlette.middleware.base import BaseHTTPMiddleware
 
 from codetoreum.adapters.primary.error_middleware import (
     DEBUG_MODE,
@@ -67,8 +67,6 @@ async def root():
 
 
 if __name__ == "__main__":
-    import uvicorn
-
     # Run the application
     uvicorn.run(
         app,

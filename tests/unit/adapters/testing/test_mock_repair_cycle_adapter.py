@@ -9,16 +9,14 @@ Comprehensive tests for the mock repair cycle adapter, verifying:
 6. Circuit breaker functionality
 """
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
-from datetime import datetime, timedelta, timezone
 
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
     MockRepairCycleAdapter,
-    CircuitBreakerTripped,
 )
 from codetoreum.domain.repair_cycle_types import (
-    CycleResult,
-    RepairCycleResult,
     RepairTestFailure,
     RepairTestResult,
     RepairTestRunConfig,
@@ -35,7 +33,7 @@ class MockRepairCycleContext:
         self,
         stage_name: str = "fix_failures",
         workflow_run_id: str = "pipeline_123",
-        test_configs: tuple = None,
+        test_configs: tuple | None = None,
         agent_name: str = "senior_software_engineer",
         max_total_agent_calls: int = 100,
         checkpoint_interval: int = 5,
@@ -70,7 +68,7 @@ class TestSimulationClockIntegration:
     async def test_clock_time_advancement_on_test_run(self):
         """Verify clock advances 30 seconds per test (FR-11.6)."""
         clock = SimulationClock(speed_multiplier=100.0)
-        start_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        start_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
         clock.start_at(start_time)
 
         adapter = MockRepairCycleAdapter(clock)
@@ -85,7 +83,7 @@ class TestSimulationClockIntegration:
             failures=(),
             warning_list=(),
             raw_output="",
-            timestamp=clock.now().isoformat()
+            timestamp=clock.now().isoformat(),
         )
         adapter.set_test_result_sequence(RepairTestType.UNIT, [result])
 
@@ -100,17 +98,15 @@ class TestSimulationClockIntegration:
     async def test_clock_time_advancement_on_fix(self):
         """Verify clock advances 2 minutes per file fix (FR-11.7)."""
         clock = SimulationClock(speed_multiplier=100.0)
-        start_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        start_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
         clock.start_at(start_time)
 
         adapter = MockRepairCycleAdapter(clock)
         adapter.current_project = "proj-1"
 
         context = MockRepairCycleContext()
-        failures = {
-            "test_file.py": (
-                RepairTestFailure(file="test_file.py", test="test_1", message="Failed"),
-            )
+        failures: dict[str, tuple[RepairTestFailure, ...]] = {
+            "test_file.py": (RepairTestFailure(file="test_file.py", test="test_1", message="Failed"),)
         }
 
         config = context.test_configs[0]
@@ -124,7 +120,7 @@ class TestSimulationClockIntegration:
     async def test_clock_time_advancement_on_warning_review(self):
         """Verify clock advances 1 minute per warning review (FR-11.8)."""
         clock = SimulationClock(speed_multiplier=100.0)
-        start_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        start_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
         clock.start_at(start_time)
 
         adapter = MockRepairCycleAdapter(clock)
@@ -145,7 +141,7 @@ class TestSimulationClockIntegration:
                 RepairTestWarning(file="src/file2.py", message="Warning 2"),
             ),
             raw_output="",
-            timestamp=clock.now().isoformat()
+            timestamp=clock.now().isoformat(),
         )
 
         await adapter.handle_warnings(test_result, config, context)
@@ -169,12 +165,10 @@ class TestConfigurationMethods:
             passed=9,
             failed=1,
             warnings=0,
-            failures=(
-                RepairTestFailure(file="test.py", test="test_1", message="Failed"),
-            ),
+            failures=(RepairTestFailure(file="test.py", test="test_1", message="Failed"),),
             warning_list=(),
             raw_output="",
-            timestamp=clock.now().isoformat()
+            timestamp=clock.now().isoformat(),
         )
 
         result2 = RepairTestResult(
@@ -186,7 +180,7 @@ class TestConfigurationMethods:
             failures=(),
             warning_list=(),
             raw_output="",
-            timestamp=clock.now().isoformat()
+            timestamp=clock.now().isoformat(),
         )
 
         adapter.set_test_result_sequence(RepairTestType.UNIT, [result1, result2])
@@ -246,7 +240,7 @@ class TestEventLogging:
             failures=(),
             warning_list=(),
             raw_output="",
-            timestamp=clock.now().isoformat()
+            timestamp=clock.now().isoformat(),
         )
         adapter.set_test_result_sequence(RepairTestType.UNIT, [result])
 
@@ -273,7 +267,7 @@ class TestEventLogging:
             failures=(),
             warning_list=(),
             raw_output="",
-            timestamp=clock.now().isoformat()
+            timestamp=clock.now().isoformat(),
         )
         adapter.set_test_result_sequence(RepairTestType.UNIT, [result])
 
@@ -322,7 +316,7 @@ class TestAssertionHelpers:
             failures=(),
             warning_list=(),
             raw_output="",
-            timestamp=clock.now().isoformat()
+            timestamp=clock.now().isoformat(),
         )
         adapter.set_test_result_sequence(RepairTestType.UNIT, [result])
 
@@ -363,7 +357,7 @@ class TestAssertionHelpers:
             failures=(),
             warning_list=(),
             raw_output="",
-            timestamp=clock.now().isoformat()
+            timestamp=clock.now().isoformat(),
         )
         adapter.set_test_result_sequence(RepairTestType.UNIT, [result])
 
@@ -409,7 +403,7 @@ class TestCircuitBreaker:
         adapter = MockRepairCycleAdapter(clock)
         adapter.current_project = "proj-1"
 
-        result = RepairTestResult(
+        test_result = RepairTestResult(
             test_type=RepairTestType.UNIT,
             iteration=1,
             passed=7,
@@ -422,17 +416,17 @@ class TestCircuitBreaker:
             ),
             warning_list=(),
             raw_output="",
-            timestamp=clock.now().isoformat()
+            timestamp=clock.now().isoformat(),
         )
-        adapter.set_test_result_sequence(RepairTestType.UNIT, [result, result, result, result])
+        adapter.set_test_result_sequence(RepairTestType.UNIT, [test_result, test_result, test_result, test_result])
 
         # Set low limit to trigger circuit breaker
         context = MockRepairCycleContext(max_total_agent_calls=3)
-        result = await adapter.execute(context)
+        cycle_result = await adapter.execute(context)
 
         # Should have hit circuit breaker before using all iterations
-        assert not result.overall_success
-        assert result.total_agent_calls >= context.max_total_agent_calls
+        assert not cycle_result.overall_success
+        assert cycle_result.total_agent_calls >= context.max_total_agent_calls
 
     @pytest.mark.asyncio
     async def test_circuit_breaker_event_emitted(self):
@@ -454,7 +448,7 @@ class TestCircuitBreaker:
             ),
             warning_list=(),
             raw_output="",
-            timestamp=clock.now().isoformat()
+            timestamp=clock.now().isoformat(),
         )
         # Create multiple iterations to trigger circuit breaker
         adapter.set_test_result_sequence(RepairTestType.UNIT, [result] * 10)

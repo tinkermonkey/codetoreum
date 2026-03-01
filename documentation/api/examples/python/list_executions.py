@@ -4,11 +4,12 @@ Example: List and monitor agent executions
 This example demonstrates how to list executions, filter by status,
 and retrieve execution logs.
 """
-import requests
-import time
-from typing import List, Dict, Any, Optional
-from datetime import datetime
 
+import time
+from datetime import datetime
+from typing import Any, cast
+
+import requests
 
 # Configuration
 BASE_URL = "http://localhost:8000"
@@ -16,15 +17,15 @@ API_TOKEN = "your_token_here"  # Get from server startup logs
 
 
 def list_executions(
-    status: Optional[str] = None,
-    work_item_id: Optional[str] = None,
-    agent_id: Optional[str] = None,
-    workflow_run_id: Optional[str] = None,
+    status: str | None = None,
+    work_item_id: str | None = None,
+    agent_id: str | None = None,
+    workflow_run_id: str | None = None,
     offset: int = 0,
     limit: int = 50,
     sort_by: str = "started_at",
-    sort_order: str = "desc"
-) -> Dict[str, Any]:
+    sort_order: str = "desc",
+) -> dict[str, Any]:
     """
     List agent executions with filtering and pagination.
 
@@ -46,15 +47,13 @@ def list_executions(
     """
     url = f"{BASE_URL}/api/v2/executions/"
 
-    headers = {
-        "Authorization": f"Bearer {API_TOKEN}"
-    }
+    headers = {"Authorization": f"Bearer {API_TOKEN}"}
 
-    params = {
+    params: dict[str, str | int] = {
         "offset": offset,
         "limit": limit,
         "sort_by": sort_by,
-        "sort_order": sort_order
+        "sort_order": sort_order,
     }
 
     # Add optional filters
@@ -70,10 +69,10 @@ def list_executions(
     response = requests.get(url, headers=headers, params=params)
     response.raise_for_status()
 
-    return response.json()
+    return cast("dict[str, Any]", response.json())
 
 
-def get_execution_details(execution_id: str) -> Dict[str, Any]:
+def get_execution_details(execution_id: str) -> dict[str, Any]:
     """
     Get detailed information about a specific execution.
 
@@ -85,21 +84,15 @@ def get_execution_details(execution_id: str) -> Dict[str, Any]:
     """
     url = f"{BASE_URL}/api/v2/executions/{execution_id}"
 
-    headers = {
-        "Authorization": f"Bearer {API_TOKEN}"
-    }
+    headers = {"Authorization": f"Bearer {API_TOKEN}"}
 
     response = requests.get(url, headers=headers)
     response.raise_for_status()
 
-    return response.json()
+    return cast("dict[str, Any]", response.json())
 
 
-def get_execution_logs(
-    execution_id: str,
-    tail: Optional[int] = None,
-    follow: bool = False
-) -> List[str]:
+def get_execution_logs(execution_id: str, tail: int | None = None, follow: bool = False) -> list[str]:
     """
     Get execution logs.
 
@@ -113,27 +106,22 @@ def get_execution_logs(
     """
     url = f"{BASE_URL}/api/v2/executions/{execution_id}/logs"
 
-    headers = {
-        "Authorization": f"Bearer {API_TOKEN}"
-    }
+    headers = {"Authorization": f"Bearer {API_TOKEN}"}
 
-    params = {}
+    params: dict[str, int] = {}
     if tail:
         params["tail"] = tail
 
     response = requests.get(url, headers=headers, params=params)
     response.raise_for_status()
 
-    data = response.json()
-    return data.get("logs", [])
+    data = cast("dict[str, Any]", response.json())
+    return cast("list[str]", data.get("logs", []))
 
 
 def wait_for_execution(
-    execution_id: str,
-    check_interval: int = 5,
-    timeout: int = 3600,
-    print_logs: bool = True
-) -> Dict[str, Any]:
+    execution_id: str, check_interval: int = 5, timeout: int = 3600, print_logs: bool = True
+) -> dict[str, Any]:
     """
     Wait for an execution to complete.
 
@@ -186,7 +174,7 @@ def wait_for_execution(
         time.sleep(check_interval)
 
 
-def main():
+def main() -> None:
     """Example usage."""
     try:
         print("=== Listing Running Executions ===\n")
@@ -222,7 +210,7 @@ def main():
                     execution_id,
                     check_interval=5,
                     timeout=300,  # 5 minutes
-                    print_logs=True
+                    print_logs=True,
                 )
                 print(f"\n✓ Execution completed with status: {final_status['status']}")
             except TimeoutError as e:
@@ -244,7 +232,7 @@ def main():
 
             # Get last 10 lines of logs
             try:
-                logs = get_execution_logs(execution['id'], tail=10)
+                logs = get_execution_logs(execution["id"], tail=10)
                 if logs:
                     print("  Last logs:")
                     for log in logs[-5:]:  # Show last 5 lines
@@ -263,13 +251,13 @@ def main():
         print(f"\n✗ Connection Error: Unable to connect to {BASE_URL}")
         print("  Ensure the API server is running")
     except requests.exceptions.Timeout:
-        print(f"\n✗ Timeout Error: Request took too long")
+        print("\n✗ Timeout Error: Request took too long")
     except requests.exceptions.RequestException as e:
-        print(f"\n✗ Request Error: {str(e)}")
+        print(f"\n✗ Request Error: {e!s}")
     except KeyError as e:
         print(f"\n✗ Data Error: Missing expected field {e} in API response")
     except Exception as e:
-        print(f"\n✗ Unexpected Error: {type(e).__name__}: {str(e)}")
+        print(f"\n✗ Unexpected Error: {type(e).__name__}: {e!s}")
 
 
 if __name__ == "__main__":

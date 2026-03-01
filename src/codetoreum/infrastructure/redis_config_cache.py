@@ -3,13 +3,12 @@
 import asyncio
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from redis import asyncio as aioredis
 
 from codetoreum.ports.output.config_store import (
     AgentConfig,
-    ConfigNotFoundError,
     PipelineConfig,
     ProjectConfig,
     WorkflowTemplate,
@@ -20,8 +19,6 @@ logger = logging.getLogger(__name__)
 
 class RedisConfigCacheError(Exception):
     """Raised when Redis config cache operations fail."""
-
-    pass
 
 
 class RedisConfigCache:
@@ -72,8 +69,8 @@ class RedisConfigCache:
         self.default_ttl = default_ttl
         self.invalidation_channel = invalidation_channel
 
-        self._pubsub: Optional[aioredis.client.PubSub] = None
-        self._listener_task: Optional[asyncio.Task] = None
+        self._pubsub: aioredis.client.PubSub | None = None
+        self._listener_task: asyncio.Task | None = None
         self._initialized = False
         self._init_lock = asyncio.Lock()  # Prevent concurrent initialization
         self._stats = {
@@ -104,25 +101,20 @@ class RedisConfigCache:
                 await self._pubsub.subscribe(self.invalidation_channel)
 
                 # Start listener task
-                self._listener_task = asyncio.create_task(
-                    self._listen_for_invalidations()
-                )
+                self._listener_task = asyncio.create_task(self._listen_for_invalidations())
 
                 self._initialized = True
                 logger.info("Redis configuration cache initialized")
 
             except Exception as e:
-                raise RedisConfigCacheError(
-                    f"Failed to initialize cache: {e}"
-                ) from e
+                message = f"Failed to initialize cache: {e}"
+                raise RedisConfigCacheError(message) from e
 
     async def _listen_for_invalidations(self) -> None:
         """Listen for cache invalidation messages."""
         try:
             while self._initialized:
-                message = await self._pubsub.get_message(
-                    ignore_subscribe_messages=True, timeout=1.0
-                )
+                message = await self._pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
                 if message and message["type"] == "message":
                     key_pattern = message["data"].decode("utf-8")
                     await self._handle_invalidation(key_pattern)
@@ -133,7 +125,7 @@ class RedisConfigCache:
             logger.error(
                 f"Error in cache invalidation listener: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_CACHE_INVALIDATION_LISTENER_FAILED"}
+                extra={"error_id": "ERR_CACHE_INVALIDATION_LISTENER_FAILED"},
             )
 
     async def _handle_invalidation(self, key_pattern: str) -> None:
@@ -149,14 +141,10 @@ class RedisConfigCache:
                 # Use SCAN to find keys matching pattern
                 cursor = 0
                 while True:
-                    cursor, keys = await self.redis.scan(
-                        cursor=cursor, match=key_pattern, count=100
-                    )
+                    cursor, keys = await self.redis.scan(cursor=cursor, match=key_pattern, count=100)
                     if keys:
                         await self.redis.delete(*keys)
-                        logger.debug(
-                            f"Invalidated {len(keys)} keys matching {key_pattern}"
-                        )
+                        logger.debug(f"Invalidated {len(keys)} keys matching {key_pattern}")
                     if cursor == 0:
                         break
             else:
@@ -171,14 +159,14 @@ class RedisConfigCache:
             logger.error(
                 f"Failed to invalidate cache for {key_pattern}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_CACHE_INVALIDATION_FAILED", "key_pattern": key_pattern}
+                extra={"error_id": "ERR_CACHE_INVALIDATION_FAILED", "key_pattern": key_pattern},
             )
 
     def _make_key(self, *parts: str) -> str:
         """Create cache key from parts."""
         return ":".join([self.key_prefix] + list(parts))
 
-    async def get_project_config(self, project_id: str) -> Optional[ProjectConfig]:
+    async def get_project_config(self, project_id: str) -> ProjectConfig | None:
         """
         Get project configuration from cache.
 
@@ -211,9 +199,7 @@ class RedisConfigCache:
                 self._stats["misses"] += 1
             return None
 
-    async def get_project_config_by_name(
-        self, project_name: str
-    ) -> Optional[ProjectConfig]:
+    async def get_project_config_by_name(self, project_name: str) -> ProjectConfig | None:
         """
         Get project configuration from cache by name.
 
@@ -246,9 +232,7 @@ class RedisConfigCache:
                 self._stats["misses"] += 1
             return None
 
-    async def set_project_config(
-        self, config: ProjectConfig, ttl: Optional[int] = None
-    ) -> None:
+    async def set_project_config(self, config: ProjectConfig, ttl: int | None = None) -> None:
         """
         Set project configuration in cache.
 
@@ -279,9 +263,7 @@ class RedisConfigCache:
         except Exception as e:
             logger.warning(f"Failed to cache project config: {e}")
 
-    async def get_agent_config(
-        self, project_id: str, agent_name: str
-    ) -> Optional[AgentConfig]:
+    async def get_agent_config(self, project_id: str, agent_name: str) -> AgentConfig | None:
         """
         Get agent configuration from cache.
 
@@ -315,9 +297,7 @@ class RedisConfigCache:
                 self._stats["misses"] += 1
             return None
 
-    async def set_agent_config(
-        self, config: AgentConfig, ttl: Optional[int] = None
-    ) -> None:
+    async def set_agent_config(self, config: AgentConfig, ttl: int | None = None) -> None:
         """
         Set agent configuration in cache.
 
@@ -343,9 +323,7 @@ class RedisConfigCache:
         except Exception as e:
             logger.warning(f"Failed to cache agent config: {e}")
 
-    async def get_pipeline_config(
-        self, project_id: str, pipeline_name: str
-    ) -> Optional[PipelineConfig]:
+    async def get_pipeline_config(self, project_id: str, pipeline_name: str) -> PipelineConfig | None:
         """
         Get pipeline configuration from cache.
 
@@ -379,9 +357,7 @@ class RedisConfigCache:
                 self._stats["misses"] += 1
             return None
 
-    async def set_pipeline_config(
-        self, config: PipelineConfig, ttl: Optional[int] = None
-    ) -> None:
+    async def set_pipeline_config(self, config: PipelineConfig, ttl: int | None = None) -> None:
         """
         Set pipeline configuration in cache.
 
@@ -407,9 +383,7 @@ class RedisConfigCache:
         except Exception as e:
             logger.warning(f"Failed to cache pipeline config: {e}")
 
-    async def get_workflow_template(
-        self, template_name: str
-    ) -> Optional[WorkflowTemplate]:
+    async def get_workflow_template(self, template_name: str) -> WorkflowTemplate | None:
         """
         Get workflow template from cache.
 
@@ -442,9 +416,7 @@ class RedisConfigCache:
                 self._stats["misses"] += 1
             return None
 
-    async def set_workflow_template(
-        self, template: WorkflowTemplate, ttl: Optional[int] = None
-    ) -> None:
+    async def set_workflow_template(self, template: WorkflowTemplate, ttl: int | None = None) -> None:
         """
         Set workflow template in cache.
 
@@ -565,7 +537,7 @@ class RedisConfigCache:
         except Exception as e:
             logger.warning(f"Failed to invalidate all cache: {e}")
 
-    async def get_stats(self) -> Dict[str, Any]:
+    async def get_stats(self) -> dict[str, Any]:
         """
         Get cache statistics.
 
@@ -573,9 +545,7 @@ class RedisConfigCache:
             Dictionary with cache statistics
         """
         total_requests = self._stats["hits"] + self._stats["misses"]
-        hit_rate = (
-            self._stats["hits"] / total_requests if total_requests > 0 else 0.0
-        )
+        hit_rate = self._stats["hits"] / total_requests if total_requests > 0 else 0.0
 
         return {
             "hits": self._stats["hits"],
@@ -597,7 +567,7 @@ class RedisConfigCache:
         }
         logger.info("Cache statistics reset")
 
-    def _serialize_project(self, config: ProjectConfig) -> Dict[str, Any]:
+    def _serialize_project(self, config: ProjectConfig) -> dict[str, Any]:
         """Serialize ProjectConfig to dictionary."""
         return {
             "id": config.id,
@@ -610,17 +580,13 @@ class RedisConfigCache:
             "environment_variables": config.environment_variables,
             "mounted_commands": config.mounted_commands,
             "mounted_subagents": config.mounted_subagents,
-            "created_at": (
-                config.created_at.isoformat() if config.created_at else None
-            ),
-            "updated_at": (
-                config.updated_at.isoformat() if config.updated_at else None
-            ),
+            "created_at": (config.created_at.isoformat() if config.created_at else None),
+            "updated_at": (config.updated_at.isoformat() if config.updated_at else None),
             "version": config.version,
             "metadata": config.metadata,
         }
 
-    def _deserialize_project(self, doc: Dict[str, Any]) -> ProjectConfig:
+    def _deserialize_project(self, doc: dict[str, Any]) -> ProjectConfig:
         """Deserialize dictionary to ProjectConfig."""
         from datetime import datetime
 
@@ -635,21 +601,13 @@ class RedisConfigCache:
             environment_variables=doc.get("environment_variables", {}),
             mounted_commands=doc.get("mounted_commands", {}),
             mounted_subagents=doc.get("mounted_subagents", {}),
-            created_at=(
-                datetime.fromisoformat(doc["created_at"])
-                if doc.get("created_at")
-                else None
-            ),
-            updated_at=(
-                datetime.fromisoformat(doc["updated_at"])
-                if doc.get("updated_at")
-                else None
-            ),
+            created_at=(datetime.fromisoformat(doc["created_at"]) if doc.get("created_at") else None),
+            updated_at=(datetime.fromisoformat(doc["updated_at"]) if doc.get("updated_at") else None),
             version=doc.get("version", 1),
             metadata=doc.get("metadata", {}),
         )
 
-    def _serialize_agent(self, config: AgentConfig) -> Dict[str, Any]:
+    def _serialize_agent(self, config: AgentConfig) -> dict[str, Any]:
         """Serialize AgentConfig to dictionary."""
         return {
             "project_id": config.project_id,
@@ -662,16 +620,12 @@ class RedisConfigCache:
             "capabilities": config.capabilities,
             "constraints": config.constraints,
             "version": config.version,
-            "created_at": (
-                config.created_at.isoformat() if config.created_at else None
-            ),
-            "updated_at": (
-                config.updated_at.isoformat() if config.updated_at else None
-            ),
+            "created_at": (config.created_at.isoformat() if config.created_at else None),
+            "updated_at": (config.updated_at.isoformat() if config.updated_at else None),
             "metadata": config.metadata,
         }
 
-    def _deserialize_agent(self, doc: Dict[str, Any]) -> AgentConfig:
+    def _deserialize_agent(self, doc: dict[str, Any]) -> AgentConfig:
         """Deserialize dictionary to AgentConfig."""
         from datetime import datetime
 
@@ -686,20 +640,12 @@ class RedisConfigCache:
             capabilities=doc.get("capabilities", []),
             constraints=doc.get("constraints", {}),
             version=doc.get("version", 1),
-            created_at=(
-                datetime.fromisoformat(doc["created_at"])
-                if doc.get("created_at")
-                else None
-            ),
-            updated_at=(
-                datetime.fromisoformat(doc["updated_at"])
-                if doc.get("updated_at")
-                else None
-            ),
+            created_at=(datetime.fromisoformat(doc["created_at"]) if doc.get("created_at") else None),
+            updated_at=(datetime.fromisoformat(doc["updated_at"]) if doc.get("updated_at") else None),
             metadata=doc.get("metadata", {}),
         )
 
-    def _serialize_pipeline(self, config: PipelineConfig) -> Dict[str, Any]:
+    def _serialize_pipeline(self, config: PipelineConfig) -> dict[str, Any]:
         """Serialize PipelineConfig to dictionary."""
         return {
             "id": config.id,
@@ -708,16 +654,12 @@ class RedisConfigCache:
             "stages": config.stages,
             "triggers": config.triggers,
             "version": config.version,
-            "created_at": (
-                config.created_at.isoformat() if config.created_at else None
-            ),
-            "updated_at": (
-                config.updated_at.isoformat() if config.updated_at else None
-            ),
+            "created_at": (config.created_at.isoformat() if config.created_at else None),
+            "updated_at": (config.updated_at.isoformat() if config.updated_at else None),
             "metadata": config.metadata,
         }
 
-    def _deserialize_pipeline(self, doc: Dict[str, Any]) -> PipelineConfig:
+    def _deserialize_pipeline(self, doc: dict[str, Any]) -> PipelineConfig:
         """Deserialize dictionary to PipelineConfig."""
         from datetime import datetime
 
@@ -728,20 +670,12 @@ class RedisConfigCache:
             stages=doc.get("stages", []),
             triggers=doc.get("triggers", []),
             version=doc.get("version", 1),
-            created_at=(
-                datetime.fromisoformat(doc["created_at"])
-                if doc.get("created_at")
-                else None
-            ),
-            updated_at=(
-                datetime.fromisoformat(doc["updated_at"])
-                if doc.get("updated_at")
-                else None
-            ),
+            created_at=(datetime.fromisoformat(doc["created_at"]) if doc.get("created_at") else None),
+            updated_at=(datetime.fromisoformat(doc["updated_at"]) if doc.get("updated_at") else None),
             metadata=doc.get("metadata", {}),
         )
 
-    def _serialize_workflow(self, template: WorkflowTemplate) -> Dict[str, Any]:
+    def _serialize_workflow(self, template: WorkflowTemplate) -> dict[str, Any]:
         """Serialize WorkflowTemplate to dictionary."""
         return {
             "id": template.id,
@@ -749,16 +683,12 @@ class RedisConfigCache:
             "description": template.description,
             "stages": template.stages,
             "version": template.version,
-            "created_at": (
-                template.created_at.isoformat() if template.created_at else None
-            ),
-            "updated_at": (
-                template.updated_at.isoformat() if template.updated_at else None
-            ),
+            "created_at": (template.created_at.isoformat() if template.created_at else None),
+            "updated_at": (template.updated_at.isoformat() if template.updated_at else None),
             "metadata": template.metadata,
         }
 
-    def _deserialize_workflow(self, doc: Dict[str, Any]) -> WorkflowTemplate:
+    def _deserialize_workflow(self, doc: dict[str, Any]) -> WorkflowTemplate:
         """Deserialize dictionary to WorkflowTemplate."""
         from datetime import datetime
 
@@ -768,16 +698,8 @@ class RedisConfigCache:
             description=doc["description"],
             stages=doc.get("stages", []),
             version=doc.get("version", 1),
-            created_at=(
-                datetime.fromisoformat(doc["created_at"])
-                if doc.get("created_at")
-                else None
-            ),
-            updated_at=(
-                datetime.fromisoformat(doc["updated_at"])
-                if doc.get("updated_at")
-                else None
-            ),
+            created_at=(datetime.fromisoformat(doc["created_at"]) if doc.get("created_at") else None),
+            updated_at=(datetime.fromisoformat(doc["updated_at"]) if doc.get("updated_at") else None),
             metadata=doc.get("metadata", {}),
         )
 

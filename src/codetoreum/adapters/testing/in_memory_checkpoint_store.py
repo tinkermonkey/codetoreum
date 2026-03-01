@@ -6,11 +6,12 @@ persistence overhead.
 """
 
 import threading
-from datetime import datetime, timedelta, timezone
-from typing import Dict, Optional, Tuple
+from datetime import UTC, datetime, timedelta
 
 from codetoreum.domain.repair_cycle_types import RepairCycleCheckpoint
-from codetoreum.ports.output.repair_cycle_checkpoint_store import IRepairCycleCheckpointStore
+from codetoreum.ports.output.repair_cycle_checkpoint_store import (
+    IRepairCycleCheckpointStore,
+)
 
 
 class InMemoryCheckpointStore(IRepairCycleCheckpointStore):
@@ -35,28 +36,31 @@ class InMemoryCheckpointStore(IRepairCycleCheckpointStore):
 
     def __init__(self) -> None:
         """Initialize in-memory checkpoint store."""
-        self._checkpoints: Dict[
-            Tuple[str, str], Tuple[RepairCycleCheckpoint, datetime]
-        ] = {}  # Key: (workflow_run_id, test_type), Value: (checkpoint, saved_time)
+        self._checkpoints: dict[tuple[str, str], tuple[RepairCycleCheckpoint, datetime]] = (
+            {}
+        )  # Key: (workflow_run_id, test_type), Value: (checkpoint, saved_time)
         self._lock = threading.RLock()
 
     async def save_checkpoint(self, checkpoint: RepairCycleCheckpoint) -> None:
         """Save checkpoint with automatic expiration."""
         if not checkpoint:
-            raise ValueError("checkpoint cannot be None")
+            msg = "checkpoint cannot be None"
+            raise ValueError(msg)
 
         with self._lock:
             # Convert enum to string for key
-            test_type_str = checkpoint.test_type.value if hasattr(checkpoint.test_type, 'value') else str(checkpoint.test_type)
+            test_type_str = (
+                checkpoint.test_type.value if hasattr(checkpoint.test_type, "value") else str(checkpoint.test_type)
+            )
             key = (checkpoint.workflow_run_id, test_type_str)
-            saved_time = datetime.now(timezone.utc)
+            saved_time = datetime.now(UTC)
             self._checkpoints[key] = (checkpoint, saved_time)
 
     async def get_checkpoint(
         self,
         workflow_run_id: str,
         test_type: str,
-    ) -> Optional[RepairCycleCheckpoint]:
+    ) -> RepairCycleCheckpoint | None:
         """Retrieve checkpoint if it exists and hasn't expired."""
         with self._lock:
             key = (workflow_run_id, test_type)
@@ -67,7 +71,7 @@ class InMemoryCheckpointStore(IRepairCycleCheckpointStore):
             checkpoint, saved_time = self._checkpoints[key]
 
             # Check if checkpoint has expired (24 hours)
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             if now - saved_time > timedelta(hours=24):
                 # Expired - remove it
                 del self._checkpoints[key]
@@ -78,7 +82,7 @@ class InMemoryCheckpointStore(IRepairCycleCheckpointStore):
     async def delete_checkpoint(
         self,
         workflow_run_id: str,
-        test_type: Optional[str] = None,
+        test_type: str | None = None,
     ) -> None:
         """Delete checkpoint(s) for a pipeline run."""
         with self._lock:
@@ -88,11 +92,7 @@ class InMemoryCheckpointStore(IRepairCycleCheckpointStore):
                 self._checkpoints.pop(key, None)
             else:
                 # Delete all for pipeline run
-                keys_to_delete = [
-                    key
-                    for key in self._checkpoints.keys()
-                    if key[0] == workflow_run_id
-                ]
+                keys_to_delete = [key for key in self._checkpoints.keys() if key[0] == workflow_run_id]
                 for key in keys_to_delete:
                     del self._checkpoints[key]
 
@@ -107,10 +107,10 @@ class InMemoryCheckpointStore(IRepairCycleCheckpointStore):
 
     # ==================== Test/Inspection Methods ====================
 
-    def get_all_checkpoints(self) -> Dict[Tuple[str, str], RepairCycleCheckpoint]:
+    def get_all_checkpoints(self) -> dict[tuple[str, str], RepairCycleCheckpoint]:
         """Get all stored checkpoints (for testing)."""
         with self._lock:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             return {
                 key: checkpoint
                 for key, (checkpoint, saved_time) in self._checkpoints.items()
@@ -125,7 +125,7 @@ class InMemoryCheckpointStore(IRepairCycleCheckpointStore):
     def get_checkpoint_count(self) -> int:
         """Get number of stored checkpoints (for testing)."""
         with self._lock:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             return sum(
                 1
                 for saved_time in (t for _, t in self._checkpoints.values())

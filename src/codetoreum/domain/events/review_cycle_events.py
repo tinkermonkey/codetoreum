@@ -14,6 +14,7 @@ serve as the single source of truth for the system's history.
 """
 
 from dataclasses import dataclass
+from typing import Literal
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
@@ -61,29 +62,37 @@ class ReviewCycleStartedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.work_item_id:
-            raise ValueError("work_item_id is required")
+            msg = "work_item_id is required"
+            raise ValueError(msg)
         if not self.review_cycle_id:
-            raise ValueError("review_cycle_id is required")
+            msg = "review_cycle_id is required"
+            raise ValueError(msg)
         if not self.project_id:
-            raise ValueError("project_id is required")
+            msg = "project_id is required"
+            raise ValueError(msg)
         if not self.maker_agent:
-            raise ValueError("maker_agent is required")
+            msg = "maker_agent is required"
+            raise ValueError(msg)
         if not self.reviewer_agent:
-            raise ValueError("reviewer_agent is required")
+            msg = "reviewer_agent is required"
+            raise ValueError(msg)
         if self.max_iterations <= 0:
-            raise ValueError("max_iterations must be greater than 0")
+            msg = "max_iterations must be greater than 0"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "review_cycle_id": self.review_cycle_id,
-            "work_item_id": self.work_item_id,
-            "project_id": self.project_id,
-            "maker_agent": self.maker_agent,
-            "reviewer_agent": self.reviewer_agent,
-            "max_iterations": self.max_iterations,
-        })
+        d.update(
+            {
+                "review_cycle_id": self.review_cycle_id,
+                "work_item_id": self.work_item_id,
+                "project_id": self.project_id,
+                "maker_agent": self.maker_agent,
+                "reviewer_agent": self.reviewer_agent,
+                "max_iterations": self.max_iterations,
+            }
+        )
         return d
 
     @classmethod
@@ -117,7 +126,7 @@ class ReviewCycleIterationCompletedEvent(CodetoreumEvent):
         review_cycle_id (str): ID of the review cycle
         work_item_id (str): ID of the work item being reviewed
         iteration (int): Iteration number (1-indexed)
-        status (str): Review decision (APPROVED, CHANGES_REQUESTED, BLOCKED)
+        status (Literal): Review decision ("APPROVED", "CHANGES_REQUESTED", "BLOCKED")
         blocking_count (int): Number of blocking findings in this iteration
 
     Example:
@@ -136,36 +145,41 @@ class ReviewCycleIterationCompletedEvent(CodetoreumEvent):
     review_cycle_id: str = ""
     work_item_id: str = ""
     iteration: int = 0
-    status: str = ""  # APPROVED, CHANGES_REQUESTED, BLOCKED
+    status: Literal["APPROVED", "CHANGES_REQUESTED", "BLOCKED"] = "APPROVED"
     blocking_count: int = 0
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""
         super().__post_init__()
         if not self.work_item_id:
-            raise ValueError("work_item_id is required")
+            msg = "work_item_id is required"
+            raise ValueError(msg)
         if not self.review_cycle_id:
-            raise ValueError("review_cycle_id is required")
+            msg = "review_cycle_id is required"
+            raise ValueError(msg)
         if self.iteration <= 0:
-            raise ValueError("iteration must be greater than 0")
+            msg = "iteration must be greater than 0"
+            raise ValueError(msg)
         valid_statuses = {"APPROVED", "CHANGES_REQUESTED", "BLOCKED"}
         if self.status not in valid_statuses:
-            raise ValueError(
-                f"status must be one of {valid_statuses}, got {self.status}"
-            )
+            msg = f"status must be one of {valid_statuses}, got {self.status}"
+            raise ValueError(msg)
         if self.blocking_count < 0:
-            raise ValueError("blocking_count must be non-negative")
+            msg = "blocking_count must be non-negative"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "review_cycle_id": self.review_cycle_id,
-            "work_item_id": self.work_item_id,
-            "iteration": self.iteration,
-            "status": self.status,
-            "blocking_count": self.blocking_count,
-        })
+        d.update(
+            {
+                "review_cycle_id": self.review_cycle_id,
+                "work_item_id": self.work_item_id,
+                "iteration": self.iteration,
+                "status": self.status,
+                "blocking_count": self.blocking_count,
+            }
+        )
         return d
 
     @classmethod
@@ -218,20 +232,25 @@ class ReviewCycleMakerRevisionEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.work_item_id:
-            raise ValueError("work_item_id is required")
+            msg = "work_item_id is required"
+            raise ValueError(msg)
         if not self.review_cycle_id:
-            raise ValueError("review_cycle_id is required")
+            msg = "review_cycle_id is required"
+            raise ValueError(msg)
         if self.iteration <= 0:
-            raise ValueError("iteration must be greater than 0")
+            msg = "iteration must be greater than 0"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "review_cycle_id": self.review_cycle_id,
-            "work_item_id": self.work_item_id,
-            "iteration": self.iteration,
-        })
+        d.update(
+            {
+                "review_cycle_id": self.review_cycle_id,
+                "work_item_id": self.work_item_id,
+                "iteration": self.iteration,
+            }
+        )
         return d
 
     @classmethod
@@ -282,36 +301,40 @@ class ReviewCycleEscalatedToHumanEvent(CodetoreumEvent):
     work_item_id: str = ""
     iteration: int = 0
     blocking_count: int = 0
-    escalation_reason: str = ""  # BLOCKED or MAX_ITERATIONS
+    escalation_reason: Literal["BLOCKED", "MAX_ITERATIONS"] = ""  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""
         super().__post_init__()
         if not self.work_item_id:
-            raise ValueError("work_item_id is required")
+            msg = "work_item_id is required"
+            raise ValueError(msg)
         if not self.review_cycle_id:
-            raise ValueError("review_cycle_id is required")
+            msg = "review_cycle_id is required"
+            raise ValueError(msg)
         if self.iteration <= 0:
-            raise ValueError("iteration must be greater than 0")
+            msg = "iteration must be greater than 0"
+            raise ValueError(msg)
         valid_reasons = {"BLOCKED", "MAX_ITERATIONS"}
         if self.escalation_reason not in valid_reasons:
-            raise ValueError(
-                f"escalation_reason must be one of {valid_reasons}, "
-                f"got {self.escalation_reason}"
-            )
+            msg = f"escalation_reason must be one of {valid_reasons}, got {self.escalation_reason}"
+            raise ValueError(msg)
         if self.blocking_count < 0:
-            raise ValueError("blocking_count must be non-negative")
+            msg = "blocking_count must be non-negative"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "review_cycle_id": self.review_cycle_id,
-            "work_item_id": self.work_item_id,
-            "iteration": self.iteration,
-            "blocking_count": self.blocking_count,
-            "escalation_reason": self.escalation_reason,
-        })
+        d.update(
+            {
+                "review_cycle_id": self.review_cycle_id,
+                "work_item_id": self.work_item_id,
+                "iteration": self.iteration,
+                "blocking_count": self.blocking_count,
+                "escalation_reason": self.escalation_reason,
+            }
+        )
         return d
 
     @classmethod
@@ -364,20 +387,25 @@ class ReviewCycleHumanFeedbackReceivedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.work_item_id:
-            raise ValueError("work_item_id is required")
+            msg = "work_item_id is required"
+            raise ValueError(msg)
         if not self.review_cycle_id:
-            raise ValueError("review_cycle_id is required")
+            msg = "review_cycle_id is required"
+            raise ValueError(msg)
         if not self.feedback:
-            raise ValueError("feedback is required")
+            msg = "feedback is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "review_cycle_id": self.review_cycle_id,
-            "work_item_id": self.work_item_id,
-            "feedback": self.feedback,
-        })
+        d.update(
+            {
+                "review_cycle_id": self.review_cycle_id,
+                "work_item_id": self.work_item_id,
+                "feedback": self.feedback,
+            }
+        )
         return d
 
     @classmethod
@@ -428,20 +456,25 @@ class ReviewCycleMaxIterationsReachedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.work_item_id:
-            raise ValueError("work_item_id is required")
+            msg = "work_item_id is required"
+            raise ValueError(msg)
         if not self.review_cycle_id:
-            raise ValueError("review_cycle_id is required")
+            msg = "review_cycle_id is required"
+            raise ValueError(msg)
         if self.max_iterations <= 0:
-            raise ValueError("max_iterations must be greater than 0")
+            msg = "max_iterations must be greater than 0"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "review_cycle_id": self.review_cycle_id,
-            "work_item_id": self.work_item_id,
-            "max_iterations": self.max_iterations,
-        })
+        d.update(
+            {
+                "review_cycle_id": self.review_cycle_id,
+                "work_item_id": self.work_item_id,
+                "max_iterations": self.max_iterations,
+            }
+        )
         return d
 
     @classmethod
@@ -492,20 +525,25 @@ class ReviewCycleApprovedEvent(CodetoreumEvent):
         """Validate event after initialization."""
         super().__post_init__()
         if not self.work_item_id:
-            raise ValueError("work_item_id is required")
+            msg = "work_item_id is required"
+            raise ValueError(msg)
         if not self.review_cycle_id:
-            raise ValueError("review_cycle_id is required")
+            msg = "review_cycle_id is required"
+            raise ValueError(msg)
         if self.total_iterations <= 0:
-            raise ValueError("total_iterations must be greater than 0")
+            msg = "total_iterations must be greater than 0"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
-        d.update({
-            "review_cycle_id": self.review_cycle_id,
-            "work_item_id": self.work_item_id,
-            "total_iterations": self.total_iterations,
-        })
+        d.update(
+            {
+                "review_cycle_id": self.review_cycle_id,
+                "work_item_id": self.work_item_id,
+                "total_iterations": self.total_iterations,
+            }
+        )
         return d
 
     @classmethod

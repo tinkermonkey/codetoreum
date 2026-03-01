@@ -9,13 +9,13 @@ from codetoreum.adapters.secondary.claude_code_adapter import (
     ClaudeCodeAdapter,
     ClaudeCodeConfig,
 )
-from codetoreum.adapters.secondary.configurable_identity_service import (
-    ConfigurableIdentityService,
-)
 from codetoreum.adapters.secondary.config_storage_factory import (
     create_cached_config_store,
     create_elasticsearch_config_storage,
     create_redis_config_cache,
+)
+from codetoreum.adapters.secondary.configurable_identity_service import (
+    ConfigurableIdentityService,
 )
 from codetoreum.adapters.secondary.docker_container_adapter import (
     DockerConfig,
@@ -44,9 +44,9 @@ from codetoreum.adapters.secondary.in_memory_pipeline_lock_service import (
 from codetoreum.adapters.secondary.mock_code_review_adapter import (
     MockCodeReviewAdapter,
 )
-from codetoreum.adapters.secondary.mock_discussion_adapter import MockDiscussionAdapter
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
+from codetoreum.adapters.testing.mock_discussion_adapter import MockDiscussionAdapter
 
 __all__ = [
     # GitHub Ticket System

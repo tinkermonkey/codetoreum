@@ -1,7 +1,6 @@
 """Work assignment service for assigning work items to agents."""
 
 from dataclasses import dataclass
-from typing import List
 
 from codetoreum.domain.agent import Agent
 from codetoreum.domain.exceptions import DomainError
@@ -38,8 +37,8 @@ class WorkAssignmentService:
     def assign_work(
         self,
         work_item: WorkItem,
-        available_agents: List[Agent],
-        requirements: List[Requirement],
+        available_agents: list[Agent],
+        requirements: list[Requirement],
         min_score: float = 0.5,
     ) -> AssignmentResult:
         """
@@ -66,14 +65,11 @@ class WorkAssignmentService:
             DomainError: If no capable agents available or no suitable agent found
         """
         # Filter by environment requirements
-        capable_agents = [
-            agent
-            for agent in available_agents
-            if self._can_handle_work_item(agent, work_item)
-        ]
+        capable_agents = [agent for agent in available_agents if self._can_handle_work_item(agent, work_item)]
 
         if not capable_agents:
-            raise DomainError("No capable agents available")
+            msg = "No capable agents available"
+            raise DomainError(msg)
 
         # Calculate match scores
         best_agent = None
@@ -87,17 +83,14 @@ class WorkAssignmentService:
                 best_agent = agent
 
         if not best_agent or best_score < min_score:
-            raise DomainError(
-                f"No suitable agent found (best score: {best_score:.2f}, min required: {min_score:.2f})"
-            )
+            msg = f"No suitable agent found (best score: {best_score:.2f}, min required: {min_score:.2f})"
+            raise DomainError(msg)
 
         # Assign to work item
         reason = self._generate_assignment_reason(best_agent, best_score, requirements)
         work_item.assign_agent(best_agent.id, reason)
 
-        return AssignmentResult(
-            agent_id=best_agent.id, match_score=best_score, reason=reason
-        )
+        return AssignmentResult(agent_id=best_agent.id, match_score=best_score, reason=reason)
 
     def _can_handle_work_item(self, agent: Agent, work_item: WorkItem) -> bool:
         """
@@ -115,9 +108,7 @@ class WorkAssignmentService:
         # to determine if agent has required permissions
         return True
 
-    def _generate_assignment_reason(
-        self, agent: Agent, score: float, requirements: List[Requirement]
-    ) -> str:
+    def _generate_assignment_reason(self, agent: Agent, score: float, requirements: list[Requirement]) -> str:
         """
         Generate human-readable assignment reasoning.
 
@@ -129,15 +120,8 @@ class WorkAssignmentService:
         Returns:
             Human-readable reason for assignment
         """
-        matched_skills = [
-            req.skill
-            for req in requirements
-            if agent.has_capability(req.skill, req.min_proficiency)
-        ]
+        matched_skills = [req.skill for req in requirements if agent.has_capability(req.skill, req.min_proficiency)]
 
         skills_text = ", ".join(matched_skills) if matched_skills else "general capabilities"
 
-        return (
-            f"Assigned {agent.display_name} (match score: {score:.2f}) "
-            f"with matching capabilities: {skills_text}"
-        )
+        return f"Assigned {agent.display_name} (match score: {score:.2f}) with matching capabilities: {skills_text}"

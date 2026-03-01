@@ -67,9 +67,7 @@ class TestCalculateMatchScore:
             Requirement("testing", 0.7, is_required=True),
         ]
 
-        score = AgentMatchingService.calculate_match_score(
-            senior_engineer_agent, requirements
-        )
+        score = AgentMatchingService.calculate_match_score(senior_engineer_agent, requirements)
 
         assert score > 0.9, "Should have very high score for perfect match"
 
@@ -85,9 +83,7 @@ class TestCalculateMatchScore:
             Requirement("rust", 0.7, is_required=True),  # Missing
         ]
 
-        score = AgentMatchingService.calculate_match_score(
-            senior_engineer_agent, requirements
-        )
+        score = AgentMatchingService.calculate_match_score(senior_engineer_agent, requirements)
 
         assert score == 0.0, "Should return 0.0 when required skill is missing"
 
@@ -98,9 +94,7 @@ class TestCalculateMatchScore:
             Requirement("rust", 0.7, is_required=False),  # Missing but optional
         ]
 
-        score = AgentMatchingService.calculate_match_score(
-            senior_engineer_agent, requirements
-        )
+        score = AgentMatchingService.calculate_match_score(senior_engineer_agent, requirements)
 
         assert score > 0.0, "Should not return 0.0 when only optional skill is missing"
         assert score < 1.0, "Score should be reduced due to missing optional skill"
@@ -111,9 +105,7 @@ class TestCalculateMatchScore:
             Requirement("python", 0.8, is_required=True),  # Junior has 0.5
         ]
 
-        score = AgentMatchingService.calculate_match_score(
-            junior_developer_agent, requirements
-        )
+        score = AgentMatchingService.calculate_match_score(junior_developer_agent, requirements)
 
         # Score should be (0.5/0.8 = 0.625) * 0.7 (weight) + 1.0 * 0.3 = 0.7375
         assert 0.7 <= score <= 0.8, "Score should reflect insufficient proficiency"
@@ -135,9 +127,7 @@ class TestCalculateMatchScore:
         score_all_required = AgentMatchingService.calculate_match_score(
             senior_engineer_agent, requirements_all_required
         )
-        score_mixed = AgentMatchingService.calculate_match_score(
-            senior_engineer_agent, requirements_mixed
-        )
+        score_mixed = AgentMatchingService.calculate_match_score(senior_engineer_agent, requirements_mixed)
 
         # Both should be high but different due to weighting
         assert score_all_required > 0.9
@@ -151,9 +141,7 @@ class TestCalculateMatchScore:
             Requirement("debugging", 0.7, is_required=False),
         ]
 
-        score = AgentMatchingService.calculate_match_score(
-            senior_engineer_agent, requirements
-        )
+        score = AgentMatchingService.calculate_match_score(senior_engineer_agent, requirements)
 
         assert score > 0.9, "Should have high score with all skills present"
 
@@ -171,18 +159,14 @@ class TestCalculateMatchScore:
 class TestFindBestMatch:
     """Tests for find_best_match method."""
 
-    def test_finds_best_agent(
-        self, senior_engineer_agent, junior_developer_agent
-    ):
+    def test_finds_best_agent(self, senior_engineer_agent, junior_developer_agent):
         """Test that find_best_match selects the agent with highest score."""
         requirements = [
             Requirement("python", 0.8, is_required=True),
             Requirement("testing", 0.7, is_required=True),
         ]
 
-        best_agent = AgentMatchingService.find_best_match(
-            [senior_engineer_agent, junior_developer_agent], requirements
-        )
+        best_agent = AgentMatchingService.find_best_match([senior_engineer_agent, junior_developer_agent], requirements)
 
         assert best_agent == senior_engineer_agent
 
@@ -192,9 +176,7 @@ class TestFindBestMatch:
             Requirement("python", 0.9, is_required=True),  # Junior only has 0.5
         ]
 
-        best_agent = AgentMatchingService.find_best_match(
-            [junior_developer_agent], requirements, min_score=0.8
-        )
+        best_agent = AgentMatchingService.find_best_match([junior_developer_agent], requirements, min_score=0.8)
 
         assert best_agent is None
 
@@ -210,24 +192,18 @@ class TestFindBestMatch:
         """Test that agent with exact min score is returned."""
         requirements = [Requirement("python", 0.8, is_required=True)]
 
-        best_agent = AgentMatchingService.find_best_match(
-            [senior_engineer_agent], requirements, min_score=0.5
-        )
+        best_agent = AgentMatchingService.find_best_match([senior_engineer_agent], requirements, min_score=0.5)
 
         assert best_agent == senior_engineer_agent
 
-    def test_specialist_vs_generalist(
-        self, specialized_agent, senior_engineer_agent
-    ):
+    def test_specialist_vs_generalist(self, specialized_agent, senior_engineer_agent):
         """Test that specialist beats generalist for specialist requirements."""
         requirements = [
             Requirement("docker", 0.8, is_required=True),
             Requirement("kubernetes", 0.7, is_required=True),
         ]
 
-        best_agent = AgentMatchingService.find_best_match(
-            [specialized_agent, senior_engineer_agent], requirements
-        )
+        best_agent = AgentMatchingService.find_best_match([specialized_agent, senior_engineer_agent], requirements)
 
         assert best_agent == specialized_agent
 
@@ -235,9 +211,7 @@ class TestFindBestMatch:
 class TestRankAgents:
     """Tests for rank_agents method."""
 
-    def test_ranks_agents_by_score(
-        self, senior_engineer_agent, junior_developer_agent, specialized_agent
-    ):
+    def test_ranks_agents_by_score(self, senior_engineer_agent, junior_developer_agent, specialized_agent):
         """Test that rank_agents returns agents sorted by score descending."""
         requirements = [
             Requirement("python", 0.8, is_required=True),
@@ -264,15 +238,11 @@ class TestRankAgents:
 
         assert ranked == []
 
-    def test_rank_preserves_all_agents(
-        self, senior_engineer_agent, junior_developer_agent
-    ):
+    def test_rank_preserves_all_agents(self, senior_engineer_agent, junior_developer_agent):
         """Test that all agents are included in ranking."""
         requirements = [Requirement("python", 0.8, is_required=True)]
 
-        ranked = AgentMatchingService.rank_agents(
-            [senior_engineer_agent, junior_developer_agent], requirements
-        )
+        ranked = AgentMatchingService.rank_agents([senior_engineer_agent, junior_developer_agent], requirements)
 
         assert len(ranked) == 2
         assert all(isinstance(item, tuple) and len(item) == 2 for item in ranked)
@@ -281,9 +251,7 @@ class TestRankAgents:
         """Test that ranking includes scores."""
         requirements = [Requirement("python", 0.8, is_required=True)]
 
-        ranked = AgentMatchingService.rank_agents(
-            [senior_engineer_agent, junior_developer_agent], requirements
-        )
+        ranked = AgentMatchingService.rank_agents([senior_engineer_agent, junior_developer_agent], requirements)
 
         # Verify scores are present and valid
         assert all(0.0 <= score <= 1.0 for _, score in ranked)

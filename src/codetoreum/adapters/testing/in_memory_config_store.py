@@ -4,8 +4,8 @@ In-Memory Configuration Store
 Mock adapter for testing configuration service without external dependencies.
 """
 
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from codetoreum.ports.output.config_store import (
     AgentConfig,
@@ -28,23 +28,25 @@ class InMemoryConfigStore(IConfigStore):
 
     def __init__(self):
         """Initialize in-memory storage."""
-        self.projects: Dict[str, ProjectConfig] = {}
-        self.projects_by_name: Dict[str, str] = {}  # name -> id mapping
-        self.agents: Dict[str, Dict[str, AgentConfig]] = {}  # project_id -> {agent_name -> config}
-        self.pipelines: Dict[str, Dict[str, PipelineConfig]] = {}  # project_id -> {pipeline_name -> config}
-        self.workflow_templates: Dict[str, WorkflowTemplate] = {}
-        self.history: Dict[str, List[ConfigVersion]] = {}  # config_id -> versions
+        self.projects: dict[str, ProjectConfig] = {}
+        self.projects_by_name: dict[str, str] = {}  # name -> id mapping
+        self.agents: dict[str, dict[str, AgentConfig]] = {}  # project_id -> {agent_name -> config}
+        self.pipelines: dict[str, dict[str, PipelineConfig]] = {}  # project_id -> {pipeline_name -> config}
+        self.workflow_templates: dict[str, WorkflowTemplate] = {}
+        self.history: dict[str, list[ConfigVersion]] = {}  # config_id -> versions
 
     async def get_project_config(self, project_id: str) -> ProjectConfig:
         """Get project configuration by ID."""
         if project_id not in self.projects:
-            raise ConfigNotFoundError(f"Project with ID '{project_id}' not found")
+            msg = f"Project with ID '{project_id}' not found"
+            raise ConfigNotFoundError(msg)
         return self.projects[project_id]
 
     async def get_project_config_by_name(self, project_name: str) -> ProjectConfig:
         """Get project configuration by name."""
         if project_name not in self.projects_by_name:
-            raise ConfigNotFoundError(f"Project '{project_name}' not found")
+            msg = f"Project '{project_name}' not found"
+            raise ConfigNotFoundError(msg)
         project_id = self.projects_by_name[project_name]
         return self.projects[project_id]
 
@@ -53,10 +55,9 @@ class InMemoryConfigStore(IConfigStore):
         # Record version history
         if config.id in self.projects:
             # Updating existing config
-            old_config = self.projects[config.id]
             version = ConfigVersion(
                 version=config.version,
-                changed_at=config.updated_at or datetime.now(timezone.utc),
+                changed_at=config.updated_at or datetime.now(UTC),
                 changed_by=config.metadata.get("updated_by", "system"),
                 change_type="update_project",
                 changes=config.metadata.get("changes", {}),
@@ -70,20 +71,14 @@ class InMemoryConfigStore(IConfigStore):
         self.projects[config.id] = config
         self.projects_by_name[config.name] = config.id
 
-    async def get_agent_config(
-        self,
-        project_id: str,
-        agent_name: str
-    ) -> AgentConfig:
+    async def get_agent_config(self, project_id: str, agent_name: str) -> AgentConfig:
         """Get agent configuration for a project."""
         if project_id not in self.agents:
-            raise ConfigNotFoundError(
-                f"No agents configured for project '{project_id}'"
-            )
+            msg = f"No agents configured for project '{project_id}'"
+            raise ConfigNotFoundError(msg)
         if agent_name not in self.agents[project_id]:
-            raise ConfigNotFoundError(
-                f"Agent '{agent_name}' not found in project '{project_id}'"
-            )
+            msg = f"Agent '{agent_name}' not found in project '{project_id}'"
+            raise ConfigNotFoundError(msg)
         return self.agents[project_id][agent_name]
 
     async def save_agent_config(self, config: AgentConfig) -> None:
@@ -96,7 +91,7 @@ class InMemoryConfigStore(IConfigStore):
         if config.agent_name in self.agents[config.project_id]:
             version = ConfigVersion(
                 version=config.version,
-                changed_at=config.updated_at or datetime.now(timezone.utc),
+                changed_at=config.updated_at or datetime.now(UTC),
                 changed_by=config.metadata.get("updated_by", "system"),
                 change_type="update_agent",
                 changes=config.metadata.get("changes", {}),
@@ -108,20 +103,14 @@ class InMemoryConfigStore(IConfigStore):
 
         self.agents[config.project_id][config.agent_name] = config
 
-    async def get_pipeline_config(
-        self,
-        project_id: str,
-        pipeline_name: str
-    ) -> PipelineConfig:
+    async def get_pipeline_config(self, project_id: str, pipeline_name: str) -> PipelineConfig:
         """Get pipeline configuration."""
         if project_id not in self.pipelines:
-            raise ConfigNotFoundError(
-                f"No pipelines configured for project '{project_id}'"
-            )
+            msg = f"No pipelines configured for project '{project_id}'"
+            raise ConfigNotFoundError(msg)
         if pipeline_name not in self.pipelines[project_id]:
-            raise ConfigNotFoundError(
-                f"Pipeline '{pipeline_name}' not found in project '{project_id}'"
-            )
+            msg = f"Pipeline '{pipeline_name}' not found in project '{project_id}'"
+            raise ConfigNotFoundError(msg)
         return self.pipelines[project_id][pipeline_name]
 
     async def save_pipeline_config(self, config: PipelineConfig) -> None:
@@ -134,7 +123,7 @@ class InMemoryConfigStore(IConfigStore):
         if config.name in self.pipelines[config.project_id]:
             version = ConfigVersion(
                 version=config.version,
-                changed_at=config.updated_at or datetime.now(timezone.utc),
+                changed_at=config.updated_at or datetime.now(UTC),
                 changed_by=config.metadata.get("updated_by", "system"),
                 change_type="update_pipeline",
                 changes=config.metadata.get("changes", {}),
@@ -149,34 +138,31 @@ class InMemoryConfigStore(IConfigStore):
     async def get_workflow_template(self, template_name: str) -> WorkflowTemplate:
         """Get workflow template by name."""
         if template_name not in self.workflow_templates:
-            raise ConfigNotFoundError(f"Workflow template '{template_name}' not found")
+            msg = f"Workflow template '{template_name}' not found"
+            raise ConfigNotFoundError(msg)
         return self.workflow_templates[template_name]
 
     async def save_workflow_template(self, template: WorkflowTemplate) -> None:
         """Save workflow template."""
         self.workflow_templates[template.name] = template
 
-    async def list_projects(self) -> List[ProjectConfig]:
+    async def list_projects(self) -> list[ProjectConfig]:
         """List all projects."""
         return list(self.projects.values())
 
-    async def list_agents(self, project_id: str) -> List[AgentConfig]:
+    async def list_agents(self, project_id: str) -> list[AgentConfig]:
         """List all agents for a project."""
         if project_id not in self.agents:
             return []
         return list(self.agents[project_id].values())
 
-    async def list_pipelines(self, project_id: str) -> List[PipelineConfig]:
+    async def list_pipelines(self, project_id: str) -> list[PipelineConfig]:
         """List all pipelines for a project."""
         if project_id not in self.pipelines:
             return []
         return list(self.pipelines[project_id].values())
 
-    async def search_configs(
-        self,
-        query: str,
-        config_type: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+    async def search_configs(self, query: str, config_type: str | None = None) -> list[dict[str, Any]]:
         """
         Search configurations using simple substring matching.
 
@@ -202,62 +188,65 @@ class InMemoryConfigStore(IConfigStore):
             """Check if config matches all search terms."""
             # Build searchable text from all fields
             searchable_fields = [
-                str(getattr(config, 'name', '')),
-                str(getattr(config, 'github_org', '')),
-                str(getattr(config, 'github_repo', '')),
-                str(getattr(config, 'agent_name', '')),
-                str(getattr(config, 'model', '')),
-                str(getattr(config, 'metadata', {})),
-                str(getattr(config, 'tech_stacks', {})),
+                str(getattr(config, "name", "")),
+                str(getattr(config, "github_org", "")),
+                str(getattr(config, "github_repo", "")),
+                str(getattr(config, "agent_name", "")),
+                str(getattr(config, "model", "")),
+                str(getattr(config, "metadata", {})),
+                str(getattr(config, "tech_stacks", {})),
             ]
-            combined_text = ' '.join(searchable_fields)
+            combined_text = " ".join(searchable_fields)
             return matches_all_terms(combined_text)
 
         # Search projects
         if not config_type or config_type == "project":
             for config in self.projects.values():
                 if config_matches(config):
-                    results.append({
-                        "type": "project",
-                        "id": config.id,
-                        "name": config.name,
-                        "config": config,
-                    })
+                    results.append(
+                        {
+                            "type": "project",
+                            "id": config.id,
+                            "name": config.name,
+                            "config": config,
+                        }
+                    )
 
         # Search agents
         if not config_type or config_type == "agent":
             for project_agents in self.agents.values():
                 for config in project_agents.values():
                     if config_matches(config):
-                        results.append({
-                            "type": "agent",
-                            "id": f"{config.project_id}:{config.agent_name}",
-                            "name": config.agent_name,
-                            "config": config,
-                        })
+                        results.append(
+                            {
+                                "type": "agent",
+                                "id": f"{config.project_id}:{config.agent_name}",
+                                "name": config.agent_name,
+                                "config": config,
+                            }
+                        )
 
         # Search pipelines
         if not config_type or config_type == "pipeline":
             for project_pipelines in self.pipelines.values():
                 for config in project_pipelines.values():
                     if config_matches(config):
-                        results.append({
-                            "type": "pipeline",
-                            "id": config.id,
-                            "name": config.name,
-                            "config": config,
-                        })
+                        results.append(
+                            {
+                                "type": "pipeline",
+                                "id": config.id,
+                                "name": config.name,
+                                "config": config,
+                            }
+                        )
 
         return results
 
-    async def get_config_version(
-        self,
-        config_id: str,
-        version: int
-    ) -> Dict[str, Any]:
+    async def get_config_version(self, config_id: str, version: int) -> dict[str, Any]:
         """Get specific version of a configuration."""
         if config_id not in self.history:
-            raise ConfigNotFoundError(f"No history found for config '{config_id}'")
+            msg = f"No history found for config '{config_id}'"
+            raise ConfigNotFoundError(msg)
 
         for v in self.history[config_id]:
             if v.version == version:
@@ -270,15 +259,10 @@ class InMemoryConfigStore(IConfigStore):
                     "reason": v.reason,
                 }
 
-        raise ConfigNotFoundError(
-            f"Version {version} not found for config '{config_id}'"
-        )
+        msg = f"Version {version} not found for config '{config_id}'"
+        raise ConfigNotFoundError(msg)
 
-    async def list_config_versions(
-        self,
-        config_id: str,
-        limit: int = 10
-    ) -> List[ConfigVersion]:
+    async def list_config_versions(self, config_id: str, limit: int = 10) -> list[ConfigVersion]:
         """List configuration version history."""
         if config_id not in self.history:
             return []
@@ -288,7 +272,8 @@ class InMemoryConfigStore(IConfigStore):
     async def delete_project_config(self, project_id: str) -> None:
         """Delete project configuration."""
         if project_id not in self.projects:
-            raise ConfigNotFoundError(f"Project '{project_id}' not found")
+            msg = f"Project '{project_id}' not found"
+            raise ConfigNotFoundError(msg)
 
         config = self.projects[project_id]
         del self.projects[project_id]
@@ -302,20 +287,14 @@ class InMemoryConfigStore(IConfigStore):
         if project_id in self.history:
             del self.history[project_id]
 
-    async def delete_agent_config(
-        self,
-        project_id: str,
-        agent_name: str
-    ) -> None:
+    async def delete_agent_config(self, project_id: str, agent_name: str) -> None:
         """Delete agent configuration."""
         if project_id not in self.agents:
-            raise ConfigNotFoundError(
-                f"No agents configured for project '{project_id}'"
-            )
+            msg = f"No agents configured for project '{project_id}'"
+            raise ConfigNotFoundError(msg)
         if agent_name not in self.agents[project_id]:
-            raise ConfigNotFoundError(
-                f"Agent '{agent_name}' not found in project '{project_id}'"
-            )
+            msg = f"Agent '{agent_name}' not found in project '{project_id}'"
+            raise ConfigNotFoundError(msg)
 
         del self.agents[project_id][agent_name]
         agent_id = f"{project_id}:{agent_name}"

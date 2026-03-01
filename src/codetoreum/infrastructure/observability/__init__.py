@@ -31,26 +31,26 @@ Trace Context Propagation:
     trace_data = TraceContextPropagator.extract_trace_context(event)
 """
 
-from .config import SignozConfig, ObservabilityConfig
-from .otel_setup import setup_opentelemetry
-from .logging_integration import TraceContextInjector
+from .auto_instrument import (
+    instrument_sqlalchemy_engine,
+    setup_library_instrumentation,
+)
+from .config import ObservabilityConfig, SignozConfig
 from .instrumentation import (
-    instrument_function,
-    instrument_async_function,
-    instrument_class,
     add_span_attributes,
     add_span_event,
+    instrument_async_function,
+    instrument_class,
+    instrument_function,
 )
-from .auto_instrument import (
-    setup_library_instrumentation,
-    instrument_sqlalchemy_engine,
-)
+from .logging_integration import TraceContextInjector
+from .otel_setup import setup_opentelemetry
 from .trace_context_propagation import (
+    EventBusTraceContext,
     TraceContextData,
     TraceContextPropagator,
-    EventBusTraceContext,
-    inject_current_trace_context_into_event,
     extract_and_activate_trace_context,
+    inject_current_trace_context_into_event,
 )
 
 # Note: InstrumentedEventBus and InstrumentedEventHandler are available via:

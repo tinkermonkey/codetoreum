@@ -4,10 +4,10 @@ Mock Agent Query Adapter
 In-memory implementation of IAgentQueryPort for development and testing.
 """
 
-from datetime import datetime, timezone
-from typing import Dict, List, Optional
 from threading import RLock
 
+from codetoreum.domain.agent import Agent
+from codetoreum.domain.exceptions import AgentNotFoundError
 from codetoreum.ports.input.agent_query import (
     AgentExecutionStats,
     AgentFilters,
@@ -16,8 +16,6 @@ from codetoreum.ports.input.agent_query import (
     AgentPaginationParams,
     IAgentQueryPort,
 )
-from codetoreum.domain.agent import Agent
-from codetoreum.domain.exceptions import AgentNotFoundError
 
 
 class MockAgentQueryAdapter(IAgentQueryPort):
@@ -30,12 +28,12 @@ class MockAgentQueryAdapter(IAgentQueryPort):
     """
 
     def __init__(self):
-        self._agents: Dict[str, AgentInfo] = {}
-        self._agents_by_name: Dict[str, str] = {}  # name -> agent_id
-        self._execution_stats: Dict[str, AgentExecutionStats] = {}
+        self._agents: dict[str, AgentInfo] = {}
+        self._agents_by_name: dict[str, str] = {}  # name -> agent_id
+        self._execution_stats: dict[str, AgentExecutionStats] = {}
         self._lock = RLock()
 
-    def add_agent(self, agent: Agent, execution_stats: Optional[AgentExecutionStats] = None):
+    def add_agent(self, agent: Agent, execution_stats: AgentExecutionStats | None = None):
         """
         Helper method to add an agent to the mock storage.
 
@@ -50,11 +48,7 @@ class MockAgentQueryAdapter(IAgentQueryPort):
             if execution_stats:
                 self._execution_stats[agent.id] = execution_stats
 
-    def _convert_agent_to_info(
-        self,
-        agent: Agent,
-        execution_stats: Optional[AgentExecutionStats] = None
-    ) -> AgentInfo:
+    def _convert_agent_to_info(self, agent: Agent, execution_stats: AgentExecutionStats | None = None) -> AgentInfo:
         """Convert Agent domain model to AgentInfo."""
         return AgentInfo(
             id=agent.id,
@@ -72,10 +66,7 @@ class MockAgentQueryAdapter(IAgentQueryPort):
             mcp_servers=agent.mcp_servers.copy(),
             created_at=agent.created_at,
             updated_at=agent.updated_at,
-            capabilities={
-                skill: cap.proficiency
-                for skill, cap in agent.capabilities.items()
-            },
+            capabilities={skill: cap.proficiency for skill, cap in agent.capabilities.items()},
             environment_variables=agent.metadata.get("environment_variables", {}),
             execution_stats=execution_stats,
         )
@@ -84,7 +75,8 @@ class MockAgentQueryAdapter(IAgentQueryPort):
         """Get agent by ID."""
         with self._lock:
             if agent_id not in self._agents:
-                raise AgentNotFoundError(f"Agent with ID {agent_id} not found")
+                msg = f"Agent with ID {agent_id} not found"
+                raise AgentNotFoundError(msg)
 
             agent_info = self._agents[agent_id]
 
@@ -117,15 +109,16 @@ class MockAgentQueryAdapter(IAgentQueryPort):
         """Get agent by name."""
         with self._lock:
             if name not in self._agents_by_name:
-                raise AgentNotFoundError(f"Agent with name '{name}' not found")
+                msg = f"Agent with name '{name}' not found"
+                raise AgentNotFoundError(msg)
 
             agent_id = self._agents_by_name[name]
             return await self.get_agent(agent_id, include_stats)
 
     async def list_agents(
         self,
-        filters: Optional[AgentFilters] = None,
-        pagination: Optional[AgentPaginationParams] = None,
+        filters: AgentFilters | None = None,
+        pagination: AgentPaginationParams | None = None,
     ) -> AgentListResult:
         """List agents with optional filtering and pagination."""
         with self._lock:
@@ -164,7 +157,7 @@ class MockAgentQueryAdapter(IAgentQueryPort):
         self,
         capability: str,
         min_proficiency: float = 0.0,
-        pagination: Optional[AgentPaginationParams] = None,
+        pagination: AgentPaginationParams | None = None,
     ) -> AgentListResult:
         """List agents that have a specific capability."""
         with self._lock:
@@ -202,7 +195,7 @@ class MockAgentQueryAdapter(IAgentQueryPort):
                 has_next=has_next,
             )
 
-    async def count_agents(self, filters: Optional[AgentFilters] = None) -> int:
+    async def count_agents(self, filters: AgentFilters | None = None) -> int:
         """Count agents matching filters."""
         with self._lock:
             agents = list(self._agents.values())
@@ -212,7 +205,7 @@ class MockAgentQueryAdapter(IAgentQueryPort):
 
             return len(agents)
 
-    def _apply_filters(self, agents: List[AgentInfo], filters: AgentFilters) -> List[AgentInfo]:
+    def _apply_filters(self, agents: list[AgentInfo], filters: AgentFilters) -> list[AgentInfo]:
         """Apply filters to agent list."""
         result = agents
 
@@ -232,9 +225,9 @@ class MockAgentQueryAdapter(IAgentQueryPort):
 
     def _sort_agents(
         self,
-        agents: List[AgentInfo],
+        agents: list[AgentInfo],
         pagination: AgentPaginationParams,
-    ) -> List[AgentInfo]:
+    ) -> list[AgentInfo]:
         """Sort agents based on pagination parameters."""
         from codetoreum.ports.input.agent_query import AgentSortField, SortOrder
 

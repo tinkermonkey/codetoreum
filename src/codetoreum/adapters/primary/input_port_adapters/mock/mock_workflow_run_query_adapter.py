@@ -4,21 +4,20 @@ Mock Workflow Run Query Adapter
 In-memory implementation of IWorkflowRunQueryPort for development and testing.
 """
 
-from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from datetime import UTC, datetime
 from threading import RLock
 
 from codetoreum.ports.input.workflow_run_query import (
     IWorkflowRunQueryPort,
-    WorkflowRunInfo,
-    WorkflowRunStatus,
-    WorkflowRunStageInfo,
-    WorkflowRunSummary,
-    WorkflowRunListResult,
-    WorkflowRunFilters,
-    WorkflowRunPaginationParams,
-    WorkflowRunEventsResult,
     WorkflowRunAuditResult,
+    WorkflowRunEventsResult,
+    WorkflowRunFilters,
+    WorkflowRunInfo,
+    WorkflowRunListResult,
+    WorkflowRunPaginationParams,
+    WorkflowRunStageInfo,
+    WorkflowRunStatus,
+    WorkflowRunSummary,
 )
 
 
@@ -28,7 +27,7 @@ class MockWorkflowRunQueryAdapter(IWorkflowRunQueryPort):
     """
 
     def __init__(self):
-        self._runs: Dict[str, Dict] = {}
+        self._runs: dict[str, dict] = {}
         self._lock = RLock()
 
     async def get_workflow_run(self, workflow_run_id: str) -> WorkflowRunInfo:
@@ -46,20 +45,20 @@ class MockWorkflowRunQueryAdapter(IWorkflowRunQueryPort):
                     name="implementation",
                     agent_name="developer_agent",
                     status="completed",
-                    started_at=datetime.now(timezone.utc),
-                    completed_at=datetime.now(timezone.utc),
+                    started_at=datetime.now(UTC),
+                    completed_at=datetime.now(UTC),
                     execution_id="exec-111",
                 ),
                 WorkflowRunStageInfo(
                     name="review",
                     agent_name="reviewer_agent",
                     status="running",
-                    started_at=datetime.now(timezone.utc),
+                    started_at=datetime.now(UTC),
                     completed_at=None,
                     execution_id="exec-222",
                 ),
             ],
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
             completed_at=None,
             duration=None,
             issue_title="Fix authentication bug",
@@ -72,8 +71,8 @@ class MockWorkflowRunQueryAdapter(IWorkflowRunQueryPort):
 
     async def list_workflow_runs(
         self,
-        filters: Optional[WorkflowRunFilters] = None,
-        pagination: Optional[WorkflowRunPaginationParams] = None,
+        filters: WorkflowRunFilters | None = None,
+        pagination: WorkflowRunPaginationParams | None = None,
     ) -> WorkflowRunListResult:
         """List workflow runs."""
         return WorkflowRunListResult(
@@ -86,7 +85,7 @@ class MockWorkflowRunQueryAdapter(IWorkflowRunQueryPort):
                     status=WorkflowRunStatus.RUNNING,
                     current_stage_index=1,
                     current_stage_name="review",
-                    started_at=datetime.now(timezone.utc),
+                    started_at=datetime.now(UTC),
                     completed_at=None,
                     duration=None,
                     issue_title="Fix authentication bug",
@@ -107,8 +106,8 @@ class MockWorkflowRunQueryAdapter(IWorkflowRunQueryPort):
         workflow_run_id: str,
         offset: int = 0,
         limit: int = 50,
-        event_types: Optional[List[str]] = None,
-        since: Optional[datetime] = None,
+        event_types: list[str] | None = None,
+        since: datetime | None = None,
     ) -> WorkflowRunEventsResult:
         """Get events for a workflow run."""
         return WorkflowRunEventsResult(
@@ -117,7 +116,7 @@ class MockWorkflowRunQueryAdapter(IWorkflowRunQueryPort):
                     "id": "evt-mock-123",
                     "event_type": "WorkflowStarted",
                     "workflow_run_id": workflow_run_id,
-                    "timestamp": datetime.now(timezone.utc),
+                    "timestamp": datetime.now(UTC),
                     "agent_name": None,
                     "stage_name": "implementation",
                     "status": None,
@@ -150,8 +149,8 @@ class MockWorkflowRunQueryAdapter(IWorkflowRunQueryPort):
             status=WorkflowRunStatus.COMPLETED,
             current_stage_index=2,
             current_stage_name="merge",
-            started_at=datetime.now(timezone.utc),
-            completed_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
             duration=300,
             issue_title="Fix authentication bug",
             issue_number=42,
@@ -167,7 +166,7 @@ class MockWorkflowRunQueryAdapter(IWorkflowRunQueryPort):
                 "event_type": "WorkflowCreated",
                 "aggregate_id": workflow_run_id,
                 "aggregate_type": "Workflow",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "data": {"work_item_id": "wi-mock-123"},
                 "correlation_id": None,
                 "causation_id": None,
@@ -179,7 +178,7 @@ class MockWorkflowRunQueryAdapter(IWorkflowRunQueryPort):
                 "event_type": "WorkflowStarted",
                 "aggregate_id": workflow_run_id,
                 "aggregate_type": "Workflow",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "data": {"first_stage": "implementation"},
                 "correlation_id": None,
                 "causation_id": None,
@@ -191,7 +190,7 @@ class MockWorkflowRunQueryAdapter(IWorkflowRunQueryPort):
                 "event_type": "WorkflowCompleted",
                 "aggregate_id": workflow_run_id,
                 "aggregate_type": "Workflow",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "data": {"duration_seconds": 300},
                 "correlation_id": None,
                 "causation_id": None,
@@ -208,30 +207,34 @@ class MockWorkflowRunQueryAdapter(IWorkflowRunQueryPort):
             {
                 "name": "implementation",
                 "status": "completed",
-                "startedAt": datetime.now(timezone.utc).isoformat(),
-                "completedAt": datetime.now(timezone.utc).isoformat(),
+                "startedAt": datetime.now(UTC).isoformat(),
+                "completedAt": datetime.now(UTC).isoformat(),
                 "durationSeconds": 150.0,
                 "events": [mock_events[1]],
             },
             {
                 "name": "review",
                 "status": "completed",
-                "startedAt": datetime.now(timezone.utc).isoformat(),
-                "completedAt": datetime.now(timezone.utc).isoformat(),
+                "startedAt": datetime.now(UTC).isoformat(),
+                "completedAt": datetime.now(UTC).isoformat(),
                 "durationSeconds": 100.0,
                 "events": [],
             },
         ]
 
         # Mock validation
-        validation = {
-            "sequenceValid": True,
-            "expectedSequence": ["WorkflowCreated", "WorkflowStarted", "WorkflowCompleted"],
-            "actualSequence": ["WorkflowCreated", "WorkflowStarted", "WorkflowCompleted"],
-            "missingEvents": [],
-            "unexpectedEvents": [],
-            "outOfOrderEvents": [],
-        } if include_validation else None
+        validation = (
+            {
+                "sequenceValid": True,
+                "expectedSequence": ["WorkflowCreated", "WorkflowStarted", "WorkflowCompleted"],
+                "actualSequence": ["WorkflowCreated", "WorkflowStarted", "WorkflowCompleted"],
+                "missingEvents": [],
+                "unexpectedEvents": [],
+                "outOfOrderEvents": [],
+            }
+            if include_validation
+            else None
+        )
 
         return WorkflowRunAuditResult(
             workflow_run=workflow_run,

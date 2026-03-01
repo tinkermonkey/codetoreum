@@ -1,6 +1,6 @@
 /**
  * AppStateProvider - Root provider that composes all state contexts
- * 
+ *
  * Order matters:
  * 1. SocketContext - Real-time events (foundation for AgentStateContext)
  * 2. SystemStateContext - Health & circuit breakers

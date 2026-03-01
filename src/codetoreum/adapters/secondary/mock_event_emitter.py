@@ -6,7 +6,7 @@ subscribers. Used as a base class for mock adapters to support event
 simulation testing without external service dependencies.
 """
 
-from typing import Callable, Dict, List
+from collections.abc import Callable
 
 from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.ports.output.event_emitter import IEventEmitter
@@ -48,7 +48,7 @@ class MockEventEmitter(IEventEmitter):
 
     def __init__(self) -> None:
         """Initialize the event emitter with empty handler registry."""
-        self._handlers: Dict[str, List[Callable[[CodetoreumEvent], None]]] = {}
+        self._handlers: dict[str, list[Callable[[CodetoreumEvent], None]]] = {}
 
     def on(self, event_type: str, handler: Callable[[CodetoreumEvent], None]) -> None:
         """Subscribe to events of a specific type.
@@ -64,9 +64,11 @@ class MockEventEmitter(IEventEmitter):
             ValueError: If event_type is empty or handler is not callable
         """
         if not event_type:
-            raise ValueError("event_type cannot be empty")
+            msg = "event_type cannot be empty"
+            raise ValueError(msg)
         if not callable(handler):
-            raise ValueError("handler must be callable")
+            msg = "handler must be callable"
+            raise ValueError(msg)
 
         if event_type not in self._handlers:
             self._handlers[event_type] = []
@@ -86,7 +88,8 @@ class MockEventEmitter(IEventEmitter):
             ValueError: If handler was not previously subscribed to this event type
         """
         if event_type not in self._handlers or handler not in self._handlers[event_type]:
-            raise ValueError(f"Handler not subscribed to event type: {event_type}")
+            msg = f"Handler not subscribed to event type: {event_type}"
+            raise ValueError(msg)
         self._handlers[event_type].remove(handler)
 
     def emit(self, event: CodetoreumEvent) -> None:
@@ -103,7 +106,8 @@ class MockEventEmitter(IEventEmitter):
             ValueError: If event is not a CodetoreumEvent instance
         """
         if not isinstance(event, CodetoreumEvent):
-            raise ValueError("event must be a CodetoreumEvent instance")
+            msg = "event must be a CodetoreumEvent instance"
+            raise ValueError(msg)
 
         if event.type in self._handlers:
             for handler in self._handlers[event.type]:

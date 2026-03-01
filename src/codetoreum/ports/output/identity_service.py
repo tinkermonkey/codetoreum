@@ -11,12 +11,15 @@ with no event emission.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from re import Pattern
-from typing import List, Optional
 
 
-@dataclass
+@dataclass(frozen=True)
 class BotIdentityConfig:
     """Configuration for bot identity detection.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. Lists are converted to
+    tuples for immutability.
 
     Attributes:
         bot_usernames: Exact usernames to identify as bots
@@ -25,8 +28,34 @@ class BotIdentityConfig:
                      (e.g., [re.compile("^bot-.*"), re.compile(".*-bot$")])
     """
 
-    bot_usernames: List[str]
-    bot_patterns: List[Pattern]
+    bot_usernames: tuple[str, ...]
+    bot_patterns: tuple[Pattern, ...]
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        # Coerce list to tuple for bot_usernames
+        if isinstance(self.bot_usernames, list):
+            object.__setattr__(self, "bot_usernames", tuple(self.bot_usernames))
+
+        # Coerce list to tuple for bot_patterns
+        if isinstance(self.bot_patterns, list):
+            object.__setattr__(self, "bot_patterns", tuple(self.bot_patterns))
+
+        if not isinstance(self.bot_usernames, tuple):
+            msg = "bot_usernames must be a list or tuple of strings"
+            raise ValueError(msg)
+
+        if not all(isinstance(u, str) and u for u in self.bot_usernames):
+            msg = "all bot_usernames must be non-empty strings"
+            raise ValueError(msg)
+
+        if not isinstance(self.bot_patterns, tuple):
+            msg = "bot_patterns must be a list or tuple of Pattern instances"
+            raise ValueError(msg)
+
+        if not all(isinstance(p, Pattern) for p in self.bot_patterns):
+            msg = "all bot_patterns must be Pattern instances"
+            raise ValueError(msg)
 
 
 class IIdentityService(ABC):
@@ -86,7 +115,6 @@ class IIdentityService(ABC):
         Returns:
             bool: True if username is identified as a bot, False if human
         """
-        pass
 
     @abstractmethod
     def get_bot_username(self) -> str:
@@ -101,10 +129,9 @@ class IIdentityService(ABC):
         Raises:
             ConfigurationError: No bot username configured
         """
-        pass
 
     @abstractmethod
-    def get_human_users(self, usernames: List[str]) -> List[str]:
+    def get_human_users(self, usernames: list[str]) -> list[str]:
         """Filter list to only human users.
 
         Removes any bots from the provided list of usernames.
@@ -120,7 +147,6 @@ class IIdentityService(ABC):
             humans = service.get_human_users(all_users)
             # Returns: ["alice", "bob"]
         """
-        pass
 
     @abstractmethod
     def configure(self, config: BotIdentityConfig) -> None:
@@ -136,4 +162,3 @@ class IIdentityService(ABC):
             ValidationError: Invalid configuration (empty bot_usernames
                             and bot_patterns, etc.)
         """
-        pass

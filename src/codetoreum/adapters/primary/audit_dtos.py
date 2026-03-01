@@ -6,15 +6,14 @@ audit information with sequence validation and stage grouping.
 """
 
 from datetime import datetime
-from typing import List, Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from codetoreum.adapters.primary.workflow_run_dtos import (
-    WorkflowRunSummaryResponse,
     WorkflowEventResponse,
+    WorkflowRunSummaryResponse,
 )
-
 
 # ============================================================================
 # Validation Models
@@ -25,8 +24,13 @@ class OutOfOrderEvent(BaseModel):
     """Event that occurred out of expected sequence."""
 
     eventType: str = Field(..., description="Event type name", serialization_alias="eventType")
-    timestamp: Optional[datetime] = Field(None, description="When event occurred (optional until out-of-order detection is fully implemented)")
-    expectedPosition: int = Field(..., description="Expected position in sequence", serialization_alias="expectedPosition")
+    timestamp: datetime | None = Field(
+        None,
+        description="When event occurred (optional until out-of-order detection is fully implemented)",
+    )
+    expectedPosition: int = Field(
+        ..., description="Expected position in sequence", serialization_alias="expectedPosition"
+    )
     actualPosition: int = Field(..., description="Actual position in sequence", serialization_alias="actualPosition")
 
     model_config = ConfigDict(
@@ -36,9 +40,9 @@ class OutOfOrderEvent(BaseModel):
                 "eventType": "WorkflowStageAdvanced",
                 "timestamp": "2026-02-20T10:15:00Z",
                 "expectedPosition": 5,
-                "actualPosition": 3
+                "actualPosition": 3,
             }
-        }
+        },
     )
 
 
@@ -46,19 +50,39 @@ class AuditValidationResult(BaseModel):
     """Validation results for event sequence."""
 
     sequenceValid: bool = Field(..., description="Whether event sequence is valid", serialization_alias="sequenceValid")
-    expectedSequence: List[str] = Field(..., description="Expected event type names", serialization_alias="expectedSequence")
-    actualSequence: List[str] = Field(..., description="Actual event type names", serialization_alias="actualSequence")
-    missingEvents: List[str] = Field(..., description="Expected events that didn't occur", serialization_alias="missingEvents")
-    unexpectedEvents: List[str] = Field(..., description="Events that shouldn't have occurred", serialization_alias="unexpectedEvents")
-    outOfOrderEvents: List[OutOfOrderEvent] = Field(..., description="Events in wrong sequence", serialization_alias="outOfOrderEvents")
+    expectedSequence: list[str] = Field(
+        ..., description="Expected event type names", serialization_alias="expectedSequence"
+    )
+    actualSequence: list[str] = Field(..., description="Actual event type names", serialization_alias="actualSequence")
+    missingEvents: list[str] = Field(
+        ..., description="Expected events that didn't occur", serialization_alias="missingEvents"
+    )
+    unexpectedEvents: list[str] = Field(
+        ...,
+        description="Events that shouldn't have occurred",
+        serialization_alias="unexpectedEvents",
+    )
+    outOfOrderEvents: list[OutOfOrderEvent] = Field(
+        ..., description="Events in wrong sequence", serialization_alias="outOfOrderEvents"
+    )
 
     model_config = ConfigDict(
         populate_by_name=True,
         json_schema_extra={
             "example": {
                 "sequenceValid": False,
-                "expectedSequence": ["WorkflowCreated", "WorkflowStarted", "WorkflowStageAdvanced", "WorkflowCompleted"],
-                "actualSequence": ["WorkflowCreated", "WorkflowStageAdvanced", "WorkflowStarted", "WorkflowCompleted"],
+                "expectedSequence": [
+                    "WorkflowCreated",
+                    "WorkflowStarted",
+                    "WorkflowStageAdvanced",
+                    "WorkflowCompleted",
+                ],
+                "actualSequence": [
+                    "WorkflowCreated",
+                    "WorkflowStageAdvanced",
+                    "WorkflowStarted",
+                    "WorkflowCompleted",
+                ],
                 "missingEvents": [],
                 "unexpectedEvents": [],
                 "outOfOrderEvents": [
@@ -66,15 +90,15 @@ class AuditValidationResult(BaseModel):
                         "eventType": "WorkflowStageAdvanced",
                         "timestamp": "2026-02-20T10:15:00Z",
                         "expectedPosition": 2,
-                        "actualPosition": 1
+                        "actualPosition": 1,
                     }
-                ]
+                ],
             }
-        }
+        },
     )
 
-    @model_validator(mode='after')
-    def validate_consistency(self) -> 'AuditValidationResult':
+    @model_validator(mode="after")
+    def validate_consistency(self) -> "AuditValidationResult":
         """
         Validate consistency between sequenceValid and error lists.
 
@@ -99,17 +123,18 @@ class AuditValidationResult(BaseModel):
                 errors.append(f"outOfOrderEvents is not empty: {self.outOfOrderEvents}")
 
             if errors:
-                raise ValueError(
+                msg = (
                     f"sequenceValid is True but error lists are not empty. "
                     f"This is a contradictory validation result. Errors: {'; '.join(errors)}"
                 )
-        else:
-            # sequenceValid=False requires at least one error
-            if not (self.missingEvents or self.unexpectedEvents or self.outOfOrderEvents):
-                raise ValueError(
-                    "sequenceValid is False but all error lists are empty. "
-                    "At least one of missingEvents, unexpectedEvents, or outOfOrderEvents must be non-empty."
-                )
+                raise ValueError(msg)
+        # sequenceValid=False requires at least one error
+        elif not (self.missingEvents or self.unexpectedEvents or self.outOfOrderEvents):
+            msg = (
+                "sequenceValid is False but all error lists are empty. "
+                "At least one of missingEvents, unexpectedEvents, or outOfOrderEvents must be non-empty."
+            )
+            raise ValueError(msg)
 
         return self
 
@@ -123,13 +148,19 @@ class AuditStageInfo(BaseModel):
     """Stage-grouped events for audit."""
 
     name: str = Field(..., description="Stage name")
-    status: Literal["pending", "ready", "running", "completed", "failed", "skipped"] = Field(..., description="Stage status")
-    startedAt: Optional[datetime] = Field(None, description="Stage start time", serialization_alias="startedAt")
-    completedAt: Optional[datetime] = Field(None, description="Stage completion time", serialization_alias="completedAt")
-    durationSeconds: Optional[float] = Field(None, description="Stage duration in seconds", serialization_alias="durationSeconds")
-    events: List[WorkflowEventResponse] = Field(default_factory=list, description="Events for this stage")
-    output: Optional[str] = Field(None, description="Stage output content")
-    errorMessage: Optional[str] = Field(None, description="Error message if stage failed", serialization_alias="errorMessage")
+    status: Literal["pending", "ready", "running", "completed", "failed", "skipped"] = Field(
+        ..., description="Stage status"
+    )
+    startedAt: datetime | None = Field(None, description="Stage start time", serialization_alias="startedAt")
+    completedAt: datetime | None = Field(None, description="Stage completion time", serialization_alias="completedAt")
+    durationSeconds: float | None = Field(
+        None, description="Stage duration in seconds", serialization_alias="durationSeconds"
+    )
+    events: list[WorkflowEventResponse] = Field(default_factory=list, description="Events for this stage")
+    output: str | None = Field(None, description="Stage output content")
+    errorMessage: str | None = Field(
+        None, description="Error message if stage failed", serialization_alias="errorMessage"
+    )
     metadata: dict = Field(default_factory=dict, description="Additional stage metadata")
 
     @model_validator(mode="after")
@@ -141,9 +172,8 @@ class AuditStageInfo(BaseModel):
         """
         if self.startedAt is not None and self.completedAt is not None:
             if self.completedAt < self.startedAt:
-                raise ValueError(
-                    f"completedAt ({self.completedAt}) must be >= startedAt ({self.startedAt})"
-                )
+                msg = f"completedAt ({self.completedAt}) must be >= startedAt ({self.startedAt})"
+                raise ValueError(msg)
         return self
 
     model_config = ConfigDict(
@@ -164,11 +194,11 @@ class AuditStageInfo(BaseModel):
                         "agentName": "developer_agent",
                         "stageName": "implementation",
                         "status": None,
-                        "data": {}
+                        "data": {},
                     }
-                ]
+                ],
             }
-        }
+        },
     )
 
 
@@ -180,10 +210,15 @@ class AuditStageInfo(BaseModel):
 class WorkflowRunAuditResponse(BaseModel):
     """Comprehensive audit response for workflow run."""
 
-    workflowRun: WorkflowRunSummaryResponse = Field(..., description="Workflow run summary", serialization_alias="workflowRun")
-    events: List[WorkflowEventResponse] = Field(..., description="All workflow events")
-    stages: List[AuditStageInfo] = Field(..., description="Stage-grouped event information")
-    validation: Optional[AuditValidationResult] = Field(None, description="Sequence validation results (optional, only included when include_validation=true)")
+    workflowRun: WorkflowRunSummaryResponse = Field(
+        ..., description="Workflow run summary", serialization_alias="workflowRun"
+    )
+    events: list[WorkflowEventResponse] = Field(..., description="All workflow events")
+    stages: list[AuditStageInfo] = Field(..., description="Stage-grouped event information")
+    validation: AuditValidationResult | None = Field(
+        None,
+        description="Sequence validation results (optional, only included when include_validation=true)",
+    )
     totalEventCount: int = Field(..., description="Total number of events", serialization_alias="totalEventCount")
     offset: int = Field(..., description="Event list offset for pagination")
     limit: int = Field(..., description="Event list limit for pagination")
@@ -208,7 +243,7 @@ class WorkflowRunAuditResponse(BaseModel):
                     "issueNumber": 42,
                     "project": "codetoreum",
                     "triggeredBy": "github_webhook",
-                    "priority": "high"
+                    "priority": "high",
                 },
                 "events": [
                     {
@@ -219,7 +254,7 @@ class WorkflowRunAuditResponse(BaseModel):
                         "agentName": None,
                         "stageName": None,
                         "status": None,
-                        "data": {}
+                        "data": {},
                     }
                 ],
                 "stages": [
@@ -229,7 +264,7 @@ class WorkflowRunAuditResponse(BaseModel):
                         "startedAt": "2026-02-20T10:00:00Z",
                         "completedAt": "2026-02-20T10:15:00Z",
                         "durationSeconds": 900.0,
-                        "events": []
+                        "events": [],
                     }
                 ],
                 "validation": {
@@ -238,12 +273,12 @@ class WorkflowRunAuditResponse(BaseModel):
                     "actualSequence": ["WorkflowCreated", "WorkflowStarted", "WorkflowCompleted"],
                     "missingEvents": [],
                     "unexpectedEvents": [],
-                    "outOfOrderEvents": []
+                    "outOfOrderEvents": [],
                 },
                 "totalEventCount": 15,
                 "offset": 0,
                 "limit": 100,
-                "hasNext": False
+                "hasNext": False,
             }
-        }
+        },
     )

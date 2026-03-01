@@ -268,17 +268,28 @@ class EventPersistenceWorker:
 
 ```python
 class InMemoryEventStore(IEventStore):
-    """In-memory event store for testing."""
+    """In-memory event store for testing with spec-compliant timing model."""
 
-    def __init__(self):
+    def __init__(self,
+                 config: Optional["SimulationConfig"] = None,
+                 clock: Optional["SimulationClock"] = None):
         self.streams: Dict[str, List[DomainEvent]] = {}
         self.snapshots: Dict[str, Dict[str, Any]] = {}
+        self._config = config  # SimulationConfig for timing
+        self._clock = clock    # SimulationClock for time manipulation
 
     async def append(self,
                      stream_id: str,
                      events: List[DomainEvent],
                      expected_version: Optional[int] = None) -> None:
-        """Append to in-memory stream."""
+        """
+        Append to in-memory stream with spec-compliant event processing latency.
+
+        Implements timing model (US-3.3):
+        Latency = event_count × handler_count × ms_per_event
+
+        Example: 1000 events × 5 handlers × 1ms = 5 seconds
+        """
         if stream_id not in self.streams:
             self.streams[stream_id] = []
 
@@ -288,7 +299,50 @@ class InMemoryEventStore(IEventStore):
                 raise ConcurrencyConflictError()
 
         self.streams[stream_id].extend(events)
+
+        # Apply backpressure: simulate event processing latency
+        # Proportional to event count and handler count
+        await self._apply_event_processing_latency(len(events))
 ```
+
+**Event Processing Latency Model (US-3.3)**
+
+The in-memory event store implements a spec-compliant timing model that simulates real-world event processing costs:
+
+```
+Latency (seconds) = event_count × handler_count × (ms_per_event / 1000)
+```
+
+Configuration from `SimulationConfig`:
+- `event_handler_count`: Number of handlers processing each event (default: 1)
+- `ms_per_event`: Processing latency per (event × handler) unit in milliseconds (default: 1.0ms)
+- `fidelity_level`: Controls whether delay is applied:
+  - `LOW`: No delay (0 milliseconds)
+  - `MEDIUM`: Full delay with configuration values
+  - `HIGH`: Full delay with ±20% random jitter
+
+**Example Usage**:
+
+```python
+config = SimulationConfig(
+    scenario_name="test",
+    fidelity_level=FidelityLevel.MEDIUM,
+    ms_per_event=1.0,          # 1ms per unit
+    event_handler_count=5       # 5 handlers
+)
+
+store = InMemoryEventStore(config=config)
+
+# Appending 1000 events will incur:
+# 1000 events × 5 handlers × 1ms = 5 seconds latency
+await store.append("stream-id", events_list_of_1000)
+```
+
+This backpressure mechanism ensures that:
+1. High event volumes incur proportional latency (accurately models handler processing time)
+2. Handler count directly impacts latency (more handlers = more processing cost)
+3. Fidelity level controls realism (LOW for speed, HIGH for accuracy)
+4. Can use simulation clock for time manipulation in tests
 
 ## Consistency and Durability Guarantees
 
@@ -345,3 +399,8 @@ class InMemoryEventStore(IEventStore):
 5. **Retention**: Configure ILM policies in Elasticsearch
 6. **Buffering**: Monitor Redis buffer depth to prevent backlog
 7. **Worker Scaling**: Add workers if buffer lag increases
+8. **Event Processing Latency (US-3.3)**: InMemoryEventStore implements spec-compliant backpressure model:
+   - Formula: `latency = event_count × handler_count × ms_per_event`
+   - Configured via `SimulationConfig.event_handler_count` and `ms_per_event`
+   - Fidelity-aware: LOW (no delay), MEDIUM (proportional), HIGH (with jitter)
+   - Prevents unrealistic fast simulation when event processing should incur cost

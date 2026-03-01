@@ -28,13 +28,13 @@ const RepairCycleCard = () => {
     if (container.is_finished) {
       return container.result?.overall_success ? 'border-green-500' : 'border-red-500'
     }
-    
+
     const checkpoint = container.checkpoint
     if (!checkpoint) {
       if (container.container_age_seconds < 300) return 'border-blue-500'
       return 'border-yellow-500'
     }
-    
+
     const checkpointAge = checkpoint.checkpoint_age_seconds || 0
     if (checkpointAge < 300) return 'border-green-500'
     if (checkpointAge < 600) return 'border-yellow-500'
@@ -44,16 +44,16 @@ const RepairCycleCard = () => {
   // Get status icon
   const getStatusIcon = (container) => {
     if (container.is_finished) {
-      return container.result?.overall_success ? 
-        <CheckCircle className="w-4 h-4 text-green-500" /> : 
+      return container.result?.overall_success ?
+        <CheckCircle className="w-4 h-4 text-green-500" /> :
         <XCircle className="w-4 h-4 text-red-500" />
     }
-    
+
     const checkpoint = container.checkpoint
     if (!checkpoint || (checkpoint.checkpoint_age_seconds || 0) > 600) {
       return <AlertTriangle className="w-4 h-4 text-yellow-500" />
     }
-    
+
     return <Loader className="w-4 h-4 text-blue-500 animate-spin" />
   }
 
@@ -90,7 +90,7 @@ const RepairCycleCard = () => {
           <Wrench className="w-5 h-5 text-gh-fg-default mr-2" />
           <h3 className="text-lg font-semibold text-gh-fg-default">Repair Cycles</h3>
         </div>
-        <Link 
+        <Link
           to="/repair-cycles"
           className="text-sm text-gh-accent-fg hover:underline flex items-center"
         >
@@ -142,13 +142,13 @@ const RepairCycleCard = () => {
                       #{container.issue_number}
                     </span>
                   </div>
-                  
+
                   {container.checkpoint && (
                     <div className="text-xs text-gh-fg-muted">
                       {container.checkpoint.test_type} - Iteration {container.checkpoint.iteration} - {container.checkpoint.agent_call_count} calls
                     </div>
                   )}
-                  
+
                   <div className="text-xs text-gh-fg-muted mt-1">
                     Running: {formatDuration(container.created_at)}
                     {container.checkpoint && (
@@ -159,10 +159,10 @@ const RepairCycleCard = () => {
               </div>
             </Link>
           ))}
-          
+
           {containerCount > 5 && (
             <div className="text-center pt-2">
-              <Link 
+              <Link
                 to="/repair-cycles"
                 className="text-sm text-gh-accent-fg hover:underline"
               >

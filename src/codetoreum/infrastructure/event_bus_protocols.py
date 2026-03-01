@@ -5,7 +5,8 @@ These protocols define the interfaces that adapters must implement
 to work with the event bus wiring system.
 """
 
-from typing import Protocol, Callable, Awaitable, Any
+from collections.abc import Awaitable, Callable
+from typing import Any, Protocol
 
 
 class EventEmitter(Protocol):
@@ -43,15 +44,11 @@ class IDiscussionAdapter(EventEmitter, Protocol):
 class IPipelineLockService(EventEmitter, Protocol):
     """Protocol for pipeline lock service implementations."""
 
-    async def try_acquire_lock(
-        self, project_id: str, board_id: str, work_item_id: str
-    ) -> tuple[bool, str]:
+    async def try_acquire_lock(self, project_id: str, board_id: str, work_item_id: str) -> tuple[bool, str]:
         """Try to acquire a pipeline lock for a work item."""
         ...
 
-    async def release_lock(
-        self, project_id: str, board_id: str, work_item_id: str
-    ) -> None:
+    async def release_lock(self, project_id: str, board_id: str, work_item_id: str) -> None:
         """Release a pipeline lock for a work item."""
         ...
 

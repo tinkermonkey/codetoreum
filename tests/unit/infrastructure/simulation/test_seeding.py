@@ -1,16 +1,17 @@
 """Unit tests for simulation data seeding."""
 
-import pytest
+from datetime import datetime
 from pathlib import Path
-from datetime import datetime, timezone
 
+import pytest
+
+from codetoreum.domain.work_item import WorkItemPriority
 from codetoreum.infrastructure.simulation import (
-    SimulationApplicationBootstrap,
-    SimulationDataSeeder,
-    SimulationConfig,
     CreatedItems,
+    SimulationApplicationBootstrap,
+    SimulationConfig,
+    SimulationDataSeeder,
 )
-from codetoreum.domain.work_item import WorkItemPriority, WorkItemStatus
 from codetoreum.ports.exceptions import ValidationError
 
 
@@ -29,7 +30,8 @@ class TestSimulationDataSeeder:
     @pytest.fixture
     async def seeder(self, bootstrap):
         """Create seeder instance."""
-        return SimulationDataSeeder(bootstrap)
+        seeder_instance = SimulationDataSeeder(bootstrap)
+        return seeder_instance
 
     # =========================================================================
     # Initialization Tests
@@ -119,9 +121,7 @@ class TestSimulationDataSeeder:
 
         # Verify pipeline was saved
         pipeline_id = seeder.created_items.pipelines[0]
-        pipeline = await seeder._config_store.get_pipeline_config(
-            seeder._current_project_id, "test-workflow"
-        )
+        pipeline = await seeder._config_store.get_pipeline_config(seeder._current_project_id, "test-workflow")
         assert pipeline.name == "test-workflow"
         assert len(pipeline.stages) == 3
         assert pipeline.stages[0]["name"] == "design"
@@ -155,9 +155,7 @@ class TestSimulationDataSeeder:
             stages=custom_stages,
         )
 
-        pipeline = await seeder._config_store.get_pipeline_config(
-            seeder._current_project_id, "custom-workflow"
-        )
+        pipeline = await seeder._config_store.get_pipeline_config(seeder._current_project_id, "custom-workflow")
         assert len(pipeline.stages) == 2
         assert pipeline.stages[0]["name"] == "analyze"
         assert pipeline.stages[0]["max_retries"] == 5
@@ -198,15 +196,11 @@ class TestSimulationDataSeeder:
         assert len(seeder.created_items.agents) == 2
 
         # Verify agents were saved
-        agent1 = await seeder._config_store.get_agent_config(
-            seeder._current_project_id, "agent1"
-        )
+        agent1 = await seeder._config_store.get_agent_config(seeder._current_project_id, "agent1")
         assert agent1.agent_name == "agent1"
         assert agent1.metadata["agent_type"] == "coder"
 
-        agent2 = await seeder._config_store.get_agent_config(
-            seeder._current_project_id, "agent2"
-        )
+        agent2 = await seeder._config_store.get_agent_config(seeder._current_project_id, "agent2")
         assert agent2.metadata["temperature"] == 0.5
         assert agent2.metadata["max_tokens"] == 2048
 
@@ -286,9 +280,7 @@ class TestSimulationDataSeeder:
         """Test fluent API allows method chaining."""
         result = await seeder.create_project("chain-test-project")
         result = await result.create_workflow("chain-workflow")
-        result = await result.create_agents([
-            {"name": "agent1", "capabilities": ["code_generation"]}
-        ])
+        result = await result.create_agents([{"name": "agent1", "capabilities": ["code_generation"]}])
         result = await result.create_work_items(count=3)
 
         # All operations should succeed
@@ -435,6 +427,7 @@ class TestCreatedItems:
         assert items.agents == []
         assert items.work_items == []
         assert items.pipelines == []
+        assert items.boards == []
 
     def test_created_items_clear(self):
         """Test clearing all tracked items."""
@@ -442,12 +435,28 @@ class TestCreatedItems:
         items.projects.append("proj1")
         items.workflows.append("wf1")
         items.agents.append("agent1")
+        items.work_items.append("wi1")
+        items.pipelines.append("p1")
+        items.boards.append("b1")
 
+        # Verify all lists have items
+        assert len(items.projects) == 1
+        assert len(items.workflows) == 1
+        assert len(items.agents) == 1
+        assert len(items.work_items) == 1
+        assert len(items.pipelines) == 1
+        assert len(items.boards) == 1
+
+        # Clear all
         items.clear()
 
+        # Verify all lists are empty
         assert items.projects == []
         assert items.workflows == []
         assert items.agents == []
+        assert items.work_items == []
+        assert items.pipelines == []
+        assert items.boards == []
 
 
 class TestScenarioModels:
@@ -458,20 +467,20 @@ class TestScenarioModels:
         from codetoreum.infrastructure.simulation.scenario_models import ScenarioModel
 
         # Valid minimal scenario
-        data = {
-            "name": "Test Scenario",
-            "description": "Test description",
-        }
-
-        scenario = ScenarioModel(**data)
+        scenario = ScenarioModel(
+            name="Test Scenario",
+            description="Test description",
+            created_at=None,
+        )
         assert scenario.name == "Test Scenario"
         assert scenario.speed_multiplier == 10.0  # Default
         assert scenario.projects == []
 
     def test_scenario_model_validation_errors(self):
         """Test ScenarioModel catches validation errors."""
-        from codetoreum.infrastructure.simulation.scenario_models import ScenarioModel
         from pydantic import ValidationError
+
+        from codetoreum.infrastructure.simulation.scenario_models import ScenarioModel
 
         # Missing required 'name'
         with pytest.raises(ValidationError):
@@ -483,26 +492,26 @@ class TestScenarioModels:
             ScenarioProjectModel,
         )
 
-        data = {
-            "name": "test-project",
-            "description": "Test project",
-        }
-
-        project = ScenarioProjectModel(**data)
+        project = ScenarioProjectModel(
+            name="test-project",
+            description="Test project",
+        )
         assert project.name == "test-project"
         assert project.default_branch == "main"
 
     def test_agent_model_capability_validation(self):
         """Test agent capabilities are validated."""
-        from codetoreum.infrastructure.simulation.scenario_models import ScenarioAgentModel
         from pydantic import ValidationError
 
+        from codetoreum.infrastructure.simulation.scenario_models import (
+            ScenarioAgentModel,
+        )
+
         # Valid capabilities
-        data = {
-            "name": "test-agent",
-            "capabilities": ["code_generation", "code_review"],
-        }
-        agent = ScenarioAgentModel(**data)
+        agent = ScenarioAgentModel(
+            name="test-agent",
+            capabilities=["code_generation", "code_review"],
+        )
         assert "code_generation" in agent.capabilities
 
         # Invalid capability
@@ -514,10 +523,11 @@ class TestScenarioModels:
 
     def test_work_item_model_priority_validation(self):
         """Test work item priority validation."""
+        from pydantic import ValidationError
+
         from codetoreum.infrastructure.simulation.scenario_models import (
             ScenarioWorkItemModel,
         )
-        from pydantic import ValidationError
 
         # Valid priority
         item = ScenarioWorkItemModel(title="Test", priority="high")
@@ -529,11 +539,12 @@ class TestScenarioModels:
 
     def test_workflow_stage_order_validation(self):
         """Test workflow stages must have sequential order."""
-        from codetoreum.infrastructure.simulation.scenario_models import (
-            ScenarioWorkflowModel,
-            ScenarioStageModel,
-        )
         from pydantic import ValidationError
+
+        from codetoreum.infrastructure.simulation.scenario_models import (
+            ScenarioStageModel,
+            ScenarioWorkflowModel,
+        )
 
         # Valid sequential order
         stages = [

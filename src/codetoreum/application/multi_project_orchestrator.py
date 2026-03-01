@@ -8,14 +8,17 @@ and cross-project state management.
 import asyncio
 import logging
 import time
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from codetoreum.domain.events.project_events import (
     OrchestrationCycleCompletedEvent,
 )
-from codetoreum.ports.output.project_manager_service import IProjectManagerService
-from codetoreum.ports.output.board_service import IBoardService, BoardConfig
+from codetoreum.ports.exceptions import (
+    ExternalServiceError,
+    ResourceNotFoundError,
+)
+from codetoreum.ports.output.board_service import BoardConfig, IBoardService
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.multi_project_orchestrator import (
     IMultiProjectOrchestrator,
@@ -23,10 +26,7 @@ from codetoreum.ports.output.multi_project_orchestrator import (
     ProjectOrchestrationResult,
     ProjectStatus,
 )
-from codetoreum.ports.exceptions import (
-    ResourceNotFoundError,
-    ExternalServiceError,
-)
+from codetoreum.ports.output.project_manager_service import IProjectManagerService
 
 if TYPE_CHECKING:
     from codetoreum.ports.output.workflow_orchestrator import IWorkflowOrchestrator
@@ -68,7 +68,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
         project_manager: IProjectManagerService,
         workflow_orchestrator: "IWorkflowOrchestrator",
         board_service: IBoardService,
-        event_emitter: Optional[IEventEmitter] = None,
+        event_emitter: IEventEmitter | None = None,
         poll_interval_seconds: int = POLL_INTERVAL_SECONDS,
     ) -> None:
         """Initialize the multi-project orchestrator.
@@ -85,7 +85,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
         self._board_service = board_service
         self._event_emitter = event_emitter
         self._poll_interval_seconds = poll_interval_seconds
-        self._last_cycle_time: Optional[datetime] = None
+        self._last_cycle_time: datetime | None = None
         self._cycle_count = 0
         self._stop_event = asyncio.Event()
 
@@ -119,14 +119,11 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
 
             # Wait before next cycle with responsive shutdown
             try:
-                await asyncio.wait_for(
-                    self._stop_event.wait(),
-                    timeout=self._poll_interval_seconds
-                )
+                await asyncio.wait_for(self._stop_event.wait(), timeout=self._poll_interval_seconds)
                 # Stop event was set, exit gracefully
                 logger.info("Orchestration cycle loop stopped")
                 break
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Normal timeout - continue to next cycle
                 pass
 
@@ -196,7 +193,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
             ExternalServiceError: Critical infrastructure failure preventing cycle
         """
         cycle_start = time.time()
-        cycle_timestamp = datetime.now(timezone.utc)
+        cycle_timestamp = datetime.now(UTC)
         self._cycle_count += 1
 
         try:
@@ -219,7 +216,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                 enabled_projects = await self._project_manager.get_enabled_projects()
             except ExternalServiceError as e:
                 msg = f"Failed to get enabled projects: {e}"
-                logger.error(msg)
+                logger.error(msg, exc_info=True)
                 duration_ms = int((time.time() - cycle_start) * 1000)
                 return OrchestrationCycleResult(
                     success=False,
@@ -246,7 +243,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
             logger.info(f"Found {len(enabled_projects)} enabled projects")
 
             # Step 3: Orchestrate each project (sequentially to avoid resource contention)
-            project_results: List[ProjectOrchestrationResult] = []
+            project_results: list[ProjectOrchestrationResult] = []
             total_actions = 0
             total_errors = 0
 
@@ -259,15 +256,9 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                     total_errors += len(result.errors)
 
                     if result.success:
-                        logger.info(
-                            f"Successfully orchestrated {project_name} "
-                            f"({result.actions_taken} actions)"
-                        )
+                        logger.info(f"Successfully orchestrated {project_name} ({result.actions_taken} actions)")
                     else:
-                        logger.warning(
-                            f"Orchestration of {project_name} had errors: "
-                            f"{', '.join(result.errors)}"
-                        )
+                        logger.warning(f"Orchestration of {project_name} had errors: {', '.join(result.errors)}")
 
                     # Reconcile boards for the project
                     try:
@@ -300,7 +291,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                             actions_taken=0,
                             errors=(str(e),),
                             workspace_path="",
-                            timestamp=datetime.now(timezone.utc),
+                            timestamp=datetime.now(UTC),
                         )
                     )
 
@@ -386,9 +377,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                 error_message=msg,
             )
 
-    async def orchestrate_project(
-        self, project_name: str
-    ) -> ProjectOrchestrationResult:
+    async def orchestrate_project(self, project_name: str) -> ProjectOrchestrationResult:
         """Execute orchestration for a single project.
 
         Steps:
@@ -407,21 +396,17 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
         Returns:
             ProjectOrchestrationResult: Results for this project (success or failure)
         """
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         try:
             # Get project configuration
             config = await self._project_manager.get_project_config(project_name)
-            logger.debug(
-                f"Loaded configuration for {project_name}: {config.repo_url}"
-            )
+            logger.debug(f"Loaded configuration for {project_name}: {config.repo_url}")
 
             # Ensure project is cloned
             # Note: ProjectClonedEvent is emitted by the project manager adapter
             try:
-                workspace_path = await self._project_manager.ensure_project_cloned(
-                    project_name
-                )
+                workspace_path = await self._project_manager.ensure_project_cloned(project_name)
                 logger.debug(f"Project {project_name} ensured at {workspace_path}")
 
             except ExternalServiceError as clone_error:
@@ -540,7 +525,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
             workspace_path=workspace_path,
         )
 
-    async def list_enabled_projects(self) -> List[str]:
+    async def list_enabled_projects(self) -> list[str]:
         """Get list of all enabled projects.
 
         Returns:
@@ -577,11 +562,9 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
             f"Reconciling boards for project {project_name}",
             extra={"project_name": project_name},
         )
-        await self._board_service.reconcile_board(
-            project_name, BoardConfig(board_id=project_name, expected_columns=[])
-        )
+        await self._board_service.reconcile_board(project_name, BoardConfig(board_id=project_name, expected_columns=()))
 
     @staticmethod
     def _get_iso_timestamp() -> str:
         """Get current timestamp in ISO 8601 format with UTC timezone."""
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()

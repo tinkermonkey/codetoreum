@@ -16,10 +16,10 @@ The actual EventBus integration is tested in the integration test suite.
 """
 
 import pytest
-from codetoreum.domain.events import DomainEvent
-from codetoreum.infrastructure.simulation.simulation_runner import SimulationRunner
-from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+
 from codetoreum.infrastructure.simulation.mock_tracer import SpanKind
+from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+from codetoreum.infrastructure.simulation.simulation_runner import SimulationRunner
 
 
 @pytest.mark.asyncio
@@ -37,7 +37,7 @@ class TestMockTracerContextInjection:
                 "publish_event",
                 kind=SpanKind.PRODUCER,
             )
-            carrier = {}
+            carrier: dict[str, str] = {}
             await sim.mock_tracer.inject_context(span, carrier)
             assert "traceparent" in carrier, "Trace context should be created"
             await sim.mock_tracer.end_span(span)
@@ -59,7 +59,8 @@ class TestMockTracerContextInjection:
                 "event_producer",
                 kind=SpanKind.PRODUCER,
             )
-            await sim.mock_tracer.inject_context(producer_span, carrier := {})
+            carrier: dict[str, str] = {}
+            await sim.mock_tracer.inject_context(producer_span, carrier)
             producer_context = carrier.get("traceparent")
             await sim.mock_tracer.end_span(producer_span)
 
@@ -166,16 +167,14 @@ class TestTraceContextAttributes:
         async def scenario(sim):
             # Create span and inject context
             span = await sim.mock_tracer.start_span("roundtrip_test")
-            carrier = {}
+            carrier: dict[str, str] = {}
             await sim.mock_tracer.inject_context(span, carrier)
             traceparent = carrier["traceparent"]
             await sim.mock_tracer.end_span(span)
 
             # Extract the context back
             extracted_carrier = {"traceparent": traceparent}
-            extracted_context = await sim.mock_tracer.extract_context(
-                extracted_carrier
-            )
+            extracted_context = await sim.mock_tracer.extract_context(extracted_carrier)
 
             # Verify roundtrip preserved context
             assert extracted_context == traceparent
@@ -202,7 +201,8 @@ class TestEventBusSpanKinds:
                 kind=SpanKind.PRODUCER,
             )
             await sim.mock_tracer.set_attribute(producer, "event_type", "ItemCreated")
-            await sim.mock_tracer.inject_context(producer, carrier := {})
+            carrier: dict[str, str] = {}
+            await sim.mock_tracer.inject_context(producer, carrier)
             context = carrier.get("traceparent")
             await sim.mock_tracer.end_span(producer)
 

@@ -105,19 +105,18 @@ export function useActiveAgents() {
 
     relevantEvents.forEach((event) => {
       // Event data contains the execution information
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const data: any = event.data || {}
+      const data = event.data as Record<string, unknown>
 
-      if (event.type === 'ExecutionStarted' && data.execution) {
+      if (event.type === 'ExecutionStarted' && 'execution' in data && data.execution) {
         // Add new execution to store
-        const execution = convertExecution(data.execution)
+        const execution = convertExecution(data.execution as Execution)
         updateAgentExecution(execution)
-      } else if (event.type === 'ExecutionCompleted' && data.execution_id) {
+      } else if (event.type === 'ExecutionCompleted' && 'execution_id' in data && data.execution_id) {
         // Remove completed execution from store
-        removeAgentExecution(data.execution_id)
-      } else if (event.type === 'ExecutionFailed' && data.execution_id) {
+        removeAgentExecution(data.execution_id as string)
+      } else if (event.type === 'ExecutionFailed' && 'execution_id' in data && data.execution_id) {
         // Remove failed execution from store
-        removeAgentExecution(data.execution_id)
+        removeAgentExecution(data.execution_id as string)
       }
     })
   }, [events, updateAgentExecution, removeAgentExecution])

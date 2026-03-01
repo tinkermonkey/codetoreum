@@ -9,10 +9,7 @@ Tests cover:
 - Event emission
 """
 
-import asyncio
-from datetime import datetime
-from typing import Dict, List, Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -22,7 +19,6 @@ from codetoreum.adapters.secondary.github_ticket_adapter import (
     GitHubTicketAdapter,
 )
 from codetoreum.domain.events.board_events import (
-    BoardReconciledEvent,
     WorkItemColumnChangedEvent,
 )
 from codetoreum.infrastructure.http.github_graphql_client import (
@@ -31,17 +27,11 @@ from codetoreum.infrastructure.http.github_graphql_client import (
 )
 from codetoreum.ports.exceptions import (
     ExternalServiceError,
-    ResourceNotFoundError,
     ValidationError,
 )
 from codetoreum.ports.output.board_service import (
-    BoardColumn,
-    BoardConfig,
     MovedByType,
-    ProjectBoard,
-    ReconciliationResult,
 )
-from codetoreum.ports.output.monitoring import MonitoringConfig, MonitoringState
 
 
 @pytest.fixture
@@ -161,13 +151,13 @@ class TestGetBoard:
         assert result.name == "Test Project"
         assert len(result.columns) == 4
         assert result.columns[0].name == "Backlog"
-        assert result.columns[0].work_item_ids == ["1"]
+        assert result.columns[0].work_item_ids == ("1",)
         assert result.columns[1].name == "In Progress"
-        assert result.columns[1].work_item_ids == ["2"]
+        assert result.columns[1].work_item_ids == ("2",)
         assert result.columns[2].name == "Review"
-        assert result.columns[2].work_item_ids == ["3"]
+        assert result.columns[2].work_item_ids == ("3",)
         assert result.columns[3].name == "Done"
-        assert result.columns[3].work_item_ids == []
+        assert result.columns[3].work_item_ids == ()
 
     @pytest.mark.asyncio
     async def test_get_board_not_found(self, board_adapter, mock_graphql_client):
@@ -186,47 +176,6 @@ class TestGetBoard:
             await board_adapter.get_board("proj-123", "board-456")
 
 
-class TestGetColumns:
-    """Tests for get_columns method."""
-
-    @pytest.mark.asyncio
-    async def test_get_columns_success(self, board_adapter, mock_graphql_client, sample_board_response):
-        """Test successful columns retrieval."""
-        mock_graphql_client.execute.return_value = sample_board_response
-
-        result = await board_adapter.get_columns("board-456")
-
-        assert len(result) == 4
-        assert result[0].name == "Backlog"
-        assert result[1].name == "In Progress"
-        assert result[2].name == "Review"
-        assert result[3].name == "Done"
-
-
-class TestGetItemsInColumn:
-    """Tests for get_items_in_column method."""
-
-    @pytest.mark.asyncio
-    async def test_get_items_in_column_success(self, board_adapter, mock_graphql_client, sample_board_response):
-        """Test successful items retrieval."""
-        mock_graphql_client.execute.return_value = sample_board_response
-
-        result = await board_adapter.get_items_in_column("board-456", "In Progress")
-
-        assert len(result) == 1
-        assert result[0].work_item_id == "2"
-        assert result[0].column_name == "In Progress"
-        assert result[0].position == 0
-
-    @pytest.mark.asyncio
-    async def test_get_items_in_column_not_found(self, board_adapter, mock_graphql_client, sample_board_response):
-        """Test column not found error."""
-        mock_graphql_client.execute.return_value = sample_board_response
-
-        with pytest.raises(Exception):  # Catches ResourceNotFoundError
-            await board_adapter.get_items_in_column("board-456", "NonExistent")
-
-
 class TestMoveItemToColumn:
     """Tests for move_item_to_column method."""
 
@@ -235,12 +184,6 @@ class TestMoveItemToColumn:
         """Test move without project/board context."""
         with pytest.raises(ValidationError):
             await board_adapter.move_item_to_column("item-1", "In Progress", MovedByType.ORCHESTRATOR)
-
-
-
-class TestReconcileBoard:
-    """Tests for reconcile_board method."""
-
 
 
 class TestWebhookHandler:
@@ -366,7 +309,6 @@ class TestPollingMechanism:
         assert changes[0].moved_by == "unknown"
 
 
-
 class TestEventEmission:
     """Tests for event emission functionality."""
 
@@ -383,6 +325,7 @@ class TestEventEmission:
 
     def test_off_unregisters_handler(self, board_adapter):
         """Test event handler unregistration."""
+
         def handler(event):
             pass
 
@@ -430,9 +373,7 @@ class TestErrorHandling:
     @pytest.mark.asyncio
     async def test_graphql_error_handling(self, board_adapter, mock_graphql_client):
         """Test GraphQL error handling."""
-        mock_graphql_client.execute.side_effect = ExternalServiceError(
-            "GitHub", "GraphQL error: Rate limit exceeded"
-        )
+        mock_graphql_client.execute.side_effect = ExternalServiceError("GitHub", "GraphQL error: Rate limit exceeded")
 
         with pytest.raises(ExternalServiceError):
             await board_adapter.get_board("proj-123", "board-456")

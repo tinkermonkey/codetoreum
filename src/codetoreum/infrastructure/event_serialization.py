@@ -1,8 +1,9 @@
 """Event serialization with schema versioning support."""
 
 import json
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Type
+import types
+from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from codetoreum.domain.events import DomainEvent
@@ -10,8 +11,6 @@ from codetoreum.domain.events import DomainEvent
 
 class EventSerializationError(Exception):
     """Raised when event serialization/deserialization fails."""
-
-    pass
 
 
 class EventSerializer:
@@ -29,10 +28,10 @@ class EventSerializer:
     SCHEMA_VERSION = 1
 
     # Event type registry for deserialization
-    _event_type_registry: Dict[str, Type[DomainEvent]] = {}
+    _event_type_registry: dict[str, type[DomainEvent]] = {}
 
     @classmethod
-    def register_event_type(cls, event_class: Type[DomainEvent]) -> None:
+    def register_event_type(cls, event_class: type[DomainEvent]) -> None:
         """
         Register an event type for deserialization.
 
@@ -47,10 +46,8 @@ class EventSerializer:
         if event_type_name in cls._event_type_registry:
             existing_class = cls._event_type_registry[event_type_name]
             if existing_class != event_class:
-                raise ValueError(
-                    f"Event type '{event_type_name}' already registered "
-                    f"with different class: {existing_class}"
-                )
+                message = f"Event type '{event_type_name}' already registered with different class: {existing_class}"
+                raise ValueError(message)
         else:
             cls._event_type_registry[event_type_name] = event_class
 
@@ -77,9 +74,7 @@ class EventSerializer:
                 "aggregate_id": event.aggregate_id,
                 "aggregate_type": event.aggregate_type,
                 "occurred_at": event.occurred_at.isoformat(),
-                "correlation_id": (
-                    str(event.correlation_id) if event.correlation_id else None
-                ),
+                "correlation_id": (str(event.correlation_id) if event.correlation_id else None),
                 "causation_id": str(event.causation_id) if event.causation_id else None,
                 "user_id": event.user_id,
                 "payload": event.payload,
@@ -89,9 +84,8 @@ class EventSerializer:
             return json.dumps(data, cls=_EventJSONEncoder, ensure_ascii=False)
 
         except Exception as e:
-            raise EventSerializationError(
-                f"Failed to serialize event {event.event_type}: {e}"
-            ) from e
+            message = f"Failed to serialize event {event.event_type}: {e}"
+            raise EventSerializationError(message) from e
 
     @classmethod
     def deserialize(cls, json_str: str) -> DomainEvent:
@@ -113,11 +107,12 @@ class EventSerializer:
             # Check schema version for compatibility
             schema_version = data.get("schema_version", 1)
             if schema_version > cls.SCHEMA_VERSION:
-                raise EventSerializationError(
+                message = (
                     f"Event schema version {schema_version} is newer than "
                     f"supported version {cls.SCHEMA_VERSION}. "
                     f"Please upgrade the application."
                 )
+                raise EventSerializationError(message)
 
             # Get event type class from registry
             event_type = data["event_type"]
@@ -133,38 +128,26 @@ class EventSerializer:
             kwargs = {
                 "payload": data.get("payload", {}),
                 "user_id": data.get("user_id"),
-                "correlation_id": (
-                    UUID(data["correlation_id"]) if data.get("correlation_id") else None
-                ),
-                "causation_id": (
-                    UUID(data["causation_id"]) if data.get("causation_id") else None
-                ),
+                "correlation_id": (UUID(data["correlation_id"]) if data.get("correlation_id") else None),
+                "causation_id": (UUID(data["causation_id"]) if data.get("causation_id") else None),
                 "event_id": UUID(data["event_id"]) if data.get("event_id") else None,
-                "occurred_at": (
-                    datetime.fromisoformat(data["occurred_at"])
-                    if data.get("occurred_at")
-                    else None
-                ),
+                "occurred_at": (datetime.fromisoformat(data["occurred_at"]) if data.get("occurred_at") else None),
             }
 
             # Only pass aggregate_type for base DomainEvent
             if event_class == DomainEvent:
                 kwargs["aggregate_type"] = data["aggregate_type"]
 
-            return event_class(
-                aggregate_id=data["aggregate_id"],
-                **kwargs
-            )
+            return event_class(aggregate_id=data["aggregate_id"], **kwargs)
 
         except EventSerializationError:
             raise
         except Exception as e:
-            raise EventSerializationError(
-                f"Failed to deserialize event: {e}"
-            ) from e
+            message = f"Failed to deserialize event: {e}"
+            raise EventSerializationError(message) from e
 
     @classmethod
-    def to_dict(cls, event: DomainEvent) -> Dict[str, Any]:
+    def to_dict(cls, event: DomainEvent) -> dict[str, Any]:
         """
         Convert event to dictionary (for Elasticsearch indexing).
 
@@ -185,9 +168,7 @@ class EventSerializer:
                 "aggregate_id": event.aggregate_id,
                 "aggregate_type": event.aggregate_type,
                 "timestamp": event.occurred_at.isoformat(),
-                "correlation_id": (
-                    str(event.correlation_id) if event.correlation_id else None
-                ),
+                "correlation_id": (str(event.correlation_id) if event.correlation_id else None),
                 "causation_id": str(event.causation_id) if event.causation_id else None,
                 "user_id": event.user_id,
                 "data": event.payload,
@@ -195,12 +176,11 @@ class EventSerializer:
             }
 
         except Exception as e:
-            raise EventSerializationError(
-                f"Failed to convert event to dict: {e}"
-            ) from e
+            message = f"Failed to convert event to dict: {e}"
+            raise EventSerializationError(message) from e
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> DomainEvent:
+    def from_dict(cls, data: dict[str, Any]) -> DomainEvent:
         """
         Reconstruct event from dictionary (from Elasticsearch).
 
@@ -222,33 +202,21 @@ class EventSerializer:
             kwargs = {
                 "payload": data.get("data", {}),
                 "user_id": data.get("user_id"),
-                "correlation_id": (
-                    UUID(data["correlation_id"]) if data.get("correlation_id") else None
-                ),
-                "causation_id": (
-                    UUID(data["causation_id"]) if data.get("causation_id") else None
-                ),
+                "correlation_id": (UUID(data["correlation_id"]) if data.get("correlation_id") else None),
+                "causation_id": (UUID(data["causation_id"]) if data.get("causation_id") else None),
                 "event_id": UUID(data["event_id"]) if data.get("event_id") else None,
-                "occurred_at": (
-                    datetime.fromisoformat(data["timestamp"])
-                    if data.get("timestamp")
-                    else None
-                ),
+                "occurred_at": (datetime.fromisoformat(data["timestamp"]) if data.get("timestamp") else None),
             }
 
             # Only pass aggregate_type for base DomainEvent
             if event_class == DomainEvent:
                 kwargs["aggregate_type"] = data["aggregate_type"]
 
-            return event_class(
-                aggregate_id=data["aggregate_id"],
-                **kwargs
-            )
+            return event_class(aggregate_id=data["aggregate_id"], **kwargs)
 
         except Exception as e:
-            raise EventSerializationError(
-                f"Failed to reconstruct event from dict: {e}"
-            ) from e
+            message = f"Failed to reconstruct event from dict: {e}"
+            raise EventSerializationError(message) from e
 
 
 class _EventJSONEncoder(json.JSONEncoder):
@@ -258,9 +226,12 @@ class _EventJSONEncoder(json.JSONEncoder):
         """Handle custom types in event data."""
         if isinstance(obj, datetime):
             return obj.isoformat()
-        elif isinstance(obj, UUID):
+        if isinstance(obj, UUID):
             return str(obj)
-        elif hasattr(obj, "__dict__"):
+        # Handle immutable mappings (MappingProxyType)
+        if isinstance(obj, types.MappingProxyType):
+            return dict(obj)
+        if hasattr(obj, "__dict__"):
             # Handle custom objects
             return obj.__dict__
         return super().default(obj)
@@ -273,7 +244,7 @@ class _EventJSONDecoder(json.JSONDecoder):
         """Initialize decoder with object hook."""
         super().__init__(object_hook=self._object_hook, *args, **kwargs)
 
-    def _object_hook(self, obj: Dict[str, Any]) -> Dict[str, Any]:
+    def _object_hook(self, obj: dict[str, Any]) -> dict[str, Any]:
         """Hook to process objects during decoding."""
         # Future: Handle custom type reconstruction
         return obj
@@ -286,7 +257,6 @@ def auto_register_event_types() -> None:
     This should be called at application startup to populate the
     event type registry for deserialization.
     """
-    from codetoreum import domain
 
     # Import all event classes
     from codetoreum.domain.events import (
@@ -301,7 +271,6 @@ def auto_register_event_types() -> None:
         AgentMcpServerRemoved,
         AgentModelUpdated,
         AgentTimeoutUpdated,
-        DomainEvent,
         ExecutionCompleted,
         ExecutionFailed,
         ExecutionInitialized,

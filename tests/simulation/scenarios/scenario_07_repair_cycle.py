@@ -14,21 +14,21 @@ Comprehensive scenarios cover:
 7. Full sequence: UNIT → INTEGRATION → E2E all passing
 """
 
-import pytest
 from dataclasses import dataclass
-from typing import Tuple
 
-from codetoreum.domain.repair_cycle_types import (
-    RepairTestType,
-    RepairTestRunConfig,
-    RepairTestResult,
-    RepairTestWarning,
-    RepairTestFailure,
-)
+import pytest
+
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
+from codetoreum.domain.repair_cycle_types import (
+    RepairTestFailure,
+    RepairTestResult,
+    RepairTestRunConfig,
+    RepairTestType,
+    RepairTestWarning,
+)
+from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 from codetoreum.infrastructure.simulation.simulation_runner import SimulationRunner
-from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 
 
 @dataclass
@@ -37,7 +37,7 @@ class RepairCycleTestContext:
 
     stage_name: str
     workflow_run_id: str
-    test_configs: Tuple[RepairTestRunConfig, ...]
+    test_configs: tuple[RepairTestRunConfig, ...]
     agent_name: str
     max_total_agent_calls: int
     checkpoint_interval: int
@@ -203,9 +203,7 @@ async def test_scenario_04_fast_fail_integration():
 
     # Verify E2E never started
     test_cycle_events = adapter.get_events_by_type("TEST_CYCLE_STARTED")
-    e2e_started = any(
-        e.get("test_type") == RepairTestType.E2E.value for e in test_cycle_events
-    )
+    e2e_started = any(e.get("test_type") == RepairTestType.E2E.value for e in test_cycle_events)
     assert not e2e_started
 
 
@@ -241,7 +239,7 @@ async def test_scenario_05_warning_review():
                 failures=(),
                 warning_list=warning_list,
                 raw_output="Tests passed but with warnings",
-                timestamp=clock.now().isoformat()
+                timestamp=clock.now().isoformat(),
             ),
             # After warning fixes, re-test passes without warnings
             RepairTestResult(
@@ -253,15 +251,13 @@ async def test_scenario_05_warning_review():
                 failures=(),
                 warning_list=(),
                 raw_output="All tests passed, no warnings",
-                timestamp=clock.now().isoformat()
+                timestamp=clock.now().isoformat(),
             ),
-        ]
+        ],
     )
 
     # Test config with review_warnings=True
-    test_configs = (
-        RepairTestRunConfig(test_type=RepairTestType.UNIT, review_warnings=True),
-    )
+    test_configs = (RepairTestRunConfig(test_type=RepairTestType.UNIT, review_warnings=True),)
     context = create_repair_context(test_configs)
     result = await adapter.execute(context)
 
@@ -280,10 +276,7 @@ async def test_scenario_05_warning_review():
 
     # Verify test cycle completed event passes
     test_cycle_events = adapter.get_events_by_type("TEST_CYCLE_COMPLETED")
-    cycle_event = next(
-        (e for e in test_cycle_events if e.get("test_type") == RepairTestType.UNIT.value),
-        None
-    )
+    cycle_event = next((e for e in test_cycle_events if e.get("test_type") == RepairTestType.UNIT.value), None)
     assert cycle_event is not None, "Expected TEST_CYCLE_COMPLETED event for UNIT tests"
     assert cycle_event.get("passed") is True, "Expected test cycle to pass"
 
@@ -384,7 +377,7 @@ async def test_scenario_08_warning_regression_detection():
                 failures=(),
                 warning_list=original_warnings,
                 raw_output="Tests passed but with warnings",
-                timestamp=clock.now().isoformat()
+                timestamp=clock.now().isoformat(),
             ),
             # After warning fixes: tests pass, no warnings (successfully fixed)
             RepairTestResult(
@@ -396,14 +389,12 @@ async def test_scenario_08_warning_regression_detection():
                 failures=(),
                 warning_list=(),
                 raw_output="All tests passed, no warnings",
-                timestamp=clock.now().isoformat()
+                timestamp=clock.now().isoformat(),
             ),
-        ]
+        ],
     )
 
-    test_configs = (
-        RepairTestRunConfig(test_type=RepairTestType.UNIT, review_warnings=True),
-    )
+    test_configs = (RepairTestRunConfig(test_type=RepairTestType.UNIT, review_warnings=True),)
     context = create_repair_context(test_configs)
     result = await adapter.execute(context)
 
@@ -438,9 +429,7 @@ async def test_scenario_09_partial_warning_fix():
         RepairTestWarning(file="database.py", message="Deprecated DB query"),
     )
 
-    warnings_batch_2 = (
-        RepairTestWarning(file="utils.py", message="Old utility function"),
-    )
+    warnings_batch_2 = (RepairTestWarning(file="utils.py", message="Old utility function"),)
 
     # Simulate: agent fixes some warnings, re-test shows remaining warnings
     adapter.set_test_result_sequence(
@@ -456,7 +445,7 @@ async def test_scenario_09_partial_warning_fix():
                 failures=(),
                 warning_list=warnings_batch_1,
                 raw_output="Tests passed with multiple warnings",
-                timestamp=clock.now().isoformat()
+                timestamp=clock.now().isoformat(),
             ),
             # After first batch of warning fixes: re-test shows 1 remaining
             RepairTestResult(
@@ -468,7 +457,7 @@ async def test_scenario_09_partial_warning_fix():
                 failures=(),
                 warning_list=warnings_batch_2,
                 raw_output="Tests passed, more warnings detected",
-                timestamp=clock.now().isoformat()
+                timestamp=clock.now().isoformat(),
             ),
             # After fixing remaining: all warnings gone
             RepairTestResult(
@@ -480,14 +469,12 @@ async def test_scenario_09_partial_warning_fix():
                 failures=(),
                 warning_list=(),
                 raw_output="All warnings resolved",
-                timestamp=clock.now().isoformat()
+                timestamp=clock.now().isoformat(),
             ),
-        ]
+        ],
     )
 
-    test_configs = (
-        RepairTestRunConfig(test_type=RepairTestType.INTEGRATION, review_warnings=True),
-    )
+    test_configs = (RepairTestRunConfig(test_type=RepairTestType.INTEGRATION, review_warnings=True),)
     context = create_repair_context(test_configs)
     result = await adapter.execute(context)
 
@@ -512,9 +499,7 @@ async def test_scenario_10_warning_and_failure_mix():
     adapter = MockRepairCycleAdapter(clock)
     adapter.current_project = "test-proj"
 
-    warnings_list = (
-        RepairTestWarning(file="helpers.py", message="Performance warning"),
-    )
+    warnings_list = (RepairTestWarning(file="helpers.py", message="Performance warning"),)
 
     failures_list = (
         RepairTestFailure(file="test_main.py", test="test_integration", message="Connection timeout"),
@@ -536,7 +521,7 @@ async def test_scenario_10_warning_and_failure_mix():
                 failures=failures_list,
                 warning_list=warnings_list,
                 raw_output="Tests failed with warnings",
-                timestamp=clock.now().isoformat()
+                timestamp=clock.now().isoformat(),
             ),
             # After fixing failures: tests pass but warnings remain
             RepairTestResult(
@@ -548,7 +533,7 @@ async def test_scenario_10_warning_and_failure_mix():
                 failures=(),
                 warning_list=warnings_list,
                 raw_output="Failures fixed, warnings remain",
-                timestamp=clock.now().isoformat()
+                timestamp=clock.now().isoformat(),
             ),
             # After warning review: all good
             RepairTestResult(
@@ -560,14 +545,12 @@ async def test_scenario_10_warning_and_failure_mix():
                 failures=(),
                 warning_list=(),
                 raw_output="All issues resolved",
-                timestamp=clock.now().isoformat()
+                timestamp=clock.now().isoformat(),
             ),
-        ]
+        ],
     )
 
-    test_configs = (
-        RepairTestRunConfig(test_type=RepairTestType.E2E, review_warnings=True),
-    )
+    test_configs = (RepairTestRunConfig(test_type=RepairTestType.E2E, review_warnings=True),)
     context = create_repair_context(test_configs)
     result = await adapter.execute(context)
 
@@ -591,9 +574,7 @@ async def test_scenario_11_multiple_test_types_with_warnings():
     adapter = MockRepairCycleAdapter(clock)
     adapter.current_project = "test-proj"
 
-    unit_warnings = (
-        RepairTestWarning(file="types.py", message="Type annotation warning"),
-    )
+    unit_warnings = (RepairTestWarning(file="types.py", message="Type annotation warning"),)
 
     integration_warnings = (
         RepairTestWarning(file="api_client.py", message="API deprecation"),
@@ -614,9 +595,9 @@ async def test_scenario_11_multiple_test_types_with_warnings():
                 failures=(),
                 warning_list=unit_warnings,
                 raw_output="Unit tests passed with warnings",
-                timestamp=clock.now().isoformat()
+                timestamp=clock.now().isoformat(),
             ),
-        ]
+        ],
     )
 
     # Configure INTEGRATION tests with different warnings
@@ -632,7 +613,7 @@ async def test_scenario_11_multiple_test_types_with_warnings():
                 failures=(),
                 warning_list=integration_warnings,
                 raw_output="Integration tests passed with warnings",
-                timestamp=clock.now().isoformat()
+                timestamp=clock.now().isoformat(),
             ),
             RepairTestResult(
                 test_type=RepairTestType.INTEGRATION,
@@ -643,9 +624,9 @@ async def test_scenario_11_multiple_test_types_with_warnings():
                 failures=(),
                 warning_list=(),
                 raw_output="Integration tests clean",
-                timestamp=clock.now().isoformat()
+                timestamp=clock.now().isoformat(),
             ),
-        ]
+        ],
     )
 
     test_configs = (
@@ -702,15 +683,13 @@ async def test_scenario_12_warnings_without_review_enabled():
                 failures=(),
                 warning_list=warnings_list,
                 raw_output="Tests passed with warnings",
-                timestamp=clock.now().isoformat()
+                timestamp=clock.now().isoformat(),
             ),
-        ]
+        ],
     )
 
     # review_warnings=False: warnings detected but not reviewed
-    test_configs = (
-        RepairTestRunConfig(test_type=RepairTestType.UNIT, review_warnings=False),
-    )
+    test_configs = (RepairTestRunConfig(test_type=RepairTestType.UNIT, review_warnings=False),)
     context = create_repair_context(test_configs)
     result = await adapter.execute(context)
 
@@ -767,7 +746,7 @@ async def test_scenario_13_warning_fixes_break_tests():
                 failures=(),
                 warning_list=original_warnings,
                 raw_output="Tests passed but with warnings",
-                timestamp=clock.now().isoformat()
+                timestamp=clock.now().isoformat(),
             ),
             # Iteration 1, after warning review + retest: new failure introduced!
             RepairTestResult(
@@ -779,7 +758,7 @@ async def test_scenario_13_warning_fixes_break_tests():
                 failures=new_failure,
                 warning_list=(),
                 raw_output="Warning fix broke a test!",
-                timestamp=clock.now().isoformat()
+                timestamp=clock.now().isoformat(),
             ),
             # Iteration 2, test: retry succeeds
             RepairTestResult(
@@ -791,14 +770,12 @@ async def test_scenario_13_warning_fixes_break_tests():
                 failures=(),
                 warning_list=(),
                 raw_output="All tests pass, no warnings",
-                timestamp=clock.now().isoformat()
+                timestamp=clock.now().isoformat(),
             ),
-        ]
+        ],
     )
 
-    test_configs = (
-        RepairTestRunConfig(test_type=RepairTestType.UNIT, review_warnings=True),
-    )
+    test_configs = (RepairTestRunConfig(test_type=RepairTestType.UNIT, review_warnings=True),)
     context = create_repair_context(test_configs)
     result = await adapter.execute(context)
 
@@ -832,9 +809,7 @@ async def test_scenario_14_warning_review_max_iterations():
     adapter = MockRepairCycleAdapter(clock)
     adapter.current_project = "test-proj"
 
-    original_warnings = (
-        RepairTestWarning(file="api.py", message="Deprecated API endpoint"),
-    )
+    original_warnings = (RepairTestWarning(file="api.py", message="Deprecated API endpoint"),)
 
     # Simulate: each warning fix breaks a different test (infinite loop scenario)
     # Iteration 1: warnings, iteration 2: new failure, iteration 3: different failure, etc.
@@ -851,7 +826,7 @@ async def test_scenario_14_warning_review_max_iterations():
                 failures=(),
                 warning_list=original_warnings,
                 raw_output="Tests pass with warnings",
-                timestamp=clock.now().isoformat()
+                timestamp=clock.now().isoformat(),
             ),
             # Iteration 2: warning fix breaks test A
             RepairTestResult(
@@ -863,7 +838,7 @@ async def test_scenario_14_warning_review_max_iterations():
                 failures=(RepairTestFailure(file="test_api.py", test="test_get_users", message="API change"),),
                 warning_list=(),
                 raw_output="Warning fix broke test A",
-                timestamp=clock.now().isoformat()
+                timestamp=clock.now().isoformat(),
             ),
             # Iteration 3: fix for A breaks test B
             RepairTestResult(
@@ -872,10 +847,12 @@ async def test_scenario_14_warning_review_max_iterations():
                 passed=7,
                 failed=1,
                 warnings=0,
-                failures=(RepairTestFailure(file="test_api.py", test="test_list_users", message="Response format change"),),
+                failures=(
+                    RepairTestFailure(file="test_api.py", test="test_list_users", message="Response format change"),
+                ),
                 warning_list=(),
                 raw_output="Fix for A broke test B",
-                timestamp=clock.now().isoformat()
+                timestamp=clock.now().isoformat(),
             ),
             # Iteration 4: fix for B breaks test C
             RepairTestResult(
@@ -884,10 +861,16 @@ async def test_scenario_14_warning_review_max_iterations():
                 passed=7,
                 failed=1,
                 warnings=0,
-                failures=(RepairTestFailure(file="test_api.py", test="test_delete_users", message="Delete endpoint changed"),),
+                failures=(
+                    RepairTestFailure(
+                        file="test_api.py",
+                        test="test_delete_users",
+                        message="Delete endpoint changed",
+                    ),
+                ),
                 warning_list=(),
                 raw_output="Fix for B broke test C",
-                timestamp=clock.now().isoformat()
+                timestamp=clock.now().isoformat(),
             ),
             # Iteration 5: fix for C breaks test D (at max_iterations limit)
             RepairTestResult(
@@ -896,18 +879,18 @@ async def test_scenario_14_warning_review_max_iterations():
                 passed=7,
                 failed=1,
                 warnings=0,
-                failures=(RepairTestFailure(file="test_api.py", test="test_update_users", message="Update logic changed"),),
+                failures=(
+                    RepairTestFailure(file="test_api.py", test="test_update_users", message="Update logic changed"),
+                ),
                 warning_list=(),
                 raw_output="Fix for C broke test D",
-                timestamp=clock.now().isoformat()
+                timestamp=clock.now().isoformat(),
             ),
-        ]
+        ],
     )
 
     # Set max_iterations to 5 to prevent infinite loop
-    test_configs = (
-        RepairTestRunConfig(test_type=RepairTestType.INTEGRATION, review_warnings=True, max_iterations=5),
-    )
+    test_configs = (RepairTestRunConfig(test_type=RepairTestType.INTEGRATION, review_warnings=True, max_iterations=5),)
     context = create_repair_context(test_configs)
     result = await adapter.execute(context)
 
@@ -942,13 +925,9 @@ async def test_scenario_15_multiple_warning_review_attempts():
     adapter = MockRepairCycleAdapter(clock)
     adapter.current_project = "test-proj"
 
-    warnings_batch_1 = (
-        RepairTestWarning(file="auth.py", message="Deprecated auth method"),
-    )
+    warnings_batch_1 = (RepairTestWarning(file="auth.py", message="Deprecated auth method"),)
 
-    new_failure_1 = (
-        RepairTestFailure(file="test_auth.py", test="test_login", message="Auth refactor broke login"),
-    )
+    new_failure_1 = (RepairTestFailure(file="test_auth.py", test="test_login", message="Auth refactor broke login"),)
 
     # Simulate: warnings → warning review → temporary regression → recovery
     adapter.set_test_result_sequence(
@@ -964,7 +943,7 @@ async def test_scenario_15_multiple_warning_review_attempts():
                 failures=(),
                 warning_list=warnings_batch_1,
                 raw_output="Tests pass with warnings",
-                timestamp=clock.now().isoformat()
+                timestamp=clock.now().isoformat(),
             ),
             # Iteration 1, after warning review: temporary regression (failure introduced)
             RepairTestResult(
@@ -976,7 +955,7 @@ async def test_scenario_15_multiple_warning_review_attempts():
                 failures=new_failure_1,
                 warning_list=(),
                 raw_output="Warning fix caused temporary regression",
-                timestamp=clock.now().isoformat()
+                timestamp=clock.now().isoformat(),
             ),
             # Iteration 2: recovery - all tests pass
             RepairTestResult(
@@ -988,14 +967,12 @@ async def test_scenario_15_multiple_warning_review_attempts():
                 failures=(),
                 warning_list=(),
                 raw_output="All tests pass after recovery",
-                timestamp=clock.now().isoformat()
+                timestamp=clock.now().isoformat(),
             ),
-        ]
+        ],
     )
 
-    test_configs = (
-        RepairTestRunConfig(test_type=RepairTestType.E2E, review_warnings=True),
-    )
+    test_configs = (RepairTestRunConfig(test_type=RepairTestType.E2E, review_warnings=True),)
     context = create_repair_context(test_configs)
     result = await adapter.execute(context)
 
@@ -1047,10 +1024,11 @@ async def test_scenario_16_json_parse_retry_logic():
     """
     import time
     from unittest.mock import Mock
+
     from codetoreum.adapters.secondary.production_repair_cycle_adapter import (
+        JSONParseError,
         ProductionRepairCycleAdapter,
         RepairCycleConfig,
-        JSONParseError,
     )
 
     config = RepairCycleConfig(
@@ -1065,10 +1043,7 @@ async def test_scenario_16_json_parse_retry_logic():
     start_time = time.time()
 
     with pytest.raises(JSONParseError) as exc_info:
-        await adapter._parse_test_output_with_retry(
-            "This is not JSON at all!",
-            RepairTestType.UNIT
-        )
+        await adapter._parse_test_output_with_retry("This is not JSON at all!", RepairTestType.UNIT)
 
     elapsed = time.time() - start_time
 
@@ -1085,6 +1060,7 @@ async def test_scenario_17_json_parse_success_after_retry():
     even when surrounded by other text.
     """
     from unittest.mock import Mock
+
     from codetoreum.adapters.secondary.production_repair_cycle_adapter import (
         ProductionRepairCycleAdapter,
         RepairCycleConfig,
@@ -1103,10 +1079,7 @@ async def test_scenario_17_json_parse_success_after_retry():
     And some text after.
     """
 
-    result = await adapter._parse_test_output_with_retry(
-        mixed_content,
-        RepairTestType.UNIT
-    )
+    result = await adapter._parse_test_output_with_retry(mixed_content, RepairTestType.UNIT)
 
     assert result["passed"] == 10
     assert result["failed"] == 0
@@ -1122,10 +1095,11 @@ async def test_scenario_18_json_parse_malformed_structure():
     fails after all retries with clear error message.
     """
     from unittest.mock import Mock
+
     from codetoreum.adapters.secondary.production_repair_cycle_adapter import (
+        JSONParseError,
         ProductionRepairCycleAdapter,
         RepairCycleConfig,
-        JSONParseError,
     )
 
     config = RepairCycleConfig(max_json_parse_retries=2)
@@ -1136,14 +1110,9 @@ async def test_scenario_18_json_parse_malformed_structure():
     malformed_json = '{"passed": 10, "failed": 0'
 
     with pytest.raises(JSONParseError) as exc_info:
-        await adapter._parse_test_output_with_retry(
-            malformed_json,
-            RepairTestType.UNIT
-        )
+        await adapter._parse_test_output_with_retry(malformed_json, RepairTestType.UNIT)
 
     assert "Failed to parse test output after 2 attempts" in str(exc_info.value)
-
-
 
 
 @pytest.mark.asyncio

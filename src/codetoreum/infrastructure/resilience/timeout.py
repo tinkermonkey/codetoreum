@@ -3,15 +3,15 @@
 Provides async timeout handling using asyncio.wait_for.
 """
 
-import time
 import asyncio
-from typing import Callable, TypeVar, List
+import time
+from collections.abc import Callable
+from typing import TypeVar
 
-from .interfaces import ITimeout, TimeoutStats
 from .exceptions import TimeoutError as ResilienceTimeoutError
+from .interfaces import ITimeout, TimeoutStats
 
-
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class AsyncTimeout(ITimeout):
@@ -24,7 +24,7 @@ class AsyncTimeout(ITimeout):
     def __init__(self):
         self._total_operations = 0
         self._total_timeouts = 0
-        self._durations: List[float] = []
+        self._durations: list[float] = []
 
     async def execute(
         self,
@@ -32,28 +32,24 @@ class AsyncTimeout(ITimeout):
         timeout_seconds: float,
         operation_name: str,
         *args,
-        **kwargs
+        **kwargs,
     ) -> T:
         """Execute operation with timeout."""
         self._total_operations += 1
         start_time = time.time()
 
         try:
-            result = await asyncio.wait_for(
-                operation(*args, **kwargs),
-                timeout=timeout_seconds
-            )
+            result = await asyncio.wait_for(operation(*args, **kwargs), timeout=timeout_seconds)
 
             duration = (time.time() - start_time) * 1000  # Convert to ms
             self._durations.append(duration)
 
             return result
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._total_timeouts += 1
-            raise ResilienceTimeoutError(
-                f"Operation {operation_name} exceeded timeout of {timeout_seconds}s"
-            )
+            message = f"Operation {operation_name} exceeded timeout of {timeout_seconds}s"
+            raise ResilienceTimeoutError(message)
 
     def get_stats(self) -> TimeoutStats:
         """Get timeout statistics."""
@@ -64,5 +60,5 @@ class AsyncTimeout(ITimeout):
             total_operations=self._total_operations,
             total_timeouts=self._total_timeouts,
             average_duration_ms=avg_duration,
-            max_duration_ms=max_duration
+            max_duration_ms=max_duration,
         )

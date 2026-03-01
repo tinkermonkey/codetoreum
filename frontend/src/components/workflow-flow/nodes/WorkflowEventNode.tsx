@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
-import { Activity, CheckCircle, XCircle, AlertCircle, PlayCircle } from 'lucide-react'
+import { Activity, CheckCircle, PlayCircle, XCircle } from 'lucide-react'
 import type { WorkflowEventNodeData, NodeStyleConfig } from '@/types/flow'
 
 interface WorkflowEventNodeProps {

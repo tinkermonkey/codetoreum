@@ -14,41 +14,36 @@ SECURITY FEATURES:
 
 import asyncio
 import logging
-import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import click
 import yaml
 from rich.console import Console
-from rich.table import Table
 from rich.progress import Progress
+from rich.table import Table
 
-from codetoreum.adapters.secondary.elasticsearch_config_storage import (
-    ElasticsearchConfigStorage,
-)
 from codetoreum.adapters.secondary.config_storage_factory import ConfigStorageFactory
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.output.config_store import (
     AgentConfig,
     PipelineConfig,
     ProjectConfig,
 )
-from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
 console = Console()
 
 # Security constants
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10MB
-ALLOWED_EXTENSIONS = {'.yaml', '.yml'}
+ALLOWED_EXTENSIONS = {".yaml", ".yml"}
 MAX_YAML_DEPTH = 10
 MAX_YAML_NODES = 10000
 
 
 class SecurityError(Exception):
     """Raised when a security validation fails."""
-    pass
 
 
 class YAMLConfigImporter:
@@ -90,22 +85,22 @@ class YAMLConfigImporter:
 
             # Check file extension
             if resolved_path.suffix.lower() not in ALLOWED_EXTENSIONS:
-                raise SecurityError(
-                    f"Invalid file extension: {resolved_path.suffix}. "
-                    f"Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
-                )
+                msg = f"Invalid file extension: {resolved_path.suffix}. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
+                raise SecurityError(msg)
 
             # Check if it's actually a file
             if not resolved_path.is_file():
-                raise SecurityError(f"Path is not a file: {resolved_path}")
+                msg = f"Path is not a file: {resolved_path}"
+                raise SecurityError(msg)
 
             # Check file size
             file_size = resolved_path.stat().st_size
             if file_size > MAX_FILE_SIZE_BYTES:
-                raise SecurityError(
+                msg = (
                     f"File too large: {file_size} bytes "
-                    f"(max: {MAX_FILE_SIZE_BYTES} bytes / {MAX_FILE_SIZE_BYTES // (1024*1024)}MB)"
+                    f"(max: {MAX_FILE_SIZE_BYTES} bytes / {MAX_FILE_SIZE_BYTES // (1024 * 1024)}MB)"
                 )
+                raise SecurityError(msg)
 
             # Additional security: Ensure no path traversal by checking that
             # resolved path doesn't escape expected directories
@@ -114,9 +109,10 @@ class YAMLConfigImporter:
             return resolved_path
 
         except (OSError, RuntimeError) as e:
-            raise SecurityError(f"Invalid or inaccessible file path: {e}")
+            msg = f"Invalid or inaccessible file path: {e}"
+            raise SecurityError(msg)
 
-    def _safe_load_yaml(self, file_path: Path) -> Dict[str, Any]:
+    def _safe_load_yaml(self, file_path: Path) -> dict[str, Any]:
         """
         Safely load YAML file with protection against malicious content.
 
@@ -131,16 +127,18 @@ class YAMLConfigImporter:
             ValueError: If YAML is invalid
         """
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, encoding="utf-8") as f:
                 # Use safe_load to prevent code execution
                 # This protects against arbitrary Python object instantiation
                 yaml_content = yaml.safe_load(f)
 
             if yaml_content is None:
-                raise ValueError("Empty YAML file")
+                msg = "Empty YAML file"
+                raise ValueError(msg)
 
             if not isinstance(yaml_content, dict):
-                raise ValueError("YAML root must be a dictionary/object")
+                msg = "YAML root must be a dictionary/object"
+                raise ValueError(msg)
 
             # Protect against YAML bombs (deeply nested structures)
             self._check_yaml_depth(yaml_content, current_depth=0)
@@ -149,7 +147,8 @@ class YAMLConfigImporter:
             return yaml_content
 
         except yaml.YAMLError as e:
-            raise ValueError(f"Invalid YAML syntax: {e}")
+            msg = f"Invalid YAML syntax: {e}"
+            raise ValueError(msg)
 
     def _check_yaml_depth(self, obj: Any, current_depth: int) -> None:
         """
@@ -163,10 +162,8 @@ class YAMLConfigImporter:
             SecurityError: If depth exceeds limit
         """
         if current_depth > MAX_YAML_DEPTH:
-            raise SecurityError(
-                f"YAML depth exceeds maximum allowed ({MAX_YAML_DEPTH}). "
-                "Possible YAML bomb attack."
-            )
+            msg = f"YAML depth exceeds maximum allowed ({MAX_YAML_DEPTH}). Possible YAML bomb attack."
+            raise SecurityError(msg)
 
         if isinstance(obj, dict):
             for value in obj.values():
@@ -187,11 +184,12 @@ class YAMLConfigImporter:
         """
         node_count = self._count_nodes(obj)
         if node_count > MAX_YAML_NODES:
-            raise SecurityError(
+            msg = (
                 f"YAML contains too many nodes ({node_count}). "
                 f"Maximum allowed: {MAX_YAML_NODES}. "
                 "Possible YAML bomb attack."
             )
+            raise SecurityError(msg)
 
     def _count_nodes(self, obj: Any) -> int:
         """Recursively count nodes in object tree."""
@@ -206,9 +204,7 @@ class YAMLConfigImporter:
 
         return count
 
-    async def import_project_config(
-        self, yaml_file: Path, dry_run: bool = False
-    ) -> Dict[str, Any]:
+    async def import_project_config(self, yaml_file: Path, dry_run: bool = False) -> dict[str, Any]:
         """
         Import a project configuration from YAML file.
 
@@ -238,7 +234,10 @@ class YAMLConfigImporter:
             return {"success": False, "error": str(e)}
         except Exception as e:
             console.print(f"[bold red]Unexpected error:[/bold red] {e}")
-            logger.exception("Unexpected error loading YAML", extra={"error_id": ErrorRegistry.ERR_CONFIG_PARSING_ERROR})
+            logger.exception(
+                "Unexpected error loading YAML",
+                extra={"error_id": ErrorRegistry.ERR_CONFIG_PARSING_ERROR},
+            )
             return {"success": False, "error": f"Unexpected error: {e}"}
 
         # Validate YAML structure
@@ -315,9 +314,7 @@ class YAMLConfigImporter:
             if "agents" in yaml_config:
                 console.print("\n[bold blue]Importing agent configurations...[/bold blue]")
                 for agent_name, agent_data in yaml_config["agents"].items():
-                    await self._import_agent_config(
-                        project_config.id, agent_name, agent_data
-                    )
+                    await self._import_agent_config(project_config.id, agent_name, agent_data)
                     console.print(f"[green]✓ Agent '{agent_name}' imported[/green]")
 
             # Import pipeline configurations
@@ -338,9 +335,7 @@ class YAMLConfigImporter:
             logger.exception("Failed to save configuration", extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR})
             return {"success": False, "error": str(e)}
 
-    async def _import_agent_config(
-        self, project_id: str, agent_name: str, agent_data: Dict[str, Any]
-    ):
+    async def _import_agent_config(self, project_id: str, agent_name: str, agent_data: dict[str, Any]):
         """Import agent configuration."""
         agent_config = AgentConfig(
             project_id=project_id,
@@ -357,9 +352,7 @@ class YAMLConfigImporter:
         )
         await self.config_store.save_agent_config(agent_config)
 
-    async def _import_pipeline_config(
-        self, project_id: str, pipeline_data: Dict[str, Any]
-    ):
+    async def _import_pipeline_config(self, project_id: str, pipeline_data: dict[str, Any]):
         """Import pipeline configuration."""
         pipeline_config = PipelineConfig(
             id=f"{project_id}:{pipeline_data['name']}",
@@ -372,7 +365,7 @@ class YAMLConfigImporter:
         )
         await self.config_store.save_pipeline_config(pipeline_config)
 
-    def _validate_yaml_structure(self, yaml_config: Dict[str, Any]) -> List[str]:
+    def _validate_yaml_structure(self, yaml_config: dict[str, Any]) -> list[str]:
         """
         Validate YAML configuration structure.
 
@@ -411,7 +404,6 @@ class YAMLConfigImporter:
 @click.group()
 def cli():
     """YAML Configuration Import Tool"""
-    pass
 
 
 @cli.command()
@@ -455,9 +447,7 @@ def import_config(yaml_file: Path, dry_run: bool, elasticsearch_url: str, redis_
         if result["success"]:
             console.print("\n[bold green]✓ Import completed successfully![/bold green]")
             if not dry_run:
-                console.print(
-                    f"Project '{result['project']}' imported at version {result.get('version', 1)}"
-                )
+                console.print(f"Project '{result['project']}' imported at version {result.get('version', 1)}")
         else:
             console.print("\n[bold red]✗ Import failed[/bold red]")
             if "error" in result:

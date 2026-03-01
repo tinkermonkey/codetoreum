@@ -99,17 +99,13 @@ def architect_agent():
 class TestAssignWork:
     """Tests for assign_work method."""
 
-    def test_successful_assignment(
-        self, work_assignment_service, code_work_item, developer_agent
-    ):
+    def test_successful_assignment(self, work_assignment_service, code_work_item, developer_agent):
         """Test successful work assignment."""
         requirements = [
             Requirement("python", 0.8, is_required=True),
         ]
 
-        result = work_assignment_service.assign_work(
-            code_work_item, [developer_agent], requirements
-        )
+        result = work_assignment_service.assign_work(code_work_item, [developer_agent], requirements)
 
         assert isinstance(result, AssignmentResult)
         assert result.agent_id == developer_agent.id
@@ -130,9 +126,7 @@ class TestAssignWork:
             Requirement("python", 0.8, is_required=True),
         ]
 
-        result = work_assignment_service.assign_work(
-            code_work_item, [developer_agent, reviewer_agent], requirements
-        )
+        result = work_assignment_service.assign_work(code_work_item, [developer_agent, reviewer_agent], requirements)
 
         # Should assign to developer who has python skill
         assert result.agent_id == developer_agent.id
@@ -148,16 +142,12 @@ class TestAssignWork:
             Requirement("architecture", 0.9, is_required=True),
         ]
 
-        result = work_assignment_service.assign_work(
-            discussion_work_item, [architect_agent], requirements
-        )
+        result = work_assignment_service.assign_work(discussion_work_item, [architect_agent], requirements)
 
         assert result.agent_id == architect_agent.id
         assert discussion_work_item.assigned_agent_id == architect_agent.id
 
-    def test_raises_error_when_no_agent_meets_requirements(
-        self, work_assignment_service, code_work_item
-    ):
+    def test_raises_error_when_no_agent_meets_requirements(self, work_assignment_service, code_work_item):
         """Test error when no agent meets skill requirements."""
         # Create agent without python skill
         non_python_agent = Agent.create(
@@ -177,35 +167,25 @@ class TestAssignWork:
 
         # Agent doesn't have required python skill
         with pytest.raises(DomainError, match="No suitable agent found"):
-            work_assignment_service.assign_work(
-                code_work_item, [non_python_agent], requirements
-            )
+            work_assignment_service.assign_work(code_work_item, [non_python_agent], requirements)
 
-    def test_raises_error_when_no_suitable_agent(
-        self, work_assignment_service, code_work_item, developer_agent
-    ):
+    def test_raises_error_when_no_suitable_agent(self, work_assignment_service, code_work_item, developer_agent):
         """Test error when no agent meets minimum score."""
         requirements = [
             Requirement("rust", 0.9, is_required=True),  # Developer doesn't have Rust
         ]
 
         with pytest.raises(DomainError, match="No suitable agent found"):
-            work_assignment_service.assign_work(
-                code_work_item, [developer_agent], requirements
-            )
+            work_assignment_service.assign_work(code_work_item, [developer_agent], requirements)
 
-    def test_custom_minimum_score(
-        self, work_assignment_service, code_work_item, developer_agent
-    ):
+    def test_custom_minimum_score(self, work_assignment_service, code_work_item, developer_agent):
         """Test custom minimum score threshold."""
         requirements = [
             Requirement("python", 0.8, is_required=True),
         ]
 
         # Should succeed with low min_score
-        result = work_assignment_service.assign_work(
-            code_work_item, [developer_agent], requirements, min_score=0.3
-        )
+        result = work_assignment_service.assign_work(code_work_item, [developer_agent], requirements, min_score=0.3)
         assert result.agent_id == developer_agent.id
 
         # Create junior agent with low score
@@ -231,9 +211,7 @@ class TestAssignWork:
 
         # Should fail with very high min_score (junior agent has low score of ~0.65)
         with pytest.raises(DomainError, match="No suitable agent found"):
-            work_assignment_service.assign_work(
-                code_work_item2, [junior_agent], requirements, min_score=0.7
-            )
+            work_assignment_service.assign_work(code_work_item2, [junior_agent], requirements, min_score=0.7)
 
     def test_selects_best_agent_among_multiple(
         self,
@@ -259,33 +237,25 @@ class TestAssignWork:
             Requirement("python", 0.8, is_required=True),
         ]
 
-        result = work_assignment_service.assign_work(
-            code_work_item, [developer_agent, junior_dev], requirements
-        )
+        result = work_assignment_service.assign_work(code_work_item, [developer_agent, junior_dev], requirements)
 
         # Should select the senior developer (higher proficiency)
         assert result.agent_id == developer_agent.id
 
-    def test_assignment_reason_includes_skills(
-        self, work_assignment_service, code_work_item, developer_agent
-    ):
+    def test_assignment_reason_includes_skills(self, work_assignment_service, code_work_item, developer_agent):
         """Test that assignment reason includes matched skills."""
         requirements = [
             Requirement("python", 0.8, is_required=True),
             Requirement("testing", 0.7, is_required=True),
         ]
 
-        result = work_assignment_service.assign_work(
-            code_work_item, [developer_agent], requirements
-        )
+        result = work_assignment_service.assign_work(code_work_item, [developer_agent], requirements)
 
         assert "python" in result.reason
         assert "testing" in result.reason
         assert "match score" in result.reason
 
-    def test_empty_agent_list_raises_error(
-        self, work_assignment_service, code_work_item
-    ):
+    def test_empty_agent_list_raises_error(self, work_assignment_service, code_work_item):
         """Test that empty agent list raises error."""
         requirements = [Requirement("python", 0.8, is_required=True)]
 
@@ -301,12 +271,8 @@ class TestCanHandleWorkItem:
     ):
         """Test that all agents can handle work items (no filtering)."""
         # Both developer and reviewer can handle work
-        assert work_assignment_service._can_handle_work_item(
-            developer_agent, code_work_item
-        )
-        assert work_assignment_service._can_handle_work_item(
-            reviewer_agent, code_work_item
-        )
+        assert work_assignment_service._can_handle_work_item(developer_agent, code_work_item)
+        assert work_assignment_service._can_handle_work_item(reviewer_agent, code_work_item)
 
     def test_discussion_work_allows_any_agent(
         self,
@@ -316,63 +282,47 @@ class TestCanHandleWorkItem:
         reviewer_agent,
     ):
         """Test that discussion work allows any agent."""
-        assert work_assignment_service._can_handle_work_item(
-            developer_agent, discussion_work_item
-        )
-        assert work_assignment_service._can_handle_work_item(
-            reviewer_agent, discussion_work_item
-        )
+        assert work_assignment_service._can_handle_work_item(developer_agent, discussion_work_item)
+        assert work_assignment_service._can_handle_work_item(reviewer_agent, discussion_work_item)
 
 
 class TestGenerateAssignmentReason:
     """Tests for _generate_assignment_reason method."""
 
-    def test_generates_reason_with_matched_skills(
-        self, work_assignment_service, developer_agent
-    ):
+    def test_generates_reason_with_matched_skills(self, work_assignment_service, developer_agent):
         """Test reason generation with matched skills."""
         requirements = [
             Requirement("python", 0.8, is_required=True),
             Requirement("testing", 0.7, is_required=True),
         ]
 
-        reason = work_assignment_service._generate_assignment_reason(
-            developer_agent, 0.92, requirements
-        )
+        reason = work_assignment_service._generate_assignment_reason(developer_agent, 0.92, requirements)
 
         assert "Developer Agent" in reason
         assert "0.92" in reason
         assert "python" in reason
         assert "testing" in reason
 
-    def test_generates_reason_with_no_matched_skills(
-        self, work_assignment_service, developer_agent
-    ):
+    def test_generates_reason_with_no_matched_skills(self, work_assignment_service, developer_agent):
         """Test reason generation when no skills match."""
         requirements = [
             Requirement("rust", 0.8, is_required=True),
         ]
 
-        reason = work_assignment_service._generate_assignment_reason(
-            developer_agent, 0.0, requirements
-        )
+        reason = work_assignment_service._generate_assignment_reason(developer_agent, 0.0, requirements)
 
         assert "Developer Agent" in reason
         assert "0.00" in reason
         assert "general capabilities" in reason
 
-    def test_generates_reason_with_partial_match(
-        self, work_assignment_service, developer_agent
-    ):
+    def test_generates_reason_with_partial_match(self, work_assignment_service, developer_agent):
         """Test reason generation with partial skill match."""
         requirements = [
             Requirement("python", 0.8, is_required=True),
             Requirement("rust", 0.7, is_required=False),  # Not matched
         ]
 
-        reason = work_assignment_service._generate_assignment_reason(
-            developer_agent, 0.75, requirements
-        )
+        reason = work_assignment_service._generate_assignment_reason(developer_agent, 0.75, requirements)
 
         assert "python" in reason
         assert "rust" not in reason  # Not matched, so not included

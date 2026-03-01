@@ -4,7 +4,7 @@ This module provides FastAPI dependencies for authentication and
 authorization using JWT tokens, API keys, and session cookies.
 """
 
-from typing import Optional
+from collections.abc import Callable
 
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -29,7 +29,7 @@ class AuthDependencies:
         auth_service: Authentication service
     """
 
-    def __init__(self, auth_service: IAuthenticationPort):
+    def __init__(self, auth_service: IAuthenticationPort) -> None:
         """Initialize auth dependencies.
 
         Args:
@@ -39,8 +39,8 @@ class AuthDependencies:
 
     async def get_current_user(
         self,
-        credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
-        x_api_key: Optional[str] = Header(None),
+        credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+        x_api_key: str | None = Header(None),
     ) -> AuthContext:
         """Get current authenticated user from JWT token or API key.
 
@@ -88,9 +88,9 @@ class AuthDependencies:
 
     async def get_optional_user(
         self,
-        credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
-        x_api_key: Optional[str] = Header(None),
-    ) -> Optional[AuthContext]:
+        credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+        x_api_key: str | None = Header(None),
+    ) -> AuthContext | None:
         """Get current authenticated user or None if not authenticated.
 
         This dependency can be used on endpoints that optionally support authentication.
@@ -107,7 +107,7 @@ class AuthDependencies:
         except HTTPException:
             return None
 
-    def require_permission(self, permission: Permission):
+    def require_permission(self, permission: Permission) -> Callable[[AuthContext], AuthContext]:
         """Create a dependency that requires a specific permission.
 
         Example usage:
@@ -139,7 +139,7 @@ class AuthDependencies:
 
         return permission_checker
 
-    def require_any_permission(self, *permissions: Permission):
+    def require_any_permission(self, *permissions: Permission) -> Callable[[AuthContext], AuthContext]:
         """Create a dependency that requires any of the specified permissions.
 
         Args:
@@ -163,7 +163,7 @@ class AuthDependencies:
 
         return permission_checker
 
-    def require_all_permissions(self, *permissions: Permission):
+    def require_all_permissions(self, *permissions: Permission) -> Callable[[AuthContext], AuthContext]:
         """Create a dependency that requires all of the specified permissions.
 
         Args:

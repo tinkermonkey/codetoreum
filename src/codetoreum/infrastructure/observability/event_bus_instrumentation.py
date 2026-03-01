@@ -11,10 +11,12 @@ All spans are linked via trace context to enable complete distributed tracing.
 """
 
 import logging
-from typing import Any, Callable, List, Optional, TYPE_CHECKING
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 try:
-    from opentelemetry import trace, context as otel_context
+    from opentelemetry import context as otel_context
+    from opentelemetry import trace
     from opentelemetry.trace import SpanKind
 
     OPENTELEMETRY_AVAILABLE = True
@@ -27,8 +29,8 @@ from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.observability.trace_context_propagation import (
     TraceContextPropagator,
-    inject_current_trace_context_into_event,
     extract_and_activate_trace_context,
+    inject_current_trace_context_into_event,
 )
 
 if TYPE_CHECKING:
@@ -128,7 +130,7 @@ class InstrumentedEventBus:
             if token:
                 otel_context.detach(token)
 
-    async def publish_batch(self, events: List[DomainEvent]) -> None:
+    async def publish_batch(self, events: list[DomainEvent]) -> None:
         """
         Publish multiple events.
 
@@ -190,9 +192,7 @@ class InstrumentedEventBus:
                 self._event_bus.unregister_handler(h)
                 return
 
-    def subscribe(
-        self, event_type: Optional[str], callback: Callable[[DomainEvent], Any]
-    ) -> None:
+    def subscribe(self, event_type: str | None, callback: Callable[[DomainEvent], Any]) -> None:
         """
         Subscribe to events with a callback function.
 
@@ -207,9 +207,7 @@ class InstrumentedEventBus:
         wrapped_callback = self._create_instrumented_callback(callback)
         self._event_bus.subscribe(event_type, wrapped_callback)
 
-    def unsubscribe(
-        self, event_type: Optional[str], callback: Callable[[DomainEvent], Any]
-    ) -> None:
+    def unsubscribe(self, event_type: str | None, callback: Callable[[DomainEvent], Any]) -> None:
         """
         Unsubscribe a callback.
 
@@ -239,9 +237,7 @@ class InstrumentedEventBus:
         """
         return self._event_bus.get_statistics()
 
-    def _create_instrumented_callback(
-        self, callback: Callable[[DomainEvent], Any]
-    ) -> Callable[[DomainEvent], Any]:
+    def _create_instrumented_callback(self, callback: Callable[[DomainEvent], Any]) -> Callable[[DomainEvent], Any]:
         """
         Create instrumented version of callback that adds CONSUMER span.
 
@@ -279,7 +275,7 @@ class InstrumentedEventBus:
 
                 # Call original callback with exception handling
                 try:
-                    if hasattr(callback, "__call__"):
+                    if callable(callback):
                         result = callback(event)
                         if hasattr(result, "__await__"):
                             return await result
@@ -304,9 +300,7 @@ class InstrumentedEventHandler:
     linking it to the PRODUCER span via extracted trace context.
     """
 
-    def __init__(
-        self, handler: "EventHandler", tracer: Optional[Any] = None
-    ):
+    def __init__(self, handler: "EventHandler", tracer: Any | None = None):
         """
         Initialize instrumented event handler.
 
@@ -365,14 +359,13 @@ class InstrumentedEventHandler:
 
                 # Log to application logger for operator visibility
                 logger.error(
-                    f"Event handler {self._handler.__class__.__name__} failed "
-                    f"processing {event.event_type}: {e}",
+                    f"Event handler {self._handler.__class__.__name__} failed processing {event.event_type}: {e}",
                     exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_HANDLER_EXECUTION}
+                    extra={"error_id": ErrorRegistry.ERR_HANDLER_EXECUTION},
                 )
                 raise
 
-    def get_event_types(self) -> List[str]:
+    def get_event_types(self) -> list[str]:
         """
         Get event types handled by wrapped handler.
 

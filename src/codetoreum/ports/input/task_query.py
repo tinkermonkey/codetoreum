@@ -9,11 +9,12 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class ExecutionStatus(Enum):
     """Status of an execution"""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -25,6 +26,7 @@ class ExecutionStatus(Enum):
 @dataclass
 class ExecutionStatusInfo:
     """Detailed status information for an execution"""
+
     execution_id: str
     workflow_run_id: str
     work_item_id: str
@@ -33,31 +35,33 @@ class ExecutionStatusInfo:
     stage_name: str
     agent_name: str
     status: ExecutionStatus
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    duration_seconds: Optional[float] = None
-    error_message: Optional[str] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    duration_seconds: float | None = None
+    error_message: str | None = None
     retry_count: int = 0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class ExecutionListItem:
     """Summary information for execution in a list"""
+
     execution_id: str
     workflow_run_id: str
     work_item_id: str
     stage_name: str
     agent_name: str
     status: ExecutionStatus
-    started_at: Optional[datetime] = None
-    duration_seconds: Optional[float] = None
+    started_at: datetime | None = None
+    duration_seconds: float | None = None
 
 
 @dataclass
 class ExecutionListResult:
     """Result of listing executions"""
-    executions: List[ExecutionListItem]
+
+    executions: list[ExecutionListItem]
     total_count: int
     page: int
     page_size: int
@@ -67,6 +71,7 @@ class ExecutionListResult:
 @dataclass
 class ArtifactInfo:
     """Information about an execution artifact"""
+
     artifact_id: str
     execution_id: str
     artifact_type: str  # code, log, report, diagram, etc.
@@ -74,31 +79,34 @@ class ArtifactInfo:
     path: str
     size_bytes: int
     created_at: datetime
-    mime_type: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    mime_type: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class ArtifactListResult:
     """Result of listing artifacts"""
-    artifacts: List[ArtifactInfo]
+
+    artifacts: list[ArtifactInfo]
     total_count: int
 
 
 @dataclass
 class ExecutionHistoryEntry:
     """Single entry in execution history"""
+
     timestamp: datetime
     event_type: str
     message: str
-    details: Optional[Dict[str, Any]] = None
+    details: dict[str, Any] | None = None
 
 
 @dataclass
 class ExecutionHistory:
     """Complete execution history"""
+
     execution_id: str
-    entries: List[ExecutionHistoryEntry]
+    entries: list[ExecutionHistoryEntry]
     total_entries: int
 
 
@@ -117,10 +125,7 @@ class ITaskQueryPort(ABC):
     """
 
     @abstractmethod
-    async def get_execution_status(
-        self,
-        execution_id: str
-    ) -> ExecutionStatusInfo:
+    async def get_execution_status(self, execution_id: str) -> ExecutionStatusInfo:
         """
         Retrieves detailed status information for a specific execution.
 
@@ -133,17 +138,16 @@ class ITaskQueryPort(ABC):
         Raises:
             ExecutionNotFoundError: If execution doesn't exist
         """
-        pass
 
     @abstractmethod
     async def list_executions(
         self,
-        workflow_run_id: Optional[str] = None,
-        work_item_id: Optional[str] = None,
-        project_name: Optional[str] = None,
-        status: Optional[ExecutionStatus] = None,
+        workflow_run_id: str | None = None,
+        work_item_id: str | None = None,
+        project_name: str | None = None,
+        status: ExecutionStatus | None = None,
         page: int = 1,
-        page_size: int = 50
+        page_size: int = 50,
     ) -> ExecutionListResult:
         """
         Lists executions matching the specified criteria.
@@ -162,14 +166,9 @@ class ITaskQueryPort(ABC):
         Raises:
             ValidationError: If parameters are invalid
         """
-        pass
 
     @abstractmethod
-    async def get_artifacts(
-        self,
-        execution_id: str,
-        artifact_type: Optional[str] = None
-    ) -> ArtifactListResult:
+    async def get_artifacts(self, execution_id: str, artifact_type: str | None = None) -> ArtifactListResult:
         """
         Retrieves artifacts produced by an execution.
 
@@ -183,14 +182,9 @@ class ITaskQueryPort(ABC):
         Raises:
             ExecutionNotFoundError: If execution doesn't exist
         """
-        pass
 
     @abstractmethod
-    async def get_execution_history(
-        self,
-        execution_id: str,
-        limit: Optional[int] = None
-    ) -> ExecutionHistory:
+    async def get_execution_history(self, execution_id: str, limit: int | None = None) -> ExecutionHistory:
         """
         Retrieves the event history for an execution.
 
@@ -204,13 +198,9 @@ class ITaskQueryPort(ABC):
         Raises:
             ExecutionNotFoundError: If execution doesn't exist
         """
-        pass
 
     @abstractmethod
-    async def get_workflow_executions(
-        self,
-        workflow_run_id: str
-    ) -> ExecutionListResult:
+    async def get_workflow_executions(self, workflow_run_id: str) -> ExecutionListResult:
         """
         Retrieves all executions for a specific workflow run.
 
@@ -223,4 +213,3 @@ class ITaskQueryPort(ABC):
         Raises:
             WorkflowNotFoundError: If workflow run doesn't exist
         """
-        pass

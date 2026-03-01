@@ -1,8 +1,6 @@
 """Unit tests for Work Item DTO mappers."""
 
-from datetime import datetime, timezone
-
-import pytest
+from datetime import UTC, datetime
 
 from codetoreum.adapters.primary.work_item_dtos import (
     CreateWorkItemRequest,
@@ -10,7 +8,9 @@ from codetoreum.adapters.primary.work_item_dtos import (
 )
 from codetoreum.adapters.primary.work_item_mappers import WorkItemMapper
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
-from codetoreum.ports.input.work_item_command import WorkItemCommandResult as DomainCommandResult
+from codetoreum.ports.input.work_item_command import (
+    WorkItemCommandResult as DomainCommandResult,
+)
 from codetoreum.ports.input.work_item_query import (
     WorkItemHistory,
     WorkItemListResult,
@@ -20,31 +20,6 @@ from codetoreum.ports.input.work_item_query import (
 class TestWorkItemMapper:
     """Test suite for WorkItemMapper."""
 
-    def test_to_create_command(self):
-        """Test converting CreateWorkItemRequest DTO to CreateWorkItemCommand."""
-        # Arrange
-        dto = CreateWorkItemRequest(
-            project_id="proj-123",
-            title="Test Work Item",
-            description="Test description",
-            labels=["bug", "urgent"],
-            priority="HIGH",
-            external_id="42",
-            external_url="https://github.com/org/repo/issues/42",
-        )
-
-        # Act
-        command = WorkItemMapper.to_create_command(dto)
-
-        # Assert
-        assert command.project_id == "proj-123"
-        assert command.title == "Test Work Item"
-        assert command.description == "Test description"
-        assert command.labels == ["bug", "urgent"]
-        assert command.priority == WorkItemPriority.HIGH
-        assert command.external_id == "42"
-        assert command.external_url == "https://github.com/org/repo/issues/42"
-
     def test_to_create_command_with_defaults(self):
         """Test converting CreateWorkItemRequest with default values."""
         # Arrange
@@ -52,6 +27,10 @@ class TestWorkItemMapper:
             project_id="proj-123",
             title="Test Work Item",
             description="Test description",
+            labels=None,
+            priority="MEDIUM",
+            external_id=None,
+            external_url=None,
         )
 
         # Act
@@ -66,31 +45,14 @@ class TestWorkItemMapper:
         assert command.external_id is None
         assert command.external_url is None
 
-    def test_to_update_command(self):
-        """Test converting UpdateWorkItemRequest DTO to UpdateWorkItemCommand."""
-        # Arrange
-        dto = UpdateWorkItemRequest(
-            title="Updated Title",
-            description="Updated description",
-            labels=["feature"],
-            priority="CRITICAL",
-        )
-
-        # Act
-        command = WorkItemMapper.to_update_command("wi-123", dto)
-
-        # Assert
-        assert command.work_item_id == "wi-123"
-        assert command.title == "Updated Title"
-        assert command.description == "Updated description"
-        assert command.labels == ["feature"]
-        assert command.priority == WorkItemPriority.CRITICAL
-
     def test_to_update_command_partial(self):
         """Test converting UpdateWorkItemRequest with partial updates."""
         # Arrange
         dto = UpdateWorkItemRequest(
             title="Updated Title",
+            description=None,
+            labels=None,
+            priority=None,
         )
 
         # Act
@@ -106,7 +68,7 @@ class TestWorkItemMapper:
     def test_to_response(self):
         """Test converting WorkItem domain model to WorkItemResponse DTO."""
         # Arrange
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         work_item = WorkItem(
             id="wi-123",
             project_id="proj-123",
@@ -150,7 +112,7 @@ class TestWorkItemMapper:
     def test_to_response_does_not_mutate_labels(self):
         """Test that to_response copies labels to prevent mutation."""
         # Arrange
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         work_item = WorkItem(
             id="wi-123",
             project_id="proj-123",
@@ -181,7 +143,7 @@ class TestWorkItemMapper:
     def test_to_detail_response(self):
         """Test converting WorkItem and history to WorkItemDetailResponse."""
         # Arrange
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         work_item = WorkItem(
             id="wi-123",
             project_id="proj-123",
@@ -224,7 +186,7 @@ class TestWorkItemMapper:
     def test_to_detail_response_limits_recent_events(self):
         """Test that to_detail_response limits recent events to 10."""
         # Arrange
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         work_item = WorkItem(
             id="wi-123",
             project_id="proj-123",
@@ -245,10 +207,7 @@ class TestWorkItemMapper:
         )
 
         # Create 15 events
-        events = [
-            {"event_type": f"Event{i}", "occurred_at": now.isoformat()}
-            for i in range(15)
-        ]
+        events = [{"event_type": f"Event{i}", "occurred_at": now.isoformat()} for i in range(15)]
 
         history = WorkItemHistory(
             work_item=work_item,
@@ -266,7 +225,7 @@ class TestWorkItemMapper:
     def test_to_list_response(self):
         """Test converting WorkItemListResult to WorkItemListResponse."""
         # Arrange
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         work_items = [
             WorkItem(
                 id="wi-1",

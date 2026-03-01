@@ -46,8 +46,12 @@ export default function DashboardPage() {
     // Get the latest event
     const latestEvent = events[0]
 
+    // Type guard to check if data has event_type property
+    const eventData = latestEvent.data as Record<string, unknown> | undefined
+    const eventType = eventData?.event_type as string | undefined
+
     // Invalidate workItems query when work item column changes
-    if (latestEvent.type === 'event' && latestEvent.data?.event_type === 'WorkItemColumnChanged') {
+    if (latestEvent.type === 'event' && eventType === 'WorkItemColumnChanged') {
       console.log('[Dashboard] WorkItemColumnChanged event received, invalidating workItems query')
       queryClient.invalidateQueries({ queryKey: ['workItems'] })
     }
@@ -55,11 +59,11 @@ export default function DashboardPage() {
     // Invalidate executions query when execution status changes
     if (
       latestEvent.type === 'event' &&
-      (latestEvent.data?.event_type === 'ExecutionStarted' ||
-        latestEvent.data?.event_type === 'ExecutionCompleted' ||
-        latestEvent.data?.event_type === 'ExecutionFailed')
+      (eventType === 'ExecutionStarted' ||
+        eventType === 'ExecutionCompleted' ||
+        eventType === 'ExecutionFailed')
     ) {
-      console.log(`[Dashboard] ${latestEvent.data?.event_type} event received, invalidating executions query`)
+      console.log(`[Dashboard] ${eventType} event received, invalidating executions query`)
       queryClient.invalidateQueries({ queryKey: ['executions'] })
     }
   }, [events, queryClient])

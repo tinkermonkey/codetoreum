@@ -1,14 +1,13 @@
 """Review Cycle aggregate root."""
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import uuid4
 
 from codetoreum.domain.events import DomainEvent
 from codetoreum.domain.exceptions import DomainError
-
 
 # =============================================================================
 # Review Cycle Events
@@ -18,7 +17,7 @@ from codetoreum.domain.exceptions import DomainError
 class ReviewCycleCreated(DomainEvent):
     """Emitted when review cycle is created."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ReviewCycleCreated event.
 
@@ -29,18 +28,13 @@ class ReviewCycleCreated(DomainEvent):
         - reviewer_agent_id: str
         - max_iterations: int
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ReviewCycle",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
 
 
 class ReviewIterationStarted(DomainEvent):
     """Emitted when new iteration begins."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ReviewIterationStarted event.
 
@@ -48,18 +42,13 @@ class ReviewIterationStarted(DomainEvent):
         - iteration_number: int
         - maker_execution_id: str
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ReviewCycle",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
 
 
 class ReviewFeedbackSubmitted(DomainEvent):
     """Emitted when reviewer provides feedback."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ReviewFeedbackSubmitted event.
 
@@ -69,18 +58,13 @@ class ReviewFeedbackSubmitted(DomainEvent):
         - reviewer_execution_id: str
         - issues_count: int
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ReviewCycle",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
 
 
 class ReviewCycleApproved(DomainEvent):
     """Emitted when review cycle is approved."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ReviewCycleApproved event.
 
@@ -88,18 +72,13 @@ class ReviewCycleApproved(DomainEvent):
         - total_iterations: int
         - approved_at: str (ISO format)
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ReviewCycle",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
 
 
 class ReviewCycleEscalated(DomainEvent):
     """Emitted when review cycle is escalated to human."""
 
-    def __init__(self, aggregate_id: str, payload: Dict[str, Any], **kwargs: Any):
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """
         Initialize ReviewCycleEscalated event.
 
@@ -108,12 +87,7 @@ class ReviewCycleEscalated(DomainEvent):
         - total_iterations: int
         - escalated_at: str (ISO format)
         """
-        super().__init__(
-            aggregate_id=aggregate_id,
-            aggregate_type="ReviewCycle",
-            payload=payload,
-            **kwargs
-        )
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
 
 
 # =============================================================================
@@ -123,6 +97,7 @@ class ReviewCycleEscalated(DomainEvent):
 
 class ReviewStatus(Enum):
     """Status of review cycle."""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     APPROVED = "approved"
@@ -132,6 +107,7 @@ class ReviewStatus(Enum):
 
 class ReviewDecision(Enum):
     """Reviewer's decision."""
+
     APPROVE = "approve"
     REQUEST_CHANGES = "request_changes"
     ESCALATE = "escalate"
@@ -144,27 +120,38 @@ class ReviewFeedback:
 
     Immutable representation of reviewer's feedback on an iteration.
     """
+
     decision: ReviewDecision
     comment: str
-    issues: List[str]
-    suggestions: List[str]
+    issues: tuple[str, ...]
+    suggestions: tuple[str, ...]
     timestamp: datetime
 
+    def __post_init__(self) -> None:
+        """Ensure lists are converted to tuples for immutability."""
+        # Handle case where issues/suggestions were passed as lists
+        if isinstance(self.issues, list):
+            object.__setattr__(self, "issues", tuple(self.issues))
+        if isinstance(self.suggestions, list):
+            object.__setattr__(self, "suggestions", tuple(self.suggestions))
 
-@dataclass
+
+@dataclass(frozen=True)
 class ReviewIteration:
     """
     Single iteration of maker-reviewer cycle.
 
     Represents one round of work submission and review.
+    Immutable value object for aggregate consistency.
     """
+
     iteration_number: int
     maker_output: str
     maker_execution_id: str
-    reviewer_feedback: Optional[ReviewFeedback]
-    reviewer_execution_id: Optional[str]
+    reviewer_feedback: ReviewFeedback | None
+    reviewer_execution_id: str | None
     started_at: datetime
-    completed_at: Optional[datetime]
+    completed_at: datetime | None
 
 
 @dataclass
@@ -175,43 +162,93 @@ class ReviewCycle:
     Manages iterative maker-checker review process where a maker agent
     produces output and a reviewer agent evaluates it. The cycle continues
     until approval, escalation, or max iterations reached.
+
+    Encapsulation Strategy:
+    - Identity fields (id, workflow_id, stage_name, maker_agent_id, reviewer_agent_id, max_iterations):
+      Protected by __setattr__ — cannot be modified after initialization
+    - Private state fields (_status, _current_iteration, _final_decision, _escalation_reason, _iterations):
+      Internal mutations only through guarded domain methods, enforced by access control and docstring
+    - All mutations guarded by state machine enforcement: start_iteration, submit_review, approve,
+      request_changes, and escalate validate preconditions before state transitions
     """
 
-    # Identity
+    # Identity (readonly - protected by __setattr__)
     id: str
     workflow_id: str
     stage_name: str
 
-    # Agents
+    # Agents (readonly - protected by __setattr__)
     maker_agent_id: str
     reviewer_agent_id: str
 
-    # Configuration
+    # Configuration (readonly - protected by __setattr__)
     max_iterations: int
 
-    # Status
-    status: ReviewStatus
-    current_iteration: int
+    # Status (private - guarded by state transitions)
+    _status: ReviewStatus
+    _current_iteration: int
+    _created_at: datetime
+    _updated_at: datetime
 
-    # Iterations
-    iterations: List[ReviewIteration]
+    # Iterations (private - immutable elements, defensive copies on access)
+    _iterations: list[ReviewIteration] = field(default_factory=list, repr=False)
 
-    # Final decision
-    final_decision: Optional[ReviewDecision]
-    escalation_reason: Optional[str]
+    # Final decision (private - set only by terminal transitions)
+    _final_decision: ReviewDecision | None = field(default=None, repr=False)
+    _escalation_reason: str | None = field(default=None, repr=False)
 
-    # Timestamps
-    created_at: datetime
-    updated_at: datetime
-    completed_at: Optional[datetime]
+    # Completion timestamp (private - managed internally)
+    _completed_at: datetime | None = field(default=None, repr=False)
 
-    # Event tracking
-    _events: List[DomainEvent] = field(default_factory=list, init=False, repr=False)
+    # Event tracking (private - guarded by methods)
+    _events: list[DomainEvent] = field(default_factory=list, init=False, repr=False)
     _version: int = field(default=0, init=False, repr=False)
+
+    # Track initialization state for __setattr__ protection
+    _initialized: bool = field(default=False, init=False, repr=False)
 
     def __post_init__(self) -> None:
         """Validate invariants after initialization."""
         self._validate_invariants()
+        # Mark as initialized to activate __setattr__ protection
+        object.__setattr__(self, "_initialized", True)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """
+        Protect identity fields from external modification.
+
+        Identity fields (id, workflow_id, stage_name, maker_agent_id,
+        reviewer_agent_id, max_iterations) cannot be modified after
+        initialization.
+
+        Args:
+            name: Attribute name
+            value: Value to set
+
+        Raises:
+            AttributeError: If attempting to modify identity fields after init
+        """
+        # Allow all attributes during __init__ and __post_init__
+        if not hasattr(self, "_initialized") or not object.__getattribute__(self, "_initialized"):
+            object.__setattr__(self, name, value)
+            return
+
+        # After initialization, protect identity fields
+        identity_fields = {
+            "id",
+            "workflow_id",
+            "stage_name",
+            "maker_agent_id",
+            "reviewer_agent_id",
+            "max_iterations",
+        }
+
+        if name in identity_fields:
+            msg = f"Cannot modify identity field '{name}' after initialization"
+            raise AttributeError(msg)
+
+        # Allow internal fields and other attributes to be set
+        object.__setattr__(self, name, value)
 
     def _validate_invariants(self) -> None:
         """
@@ -223,16 +260,60 @@ class ReviewCycle:
         - Current iteration cannot exceed max iterations
         """
         if self.maker_agent_id == self.reviewer_agent_id:
-            raise DomainError("Maker and reviewer must be different agents")
+            msg = "Maker and reviewer must be different agents"
+            raise DomainError(msg)
 
         if self.max_iterations <= 0:
-            raise DomainError("Max iterations must be positive")
+            msg = "Max iterations must be positive"
+            raise DomainError(msg)
 
-        if self.current_iteration > self.max_iterations:
-            raise DomainError(
-                f"Current iteration ({self.current_iteration}) cannot exceed "
-                f"max iterations ({self.max_iterations})"
-            )
+        if self._current_iteration > self.max_iterations:
+            msg = f"Current iteration ({self._current_iteration}) cannot exceed max iterations ({self.max_iterations})"
+            raise DomainError(msg)
+
+    # =========================================================================
+    # Public accessors (defensive copies / computed properties)
+    # =========================================================================
+
+    @property
+    def status(self) -> ReviewStatus:
+        """Get current review cycle status."""
+        return self._status
+
+    @property
+    def current_iteration(self) -> int:
+        """Get current iteration number."""
+        return self._current_iteration
+
+    @property
+    def iterations(self) -> list[ReviewIteration]:
+        """Get defensive copy of iterations list."""
+        return list(self._iterations)
+
+    @property
+    def final_decision(self) -> ReviewDecision | None:
+        """Get final decision (None until cycle completes)."""
+        return self._final_decision
+
+    @property
+    def escalation_reason(self) -> str | None:
+        """Get escalation reason (None unless escalated)."""
+        return self._escalation_reason
+
+    @property
+    def created_at(self) -> datetime:
+        """Get creation timestamp."""
+        return self._created_at
+
+    @property
+    def updated_at(self) -> datetime:
+        """Get last update timestamp."""
+        return self._updated_at
+
+    @property
+    def completed_at(self) -> datetime | None:
+        """Get completion timestamp (None if not complete)."""
+        return self._completed_at
 
     # Creation
     @classmethod
@@ -242,7 +323,7 @@ class ReviewCycle:
         stage_name: str,
         maker_agent_id: str,
         reviewer_agent_id: str,
-        max_iterations: int = 3
+        max_iterations: int = 3,
     ) -> "ReviewCycle":
         """
         Factory method to create a new review cycle.
@@ -262,6 +343,7 @@ class ReviewCycle:
 
         Emits: ReviewCycleCreated event
         """
+        now = datetime.now(UTC)
         cycle = cls(
             id=str(uuid4()),
             workflow_id=workflow_id,
@@ -269,14 +351,14 @@ class ReviewCycle:
             maker_agent_id=maker_agent_id,
             reviewer_agent_id=reviewer_agent_id,
             max_iterations=max_iterations,
-            status=ReviewStatus.PENDING,
-            current_iteration=0,
-            iterations=[],
-            final_decision=None,
-            escalation_reason=None,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
-            completed_at=None
+            _status=ReviewStatus.PENDING,
+            _current_iteration=0,
+            _iterations=[],
+            _final_decision=None,
+            _escalation_reason=None,
+            _created_at=now,
+            _updated_at=now,
+            _completed_at=None,
         )
 
         event = ReviewCycleCreated(
@@ -286,8 +368,8 @@ class ReviewCycle:
                 "stage_name": stage_name,
                 "maker_agent_id": maker_agent_id,
                 "reviewer_agent_id": reviewer_agent_id,
-                "max_iterations": max_iterations
-            }
+                "max_iterations": max_iterations,
+            },
         )
         cycle._add_event(event)
 
@@ -303,35 +385,41 @@ class ReviewCycle:
             maker_execution_id: Execution ID of maker's run
 
         Raises:
-            DomainError: If max iterations already reached
+            DomainError: If max iterations already reached or cycle is in terminal state
 
         Emits: ReviewIterationStarted event
         """
-        if self.current_iteration >= self.max_iterations:
-            raise DomainError(f"Exceeded max iterations ({self.max_iterations})")
+        # Validate preconditions
+        if self._status in {ReviewStatus.APPROVED, ReviewStatus.ESCALATED}:
+            msg = f"Cannot start iteration on {self._status.value} cycle"
+            raise DomainError(msg)
 
-        self.current_iteration += 1
+        if self._current_iteration >= self.max_iterations:
+            msg = f"Exceeded max iterations ({self.max_iterations})"
+            raise DomainError(msg)
+
+        self._current_iteration += 1
         iteration = ReviewIteration(
-            iteration_number=self.current_iteration,
+            iteration_number=self._current_iteration,
             maker_output=maker_output,
             maker_execution_id=maker_execution_id,
             reviewer_feedback=None,
             reviewer_execution_id=None,
-            started_at=datetime.now(timezone.utc),
-            completed_at=None
+            started_at=datetime.now(UTC),
+            completed_at=None,
         )
 
-        self.iterations.append(iteration)
-        self.status = ReviewStatus.IN_PROGRESS
-        self.updated_at = datetime.now(timezone.utc)
+        self._iterations.append(iteration)
+        self._status = ReviewStatus.IN_PROGRESS
+        self._updated_at = datetime.now(UTC)
         self._version += 1
 
         event = ReviewIterationStarted(
             aggregate_id=self.id,
             payload={
-                "iteration_number": self.current_iteration,
-                "maker_execution_id": maker_execution_id
-            }
+                "iteration_number": self._current_iteration,
+                "maker_execution_id": maker_execution_id,
+            },
         )
         self._add_event(event)
 
@@ -340,8 +428,8 @@ class ReviewCycle:
         decision: ReviewDecision,
         comment: str,
         reviewer_execution_id: str,
-        issues: Optional[List[str]] = None,
-        suggestions: Optional[List[str]] = None
+        issues: list[str] | None = None,
+        suggestions: list[str] | None = None,
     ) -> None:
         """
         Submit reviewer's feedback.
@@ -358,36 +446,49 @@ class ReviewCycle:
 
         Emits: ReviewFeedbackSubmitted event
         """
-        if not self.iterations:
-            raise DomainError("No iterations to review")
+        if not self._iterations:
+            msg = "No iterations to review"
+            raise DomainError(msg)
 
-        current = self.iterations[-1]
+        current = self._iterations[-1]
         if current.reviewer_feedback:
-            raise DomainError("Current iteration already reviewed")
+            msg = "Current iteration already reviewed"
+            raise DomainError(msg)
 
         feedback = ReviewFeedback(
             decision=decision,
             comment=comment,
-            issues=issues or [],
-            suggestions=suggestions or [],
-            timestamp=datetime.now(timezone.utc)
+            issues=tuple(issues or []),
+            suggestions=tuple(suggestions or []),
+            timestamp=datetime.now(UTC),
         )
 
-        current.reviewer_feedback = feedback
-        current.reviewer_execution_id = reviewer_execution_id
-        current.completed_at = datetime.now(timezone.utc)
-        self.updated_at = datetime.now(timezone.utc)
+        # Create new immutable iteration with feedback
+        now = datetime.now(UTC)
+        updated_iteration = ReviewIteration(
+            iteration_number=current.iteration_number,
+            maker_output=current.maker_output,
+            maker_execution_id=current.maker_execution_id,
+            reviewer_feedback=feedback,
+            reviewer_execution_id=reviewer_execution_id,
+            started_at=current.started_at,
+            completed_at=now,
+        )
+
+        # Replace the last iteration with the updated one
+        self._iterations[-1] = updated_iteration
+        self._updated_at = now
         self._version += 1
 
         # Add feedback event first
         event = ReviewFeedbackSubmitted(
             aggregate_id=self.id,
             payload={
-                "iteration_number": self.current_iteration,
+                "iteration_number": self._current_iteration,
                 "decision": decision.value,
                 "reviewer_execution_id": reviewer_execution_id,
-                "issues_count": len(issues or [])
-            }
+                "issues_count": len(issues or []),
+            },
         )
         self._add_event(event)
 
@@ -405,20 +506,29 @@ class ReviewCycle:
 
         Marks the review cycle as complete and approved.
 
+        Raises:
+            DomainError: If cycle is not in IN_PROGRESS state
+
         Emits: ReviewCycleApproved event
         """
-        self.status = ReviewStatus.APPROVED
-        self.final_decision = ReviewDecision.APPROVE
-        self.completed_at = datetime.now(timezone.utc)
-        self.updated_at = self.completed_at
+        # Validate precondition: can only approve from IN_PROGRESS state
+        if self._status != ReviewStatus.IN_PROGRESS:
+            msg = f"Can only approve cycle in IN_PROGRESS state, current state: {self._status.value}"
+            raise DomainError(msg)
+
+        now = datetime.now(UTC)
+        self._status = ReviewStatus.APPROVED
+        self._final_decision = ReviewDecision.APPROVE
+        self._completed_at = now
+        self._updated_at = now
         self._version += 1
 
         event = ReviewCycleApproved(
             aggregate_id=self.id,
             payload={
-                "total_iterations": self.current_iteration,
-                "approved_at": self.completed_at.isoformat()
-            }
+                "total_iterations": self._current_iteration,
+                "approved_at": now.isoformat(),
+            },
         )
         self._add_event(event)
 
@@ -429,12 +539,12 @@ class ReviewCycle:
         If max iterations reached, automatically escalates.
         Otherwise, marks cycle as needing maker revision.
         """
-        if self.current_iteration >= self.max_iterations:
+        if self._current_iteration >= self.max_iterations:
             self.escalate("Max iterations reached")
             return
 
-        self.status = ReviewStatus.CHANGES_REQUESTED
-        self.updated_at = datetime.now(timezone.utc)
+        self._status = ReviewStatus.CHANGES_REQUESTED
+        self._updated_at = datetime.now(UTC)
         self._version += 1
 
     def escalate(self, reason: str) -> None:
@@ -444,22 +554,31 @@ class ReviewCycle:
         Args:
             reason: Reason for escalation
 
+        Raises:
+            DomainError: If cycle is already in terminal state (APPROVED or ESCALATED)
+
         Emits: ReviewCycleEscalated event
         """
-        self.status = ReviewStatus.ESCALATED
-        self.final_decision = ReviewDecision.ESCALATE
-        self.escalation_reason = reason
-        self.completed_at = datetime.now(timezone.utc)
-        self.updated_at = self.completed_at
+        # Validate precondition: cannot escalate terminal states
+        if self._status in {ReviewStatus.APPROVED, ReviewStatus.ESCALATED}:
+            msg = f"Cannot escalate {self._status.value} cycle"
+            raise DomainError(msg)
+
+        now = datetime.now(UTC)
+        self._status = ReviewStatus.ESCALATED
+        self._final_decision = ReviewDecision.ESCALATE
+        self._escalation_reason = reason
+        self._completed_at = now
+        self._updated_at = now
         self._version += 1
 
         event = ReviewCycleEscalated(
             aggregate_id=self.id,
             payload={
                 "reason": reason,
-                "total_iterations": self.current_iteration,
-                "escalated_at": self.completed_at.isoformat()
-            }
+                "total_iterations": self._current_iteration,
+                "escalated_at": now.isoformat(),
+            },
         )
         self._add_event(event)
 
@@ -471,7 +590,7 @@ class ReviewCycle:
         Returns:
             True if cycle is approved or escalated
         """
-        return self.status in [ReviewStatus.APPROVED, ReviewStatus.ESCALATED]
+        return self._status in {ReviewStatus.APPROVED, ReviewStatus.ESCALATED}
 
     def needs_maker_revision(self) -> bool:
         """
@@ -480,18 +599,18 @@ class ReviewCycle:
         Returns:
             True if changes were requested
         """
-        return self.status == ReviewStatus.CHANGES_REQUESTED
+        return self._status == ReviewStatus.CHANGES_REQUESTED
 
-    def get_latest_feedback(self) -> Optional[ReviewFeedback]:
+    def get_latest_feedback(self) -> ReviewFeedback | None:
         """
         Get latest reviewer feedback.
 
         Returns:
             Most recent ReviewFeedback or None if no feedback yet
         """
-        if not self.iterations:
+        if not self._iterations:
             return None
-        return self.iterations[-1].reviewer_feedback
+        return self._iterations[-1].reviewer_feedback
 
     # Event management
     def _add_event(self, event: DomainEvent) -> None:
@@ -503,7 +622,7 @@ class ReviewCycle:
         """
         self._events.append(event)
 
-    def get_pending_events(self) -> List[DomainEvent]:
+    def get_pending_events(self) -> list[DomainEvent]:
         """
         Get all pending events.
 

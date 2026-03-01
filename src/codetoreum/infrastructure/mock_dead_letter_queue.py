@@ -3,15 +3,14 @@
 Provides deterministic behavior for testing workflows that use DLQ.
 """
 
-import asyncio
-from typing import Any, Callable, Dict, List, Optional
-from datetime import datetime, timedelta, timezone
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from .dead_letter_queue import (
     DeadLetterQueue,
     FailedEvent,
     FailureReason,
-    DeadLetterQueueStats,
 )
 
 
@@ -28,12 +27,12 @@ class MockDeadLetterQueue(DeadLetterQueue):
 
     def __init__(
         self,
-        storage: Optional[Dict[str, FailedEvent]] = None,
+        storage: dict[str, FailedEvent] | None = None,
         max_retries: int = 3,
         base_delay_seconds: float = 60.0,
         exponential_base: float = 2.0,
         retry_interval_seconds: float = 30.0,
-        auto_succeed_after: Optional[int] = None,
+        auto_succeed_after: int | None = None,
     ):
         """
         Initialize mock dead letter queue.
@@ -56,9 +55,9 @@ class MockDeadLetterQueue(DeadLetterQueue):
 
         # Testing features
         self._auto_succeed_after = auto_succeed_after
-        self._event_history: List[Dict[str, Any]] = []
-        self._current_time = datetime.now(timezone.utc)
-        self._retry_outcomes: Dict[str, bool] = {}  # event_id -> should_succeed
+        self._event_history: list[dict[str, Any]] = []
+        self._current_time = datetime.now(UTC)
+        self._retry_outcomes: dict[str, bool] = {}  # event_id -> should_succeed
 
     def set_current_time(self, time: datetime) -> None:
         """
@@ -82,34 +81,30 @@ class MockDeadLetterQueue(DeadLetterQueue):
         """
         self._retry_outcomes[event_id] = should_succeed
 
-    def get_event_history(self) -> List[Dict[str, Any]]:
+    def get_event_history(self) -> list[dict[str, Any]]:
         """Get complete history of all events."""
         return self._event_history.copy()
 
     async def add_failed_event(
         self,
         event_type: str,
-        event_data: Dict[str, Any],
+        event_data: dict[str, Any],
         failure_reason: FailureReason,
         error_message: str,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: dict[str, Any] | None = None,
     ) -> str:
         """Add failed event and track in history."""
-        event_id = await super().add_failed_event(
-            event_type,
-            event_data,
-            failure_reason,
-            error_message,
-            metadata
-        )
+        event_id = await super().add_failed_event(event_type, event_data, failure_reason, error_message, metadata)
 
-        self._event_history.append({
-            "action": "add",
-            "event_id": event_id,
-            "event_type": event_type,
-            "failure_reason": failure_reason.value,
-            "timestamp": self._current_time,
-        })
+        self._event_history.append(
+            {
+                "action": "add",
+                "event_id": event_id,
+                "event_type": event_type,
+                "failure_reason": failure_reason.value,
+                "timestamp": self._current_time,
+            }
+        )
 
         return event_id
 
@@ -142,16 +137,18 @@ class MockDeadLetterQueue(DeadLetterQueue):
             self._total_retries_attempted += 1
             self._total_retries_succeeded += 1
 
-            self._event_history.append({
-                "action": "retry_success",
-                "event_id": event_id,
-                "retry_count": event.retry_count,
-                "timestamp": self._current_time,
-            })
+            self._event_history.append(
+                {
+                    "action": "retry_success",
+                    "event_id": event_id,
+                    "retry_count": event.retry_count,
+                    "timestamp": self._current_time,
+                }
+            )
 
             return True
 
-        elif should_succeed is False:
+        if should_succeed is False:
             # Force failure
             event.retry_count += 1
             event.last_retry_at = self._current_time
@@ -159,34 +156,34 @@ class MockDeadLetterQueue(DeadLetterQueue):
             self._total_retries_failed += 1
 
             if event.can_retry():
-                event.next_retry_at = event.calculate_next_retry(
-                    self._base_delay_seconds,
-                    self._exponential_base
-                )
+                event.next_retry_at = event.calculate_next_retry(self._base_delay_seconds, self._exponential_base)
             else:
                 event.next_retry_at = None
 
-            self._event_history.append({
-                "action": "retry_failure",
-                "event_id": event_id,
-                "retry_count": event.retry_count,
-                "timestamp": self._current_time,
-            })
+            self._event_history.append(
+                {
+                    "action": "retry_failure",
+                    "event_id": event_id,
+                    "retry_count": event.retry_count,
+                    "timestamp": self._current_time,
+                }
+            )
 
             return False
 
-        else:
-            # Use default behavior from parent class
-            result = await super().retry_event(event_id)
+        # Use default behavior from parent class
+        result = await super().retry_event(event_id)
 
-            self._event_history.append({
+        self._event_history.append(
+            {
                 "action": "retry_success" if result else "retry_failure",
                 "event_id": event_id,
                 "retry_count": event.retry_count,
                 "timestamp": self._current_time,
-            })
+            }
+        )
 
-            return result
+        return result
 
     async def process_retries_now(self) -> int:
         """
@@ -202,10 +199,7 @@ class MockDeadLetterQueue(DeadLetterQueue):
         retryable_events = [
             event_id
             for event_id, event in self._storage.items()
-            if event.can_retry() and (
-                event.next_retry_at is None or
-                event.next_retry_at <= self._current_time
-            )
+            if event.can_retry() and (event.next_retry_at is None or event.next_retry_at <= self._current_time)
         ]
 
         processed_count = 0
@@ -226,7 +220,6 @@ class MockDeadLetterQueue(DeadLetterQueue):
 
     async def stop_retry_processor(self) -> None:
         """Mock stop - nothing to stop."""
-        pass
 
     def reset(self) -> None:
         """Reset the mock DLQ to initial state."""
@@ -236,4 +229,4 @@ class MockDeadLetterQueue(DeadLetterQueue):
         self._total_retries_attempted = 0
         self._total_retries_succeeded = 0
         self._total_retries_failed = 0
-        self._current_time = datetime.now(timezone.utc)
+        self._current_time = datetime.now(UTC)

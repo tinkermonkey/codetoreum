@@ -8,10 +8,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
 
 from codetoreum.domain.agent_execution import ExecutionStatus
-
 
 # ============================================================================
 # Filters and Pagination
@@ -22,13 +20,13 @@ from codetoreum.domain.agent_execution import ExecutionStatus
 class ExecutionFilters:
     """Filters for execution queries."""
 
-    status: Optional[ExecutionStatus] = None
-    agent_id: Optional[str] = None
-    work_item_id: Optional[str] = None
-    workflow_id: Optional[str] = None
-    stage_name: Optional[str] = None
-    start_date: Optional[datetime] = None
-    end_date: Optional[datetime] = None
+    status: ExecutionStatus | None = None
+    agent_id: str | None = None
+    work_item_id: str | None = None
+    workflow_id: str | None = None
+    stage_name: str | None = None
+    start_date: datetime | None = None
+    end_date: datetime | None = None
 
 
 class ExecutionSortField(Enum):
@@ -76,10 +74,10 @@ class ErrorType(Enum):
 class ContainerStatus:
     """Container status information."""
 
-    container_id: Optional[str]
-    container_name: Optional[str]
-    last_known_status: Optional[str]
-    exit_code: Optional[int]
+    container_id: str | None
+    container_name: str | None
+    last_known_status: str | None
+    exit_code: int | None
 
 
 @dataclass
@@ -88,7 +86,7 @@ class ExecutionErrorDetail:
 
     error_type: ErrorType
     message: str
-    container_status: Optional[ContainerStatus] = None
+    container_status: ContainerStatus | None = None
     partial_logs_available: bool = False
 
 
@@ -108,28 +106,28 @@ class ExecutionInfo:
     status: ExecutionStatus
 
     # Container info
-    container_name: Optional[str]
-    container_id: Optional[str]
+    container_name: str | None
+    container_id: str | None
 
     # Results
-    output: Optional[str]
-    error_message: Optional[str]
-    error_detail: Optional[ExecutionErrorDetail]
-    exit_code: Optional[int]
+    output: str | None
+    error_message: str | None
+    error_detail: ExecutionErrorDetail | None
+    exit_code: int | None
 
     # Metrics
     input_tokens: int
     output_tokens: int
-    duration_seconds: Optional[float]
+    duration_seconds: float | None
 
     # Timestamps
     initialized_at: datetime
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
+    started_at: datetime | None
+    completed_at: datetime | None
 
     # Calculated fields
-    elapsed_time_seconds: Optional[float] = None
-    current_stage: Optional[str] = None
+    elapsed_time_seconds: float | None = None
+    current_stage: str | None = None
 
 
 @dataclass
@@ -139,7 +137,7 @@ class LogEntry:
     timestamp: datetime
     level: str
     message: str
-    stage: Optional[str] = None
+    stage: str | None = None
 
 
 @dataclass
@@ -147,9 +145,9 @@ class ExecutionLogs:
     """Execution logs with metadata."""
 
     execution_id: str
-    logs: List[LogEntry]
+    logs: list[LogEntry]
     total_lines: int
-    stage: Optional[str] = None
+    stage: str | None = None
     has_more: bool = False
 
 
@@ -157,7 +155,7 @@ class ExecutionLogs:
 class ExecutionListResult:
     """Result for execution list queries."""
 
-    executions: List[ExecutionInfo]
+    executions: list[ExecutionInfo]
     total_count: int
     offset: int
     limit: int
@@ -178,7 +176,7 @@ class ExecutionHistory:
     """Execution event history."""
 
     execution_id: str
-    events: List[ExecutionHistoryEntry]
+    events: list[ExecutionHistoryEntry]
     total_events: int
 
 
@@ -209,13 +207,12 @@ class IExecutionQueryPort(ABC):
         Raises:
             ExecutionNotFoundError: If execution doesn't exist
         """
-        pass
 
     @abstractmethod
     async def list_executions(
         self,
-        filters: Optional[ExecutionFilters] = None,
-        pagination: Optional[ExecutionPaginationParams] = None,
+        filters: ExecutionFilters | None = None,
+        pagination: ExecutionPaginationParams | None = None,
     ) -> ExecutionListResult:
         """
         List executions with optional filtering and pagination.
@@ -227,14 +224,13 @@ class IExecutionQueryPort(ABC):
         Returns:
             ExecutionListResult with matching executions
         """
-        pass
 
     @abstractmethod
     async def get_execution_logs(
         self,
         execution_id: str,
-        stage: Optional[str] = None,
-        tail: Optional[int] = None,
+        stage: str | None = None,
+        tail: int | None = None,
     ) -> ExecutionLogs:
         """
         Get execution logs.
@@ -250,12 +246,9 @@ class IExecutionQueryPort(ABC):
         Raises:
             ExecutionNotFoundError: If execution doesn't exist
         """
-        pass
 
     @abstractmethod
-    async def get_execution_history(
-        self, execution_id: str, limit: Optional[int] = None
-    ) -> ExecutionHistory:
+    async def get_execution_history(self, execution_id: str, limit: int | None = None) -> ExecutionHistory:
         """
         Get execution event history.
 
@@ -269,10 +262,9 @@ class IExecutionQueryPort(ABC):
         Raises:
             ExecutionNotFoundError: If execution doesn't exist
         """
-        pass
 
     @abstractmethod
-    async def count_executions(self, filters: Optional[ExecutionFilters] = None) -> int:
+    async def count_executions(self, filters: ExecutionFilters | None = None) -> int:
         """
         Count executions matching filters.
 
@@ -282,4 +274,3 @@ class IExecutionQueryPort(ABC):
         Returns:
             Count of matching executions
         """
-        pass

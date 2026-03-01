@@ -9,7 +9,8 @@ import { format } from 'date-fns';
 import { Terminal } from 'lucide-react';
 
 import { WorkflowEvent } from '../../types/workflow-event';
-import { EventIcon, getEventLabel } from './EventIcon';
+import { EventIcon } from './EventIcon';
+import { getEventLabel } from '../../utils/eventLabelMap';
 
 interface EventCardProps {
   event: WorkflowEvent;

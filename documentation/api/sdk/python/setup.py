@@ -1,9 +1,10 @@
 """
 Setup configuration for Codetoreum Python SDK
 """
-from setuptools import setup, find_packages
 
-with open("README.md", "r", encoding="utf-8") as fh:
+from setuptools import find_packages, setup
+
+with open("README.md", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
@@ -40,6 +41,7 @@ setup(
             "black>=23.0",
             "mypy>=1.0",
             "flake8>=6.0",
+            "types-requests>=2.28.0",
         ],
     },
     project_urls={

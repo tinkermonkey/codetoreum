@@ -3,16 +3,16 @@
 Provides circuit breaker pattern with CLOSED/OPEN/HALF_OPEN states.
 """
 
-import time
 import asyncio
+import time
+from collections.abc import Callable
 from datetime import datetime
-from typing import Optional, Callable, TypeVar, Tuple, Type
+from typing import TypeVar
 
-from .interfaces import ICircuitBreaker, CircuitState, CircuitBreakerStats
 from .exceptions import CircuitBreakerOpenError
+from .interfaces import CircuitBreakerStats, CircuitState, ICircuitBreaker
 
-
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class CircuitBreaker(ICircuitBreaker):
@@ -29,9 +29,9 @@ class CircuitBreaker(ICircuitBreaker):
     def __init__(
         self,
         failure_threshold: int = 5,
-        timeout_seconds: int = 60,
+        timeout_seconds: float = 60,
         success_threshold: int = 2,
-        expected_exceptions: Tuple[Type[Exception], ...] = (Exception,)
+        expected_exceptions: tuple[type[Exception], ...] = (Exception,),
     ):
         """
         Initialize circuit breaker.
@@ -50,8 +50,8 @@ class CircuitBreaker(ICircuitBreaker):
         self._state = CircuitState.CLOSED
         self._failure_count = 0
         self._success_count = 0
-        self._last_failure_time: Optional[float] = None
-        self._last_success_time: Optional[float] = None
+        self._last_failure_time: float | None = None
+        self._last_success_time: float | None = None
 
         # Statistics
         self._total_calls = 0
@@ -60,13 +60,7 @@ class CircuitBreaker(ICircuitBreaker):
 
         self._lock = asyncio.Lock()
 
-    async def call(
-        self,
-        operation: Callable[..., T],
-        operation_name: str,
-        *args,
-        **kwargs
-    ) -> T:
+    async def call(self, operation: Callable[..., T], operation_name: str, *args, **kwargs) -> T:
         """Execute operation with circuit breaker protection."""
         async with self._lock:
             self._total_calls += 1
@@ -77,11 +71,10 @@ class CircuitBreaker(ICircuitBreaker):
                     self._state = CircuitState.HALF_OPEN
                     self._success_count = 0
                 else:
-                    raise CircuitBreakerOpenError(
-                        f"Circuit breaker open for {operation_name}. "
-                        f"Will retry in {self._time_until_retry():.1f}s",
-                        retry_after_seconds=self._time_until_retry()
+                    message = (
+                        f"Circuit breaker open for {operation_name}. Will retry in {self._time_until_retry():.1f}s"
                     )
+                    raise CircuitBreakerOpenError(message, retry_after_seconds=self._time_until_retry())
 
         # Execute operation (outside lock to avoid holding during I/O)
         try:
@@ -93,7 +86,7 @@ class CircuitBreaker(ICircuitBreaker):
 
             return result
 
-        except self.expected_exceptions as e:
+        except self.expected_exceptions:
             # Handle failure
             async with self._lock:
                 self._on_failure()
@@ -155,7 +148,7 @@ class CircuitBreaker(ICircuitBreaker):
             last_success_time=datetime.fromtimestamp(self._last_success_time) if self._last_success_time else None,
             total_calls=self._total_calls,
             total_failures=self._total_failures,
-            total_successes=self._total_successes
+            total_successes=self._total_successes,
         )
 
     def reset(self) -> None:

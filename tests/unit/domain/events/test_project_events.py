@@ -4,14 +4,13 @@ Tests validation, serialization, and deserialization of all project events.
 """
 
 import pytest
-from datetime import datetime, timezone
 
 from codetoreum.domain.events.project_events import (
+    OrchestrationCycleCompletedEvent,
     ProjectClonedEvent,
     ProjectCloneFailedEvent,
-    ProjectEnabledEvent,
     ProjectDisabledEvent,
-    OrchestrationCycleCompletedEvent,
+    ProjectEnabledEvent,
 )
 
 
@@ -510,4 +509,3 @@ class TestOrchestrationCycleCompletedEvent:
         assert restored.boards_processed == original.boards_processed
         assert restored.total_actions == original.total_actions
         assert restored.cycle_duration_ms == original.cycle_duration_ms
-

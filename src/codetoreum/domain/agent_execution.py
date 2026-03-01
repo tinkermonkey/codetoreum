@@ -1,9 +1,9 @@
 """Agent Execution entity."""
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import uuid4
 
 from codetoreum.domain.events import (
@@ -55,32 +55,32 @@ class AgentExecution:
     # Execution context
     prompt: str
     model: str
-    session_id: Optional[str]
+    session_id: str | None
 
     # Container tracking
-    container_name: Optional[str]
-    container_id: Optional[str]
+    container_name: str | None
+    container_id: str | None
 
     # Results
-    output: Optional[str]
-    error_message: Optional[str]
-    exit_code: Optional[int]
+    output: str | None
+    error_message: str | None
+    exit_code: int | None
 
     # Metrics
     input_tokens: int
     output_tokens: int
-    duration_seconds: Optional[float]
+    duration_seconds: float | None
 
     # Timestamps
     initialized_at: datetime
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
+    started_at: datetime | None
+    completed_at: datetime | None
 
     # Metadata
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
     # Event tracking
-    _events: List[DomainEvent] = field(default_factory=list, init=False, repr=False)
+    _events: list[DomainEvent] = field(default_factory=list, init=False, repr=False)
 
     @classmethod
     def create(
@@ -91,7 +91,7 @@ class AgentExecution:
         stage_name: str,
         prompt: str,
         model: str,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
     ) -> "AgentExecution":
         """
         Create new agent execution.
@@ -128,7 +128,7 @@ class AgentExecution:
             input_tokens=0,
             output_tokens=0,
             duration_seconds=None,
-            initialized_at=datetime.now(timezone.utc),
+            initialized_at=datetime.now(UTC),
             started_at=None,
             completed_at=None,
             metadata={},
@@ -148,7 +148,7 @@ class AgentExecution:
 
         return execution
 
-    def start(self, container_name: Optional[str] = None) -> None:
+    def start(self, container_name: str | None = None) -> None:
         """
         Start execution.
 
@@ -161,10 +161,11 @@ class AgentExecution:
         Emits: ExecutionStarted event
         """
         if self.status != ExecutionStatus.INITIALIZED:
-            raise DomainError(f"Cannot start execution in status {self.status.value}")
+            msg = f"Cannot start execution in status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = ExecutionStatus.RUNNING
-        self.started_at = datetime.now(timezone.utc)
+        self.started_at = datetime.now(UTC)
         self.container_name = container_name
 
         event = ExecutionStarted(
@@ -181,7 +182,7 @@ class AgentExecution:
         output: str,
         input_tokens: int,
         output_tokens: int,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
     ) -> None:
         """
         Mark execution as completed successfully.
@@ -198,12 +199,11 @@ class AgentExecution:
         Emits: ExecutionCompleted event
         """
         if self.status != ExecutionStatus.RUNNING:
-            raise DomainError(
-                f"Cannot complete execution in status {self.status.value}"
-            )
+            msg = f"Cannot complete execution in status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = ExecutionStatus.COMPLETED
-        self.completed_at = datetime.now(timezone.utc)
+        self.completed_at = datetime.now(UTC)
         self.output = output
         self.input_tokens = input_tokens
         self.output_tokens = output_tokens
@@ -213,9 +213,7 @@ class AgentExecution:
             self.session_id = session_id
 
         if self.started_at:
-            self.duration_seconds = (
-                self.completed_at - self.started_at
-            ).total_seconds()
+            self.duration_seconds = (self.completed_at - self.started_at).total_seconds()
 
         event = ExecutionCompleted(
             aggregate_id=self.id,
@@ -229,7 +227,7 @@ class AgentExecution:
         )
         self._add_event(event)
 
-    def fail(self, error_message: str, exit_code: Optional[int] = None) -> None:
+    def fail(self, error_message: str, exit_code: int | None = None) -> None:
         """
         Mark execution as failed.
 
@@ -243,17 +241,16 @@ class AgentExecution:
         Emits: ExecutionFailed event
         """
         if self.status not in [ExecutionStatus.INITIALIZED, ExecutionStatus.RUNNING]:
-            raise DomainError(f"Cannot fail execution in status {self.status.value}")
+            msg = f"Cannot fail execution in status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = ExecutionStatus.FAILED
-        self.completed_at = datetime.now(timezone.utc)
+        self.completed_at = datetime.now(UTC)
         self.error_message = error_message
         self.exit_code = exit_code
 
         if self.started_at:
-            self.duration_seconds = (
-                self.completed_at - self.started_at
-            ).total_seconds()
+            self.duration_seconds = (self.completed_at - self.started_at).total_seconds()
 
         event = ExecutionFailed(
             aggregate_id=self.id,
@@ -276,17 +273,16 @@ class AgentExecution:
         Emits: ExecutionTimeout event
         """
         if self.status != ExecutionStatus.RUNNING:
-            raise DomainError(f"Cannot timeout execution in status {self.status.value}")
+            msg = f"Cannot timeout execution in status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = ExecutionStatus.TIMEOUT
-        self.completed_at = datetime.now(timezone.utc)
+        self.completed_at = datetime.now(UTC)
         self.error_message = "Execution exceeded timeout"
         self.exit_code = -1
 
         if self.started_at:
-            self.duration_seconds = (
-                self.completed_at - self.started_at
-            ).total_seconds()
+            self.duration_seconds = (self.completed_at - self.started_at).total_seconds()
 
         event = ExecutionTimeout(
             aggregate_id=self.id,
@@ -297,7 +293,7 @@ class AgentExecution:
         )
         self._add_event(event)
 
-    def cancel(self, reason: Optional[str] = None) -> None:
+    def cancel(self, reason: str | None = None) -> None:
         """
         Cancel execution.
 
@@ -314,19 +310,16 @@ class AgentExecution:
             ExecutionStatus.RUNNING,
             ExecutionStatus.PAUSED,
         ]:
-            raise DomainError(
-                f"Cannot cancel execution in status {self.status.value}"
-            )
+            msg = f"Cannot cancel execution in status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = ExecutionStatus.CANCELLED
-        self.completed_at = datetime.now(timezone.utc)
+        self.completed_at = datetime.now(UTC)
         self.error_message = reason or "Execution cancelled"
         self.exit_code = -2
 
         if self.started_at:
-            self.duration_seconds = (
-                self.completed_at - self.started_at
-            ).total_seconds()
+            self.duration_seconds = (self.completed_at - self.started_at).total_seconds()
 
         event = ExecutionCancelled(
             aggregate_id=self.id,
@@ -338,7 +331,7 @@ class AgentExecution:
         )
         self._add_event(event)
 
-    def pause(self, reason: Optional[str] = None) -> None:
+    def pause(self, reason: str | None = None) -> None:
         """
         Pause execution.
 
@@ -351,14 +344,15 @@ class AgentExecution:
         Emits: ExecutionPaused event
         """
         if self.status != ExecutionStatus.RUNNING:
-            raise DomainError(f"Cannot pause execution in status {self.status.value}")
+            msg = f"Cannot pause execution in status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = ExecutionStatus.PAUSED
 
         event = ExecutionPaused(
             aggregate_id=self.id,
             payload={
-                "paused_at": datetime.now(timezone.utc).isoformat(),
+                "paused_at": datetime.now(UTC).isoformat(),
                 "reason": reason,
             },
         )
@@ -374,14 +368,15 @@ class AgentExecution:
         Emits: ExecutionResumed event
         """
         if self.status != ExecutionStatus.PAUSED:
-            raise DomainError(f"Cannot resume execution in status {self.status.value}")
+            msg = f"Cannot resume execution in status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = ExecutionStatus.RUNNING
 
         event = ExecutionResumed(
             aggregate_id=self.id,
             payload={
-                "resumed_at": datetime.now(timezone.utc).isoformat(),
+                "resumed_at": datetime.now(UTC).isoformat(),
             },
         )
         self._add_event(event)
@@ -437,7 +432,7 @@ class AgentExecution:
         """
         self._events.append(event)
 
-    def get_pending_events(self) -> List[DomainEvent]:
+    def get_pending_events(self) -> list[DomainEvent]:
         """
         Get pending events.
 

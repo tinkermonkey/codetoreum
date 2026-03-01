@@ -12,7 +12,7 @@ from codetoreum.adapters.primary.config_dtos import (
 )
 from codetoreum.adapters.primary.exception_mapper import map_exception_to_http
 from codetoreum.domain.exceptions import DomainError
-from codetoreum.infrastructure.security import validate_env_var_name, InvalidInputError
+from codetoreum.infrastructure.security import InvalidInputError, validate_env_var_name
 from codetoreum.ports.exceptions import PortError
 from codetoreum.ports.input.config_command import (
     AddEnvironmentVariableCommand,
@@ -90,7 +90,7 @@ def register_environment_endpoints(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to add environment variable: {str(e)}",
+                detail=f"Failed to add environment variable: {e!s}",
             )
 
     @router.delete(
@@ -120,10 +120,7 @@ def register_environment_endpoints(
             try:
                 validated_name = validate_env_var_name(variable_name)
             except InvalidInputError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=str(e)
-                )
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
             # Get project name
             project_config = await query_port.get_project_config(project_id, include_secrets=False)
@@ -149,5 +146,5 @@ def register_environment_endpoints(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to remove environment variable: {str(e)}",
+                detail=f"Failed to remove environment variable: {e!s}",
             )

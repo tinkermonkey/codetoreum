@@ -1,12 +1,25 @@
 """In-memory ticket system adapter for testing."""
 
 import asyncio
+import logging
 import threading
-from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Dict, List, Optional
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
+from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.domain.comment import Comment
+from codetoreum.domain.events.discussion_events import (
+    Comment as DiscussionComment,
+)
+from codetoreum.domain.events.discussion_events import (
+    CommentPostedEvent,
+)
+from codetoreum.domain.events.work_item_events import (
+    WorkItemCreatedEvent,
+    WorkItemUpdatedEvent,
+)
 from codetoreum.domain.types import CommentId, ProjectId, UserId, WorkItemId
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
 from codetoreum.ports.exceptions import (
@@ -15,8 +28,10 @@ from codetoreum.ports.exceptions import (
 )
 from codetoreum.ports.output.ticket_system import ITicketSystem
 
+logger = logging.getLogger(__name__)
 
-class InMemoryTicketAdapter(ITicketSystem):
+
+class InMemoryTicketAdapter(MockEventEmitter, ITicketSystem):
     """
     In-memory implementation of ticket system for testing.
 
@@ -30,12 +45,15 @@ class InMemoryTicketAdapter(ITicketSystem):
 
     def __init__(self):
         """Initialize the in-memory ticket adapter with thread-safe storage."""
-        self._work_items: Dict[str, WorkItem] = {}
-        self._comments: Dict[str, List[Comment]] = {}  # work_item_id -> comments
-        self._webhooks: Dict[str, Dict[str, Any]] = {}
-        self._relationships: Dict[str, List[tuple[str, str]]] = {}  # source_id -> [(target_id, relationship)]
+        super().__init__()
+        self._work_items: dict[str, WorkItem] = {}
+        self._comments: dict[str, list[Comment]] = {}  # work_item_id -> comments
+        self._webhooks: dict[str, dict[str, Any]] = {}
+        self._relationships: dict[str, list[tuple[str, str]]] = {}  # source_id -> [(target_id, relationship)]
         self._next_work_item_number = 1
         self._lock = threading.Lock()  # Thread safety for concurrent test execution
+
+    # ===== Query Operations =====
 
     async def get_work_item(self, item_id: WorkItemId) -> WorkItem:
         """
@@ -53,7 +71,8 @@ class InMemoryTicketAdapter(ITicketSystem):
         with self._lock:
             work_item = self._work_items.get(str(item_id))
             if not work_item:
-                raise ResourceNotFoundError("WorkItem", str(item_id))
+                msg = "WorkItem"
+                raise ResourceNotFoundError(msg, str(item_id))
             return work_item
 
     async def create_work_item(
@@ -61,10 +80,10 @@ class InMemoryTicketAdapter(ITicketSystem):
         title: str,
         description: str,
         project_id: ProjectId,
-        labels: Optional[List[str]] = None,
-        assignee: Optional[UserId] = None,
-        priority: Optional[WorkItemPriority] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        labels: list[str] | None = None,
+        assignee: UserId | None = None,
+        priority: WorkItemPriority | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> WorkItem:
         """
         Create a new work item.
@@ -85,10 +104,12 @@ class InMemoryTicketAdapter(ITicketSystem):
             ValidationError: If required fields are missing or invalid
         """
         if not title or not title.strip():
-            raise ValidationError("Title cannot be empty")
+            msg = "Title cannot be empty"
+            raise ValidationError(msg)
 
         if not project_id:
-            raise ValidationError("Project ID cannot be empty")
+            msg = "Project ID cannot be empty"
+            raise ValidationError(msg)
 
         if not description:
             description = ""
@@ -111,11 +132,20 @@ class InMemoryTicketAdapter(ITicketSystem):
             # Clear events after storage
             work_item.clear_events()
 
+            # Emit creation event
+            event = WorkItemCreatedEvent(
+                type="workitem.created",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="in_memory_ticket",
+                work_item_id=work_item.id,
+                project_id=str(project_id),
+                title=title,
+            )
+            self.emit(event)
+
             return work_item
 
-    async def update_work_item(
-        self, item_id: WorkItemId, updates: Dict[str, Any]
-    ) -> WorkItem:
+    async def update_work_item(self, item_id: WorkItemId, updates: dict[str, Any]) -> WorkItem:
         """
         Update an existing work item.
 
@@ -131,10 +161,12 @@ class InMemoryTicketAdapter(ITicketSystem):
             ValidationError: If updates dictionary is None or empty
         """
         if not item_id:
-            raise ValidationError("Work item ID cannot be empty")
+            msg = "Work item ID cannot be empty"
+            raise ValidationError(msg)
 
         if updates is None:
-            raise ValidationError("Updates dictionary cannot be None")
+            msg = "Updates dictionary cannot be None"
+            raise ValidationError(msg)
 
         work_item = await self.get_work_item(item_id)
 
@@ -152,8 +184,20 @@ class InMemoryTicketAdapter(ITicketSystem):
                     priority = WorkItemPriority[priority.upper()]
                 work_item.update_priority(priority)
 
-            work_item.updated_at = datetime.now(timezone.utc)
+            work_item.updated_at = datetime.now(UTC)
             work_item.clear_events()
+
+            # Emit update event
+            event = WorkItemUpdatedEvent(
+                type="workitem.updated",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="in_memory_ticket",
+                work_item_id=work_item.id,
+                project_id=work_item.project_id,
+                changes=dict(updates),
+            )
+            self.emit(event)
+
             return work_item
 
     async def delete_work_item(self, item_id: WorkItemId) -> None:
@@ -168,11 +212,13 @@ class InMemoryTicketAdapter(ITicketSystem):
             ValidationError: If item_id is None or empty
         """
         if not item_id:
-            raise ValidationError("Work item ID cannot be empty")
+            msg = "Work item ID cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             if str(item_id) not in self._work_items:
-                raise ResourceNotFoundError("WorkItem", str(item_id))
+                msg = "WorkItem"
+                raise ResourceNotFoundError(msg, str(item_id))
 
             del self._work_items[str(item_id)]
             if str(item_id) in self._comments:
@@ -184,7 +230,7 @@ class InMemoryTicketAdapter(ITicketSystem):
         self,
         item_id: WorkItemId,
         status: WorkItemStatus,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> WorkItem:
         """
         Update work item status.
@@ -202,10 +248,12 @@ class InMemoryTicketAdapter(ITicketSystem):
             ValidationError: If item_id or status is None/empty
         """
         if not item_id:
-            raise ValidationError("Work item ID cannot be empty")
+            msg = "Work item ID cannot be empty"
+            raise ValidationError(msg)
 
         if not status:
-            raise ValidationError("Status cannot be None")
+            msg = "Status cannot be None"
+            raise ValidationError(msg)
 
         work_item = await self.get_work_item(item_id)
 
@@ -230,15 +278,15 @@ class InMemoryTicketAdapter(ITicketSystem):
 
     async def list_work_items(
         self,
-        project_id: Optional[ProjectId] = None,
-        status: Optional[WorkItemStatus] = None,
-        assignee: Optional[UserId] = None,
-        labels: Optional[List[str]] = None,
-        created_after: Optional[datetime] = None,
-        updated_after: Optional[datetime] = None,
+        project_id: ProjectId | None = None,
+        status: WorkItemStatus | None = None,
+        assignee: UserId | None = None,
+        labels: list[str] | None = None,
+        created_after: datetime | None = None,
+        updated_after: datetime | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[WorkItem]:
+    ) -> list[WorkItem]:
         """
         List work items with optional filters.
 
@@ -266,26 +314,23 @@ class InMemoryTicketAdapter(ITicketSystem):
             if assignee:
                 results = [wi for wi in results if wi.assigned_agent_id == str(assignee)]
             if labels:
-                results = [
-                    wi for wi in results
-                    if all(label in wi.labels for label in labels)
-                ]
+                results = [wi for wi in results if all(label in wi.labels for label in labels)]
             if created_after:
                 results = [wi for wi in results if wi.created_at > created_after]
             if updated_after:
                 results = [wi for wi in results if wi.updated_at > updated_after]
 
             # Apply pagination
-            results = results[offset:offset + limit]
+            results = results[offset : offset + limit]
 
             return results
 
     async def search_work_items(
         self,
         query: str,
-        project_id: Optional[ProjectId] = None,
+        project_id: ProjectId | None = None,
         limit: int = 100,
-    ) -> List[WorkItem]:
+    ) -> list[WorkItem]:
         """
         Full-text search for work items.
 
@@ -301,7 +346,8 @@ class InMemoryTicketAdapter(ITicketSystem):
             ValidationError: If query is None or empty
         """
         if not query or not query.strip():
-            raise ValidationError("Search query cannot be empty")
+            msg = "Search query cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             results = list(self._work_items.values())
@@ -311,17 +357,14 @@ class InMemoryTicketAdapter(ITicketSystem):
 
             # Simple text search in title and description
             query_lower = query.lower()
-            results = [
-                wi for wi in results
-                if query_lower in wi.title.lower() or query_lower in wi.description.lower()
-            ]
+            results = [wi for wi in results if query_lower in wi.title.lower() or query_lower in wi.description.lower()]
 
             return results[:limit]
 
     async def get_work_item_stream(
         self,
-        project_id: Optional[ProjectId] = None,
-        since: Optional[datetime] = None,
+        project_id: ProjectId | None = None,
+        since: datetime | None = None,
     ) -> AsyncIterator[WorkItem]:
         """
         Stream work item updates in real-time.
@@ -347,8 +390,8 @@ class InMemoryTicketAdapter(ITicketSystem):
         self,
         item_id: WorkItemId,
         body: str,
-        author: Optional[UserId] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        author: UserId | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> Comment:
         """
         Add a comment to a work item.
@@ -367,13 +410,15 @@ class InMemoryTicketAdapter(ITicketSystem):
             ValidationError: If item_id or body is None/empty
         """
         if not item_id:
-            raise ValidationError("Work item ID cannot be empty")
+            msg = "Work item ID cannot be empty"
+            raise ValidationError(msg)
 
         if not body or not body.strip():
-            raise ValidationError("Comment body cannot be empty")
+            msg = "Comment body cannot be empty"
+            raise ValidationError(msg)
 
         # Verify work item exists
-        await self.get_work_item(item_id)
+        work_item = await self.get_work_item(item_id)
 
         with self._lock:
             comment = Comment(
@@ -381,18 +426,36 @@ class InMemoryTicketAdapter(ITicketSystem):
                 work_item_id=item_id,
                 author_id=author or UserId("system"),
                 body=body,
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
             )
 
             self._comments[str(item_id)].append(comment)
+
+            # Emit comment posted event
+            discussion_comment = DiscussionComment(
+                id=comment.id,
+                author=str(comment.author_id),
+                body=body,
+                created_at=datetime.now(UTC).isoformat(),
+            )
+            event = CommentPostedEvent(
+                type="comment.posted",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="in_memory_ticket",
+                work_item_id=str(item_id),
+                project_id=work_item.project_id,
+                comment=discussion_comment,
+            )
+            self.emit(event)
+
             return comment
 
     async def get_comments(
         self,
         item_id: WorkItemId,
-        since: Optional[datetime] = None,
+        since: datetime | None = None,
         limit: int = 100,
-    ) -> List[Comment]:
+    ) -> list[Comment]:
         """
         Get comments for a work item.
 
@@ -409,7 +472,8 @@ class InMemoryTicketAdapter(ITicketSystem):
             ValidationError: If item_id is None or empty
         """
         if not item_id:
-            raise ValidationError("Work item ID cannot be empty")
+            msg = "Work item ID cannot be empty"
+            raise ValidationError(msg)
 
         # Verify work item exists
         await self.get_work_item(item_id)
@@ -441,13 +505,16 @@ class InMemoryTicketAdapter(ITicketSystem):
             ValidationError: If any parameter is None or empty
         """
         if not source_id:
-            raise ValidationError("Source work item ID cannot be empty")
+            msg = "Source work item ID cannot be empty"
+            raise ValidationError(msg)
 
         if not target_id:
-            raise ValidationError("Target work item ID cannot be empty")
+            msg = "Target work item ID cannot be empty"
+            raise ValidationError(msg)
 
         if not relationship or not relationship.strip():
-            raise ValidationError("Relationship type cannot be empty")
+            msg = "Relationship type cannot be empty"
+            raise ValidationError(msg)
 
         # Verify both work items exist
         await self.get_work_item(source_id)
@@ -462,8 +529,8 @@ class InMemoryTicketAdapter(ITicketSystem):
     async def get_related_items(
         self,
         item_id: WorkItemId,
-        relationship: Optional[str] = None,
-    ) -> List[WorkItem]:
+        relationship: str | None = None,
+    ) -> list[WorkItem]:
         """
         Get related work items.
 
@@ -479,7 +546,8 @@ class InMemoryTicketAdapter(ITicketSystem):
             ValidationError: If item_id is None or empty
         """
         if not item_id:
-            raise ValidationError("Work item ID cannot be empty")
+            msg = "Work item ID cannot be empty"
+            raise ValidationError(msg)
 
         # Verify work item exists
         await self.get_work_item(item_id)
@@ -488,9 +556,7 @@ class InMemoryTicketAdapter(ITicketSystem):
             relationships = self._relationships.get(str(item_id), [])
 
             if relationship:
-                relationships = [
-                    (target, rel) for target, rel in relationships if rel == relationship
-                ]
+                relationships = [(target, rel) for target, rel in relationships if rel == relationship]
 
             related_ids = [target for target, _ in relationships]
             return [self._work_items[wid] for wid in related_ids if wid in self._work_items]
@@ -498,8 +564,8 @@ class InMemoryTicketAdapter(ITicketSystem):
     async def register_webhook(
         self,
         url: str,
-        events: List[str],
-        project_id: Optional[ProjectId] = None,
+        events: list[str],
+        project_id: ProjectId | None = None,
     ) -> str:
         """
         Register a webhook for events.
@@ -516,10 +582,12 @@ class InMemoryTicketAdapter(ITicketSystem):
             ValidationError: If url or events are invalid
         """
         if not url or not url.startswith(("http://", "https://")):
-            raise ValidationError("Invalid webhook URL")
+            msg = "Invalid webhook URL"
+            raise ValidationError(msg)
 
         if not events:
-            raise ValidationError("At least one event type is required")
+            msg = "At least one event type is required"
+            raise ValidationError(msg)
 
         with self._lock:
             webhook_id = str(uuid4())
@@ -527,7 +595,7 @@ class InMemoryTicketAdapter(ITicketSystem):
                 "url": url,
                 "events": events,
                 "project_id": str(project_id) if project_id else None,
-                "created_at": datetime.now(timezone.utc),
+                "created_at": datetime.now(UTC),
             }
 
             return webhook_id
@@ -544,11 +612,13 @@ class InMemoryTicketAdapter(ITicketSystem):
             ValidationError: If webhook_id is None or empty
         """
         if not webhook_id:
-            raise ValidationError("Webhook ID cannot be empty")
+            msg = "Webhook ID cannot be empty"
+            raise ValidationError(msg)
 
         with self._lock:
             if webhook_id not in self._webhooks:
-                raise ResourceNotFoundError("Webhook", webhook_id)
+                msg = "Webhook"
+                raise ResourceNotFoundError(msg, webhook_id)
 
             del self._webhooks[webhook_id]
 
@@ -565,9 +635,10 @@ class InMemoryTicketAdapter(ITicketSystem):
             self._comments.clear()
             self._webhooks.clear()
             self._relationships.clear()
+            self._handlers.clear()
             self._next_work_item_number = 1
 
-    def get_all_work_items(self) -> List[WorkItem]:
+    def get_all_work_items(self) -> list[WorkItem]:
         """
         Get all work items (for testing).
 

@@ -4,14 +4,14 @@ Defines contracts for liveness and readiness probes.
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from datetime import datetime, timezone
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Dict, Optional, List
 
 
 class HealthStatus(Enum):
     """Health status enumeration."""
+
     HEALTHY = "healthy"
     UNHEALTHY = "unhealthy"
     DEGRADED = "degraded"
@@ -21,30 +21,28 @@ class HealthStatus(Enum):
 @dataclass
 class DependencyHealth:
     """Health status of a dependency."""
+
     name: str
     status: HealthStatus
-    message: Optional[str] = None
-    last_check: Optional[datetime] = None
-    response_time_ms: Optional[float] = None
-    metadata: Optional[Dict] = None
+    message: str | None = None
+    last_check: datetime | None = None
+    response_time_ms: float | None = None
+    metadata: dict | None = None
 
 
 @dataclass
 class HealthCheckResult:
     """Result of a health check."""
+
     status: HealthStatus
-    message: Optional[str] = None
-    timestamp: datetime = None
-    dependencies: Optional[List[DependencyHealth]] = None
-    metadata: Optional[Dict] = None
+    message: str | None = None
+    timestamp: datetime | None = None
+    dependencies: list[DependencyHealth] = field(default_factory=list)
+    metadata: dict = field(default_factory=dict)
 
     def __post_init__(self):
         if self.timestamp is None:
-            self.timestamp = datetime.now(timezone.utc)
-        if self.dependencies is None:
-            self.dependencies = []
-        if self.metadata is None:
-            self.metadata = {}
+            self.timestamp = datetime.now(UTC)
 
 
 class IHealthCheck(ABC):
@@ -65,7 +63,6 @@ class IHealthCheck(ABC):
         Returns:
             HealthCheckResult indicating if the application is alive
         """
-        pass
 
     @abstractmethod
     async def check_readiness(self) -> HealthCheckResult:
@@ -78,7 +75,6 @@ class IHealthCheck(ABC):
         Returns:
             HealthCheckResult indicating if the application is ready
         """
-        pass
 
     @abstractmethod
     async def check_dependency(self, dependency_name: str) -> DependencyHealth:
@@ -91,4 +87,3 @@ class IHealthCheck(ABC):
         Returns:
             DependencyHealth for the specified dependency
         """
-        pass

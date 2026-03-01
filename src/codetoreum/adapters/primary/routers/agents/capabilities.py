@@ -14,8 +14,8 @@ from codetoreum.adapters.primary.agent_dtos import (
 from codetoreum.adapters.primary.agent_mappers import AgentMapper
 from codetoreum.domain.agent import AgentCapability
 from codetoreum.ports.input.agent_command import (
-    IAgentCommandPort,
     AddAgentCapabilityCommand,
+    IAgentCommandPort,
     RemoveAgentCapabilityCommand,
     UpdateAgentCapabilityCommand,
 )
@@ -86,16 +86,16 @@ def register_capability_endpoints(
             if "not found" in str(e).lower():
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Agent not found: {str(e)}",
+                    detail=f"Agent not found: {e!s}",
                 )
-            elif "already" in str(e).lower():
+            if "already" in str(e).lower():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Capability already exists: {str(e)}",
+                    detail=f"Capability already exists: {e!s}",
                 )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to add capability: {str(e)}",
+                detail=f"Failed to add capability: {e!s}",
             )
 
     @router.delete(
@@ -142,21 +142,20 @@ def register_capability_endpoints(
                 if "agent" in str(e).lower():
                     raise HTTPException(
                         status_code=status.HTTP_404_NOT_FOUND,
-                        detail=f"Agent not found: {str(e)}",
+                        detail=f"Agent not found: {e!s}",
                     )
-                else:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Capability not found: {str(e)}",
-                    )
-            elif "last capability" in str(e).lower():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Capability not found: {e!s}",
+                )
+            if "last capability" in str(e).lower():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Cannot remove last capability from agent",
                 )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to remove capability: {str(e)}",
+                detail=f"Failed to remove capability: {e!s}",
             )
 
     @router.patch(
@@ -206,14 +205,13 @@ def register_capability_endpoints(
                 if "agent" in str(e).lower():
                     raise HTTPException(
                         status_code=status.HTTP_404_NOT_FOUND,
-                        detail=f"Agent not found: {str(e)}",
+                        detail=f"Agent not found: {e!s}",
                     )
-                else:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Capability not found: {str(e)}",
-                    )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Capability not found: {e!s}",
+                )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to update capability: {str(e)}",
+                detail=f"Failed to update capability: {e!s}",
             )

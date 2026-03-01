@@ -4,9 +4,8 @@ This module defines the domain models for column-based workflow orchestration,
 where board position (not labels) determines workflow state and agent triggers.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, Tuple
 
 
 class ColumnType(Enum):
@@ -33,7 +32,7 @@ class ColumnTemplate:
 
     name: str
     type: ColumnType
-    agent_id: Optional[str]
+    agent_id: str | None
     is_pipeline_trigger: bool
     is_exit_column: bool
     position: int
@@ -43,29 +42,30 @@ class ColumnTemplate:
         """Validate column template invariants."""
         # Validate name
         if not self.name or not self.name.strip():
-            raise ValueError("Column name cannot be empty")
+            msg = "Column name cannot be empty"
+            raise ValueError(msg)
 
         # Validate position
         if self.position < 0:
-            raise ValueError(f"Position must be non-negative, got {self.position}")
+            msg = f"Position must be non-negative, got {self.position}"
+            raise ValueError(msg)
 
         # Validate agent_id correlation with type
         if self.type == ColumnType.AUTOMATED and not self.agent_id:
-            raise ValueError(
-                f"Automated column '{self.name}' must have an agent_id"
-            )
+            msg = f"Automated column '{self.name}' must have an agent_id"
+            raise ValueError(msg)
 
         if self.type == ColumnType.MANUAL and self.agent_id:
-            raise ValueError(
-                f"Manual column '{self.name}' cannot have an agent_id"
-            )
+            msg = f"Manual column '{self.name}' cannot have an agent_id"
+            raise ValueError(msg)
 
         # Validate auto_progress only for automated columns
         if self.auto_progress_on_completion and self.type != ColumnType.AUTOMATED:
-            raise ValueError(
+            msg = (
                 f"auto_progress_on_completion only valid for automated columns, "
                 f"column '{self.name}' is {self.type.value}"
             )
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True)
@@ -88,53 +88,53 @@ class BoardWorkflowTemplate:
 
     id: str
     name: str
-    pipeline_trigger_columns: Tuple[str, ...]
-    exit_columns: Tuple[str, ...]
-    columns: Tuple[ColumnTemplate, ...]
+    pipeline_trigger_columns: tuple[str, ...]
+    exit_columns: tuple[str, ...]
+    columns: tuple[ColumnTemplate, ...]
 
     def __post_init__(self) -> None:
         """Validate workflow template invariants."""
         # Validate ID and name
         if not self.id or not self.id.strip():
-            raise ValueError("Template ID cannot be empty")
+            msg = "Template ID cannot be empty"
+            raise ValueError(msg)
         if not self.name or not self.name.strip():
-            raise ValueError("Template name cannot be empty")
+            msg = "Template name cannot be empty"
+            raise ValueError(msg)
 
         # Require at least one column
         if not self.columns:
-            raise ValueError("Workflow must have at least one column")
+            msg = "Workflow must have at least one column"
+            raise ValueError(msg)
 
         # Validate column positions are unique and sequential
         positions = sorted([col.position for col in self.columns])
         expected = list(range(len(self.columns)))
 
         if positions != expected:
-            raise ValueError(
-                f"Column positions must be unique and sequential starting at 0. "
-                f"Got {positions}, expected {expected}"
-            )
+            msg = f"Column positions must be unique and sequential starting at 0. Got {positions}, expected {expected}"
+            raise ValueError(msg)
 
         # Validate column names are unique
         names = [col.name for col in self.columns]
         if len(names) != len(set(names)):
             duplicates = [n for n in names if names.count(n) > 1]
-            raise ValueError(f"Column names must be unique, duplicates: {duplicates}")
+            msg = f"Column names must be unique, duplicates: {duplicates}"
+            raise ValueError(msg)
 
         # Validate trigger/exit columns exist in columns list
         column_names = {col.name for col in self.columns}
         for trigger_col in self.pipeline_trigger_columns:
             if trigger_col not in column_names:
-                raise ValueError(
-                    f"pipeline_trigger_columns references non-existent column: {trigger_col}"
-                )
+                msg = f"pipeline_trigger_columns references non-existent column: {trigger_col}"
+                raise ValueError(msg)
 
         for exit_col in self.exit_columns:
             if exit_col not in column_names:
-                raise ValueError(
-                    f"exit_columns references non-existent column: {exit_col}"
-                )
+                msg = f"exit_columns references non-existent column: {exit_col}"
+                raise ValueError(msg)
 
-    def get_column_config(self, column_name: str) -> Optional[ColumnTemplate]:
+    def get_column_config(self, column_name: str) -> ColumnTemplate | None:
         """Get configuration for a specific column by name.
 
         Args:
@@ -145,7 +145,7 @@ class BoardWorkflowTemplate:
         """
         return next((c for c in self.columns if c.name == column_name), None)
 
-    def get_next_column(self, current: str) -> Optional[str]:
+    def get_next_column(self, current: str) -> str | None:
         """Get the next column by position order.
 
         Args:
@@ -158,9 +158,7 @@ class BoardWorkflowTemplate:
         if not current_config:
             return None
         next_pos = current_config.position + 1
-        return next(
-            (c.name for c in self.columns if c.position == next_pos), None
-        )
+        return next((c.name for c in self.columns if c.position == next_pos), None)
 
 
 @dataclass(frozen=True)
@@ -184,8 +182,11 @@ class BoardReconciliationConfig:
     def __post_init__(self) -> None:
         """Validate reconciliation config."""
         if not self.workflow_template_id or not self.workflow_template_id.strip():
-            raise ValueError("workflow_template_id cannot be empty")
+            msg = "workflow_template_id cannot be empty"
+            raise ValueError(msg)
         if not self.board_id or not self.board_id.strip():
-            raise ValueError("board_id cannot be empty")
+            msg = "board_id cannot be empty"
+            raise ValueError(msg)
         if not self.project_id or not self.project_id.strip():
-            raise ValueError("project_id cannot be empty")
+            msg = "project_id cannot be empty"
+            raise ValueError(msg)

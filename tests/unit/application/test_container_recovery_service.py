@@ -7,8 +7,8 @@ These tests verify:
 - Error handling and recovery
 """
 
-from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime, timedelta
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -23,7 +23,6 @@ from codetoreum.domain.events.container_recovery_events import (
     ContainerRecoveredEvent,
     ContainerRecoveryCompletedEvent,
 )
-from codetoreum.ports.output.container_recovery import ContainerMetadata
 
 
 class TestContainerRecoveryServiceInitialization:
@@ -301,7 +300,6 @@ class TestContainerRecoveryServiceWithMock:
         assert completion_event.containers_killed == 1
         assert completion_event.repair_cycles_processed == 2
 
-
     @pytest.mark.asyncio
     async def test_recovery_event_emission_failure_handling(self):
         """Service should handle event emission failures gracefully."""
@@ -436,7 +434,7 @@ class TestCalculateUptimeSeconds:
 
     def test_calculate_uptime_seconds_current(self):
         """Should calculate uptime correctly for recently created container."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         created_at = now - timedelta(seconds=30)
 
         uptime = ContainerRecoveryService._calculate_uptime_seconds(created_at)
@@ -446,7 +444,7 @@ class TestCalculateUptimeSeconds:
 
     def test_calculate_uptime_seconds_hours(self):
         """Should calculate uptime correctly for container hours old."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         created_at = now - timedelta(hours=2)
 
         uptime = ContainerRecoveryService._calculate_uptime_seconds(created_at)
@@ -457,13 +455,151 @@ class TestCalculateUptimeSeconds:
 
     def test_calculate_uptime_seconds_very_new(self):
         """Should handle containers created less than a second ago."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         created_at = now
 
         uptime = ContainerRecoveryService._calculate_uptime_seconds(created_at)
 
         assert uptime >= 0
         assert uptime < 1
+
+
+class TestUnrecoverableErrorPropagation:
+    """Tests for unrecoverable error propagation to callers.
+
+    Unrecoverable errors (e.g., catastrophic failures at service initialization)
+    must be re-raised so callers can distinguish them from partial success.
+    """
+
+    @pytest.mark.asyncio
+    async def test_unrecoverable_error_during_orphaned_repair_results_processing(self):
+        """Service should propagate unrecoverable errors from repair result processing.
+
+        Criticality: 10/10
+        Scenario: Storage becomes completely unavailable during orphaned repair results processing
+
+        Expected behavior:
+        - Service attempts to process orphaned repair cycle results
+        - StorageError is raised by adapter
+        - Exception is logged
+        - Exception is re-raised to caller (not caught and swallowed)
+        - Caller can distinguish catastrophic failure from partial recovery
+        """
+        mock_adapter = MockContainerRecoveryAdapter()
+        event_emitter = MagicMock()
+
+        service = ContainerRecoveryService(
+            recovery_adapter=mock_adapter,
+            event_emitter=event_emitter,
+        )
+
+        # Simulate unrecoverable storage failure during repair results processing
+        from codetoreum.ports.exceptions import StorageError
+
+        mock_adapter.set_repair_results_processing_error(StorageError("Storage completely unavailable"))
+
+        # Service should re-raise the unrecoverable error
+        with pytest.raises(StorageError, match="Storage completely unavailable"):
+            await service.recover_or_cleanup_containers()
+
+    @pytest.mark.asyncio
+    async def test_unrecoverable_error_during_container_listing(self):
+        """Service should propagate unrecoverable errors from container listing.
+
+        Criticality: 10/10
+        Scenario: Docker API becomes completely unavailable when listing containers
+
+        Expected behavior:
+        - Service attempts to list running containers
+        - ContainerError is raised by adapter
+        - Exception is logged
+        - Exception is re-raised to caller
+        - Caller can take corrective action (retry, alert, etc.)
+        """
+        mock_adapter = MockContainerRecoveryAdapter()
+        event_emitter = MagicMock()
+
+        service = ContainerRecoveryService(
+            recovery_adapter=mock_adapter,
+            event_emitter=event_emitter,
+        )
+
+        # Simulate unrecoverable Docker API failure
+        from codetoreum.ports.exceptions import ContainerError
+
+        mock_adapter.set_container_listing_error(ContainerError("Docker daemon unreachable"))
+
+        # Service should re-raise the unrecoverable error
+        with pytest.raises(ContainerError, match="Docker daemon unreachable"):
+            await service.recover_or_cleanup_containers()
+
+    @pytest.mark.asyncio
+    async def test_unrecoverable_error_distinguishable_from_partial_success(self):
+        """Callers must be able to distinguish unrecoverable errors from partial success.
+
+        Criticality: 10/10
+        Scenario: Verify the difference between:
+        - Partial success (2 recovered, 3 killed, 5 errors) -> returns RecoveryResult
+        - Catastrophic failure (Docker unavailable) -> raises exception
+
+        Expected behavior:
+        - Partial success case returns RecoveryResult object
+        - Catastrophic failure case raises exception
+        - Caller can write different error handling logic for each case
+        """
+        # Case 1: Partial success (Docker fails mid-processing)
+        mock_adapter_partial = MockContainerRecoveryAdapter()
+        event_emitter_partial = MagicMock()
+
+        service_partial = ContainerRecoveryService(
+            recovery_adapter=mock_adapter_partial,
+            event_emitter=event_emitter_partial,
+        )
+
+        # Add containers and simulate partial Docker failure
+        for i in range(10):
+            mock_adapter_partial.add_container(
+                container_id=f"container-{i}",
+                container_name=f"test-{i}",
+                project_id="proj-1",
+                agent_id="agent-1",
+                task_id=f"task-{i}",
+                age_hours=1.0,
+            )
+
+        for i in range(5):
+            mock_adapter_partial.set_assessment(
+                container_id=f"container-{i}",
+                action="reconnect" if i % 2 == 0 else "kill",
+                reason="valid_execution" if i % 2 == 0 else "timeout",
+                with_monitoring=i % 2 == 0,
+                execution_id=f"exec-{i}" if i % 2 == 0 else None,
+            )
+
+        mock_adapter_partial.set_docker_failure_after_count(5)
+
+        # Partial success returns RecoveryResult
+        result_partial = await service_partial.recover_or_cleanup_containers()
+        assert isinstance(result_partial, object)  # RecoveryResult
+        assert hasattr(result_partial, "recovered")
+        assert hasattr(result_partial, "errors")
+
+        # Case 2: Catastrophic failure (Docker unavailable at start)
+        mock_adapter_catastrophic = MockContainerRecoveryAdapter()
+        event_emitter_catastrophic = MagicMock()
+
+        service_catastrophic = ContainerRecoveryService(
+            recovery_adapter=mock_adapter_catastrophic,
+            event_emitter=event_emitter_catastrophic,
+        )
+
+        from codetoreum.ports.exceptions import ContainerError
+
+        mock_adapter_catastrophic.set_container_listing_error(ContainerError("Docker unreachable"))
+
+        # Catastrophic failure raises exception
+        with pytest.raises(ContainerError):
+            await service_catastrophic.recover_or_cleanup_containers()
 
 
 class TestCriticalEdgeCases:
@@ -533,10 +669,7 @@ class TestCriticalEdgeCases:
 
         # Verify completion event was still emitted despite partial failure
         calls = event_emitter.emit.call_args_list
-        completion_events = [
-            call[0][0] for call in calls
-            if isinstance(call[0][0], ContainerRecoveryCompletedEvent)
-        ]
+        completion_events = [call[0][0] for call in calls if isinstance(call[0][0], ContainerRecoveryCompletedEvent)]
         assert len(completion_events) == 1
         completion_event = completion_events[0]
         assert completion_event.containers_recovered == 2
@@ -598,10 +731,7 @@ class TestCriticalEdgeCases:
 
         # Verify completion event shows error
         calls = event_emitter.emit.call_args_list
-        completion_events = [
-            call[0][0] for call in calls
-            if isinstance(call[0][0], ContainerRecoveryCompletedEvent)
-        ]
+        completion_events = [call[0][0] for call in calls if isinstance(call[0][0], ContainerRecoveryCompletedEvent)]
         assert len(completion_events) == 1
         assert completion_events[0].errors_encountered == 1
 
@@ -641,10 +771,7 @@ class TestCriticalEdgeCases:
 
         # Completion event should still be emitted
         calls = event_emitter.emit.call_args_list
-        completion_events = [
-            call[0][0] for call in calls
-            if isinstance(call[0][0], ContainerRecoveryCompletedEvent)
-        ]
+        completion_events = [call[0][0] for call in calls if isinstance(call[0][0], ContainerRecoveryCompletedEvent)]
         assert len(completion_events) == 1
 
     @pytest.mark.asyncio
@@ -690,10 +817,7 @@ class TestCriticalEdgeCases:
 
         # Verify completion event shows error
         calls = event_emitter.emit.call_args_list
-        completion_events = [
-            call[0][0] for call in calls
-            if isinstance(call[0][0], ContainerRecoveryCompletedEvent)
-        ]
+        completion_events = [call[0][0] for call in calls if isinstance(call[0][0], ContainerRecoveryCompletedEvent)]
         assert len(completion_events) == 1
         assert completion_events[0].errors_encountered == 1
 
@@ -760,10 +884,7 @@ class TestCriticalEdgeCases:
 
         # Verify completion event shows all outcomes
         calls = event_emitter.emit.call_args_list
-        completion_events = [
-            call[0][0] for call in calls
-            if isinstance(call[0][0], ContainerRecoveryCompletedEvent)
-        ]
+        completion_events = [call[0][0] for call in calls if isinstance(call[0][0], ContainerRecoveryCompletedEvent)]
         assert len(completion_events) == 1
         assert completion_events[0].containers_recovered == 1
         assert completion_events[0].containers_killed == 1
@@ -888,10 +1009,7 @@ class TestCriticalEdgeCases:
 
         # Verify kill event was emitted with None for optional fields
         calls = event_emitter.emit.call_args_list
-        kill_events = [
-            call[0][0] for call in calls
-            if isinstance(call[0][0], ContainerKilledEvent)
-        ]
+        kill_events = [call[0][0] for call in calls if isinstance(call[0][0], ContainerKilledEvent)]
         assert len(kill_events) == 1
         # Event should have None for missing fields, not crash
         assert kill_events[0].work_item_id is None
@@ -935,10 +1053,7 @@ class TestCriticalEdgeCases:
         # Set assessments for first 8 containers
         for i in range(8):
             action = "reconnect" if i % 2 == 0 else "kill"
-            reason = (
-                "valid_execution" if action == "reconnect"
-                else "container_timeout"
-            )
+            reason = "valid_execution" if action == "reconnect" else "container_timeout"
             mock_adapter.set_assessment(
                 container_id=f"container-{i}",
                 action=action,
@@ -973,10 +1088,7 @@ class TestCriticalEdgeCases:
 
         # Verify completion event was always emitted
         calls = event_emitter.emit.call_args_list
-        completion_events = [
-            call[0][0] for call in calls
-            if isinstance(call[0][0], ContainerRecoveryCompletedEvent)
-        ]
+        completion_events = [call[0][0] for call in calls if isinstance(call[0][0], ContainerRecoveryCompletedEvent)]
         assert len(completion_events) == 1
         assert completion_events[0].containers_recovered == 4
         assert completion_events[0].containers_killed == 4

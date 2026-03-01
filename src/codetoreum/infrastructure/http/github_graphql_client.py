@@ -5,7 +5,7 @@ error handling, and rate limit tracking for Projects v2 operations.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any
 
 import httpx
 
@@ -38,9 +38,9 @@ class GitHubGraphQLClient:
             config: GitHub GraphQL configuration
         """
         self.config = config
-        self._http_client: Optional[httpx.AsyncClient] = None
-        self._rate_limit_remaining: Optional[int] = None
-        self._rate_limit_reset: Optional[int] = None
+        self._http_client: httpx.AsyncClient | None = None
+        self._rate_limit_remaining: int | None = None
+        self._rate_limit_reset: int | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
@@ -66,8 +66,8 @@ class GitHubGraphQLClient:
     async def execute(
         self,
         query: str,
-        variables: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        variables: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Execute GraphQL query or mutation.
 
         Args:
@@ -97,50 +97,42 @@ class GitHubGraphQLClient:
 
             # Track rate limits
             if "x-ratelimit-remaining" in response.headers:
-                self._rate_limit_remaining = int(
-                    response.headers["x-ratelimit-remaining"]
-                )
+                self._rate_limit_remaining = int(response.headers["x-ratelimit-remaining"])
             if "x-ratelimit-reset" in response.headers:
-                self._rate_limit_reset = int(
-                    response.headers["x-ratelimit-reset"]
-                )
+                self._rate_limit_reset = int(response.headers["x-ratelimit-reset"])
 
             # Check for authentication errors
             if response.status_code == 401:
-                raise AuthenticationError("GitHub authentication failed")
+                message = "GitHub authentication failed"
+                raise AuthenticationError(message)
 
             # Check for rate limiting
             if response.status_code == 403:
-                raise ExternalServiceError(
+                message = (
                     "GitHub",
-                    f"GitHub rate limit exceeded. Reset at: {self._rate_limit_reset}"
+                    f"GitHub rate limit exceeded. Reset at: {self._rate_limit_reset}",
                 )
+                raise ExternalServiceError(message)
 
             if response.status_code >= 400:
-                raise ExternalServiceError(
-                    "GitHub",
-                    f"GitHub GraphQL API error: {response.status_code}"
-                )
+                message = "GitHub", f"GitHub GraphQL API error: {response.status_code}"
+                raise ExternalServiceError(message)
 
             data = response.json()
 
             # Check for GraphQL errors in response
-            if "errors" in data and data["errors"]:
-                error_messages = [
-                    str(e.get("message", "Unknown error"))
-                    for e in data["errors"]
-                ]
-                raise ExternalServiceError(
-                    "GitHub",
-                    f"GraphQL errors: {'; '.join(error_messages)}"
-                )
+            if data.get("errors"):
+                error_messages = [str(e.get("message", "Unknown error")) for e in data["errors"]]
+                message = "GitHub", f"GraphQL errors: {'; '.join(error_messages)}"
+                raise ExternalServiceError(message)
 
             return data.get("data", {})
 
         except httpx.RequestError as e:
-            raise ExternalServiceError("GitHub", f"GitHub API request failed: {str(e)}")
+            message = "GitHub"
+            raise ExternalServiceError(message, f"GitHub API request failed: {e!s}")
 
-    def get_rate_limit_status(self) -> Dict[str, Optional[int]]:
+    def get_rate_limit_status(self) -> dict[str, int | None]:
         """Get current rate limit status.
 
         Returns:

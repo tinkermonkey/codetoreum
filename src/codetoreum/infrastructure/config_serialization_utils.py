@@ -6,7 +6,7 @@ storage and Redis cache implementations, eliminating code duplication.
 """
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 from uuid import UUID
 
 from codetoreum.domain.models import (
@@ -30,9 +30,11 @@ def validate_id(value: str, name: str = "id") -> None:
         ValueError: If the ID is invalid
     """
     if not value or not isinstance(value, str):
-        raise ValueError(f"{name} must be a non-empty string")
+        message = f"{name} must be a non-empty string"
+        raise ValueError(message)
     if not value.strip():
-        raise ValueError(f"{name} cannot be whitespace only")
+        message = f"{name} cannot be whitespace only"
+        raise ValueError(message)
 
 
 def validate_name(value: str) -> None:
@@ -46,17 +48,19 @@ def validate_name(value: str) -> None:
         ValueError: If the name is invalid
     """
     if not value or not isinstance(value, str):
-        raise ValueError("name must be a non-empty string")
+        message = "name must be a non-empty string"
+        raise ValueError(message)
     if not value.strip():
-        raise ValueError("name cannot be whitespace only")
+        message = "name cannot be whitespace only"
+        raise ValueError(message)
 
 
-def serialize_datetime(dt: Optional[datetime]) -> Optional[str]:
+def serialize_datetime(dt: datetime | None) -> str | None:
     """Serialize datetime to ISO format string."""
     return dt.isoformat() if dt else None
 
 
-def deserialize_datetime(value: Optional[str]) -> Optional[datetime]:
+def deserialize_datetime(value: str | None) -> datetime | None:
     """Deserialize ISO format string to datetime."""
     if not value:
         return None
@@ -66,12 +70,12 @@ def deserialize_datetime(value: Optional[str]) -> Optional[datetime]:
         return None
 
 
-def serialize_uuid(uuid_obj: Optional[UUID]) -> Optional[str]:
+def serialize_uuid(uuid_obj: UUID | None) -> str | None:
     """Serialize UUID to string."""
     return str(uuid_obj) if uuid_obj else None
 
 
-def deserialize_uuid(value: Optional[str]) -> Optional[UUID]:
+def deserialize_uuid(value: str | None) -> UUID | None:
     """Deserialize string to UUID."""
     if not value:
         return None
@@ -81,7 +85,7 @@ def deserialize_uuid(value: Optional[str]) -> Optional[UUID]:
         return None
 
 
-def project_config_to_dict(config: ProjectConfig) -> Dict[str, Any]:
+def project_config_to_dict(config: ProjectConfig) -> dict[str, Any]:
     """
     Serialize ProjectConfig to dictionary.
 
@@ -104,7 +108,7 @@ def project_config_to_dict(config: ProjectConfig) -> Dict[str, Any]:
     }
 
 
-def dict_to_project_config(data: Dict[str, Any]) -> ProjectConfig:
+def dict_to_project_config(data: dict[str, Any]) -> ProjectConfig:
     """
     Deserialize dictionary to ProjectConfig.
 
@@ -127,7 +131,7 @@ def dict_to_project_config(data: Dict[str, Any]) -> ProjectConfig:
     )
 
 
-def agent_config_to_dict(config: AgentConfig) -> Dict[str, Any]:
+def agent_config_to_dict(config: AgentConfig) -> dict[str, Any]:
     """
     Serialize AgentConfig to dictionary.
 
@@ -150,7 +154,7 @@ def agent_config_to_dict(config: AgentConfig) -> Dict[str, Any]:
     }
 
 
-def dict_to_agent_config(data: Dict[str, Any]) -> AgentConfig:
+def dict_to_agent_config(data: dict[str, Any]) -> AgentConfig:
     """
     Deserialize dictionary to AgentConfig.
 
@@ -173,7 +177,7 @@ def dict_to_agent_config(data: Dict[str, Any]) -> AgentConfig:
     )
 
 
-def pipeline_config_to_dict(config: PipelineConfig) -> Dict[str, Any]:
+def pipeline_config_to_dict(config: PipelineConfig) -> dict[str, Any]:
     """
     Serialize PipelineConfig to dictionary.
 
@@ -204,7 +208,7 @@ def pipeline_config_to_dict(config: PipelineConfig) -> Dict[str, Any]:
     }
 
 
-def dict_to_pipeline_config(data: Dict[str, Any]) -> PipelineConfig:
+def dict_to_pipeline_config(data: dict[str, Any]) -> PipelineConfig:
     """
     Deserialize dictionary to PipelineConfig.
 
@@ -237,7 +241,7 @@ def dict_to_pipeline_config(data: Dict[str, Any]) -> PipelineConfig:
     )
 
 
-def workflow_config_to_dict(config: WorkflowConfig) -> Dict[str, Any]:
+def workflow_config_to_dict(config: WorkflowConfig) -> dict[str, Any]:
     """
     Serialize WorkflowConfig to dictionary.
 
@@ -259,7 +263,7 @@ def workflow_config_to_dict(config: WorkflowConfig) -> Dict[str, Any]:
     }
 
 
-def dict_to_workflow_config(data: Dict[str, Any]) -> WorkflowConfig:
+def dict_to_workflow_config(data: dict[str, Any]) -> WorkflowConfig:
     """
     Deserialize dictionary to WorkflowConfig.
 
@@ -281,7 +285,7 @@ def dict_to_workflow_config(data: Dict[str, Any]) -> WorkflowConfig:
     )
 
 
-def environment_variable_to_dict(env_var: EnvironmentVariable) -> Dict[str, Any]:
+def environment_variable_to_dict(env_var: EnvironmentVariable) -> dict[str, Any]:
     """
     Serialize EnvironmentVariable to dictionary.
 
@@ -303,7 +307,7 @@ def environment_variable_to_dict(env_var: EnvironmentVariable) -> Dict[str, Any]
     }
 
 
-def dict_to_environment_variable(data: Dict[str, Any]) -> EnvironmentVariable:
+def dict_to_environment_variable(data: dict[str, Any]) -> EnvironmentVariable:
     """
     Deserialize dictionary to EnvironmentVariable.
 

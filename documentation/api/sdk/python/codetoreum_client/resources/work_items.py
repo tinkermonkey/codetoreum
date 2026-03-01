@@ -1,14 +1,19 @@
 """
 Work items resource client
 """
-from typing import Optional, List
-from ..models import WorkItem, PaginatedResponse
+
+from __future__ import annotations
+
+import builtins
+from typing import Any
+
+from ..models import PaginatedResponse, WorkItem
 
 
 class WorkItemsResource:
     """Client for work items endpoints."""
 
-    def __init__(self, client):
+    def __init__(self, client: Any) -> None:
         self.client = client
 
     def create(
@@ -16,10 +21,10 @@ class WorkItemsResource:
         title: str,
         description: str,
         project_id: str,
-        labels: Optional[List[str]] = None,
+        labels: builtins.list[str] | None = None,
         priority: str = "medium",
         status: str = "pending",
-        external_id: Optional[str] = None,
+        external_id: str | None = None,
     ) -> WorkItem:
         """
         Create a new work item.
@@ -44,7 +49,7 @@ class WorkItemsResource:
             ...     labels=["feature", "security"]
             ... )
         """
-        payload = {
+        payload: dict[str, Any] = {
             "title": title,
             "description": description,
             "project_id": project_id,
@@ -61,10 +66,10 @@ class WorkItemsResource:
 
     def list(
         self,
-        project_id: Optional[str] = None,
-        status: Optional[str] = None,
-        assignee: Optional[str] = None,
-        labels: Optional[List[str]] = None,
+        project_id: str | None = None,
+        status: str | None = None,
+        assignee: str | None = None,
+        labels: builtins.list[str] | None = None,
         offset: int = 0,
         limit: int = 50,
         sort_by: str = "created_at",
@@ -94,7 +99,7 @@ class WorkItemsResource:
             >>> for work_item in response.items:
             ...     print(work_item.title)
         """
-        params = {
+        params: dict[str, Any] = {
             "offset": offset,
             "limit": limit,
             "sort_by": sort_by,
@@ -132,13 +137,13 @@ class WorkItemsResource:
     def update(
         self,
         work_item_id: str,
-        title: Optional[str] = None,
-        description: Optional[str] = None,
-        status: Optional[str] = None,
-        assignee: Optional[str] = None,
-        labels: Optional[List[str]] = None,
-        priority: Optional[str] = None,
-        workflow_stage: Optional[str] = None,
+        title: str | None = None,
+        description: str | None = None,
+        status: str | None = None,
+        assignee: str | None = None,
+        labels: builtins.list[str] | None = None,
+        priority: str | None = None,
+        workflow_stage: str | None = None,
     ) -> WorkItem:
         """
         Update a work item.
@@ -163,7 +168,7 @@ class WorkItemsResource:
             ...     assignee="agent-backend-dev"
             ... )
         """
-        payload = {}
+        payload: dict[str, Any] = {}
 
         if title is not None:
             payload["title"] = title
@@ -183,7 +188,7 @@ class WorkItemsResource:
         data = self.client.put(f"/api/v2/work-items/{work_item_id}", json=payload)
         return WorkItem.from_dict(data)
 
-    def delete(self, work_item_id: str) -> dict:
+    def delete(self, work_item_id: str) -> dict[str, Any]:
         """
         Delete a work item.
 
@@ -196,9 +201,10 @@ class WorkItemsResource:
         Example:
             >>> client.work_items.delete("wi_abc123")
         """
-        return self.client.delete(f"/api/v2/work-items/{work_item_id}")
+        result: dict[str, Any] = self.client.delete(f"/api/v2/work-items/{work_item_id}")
+        return result
 
-    def get_history(self, work_item_id: str) -> List[dict]:
+    def get_history(self, work_item_id: str) -> builtins.list[dict[str, Any]]:
         """
         Get change history for a work item.
 
@@ -211,5 +217,6 @@ class WorkItemsResource:
         Example:
             >>> history = client.work_items.get_history("wi_abc123")
         """
-        data = self.client.get(f"/api/v2/work-items/{work_item_id}/history")
-        return data.get("history", [])
+        data: dict[str, Any] = self.client.get(f"/api/v2/work-items/{work_item_id}/history")
+        result: builtins.list[dict[str, Any]] = data.get("history", [])
+        return result

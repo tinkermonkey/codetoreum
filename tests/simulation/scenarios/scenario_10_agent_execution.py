@@ -21,14 +21,13 @@ Key Features Tested:
 - Resource cleanup and container removal
 """
 
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import timedelta
+
 import pytest
 
 from codetoreum.domain.agent_execution import AgentExecution, ExecutionStatus
-from codetoreum.domain.value_objects import ExecutionContext, ContainerConfig
+from codetoreum.domain.value_objects import ContainerConfig, ExecutionContext
 from codetoreum.domain.workspace_context import WorkspaceContext
-from codetoreum.domain.agent import Agent, AgentType
 from codetoreum.infrastructure.simulation import (
     SimulationConfig,
     SimulationRunner,
@@ -139,13 +138,9 @@ async def scenario_single_agent_execution_happy_path(runner: SimulationRunner):
         execution.status,
         ExecutionStatus.INITIALIZED,
         "single_execution_initialized",
-        "Execution should be in INITIALIZED state after creation"
+        "Execution should be in INITIALIZED state after creation",
     )
-    runner.assert_true(
-        execution.id is not None,
-        "single_execution_has_id",
-        "Execution should have an ID"
-    )
+    runner.assert_true(execution.id is not None, "single_execution_has_id", "Execution should have an ID")
 
     # Capture initialization event
     init_event = execution.get_pending_events()[0]
@@ -153,7 +148,7 @@ async def scenario_single_agent_execution_happy_path(runner: SimulationRunner):
         init_event.event_type,
         "ExecutionInitialized",
         "single_execution_init_event",
-        "Should emit ExecutionInitialized event"
+        "Should emit ExecutionInitialized event",
     )
 
     # Start execution
@@ -162,12 +157,10 @@ async def scenario_single_agent_execution_happy_path(runner: SimulationRunner):
         execution.status,
         ExecutionStatus.RUNNING,
         "single_execution_running",
-        "Execution should be in RUNNING state after start"
+        "Execution should be in RUNNING state after start",
     )
     runner.assert_true(
-        execution.started_at is not None,
-        "single_execution_started_at",
-        "Started timestamp should be set"
+        execution.started_at is not None, "single_execution_started_at", "Started timestamp should be set"
     )
 
     # Advance time to simulate agent working
@@ -185,44 +178,24 @@ async def scenario_single_agent_execution_happy_path(runner: SimulationRunner):
         execution.status,
         ExecutionStatus.COMPLETED,
         "single_execution_completed",
-        "Execution should be in COMPLETED state after completion"
+        "Execution should be in COMPLETED state after completion",
     )
     runner.assert_true(
-        execution.completed_at is not None,
-        "single_execution_completed_at",
-        "Completed timestamp should be set"
+        execution.completed_at is not None, "single_execution_completed_at", "Completed timestamp should be set"
     )
     runner.assert_equal(
-        execution.exit_code,
-        0,
-        "single_execution_exit_code",
-        "Exit code should be 0 for successful completion"
+        execution.exit_code, 0, "single_execution_exit_code", "Exit code should be 0 for successful completion"
+    )
+    runner.assert_equal(execution.input_tokens, 145, "single_execution_input_tokens", "Input tokens should be tracked")
+    runner.assert_equal(
+        execution.output_tokens, 89, "single_execution_output_tokens", "Output tokens should be tracked"
     )
     runner.assert_equal(
-        execution.input_tokens,
-        145,
-        "single_execution_input_tokens",
-        "Input tokens should be tracked"
-    )
-    runner.assert_equal(
-        execution.output_tokens,
-        89,
-        "single_execution_output_tokens",
-        "Output tokens should be tracked"
-    )
-    runner.assert_equal(
-        execution.get_total_tokens(),
-        234,
-        "single_execution_total_tokens",
-        "Total tokens should be input + output"
+        execution.get_total_tokens(), 234, "single_execution_total_tokens", "Total tokens should be input + output"
     )
 
     # Verify terminal state
-    runner.assert_true(
-        execution.is_terminal(),
-        "single_execution_is_terminal",
-        "COMPLETED is a terminal state"
-    )
+    runner.assert_true(execution.is_terminal(), "single_execution_is_terminal", "COMPLETED is a terminal state")
 
 
 async def scenario_multiple_concurrent_executions(runner: SimulationRunner):
@@ -249,14 +222,9 @@ async def scenario_multiple_concurrent_executions(runner: SimulationRunner):
 
     # Start all executions
     for i, execution in enumerate(executions):
-        execution.start(container_name=f"agent-20{i+1}-dev")
+        execution.start(container_name=f"agent-20{i + 1}-dev")
 
-    runner.assert_equal(
-        len(executions),
-        3,
-        "concurrent_execution_count",
-        "Should have 3 concurrent executions"
-    )
+    runner.assert_equal(len(executions), 3, "concurrent_execution_count", "Should have 3 concurrent executions")
 
     # Verify all are in RUNNING state
     for exec in executions:
@@ -264,7 +232,7 @@ async def scenario_multiple_concurrent_executions(runner: SimulationRunner):
             exec.status,
             ExecutionStatus.RUNNING,
             f"concurrent_exec_{exec.work_item_id}_running",
-            f"Execution {exec.work_item_id} should be RUNNING"
+            f"Execution {exec.work_item_id} should be RUNNING",
         )
 
     # Complete first two, leave third running
@@ -279,19 +247,19 @@ async def scenario_multiple_concurrent_executions(runner: SimulationRunner):
         executions[0].status,
         ExecutionStatus.COMPLETED,
         "concurrent_first_completed",
-        "First execution should be COMPLETED"
+        "First execution should be COMPLETED",
     )
     runner.assert_equal(
         executions[1].status,
         ExecutionStatus.COMPLETED,
         "concurrent_second_completed",
-        "Second execution should be COMPLETED"
+        "Second execution should be COMPLETED",
     )
     runner.assert_equal(
         executions[2].status,
         ExecutionStatus.RUNNING,
         "concurrent_third_running",
-        "Third execution should still be RUNNING"
+        "Third execution should still be RUNNING",
     )
 
     # Complete final execution
@@ -302,7 +270,7 @@ async def scenario_multiple_concurrent_executions(runner: SimulationRunner):
         executions[2].status,
         ExecutionStatus.COMPLETED,
         "concurrent_third_completed",
-        "Third execution should now be COMPLETED"
+        "Third execution should now be COMPLETED",
     )
 
 
@@ -317,10 +285,7 @@ async def scenario_execution_with_container_provisioning(runner: SimulationRunne
     """
     # Create execution context with full configuration
     workspace_ctx = WorkspaceContext.for_issue(
-        project_id="proj-123",
-        work_item_id="ISSUE-301",
-        branch_name="feature/auth-system",
-        create_pr=True
+        project_id="proj-123", work_item_id="ISSUE-301", branch_name="feature/auth-system", create_pr=True
     )
 
     exec_context = ExecutionContext(
@@ -330,7 +295,7 @@ async def scenario_execution_with_container_provisioning(runner: SimulationRunne
         agent_id="developer",
         model="claude-sonnet-4-5",
         timeout_seconds=900,
-        workspace_type=workspace_ctx.workspace_type,
+        workspace_type=workspace_ctx.workspace_type.value,
         branch_name=workspace_ctx.branch_name,
         discussion_id=None,
         project_id="proj-123",
@@ -346,26 +311,19 @@ async def scenario_execution_with_container_provisioning(runner: SimulationRunne
 
     # Verify context properties
     runner.assert_equal(
-        exec_context.work_item_id,
-        "ISSUE-301",
-        "container_context_work_item",
-        "Context should contain work item ID"
+        exec_context.work_item_id, "ISSUE-301", "container_context_work_item", "Context should contain work item ID"
     )
     runner.assert_equal(
         exec_context.branch_name,
         "feature/auth-system",
         "container_context_branch",
-        "Context should contain branch name for issue workspace"
+        "Context should contain branch name for issue workspace",
     )
     runner.assert_true(
-        exec_context.filesystem_write_allowed,
-        "container_context_write_allowed",
-        "Filesystem write should be allowed"
+        exec_context.filesystem_write_allowed, "container_context_write_allowed", "Filesystem write should be allowed"
     )
     runner.assert_true(
-        exec_context.can_make_commits,
-        "container_context_can_commit",
-        "Commit capability should be enabled"
+        exec_context.can_make_commits, "container_context_can_commit", "Commit capability should be enabled"
     )
 
     # Create container configuration
@@ -389,26 +347,19 @@ async def scenario_execution_with_container_provisioning(runner: SimulationRunne
     )
 
     runner.assert_equal(
-        container_config.image,
-        "codetoreum/agent:latest",
-        "container_image",
-        "Container should have correct image"
+        container_config.image, "codetoreum/agent:latest", "container_image", "Container should have correct image"
     )
-    runner.assert_equal(
-        container_config.user,
-        "1000:1000",
-        "container_user",
-        "Container should run as specific user"
-    )
+    runner.assert_equal(container_config.user, "1000:1000", "container_user", "Container should run as specific user")
     runner.assert_true(
         "AGENT_ID" in container_config.environment,
         "container_env_agent_id",
-        "Container should have AGENT_ID environment variable"
+        "Container should have AGENT_ID environment variable",
     )
     runner.assert_true(
-        "/workspace" in container_config.volumes.values().__str__(),
+        container_config.volumes is not None
+        and any("/workspace" in (v.get("bind") or "") for v in container_config.volumes.values()),
         "container_workspace_volume",
-        "Container should have workspace volume mounted"
+        "Container should have workspace volume mounted",
     )
 
 
@@ -435,33 +386,18 @@ async def scenario_agent_failure_scenarios(runner: SimulationRunner):
     await runner.advance_time(timedelta(seconds=20))
 
     # Simulate failure
-    execution1.fail(
-        error_message="LLM rate limit exceeded, retry after 60 seconds",
-        exit_code=429
-    )
+    execution1.fail(error_message="LLM rate limit exceeded, retry after 60 seconds", exit_code=429)
 
     runner.assert_equal(
-        execution1.status,
-        ExecutionStatus.FAILED,
-        "failure_status",
-        "Execution should be in FAILED state"
+        execution1.status, ExecutionStatus.FAILED, "failure_status", "Execution should be in FAILED state"
     )
-    runner.assert_equal(
-        execution1.exit_code,
-        429,
-        "failure_exit_code",
-        "Exit code should reflect rate limit error"
-    )
+    runner.assert_equal(execution1.exit_code, 429, "failure_exit_code", "Exit code should reflect rate limit error")
     runner.assert_true(
-        "rate limit" in execution1.error_message.lower(),
+        execution1.error_message is not None and "rate limit" in execution1.error_message.lower(),
         "failure_error_message",
-        "Error message should be captured"
+        "Error message should be captured",
     )
-    runner.assert_true(
-        execution1.is_terminal(),
-        "failure_is_terminal",
-        "FAILED is a terminal state"
-    )
+    runner.assert_true(execution1.is_terminal(), "failure_is_terminal", "FAILED is a terminal state")
 
     # Scenario 2: Failure with no exit code specified
     execution2 = AgentExecution.create(
@@ -479,15 +415,12 @@ async def scenario_agent_failure_scenarios(runner: SimulationRunner):
     execution2.fail(error_message="Container execution failed: out of memory")
 
     runner.assert_equal(
-        execution2.status,
-        ExecutionStatus.FAILED,
-        "failure_no_exit_code_status",
-        "Execution should fail"
+        execution2.status, ExecutionStatus.FAILED, "failure_no_exit_code_status", "Execution should fail"
     )
     runner.assert_true(
         execution2.exit_code is None or execution2.exit_code != 0,
         "failure_no_exit_code",
-        "Exit code should not be 0 for failure"
+        "Exit code should not be 0 for failure",
     )
 
 
@@ -516,27 +449,15 @@ async def scenario_execution_timeout_scenario(runner: SimulationRunner):
     execution.timeout()
 
     runner.assert_equal(
-        execution.status,
-        ExecutionStatus.TIMEOUT,
-        "timeout_status",
-        "Execution should be in TIMEOUT state"
+        execution.status, ExecutionStatus.TIMEOUT, "timeout_status", "Execution should be in TIMEOUT state"
     )
-    runner.assert_equal(
-        execution.exit_code,
-        -1,
-        "timeout_exit_code",
-        "Timeout should have exit code -1"
-    )
+    runner.assert_equal(execution.exit_code, -1, "timeout_exit_code", "Timeout should have exit code -1")
     runner.assert_true(
-        "timeout" in execution.error_message.lower(),
+        execution.error_message is not None and "timeout" in execution.error_message.lower(),
         "timeout_error_message",
-        "Error message should indicate timeout"
+        "Error message should indicate timeout",
     )
-    runner.assert_true(
-        execution.is_terminal(),
-        "timeout_is_terminal",
-        "TIMEOUT is a terminal state"
-    )
+    runner.assert_true(execution.is_terminal(), "timeout_is_terminal", "TIMEOUT is a terminal state")
 
 
 async def scenario_token_usage_tracking(runner: SimulationRunner):
@@ -569,41 +490,18 @@ async def scenario_token_usage_tracking(runner: SimulationRunner):
         executions.append(exec)
 
     # Verify individual token counts
+    runner.assert_equal(executions[0].input_tokens, 100, "token_tracking_exec1_input", "First execution input tokens")
+    runner.assert_equal(executions[0].output_tokens, 50, "token_tracking_exec1_output", "First execution output tokens")
     runner.assert_equal(
-        executions[0].input_tokens,
-        100,
-        "token_tracking_exec1_input",
-        "First execution input tokens"
-    )
-    runner.assert_equal(
-        executions[0].output_tokens,
-        50,
-        "token_tracking_exec1_output",
-        "First execution output tokens"
-    )
-    runner.assert_equal(
-        executions[0].get_total_tokens(),
-        150,
-        "token_tracking_exec1_total",
-        "First execution total tokens"
+        executions[0].get_total_tokens(), 150, "token_tracking_exec1_total", "First execution total tokens"
     )
 
     # Verify aggregated tokens
     total_input = sum(exec.input_tokens for exec in executions)
     total_output = sum(exec.output_tokens for exec in executions)
 
-    runner.assert_equal(
-        total_input,
-        450,
-        "token_tracking_total_input",
-        "Total input tokens across all executions"
-    )
-    runner.assert_equal(
-        total_output,
-        245,
-        "token_tracking_total_output",
-        "Total output tokens across all executions"
-    )
+    runner.assert_equal(total_input, 450, "token_tracking_total_input", "Total input tokens across all executions")
+    runner.assert_equal(total_output, 245, "token_tracking_total_output", "Total output tokens across all executions")
 
 
 async def scenario_session_continuity(runner: SimulationRunner):
@@ -635,10 +533,7 @@ async def scenario_session_continuity(runner: SimulationRunner):
     )
 
     runner.assert_equal(
-        exec1.session_id,
-        session_id,
-        "session_continuity_exec1_session",
-        "First execution should have session ID"
+        exec1.session_id, session_id, "session_continuity_exec1_session", "First execution should have session ID"
     )
 
     # Second execution in same session
@@ -661,17 +556,12 @@ async def scenario_session_continuity(runner: SimulationRunner):
     )
 
     runner.assert_equal(
-        exec2.session_id,
-        session_id,
-        "session_continuity_exec2_session",
-        "Second execution should have same session ID"
+        exec2.session_id, session_id, "session_continuity_exec2_session", "Second execution should have same session ID"
     )
 
     # Verify session continuity
     runner.assert_true(
-        exec1.session_id == exec2.session_id,
-        "session_continuity_match",
-        "Both executions should be in same session"
+        exec1.session_id == exec2.session_id, "session_continuity_match", "Both executions should be in same session"
     )
 
 
@@ -698,12 +588,7 @@ async def scenario_execution_cancellation(runner: SimulationRunner):
 
     # Pause execution
     execution.pause(reason="User requested pause for review")
-    runner.assert_equal(
-        execution.status,
-        ExecutionStatus.PAUSED,
-        "cancel_paused_status",
-        "Execution should be PAUSED"
-    )
+    runner.assert_equal(execution.status, ExecutionStatus.PAUSED, "cancel_paused_status", "Execution should be PAUSED")
 
     # Resume execution
     await runner.advance_time(timedelta(seconds=10))
@@ -712,31 +597,18 @@ async def scenario_execution_cancellation(runner: SimulationRunner):
         execution.status,
         ExecutionStatus.RUNNING,
         "cancel_resumed_status",
-        "Execution should be RUNNING again after resume"
+        "Execution should be RUNNING again after resume",
     )
 
     # Cancel execution
     execution.cancel(reason="User cancelled due to priority change")
     runner.assert_equal(
-        execution.status,
-        ExecutionStatus.CANCELLED,
-        "cancel_cancelled_status",
-        "Execution should be CANCELLED"
+        execution.status, ExecutionStatus.CANCELLED, "cancel_cancelled_status", "Execution should be CANCELLED"
     )
-    runner.assert_equal(
-        execution.exit_code,
-        -2,
-        "cancel_exit_code",
-        "Cancellation should have exit code -2"
-    )
-    runner.assert_true(
-        execution.is_terminal(),
-        "cancel_is_terminal",
-        "CANCELLED is a terminal state"
-    )
+    runner.assert_equal(execution.exit_code, -2, "cancel_exit_code", "Cancellation should have exit code -2")
+    runner.assert_true(execution.is_terminal(), "cancel_is_terminal", "CANCELLED is a terminal state")
 
 
-@pytest.mark.asyncio
 async def test_scenario_10_agent_execution():
     """Test Scenario 10: Agent Execution Lifecycle."""
     config = create_config()
@@ -746,17 +618,11 @@ async def test_scenario_10_agent_execution():
 
     # Verify success
     assert result.success, f"Scenario failed with errors: {result.errors}"
-    assert result.assertions_passed >= 40, (
-        f"Expected at least 40 assertions to pass, got {result.assertions_passed}"
-    )
-    assert result.assertions_failed == 0, (
-        f"Expected no failed assertions, got {result.assertions_failed}"
-    )
+    assert result.assertions_passed >= 40, f"Expected at least 40 assertions to pass, got {result.assertions_passed}"
+    assert result.assertions_failed == 0, f"Expected no failed assertions, got {result.assertions_failed}"
 
     # Verify performance goal (10-100x faster)
-    assert result.speed_multiplier >= 10.0, (
-        f"Speed multiplier {result.speed_multiplier:.1f}x below 10x target"
-    )
+    assert result.speed_multiplier >= 10.0, f"Speed multiplier {result.speed_multiplier:.1f}x below 10x target"
 
 
 if __name__ == "__main__":

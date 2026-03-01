@@ -8,39 +8,34 @@ This module provides security functions to prevent common vulnerabilities:
 - Input sanitization
 """
 
-import os
 import re
 from pathlib import Path
-from typing import List, Optional, Set
 
 from fastapi import HTTPException, UploadFile
-
 
 # File upload limits
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 ALLOWED_CONTENT_TYPES = {
-    'application/json',
-    'application/yaml',
-    'application/x-yaml',
-    'text/plain',
-    'text/yaml',
+    "application/json",
+    "application/yaml",
+    "application/x-yaml",
+    "text/plain",
+    "text/yaml",
 }
 
 # Input validation patterns
-SAFE_FILENAME_PATTERN = re.compile(r'^[a-zA-Z0-9_\-\.]+$')
-SAFE_ENV_VAR_NAME_PATTERN = re.compile(r'^[A-Z][A-Z0-9_]*$')
-SAFE_AGENT_NAME_PATTERN = re.compile(r'^[a-z][a-z0-9_]*$')
-SAFE_LABEL_PATTERN = re.compile(r'^[a-zA-Z0-9_\-\.:/]+$')
+SAFE_FILENAME_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
+SAFE_ENV_VAR_NAME_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
+SAFE_AGENT_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
+SAFE_LABEL_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.:/]+$")
 
 
 class PathTraversalError(Exception):
     """Raised when path traversal attempt is detected."""
-    pass
 
 
 class InvalidInputError(Exception):
     """Raised when invalid input is detected."""
-    pass
 
 
 def safe_path_join(base_path: str, user_path: str) -> Path:
@@ -71,17 +66,14 @@ def safe_path_join(base_path: str, user_path: str) -> Path:
     try:
         target.relative_to(base)
     except ValueError:
-        raise PathTraversalError(
-            f"Path traversal attempt detected: '{user_path}' resolves outside base path"
-        )
+        message = f"Path traversal attempt detected: '{user_path}' resolves outside base path"
+        raise PathTraversalError(message)
 
     return target
 
 
 async def validate_upload(
-    file: UploadFile,
-    max_size: int = MAX_FILE_SIZE,
-    allowed_types: Optional[Set[str]] = None
+    file: UploadFile, max_size: int = MAX_FILE_SIZE, allowed_types: set[str] | None = None
 ) -> None:
     """
     Validate uploaded file for security.
@@ -105,22 +97,18 @@ async def validate_upload(
     if file.content_type not in allowed_types:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid file type '{file.content_type}'. "
-                   f"Allowed types: {', '.join(sorted(allowed_types))}"
+            detail=f"Invalid file type '{file.content_type}'. Allowed types: {', '.join(sorted(allowed_types))}",
         )
 
     # Check filename for path traversal
-    if file.filename and ('/' in file.filename or '\\' in file.filename or '..' in file.filename):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid filename: path separators not allowed"
-        )
+    if file.filename and ("/" in file.filename or "\\" in file.filename or ".." in file.filename):
+        raise HTTPException(status_code=400, detail="Invalid filename: path separators not allowed")
 
     # Validate filename pattern
     if file.filename and not SAFE_FILENAME_PATTERN.match(file.filename):
         raise HTTPException(
             status_code=400,
-            detail="Invalid filename: only alphanumeric, underscore, hyphen, and dot allowed"
+            detail="Invalid filename: only alphanumeric, underscore, hyphen, and dot allowed",
         )
 
     # Check file size
@@ -131,22 +119,14 @@ async def validate_upload(
     if size > max_size:
         raise HTTPException(
             status_code=400,
-            detail=f"File too large. Maximum size: {max_size / (1024*1024):.1f} MB"
+            detail=f"File too large. Maximum size: {max_size / (1024 * 1024):.1f} MB",
         )
 
     if size == 0:
-        raise HTTPException(
-            status_code=400,
-            detail="File is empty"
-        )
+        raise HTTPException(status_code=400, detail="File is empty")
 
 
-def sanitize_string(
-    value: str,
-    max_length: Optional[int] = None,
-    strip: bool = True,
-    allow_empty: bool = False
-) -> str:
+def sanitize_string(value: str, max_length: int | None = None, strip: bool = True, allow_empty: bool = False) -> str:
     """
     Sanitize string input.
 
@@ -163,18 +143,19 @@ def sanitize_string(
         InvalidInputError: If validation fails
     """
     if not isinstance(value, str):
-        raise InvalidInputError(f"Expected string, got {type(value).__name__}")
+        message = f"Expected string, got {type(value).__name__}"
+        raise InvalidInputError(message)
 
     if strip:
         value = value.strip()
 
     if not allow_empty and not value:
-        raise InvalidInputError("Empty string not allowed")
+        message = "Empty string not allowed"
+        raise InvalidInputError(message)
 
     if max_length and len(value) > max_length:
-        raise InvalidInputError(
-            f"String too long. Maximum length: {max_length}, got: {len(value)}"
-        )
+        message = f"String too long. Maximum length: {max_length}, got: {len(value)}"
+        raise InvalidInputError(message)
 
     return value
 
@@ -201,10 +182,11 @@ def validate_env_var_name(name: str) -> str:
     name = sanitize_string(name, max_length=255)
 
     if not SAFE_ENV_VAR_NAME_PATTERN.match(name):
-        raise InvalidInputError(
+        message = (
             "Invalid environment variable name. Must start with uppercase letter "
             "and contain only uppercase letters, digits, and underscores."
         )
+        raise InvalidInputError(message)
 
     return name
 
@@ -231,15 +213,16 @@ def validate_agent_name(name: str) -> str:
     name = sanitize_string(name, max_length=100)
 
     if not SAFE_AGENT_NAME_PATTERN.match(name):
-        raise InvalidInputError(
+        message = (
             "Invalid agent name. Must start with lowercase letter "
             "and contain only lowercase letters, digits, and underscores."
         )
+        raise InvalidInputError(message)
 
     return name
 
 
-def validate_labels(labels: List[str], max_labels: int = 20) -> List[str]:
+def validate_labels(labels: list[str], max_labels: int = 20) -> list[str]:
     """
     Validate list of labels.
 
@@ -254,29 +237,29 @@ def validate_labels(labels: List[str], max_labels: int = 20) -> List[str]:
         InvalidInputError: If validation fails
     """
     if not isinstance(labels, list):
-        raise InvalidInputError(f"Expected list, got {type(labels).__name__}")
+        message = f"Expected list, got {type(labels).__name__}"
+        raise InvalidInputError(message)
 
     if len(labels) > max_labels:
-        raise InvalidInputError(
-            f"Too many labels. Maximum: {max_labels}, got: {len(labels)}"
-        )
+        message = f"Too many labels. Maximum: {max_labels}, got: {len(labels)}"
+        raise InvalidInputError(message)
 
     validated = []
     for label in labels:
         label_str = sanitize_string(label, max_length=100)
 
         if not SAFE_LABEL_PATTERN.match(label_str):
-            raise InvalidInputError(
-                f"Invalid label '{label_str}'. Only alphanumeric, "
-                "underscore, hyphen, dot, colon, and slash allowed."
+            message = (
+                f"Invalid label '{label_str}'. Only alphanumeric, underscore, hyphen, dot, colon, and slash allowed."
             )
+            raise InvalidInputError(message)
 
         validated.append(label_str)
 
     return validated
 
 
-def validate_url(url: str, allowed_schemes: Optional[Set[str]] = None) -> str:
+def validate_url(url: str, allowed_schemes: set[str] | None = None) -> str:
     """
     Validate URL format.
 
@@ -291,7 +274,7 @@ def validate_url(url: str, allowed_schemes: Optional[Set[str]] = None) -> str:
         InvalidInputError: If URL is invalid
     """
     if allowed_schemes is None:
-        allowed_schemes = {'http', 'https'}
+        allowed_schemes = {"http", "https"}
 
     url = sanitize_string(url, max_length=2048)
 
@@ -301,28 +284,29 @@ def validate_url(url: str, allowed_schemes: Optional[Set[str]] = None) -> str:
     try:
         parsed = urlparse(url)
     except Exception as e:
-        raise InvalidInputError(f"Invalid URL format: {e}")
+        message = f"Invalid URL format: {e}"
+        raise InvalidInputError(message)
 
     if not parsed.scheme:
-        raise InvalidInputError("URL must include scheme (http:// or https://)")
+        message = "URL must include scheme (http:// or https://)"
+        raise InvalidInputError(message)
 
     if parsed.scheme not in allowed_schemes:
-        raise InvalidInputError(
-            f"Invalid URL scheme '{parsed.scheme}'. "
-            f"Allowed: {', '.join(sorted(allowed_schemes))}"
-        )
+        message = f"Invalid URL scheme '{parsed.scheme}'. Allowed: {', '.join(sorted(allowed_schemes))}"
+        raise InvalidInputError(message)
 
     if not parsed.netloc:
-        raise InvalidInputError("URL must include hostname")
+        message = "URL must include hostname"
+        raise InvalidInputError(message)
 
     return url
 
 
 def validate_integer_range(
     value: int,
-    min_value: Optional[int] = None,
-    max_value: Optional[int] = None,
-    field_name: str = "value"
+    min_value: int | None = None,
+    max_value: int | None = None,
+    field_name: str = "value",
 ) -> int:
     """
     Validate integer is within range.
@@ -340,26 +324,25 @@ def validate_integer_range(
         InvalidInputError: If value out of range
     """
     if not isinstance(value, int):
-        raise InvalidInputError(f"{field_name}: Expected integer, got {type(value).__name__}")
+        message = f"{field_name}: Expected integer, got {type(value).__name__}"
+        raise InvalidInputError(message)
 
     if min_value is not None and value < min_value:
-        raise InvalidInputError(
-            f"{field_name}: Value {value} below minimum {min_value}"
-        )
+        message = f"{field_name}: Value {value} below minimum {min_value}"
+        raise InvalidInputError(message)
 
     if max_value is not None and value > max_value:
-        raise InvalidInputError(
-            f"{field_name}: Value {value} above maximum {max_value}"
-        )
+        message = f"{field_name}: Value {value} above maximum {max_value}"
+        raise InvalidInputError(message)
 
     return value
 
 
 def validate_float_range(
     value: float,
-    min_value: Optional[float] = None,
-    max_value: Optional[float] = None,
-    field_name: str = "value"
+    min_value: float | None = None,
+    max_value: float | None = None,
+    field_name: str = "value",
 ) -> float:
     """
     Validate float is within range.
@@ -377,19 +360,18 @@ def validate_float_range(
         InvalidInputError: If value out of range
     """
     if not isinstance(value, (int, float)):
-        raise InvalidInputError(f"{field_name}: Expected number, got {type(value).__name__}")
+        message = f"{field_name}: Expected number, got {type(value).__name__}"
+        raise InvalidInputError(message)
 
     value = float(value)
 
     if min_value is not None and value < min_value:
-        raise InvalidInputError(
-            f"{field_name}: Value {value} below minimum {min_value}"
-        )
+        message = f"{field_name}: Value {value} below minimum {min_value}"
+        raise InvalidInputError(message)
 
     if max_value is not None and value > max_value:
-        raise InvalidInputError(
-            f"{field_name}: Value {value} above maximum {max_value}"
-        )
+        message = f"{field_name}: Value {value} above maximum {max_value}"
+        raise InvalidInputError(message)
 
     return value
 
@@ -416,12 +398,9 @@ def sanitize_search_query(query: str, max_length: int = 500) -> str:
     # Keep tabs, newlines, carriage returns for readability
     # Keep search operators: -, +, *, "
     allowed_chars = set('\t\n\r-+*"')
-    query = ''.join(
-        char for char in query
-        if ord(char) >= 32 or char in allowed_chars
-    )
+    query = "".join(char for char in query if ord(char) >= 32 or char in allowed_chars)
 
     # Remove multiple consecutive spaces
-    query = re.sub(r'\s+', ' ', query)
+    query = re.sub(r"\s+", " ", query)
 
     return query.strip()

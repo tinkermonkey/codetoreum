@@ -1,8 +1,7 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { projectApi } from '../services/projectApi'
 import { startPolling, POLLING_INTERVALS } from '../utils/polling'
-
-const ProjectStateContext = createContext()
+import { ProjectStateContext } from './ProjectStateContextValue'
 
 /**
  * ProjectStateProvider - Manages project data and configurations
@@ -72,15 +71,4 @@ export function ProjectStateProvider({ children }) {
       {children}
     </ProjectStateContext.Provider>
   )
-}
-
-/**
- * Hook to access project state
- */
-export function useProjectState() {
-  const context = useContext(ProjectStateContext)
-  if (!context) {
-    throw new Error('useProjectState must be used within ProjectStateProvider')
-  }
-  return context
 }

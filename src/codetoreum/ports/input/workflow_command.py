@@ -8,11 +8,12 @@ including starting, pausing, resuming, canceling, and retrying workflows.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class TriggerType(Enum):
     """Type of workflow trigger"""
+
     CARD_MOVEMENT = "card_movement"
     MANUAL = "manual"
     SCHEDULED = "scheduled"
@@ -23,18 +24,20 @@ class TriggerType(Enum):
 @dataclass
 class StartWorkflowCommand:
     """Command to start a new workflow execution"""
+
     project_name: str
     work_item_id: str  # Issue number, discussion ID, etc.
     pipeline_name: str
-    stage_name: Optional[str] = None  # If None, start from first stage
+    stage_name: str | None = None  # If None, start from first stage
     trigger: TriggerType = TriggerType.MANUAL
-    context: Optional[Dict[str, Any]] = None
+    context: dict[str, Any] | None = None
     priority: str = "MEDIUM"  # LOW, MEDIUM, HIGH, CRITICAL
 
 
 @dataclass
 class PauseWorkflowCommand:
     """Command to pause an active workflow"""
+
     workflow_run_id: str
     reason: str
     pause_point: str  # Current stage to pause at
@@ -43,13 +46,15 @@ class PauseWorkflowCommand:
 @dataclass
 class ResumeWorkflowCommand:
     """Command to resume a paused workflow"""
+
     workflow_run_id: str
-    from_stage: Optional[str] = None  # If None, resume from paused point
+    from_stage: str | None = None  # If None, resume from paused point
 
 
 @dataclass
 class CancelWorkflowCommand:
     """Command to cancel a workflow"""
+
     workflow_run_id: str
     reason: str
     force: bool = False  # If True, immediate cancellation
@@ -58,6 +63,7 @@ class CancelWorkflowCommand:
 @dataclass
 class RetryStageCommand:
     """Command to retry a failed stage"""
+
     workflow_run_id: str
     stage_name: str
     reset_state: bool = True  # If True, clear previous attempts
@@ -66,11 +72,12 @@ class RetryStageCommand:
 @dataclass
 class WorkflowCommandResult:
     """Result of executing a workflow command"""
+
     success: bool
     workflow_run_id: str
     message: str
     state: str  # STARTED, PAUSED, RESUMED, CANCELLED, COMPLETED
-    errors: Optional[List[str]] = field(default=None)
+    errors: list[str] | None = field(default=None)
 
 
 class IWorkflowCommandPort(ABC):
@@ -88,10 +95,7 @@ class IWorkflowCommandPort(ABC):
     """
 
     @abstractmethod
-    async def start_workflow(
-        self,
-        command: StartWorkflowCommand
-    ) -> WorkflowCommandResult:
+    async def start_workflow(self, command: StartWorkflowCommand) -> WorkflowCommandResult:
         """
         Starts a new workflow execution.
 
@@ -107,13 +111,9 @@ class IWorkflowCommandPort(ABC):
             WorkItemNotFoundError: If work item doesn't exist
             ValidationError: If command parameters invalid
         """
-        pass
 
     @abstractmethod
-    async def pause_workflow(
-        self,
-        command: PauseWorkflowCommand
-    ) -> WorkflowCommandResult:
+    async def pause_workflow(self, command: PauseWorkflowCommand) -> WorkflowCommandResult:
         """
         Pauses an active workflow execution.
 
@@ -127,13 +127,9 @@ class IWorkflowCommandPort(ABC):
             WorkflowNotFoundError: If workflow doesn't exist
             WorkflowNotActiveError: If workflow not in active state
         """
-        pass
 
     @abstractmethod
-    async def resume_workflow(
-        self,
-        command: ResumeWorkflowCommand
-    ) -> WorkflowCommandResult:
+    async def resume_workflow(self, command: ResumeWorkflowCommand) -> WorkflowCommandResult:
         """
         Resumes a paused workflow execution.
 
@@ -147,13 +143,9 @@ class IWorkflowCommandPort(ABC):
             WorkflowNotFoundError: If workflow doesn't exist
             WorkflowNotPausedError: If workflow not in paused state
         """
-        pass
 
     @abstractmethod
-    async def cancel_workflow(
-        self,
-        command: CancelWorkflowCommand
-    ) -> WorkflowCommandResult:
+    async def cancel_workflow(self, command: CancelWorkflowCommand) -> WorkflowCommandResult:
         """
         Cancels a workflow execution.
 
@@ -166,13 +158,9 @@ class IWorkflowCommandPort(ABC):
         Raises:
             WorkflowNotFoundError: If workflow doesn't exist
         """
-        pass
 
     @abstractmethod
-    async def retry_stage(
-        self,
-        command: RetryStageCommand
-    ) -> WorkflowCommandResult:
+    async def retry_stage(self, command: RetryStageCommand) -> WorkflowCommandResult:
         """
         Retries a failed workflow stage.
 
@@ -186,4 +174,3 @@ class IWorkflowCommandPort(ABC):
             WorkflowNotFoundError: If workflow doesn't exist
             StageNotFoundError: If stage doesn't exist
         """
-        pass

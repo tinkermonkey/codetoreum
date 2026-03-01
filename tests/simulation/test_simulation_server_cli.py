@@ -8,31 +8,26 @@ Tests:
 - Graceful shutdown
 """
 
-import asyncio
-import os
-import tempfile
 import time
-from pathlib import Path
-from typing import AsyncGenerator
-from contextlib import contextmanager
+from collections.abc import AsyncGenerator
 
 import click
-import httpx
 import pytest
-import yaml
 from click.testing import CliRunner
 from fastapi.testclient import TestClient
 
 from codetoreum.cli.simulation_server import (
     bootstrap_application,
-    seed_data,
     get_scenario_file_path,
+    main,
+    seed_data,
     validate_port,
     validate_speed_multiplier,
     validate_yaml_file,
-    main,
 )
-from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
+from codetoreum.infrastructure.simulation.bootstrap import (
+    SimulationApplicationBootstrap,
+)
 
 
 class TestSimulationServerCLI:
@@ -363,7 +358,6 @@ class TestSimulationServerCLIClick:
 
     def test_cli_help(self):
         """Test CLI help output."""
-        from codetoreum.cli.simulation_server import main
 
         runner = CliRunner()
         result = runner.invoke(main, ["--help"])
@@ -377,7 +371,6 @@ class TestSimulationServerCLIClick:
 
     def test_cli_default_options(self):
         """Test CLI with default options (should show defaults in help)."""
-        from codetoreum.cli.simulation_server import main
 
         runner = CliRunner()
         result = runner.invoke(main, ["--help"])

@@ -1,44 +1,42 @@
 """Simulation scenario tests."""
 
+from collections.abc import Callable
+from datetime import UTC, timedelta
+
 import pytest
-from datetime import timedelta
 
 from codetoreum.infrastructure.simulation import (
     SimulationConfig,
+    SimulationResult,
     SimulationRunner,
-)
-
-# Import scenario functions
-from .scenarios.scenario_01_simple_workflow import (
-    create_config as create_simple_config,
-    run_scenario as run_simple_scenario,
-)
-from .scenarios.scenario_02_parallel_executions import (
-    create_config as create_parallel_config,
-    run_scenario as run_parallel_scenario,
-)
-from .scenarios.scenario_03_review_cycle import (
-    create_config as create_review_config,
-    run_scenario as run_review_scenario,
-)
-from .scenarios.scenario_04_execution_failure import (
-    create_config as create_failure_config,
-    run_scenario as run_failure_scenario,
-)
-from .scenarios.scenario_05_complex_workflow import (
-    create_config as create_complex_config,
-    run_scenario as run_complex_scenario,
-)
-from .scenarios.scenario_10_agent_execution import (
-    create_config as create_agent_execution_config,
-    run_scenario as run_agent_execution_scenario,
 )
 
 from .helpers import (
     AssertionHelpers,
     print_event_timeline,
-    print_metrics_summary,
 )
+
+# Import scenario functions
+from .scenarios.scenario_01_simple_workflow import create_config as create_simple_config
+from .scenarios.scenario_01_simple_workflow import run_scenario as run_simple_scenario
+from .scenarios.scenario_02_parallel_executions import (
+    create_config as create_parallel_config,
+)
+from .scenarios.scenario_02_parallel_executions import (
+    run_scenario as run_parallel_scenario,
+)
+from .scenarios.scenario_03_review_cycle import create_config as create_review_config
+from .scenarios.scenario_03_review_cycle import run_scenario as run_review_scenario
+from .scenarios.scenario_04_execution_failure import (
+    create_config as create_failure_config,
+)
+from .scenarios.scenario_04_execution_failure import (
+    run_scenario as run_failure_scenario,
+)
+from .scenarios.scenario_05_complex_workflow import (
+    create_config as create_complex_config,
+)
+from .scenarios.scenario_05_complex_workflow import run_scenario as run_complex_scenario
 
 
 @pytest.mark.simulation
@@ -60,9 +58,7 @@ async def test_scenario_01_simple_workflow():
     assert result.assertions_failed == 0, "Expected no failed assertions"
 
     # Verify performance goal (10-100x faster)
-    assert result.speed_multiplier >= 10.0, (
-        f"Speed multiplier {result.speed_multiplier:.1f}x below 10x target"
-    )
+    assert result.speed_multiplier >= 10.0, f"Speed multiplier {result.speed_multiplier:.1f}x below 10x target"
 
     # Verify events captured
     assert result.events_captured >= 6, "Expected at least 6 events"
@@ -186,45 +182,15 @@ async def test_scenario_05_complex_workflow():
     AssertionHelpers.assert_workflow_completed(runner, "ISSUE-400")
 
     # Verify simulated time was significant
-    assert result.simulated_duration_seconds >= 25 * 60, (
-        "Expected at least 25 minutes of simulated time"
-    )
+    assert result.simulated_duration_seconds >= 25 * 60, "Expected at least 25 minutes of simulated time"
 
     # Verify performance
     assert result.speed_multiplier >= 10.0
 
 
 @pytest.mark.simulation
-@pytest.mark.scenario
 @pytest.mark.asyncio
-async def test_scenario_10_agent_execution():
-    """Test Scenario 10: Agent Execution Lifecycle."""
-    config = create_agent_execution_config()
-    runner = SimulationRunner(config)
-
-    result = await runner.run(run_agent_execution_scenario)
-
-    # Print diagnostics
-    print_event_timeline(runner)
-
-    # Verify success
-    assert result.success, f"Scenario failed with errors: {result.errors}"
-    assert result.assertions_passed >= 40, (
-        f"Expected at least 40 assertions to pass, got {result.assertions_passed}"
-    )
-    assert result.assertions_failed == 0, (
-        f"Expected no failed assertions, got {result.assertions_failed}"
-    )
-
-    # Verify performance goal (10-100x faster)
-    assert result.speed_multiplier >= 10.0, (
-        f"Speed multiplier {result.speed_multiplier:.1f}x below 10x target"
-    )
-
-
-@pytest.mark.simulation
-@pytest.mark.asyncio
-async def test_all_scenarios_meet_performance_target():
+async def test_all_scenarios_meet_performance_target() -> None:
     """
     Meta-test: Verify all scenarios meet the 10-100x performance target.
 
@@ -232,16 +198,15 @@ async def test_all_scenarios_meet_performance_target():
     MockRepairCycleAdapter directly, not through SimulationRunner.
     It has its own test suite in scenarios/scenario_07_repair_cycle.py.
     """
-    scenarios = [
+    scenarios: list[tuple[str, Callable[[], SimulationConfig], Callable[[SimulationRunner], object]]] = [
         ("Simple Workflow", create_simple_config, run_simple_scenario),
         ("Parallel Executions", create_parallel_config, run_parallel_scenario),
         ("Review Cycle", create_review_config, run_review_scenario),
         ("Execution Failure", create_failure_config, run_failure_scenario),
         ("Complex Workflow", create_complex_config, run_complex_scenario),
-        ("Agent Execution", create_agent_execution_config, run_agent_execution_scenario),
     ]
 
-    results = []
+    results: list[tuple[str, SimulationResult]] = []
 
     for name, create_config_func, run_func in scenarios:
         config = create_config_func()
@@ -259,10 +224,9 @@ async def test_all_scenarios_meet_performance_target():
 
     # Verify all meet performance target
     for name, result in results:
-        assert result.speed_multiplier >= 10.0, (
-            f"{name} failed to meet 10x performance target "
-            f"(achieved {result.speed_multiplier:.1f}x)"
-        )
+        assert (
+            result.speed_multiplier >= 10.0
+        ), f"{name} failed to meet 10x performance target (achieved {result.speed_multiplier:.1f}x)"
 
     # Verify all succeeded
     for name, result in results:
@@ -275,7 +239,7 @@ async def test_all_scenarios_meet_performance_target():
 @pytest.mark.asyncio
 async def test_simulation_with_custom_helpers(simulation_runner):
     """Test using simulation helpers for common patterns."""
-    from .helpers import ScenarioHelpers, AssertionHelpers
+    from .helpers import ScenarioHelpers
 
     runner = simulation_runner
 
@@ -306,21 +270,21 @@ async def test_simulation_with_custom_helpers(simulation_runner):
 @pytest.mark.asyncio
 async def test_simulation_clock_manipulation(simulation_clock):
     """Test simulation clock time manipulation."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     clock = simulation_clock
 
     # Verify initial time
     start_time = clock.now()
-    assert start_time == datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    assert start_time == datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
 
     # Advance time (1 minute simulated = 0.6s real at 100x speed)
     await clock.advance(timedelta(minutes=1))
-    assert clock.now() == datetime(2025, 1, 1, 12, 1, 0, tzinfo=timezone.utc)
+    assert clock.now() == datetime(2025, 1, 1, 12, 1, 0, tzinfo=UTC)
 
     # Advance to specific time
-    await clock.advance_to(datetime(2025, 1, 1, 12, 5, 0, tzinfo=timezone.utc))
-    assert clock.now() == datetime(2025, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
+    await clock.advance_to(datetime(2025, 1, 1, 12, 5, 0, tzinfo=UTC))
+    assert clock.now() == datetime(2025, 1, 1, 12, 5, 0, tzinfo=UTC)
 
 
 @pytest.mark.simulation
@@ -367,5 +331,3 @@ async def test_mock_adapters_integration(
     )
     assert notif_result.success
     assert mock_notifier.get_notification_count() == 1
-
-

@@ -28,6 +28,8 @@ MANIFEST
 
 # Virtual environments
 venv/
+venv_test/
+venv_integration/
 env/
 ENV/
 .venv
@@ -55,6 +57,13 @@ docs/_build/
 
 # Claude specific
 .claude/
+
+# Node.js
+node_modules/
+
+# Legacy UX (vendored frontend)
+legacy_ux/node_modules/
+legacy_ux/dist/
 
 # Temporary files
 tmp/

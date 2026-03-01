@@ -1,11 +1,12 @@
 """Git repository adapter for IRepository interface."""
 
 import asyncio
+import logging
+import os
 import subprocess
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import List, Optional
 
 from codetoreum.domain.types import BranchName, CommitHash, RepositoryId
 from codetoreum.ports.exceptions import (
@@ -16,10 +17,14 @@ from codetoreum.ports.exceptions import (
     ValidationError,
 )
 from codetoreum.ports.output.repository import (
+    CommitAuthor,
+    CommitInfo,
     IRepository,
     MergeResult,
     RepositoryStatus,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -30,12 +35,12 @@ class GitConfig:
     git_path: str = "git"
 
     # Default author (used when not specified)
-    default_author_name: Optional[str] = None
-    default_author_email: Optional[str] = None
+    default_author_name: str | None = None
+    default_author_email: str | None = None
 
     # Authentication
-    ssh_key_path: Optional[str] = None
-    credential_helper: Optional[str] = None
+    ssh_key_path: str | None = None
+    credential_helper: str | None = None
 
     # Behavior
     default_branch: str = "main"
@@ -62,7 +67,7 @@ class GitRepositoryAdapter(IRepository):
         """
         self.config = config
 
-    def _sanitize_git_args(self, args: List[str]) -> List[str]:
+    def _sanitize_git_args(self, args: list[str]) -> list[str]:
         """
         Sanitize git command arguments to prevent injection.
 
@@ -79,13 +84,15 @@ class GitRepositoryAdapter(IRepository):
         for arg in args:
             # Remove null bytes and ensure arguments are strings
             if not isinstance(arg, str):
-                raise ValidationError(f"Invalid argument type: {type(arg)}")
+                msg = f"Invalid argument type: {type(arg)}"
+                raise ValidationError(msg)
 
             sanitized_arg = arg.replace("\x00", "")
 
             # Validate argument doesn't contain dangerous patterns
             if sanitized_arg.startswith("-") and ".." in sanitized_arg:
-                raise ValidationError(f"Potentially dangerous argument: {arg}")
+                msg = f"Potentially dangerous argument: {arg}"
+                raise ValidationError(msg)
 
             sanitized.append(sanitized_arg)
 
@@ -93,9 +100,9 @@ class GitRepositoryAdapter(IRepository):
 
     async def _run_git_command(
         self,
-        args: List[str],
-        cwd: Optional[Path] = None,
-        env: Optional[dict] = None,
+        args: list[str],
+        cwd: Path | None = None,
+        env: dict | None = None,
         check: bool = True,
     ) -> subprocess.CompletedProcess:
         """
@@ -119,8 +126,6 @@ class GitRepositoryAdapter(IRepository):
         cmd = [self.config.git_path] + sanitized_args
 
         # Set up clean git environment
-        import os
-
         git_env = os.environ.copy()
         # Disable global and system git config to avoid issues
         git_env["GIT_CONFIG_GLOBAL"] = "/dev/null"
@@ -151,17 +156,22 @@ class GitRepositoryAdapter(IRepository):
                 error_text = e.stderr.lower()
 
                 if "authentication" in error_text or "permission denied" in error_text:
-                    raise AuthenticationError(f"Git authentication failed: {e.stderr}")
-                elif "conflict" in error_text or "merge conflict" in error_text:
-                    raise MergeConflictError(f"Merge conflict detected: {e.stderr}")
-                elif "not found" in error_text:
-                    raise ResourceNotFoundError("Git resource", str(args))
-                else:
-                    raise RepositoryError(f"Git command failed: {e.stderr}")
-            except subprocess.TimeoutExpired:
-                raise RepositoryError(f"Git command timed out after {self.config.timeout_seconds}s")
-            except FileNotFoundError:
-                raise RepositoryError(f"Git executable not found at: {self.config.git_path}")
+                    msg = f"Git authentication failed: {e.stderr}"
+                    raise AuthenticationError(msg) from e
+                if "conflict" in error_text or "merge conflict" in error_text:
+                    msg = f"Merge conflict detected: {e.stderr}"
+                    raise MergeConflictError(msg) from e
+                if "not found" in error_text:
+                    msg = "Git resource"
+                    raise ResourceNotFoundError(msg, str(args)) from e
+                msg = f"Git command failed: {e.stderr}"
+                raise RepositoryError(msg) from e
+            except subprocess.TimeoutExpired as e:
+                msg = f"Git command timed out after {self.config.timeout_seconds}s"
+                raise RepositoryError(msg) from e
+            except FileNotFoundError as e:
+                msg = f"Git executable not found at: {self.config.git_path}"
+                raise RepositoryError(msg) from e
 
         return await loop.run_in_executor(None, _run)
 
@@ -169,14 +179,16 @@ class GitRepositoryAdapter(IRepository):
         self,
         url: str,
         destination: Path,
-        branch: Optional[BranchName] = None,
+        branch: BranchName | None = None,
     ) -> RepositoryId:
         """Clone a repository."""
         if not url:
-            raise ValidationError("Repository URL is required")
+            msg = "Repository URL is required"
+            raise ValidationError(msg)
 
         if not destination:
-            raise ValidationError("Destination path is required")
+            msg = "Destination path is required"
+            raise ValidationError(msg)
 
         # Build clone command
         args = ["clone"]
@@ -200,7 +212,8 @@ class GitRepositoryAdapter(IRepository):
     ) -> None:
         """Checkout a branch."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         args = ["checkout"]
 
@@ -215,11 +228,12 @@ class GitRepositoryAdapter(IRepository):
         self,
         repo_path: Path,
         branch_name: BranchName,
-        from_branch: Optional[BranchName] = None,
+        from_branch: BranchName | None = None,
     ) -> None:
         """Create a new branch."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         args = ["branch", branch_name]
 
@@ -228,31 +242,61 @@ class GitRepositoryAdapter(IRepository):
 
         await self._run_git_command(args, cwd=repo_path)
 
+    async def stage_files(
+        self,
+        repo_path: Path,
+        files: list[str],
+    ) -> None:
+        """Stage files for commit.
+
+        Adds the specified files to the repository's staging area. This is a
+        prerequisite to committing - staging and committing are independent
+        operations that follow real git semantics.
+
+        Args:
+            repo_path: Path to the repository
+            files: List of file paths to stage
+
+        Raises:
+            RepositoryError: Stage operation failed
+            ValidationError: Invalid file paths or repo_path
+        """
+        if not repo_path or not repo_path.exists():
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
+
+        if not files:
+            msg = "Files list is required and cannot be empty"
+            raise ValidationError(msg)
+
+        # Stage each file individually to preserve proper git semantics
+        for file in files:
+            await self._run_git_command(["add", file], cwd=repo_path)
+
     async def commit(
         self,
         repo_path: Path,
         message: str,
         author_name: str,
         author_email: str,
-        files: Optional[List[str]] = None,
+        files: list[str] | None = None,
     ) -> CommitHash:
         """Create a commit."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         if not message:
-            raise ValidationError("Commit message is required")
+            msg = "Commit message is required"
+            raise ValidationError(msg)
 
-        # Stage files
+        # Stage files only if explicitly provided
+        # If no files provided, commit uses whatever is already staged (real git semantics)
         if files:
             for file in files:
                 await self._run_git_command(["add", file], cwd=repo_path)
-        else:
-            await self._run_git_command(["add", "."], cwd=repo_path)
 
         # Set up environment with author info
-        import os
-
         env = os.environ.copy()
         env["GIT_AUTHOR_NAME"] = author_name
         env["GIT_AUTHOR_EMAIL"] = author_email
@@ -272,12 +316,13 @@ class GitRepositoryAdapter(IRepository):
         self,
         repo_path: Path,
         remote: str = "origin",
-        branch: Optional[str] = None,
+        branch: str | None = None,
         force: bool = False,
     ) -> None:
         """Push commits to remote."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         args = ["push"]
 
@@ -299,11 +344,12 @@ class GitRepositoryAdapter(IRepository):
         self,
         repo_path: Path,
         remote: str = "origin",
-        branch: Optional[str] = None,
+        branch: str | None = None,
     ) -> None:
         """Pull commits from remote."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         args = ["pull", remote]
 
@@ -320,7 +366,8 @@ class GitRepositoryAdapter(IRepository):
     ) -> None:
         """Fetch from remote."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         args = ["fetch", remote]
 
@@ -337,7 +384,8 @@ class GitRepositoryAdapter(IRepository):
     ) -> str:
         """Get diff between two refs."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         result = await self._run_git_command(
             ["diff", f"{base}...{target}"],
@@ -350,7 +398,8 @@ class GitRepositoryAdapter(IRepository):
     async def status(self, repo_path: Path) -> RepositoryStatus:
         """Get repository status."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         # Get current branch
         # Use check=False because this may fail if there are no commits yet
@@ -372,9 +421,18 @@ class GitRepositoryAdapter(IRepository):
                 if result.returncode == 0 and result.stdout.strip():
                     current_branch = BranchName(result.stdout.strip())
                 else:
-                    # Fallback to config default or "master"
+                    # Fallback to config default
+                    logger.warning(
+                        "Failed to detect default branch, using config value",
+                        extra={"default_branch": self.config.default_branch, "repo_path": str(repo_path)},
+                    )
                     current_branch = BranchName(self.config.default_branch)
-            except Exception:
+            except Exception as e:
+                logger.warning(
+                    "Exception detecting default branch, using config value",
+                    extra={"error": str(e), "default_branch": self.config.default_branch, "repo_path": str(repo_path)},
+                    exc_info=True,
+                )
                 current_branch = BranchName(self.config.default_branch)
         else:
             current_branch = BranchName(result.stdout.strip())
@@ -409,8 +467,18 @@ class GitRepositoryAdapter(IRepository):
         behind_count = 0
 
         try:
+            # Detect the actual remote for this branch
+            remote_name = "origin"  # default
             result = await self._run_git_command(
-                ["rev-list", "--left-right", "--count", f"origin/{current_branch}...HEAD"],
+                ["config", "--get", f"branch.{current_branch}.remote"],
+                cwd=repo_path,
+                check=False,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                remote_name = result.stdout.strip()
+
+            result = await self._run_git_command(
+                ["rev-list", "--left-right", "--count", f"{remote_name}/{current_branch}...HEAD"],
                 cwd=repo_path,
                 check=False,
             )
@@ -419,16 +487,24 @@ class GitRepositoryAdapter(IRepository):
                 parts = result.stdout.strip().split()
                 if len(parts) == 2:
                     behind_count, ahead_count = map(int, parts)
-        except Exception:
-            # Remote tracking branch may not exist
-            pass
+            elif result.returncode != 0:
+                logger.warning(
+                    "Failed to determine ahead/behind counts for remote tracking branch",
+                    extra={"current_branch": str(current_branch), "remote": remote_name, "repo_path": str(repo_path)},
+                )
+        except Exception as e:
+            logger.warning(
+                "Exception determining ahead/behind counts, remote tracking branch may not exist",
+                extra={"error": str(e), "current_branch": str(current_branch), "repo_path": str(repo_path)},
+                exc_info=True,
+            )
 
         return RepositoryStatus(
             current_branch=current_branch,
             is_dirty=bool(staged_files or unstaged_files or untracked_files),
-            staged_files=staged_files,
-            unstaged_files=unstaged_files,
-            untracked_files=untracked_files,
+            staged_files=tuple(staged_files),
+            unstaged_files=tuple(unstaged_files),
+            untracked_files=tuple(untracked_files),
             ahead_count=ahead_count,
             behind_count=behind_count,
         )
@@ -437,10 +513,11 @@ class GitRepositoryAdapter(IRepository):
         self,
         repo_path: Path,
         remote: bool = False,
-    ) -> List[str]:
+    ) -> list[str]:
         """List branches."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         args = ["branch", "--list"]
 
@@ -470,10 +547,12 @@ class GitRepositoryAdapter(IRepository):
     ) -> MergeResult:
         """Merge a branch."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         if strategy not in ("merge", "rebase", "squash"):
-            raise ValidationError(f"Invalid merge strategy: {strategy}")
+            msg = f"Invalid merge strategy: {strategy}"
+            raise ValidationError(msg)
 
         try:
             if strategy == "merge":
@@ -489,11 +568,11 @@ class GitRepositoryAdapter(IRepository):
 
             return MergeResult(
                 success=True,
-                conflicts=[],
+                conflicts=(),
                 merge_commit=commit_sha,
             )
 
-        except MergeConflictError as e:
+        except MergeConflictError:
             # Get list of conflicted files
             result = await self._run_git_command(
                 ["diff", "--name-only", "--diff-filter=U"],
@@ -505,7 +584,7 @@ class GitRepositoryAdapter(IRepository):
 
             return MergeResult(
                 success=False,
-                conflicts=conflicts,
+                conflicts=tuple(conflicts),
                 merge_commit=None,
             )
 
@@ -513,11 +592,12 @@ class GitRepositoryAdapter(IRepository):
         self,
         repo_path: Path,
         file_path: str,
-        ref: Optional[str] = None,
+        ref: str | None = None,
     ) -> str:
         """Get content of a file at a specific ref."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         if ref:
             # Get file from git object database
@@ -526,22 +606,23 @@ class GitRepositoryAdapter(IRepository):
                 cwd=repo_path,
             )
             return result.stdout
-        else:
-            # Read from working tree
-            full_path = repo_path / file_path
-            if not full_path.exists():
-                raise ResourceNotFoundError("File", file_path)
+        # Read from working tree
+        full_path = repo_path / file_path
+        if not full_path.exists():
+            msg = "File"
+            raise ResourceNotFoundError(msg, file_path)
 
-            return full_path.read_text()
+        return full_path.read_text()
 
     async def get_commit_info(
         self,
         repo_path: Path,
         commit_sha: str,
-    ) -> dict:
+    ) -> CommitInfo:
         """Get information about a commit."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         # Get commit info in JSON format
         result = await self._run_git_command(
@@ -556,27 +637,29 @@ class GitRepositoryAdapter(IRepository):
 
         lines = result.stdout.splitlines()
         if len(lines) < 5:
-            raise RepositoryError(f"Invalid commit info format for {commit_sha}")
+            msg = f"Invalid commit info format for {commit_sha}"
+            raise RepositoryError(msg)
 
-        return {
-            "sha": lines[0],
-            "author_name": lines[1],
-            "author_email": lines[2],
-            "timestamp": datetime.fromtimestamp(int(lines[3]), tz=timezone.utc),
-            "subject": lines[4],
-            "body": "\n".join(lines[5:]) if len(lines) > 5 else "",
-        }
+        author = CommitAuthor(name=lines[1], email=lines[2])
+        return CommitInfo(
+            sha=lines[0],
+            author=author,
+            message=lines[4],
+            timestamp=datetime.fromtimestamp(int(lines[3]), tz=UTC),
+            body="\n".join(lines[5:]) if len(lines) > 5 else "",
+        )
 
     async def get_commit_history(
         self,
         repo_path: Path,
-        branch: Optional[str] = None,
+        branch: str | None = None,
         limit: int = 100,
-        since: Optional[datetime] = None,
-    ) -> List[dict]:
+        since: datetime | None = None,
+    ) -> list[CommitInfo]:
         """Get commit history."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         args = [
             "log",
@@ -599,14 +682,14 @@ class GitRepositoryAdapter(IRepository):
 
             parts = line.split("|", 4)
             if len(parts) == 5:
+                author = CommitAuthor(name=parts[1], email=parts[2])
                 commits.append(
-                    {
-                        "sha": parts[0],
-                        "author_name": parts[1],
-                        "author_email": parts[2],
-                        "timestamp": datetime.fromtimestamp(int(parts[3]), tz=timezone.utc),
-                        "subject": parts[4],
-                    }
+                    CommitInfo(
+                        sha=parts[0],
+                        author=author,
+                        message=parts[4],
+                        timestamp=datetime.fromtimestamp(int(parts[3]), tz=UTC),
+                    )
                 )
 
         return commits
@@ -619,10 +702,12 @@ class GitRepositoryAdapter(IRepository):
     ) -> None:
         """Add a remote."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         if not name or not url:
-            raise ValidationError("Remote name and URL are required")
+            msg = "Remote name and URL are required"
+            raise ValidationError(msg)
 
         await self._run_git_command(["remote", "add", name, url], cwd=repo_path)
 
@@ -633,10 +718,12 @@ class GitRepositoryAdapter(IRepository):
     ) -> None:
         """Remove a remote."""
         if not repo_path or not repo_path.exists():
-            raise ValidationError(f"Repository path does not exist: {repo_path}")
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
 
         if not name:
-            raise ValidationError("Remote name is required")
+            msg = "Remote name is required"
+            raise ValidationError(msg)
 
         await self._run_git_command(["remote", "remove", name], cwd=repo_path)
 
@@ -645,15 +732,5 @@ class GitRepositoryAdapter(IRepository):
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """
-        Async context manager exit with proper cleanup.
-
-        Ensures cleanup happens even if exceptions occur.
-        """
-        try:
-            # Cleanup any resources if needed
-            pass
-        except Exception:
-            # Suppress cleanup errors to avoid masking original exception
-            pass
+        """Async context manager exit."""
         return False  # Don't suppress exceptions

@@ -12,8 +12,8 @@ from codetoreum.adapters.primary.agent_dtos import (
 )
 from codetoreum.adapters.primary.agent_mappers import AgentMapper
 from codetoreum.ports.input.agent_command import (
-    IAgentCommandPort,
     AddMcpServerCommand,
+    IAgentCommandPort,
     RemoveMcpServerCommand,
 )
 from codetoreum.ports.input.agent_query import IAgentQueryPort
@@ -76,16 +76,16 @@ def register_mcp_server_endpoints(
             if "not found" in str(e).lower():
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Agent not found: {str(e)}",
+                    detail=f"Agent not found: {e!s}",
                 )
-            elif "already" in str(e).lower():
+            if "already" in str(e).lower():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"MCP server already configured: {str(e)}",
+                    detail=f"MCP server already configured: {e!s}",
                 )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to add MCP server: {str(e)}",
+                detail=f"Failed to add MCP server: {e!s}",
             )
 
     @router.delete(
@@ -130,14 +130,13 @@ def register_mcp_server_endpoints(
                 if "agent" in str(e).lower():
                     raise HTTPException(
                         status_code=status.HTTP_404_NOT_FOUND,
-                        detail=f"Agent not found: {str(e)}",
+                        detail=f"Agent not found: {e!s}",
                     )
-                else:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"MCP server not configured: {str(e)}",
-                    )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"MCP server not configured: {e!s}",
+                )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to remove MCP server: {str(e)}",
+                detail=f"Failed to remove MCP server: {e!s}",
             )

@@ -8,18 +8,18 @@ Subscribes to workitem.column_changed events and orchestrates:
 
 import logging
 from dataclasses import dataclass
-from typing import Optional, Tuple
 
 from codetoreum.domain.events import DomainEvent, WorkItemColumnChanged
 from codetoreum.domain.repair_cycle_types import (
     RepairTestRunConfig,
     RepairTestType,
 )
-from codetoreum.infrastructure.event_bus import EventHandler, event_handler, EventBus
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.infrastructure.event_bus import EventBus, EventHandler, event_handler
+from codetoreum.infrastructure.observability.instrumentation import (
+    instrument_async_function,
+)
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
-from codetoreum.infrastructure.observability.instrumentation import instrument_async_function
-from codetoreum.ports.exceptions import ExternalServiceError
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle
 
 logger = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ class RepairCycleEventContext:
 
     stage_name: str
     workflow_run_id: str
-    test_configs: Tuple[RepairTestRunConfig, ...]
+    test_configs: tuple[RepairTestRunConfig, ...]
     agent_name: str
     max_total_agent_calls: int
     checkpoint_interval: int
@@ -71,8 +71,8 @@ class RepairCycleEventHandler(EventHandler):
     def __init__(
         self,
         repair_cycle: IRepairCycle,
-        clock: Optional[SimulationClock] = None,
-        event_bus: Optional[EventBus] = None,
+        clock: SimulationClock | None = None,
+        event_bus: EventBus | None = None,
     ):
         """
         Initialize repair cycle event handler.
@@ -92,12 +92,12 @@ class RepairCycleEventHandler(EventHandler):
         return self._repair_cycle
 
     @property
-    def clock(self) -> Optional[SimulationClock]:
+    def clock(self) -> SimulationClock | None:
         """Get the simulation clock if configured."""
         return self._clock
 
     @property
-    def event_bus(self) -> Optional[EventBus]:
+    def event_bus(self) -> EventBus | None:
         """Get the event bus if configured."""
         return self._event_bus
 
@@ -114,7 +114,7 @@ class RepairCycleEventHandler(EventHandler):
         attributes={
             "component": "repair_cycle",
             "layer": "application",
-        }
+        },
     )
     async def handle(self, event: DomainEvent) -> None:
         """
@@ -127,9 +127,7 @@ class RepairCycleEventHandler(EventHandler):
             Exception: If handling fails (logged but not re-raised)
         """
         if not isinstance(event, WorkItemColumnChanged):
-            logger.warning(
-                f"RepairCycleEventHandler received unexpected event type: {event.event_type}"
-            )
+            logger.warning(f"RepairCycleEventHandler received unexpected event type: {event.event_type}")
             return
 
         try:
@@ -147,7 +145,7 @@ class RepairCycleEventHandler(EventHandler):
         attributes={
             "component": "repair_cycle",
             "layer": "application",
-        }
+        },
     )
     async def handle_column_change(self, event: WorkItemColumnChanged) -> None:
         """
@@ -201,9 +199,7 @@ class RepairCycleEventHandler(EventHandler):
                 # In a full implementation, this would emit an event to move the item
                 # to the next column (e.g., "Staged" or "Ready for Deploy")
             else:
-                logger.warning(
-                    f"Repair cycle failed for {work_item_id}, escalating for human review"
-                )
+                logger.warning(f"Repair cycle failed for {work_item_id}, escalating for human review")
                 # In a full implementation, this would emit an event to escalate
                 # the item for human review or move to an escalation column
 

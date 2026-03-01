@@ -37,20 +37,21 @@ def extract_repo_name(repo_url: str) -> str:
         'repo'
     """
     if not repo_url or not repo_url.strip():
-        raise ValueError("repo_url cannot be empty, None, or whitespace-only")
+        msg = "repo_url cannot be empty, None, or whitespace-only"
+        raise ValueError(msg)
 
     # Remove trailing .git if present
-    url = repo_url.rstrip('/')
-    if url.endswith('.git'):
+    url = repo_url.rstrip("/")
+    if url.endswith(".git"):
         url = url[:-4]
 
     # Handle SSH format: git@github.com:org/repo -> repo
-    if '@' in url and ':' in url:
+    if "@" in url and ":" in url:
         # Extract the part after the colon
-        after_colon = url.split(':')[-1]
+        after_colon = url.split(":")[-1]
         # Get the last path component
-        return after_colon.split('/')[-1]
+        return after_colon.split("/")[-1]
 
     # Handle HTTPS format: https://github.com/org/repo -> repo
     # Get the last path component
-    return url.split('/')[-1]
+    return url.split("/")[-1]

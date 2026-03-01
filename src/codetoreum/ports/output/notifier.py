@@ -4,10 +4,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
-
-from codetoreum.domain.types import ChannelId, NotificationId, TemplateId, UserId
-
+from types import MappingProxyType
+from typing import Any
 
 # ============================================================================
 # Enums
@@ -47,58 +45,200 @@ class DeliveryStatus(Enum):
 # ============================================================================
 
 
-@dataclass
+@dataclass(frozen=True)
 class Notification:
-    """Notification data."""
+    """Notification data.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. Metadata dict is converted
+    to MappingProxyType for true immutability.
+    """
 
     channel: NotificationChannel
     recipient: str
     subject: str
     message: str
     priority: NotificationPriority
-    metadata: Dict[str, Any]
+    metadata: MappingProxyType
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.channel, NotificationChannel):
+            msg = "channel must be a NotificationChannel instance"
+            raise ValueError(msg)
+
+        if not isinstance(self.recipient, str) or not self.recipient:
+            msg = "recipient must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.subject, str) or not self.subject:
+            msg = "subject must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.message, str) or not self.message:
+            msg = "message must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.priority, NotificationPriority):
+            msg = "priority must be a NotificationPriority instance"
+            raise ValueError(msg)
+
+        if not isinstance(self.metadata, MappingProxyType):
+            msg = "metadata must be a MappingProxyType (immutable dict)"
+            raise ValueError(msg)
 
 
-@dataclass
+@dataclass(frozen=True)
 class NotificationResult:
-    """Notification send result."""
+    """Notification send result.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation.
+    """
 
     success: bool
     notification_id: str
-    error: Optional[str]
+    error: str | None
     timestamp: datetime
 
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.success, bool):
+            msg = "success must be a boolean"
+            raise ValueError(msg)
 
-@dataclass
+        if not isinstance(self.notification_id, str) or not self.notification_id:
+            msg = "notification_id must be a non-empty string"
+            raise ValueError(msg)
+
+        if self.error is not None:
+            if not isinstance(self.error, str) or not self.error:
+                msg = "error must be a non-empty string or None"
+                raise ValueError(msg)
+
+        if not isinstance(self.timestamp, datetime):
+            msg = "timestamp must be a datetime instance"
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True)
 class Attachment:
-    """File attachment for notifications."""
+    """File attachment for notifications.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation.
+    """
 
     filename: str
     content: bytes
     content_type: str
 
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.filename, str) or not self.filename:
+            msg = "filename must be a non-empty string"
+            raise ValueError(msg)
 
-@dataclass
+        if not isinstance(self.content, bytes) or len(self.content) == 0:
+            msg = "content must be non-empty bytes"
+            raise ValueError(msg)
+
+        if not isinstance(self.content_type, str) or not self.content_type:
+            msg = "content_type must be a non-empty string"
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True)
 class Action:
-    """Action button for rich notifications."""
+    """Action button for rich notifications.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation.
+    """
 
     label: str
     url: str
-    style: Optional[str] = None  # primary, danger, default
+    style: str | None = None  # primary, danger, default
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.label, str) or not self.label:
+            msg = "label must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.url, str) or not self.url:
+            msg = "url must be a non-empty string"
+            raise ValueError(msg)
+
+        if self.style is not None:
+            if self.style not in ("primary", "danger", "default"):
+                msg = f"style must be 'primary', 'danger', 'default', or None. Got: {self.style}"
+                raise ValueError(msg)
 
 
-@dataclass
+@dataclass(frozen=True)
 class RichContent:
-    """Rich notification content."""
+    """Rich notification content.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. Lists are converted to
+    tuples for true immutability.
+    """
 
     title: str
     body: str
-    attachments: List[Attachment]
-    actions: List[Action]
-    color: Optional[str] = None
-    footer: Optional[str] = None
-    thumbnail_url: Optional[str] = None
-    image_url: Optional[str] = None
+    attachments: tuple[Attachment, ...]
+    actions: tuple[Action, ...]
+    color: str | None = None
+    footer: str | None = None
+    thumbnail_url: str | None = None
+    image_url: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.title, str) or not self.title:
+            msg = "title must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.body, str) or not self.body:
+            msg = "body must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.attachments, tuple):
+            msg = "attachments must be a tuple of Attachment instances"
+            raise ValueError(msg)
+
+        if not all(isinstance(a, Attachment) for a in self.attachments):
+            msg = "all attachments must be Attachment instances"
+            raise ValueError(msg)
+
+        if not isinstance(self.actions, tuple):
+            msg = "actions must be a tuple of Action instances"
+            raise ValueError(msg)
+
+        if not all(isinstance(a, Action) for a in self.actions):
+            msg = "all actions must be Action instances"
+            raise ValueError(msg)
+
+        if self.color is not None:
+            if not isinstance(self.color, str) or not self.color:
+                msg = "color must be a non-empty string or None"
+                raise ValueError(msg)
+
+        if self.footer is not None:
+            if not isinstance(self.footer, str) or not self.footer:
+                msg = "footer must be a non-empty string or None"
+                raise ValueError(msg)
+
+        if self.thumbnail_url is not None:
+            if not isinstance(self.thumbnail_url, str) or not self.thumbnail_url:
+                msg = "thumbnail_url must be a non-empty string or None"
+                raise ValueError(msg)
+
+        if self.image_url is not None:
+            if not isinstance(self.image_url, str) or not self.image_url:
+                msg = "image_url must be a non-empty string or None"
+                raise ValueError(msg)
 
 
 # ============================================================================
@@ -117,7 +257,7 @@ class INotifier(ABC):
         subject: str,
         message: str,
         priority: NotificationPriority = NotificationPriority.NORMAL,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> NotificationResult:
         """
         Send a notification.
@@ -138,7 +278,6 @@ class INotifier(ABC):
             UnsupportedChannelError: Channel not supported
             NotificationError: Send failed
         """
-        pass
 
     @abstractmethod
     async def send_rich(
@@ -165,13 +304,12 @@ class INotifier(ABC):
             UnsupportedChannelError: Channel doesn't support rich content
             NotificationError: Send failed
         """
-        pass
 
     @abstractmethod
     async def send_batch(
         self,
-        notifications: List[Notification],
-    ) -> List[NotificationResult]:
+        notifications: list[Notification],
+    ) -> list[NotificationResult]:
         """
         Send multiple notifications.
 
@@ -185,7 +323,6 @@ class INotifier(ABC):
             ValidationError: Invalid notification data
             NotificationError: Batch send failed
         """
-        pass
 
     @abstractmethod
     async def send_template(
@@ -193,7 +330,7 @@ class INotifier(ABC):
         channel: NotificationChannel,
         recipient: str,
         template_id: str,
-        variables: Dict[str, Any],
+        variables: dict[str, Any],
         priority: NotificationPriority = NotificationPriority.NORMAL,
     ) -> NotificationResult:
         """
@@ -214,7 +351,6 @@ class INotifier(ABC):
             ValidationError: Invalid template variables
             NotificationError: Send failed
         """
-        pass
 
     @abstractmethod
     async def get_delivery_status(
@@ -234,16 +370,15 @@ class INotifier(ABC):
             ResourceNotFoundError: Notification doesn't exist
             NotificationError: Status check failed
         """
-        pass
 
     @abstractmethod
     async def get_notification_history(
         self,
-        recipient: Optional[str] = None,
-        channel: Optional[NotificationChannel] = None,
-        since: Optional[datetime] = None,
+        recipient: str | None = None,
+        channel: NotificationChannel | None = None,
+        since: datetime | None = None,
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get notification history.
 
@@ -259,7 +394,6 @@ class INotifier(ABC):
         Raises:
             NotificationError: Query failed
         """
-        pass
 
     @abstractmethod
     async def cancel_notification(
@@ -279,7 +413,6 @@ class INotifier(ABC):
             ResourceNotFoundError: Notification doesn't exist
             NotificationError: Cancel failed
         """
-        pass
 
     @abstractmethod
     async def register_template(
@@ -287,8 +420,8 @@ class INotifier(ABC):
         template_id: str,
         channel: NotificationChannel,
         template: str,
-        subject_template: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        subject_template: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """
         Register a notification template.
@@ -304,7 +437,6 @@ class INotifier(ABC):
             ValidationError: Invalid template
             NotificationError: Registration failed
         """
-        pass
 
     @abstractmethod
     async def unregister_template(
@@ -321,13 +453,12 @@ class INotifier(ABC):
             ResourceNotFoundError: Template doesn't exist
             NotificationError: Unregistration failed
         """
-        pass
 
     @abstractmethod
     async def list_templates(
         self,
-        channel: Optional[NotificationChannel] = None,
-    ) -> List[Dict[str, Any]]:
+        channel: NotificationChannel | None = None,
+    ) -> list[dict[str, Any]]:
         """
         List registered templates.
 
@@ -340,7 +471,6 @@ class INotifier(ABC):
         Raises:
             NotificationError: Query failed
         """
-        pass
 
     @abstractmethod
     async def test_channel(
@@ -361,14 +491,13 @@ class INotifier(ABC):
         Raises:
             NotificationError: Test failed
         """
-        pass
 
     @abstractmethod
     async def get_statistics(
         self,
-        since: Optional[datetime] = None,
-        channel: Optional[NotificationChannel] = None,
-    ) -> Dict[str, Any]:
+        since: datetime | None = None,
+        channel: NotificationChannel | None = None,
+    ) -> dict[str, Any]:
         """
         Get notification statistics.
 
@@ -382,13 +511,12 @@ class INotifier(ABC):
         Raises:
             NotificationError: Query failed
         """
-        pass
 
     @abstractmethod
     async def configure_channel(
         self,
         channel: NotificationChannel,
-        configuration: Dict[str, Any],
+        configuration: dict[str, Any],
     ) -> None:
         """
         Configure a notification channel.
@@ -401,10 +529,9 @@ class INotifier(ABC):
             ValidationError: Invalid configuration
             NotificationError: Configuration failed
         """
-        pass
 
     @abstractmethod
-    async def health_check(self) -> Dict[NotificationChannel, bool]:
+    async def health_check(self) -> dict[NotificationChannel, bool]:
         """
         Check health of all configured channels.
 
@@ -414,4 +541,3 @@ class INotifier(ABC):
         Raises:
             NotificationError: Health check failed
         """
-        pass

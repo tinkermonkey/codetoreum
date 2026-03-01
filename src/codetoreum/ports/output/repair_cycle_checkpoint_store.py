@@ -5,7 +5,6 @@ to support resuming after failures or interruptions.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional
 
 from codetoreum.domain.repair_cycle_types import RepairCycleCheckpoint
 
@@ -67,14 +66,13 @@ class IRepairCycleCheckpointStore(ABC):
             - Multiple saves of same checkpoint are idempotent
             - All fields of checkpoint are preserved exactly
         """
-        pass
 
     @abstractmethod
     async def get_checkpoint(
         self,
         workflow_run_id: str,
         test_type: str,
-    ) -> Optional[RepairCycleCheckpoint]:
+    ) -> RepairCycleCheckpoint | None:
         """Retrieve a repair cycle checkpoint.
 
         Retrieves the most recent checkpoint for the specified pipeline run
@@ -97,13 +95,12 @@ class IRepairCycleCheckpointStore(ABC):
             - Returned checkpoint is validated (all fields correct)
             - Multiple reads return identical checkpoint
         """
-        pass
 
     @abstractmethod
     async def delete_checkpoint(
         self,
         workflow_run_id: str,
-        test_type: Optional[str] = None,
+        test_type: str | None = None,
     ) -> None:
         """Delete checkpoint(s) for a pipeline run.
 
@@ -125,7 +122,6 @@ class IRepairCycleCheckpointStore(ABC):
             - Deletion is idempotent (deleting missing checkpoint is safe)
             - Can delete single test type or all for pipeline run
         """
-        pass
 
     @abstractmethod
     async def checkpoint_exists(
@@ -152,4 +148,3 @@ class IRepairCycleCheckpointStore(ABC):
             - Returns False for expired checkpoints
             - Does not throw on missing checkpoints
         """
-        pass

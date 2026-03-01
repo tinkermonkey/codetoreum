@@ -11,13 +11,13 @@ the orchestrator. They carry metadata about status, assignment, and progress.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from codetoreum.domain.types import ProjectId, WorkItemId
 from codetoreum.domain.work_item import WorkItem
 
 from .event_emitter import IEventEmitter
-from .monitoring import IMonitoredService, MonitoringConfig
+from .monitoring import IMonitoredService
 
 
 class IWorkItemService(IEventEmitter, IMonitoredService, ABC):
@@ -67,12 +67,9 @@ class IWorkItemService(IEventEmitter, IMonitoredService, ABC):
             ValidationError: Invalid item_id format
             ExternalServiceError: Service communication failure
         """
-        pass
 
     @abstractmethod
-    async def get_work_items_by_status(
-        self, project_id: ProjectId, status: str
-    ) -> List[WorkItem]:
+    async def get_work_items_by_status(self, project_id: ProjectId, status: str) -> list[WorkItem]:
         """Query work items by status.
 
         Returns all work items in a given project with the specified status.
@@ -89,12 +86,9 @@ class IWorkItemService(IEventEmitter, IMonitoredService, ABC):
             ValidationError: Invalid status value
             ExternalServiceError: Service communication failure
         """
-        pass
 
     @abstractmethod
-    async def get_work_items_by_column(
-        self, project_id: ProjectId, column_name: str
-    ) -> List[WorkItem]:
+    async def get_work_items_by_column(self, project_id: ProjectId, column_name: str) -> list[WorkItem]:
         """Query work items in a specific board column.
 
         Returns all work items currently assigned to a column on a project board.
@@ -111,14 +105,11 @@ class IWorkItemService(IEventEmitter, IMonitoredService, ABC):
             ValidationError: Invalid column_name
             ExternalServiceError: Service communication failure
         """
-        pass
 
     # Command Operations
 
     @abstractmethod
-    async def update_work_item(
-        self, item_id: WorkItemId, updates: Dict[str, Any]
-    ) -> WorkItem:
+    async def update_work_item(self, item_id: WorkItemId, updates: dict[str, Any]) -> WorkItem:
         """Update a work item and emit update event.
 
         Updates specified fields and emits 'workitem.updated' event.
@@ -141,16 +132,9 @@ class IWorkItemService(IEventEmitter, IMonitoredService, ABC):
         Events:
             Emits 'workitem.updated' event with updated state
         """
-        pass
 
     @abstractmethod
-    async def create_work_item(
-        self,
-        project_id: ProjectId,
-        title: str,
-        description: str,
-        **kwargs: Any
-    ) -> WorkItem:
+    async def create_work_item(self, project_id: ProjectId, title: str, description: str, **kwargs: Any) -> WorkItem:
         """Create a new work item and emit creation event.
 
         Args:
@@ -170,4 +154,3 @@ class IWorkItemService(IEventEmitter, IMonitoredService, ABC):
         Events:
             Emits 'workitem.created' event with new work item
         """
-        pass

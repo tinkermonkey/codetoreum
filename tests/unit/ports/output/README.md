@@ -66,6 +66,45 @@ class TestMockBoardService(TestBoardServiceContract):
 - **Coverage**: Comment posting, thread retrieval, monitoring, independence
 - **Required Methods**: `create_adapter()`
 
+### TestStorageContract
+- **Location**: `test_storage_contract.py`
+- **Tests**: `IStorage` interface
+- **Coverage**: Upload/download state consistency, error conditions (missing files), metadata operations, file operations (copy, move, delete), listing with pagination
+- **Required Methods**: `create_storage()`
+- **Test Categories**:
+  - Basic operations: upload, download, exists
+  - State consistency: multi-operation sequences, last-write-wins
+  - Error conditions: ResourceNotFoundError for missing objects
+  - Metadata: get/update metadata, content type, size
+  - File operations: copy, move, delete, delete_many
+  - Listing: list_files with prefix filtering, list_prefixes, pagination
+  - File I/O: upload_from_file, download_to_file
+  - Storage info: statistics and provider information
+  - Presigned URLs: generate_presigned_url returns valid URLs with expiration
+- **Coverage**: Validates IStorage implementations handle all operations with consistent semantics
+
+### TestRepositoryContract
+- **Location**: `test_repository_contract.py`
+- **Tests**: `IRepository` interface
+- **Coverage**: Repository initialization, branch management, file operations, commit history, multi-operation sequences
+- **Required Methods**: `create_repository()`
+- **Test Categories**:
+  - Repository operations: clone, status
+  - Branch management: create_branch, checkout, list_branches
+  - File operations: get_file_content (state consistency and error handling)
+  - Commits: commit creation, message validation, history retrieval
+  - Remote operations: add_remote, remove_remote, push, pull, fetch
+  - Merging: merge compatible branches with state validation
+  - Diff: showing differences between refs with error handling
+  - Commit metadata: get_commit_info with full details
+- **Coverage**: Validates IRepository implementations handle all operations with consistent semantics
+
+### TestPipelineQueueServiceContract
+- **Location**: `test_pipeline_queue_service_contract.py`
+- **Tests**: `IPipelineQueueService` interface
+- **Coverage**: Queue operations, board position ordering, status management, synchronization
+- **Required Methods**: `create_service()`
+
 ## Benefits
 
 1. **Consistency**: All implementations of a port interface behave consistently

@@ -4,124 +4,160 @@ Simulation Application Bootstrap
 Wires up the entire application stack in simulation mode through 6 phases:
 
 **Phase 0**: Create simulation engine (encapsulates clock and timing)
-**Phase 1**: Create adapters (16 mock adapters: ticket system, LLM, container, repository,
+**Phase 1**: Create infrastructure (event bus, logger, error registry) - EARLY for event subscriptions
+**Phase 2**: Create adapters (24 mock adapters: ticket system, LLM, container, repository,
            event store, metrics, storage, config, notifier, encryption, board, repair cycle,
-           project manager, lock service, workflow config, agent executor)
-**Phase 2**: Create infrastructure (event bus, logger, error registry)
-**Phase 3**: Create services (8 application services with their dependencies)
+           project manager, lock service, workflow config, agent executor, version control,
+           message broker, discussion, review cycle, identity service, checkpoint store, queue service, event emitter)
+**Phase 3**: Create services (11 application services with their dependencies: workflow orchestrator,
+           execution service, agent scheduler, pipeline manager, review service, feedback processor,
+           workspace router, configuration service, work item service, multi-project orchestrator,
+           container recovery service)
 **Phase 4**: Create ports (16 input port implementations)
 **Phase 5**: Create FastAPI app (wire all ports to API endpoints, register event handlers)
+
+Note: Infrastructure (event bus) is created before adapters to enable causal linking via
+event subscriptions. Adapters can subscribe to domain events during initialization.
 
 This is the foundational component that enables simulation testing. It provides a complete
 application bootstrap that wires together all components in the correct order with proper
 dependency injection.
 """
 
+import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any
 
 from fastapi import FastAPI
-
-# Adapters
-from codetoreum.adapters.testing import (
-    InMemoryEventStore,
-    InMemoryRepositoryAdapter,
-    InMemoryTicketAdapter,
-    FakeContainerAdapter,
-    MockLLMAdapter,
-    InMemoryMetricsAdapter,
-    MockNotifierAdapter,
-    SimpleEncryptionAdapter,
-    MockBoardAdapter,
-)
-# Mock tracer for trace propagation testing
-from codetoreum.infrastructure.simulation.mock_tracer import MockTracer
-# Lazy import to avoid circular dependency
-from codetoreum.adapters.testing.mock_container_recovery_adapter import (
-    MockContainerRecoveryAdapter,
-)
-from codetoreum.adapters.testing.mock_project_manager_adapter import (
-    MockProjectManagerAdapter,
-)
-from codetoreum.adapters.testing.mock_agent_executor import MockAgentExecutor
-from codetoreum.adapters.testing.in_memory_workflow_config_service import (
-    InMemoryWorkflowConfigService,
-)
-from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
-    InMemoryLockService,
-)
-from codetoreum.adapters.testing.in_memory_config_store import InMemoryConfigStore
-from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
-from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
-
-# Application Services
-from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator
-from codetoreum.application.execution_service import ExecutionService
-from codetoreum.application.agent_scheduler import AgentScheduler
-from codetoreum.application.pipeline_manager import PipelineManager
-from codetoreum.application.review_service import ReviewService
-from codetoreum.application.feedback_processor import FeedbackProcessor
-from codetoreum.application.workspace_router import WorkspaceRouter
-from codetoreum.application.configuration_service import ConfigurationService
-from codetoreum.application.work_item_service import WorkItemService
-from codetoreum.application.container_recovery_service import ContainerRecoveryService
-from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
-from codetoreum.application.workflow_run_query_service import WorkflowRunQueryService
-
-# Infrastructure
-from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
-from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
-from codetoreum.infrastructure.adapters.factory import (
-    AdapterFactory,
-    AdapterFactoryConfig,
-)
-from codetoreum.infrastructure.resilience import OperationMode
-from codetoreum.infrastructure.error_ids import ErrorRegistry
-
-# Ports
-from codetoreum.ports.input.workflow_command import IWorkflowCommandPort
-from codetoreum.ports.input.task_query import ITaskQueryPort
-from codetoreum.ports.input.config_command import IConfigurationCommandPort
-from codetoreum.ports.input.config_query import IConfigurationQueryPort
-from codetoreum.ports.input.metrics_query import IMetricsQueryPort
-from codetoreum.ports.input.workspace_query import IWorkspaceQueryPort
-from codetoreum.ports.input.work_item_command import IWorkItemCommandPort
-from codetoreum.ports.input.work_item_query import IWorkItemQueryPort
-from codetoreum.ports.input.workflow_query import IWorkflowQueryPort
-from codetoreum.ports.input.workflow_run_query import IWorkflowRunQueryPort
-from codetoreum.ports.input.workflow_definition_command import IWorkflowDefinitionCommandPort
-from codetoreum.ports.input.orchestration_command import IOrchestrationCommandPort
-from codetoreum.ports.input.agent_command import IAgentCommandPort
-from codetoreum.ports.input.agent_query import IAgentQueryPort
-from codetoreum.ports.input.execution_command import IExecutionCommandPort
-from codetoreum.ports.input.execution_query import IExecutionQueryPort
 
 # FastAPI app factory
 from codetoreum.adapters.primary.fastapi_app import create_app
 
 # Mock Port Adapters (these wrap application services to implement port interfaces)
 from codetoreum.adapters.primary.input_port_adapters.mock import (
-    MockWorkItemCommandAdapter,
-    MockWorkItemQueryAdapter,
     MockAgentCommandAdapter,
     MockAgentQueryAdapter,
+    MockConfigCommandAdapter,
+    MockConfigQueryAdapter,
+    MockConfigServiceAdapter,
     MockExecutionCommandAdapter,
     MockExecutionQueryAdapter,
-    MockConfigQueryAdapter,
-    MockMetricsQueryAdapter,
-    MockWorkspaceQueryAdapter,
-    MockWorkflowCommandAdapter,
-    MockWorkflowQueryAdapter,
-    MockWorkflowRunQueryAdapter,
-    MockOrchestrationCommandAdapter,
-    MockWorkflowDefinitionCommandAdapter,
-    MockConfigCommandAdapter,
-    MockTaskQueryAdapter,
-    MockConfigServiceAdapter,
     MockLoggerAdapter,
+    MockOrchestrationCommandAdapter,
+    MockTaskQueryAdapter,
+    MockWorkflowCommandAdapter,
+    MockWorkflowDefinitionCommandAdapter,
+    MockWorkflowQueryAdapter,
+    MockWorkItemCommandAdapter,
+    MockWorkItemQueryAdapter,
+    MockWorkspaceQueryAdapter,
 )
+
+# Import simulation ticketing router
+from codetoreum.adapters.primary.routers.simulation_ticketing import (
+    create_simulation_ticketing_router,
+)
+from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
+    InMemoryLockService,
+)
+from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
+
+# Adapters
+from codetoreum.adapters.testing import (
+    CapturingMockEventEmitter,
+    ConfigurableIdentityService,
+    FakeContainerAdapter,
+    InMemoryCheckpointStore,
+    InMemoryConfigStore,
+    InMemoryEventStore,
+    InMemoryMessageBroker,
+    InMemoryMetricsAdapter,
+    InMemoryQueueService,
+    InMemoryRepositoryAdapter,
+    InMemoryTicketAdapter,
+    InMemoryVersionControlService,
+    InMemoryWorkflowConfigService,
+    MockAgentExecutor,
+    MockBoardAdapter,
+    MockDiscussionAdapter,
+    MockLLMAdapter,
+    MockNotifierAdapter,
+    MockProjectManagerAdapter,
+    MockReviewCycleAdapter,
+    SimpleEncryptionAdapter,
+)
+from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
+from codetoreum.adapters.testing.mock_container_recovery_adapter import (
+    MockContainerRecoveryAdapter,
+)
+from codetoreum.application.agent_scheduler import (
+    AgentScheduler,
+    InMemoryTaskQueue,
+    MockProjectConfiguration,
+    MockRateLimiter,
+    MockResourceMonitor,
+    MockSchedulingEvents,
+)
+from codetoreum.application.configuration_service import ConfigurationService
+from codetoreum.application.container_recovery_service import ContainerRecoveryService
+from codetoreum.application.event_handlers.board_event_handler import (
+    BoardColumnEventHandler,
+)
+from codetoreum.application.execution_service import ExecutionService
+from codetoreum.application.feedback_processor import FeedbackProcessor
+from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
+from codetoreum.application.pipeline_manager import PipelineManager
+from codetoreum.application.review_service import ReviewService
+from codetoreum.application.work_item_service import WorkItemService
+
+# Application Services
+from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator, WorkflowState
+from codetoreum.application.workflow_run_query_service import WorkflowRunQueryService
+from codetoreum.application.workspace_router import WorkspaceRouter
+
+# Domain
+from codetoreum.domain.events import BoardReconciled, WorkItemColumnChanged
+from codetoreum.domain.value_objects import ProjectConfig
+from codetoreum.domain.work_item import WorkItemStatus
+from codetoreum.infrastructure.adapters.factory import (
+    AdapterFactory,
+    AdapterFactoryConfig,
+)
+from codetoreum.infrastructure.error_ids import ErrorRegistry
+
+# Infrastructure
+from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.infrastructure.resilience import OperationMode
+from codetoreum.infrastructure.simulation.causal_link_registry import (
+    CausalLinkRegistry,
+    LinkType,
+)
+
+# Mock tracer for trace propagation testing
+from codetoreum.infrastructure.simulation.mock_tracer import MockTracer
+from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
+from codetoreum.ports.input.agent_command import IAgentCommandPort
+from codetoreum.ports.input.agent_query import IAgentQueryPort
+from codetoreum.ports.input.config_command import IConfigurationCommandPort
+from codetoreum.ports.input.config_query import IConfigurationQueryPort
+from codetoreum.ports.input.execution_command import IExecutionCommandPort
+from codetoreum.ports.input.execution_query import IExecutionQueryPort
+from codetoreum.ports.input.metrics_query import IMetricsQueryPort
+from codetoreum.ports.input.orchestration_command import IOrchestrationCommandPort
+from codetoreum.ports.input.task_query import ITaskQueryPort
+from codetoreum.ports.input.work_item_command import IWorkItemCommandPort
+from codetoreum.ports.input.work_item_query import IWorkItemQueryPort
+
+# Ports
+from codetoreum.ports.input.workflow_command import IWorkflowCommandPort
+from codetoreum.ports.input.workflow_definition_command import (
+    IWorkflowDefinitionCommandPort,
+)
+from codetoreum.ports.input.workflow_query import IWorkflowQueryPort
+from codetoreum.ports.input.workflow_run_query import IWorkflowRunQueryPort
+from codetoreum.ports.input.workspace_query import IWorkspaceQueryPort
 
 logger = logging.getLogger(__name__)
 
@@ -143,10 +179,20 @@ class SimulationAdapters:
     encryption: SimpleEncryptionAdapter
     board: MockBoardAdapter
     repair_cycle: Any  # MockRepairCycleAdapter - lazy imported to avoid circular dependency
-    project_manager: Any  # IProjectManagerService - multi-project management
+    project_manager: MockProjectManagerAdapter  # Multi-project management
     lock_service: InMemoryLockService
     workflow_config: InMemoryWorkflowConfigService
     agent_executor: MockAgentExecutor
+    queue_service: InMemoryQueueService  # Pipeline queue service for board automation
+    event_emitter: CapturingMockEventEmitter  # For domain event capture
+
+    # Additional adapters (wired in simulation mode)
+    version_control: InMemoryVersionControlService  # Version control operations
+    message_broker: InMemoryMessageBroker  # Pub/sub message distribution
+    discussion_adapter: MockDiscussionAdapter  # Discussion/comment thread management
+    review_cycle: MockReviewCycleAdapter  # Code review workflow
+    identity_service: ConfigurableIdentityService  # Bot/user identification
+    checkpoint_store: InMemoryCheckpointStore  # Repair cycle state persistence
 
 
 @dataclass
@@ -162,8 +208,8 @@ class SimulationServices:
     workspace_router: WorkspaceRouter
     configuration_service: ConfigurationService
     work_item_service: WorkItemService
-    multi_project_orchestrator: Optional[Any] = None  # MultiProjectOrchestrator
-    container_recovery_service: Optional[Any] = None
+    multi_project_orchestrator: Any | None = None  # MultiProjectOrchestrator
+    container_recovery_service: Any | None = None
 
 
 @dataclass
@@ -202,6 +248,7 @@ class SimulationInfrastructure:
     event_bus: EventBus
     logger: logging.Logger
     mock_tracer: MockTracer
+    causal_link_registry: CausalLinkRegistry
 
 
 class SimulationApplicationBootstrap:
@@ -209,9 +256,9 @@ class SimulationApplicationBootstrap:
     Bootstrap the entire application stack in simulation mode.
 
     This class wires up:
-    1. All 16 mock adapters (5 via AdapterFactory + 8 additional)
+    1. All 24 testing and simulation adapters
     2. Infrastructure (event bus, clock, logger)
-    3. All 8 application services
+    3. All application services
     4. All input/output ports
     5. FastAPI application
 
@@ -223,7 +270,7 @@ class SimulationApplicationBootstrap:
         await bootstrap.teardown()
     """
 
-    def __init__(self, config: Optional[SimulationConfig] = None):
+    def __init__(self, config: SimulationConfig | None = None):
         """
         Initialize bootstrap with simulation configuration.
 
@@ -236,28 +283,30 @@ class SimulationApplicationBootstrap:
         self.config = config or SimulationConfig.create_fast_config("default")
 
         # Components (initialized by setup())
-        self.adapters: Optional[SimulationAdapters] = None
-        self.infrastructure: Optional[SimulationInfrastructure] = None
-        self.services: Optional[SimulationServices] = None
-        self.ports: Optional[SimulationPorts] = None
-        self.app: Optional[FastAPI] = None
+        self.adapters: SimulationAdapters | None = None
+        self.infrastructure: SimulationInfrastructure | None = None
+        self.services: SimulationServices | None = None
+        self.ports: SimulationPorts | None = None
+        self.app: FastAPI | None = None
 
         # Internal state
         self._is_setup = False
-        self._adapter_factory: Optional[AdapterFactory] = None
-        self._engine: Optional[SimulationEngine] = None
+        self._adapter_factory: AdapterFactory | None = None
+        self._engine: SimulationEngine | None = None
 
     async def setup(self) -> FastAPI:
         """
         Set up the entire application stack.
 
-        This method executes all 6 bootstrap phases in order:
+        This method executes bootstrap phases in order:
         - Phase 0: Create simulation engine (encapsulates clock and timing)
-        - Phase 1: Create adapters (12 mock adapters for all output ports)
-        - Phase 2: Create infrastructure (event bus, logger, error registry)
-        - Phase 3: Create services (8 application services with dependencies)
+        - Phase 1: Create infrastructure (event bus, logger, error registry) - EARLY for subscriptions
+        - Phase 2: Create adapters (24 mock adapters for all output ports)
+        - Phase 3: Create services (11 application services with dependencies)
         - Phase 4: Create ports (16 input port implementations)
         - Phase 5: Create FastAPI app (wire all ports to API endpoints, register handlers)
+
+        Infrastructure is created before adapters to enable causal linking via event bus subscriptions.
 
         Returns:
             Fully configured FastAPI application
@@ -266,7 +315,8 @@ class SimulationApplicationBootstrap:
             RuntimeError: If already set up or if setup fails
         """
         if self._is_setup:
-            raise RuntimeError("Bootstrap already set up")
+            message = "Bootstrap already set up"
+            raise RuntimeError(message)
 
         try:
             logger.info("Starting simulation bootstrap...")
@@ -275,13 +325,18 @@ class SimulationApplicationBootstrap:
             logger.info("Phase 0: Creating simulation engine...")
             self._engine = SimulationEngine.create(self.config)
 
-            # Phase 1: Create adapters (16 total)
-            logger.info("Phase 1: Creating 16 adapters...")
+            # Phase 1 (early): Create infrastructure including event bus
+            # Created before adapters so they can subscribe to domain events
+            logger.info("Phase 1: Creating infrastructure...")
+            self.infrastructure = self._create_infrastructure()
+
+            # Phase 2: Create adapters (24 total) with event bus subscriptions
+            logger.info("Phase 2: Creating 24 adapters...")
             self.adapters = await self._create_adapters()
 
-            # Phase 2: Create infrastructure
-            logger.info("Phase 2: Creating infrastructure...")
-            self.infrastructure = self._create_infrastructure()
+            # Register causal links between adapters and domain events
+            logger.info("Phase 2b: Registering causal links...")
+            self._register_causal_links()
 
             # Phase 3: Create services
             logger.info("Phase 3: Creating services...")
@@ -295,15 +350,20 @@ class SimulationApplicationBootstrap:
             logger.info("Phase 5: Creating FastAPI app...")
             self.app = self._create_fastapi_app()
 
+            # Validate causal link consistency (Phase 5b)
+            logger.info("Phase 5b: Validating causal link consistency...")
+            self._validate_causal_links()
+
             self._is_setup = True
             logger.info("Simulation bootstrap completed successfully")
 
             return self.app
 
         except Exception as e:
-            logger.error(f"Bootstrap setup failed: {e}",
+            logger.error(
+                f"Bootstrap setup failed: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
             )
             raise
 
@@ -332,6 +392,10 @@ class SimulationApplicationBootstrap:
                 # Event bus cleanup (no async stop needed for in-memory implementation)
                 self.infrastructure.event_bus.reset_statistics()
 
+            # Clear causal link registry
+            if self.infrastructure and self.infrastructure.causal_link_registry:
+                self.infrastructure.causal_link_registry.clear()
+
             # Clear references
             self.app = None
             self.ports = None
@@ -345,18 +409,19 @@ class SimulationApplicationBootstrap:
             logger.info("Simulation bootstrap teardown complete")
 
         except Exception as e:
-            logger.error(f"Error during teardown: {e}",
+            logger.error(
+                f"Error during teardown: {e}",
                 extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
-                exc_info=True
+                exc_info=True,
             )
 
     # =========================================================================
-    # Phase 1: Create Adapters
+    # Phase 2: Create Adapters
     # =========================================================================
 
     async def _create_adapters(self) -> SimulationAdapters:
         """
-        Create all 16 mock adapters in simulation mode.
+        Create all 24 mock adapters in simulation mode.
 
         5 adapters created via AdapterFactory:
         - ticket_system (in_memory)
@@ -365,19 +430,25 @@ class SimulationApplicationBootstrap:
         - repository (in_memory)
         - event_store (in_memory)
 
-        11 additional adapters created directly:
+        19 additional adapters created directly:
         - metrics, storage, config_store, notifier, encryption, board, repair_cycle, project_manager
         - lock_service, workflow_config, agent_executor
+        - version_control, message_broker, discussion_adapter, review_cycle, identity_service, checkpoint_store
+        - queue_service, event_emitter
 
         The SimulationEngine automatically injects the clock into time-aware
         adapters (repair_cycle), hiding simulation implementation details from
         the adapter constructors.
 
         Returns:
-            SimulationAdapters with all 16 adapters configured
+            SimulationAdapters with all 24 adapters configured in SimulationAdapters dataclass
         """
         if not self._engine:
-            raise RuntimeError("SimulationEngine must be created before adapters")
+            message = "SimulationEngine must be created before adapters"
+            raise RuntimeError(message)
+        if not self.infrastructure:
+            message = "Infrastructure (event bus) must be created before adapters"
+            raise RuntimeError(message)
 
         # Create adapter factory in simulation mode with resilience disabled
         factory_config = AdapterFactoryConfig(
@@ -386,18 +457,50 @@ class SimulationApplicationBootstrap:
         )
         self._adapter_factory = AdapterFactory(factory_config)
 
+        # Create event emitter for domain event capture
+        event_emitter = CapturingMockEventEmitter()
+
+        # Get event bus from infrastructure for event subscriptions
+        event_bus = self.infrastructure.event_bus
+
         # Create adapters using factory
         ticket_system = self._adapter_factory.create_ticket_system(adapter_name="in_memory")
-        llm_provider = self._adapter_factory.create_llm_provider(adapter_name="mock")
-        container = self._adapter_factory.create_container(adapter_name="fake")
-        repository = self._adapter_factory.create_repository(adapter_name="in_memory")
+
+        # Pass config and clock to LLM adapter for fidelity-aware timing
+        llm_provider = self._adapter_factory.create_llm_provider(
+            adapter_name="mock",
+            config=self.config,
+            clock=self._engine.get_clock_for_testing() if self._engine else None,
+        )
+
+        # Pass event_emitter, event_bus, config, and clock to container for event subscription
+        # and fidelity-aware timing
+        container = self._adapter_factory.create_container(
+            adapter_name="fake",
+            event_emitter=event_emitter,
+            event_bus=event_bus,
+            config=self.config,
+            clock=self._engine.get_clock_for_testing() if self._engine else None,
+        )
+
+        repository = InMemoryRepositoryAdapter(event_emitter=event_emitter)
         event_store = self._adapter_factory.create_event_store(adapter_name="in_memory")
 
-        # Adapters not in factory yet - create directly
+        # Adapters not in factory yet - create directly with event bus for causal linking
         metrics = InMemoryMetricsAdapter()
-        storage = InMemoryStorageAdapter()
+        storage = InMemoryStorageAdapter(
+            event_emitter=event_emitter,
+            event_bus=event_bus,  # Subscribe to container execution completion events
+            container=container,  # Enable retrieval of actual file content from container
+        )
         config_store = InMemoryConfigStore()
         notifier = MockNotifierAdapter()
+
+        # Create queue service with event emitter and event bus for causal linking
+        queue_service = InMemoryQueueService(
+            event_emitter=event_emitter,
+            event_bus=event_bus,  # Subscribe to board position changes
+        )
 
         # Note: SimpleEncryptionAdapter is created directly (not via AdapterFactory)
         # because it's a simple utility service, not a main output port adapter.
@@ -408,8 +511,8 @@ class SimulationApplicationBootstrap:
         # Create time-aware adapters via engine (clock is injected internally)
         repair_cycle = self._engine.create_repair_cycle_adapter()
 
-        # Create board adapter
-        board = MockBoardAdapter()
+        # Create board adapter with event emitter for domain events
+        board = MockBoardAdapter(event_emitter=event_emitter)
 
         # Create project manager adapter
         project_manager = MockProjectManagerAdapter()
@@ -420,7 +523,6 @@ class SimulationApplicationBootstrap:
         agent_executor = MockAgentExecutor(execution_delay_seconds=3.0)
 
         # Pre-configure default test project for simulation testing
-        from codetoreum.domain.value_objects import ProjectConfig
         project_manager.add_project(
             "default_project",
             ProjectConfig(
@@ -431,7 +533,17 @@ class SimulationApplicationBootstrap:
             ),
         )
 
-        logger.info("Created 16 simulation adapters")
+        # Create additional adapters (version control, messaging, discussion, etc.)
+        version_control = InMemoryVersionControlService()
+        message_broker = InMemoryMessageBroker()
+        await message_broker.initialize()  # Initialize message broker
+        identity_service = ConfigurableIdentityService()
+        identity_service.set_bot_username("codetoreum-bot")
+        discussion_adapter = MockDiscussionAdapter(identity_service=identity_service)
+        review_cycle = MockReviewCycleAdapter(clock=self._engine.get_clock_for_testing() if self._engine else None)
+        checkpoint_store = InMemoryCheckpointStore()
+
+        logger.info("Created 24 simulation adapters with domain event emission")
 
         return SimulationAdapters(
             ticket_system=ticket_system,
@@ -450,24 +562,170 @@ class SimulationApplicationBootstrap:
             lock_service=lock_service,
             workflow_config=workflow_config,
             agent_executor=agent_executor,
+            queue_service=queue_service,
+            event_emitter=event_emitter,
+            version_control=version_control,
+            message_broker=message_broker,
+            discussion_adapter=discussion_adapter,
+            review_cycle=review_cycle,
+            identity_service=identity_service,
+            checkpoint_store=checkpoint_store,
         )
 
     # =========================================================================
-    # Phase 2: Create Infrastructure
+    # Phase 2b: Register Causal Links
+    # =========================================================================
+
+    def _register_causal_links(self) -> None:
+        """
+        Register causal dependencies between adapters and domain events.
+
+        This enables runtime enforcement and discoverability of causal links,
+        providing visibility into which adapters depend on which domain events.
+
+        Causal links are registered in the CausalLinkRegistry, enabling:
+        - Discovery of adapter dependencies (e.g., which adapters depend on container output)
+        - Cycle detection to ensure no circular dependencies
+        - Audit trail of system integration points
+        - Potential future enforcement of causal link consistency
+
+        Key dependencies documented here:
+        - InMemoryQueueService subscribes to WorkItemColumnChangedEvent
+        - InMemoryStorageAdapter subscribes to ContainerExecutionCompletedEvent
+        - RepairCycleAdapter subscribes to WorkItemColumnChangedEvent
+        - ReviewCycleAdapter receives events via event emitter (event-driven)
+        """
+        if not self.infrastructure or not self.adapters:
+            logger.warning("Cannot register causal links: infrastructure or adapters not ready")
+            return
+
+        registry = self.infrastructure.causal_link_registry
+
+        # Container adapter → Storage adapter (test results flow)
+        registry.register_dependency(
+            source="FakeContainerAdapter",
+            target="InMemoryStorageAdapter",
+            link_type=LinkType.TEST_RESULTS,
+            metadata={"event_type": "ContainerExecutionCompletedEvent", "purpose": "Store execution artifacts"},
+        )
+
+        # Container adapter → Repair cycle adapter (test output feeds repair decisions)
+        registry.register_dependency(
+            source="FakeContainerAdapter",
+            target="MockRepairCycleAdapter",
+            link_type=LinkType.TEST_RESULTS,
+            metadata={"event_type": "ContainerExecutionCompletedEvent", "purpose": "Drive repair cycle"},
+        )
+
+        # LLM adapter → Review cycle adapter (code quality metrics inform review)
+        registry.register_dependency(
+            source="MockLLMAdapter",
+            target="MockReviewCycleAdapter",
+            link_type=LinkType.CODE_QUALITY,
+            metadata={"purpose": "Code quality assessment drives review cycle"},
+        )
+
+        # Event bus → Queue service (board position changes trigger queue updates)
+        registry.register_event_subscription(
+            publisher="EventBus",
+            subscriber="InMemoryQueueService",
+            event_type="WorkItemColumnChangedEvent",
+            metadata={"purpose": "Track work item position in queue"},
+        )
+
+        # Event bus → Repair cycle adapter (column changes trigger repair checks)
+        registry.register_event_subscription(
+            publisher="EventBus",
+            subscriber="MockRepairCycleAdapter",
+            event_type="WorkItemColumnChangedEvent",
+            metadata={"purpose": "Trigger repair cycle when item moves to repair stage"},
+        )
+
+        # Event bus → Storage adapter (container completion stores artifacts)
+        registry.register_event_subscription(
+            publisher="EventBus",
+            subscriber="InMemoryStorageAdapter",
+            event_type="ContainerExecutionCompletedEvent",
+            metadata={"purpose": "Store container execution artifacts"},
+        )
+
+        logger.info(
+            f"Registered {len(registry.get_all_links())} causal links and "
+            f"{len(registry.get_all_subscriptions())} event subscriptions"
+        )
+
+    # =========================================================================
+    # Phase 5b: Validate Causal Links
+    # =========================================================================
+
+    def _validate_causal_links(self) -> None:
+        """
+        Validate causal link consistency and log dependency summary.
+
+        Ensures:
+        - No cycles in the dependency graph
+        - All registered links are acyclic
+
+        Provides visibility into the adapter dependency graph for debugging
+        and understanding system integration points.
+        """
+        if not self.infrastructure:
+            logger.warning("Cannot validate causal links: infrastructure not ready")
+            return
+
+        registry = self.infrastructure.causal_link_registry
+
+        try:
+            registry.validate_consistency()
+            logger.info("Causal link validation passed - no cycles detected")
+
+            # Log summary of causal links for debugging
+            all_links = registry.get_all_links()
+            all_subs = registry.get_all_subscriptions()
+
+            if all_links or all_subs:
+                logger.info(
+                    f"Causal link summary: {len(all_links)} direct dependencies, {len(all_subs)} event subscriptions"
+                )
+
+                # Log direct dependencies
+                for link in all_links:
+                    logger.debug(f"  {link.source} → {link.target} ({link.link_type.value})")
+
+                # Log event subscriptions
+                for sub in all_subs:
+                    logger.debug(f"  {sub.publisher} ⟹ {sub.subscriber} ({sub.event_type})")
+            else:
+                logger.info("No causal links registered (adapters may not use event subscriptions)")
+
+        except Exception as e:
+            logger.error(
+                f"Causal link validation failed: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+            raise
+
+    # =========================================================================
+    # Phase 1: Create Infrastructure (Early for Event Bus Subscriptions)
     # =========================================================================
 
     def _create_infrastructure(self) -> SimulationInfrastructure:
         """
-        Create infrastructure components (event bus, logger).
+        Create infrastructure components (event bus, logger, causal link registry).
 
         The SimulationEngine manages the clock internally. The engine is used
         directly to access clock functionality, not through infrastructure.
+
+        The CausalLinkRegistry enables runtime enforcement and discoverability of
+        causal dependencies between adapters and domain events.
 
         Returns:
             SimulationInfrastructure with configured components
         """
         if not self._engine:
-            raise RuntimeError("SimulationEngine must be created before infrastructure")
+            message = "SimulationEngine must be created before infrastructure"
+            raise RuntimeError(message)
 
         # Create event bus
         event_bus = EventBus()
@@ -478,7 +736,10 @@ class SimulationApplicationBootstrap:
         # Create mock tracer for trace propagation testing in simulation mode
         mock_tracer = MockTracer(service_name="simulation")
 
-        logger.info("Created infrastructure components")
+        # Create causal link registry for managing adapter dependencies
+        causal_link_registry = CausalLinkRegistry()
+
+        logger.info("Created infrastructure components (including CausalLinkRegistry)")
 
         # Note: Clock is no longer exposed here - it's managed by SimulationEngine
         # The engine is the single point of control for all timing operations
@@ -486,6 +747,7 @@ class SimulationApplicationBootstrap:
             event_bus=event_bus,
             logger=app_logger,
             mock_tracer=mock_tracer,
+            causal_link_registry=causal_link_registry,
         )
 
     # =========================================================================
@@ -494,13 +756,14 @@ class SimulationApplicationBootstrap:
 
     async def _create_services(self) -> SimulationServices:
         """
-        Create all 8 application services with proper dependencies.
+        Create all 11 application services with proper dependencies.
 
         Returns:
             SimulationServices with all services configured
         """
         if not self.adapters or not self.infrastructure:
-            raise RuntimeError("Adapters and infrastructure must be created first")
+            message = "Adapters and infrastructure must be created first"
+            raise RuntimeError(message)
 
         # Configuration Service
         configuration_service = ConfigurationService(
@@ -544,14 +807,6 @@ class SimulationApplicationBootstrap:
 
         # Agent Scheduler - create with simulation dependencies
         # Import mock implementations from agent_scheduler module
-        from codetoreum.application.agent_scheduler import (
-            InMemoryTaskQueue,
-            MockResourceMonitor,
-            MockRateLimiter,
-            MockProjectConfiguration,
-            MockSchedulingEvents,
-        )
-
         task_queue = InMemoryTaskQueue()
         resource_monitor = MockResourceMonitor()
         rate_limiter = MockRateLimiter()
@@ -575,9 +830,7 @@ class SimulationApplicationBootstrap:
             def __init__(self):
                 self._states = {}
 
-            async def get_workflow_state(self, issue_id: str):
-                from codetoreum.application.workflow_orchestrator import WorkflowState
-
+            async def get_workflow_state(self, issue_id: str) -> "WorkflowState":
                 if issue_id not in self._states:
                     self._states[issue_id] = WorkflowState(
                         in_progress_tasks={}, current_column=None, current_agent=None
@@ -607,9 +860,7 @@ class SimulationApplicationBootstrap:
                 self.card_movements = []
                 self.labels_added = []
 
-            async def move_card_to_column(
-                self, project: str, issue_number: int, column_name: str
-            ) -> None:
+            async def move_card_to_column(self, project: str, issue_number: int, column_name: str) -> None:
                 self.card_movements.append(
                     {
                         "project": project,
@@ -618,12 +869,8 @@ class SimulationApplicationBootstrap:
                     }
                 )
 
-            async def add_label(
-                self, project: str, issue_number: int, label: str
-            ) -> None:
-                self.labels_added.append(
-                    {"project": project, "issue_number": issue_number, "label": label}
-                )
+            async def add_label(self, project: str, issue_number: int, label: str) -> None:
+                self.labels_added.append({"project": project, "issue_number": issue_number, "label": label})
 
         workflow_state_manager = SimulationWorkflowStateManager()
         decision_events = SimulationDecisionEvents()
@@ -662,7 +909,9 @@ class SimulationApplicationBootstrap:
             poll_interval_seconds=30,
         )
 
-        logger.info("Created all application services with simulation dependencies (including container recovery and multi-project orchestrator)")
+        logger.info(
+            "Created all application services with simulation dependencies (including container recovery and multi-project orchestrator)"
+        )
 
         return SimulationServices(
             workflow_orchestrator=workflow_orchestrator,
@@ -689,8 +938,9 @@ class SimulationApplicationBootstrap:
         Returns:
             SimulationPorts with all port implementations
         """
-        if not self.services:
-            raise RuntimeError("Services must be created first")
+        if not self.adapters or not self.services:
+            message = "Adapters and services must be created first"
+            raise RuntimeError(message)
 
         # Create mock port adapters, injecting Phase 1 backing stores where available
         # so query adapters read directly from the canonical data source.
@@ -707,7 +957,8 @@ class SimulationApplicationBootstrap:
         )
         # Create metrics query adapter via engine (clock is injected internally)
         if not self._engine:
-            raise RuntimeError("SimulationEngine must be created before ports")
+            message = "SimulationEngine must be created before ports"
+            raise RuntimeError(message)
         metrics_query = self._engine.create_metrics_query_adapter(
             metrics_adapter=self.adapters.metrics,
             event_store=self.adapters.event_store,
@@ -768,8 +1019,9 @@ class SimulationApplicationBootstrap:
         Raises:
             RuntimeError: If ports, infrastructure, or services not created first
         """
-        if not self.ports or not self.infrastructure or not self.services:
-            raise RuntimeError("Ports and infrastructure must be created first")
+        if not self.adapters or not self.ports or not self.infrastructure or not self.services:
+            message = "Adapters, ports, infrastructure, and services must be created first"
+            raise RuntimeError(message)
 
         # Create adapter for config service (wraps application service for FastAPI interface)
         config_service_interface = MockConfigServiceAdapter(self.services.configuration_service)
@@ -806,12 +1058,7 @@ class SimulationApplicationBootstrap:
         )
 
         # Mount simulation-only ticketing router (never in production create_app)
-        from codetoreum.adapters.primary.routers.simulation_ticketing import (
-            create_simulation_ticketing_router,
-        )
-        sim_router = create_simulation_ticketing_router(
-            self.adapters.ticket_system, self.adapters.board
-        )
+        sim_router = create_simulation_ticketing_router(self.adapters.ticket_system, self.adapters.board)
         app.include_router(sim_router)
 
         logger.info("Created FastAPI application with all ports wired")
@@ -873,10 +1120,6 @@ class SimulationApplicationBootstrap:
             logger.warning("Cannot register board event bridge: components not ready")
             return
 
-        import asyncio
-        from codetoreum.domain.events import WorkItemColumnChanged, BoardReconciled
-        from codetoreum.domain.work_item import WorkItemStatus
-
         event_bus = self.infrastructure.event_bus
         ticket_adapter = self.adapters.ticket_system
 
@@ -888,6 +1131,34 @@ class SimulationApplicationBootstrap:
             "Review": WorkItemStatus.UNDER_REVIEW,
             "Done": WorkItemStatus.COMPLETED,
         }
+
+        def _handle_publish_task_error(task: asyncio.Task) -> None:
+            """Handle errors from event publish tasks."""
+            try:
+                task.result()
+            except asyncio.CancelledError:
+                # Task was cancelled, this is normal during shutdown
+                pass
+            except Exception as e:
+                logger.error(
+                    f"Event publish task failed: {e}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                )
+
+        def _handle_sync_task_error(task: asyncio.Task) -> None:
+            """Handle errors from work item status sync tasks."""
+            try:
+                task.result()
+            except asyncio.CancelledError:
+                # Task was cancelled, this is normal during shutdown
+                pass
+            except Exception as e:
+                logger.error(
+                    f"Work item status sync task failed: {e}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                )
 
         def board_column_changed_bridge(event):
             """Translate WorkItemColumnChangedEvent (CodetoreumEvent) to WorkItemColumnChanged (DomainEvent).
@@ -908,20 +1179,23 @@ class SimulationApplicationBootstrap:
                         "moved_by": event.moved_by,
                     },
                 )
-                loop.create_task(event_bus.publish(domain_event))
+                # Create task with error callback to catch publish failures
+                task = loop.create_task(event_bus.publish(domain_event))
+                task.add_done_callback(_handle_publish_task_error)
 
                 # Sync work item status based on target column (best-effort)
                 target_status = _column_to_status.get(event.to_column)
                 if target_status is not None:
-                    loop.create_task(
-                        _sync_work_item_status(event.work_item_id, target_status)
-                    )
-            except RuntimeError:
-                pass
+                    sync_task = loop.create_task(_sync_work_item_status(event.work_item_id, target_status))
+                    sync_task.add_done_callback(_handle_sync_task_error)
+            except RuntimeError as e:
+                logger.error(
+                    f"Failed to schedule board column event bridge tasks: {e}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                )
 
-        async def _sync_work_item_status(
-            work_item_id: str, target_status: WorkItemStatus
-        ) -> None:
+        async def _sync_work_item_status(work_item_id: str, target_status: WorkItemStatus) -> None:
             """Best-effort sync of work item status in ticket adapter.
 
             The domain model validates transitions strictly, so some jumps
@@ -947,9 +1221,7 @@ class SimulationApplicationBootstrap:
                         work_item.assign_agent("simulation-agent", "Board column sync")
                         work_item.clear_events()
                     if work_item.status == WorkItemStatus.ASSIGNED:
-                        await ticket_adapter.update_status(
-                            work_item_id, WorkItemStatus.IN_PROGRESS
-                        )
+                        await ticket_adapter.update_status(work_item_id, WorkItemStatus.IN_PROGRESS)
                     return
 
                 # For UNDER_REVIEW: must go through ASSIGNED -> IN_PROGRESS first
@@ -958,15 +1230,11 @@ class SimulationApplicationBootstrap:
                         work_item.assign_agent("simulation-agent", "Board column sync")
                         work_item.clear_events()
                     if work_item.status == WorkItemStatus.ASSIGNED:
-                        await ticket_adapter.update_status(
-                            work_item_id, WorkItemStatus.IN_PROGRESS
-                        )
+                        await ticket_adapter.update_status(work_item_id, WorkItemStatus.IN_PROGRESS)
                     # Re-read after intermediate transition
                     work_item = await ticket_adapter.get_work_item(work_item_id)
                     if work_item.status == WorkItemStatus.IN_PROGRESS:
-                        await ticket_adapter.update_status(
-                            work_item_id, WorkItemStatus.UNDER_REVIEW
-                        )
+                        await ticket_adapter.update_status(work_item_id, WorkItemStatus.UNDER_REVIEW)
                     return
 
                 # For COMPLETED: must go through the full chain
@@ -975,28 +1243,23 @@ class SimulationApplicationBootstrap:
                         work_item.assign_agent("simulation-agent", "Board column sync")
                         work_item.clear_events()
                     if work_item.status == WorkItemStatus.ASSIGNED:
-                        await ticket_adapter.update_status(
-                            work_item_id, WorkItemStatus.IN_PROGRESS
-                        )
+                        await ticket_adapter.update_status(work_item_id, WorkItemStatus.IN_PROGRESS)
                     work_item = await ticket_adapter.get_work_item(work_item_id)
                     if work_item.status == WorkItemStatus.IN_PROGRESS:
-                        await ticket_adapter.update_status(
-                            work_item_id, WorkItemStatus.UNDER_REVIEW
-                        )
+                        await ticket_adapter.update_status(work_item_id, WorkItemStatus.UNDER_REVIEW)
                     work_item = await ticket_adapter.get_work_item(work_item_id)
                     if work_item.status == WorkItemStatus.UNDER_REVIEW:
-                        await ticket_adapter.update_status(
-                            work_item_id, WorkItemStatus.COMPLETED
-                        )
+                        await ticket_adapter.update_status(work_item_id, WorkItemStatus.COMPLETED)
                     return
 
                 # Fallback: try direct update
                 await ticket_adapter.update_status(work_item_id, target_status)
 
             except Exception as e:
-                logger.debug(
-                    f"Best-effort status sync failed for {work_item_id} -> "
-                    f"{target_status.value}: {e}"
+                logger.warning(
+                    f"Best-effort status sync failed for {work_item_id} -> {target_status.value}: {e}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
                 )
 
         def board_reconciled_bridge(event):
@@ -1008,14 +1271,20 @@ class SimulationApplicationBootstrap:
                     payload={
                         "board_id": event.board_id,
                         "project_id": event.project_id,
-                        "columns_added": list(event.columns_added) if hasattr(event, 'columns_added') else [],
-                        "columns_removed": list(event.columns_removed) if hasattr(event, 'columns_removed') else [],
+                        "columns_added": list(event.columns_added) if hasattr(event, "columns_added") else [],
+                        "columns_removed": list(event.columns_removed) if hasattr(event, "columns_removed") else [],
                         "orphaned_items": [],
                     },
                 )
-                loop.create_task(event_bus.publish(domain_event))
-            except RuntimeError:
-                pass
+                # Create task with error callback to catch publish failures
+                task = loop.create_task(event_bus.publish(domain_event))
+                task.add_done_callback(_handle_publish_task_error)
+            except RuntimeError as e:
+                logger.error(
+                    f"Failed to schedule board reconciliation event bridge task: {e}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                )
 
         self.adapters.board.on("workitem.column_changed", board_column_changed_bridge)
         self.adapters.board.on("board.reconciled", board_reconciled_bridge)
@@ -1033,10 +1302,6 @@ class SimulationApplicationBootstrap:
             logger.warning("Cannot register board column handler: components not ready")
             return
 
-        from codetoreum.application.event_handlers.board_event_handler import (
-            BoardColumnEventHandler,
-        )
-
         handler = BoardColumnEventHandler(
             board_service=self.adapters.board,
             lock_service=self.adapters.lock_service,
@@ -1047,9 +1312,7 @@ class SimulationApplicationBootstrap:
         )
 
         # Wire completion callback: executor -> handler.handle_agent_completion
-        self.adapters.agent_executor.set_completion_handler(
-            handler.handle_agent_completion, "board-1"
-        )
+        self.adapters.agent_executor.set_completion_handler(handler.handle_agent_completion, "board-1")
 
         self.infrastructure.event_bus.register_handler(handler)
         logger.info("Registered BoardColumnEventHandler with event bus")
@@ -1059,7 +1322,7 @@ class SimulationApplicationBootstrap:
     # =========================================================================
 
     @property
-    def engine(self) -> Optional[SimulationEngine]:
+    def engine(self) -> SimulationEngine | None:
         """
         Get the SimulationEngine instance.
 
@@ -1070,3 +1333,20 @@ class SimulationApplicationBootstrap:
             SimulationEngine instance (None if not yet set up)
         """
         return self._engine
+
+    @property
+    def causal_link_registry(self) -> CausalLinkRegistry | None:
+        """
+        Get the CausalLinkRegistry instance.
+
+        The registry manages causal dependencies between adapters and domain events,
+        providing:
+        - Discovery of adapter integration points
+        - Cycle detection for dependency consistency
+        - Audit trail of system wiring
+        - Runtime enforcement of causal constraints
+
+        Returns:
+            CausalLinkRegistry instance (None if not yet set up)
+        """
+        return self.infrastructure.causal_link_registry if self.infrastructure else None

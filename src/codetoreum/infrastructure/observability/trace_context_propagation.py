@@ -21,18 +21,18 @@ Key Concepts:
 """
 
 import logging
-from typing import Dict, Optional, Tuple
 from dataclasses import dataclass
+from typing import Optional
 
 try:
-    from opentelemetry import trace, context
+    from opentelemetry import context  # noqa: F401 - used as context.attach()/detach()
+    from opentelemetry.context import Context
     from opentelemetry.trace import (
         SpanContext,
         TraceFlags,
         get_current_span,
         set_span_in_context,
     )
-    from opentelemetry.context import Context
 
     OPENTELEMETRY_AVAILABLE = True
 except ImportError:
@@ -84,7 +84,7 @@ class TraceContextData:
         if not isinstance(traceparent, str):
             logger.warning(
                 f"traceparent must be a string, got {type(traceparent).__name__}",
-                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
             )
             return None
 
@@ -121,7 +121,7 @@ class TraceContextData:
             logger.error(
                 f"Unexpected error parsing traceparent: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
             )
             return None
 
@@ -157,12 +157,16 @@ class TraceContextPropagator:
 
     # Metadata key for storing trace context in events
     TRACE_CONTEXT_KEY = "traceparent"
-    STATE_KEY = "tracestate"
 
     @staticmethod
     def inject_trace_context(event: DomainEvent, span_context: Optional["SpanContext"] = None) -> None:
         """
         Inject current trace context into event metadata.
+
+        **NOTE**: Events are immutable by design. This function can only work if the
+        event was created with metadata that can be set at initialization time.
+        For events already created without trace context, this function will log a
+        warning and skip injection.
 
         If span_context is provided, uses it. Otherwise extracts from current span.
         Stores as W3C traceparent format in event.metadata[TRACE_CONTEXT_KEY].
@@ -172,9 +176,10 @@ class TraceContextPropagator:
             span_context: Optional SpanContext to use (defaults to current span)
 
         Example:
-            event = WorkItemCreated(...)
-            TraceContextPropagator.inject_trace_context(event)
-            # event.metadata['traceparent'] now contains W3C traceparent
+            # Events should be created with metadata at initialization:
+            event = DomainEvent(..., metadata={"traceparent": traceparent})
+
+            # OR if using OpenTelemetry, provide span_context at creation time
         """
         if not OPENTELEMETRY_AVAILABLE:
             return
@@ -190,29 +195,31 @@ class TraceContextPropagator:
                 logger.debug("No active span context, not injecting trace context")
                 return
 
-            # Convert to W3C format
-            trace_data = TraceContextData.from_span_context(span_context)
-            traceparent = trace_data.to_traceparent()
+            # NOTE: Events are immutable (frozen). If metadata is already set,
+            # we cannot mutate it. This is by design to preserve event sourcing
+            # audit trail integrity. Events should include trace context at creation time.
+            if event.metadata and TraceContextPropagator.TRACE_CONTEXT_KEY in event.metadata:
+                # Trace context already present
+                logger.debug(f"Trace context already present in event {event.event_type}")
+                return
 
-            # Inject into event metadata
-            if event.metadata is None:
-                event.metadata = {}
-
-            event.metadata[TraceContextPropagator.TRACE_CONTEXT_KEY] = traceparent
-
+            # For immutable events, we cannot inject trace context after creation
+            # Log this at debug level since it's not an error - events should be created
+            # with trace context if needed
             logger.debug(
-                f"Injected trace context into event {event.event_type}: {traceparent}"
+                f"Cannot inject trace context into immutable event {event.event_type}. "
+                f"Events should be created with metadata at initialization time with trace context."
             )
 
         except Exception as e:
             logger.warning(
                 f"Failed to inject trace context: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
             )
 
     @staticmethod
-    def extract_trace_context(event: DomainEvent) -> Optional[TraceContextData]:
+    def extract_trace_context(event: DomainEvent) -> TraceContextData | None:
         """
         Extract trace context from event metadata.
 
@@ -238,9 +245,7 @@ class TraceContextPropagator:
 
         trace_data = TraceContextData.from_traceparent(traceparent)
         if trace_data:
-            logger.debug(
-                f"Extracted trace context from event {event.event_type}: {traceparent}"
-            )
+            logger.debug(f"Extracted trace context from event {event.event_type}: {traceparent}")
         return trace_data
 
     @staticmethod
@@ -275,7 +280,6 @@ class TraceContextPropagator:
             return None
 
         try:
-            from opentelemetry import context as otel_context
             from opentelemetry.trace import NonRecordingSpan
 
             # Parse trace IDs from hex strings
@@ -298,10 +302,7 @@ class TraceContextPropagator:
             # Create context with this span context
             ctx = set_span_in_context(non_recording_span)
 
-            logger.debug(
-                f"Activated trace context: trace_id={trace_data.trace_id}, "
-                f"span_id={trace_data.span_id}"
-            )
+            logger.debug(f"Activated trace context: trace_id={trace_data.trace_id}, span_id={trace_data.span_id}")
 
             return ctx
 
@@ -309,7 +310,7 @@ class TraceContextPropagator:
             logger.warning(
                 f"Failed to activate trace context: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
             )
             return None
 
@@ -330,7 +331,7 @@ class EventBusTraceContext:
             handler.handle(event)
     """
 
-    def __init__(self, trace_data: Optional[TraceContextData] = None):
+    def __init__(self, trace_data: TraceContextData | None = None):
         """
         Initialize event bus trace context.
 
@@ -338,7 +339,7 @@ class EventBusTraceContext:
             trace_data: Optional W3C Trace Context data
         """
         self.trace_data = trace_data
-        self.context: Optional["Context"] = None
+        self.context: Context | None = None
 
     @classmethod
     def from_event(cls, event: DomainEvent) -> "EventBusTraceContext":
@@ -371,7 +372,7 @@ class EventBusTraceContext:
         """Check if trace context is available."""
         return self.trace_data is not None
 
-    def get_traceparent(self) -> Optional[str]:
+    def get_traceparent(self) -> str | None:
         """Get W3C traceparent header value."""
         if self.trace_data:
             return self.trace_data.to_traceparent()
@@ -379,6 +380,7 @@ class EventBusTraceContext:
 
 
 # Convenience functions for event bus integration
+
 
 def inject_current_trace_context_into_event(event: DomainEvent) -> None:
     """

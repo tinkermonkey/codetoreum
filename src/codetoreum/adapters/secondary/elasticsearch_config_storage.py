@@ -1,20 +1,15 @@
 """Elasticsearch configuration storage adapter for production persistence."""
 
 import logging
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
-from uuid import uuid4
+from datetime import UTC, datetime
+from typing import Any
 
 from elasticsearch import AsyncElasticsearch, NotFoundError
 
-from codetoreum.ports.exceptions import (
-    ConcurrencyConflictError,
-    ResourceNotFoundError,
-)
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.output.config_store import (
     AgentConfig,
     ConfigNotFoundError,
-    ConfigValidationError,
     ConfigVersion,
     IConfigStore,
     PipelineConfig,
@@ -128,9 +123,7 @@ class ElasticsearchConfigStorage(IConfigStore):
         for index_name, mappings in templates:
             await self._create_index_template(index_name, mappings)
 
-    async def _create_index_template(
-        self, index_name: str, mappings: Dict[str, Any]
-    ) -> None:
+    async def _create_index_template(self, index_name: str, mappings: dict[str, Any]) -> None:
         """
         Create or update an index template.
 
@@ -170,25 +163,27 @@ class ElasticsearchConfigStorage(IConfigStore):
                 logger.info(f"Created index: {index_name}")
             else:
                 # Update mappings if index already exists
-                await self.client.indices.put_mapping(
-                    index=index_name, body=mappings
-                )
+                await self.client.indices.put_mapping(index=index_name, body=mappings)
                 logger.info(f"Updated mappings for index: {index_name}")
 
         except Exception as e:
             logger.error(
                 f"Failed to create/update index {index_name}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR},
             )
             raise
 
-    def _get_projects_mapping(self) -> Dict[str, Any]:
+    def _get_projects_mapping(self) -> dict[str, Any]:
         """Get Elasticsearch mapping for projects index."""
         return {
             "properties": {
                 "id": {"type": "keyword"},
-                "name": {"type": "text", "analyzer": "config_analyzer", "fields": {"keyword": {"type": "keyword"}}},
+                "name": {
+                    "type": "text",
+                    "analyzer": "config_analyzer",
+                    "fields": {"keyword": {"type": "keyword"}},
+                },
                 "github_org": {"type": "keyword"},
                 "github_repo": {"type": "keyword"},
                 "tech_stacks": {"type": "object", "enabled": True},
@@ -204,12 +199,16 @@ class ElasticsearchConfigStorage(IConfigStore):
             }
         }
 
-    def _get_agents_mapping(self) -> Dict[str, Any]:
+    def _get_agents_mapping(self) -> dict[str, Any]:
         """Get Elasticsearch mapping for agents index."""
         return {
             "properties": {
                 "project_id": {"type": "keyword"},
-                "agent_name": {"type": "text", "analyzer": "config_analyzer", "fields": {"keyword": {"type": "keyword"}}},
+                "agent_name": {
+                    "type": "text",
+                    "analyzer": "config_analyzer",
+                    "fields": {"keyword": {"type": "keyword"}},
+                },
                 "model": {"type": "keyword"},
                 "timeout": {"type": "integer"},
                 "requires_docker": {"type": "boolean"},
@@ -224,13 +223,17 @@ class ElasticsearchConfigStorage(IConfigStore):
             }
         }
 
-    def _get_pipelines_mapping(self) -> Dict[str, Any]:
+    def _get_pipelines_mapping(self) -> dict[str, Any]:
         """Get Elasticsearch mapping for pipelines index."""
         return {
             "properties": {
                 "id": {"type": "keyword"},
                 "project_id": {"type": "keyword"},
-                "name": {"type": "text", "analyzer": "config_analyzer", "fields": {"keyword": {"type": "keyword"}}},
+                "name": {
+                    "type": "text",
+                    "analyzer": "config_analyzer",
+                    "fields": {"keyword": {"type": "keyword"}},
+                },
                 "stages": {"type": "nested"},
                 "triggers": {"type": "keyword"},
                 "version": {"type": "integer"},
@@ -240,12 +243,16 @@ class ElasticsearchConfigStorage(IConfigStore):
             }
         }
 
-    def _get_workflows_mapping(self) -> Dict[str, Any]:
+    def _get_workflows_mapping(self) -> dict[str, Any]:
         """Get Elasticsearch mapping for workflow templates index."""
         return {
             "properties": {
                 "id": {"type": "keyword"},
-                "name": {"type": "text", "analyzer": "config_analyzer", "fields": {"keyword": {"type": "keyword"}}},
+                "name": {
+                    "type": "text",
+                    "analyzer": "config_analyzer",
+                    "fields": {"keyword": {"type": "keyword"}},
+                },
                 "description": {"type": "text", "analyzer": "config_analyzer"},
                 "stages": {"type": "nested"},
                 "version": {"type": "integer"},
@@ -255,7 +262,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             }
         }
 
-    def _get_history_mapping(self) -> Dict[str, Any]:
+    def _get_history_mapping(self) -> dict[str, Any]:
         """Get Elasticsearch mapping for configuration history index."""
         return {
             "properties": {
@@ -288,19 +295,18 @@ class ElasticsearchConfigStorage(IConfigStore):
             await self.initialize()
 
         try:
-            result = await self.client.get(
-                index=self.INDEX_PROJECTS, id=project_id
-            )
+            result = await self.client.get(index=self.INDEX_PROJECTS, id=project_id)
 
             return self._deserialize_project(result["_source"])
 
         except NotFoundError:
-            raise ConfigNotFoundError(f"Project not found: {project_id}")
+            msg = f"Project not found: {project_id}"
+            raise ConfigNotFoundError(msg)
         except Exception as e:
             logger.error(
                 f"Failed to get project config {project_id}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR},
             )
             raise
 
@@ -331,7 +337,8 @@ class ElasticsearchConfigStorage(IConfigStore):
 
             hits = result["hits"]["hits"]
             if not hits:
-                raise ConfigNotFoundError(f"Project not found: {project_name}")
+                msg = f"Project not found: {project_name}"
+                raise ConfigNotFoundError(msg)
 
             return self._deserialize_project(hits[0]["_source"])
 
@@ -341,7 +348,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to get project config by name {project_name}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR},
             )
             raise
 
@@ -359,7 +366,7 @@ class ElasticsearchConfigStorage(IConfigStore):
 
         try:
             # Set timestamps
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             if config.created_at is None:
                 config.created_at = now
             config.updated_at = now
@@ -369,9 +376,7 @@ class ElasticsearchConfigStorage(IConfigStore):
 
             # Try to get existing document to check version
             try:
-                existing = await self.client.get(
-                    index=self.INDEX_PROJECTS, id=config.id
-                )
+                existing = await self.client.get(index=self.INDEX_PROJECTS, id=config.id)
                 old_version = existing["_source"].get("version", 1)
                 config.version = old_version + 1
                 doc["version"] = config.version
@@ -411,21 +416,17 @@ class ElasticsearchConfigStorage(IConfigStore):
                 refresh=True,
             )
 
-            logger.info(
-                f"Saved project config {config.id} (version {config.version})"
-            )
+            logger.info(f"Saved project config {config.id} (version {config.version})")
 
         except Exception as e:
             logger.error(
                 f"Failed to save project config {config.id}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR},
             )
             raise
 
-    async def get_agent_config(
-        self, project_id: str, agent_name: str
-    ) -> AgentConfig:
+    async def get_agent_config(self, project_id: str, agent_name: str) -> AgentConfig:
         """
         Get agent configuration for a project.
 
@@ -445,21 +446,18 @@ class ElasticsearchConfigStorage(IConfigStore):
         doc_id = f"{project_id}:{agent_name}"
 
         try:
-            result = await self.client.get(
-                index=self.INDEX_AGENTS, id=doc_id
-            )
+            result = await self.client.get(index=self.INDEX_AGENTS, id=doc_id)
 
             return self._deserialize_agent(result["_source"])
 
         except NotFoundError:
-            raise ConfigNotFoundError(
-                f"Agent config not found: {project_id}/{agent_name}"
-            )
+            msg = f"Agent config not found: {project_id}/{agent_name}"
+            raise ConfigNotFoundError(msg)
         except Exception as e:
             logger.error(
                 f"Failed to get agent config {doc_id}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR},
             )
             raise
 
@@ -477,7 +475,7 @@ class ElasticsearchConfigStorage(IConfigStore):
 
         try:
             # Set timestamps
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             if config.created_at is None:
                 config.created_at = now
             config.updated_at = now
@@ -487,9 +485,7 @@ class ElasticsearchConfigStorage(IConfigStore):
 
             # Try to get existing document to check version
             try:
-                existing = await self.client.get(
-                    index=self.INDEX_AGENTS, id=doc_id
-                )
+                existing = await self.client.get(index=self.INDEX_AGENTS, id=doc_id)
                 old_version = existing["_source"].get("version", 1)
                 config.version = old_version + 1
                 doc["version"] = config.version
@@ -535,13 +531,11 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to save agent config {doc_id}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR},
             )
             raise
 
-    async def get_pipeline_config(
-        self, project_id: str, pipeline_name: str
-    ) -> PipelineConfig:
+    async def get_pipeline_config(self, project_id: str, pipeline_name: str) -> PipelineConfig:
         """
         Get pipeline configuration.
 
@@ -576,9 +570,8 @@ class ElasticsearchConfigStorage(IConfigStore):
 
             hits = result["hits"]["hits"]
             if not hits:
-                raise ConfigNotFoundError(
-                    f"Pipeline not found: {project_id}/{pipeline_name}"
-                )
+                msg = f"Pipeline not found: {project_id}/{pipeline_name}"
+                raise ConfigNotFoundError(msg)
 
             return self._deserialize_pipeline(hits[0]["_source"])
 
@@ -588,7 +581,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to get pipeline config {project_id}/{pipeline_name}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR},
             )
             raise
 
@@ -604,7 +597,7 @@ class ElasticsearchConfigStorage(IConfigStore):
 
         try:
             # Set timestamps
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             if config.created_at is None:
                 config.created_at = now
             config.updated_at = now
@@ -614,9 +607,7 @@ class ElasticsearchConfigStorage(IConfigStore):
 
             # Try to get existing document to check version
             try:
-                existing = await self.client.get(
-                    index=self.INDEX_PIPELINES, id=config.id
-                )
+                existing = await self.client.get(index=self.INDEX_PIPELINES, id=config.id)
                 old_version = existing["_source"].get("version", 1)
                 config.version = old_version + 1
                 doc["version"] = config.version
@@ -656,15 +647,13 @@ class ElasticsearchConfigStorage(IConfigStore):
                 refresh=True,
             )
 
-            logger.info(
-                f"Saved pipeline config {config.id} (version {config.version})"
-            )
+            logger.info(f"Saved pipeline config {config.id} (version {config.version})")
 
         except Exception as e:
             logger.error(
                 f"Failed to save pipeline config {config.id}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR},
             )
             raise
 
@@ -695,7 +684,8 @@ class ElasticsearchConfigStorage(IConfigStore):
 
             hits = result["hits"]["hits"]
             if not hits:
-                raise ConfigNotFoundError(f"Template not found: {template_name}")
+                msg = f"Template not found: {template_name}"
+                raise ConfigNotFoundError(msg)
 
             return self._deserialize_workflow(hits[0]["_source"])
 
@@ -705,7 +695,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to get workflow template {template_name}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR},
             )
             raise
 
@@ -721,7 +711,7 @@ class ElasticsearchConfigStorage(IConfigStore):
 
         try:
             # Set timestamps
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             if template.created_at is None:
                 template.created_at = now
             template.updated_at = now
@@ -731,9 +721,7 @@ class ElasticsearchConfigStorage(IConfigStore):
 
             # Try to get existing document to check version
             try:
-                existing = await self.client.get(
-                    index=self.INDEX_WORKFLOWS, id=template.id
-                )
+                existing = await self.client.get(index=self.INDEX_WORKFLOWS, id=template.id)
                 old_version = existing["_source"].get("version", 1)
                 template.version = old_version + 1
                 doc["version"] = template.version
@@ -773,19 +761,17 @@ class ElasticsearchConfigStorage(IConfigStore):
                 refresh=True,
             )
 
-            logger.info(
-                f"Saved workflow template {template.id} (version {template.version})"
-            )
+            logger.info(f"Saved workflow template {template.id} (version {template.version})")
 
         except Exception as e:
             logger.error(
                 f"Failed to save workflow template {template.id}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR},
             )
             raise
 
-    async def list_projects(self) -> List[ProjectConfig]:
+    async def list_projects(self) -> list[ProjectConfig]:
         """
         List all projects.
 
@@ -811,11 +797,11 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to list projects: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR},
             )
             raise
 
-    async def list_agents(self, project_id: str) -> List[AgentConfig]:
+    async def list_agents(self, project_id: str) -> list[AgentConfig]:
         """
         List all agents for a project.
 
@@ -847,11 +833,11 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to list agents for project {project_id}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR},
             )
             raise
 
-    async def list_pipelines(self, project_id: str) -> List[PipelineConfig]:
+    async def list_pipelines(self, project_id: str) -> list[PipelineConfig]:
         """
         List all pipelines for a project.
 
@@ -883,13 +869,11 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to list pipelines for project {project_id}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR},
             )
             raise
 
-    async def search_configs(
-        self, query: str, config_type: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+    async def search_configs(self, query: str, config_type: str | None = None) -> list[dict[str, Any]]:
         """
         Search configurations using full-text search with injection protection.
 
@@ -908,13 +892,16 @@ class ElasticsearchConfigStorage(IConfigStore):
 
         try:
             # Sanitize and validate query to prevent injection attacks
-            from codetoreum.infrastructure.security import sanitize_search_query, InvalidInputError
-            from codetoreum.infrastructure.error_ids import ErrorRegistry
+            from codetoreum.infrastructure.security import (
+                InvalidInputError,
+                sanitize_search_query,
+            )
 
             try:
                 sanitized_query = sanitize_search_query(query, max_length=500)
             except InvalidInputError as e:
-                raise ValueError(f"Invalid search query: {e}")
+                msg = f"Invalid search query: {e}"
+                raise ValueError(msg)
 
             if not sanitized_query:
                 return []  # Empty query returns no results
@@ -922,10 +909,11 @@ class ElasticsearchConfigStorage(IConfigStore):
             # Validate config_type to prevent injection
             valid_config_types = ["project", "agent", "pipeline", "workflow", None]
             if config_type not in valid_config_types:
-                raise ValueError(
+                msg = (
                     f"Invalid config_type '{config_type}'. "
                     f"Must be one of: {', '.join([t for t in valid_config_types if t is not None])}"
                 )
+                raise ValueError(msg)
 
             # Determine which indices to search
             if config_type == "project":
@@ -991,13 +979,11 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to search configs: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR},
             )
             raise
 
-    async def get_config_version(
-        self, config_id: str, version: int
-    ) -> Dict[str, Any]:
+    async def get_config_version(self, config_id: str, version: int) -> dict[str, Any]:
         """
         Get specific version of a configuration.
 
@@ -1032,9 +1018,8 @@ class ElasticsearchConfigStorage(IConfigStore):
 
             hits = result["hits"]["hits"]
             if not hits:
-                raise ConfigNotFoundError(
-                    f"Config version not found: {config_id} v{version}"
-                )
+                msg = f"Config version not found: {config_id} v{version}"
+                raise ConfigNotFoundError(msg)
 
             return hits[0]["_source"]["snapshot"]
 
@@ -1044,13 +1029,11 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to get config version {config_id} v{version}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR},
             )
             raise
 
-    async def list_config_versions(
-        self, config_id: str, limit: int = 10
-    ) -> List[ConfigVersion]:
+    async def list_config_versions(self, config_id: str, limit: int = 10) -> list[ConfigVersion]:
         """
         List configuration version history.
 
@@ -1094,7 +1077,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to list config versions for {config_id}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR},
             )
             raise
 
@@ -1112,25 +1095,22 @@ class ElasticsearchConfigStorage(IConfigStore):
             await self.initialize()
 
         try:
-            await self.client.delete(
-                index=self.INDEX_PROJECTS, id=project_id, refresh=True
-            )
+            await self.client.delete(index=self.INDEX_PROJECTS, id=project_id, refresh=True)
 
             logger.info(f"Deleted project config {project_id}")
 
         except NotFoundError:
-            raise ConfigNotFoundError(f"Project not found: {project_id}")
+            msg = f"Project not found: {project_id}"
+            raise ConfigNotFoundError(msg)
         except Exception as e:
             logger.error(
                 f"Failed to delete project config {project_id}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR},
             )
             raise
 
-    async def delete_agent_config(
-        self, project_id: str, agent_name: str
-    ) -> None:
+    async def delete_agent_config(self, project_id: str, agent_name: str) -> None:
         """
         Delete agent configuration.
 
@@ -1147,21 +1127,18 @@ class ElasticsearchConfigStorage(IConfigStore):
         doc_id = f"{project_id}:{agent_name}"
 
         try:
-            await self.client.delete(
-                index=self.INDEX_AGENTS, id=doc_id, refresh=True
-            )
+            await self.client.delete(index=self.INDEX_AGENTS, id=doc_id, refresh=True)
 
             logger.info(f"Deleted agent config {doc_id}")
 
         except NotFoundError:
-            raise ConfigNotFoundError(
-                f"Agent config not found: {project_id}/{agent_name}"
-            )
+            msg = f"Agent config not found: {project_id}/{agent_name}"
+            raise ConfigNotFoundError(msg)
         except Exception as e:
             logger.error(
                 f"Failed to delete agent config {doc_id}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR},
             )
             raise
 
@@ -1179,16 +1156,14 @@ class ElasticsearchConfigStorage(IConfigStore):
             await self.initialize()
 
         try:
-            result = await self.client.exists(
-                index=self.INDEX_PROJECTS, id=project_id
-            )
+            result = await self.client.exists(index=self.INDEX_PROJECTS, id=project_id)
             return bool(result)
 
         except Exception as e:
             logger.error(
                 f"Failed to check if project exists {project_id}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR},
             )
             raise
 
@@ -1199,9 +1174,9 @@ class ElasticsearchConfigStorage(IConfigStore):
         version: int,
         changed_by: str,
         change_type: str,
-        changes: Dict[str, Any],
-        snapshot: Dict[str, Any],
-        reason: Optional[str] = None,
+        changes: dict[str, Any],
+        snapshot: dict[str, Any],
+        reason: str | None = None,
     ) -> None:
         """
         Save configuration history entry.
@@ -1223,7 +1198,7 @@ class ElasticsearchConfigStorage(IConfigStore):
                 "config_id": config_id,
                 "config_type": config_type,
                 "version": version,
-                "changed_at": datetime.now(timezone.utc).isoformat(),
+                "changed_at": datetime.now(UTC).isoformat(),
                 "changed_by": changed_by,
                 "change_type": change_type,
                 "changes": changes,
@@ -1244,11 +1219,11 @@ class ElasticsearchConfigStorage(IConfigStore):
             logger.error(
                 f"Failed to save history for {config_id} v{version}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR},
             )
             # Don't raise - history failure shouldn't block config save
 
-    def _serialize_project(self, config: ProjectConfig) -> Dict[str, Any]:
+    def _serialize_project(self, config: ProjectConfig) -> dict[str, Any]:
         """Serialize ProjectConfig to dictionary."""
         return {
             "id": config.id,
@@ -1261,17 +1236,13 @@ class ElasticsearchConfigStorage(IConfigStore):
             "environment_variables": config.environment_variables,
             "mounted_commands": config.mounted_commands,
             "mounted_subagents": config.mounted_subagents,
-            "created_at": (
-                config.created_at.isoformat() if config.created_at else None
-            ),
-            "updated_at": (
-                config.updated_at.isoformat() if config.updated_at else None
-            ),
+            "created_at": (config.created_at.isoformat() if config.created_at else None),
+            "updated_at": (config.updated_at.isoformat() if config.updated_at else None),
             "version": config.version,
             "metadata": config.metadata,
         }
 
-    def _deserialize_project(self, doc: Dict[str, Any]) -> ProjectConfig:
+    def _deserialize_project(self, doc: dict[str, Any]) -> ProjectConfig:
         """Deserialize dictionary to ProjectConfig."""
         return ProjectConfig(
             id=doc["id"],
@@ -1284,21 +1255,13 @@ class ElasticsearchConfigStorage(IConfigStore):
             environment_variables=doc.get("environment_variables", {}),
             mounted_commands=doc.get("mounted_commands", {}),
             mounted_subagents=doc.get("mounted_subagents", {}),
-            created_at=(
-                datetime.fromisoformat(doc["created_at"])
-                if doc.get("created_at")
-                else None
-            ),
-            updated_at=(
-                datetime.fromisoformat(doc["updated_at"])
-                if doc.get("updated_at")
-                else None
-            ),
+            created_at=(datetime.fromisoformat(doc["created_at"]) if doc.get("created_at") else None),
+            updated_at=(datetime.fromisoformat(doc["updated_at"]) if doc.get("updated_at") else None),
             version=doc.get("version", 1),
             metadata=doc.get("metadata", {}),
         )
 
-    def _serialize_agent(self, config: AgentConfig) -> Dict[str, Any]:
+    def _serialize_agent(self, config: AgentConfig) -> dict[str, Any]:
         """Serialize AgentConfig to dictionary."""
         return {
             "project_id": config.project_id,
@@ -1311,16 +1274,12 @@ class ElasticsearchConfigStorage(IConfigStore):
             "capabilities": config.capabilities,
             "constraints": config.constraints,
             "version": config.version,
-            "created_at": (
-                config.created_at.isoformat() if config.created_at else None
-            ),
-            "updated_at": (
-                config.updated_at.isoformat() if config.updated_at else None
-            ),
+            "created_at": (config.created_at.isoformat() if config.created_at else None),
+            "updated_at": (config.updated_at.isoformat() if config.updated_at else None),
             "metadata": config.metadata,
         }
 
-    def _deserialize_agent(self, doc: Dict[str, Any]) -> AgentConfig:
+    def _deserialize_agent(self, doc: dict[str, Any]) -> AgentConfig:
         """Deserialize dictionary to AgentConfig."""
         return AgentConfig(
             project_id=doc["project_id"],
@@ -1333,20 +1292,12 @@ class ElasticsearchConfigStorage(IConfigStore):
             capabilities=doc.get("capabilities", []),
             constraints=doc.get("constraints", {}),
             version=doc.get("version", 1),
-            created_at=(
-                datetime.fromisoformat(doc["created_at"])
-                if doc.get("created_at")
-                else None
-            ),
-            updated_at=(
-                datetime.fromisoformat(doc["updated_at"])
-                if doc.get("updated_at")
-                else None
-            ),
+            created_at=(datetime.fromisoformat(doc["created_at"]) if doc.get("created_at") else None),
+            updated_at=(datetime.fromisoformat(doc["updated_at"]) if doc.get("updated_at") else None),
             metadata=doc.get("metadata", {}),
         )
 
-    def _serialize_pipeline(self, config: PipelineConfig) -> Dict[str, Any]:
+    def _serialize_pipeline(self, config: PipelineConfig) -> dict[str, Any]:
         """Serialize PipelineConfig to dictionary."""
         return {
             "id": config.id,
@@ -1355,16 +1306,12 @@ class ElasticsearchConfigStorage(IConfigStore):
             "stages": config.stages,
             "triggers": config.triggers,
             "version": config.version,
-            "created_at": (
-                config.created_at.isoformat() if config.created_at else None
-            ),
-            "updated_at": (
-                config.updated_at.isoformat() if config.updated_at else None
-            ),
+            "created_at": (config.created_at.isoformat() if config.created_at else None),
+            "updated_at": (config.updated_at.isoformat() if config.updated_at else None),
             "metadata": config.metadata,
         }
 
-    def _deserialize_pipeline(self, doc: Dict[str, Any]) -> PipelineConfig:
+    def _deserialize_pipeline(self, doc: dict[str, Any]) -> PipelineConfig:
         """Deserialize dictionary to PipelineConfig."""
         return PipelineConfig(
             id=doc["id"],
@@ -1373,20 +1320,12 @@ class ElasticsearchConfigStorage(IConfigStore):
             stages=doc.get("stages", []),
             triggers=doc.get("triggers", []),
             version=doc.get("version", 1),
-            created_at=(
-                datetime.fromisoformat(doc["created_at"])
-                if doc.get("created_at")
-                else None
-            ),
-            updated_at=(
-                datetime.fromisoformat(doc["updated_at"])
-                if doc.get("updated_at")
-                else None
-            ),
+            created_at=(datetime.fromisoformat(doc["created_at"]) if doc.get("created_at") else None),
+            updated_at=(datetime.fromisoformat(doc["updated_at"]) if doc.get("updated_at") else None),
             metadata=doc.get("metadata", {}),
         )
 
-    def _serialize_workflow(self, template: WorkflowTemplate) -> Dict[str, Any]:
+    def _serialize_workflow(self, template: WorkflowTemplate) -> dict[str, Any]:
         """Serialize WorkflowTemplate to dictionary."""
         return {
             "id": template.id,
@@ -1394,16 +1333,12 @@ class ElasticsearchConfigStorage(IConfigStore):
             "description": template.description,
             "stages": template.stages,
             "version": template.version,
-            "created_at": (
-                template.created_at.isoformat() if template.created_at else None
-            ),
-            "updated_at": (
-                template.updated_at.isoformat() if template.updated_at else None
-            ),
+            "created_at": (template.created_at.isoformat() if template.created_at else None),
+            "updated_at": (template.updated_at.isoformat() if template.updated_at else None),
             "metadata": template.metadata,
         }
 
-    def _deserialize_workflow(self, doc: Dict[str, Any]) -> WorkflowTemplate:
+    def _deserialize_workflow(self, doc: dict[str, Any]) -> WorkflowTemplate:
         """Deserialize dictionary to WorkflowTemplate."""
         return WorkflowTemplate(
             id=doc["id"],
@@ -1411,16 +1346,8 @@ class ElasticsearchConfigStorage(IConfigStore):
             description=doc["description"],
             stages=doc.get("stages", []),
             version=doc.get("version", 1),
-            created_at=(
-                datetime.fromisoformat(doc["created_at"])
-                if doc.get("created_at")
-                else None
-            ),
-            updated_at=(
-                datetime.fromisoformat(doc["updated_at"])
-                if doc.get("updated_at")
-                else None
-            ),
+            created_at=(datetime.fromisoformat(doc["created_at"]) if doc.get("created_at") else None),
+            updated_at=(datetime.fromisoformat(doc["updated_at"]) if doc.get("updated_at") else None),
             metadata=doc.get("metadata", {}),
         )
 

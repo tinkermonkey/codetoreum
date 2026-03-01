@@ -6,8 +6,6 @@ Defines the contract for execution command operations.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
-
 
 # ============================================================================
 # Commands
@@ -19,7 +17,7 @@ class TerminateExecutionCommand:
     """Command to terminate a running execution."""
 
     execution_id: str
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 @dataclass
@@ -48,8 +46,8 @@ class ExecutionCommandResult:
     success: bool
     execution_id: str
     message: str
-    new_status: Optional[str] = None
-    errors: Optional[list] = None
+    new_status: str | None = None
+    errors: list | None = None
 
 
 # ============================================================================
@@ -65,9 +63,7 @@ class IExecutionCommandPort(ABC):
     """
 
     @abstractmethod
-    async def terminate_execution(
-        self, command: TerminateExecutionCommand
-    ) -> ExecutionCommandResult:
+    async def terminate_execution(self, command: TerminateExecutionCommand) -> ExecutionCommandResult:
         """
         Terminate a running execution.
 
@@ -86,12 +82,9 @@ class IExecutionCommandPort(ABC):
             ExecutionNotFoundError: If execution doesn't exist
             InvalidStateError: If execution is already completed (409 Conflict)
         """
-        pass
 
     @abstractmethod
-    async def pause_execution(
-        self, command: PauseExecutionCommand
-    ) -> ExecutionCommandResult:
+    async def pause_execution(self, command: PauseExecutionCommand) -> ExecutionCommandResult:
         """
         Pause a running execution.
 
@@ -105,12 +98,9 @@ class IExecutionCommandPort(ABC):
             ExecutionNotFoundError: If execution doesn't exist
             InvalidStateError: If execution cannot be paused
         """
-        pass
 
     @abstractmethod
-    async def resume_execution(
-        self, command: ResumeExecutionCommand
-    ) -> ExecutionCommandResult:
+    async def resume_execution(self, command: ResumeExecutionCommand) -> ExecutionCommandResult:
         """
         Resume a paused execution.
 
@@ -124,4 +114,3 @@ class IExecutionCommandPort(ABC):
             ExecutionNotFoundError: If execution doesn't exist
             InvalidStateError: If execution is not paused
         """
-        pass

@@ -10,23 +10,24 @@ Provides detailed metrics for:
 """
 
 import logging
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 try:
     from prometheus_client import Counter, Gauge, Histogram, Summary
+
     PROMETHEUS_AVAILABLE = True
 except ImportError:
     PROMETHEUS_AVAILABLE = False
 
-from codetoreum.ports.output.metrics import IMetrics, MetricData
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.ports.output.metrics import IMetrics, MetricData
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    "PrometheusMetricsAdapter",
     "PROMETHEUS_AVAILABLE",
+    "PrometheusMetricsAdapter",
 ]
 
 
@@ -42,12 +43,13 @@ class PrometheusMetricsAdapter(IMetrics):
             subsystem: Prometheus metric subsystem
         """
         if not PROMETHEUS_AVAILABLE:
-            raise RuntimeError("prometheus_client library not installed")
+            msg = "prometheus_client library not installed"
+            raise RuntimeError(msg)
 
         self.namespace = namespace
         self.subsystem = subsystem
-        self._timers: Dict[str, float] = {}
-        self._metrics_registry: Dict[str, Any] = {}
+        self._timers: dict[str, float] = {}
+        self._metrics_registry: dict[str, Any] = {}
 
         # Initialize repair cycle metrics
         self._init_repair_cycle_metrics()
@@ -154,25 +156,27 @@ class PrometheusMetricsAdapter(IMetrics):
         )
 
         # Register metrics for later retrieval
-        self._metrics_registry.update({
-            f"{prefix}_started_total": self._repair_cycles_started,
-            f"{prefix}_completed_total": self._repair_cycles_completed,
-            f"{prefix}_successful_total": self._repair_cycles_successful,
-            f"{prefix}_failed_total": self._repair_cycles_failed,
-            f"{prefix}_fast_failed_total": self._repair_cycles_fast_failed,
-            f"{prefix}_test_executions_total": self._test_executions_total,
-            f"{prefix}_test_failures_total": self._test_failures_total,
-            f"{prefix}_files_fixed_total": self._files_fixed_total,
-            f"{prefix}_warnings_reviewed_total": self._warnings_reviewed_total,
-            f"{prefix}_active_count": self._active_cycles,
-            f"{prefix}_max_iterations_reached_total": self._max_iterations_reached,
-            f"{prefix}_duration_seconds": self._cycle_duration_histogram,
-            f"{prefix}_test_execution_duration_seconds": self._test_execution_duration_histogram,
-            f"{prefix}_file_fix_duration_seconds": self._file_fix_duration_histogram,
-            f"{prefix}_iterations_count": self._iterations_histogram,
-            f"{prefix}_agent_calls_per_cycle": self._agent_calls_summary,
-            f"{prefix}_files_fixed_per_cycle": self._files_fixed_per_cycle_summary,
-        })
+        self._metrics_registry.update(
+            {
+                f"{prefix}_started_total": self._repair_cycles_started,
+                f"{prefix}_completed_total": self._repair_cycles_completed,
+                f"{prefix}_successful_total": self._repair_cycles_successful,
+                f"{prefix}_failed_total": self._repair_cycles_failed,
+                f"{prefix}_fast_failed_total": self._repair_cycles_fast_failed,
+                f"{prefix}_test_executions_total": self._test_executions_total,
+                f"{prefix}_test_failures_total": self._test_failures_total,
+                f"{prefix}_files_fixed_total": self._files_fixed_total,
+                f"{prefix}_warnings_reviewed_total": self._warnings_reviewed_total,
+                f"{prefix}_active_count": self._active_cycles,
+                f"{prefix}_max_iterations_reached_total": self._max_iterations_reached,
+                f"{prefix}_duration_seconds": self._cycle_duration_histogram,
+                f"{prefix}_test_execution_duration_seconds": self._test_execution_duration_histogram,
+                f"{prefix}_file_fix_duration_seconds": self._file_fix_duration_histogram,
+                f"{prefix}_iterations_count": self._iterations_histogram,
+                f"{prefix}_agent_calls_per_cycle": self._agent_calls_summary,
+                f"{prefix}_files_fixed_per_cycle": self._files_fixed_per_cycle_summary,
+            }
+        )
 
         logger.info("Prometheus metrics adapter initialized with %d metrics", len(self._metrics_registry))
 
@@ -180,7 +184,7 @@ class PrometheusMetricsAdapter(IMetrics):
         self,
         name: str,
         value: int = 1,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         """
         Increment a counter metric.
@@ -203,13 +207,14 @@ class PrometheusMetricsAdapter(IMetrics):
             logger.error(
                 f"Error incrementing counter {name}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_METRICS_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_METRICS_ERROR},
             )
+
     async def set_gauge(
         self,
         name: str,
         value: float,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         """
         Set a gauge metric.
@@ -232,13 +237,14 @@ class PrometheusMetricsAdapter(IMetrics):
             logger.error(
                 f"Error setting gauge {name}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_METRICS_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_METRICS_ERROR},
             )
+
     async def record_histogram(
         self,
         name: str,
         value: float,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         """
         Record a histogram value.
@@ -261,13 +267,14 @@ class PrometheusMetricsAdapter(IMetrics):
             logger.error(
                 f"Error recording histogram {name}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_METRICS_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_METRICS_ERROR},
             )
+
     async def record_summary(
         self,
         name: str,
         value: float,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         """
         Record a summary value.
@@ -290,8 +297,9 @@ class PrometheusMetricsAdapter(IMetrics):
             logger.error(
                 f"Error recording summary {name}: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_METRICS_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_METRICS_ERROR},
             )
+
     async def start_timer(self, name: str) -> str:
         """
         Start a timer.
@@ -302,14 +310,14 @@ class PrometheusMetricsAdapter(IMetrics):
         Returns:
             str: Timer ID
         """
-        timer_id = f"{name}_{id(self)}_{datetime.now(timezone.utc).timestamp()}"
-        self._timers[timer_id] = datetime.now(timezone.utc).timestamp()
+        timer_id = f"{name}_{id(self)}_{datetime.now(UTC).timestamp()}"
+        self._timers[timer_id] = datetime.now(UTC).timestamp()
         return timer_id
 
     async def stop_timer(
         self,
         timer_id: str,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> float:
         """
         Stop a timer and record duration.
@@ -326,7 +334,7 @@ class PrometheusMetricsAdapter(IMetrics):
             return 0.0
 
         start_time = self._timers.pop(timer_id)
-        duration = datetime.now(timezone.utc).timestamp() - start_time
+        duration = datetime.now(UTC).timestamp() - start_time
 
         return duration
 
@@ -334,7 +342,7 @@ class PrometheusMetricsAdapter(IMetrics):
         self,
         name: str,
         duration_seconds: float,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         """
         Record a duration metric.
@@ -351,7 +359,7 @@ class PrometheusMetricsAdapter(IMetrics):
         name: str,
         value: Any,
         metric_type: str,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         """
         Record a custom metric.
@@ -376,9 +384,9 @@ class PrometheusMetricsAdapter(IMetrics):
         name: str,
         start_time: datetime,
         end_time: datetime,
-        labels: Optional[Dict[str, str]] = None,
-        aggregation: Optional[str] = None,
-    ) -> List[MetricData]:
+        labels: dict[str, str] | None = None,
+        aggregation: str | None = None,
+    ) -> list[MetricData]:
         """
         Query metric data.
 
@@ -398,12 +406,11 @@ class PrometheusMetricsAdapter(IMetrics):
         # Prometheus client library doesn't provide query capabilities
         # Use Prometheus HTTP API for time-series queries
         logger.warning(
-            f"query_metrics not implemented for Prometheus adapter. "
-            "Use Prometheus HTTP API /api/v1/query_range instead."
+            "query_metrics not implemented for Prometheus adapter. Use Prometheus HTTP API /api/v1/query_range instead."
         )
         return []
 
-    async def get_metric_names(self, prefix: Optional[str] = None) -> List[str]:
+    async def get_metric_names(self, prefix: str | None = None) -> list[str]:
         """
         Get list of metric names.
 
@@ -421,8 +428,8 @@ class PrometheusMetricsAdapter(IMetrics):
     async def get_label_values(
         self,
         label_name: str,
-        metric_name: Optional[str] = None,
-    ) -> List[str]:
+        metric_name: str | None = None,
+    ) -> list[str]:
         """
         Get all values for a label.
 
@@ -436,7 +443,7 @@ class PrometheusMetricsAdapter(IMetrics):
         # Prometheus client library doesn't expose label values
         # Use Prometheus HTTP API for this
         logger.warning(
-            f"get_label_values not implemented for Prometheus adapter. "
+            "get_label_values not implemented for Prometheus adapter. "
             "Use Prometheus HTTP API /api/v1/label/{label_name}/values instead."
         )
         return []
@@ -444,7 +451,7 @@ class PrometheusMetricsAdapter(IMetrics):
     async def delete_metric(
         self,
         name: str,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         """
         Delete a metric or metric series.
@@ -457,8 +464,7 @@ class PrometheusMetricsAdapter(IMetrics):
             labels: Optional labels to delete specific series
         """
         logger.warning(
-            f"delete_metric not supported for Prometheus adapter. "
-            "Metrics are managed by Prometheus retention policies."
+            "delete_metric not supported for Prometheus adapter. Metrics are managed by Prometheus retention policies."
         )
 
     async def get_statistics(
@@ -466,8 +472,8 @@ class PrometheusMetricsAdapter(IMetrics):
         name: str,
         start_time: datetime,
         end_time: datetime,
-        labels: Optional[Dict[str, str]] = None,
-    ) -> Dict[str, float]:
+        labels: dict[str, str] | None = None,
+    ) -> dict[str, float]:
         """
         Get statistics for a metric.
 
@@ -481,14 +487,14 @@ class PrometheusMetricsAdapter(IMetrics):
             Dict[str, float]: Statistics (min, max, avg, sum, count)
         """
         logger.warning(
-            f"get_statistics not fully implemented for Prometheus adapter. "
+            "get_statistics not fully implemented for Prometheus adapter. "
             "Use Prometheus HTTP API /api/v1/query_range for historical data."
         )
         return {}
 
     async def record_batch(
         self,
-        metrics: List[Dict[str, Any]],
+        metrics: list[dict[str, Any]],
     ) -> None:
         """
         Record multiple metrics in a batch.
@@ -508,8 +514,9 @@ class PrometheusMetricsAdapter(IMetrics):
                 logger.error(
                     f"Error recording batch metric: {e}",
                     exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_METRICS_ERROR}
+                    extra={"error_id": ErrorRegistry.ERR_METRICS_ERROR},
                 )
+
     async def flush(self) -> None:
         """Flush any buffered metrics."""
         # Prometheus client handles flushing automatically
@@ -529,6 +536,6 @@ class PrometheusMetricsAdapter(IMetrics):
             logger.error(
                 f"Health check failed: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_HEALTH_CHECK_FAILED}
+                extra={"error_id": ErrorRegistry.ERR_HEALTH_CHECK_FAILED},
             )
             return False

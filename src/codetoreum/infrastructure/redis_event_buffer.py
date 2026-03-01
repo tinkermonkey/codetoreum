@@ -1,10 +1,8 @@
 """Redis event buffer for high-throughput event writes."""
 
-import asyncio
-import json
 import logging
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from redis import asyncio as aioredis
 
@@ -18,8 +16,6 @@ logger = logging.getLogger(__name__)
 
 class RedisEventBufferError(Exception):
     """Raised when Redis event buffer operations fail."""
-
-    pass
 
 
 class RedisEventBuffer:
@@ -85,23 +81,19 @@ class RedisEventBuffer:
                     id="0",
                     mkstream=True,
                 )
-                logger.info(
-                    f"Created consumer group '{self.consumer_group}' "
-                    f"for stream '{self.stream_name}'"
-                )
+                logger.info(f"Created consumer group '{self.consumer_group}' for stream '{self.stream_name}'")
             except aioredis.ResponseError as e:
                 if "BUSYGROUP" in str(e):
                     # Group already exists, that's fine
-                    logger.debug(
-                        f"Consumer group '{self.consumer_group}' already exists"
-                    )
+                    logger.debug(f"Consumer group '{self.consumer_group}' already exists")
                 else:
                     raise
 
             self._initialized = True
 
         except Exception as e:
-            raise RedisEventBufferError(f"Failed to initialize buffer: {e}") from e
+            message = f"Failed to initialize buffer: {e}"
+            raise RedisEventBufferError(message) from e
 
     async def buffer_event(self, event: DomainEvent) -> str:
         """
@@ -147,9 +139,10 @@ class RedisEventBuffer:
             return message_id
 
         except Exception as e:
-            raise RedisEventBufferError(f"Failed to buffer event: {e}") from e
+            message = f"Failed to buffer event: {e}"
+            raise RedisEventBufferError(message) from e
 
-    async def buffer_events_batch(self, events: List[DomainEvent]) -> List[str]:
+    async def buffer_events_batch(self, events: list[DomainEvent]) -> list[str]:
         """
         Buffer multiple events efficiently using pipeline.
 
@@ -190,23 +183,20 @@ class RedisEventBuffer:
 
                 message_ids = await pipe.execute()
 
-            logger.debug(
-                f"Buffered {len(events)} events to stream {self.stream_name}"
-            )
+            logger.debug(f"Buffered {len(events)} events to stream {self.stream_name}")
 
             return message_ids
 
         except Exception as e:
-            raise RedisEventBufferError(
-                f"Failed to buffer events batch: {e}"
-            ) from e
+            message = f"Failed to buffer events batch: {e}"
+            raise RedisEventBufferError(message)
 
     async def read_pending_events(
         self,
         consumer_name: str,
         count: int = 100,
         block_ms: int = 1000,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Read pending events from stream (for background workers).
 
@@ -259,18 +249,17 @@ class RedisEventBuffer:
                         logger.error(
                             f"Failed to deserialize event from message {message_id}: {e}",
                             exc_info=True,
-                            extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
+                            extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
                         )
                         await self._move_to_dead_letter(message_id, fields, str(e))
 
             return events
 
         except Exception as e:
-            raise RedisEventBufferError(f"Failed to read events: {e}") from e
+            message = f"Failed to read events: {e}"
+            raise RedisEventBufferError(message) from e
 
-    async def acknowledge_events(
-        self, message_ids: List[str]
-    ) -> int:
+    async def acknowledge_events(self, message_ids: list[str]) -> int:
         """
         Acknowledge successful processing of events (XACK).
 
@@ -298,9 +287,10 @@ class RedisEventBuffer:
             return count
 
         except Exception as e:
-            raise RedisEventBufferError(f"Failed to acknowledge events: {e}") from e
+            message = f"Failed to acknowledge events: {e}"
+            raise RedisEventBufferError(message) from e
 
-    async def get_pending_count(self, consumer_name: Optional[str] = None) -> int:
+    async def get_pending_count(self, consumer_name: str | None = None) -> int:
         """
         Get count of pending (unacknowledged) events.
 
@@ -327,7 +317,8 @@ class RedisEventBuffer:
             return pending_info[0] if isinstance(pending_info, list) else 0
 
         except Exception as e:
-            raise RedisEventBufferError(f"Failed to get pending count: {e}") from e
+            message = f"Failed to get pending count: {e}"
+            raise RedisEventBufferError(message) from e
 
     async def get_stream_length(self) -> int:
         """
@@ -344,9 +335,10 @@ class RedisEventBuffer:
             return length
 
         except Exception as e:
-            raise RedisEventBufferError(f"Failed to get stream length: {e}") from e
+            message = f"Failed to get stream length: {e}"
+            raise RedisEventBufferError(message) from e
 
-    async def get_buffer_stats(self) -> Dict[str, Any]:
+    async def get_buffer_stats(self) -> dict[str, Any]:
         """
         Get buffer statistics for monitoring.
 
@@ -375,26 +367,17 @@ class RedisEventBuffer:
                 "stream_length": stream_length,
                 "pending_count": pending_count,
                 "consumer_count": consumer_count,
-                "first_entry_id": (
-                    stream_info.get("first-entry", [None])[0] if stream_info else None
-                ),
-                "last_entry_id": (
-                    stream_info.get("last-entry", [None])[0] if stream_info else None
-                ),
+                "first_entry_id": (stream_info.get("first-entry", [None])[0] if stream_info else None),
+                "last_entry_id": (stream_info.get("last-entry", [None])[0] if stream_info else None),
                 "max_stream_length": self.stream_max_length,
-                "utilization": (
-                    stream_length / self.stream_max_length
-                    if self.stream_max_length > 0
-                    else 0
-                ),
+                "utilization": (stream_length / self.stream_max_length if self.stream_max_length > 0 else 0),
             }
 
         except Exception as e:
-            raise RedisEventBufferError(f"Failed to get buffer stats: {e}") from e
+            message = f"Failed to get buffer stats: {e}"
+            raise RedisEventBufferError(message) from e
 
-    async def _move_to_dead_letter(
-        self, message_id: bytes, fields: Dict[bytes, bytes], error: str
-    ) -> None:
+    async def _move_to_dead_letter(self, message_id: bytes, fields: dict[bytes, bytes], error: str) -> None:
         """
         Move a failed event to the dead letter queue.
 
@@ -410,20 +393,19 @@ class RedisEventBuffer:
                     **fields,
                     b"original_message_id": message_id,
                     b"error": error.encode("utf-8"),
-                    b"moved_at": datetime.now(timezone.utc).isoformat().encode("utf-8"),
+                    b"moved_at": datetime.now(UTC).isoformat().encode("utf-8"),
                 },
             )
 
-            logger.warning(
-                f"Moved message {message_id} to dead letter queue due to error: {error}"
-            )
+            logger.warning(f"Moved message {message_id} to dead letter queue due to error: {error}")
 
         except Exception as e:
             logger.error(
                 f"Failed to move message {message_id} to dead letter queue: {e}",
                 exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR}
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
             )
+
     async def close(self) -> None:
         """Close the buffer (cleanup resources)."""
         # Redis client is managed externally, so nothing to do here

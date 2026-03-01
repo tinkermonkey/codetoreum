@@ -4,26 +4,74 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from types import MappingProxyType
+from typing import Any
 
-from codetoreum.domain.types import BucketName, StorageKey
-
+from codetoreum.domain.types import StorageKey
 
 # ============================================================================
 # Data Models
 # ============================================================================
 
 
-@dataclass
+@dataclass(frozen=True)
 class StorageObject:
-    """Storage object metadata."""
+    """Storage object metadata.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. Metadata dict is converted
+    to MappingProxyType for true immutability.
+    """
 
     key: StorageKey
     size: int
     last_modified: datetime
-    content_type: Optional[str]
-    metadata: Dict[str, str]
-    etag: Optional[str] = None
+    content_type: str | None
+    metadata: MappingProxyType
+    etag: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        # Coerce dict to MappingProxyType for metadata
+        if isinstance(self.metadata, dict):
+            object.__setattr__(self, "metadata", MappingProxyType(self.metadata))
+
+        if not isinstance(self.key, str) or not self.key:
+            msg = "key must be a non-empty string"
+            raise ValueError(msg)
+
+        # Explicitly reject bool (subclass of int)
+        if isinstance(self.size, bool):
+            msg = "size must be a non-negative integer, got bool"
+            raise ValueError(msg)
+
+        if not isinstance(self.size, int) or self.size < 0:
+            msg = "size must be a non-negative integer"
+            raise ValueError(msg)
+
+        if not isinstance(self.last_modified, datetime):
+            msg = "last_modified must be a datetime instance"
+            raise ValueError(msg)
+
+        if self.content_type is not None:
+            if not isinstance(self.content_type, str) or not self.content_type:
+                msg = "content_type must be a non-empty string or None"
+                raise ValueError(msg)
+
+        if not isinstance(self.metadata, MappingProxyType):
+            msg = "metadata must be a dict or MappingProxyType (immutable dict)"
+            raise ValueError(msg)
+
+        # Validate metadata contents
+        for k, v in self.metadata.items():
+            if not isinstance(k, str) or not isinstance(v, str):
+                msg = "all metadata keys and values must be strings"
+                raise ValueError(msg)
+
+        if self.etag is not None:
+            if not isinstance(self.etag, str) or not self.etag:
+                msg = "etag must be a non-empty string or None"
+                raise ValueError(msg)
 
 
 # ============================================================================
@@ -39,8 +87,8 @@ class IStorage(ABC):
         self,
         key: str,
         content: bytes,
-        content_type: Optional[str] = None,
-        metadata: Optional[Dict[str, str]] = None,
+        content_type: str | None = None,
+        metadata: dict[str, str] | None = None,
     ) -> None:
         """
         Upload a file.
@@ -55,15 +103,14 @@ class IStorage(ABC):
             ValidationError: Invalid key or content
             StorageError: Upload failed
         """
-        pass
 
     @abstractmethod
     async def upload_from_file(
         self,
         key: str,
         file_path: Path,
-        content_type: Optional[str] = None,
-        metadata: Optional[Dict[str, str]] = None,
+        content_type: str | None = None,
+        metadata: dict[str, str] | None = None,
     ) -> None:
         """
         Upload from file.
@@ -79,7 +126,6 @@ class IStorage(ABC):
             ValidationError: Invalid key or file
             StorageError: Upload failed
         """
-        pass
 
     @abstractmethod
     async def download(self, key: str) -> bytes:
@@ -96,7 +142,6 @@ class IStorage(ABC):
             ResourceNotFoundError: Object doesn't exist
             StorageError: Download failed
         """
-        pass
 
     @abstractmethod
     async def download_to_file(self, key: str, file_path: Path) -> None:
@@ -111,7 +156,6 @@ class IStorage(ABC):
             ResourceNotFoundError: Object doesn't exist
             StorageError: Download failed
         """
-        pass
 
     @abstractmethod
     async def delete(self, key: str) -> None:
@@ -125,10 +169,9 @@ class IStorage(ABC):
             ResourceNotFoundError: Object doesn't exist
             StorageError: Delete failed
         """
-        pass
 
     @abstractmethod
-    async def delete_many(self, keys: List[str]) -> None:
+    async def delete_many(self, keys: list[str]) -> None:
         """
         Delete multiple files.
 
@@ -138,15 +181,14 @@ class IStorage(ABC):
         Raises:
             StorageError: Delete failed
         """
-        pass
 
     @abstractmethod
     async def list_files(
         self,
-        prefix: Optional[str] = None,
+        prefix: str | None = None,
         limit: int = 1000,
         offset: int = 0,
-    ) -> List[StorageObject]:
+    ) -> list[StorageObject]:
         """
         List files with optional prefix filter.
 
@@ -161,7 +203,6 @@ class IStorage(ABC):
         Raises:
             StorageError: List operation failed
         """
-        pass
 
     @abstractmethod
     async def exists(self, key: str) -> bool:
@@ -177,10 +218,9 @@ class IStorage(ABC):
         Raises:
             StorageError: Check failed
         """
-        pass
 
     @abstractmethod
-    async def get_metadata(self, key: str) -> Dict[str, Any]:
+    async def get_metadata(self, key: str) -> dict[str, Any]:
         """
         Get file metadata.
 
@@ -194,13 +234,12 @@ class IStorage(ABC):
             ResourceNotFoundError: Object doesn't exist
             StorageError: Metadata retrieval failed
         """
-        pass
 
     @abstractmethod
     async def update_metadata(
         self,
         key: str,
-        metadata: Dict[str, str],
+        metadata: dict[str, str],
     ) -> None:
         """
         Update file metadata.
@@ -213,7 +252,6 @@ class IStorage(ABC):
             ResourceNotFoundError: Object doesn't exist
             StorageError: Update failed
         """
-        pass
 
     @abstractmethod
     async def copy(
@@ -232,7 +270,6 @@ class IStorage(ABC):
             ResourceNotFoundError: Source doesn't exist
             StorageError: Copy failed
         """
-        pass
 
     @abstractmethod
     async def move(
@@ -251,7 +288,6 @@ class IStorage(ABC):
             ResourceNotFoundError: Source doesn't exist
             StorageError: Move failed
         """
-        pass
 
     @abstractmethod
     async def generate_presigned_url(
@@ -276,7 +312,6 @@ class IStorage(ABC):
             UnsupportedFeatureError: Provider doesn't support presigned URLs
             StorageError: URL generation failed
         """
-        pass
 
     @abstractmethod
     async def get_size(self, key: str) -> int:
@@ -293,7 +328,6 @@ class IStorage(ABC):
             ResourceNotFoundError: Object doesn't exist
             StorageError: Query failed
         """
-        pass
 
     @abstractmethod
     async def get_content_type(self, key: str) -> str:
@@ -310,14 +344,13 @@ class IStorage(ABC):
             ResourceNotFoundError: Object doesn't exist
             StorageError: Query failed
         """
-        pass
 
     @abstractmethod
     async def list_prefixes(
         self,
-        prefix: Optional[str] = None,
+        prefix: str | None = None,
         delimiter: str = "/",
-    ) -> List[str]:
+    ) -> list[str]:
         """
         List common prefixes (like directories).
 
@@ -331,10 +364,9 @@ class IStorage(ABC):
         Raises:
             StorageError: List operation failed
         """
-        pass
 
     @abstractmethod
-    async def get_storage_info(self) -> Dict[str, Any]:
+    async def get_storage_info(self) -> dict[str, Any]:
         """
         Get storage system information.
 
@@ -344,4 +376,3 @@ class IStorage(ABC):
         Raises:
             StorageError: Query failed
         """
-        pass

@@ -12,6 +12,40 @@ Event Categories (Adapter Events):
 - Work Item Events: Work item creation and updates
 """
 
+# Adapter event infrastructure
+from .adapter_events import (
+    CodetoreumEvent,
+    now_iso,
+)
+
+# Board events
+from .board_events import (
+    BoardReconciledEvent,
+    WorkItemColumnChangedEvent,
+    WorkItemPositionChangedEvent,
+)
+
+# Container execution events
+from .container_events import (
+    ContainerExecutionCompletedEvent,
+)
+
+# Container recovery events
+from .container_recovery_events import (
+    ContainerKilledEvent,
+    ContainerRecoveredEvent,
+    ContainerRecoveryCompletedEvent,
+)
+
+# Discussion events
+from .discussion_events import (
+    AgentResponsePostedEvent,
+    Comment,
+    CommentContext,
+    CommentNeedsResponseEvent,
+    CommentPostedEvent,
+)
+
 # Legacy domain events (static imports for mypy compatibility)
 from .legacy_domain_events import (
     AgentAssigned,
@@ -21,6 +55,9 @@ from .legacy_domain_events import (
     AgentConfigUpdated,
     AgentConstraintsUpdated,
     AgentCreated,
+    AgentExecutionCompleted,
+    AgentExecutionFailed,
+    AgentExecutionStarted,
     AgentMaxRetriesUpdated,
     AgentMcpServerAdded,
     AgentMcpServerRemoved,
@@ -37,6 +74,7 @@ from .legacy_domain_events import (
     ExecutionInitialized,
     ExecutionPaused,
     ExecutionResumed,
+    ExecutionRetryScheduled,
     ExecutionStarted,
     ExecutionTimeout,
     PipelineCompleted,
@@ -50,15 +88,18 @@ from .legacy_domain_events import (
     ProjectDockerConfigUpdated,
     ProjectTestConfigUpdated,
     ProjectWorkflowMappingAdded,
+    ReviewApproved,
     ReviewCycleApproved,
     ReviewCycleCreated,
     ReviewCycleEscalated,
     ReviewCycleRejected,
     ReviewFeedbackSubmitted,
     ReviewIterationStarted,
+    ReviewRejected,
     SubAgentMounted,
     SubAgentUnmounted,
     WorkflowAttached,
+    WorkflowBranchSelected,
     WorkflowCancelled,
     WorkflowCompleted,
     WorkflowCreated,
@@ -81,34 +122,6 @@ from .legacy_domain_events import (
     WorkItemUnderReview,
 )
 
-# Adapter event infrastructure
-from .adapter_events import (
-    CodetoreumEvent,
-    now_iso,
-)
-
-# Board events
-from .board_events import (
-    BoardReconciledEvent,
-    WorkItemColumnChangedEvent,
-)
-
-# Discussion events
-from .discussion_events import (
-    Comment,
-    CommentContext,
-    CommentNeedsResponseEvent,
-    CommentPostedEvent,
-    AgentResponsePostedEvent,
-)
-
-# Code review events
-from .review_events import (
-    CodeReviewStatus,
-    ReviewCommentAddedEvent,
-    ReviewStatusChangedEvent,
-)
-
 # Pipeline lock events
 from .lock_events import (
     LockAcquiredEvent,
@@ -119,55 +132,75 @@ from .lock_events import (
     WorkItemQueuedEvent,
 )
 
-# Work item events
-from .work_item_events import (
-    WorkItemCreatedEvent,
-    WorkItemUpdatedEvent,
+# Project management events
+from .project_events import (
+    OrchestrationCycleCompletedEvent,
+    ProjectClonedEvent,
+    ProjectCloneFailedEvent,
+    ProjectDisabledEvent,
+    ProjectEnabledEvent,
+)
+
+# Queue events
+from .queue_events import (
+    QueueItemAddedEvent,
+    QueueItemRemovedEvent,
+    QueuePositionChangedEvent,
 )
 
 # Repair cycle events
 from .repair_cycle_events import (
-    RepairCycleStartedEvent,
-    RepairCycleTestExecutionStartedEvent,
-    RepairCycleTestExecutionCompletedEvent,
-    RepairCycleFixCycleStartedEvent,
-    RepairCycleFileFixStartedEvent,
-    RepairCycleFileFixCompletedEvent,
-    RepairCycleWarningReviewStartedEvent,
-    RepairCycleWarningReviewCompletedEvent,
-    RepairCycleTestCycleCompletedEvent,
-    RepairCycleFastFailEvent,
-    RepairCycleResumedEvent,
     RepairCycleCheckpointFailedEvent,
-    RepairCycleMetricsBackendFailedEvent,
     RepairCycleCompletedEvent,
+    RepairCycleFastFailEvent,
+    RepairCycleFileFixCompletedEvent,
+    RepairCycleFileFixStartedEvent,
+    RepairCycleFixCycleStartedEvent,
+    RepairCycleMetricsBackendFailedEvent,
+    RepairCycleResumedEvent,
+    RepairCycleStartedEvent,
+    RepairCycleTestCycleCompletedEvent,
+    RepairCycleTestExecutionCompletedEvent,
+    RepairCycleTestExecutionStartedEvent,
+    RepairCycleWarningReviewCompletedEvent,
+    RepairCycleWarningReviewStartedEvent,
+)
+
+# Repository events
+from .repository_events import (
+    BranchCreatedEvent,
+    CommitCreatedEvent,
+    FilesStagedEvent,
 )
 
 # Review cycle events
 from .review_cycle_events import (
-    ReviewCycleStartedEvent,
-    ReviewCycleIterationCompletedEvent,
-    ReviewCycleMakerRevisionEvent,
+    ReviewCycleApprovedEvent,
     ReviewCycleEscalatedToHumanEvent,
     ReviewCycleHumanFeedbackReceivedEvent,
+    ReviewCycleIterationCompletedEvent,
+    ReviewCycleMakerRevisionEvent,
     ReviewCycleMaxIterationsReachedEvent,
-    ReviewCycleApprovedEvent,
+    ReviewCycleStartedEvent,
 )
 
-# Container recovery events
-from .container_recovery_events import (
-    ContainerRecoveredEvent,
-    ContainerKilledEvent,
-    ContainerRecoveryCompletedEvent,
+# Code review events
+from .review_events import (
+    CodeReviewStatus,
+    ReviewCommentAddedEvent,
+    ReviewStatusChangedEvent,
 )
 
-# Project management events
-from .project_events import (
-    ProjectClonedEvent,
-    ProjectCloneFailedEvent,
-    ProjectEnabledEvent,
-    ProjectDisabledEvent,
-    OrchestrationCycleCompletedEvent,
+# Storage events
+from .storage_events import (
+    ArtifactDeletedEvent,
+    ArtifactUploadedEvent,
+)
+
+# Work item events
+from .work_item_events import (
+    WorkItemCreatedEvent,
+    WorkItemUpdatedEvent,
 )
 
 __all__ = [
@@ -195,6 +228,9 @@ __all__ = [
     "AgentConstraintsUpdated",
     "AgentMcpServerAdded",
     "AgentMcpServerRemoved",
+    "AgentExecutionStarted",
+    "AgentExecutionCompleted",
+    "AgentExecutionFailed",
     "ExecutionInitialized",
     "ExecutionStarted",
     "ExecutionCompleted",
@@ -203,6 +239,8 @@ __all__ = [
     "ExecutionCancelled",
     "ExecutionPaused",
     "ExecutionResumed",
+    "ExecutionRetryScheduled",
+    "WorkflowBranchSelected",
     "WorkflowCreated",
     "WorkflowStarted",
     "WorkflowStageAdvanced",
@@ -212,12 +250,14 @@ __all__ = [
     "WorkflowPaused",
     "WorkflowResumed",
     "WorkflowCancelled",
+    "ReviewApproved",
     "ReviewCycleCreated",
     "ReviewIterationStarted",
     "ReviewFeedbackSubmitted",
     "ReviewCycleApproved",
     "ReviewCycleRejected",
     "ReviewCycleEscalated",
+    "ReviewRejected",
     "ProjectContextCreated",
     "ProjectTestConfigUpdated",
     "ProjectDockerConfigUpdated",
@@ -240,6 +280,7 @@ __all__ = [
     "now_iso",
     # Board events
     "WorkItemColumnChangedEvent",
+    "WorkItemPositionChangedEvent",
     "BoardReconciledEvent",
     # Discussion events
     "Comment",
@@ -284,6 +325,8 @@ __all__ = [
     "ReviewCycleHumanFeedbackReceivedEvent",
     "ReviewCycleMaxIterationsReachedEvent",
     "ReviewCycleApprovedEvent",
+    # Container execution events
+    "ContainerExecutionCompletedEvent",
     # Container recovery events
     "ContainerRecoveredEvent",
     "ContainerKilledEvent",
@@ -294,4 +337,15 @@ __all__ = [
     "ProjectEnabledEvent",
     "ProjectDisabledEvent",
     "OrchestrationCycleCompletedEvent",
+    # Queue events
+    "QueueItemAddedEvent",
+    "QueueItemRemovedEvent",
+    "QueuePositionChangedEvent",
+    # Repository events
+    "CommitCreatedEvent",
+    "BranchCreatedEvent",
+    "FilesStagedEvent",
+    # Storage events
+    "ArtifactUploadedEvent",
+    "ArtifactDeletedEvent",
 ]

@@ -5,23 +5,16 @@ Provides RESTful endpoints for system metrics, health checks, performance statis
 and resilience infrastructure monitoring.
 """
 
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from codetoreum.config import (
-    DEFAULT_METRICS_AGGREGATION_WINDOW_SECONDS,
-    MIN_METRICS_AGGREGATION_WINDOW_SECONDS,
-    MAX_METRICS_AGGREGATION_WINDOW_SECONDS,
-)
-from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
 from codetoreum.adapters.primary.metrics_dtos import (
-    ActiveAgentsResponse,
     ActiveAgentResponse,
+    ActiveAgentsResponse,
     AgentExecutionMetricsResponse,
-    ApiUsageResponse,
     ApiUsageQuotaResponse,
+    ApiUsageResponse,
     EndpointMetricsResponse,
     IntegrationStatusResponse,
     MetricNamesResponse,
@@ -31,12 +24,18 @@ from codetoreum.adapters.primary.metrics_dtos import (
     SimulationModeResponse,
     SystemHealthResponse,
 )
+from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
+from codetoreum.config import (
+    DEFAULT_METRICS_AGGREGATION_WINDOW_SECONDS,
+    MAX_METRICS_AGGREGATION_WINDOW_SECONDS,
+    MIN_METRICS_AGGREGATION_WINDOW_SECONDS,
+)
 from codetoreum.ports.input.metrics_query import IMetricsQueryPort
 
 
 def create_metrics_router(
     metrics_query_port: IMetricsQueryPort,
-    auth_deps: Optional[SimpleAuthDependencies] = None,
+    auth_deps: SimpleAuthDependencies | None = None,
 ) -> APIRouter:
     """
     Create the metrics REST API router.
@@ -138,7 +137,7 @@ def create_metrics_router(
             # If health check itself fails, return 503
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Health check failed: {str(e)}",
+                detail=f"Health check failed: {e!s}",
             )
 
     # ========================================================================
@@ -156,13 +155,13 @@ def create_metrics_router(
         dependencies=auth_dependency,
     )
     async def get_performance_metrics(
-        start_time: Optional[datetime] = Query(None, description="Start of time range (default: last hour)"),
-        end_time: Optional[datetime] = Query(None, description="End of time range (default: now)"),
+        start_time: datetime | None = Query(None, description="Start of time range (default: last hour)"),
+        end_time: datetime | None = Query(None, description="End of time range (default: now)"),
         aggregation_window_seconds: int = Query(
             DEFAULT_METRICS_AGGREGATION_WINDOW_SECONDS,
             ge=MIN_METRICS_AGGREGATION_WINDOW_SECONDS,
             le=MAX_METRICS_AGGREGATION_WINDOW_SECONDS,
-            description=f"Aggregation window in seconds (min {MIN_METRICS_AGGREGATION_WINDOW_SECONDS}, max {MAX_METRICS_AGGREGATION_WINDOW_SECONDS})"
+            description=f"Aggregation window in seconds (min {MIN_METRICS_AGGREGATION_WINDOW_SECONDS}, max {MAX_METRICS_AGGREGATION_WINDOW_SECONDS})",
         ),
     ) -> PerformanceMetricsResponse:
         """
@@ -191,7 +190,7 @@ def create_metrics_router(
         try:
             # Default to last hour if not specified
             if not end_time:
-                end_time = datetime.now(timezone.utc)
+                end_time = datetime.now(UTC)
             if not start_time:
                 start_time = end_time - timedelta(hours=1)
 
@@ -225,7 +224,7 @@ def create_metrics_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve performance metrics: {str(e)}",
+                detail=f"Failed to retrieve performance metrics: {e!s}",
             )
 
     # ========================================================================
@@ -240,8 +239,8 @@ def create_metrics_router(
         dependencies=auth_dependency,
     )
     async def get_resilience_metrics(
-        start_time: Optional[datetime] = Query(None, description="Start of time range (default: last hour)"),
-        end_time: Optional[datetime] = Query(None, description="End of time range (default: now)"),
+        start_time: datetime | None = Query(None, description="Start of time range (default: last hour)"),
+        end_time: datetime | None = Query(None, description="End of time range (default: now)"),
     ) -> ResilienceMetricsResponse:
         """
         Get resilience infrastructure metrics.
@@ -266,7 +265,7 @@ def create_metrics_router(
         try:
             # Default to last hour
             if not end_time:
-                end_time = datetime.now(timezone.utc)
+                end_time = datetime.now(UTC)
             if not start_time:
                 start_time = end_time - timedelta(hours=1)
 
@@ -310,7 +309,7 @@ def create_metrics_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve resilience metrics: {str(e)}",
+                detail=f"Failed to retrieve resilience metrics: {e!s}",
             )
 
     # ========================================================================
@@ -372,7 +371,7 @@ def create_metrics_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve integration status: {str(e)}",
+                detail=f"Failed to retrieve integration status: {e!s}",
             )
 
     # ========================================================================
@@ -427,7 +426,7 @@ def create_metrics_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve simulation mode info: {str(e)}",
+                detail=f"Failed to retrieve simulation mode info: {e!s}",
             )
 
     # ========================================================================
@@ -442,9 +441,9 @@ def create_metrics_router(
         dependencies=auth_dependency,
     )
     async def get_endpoint_metrics(
-        endpoint_path: Optional[str] = Query(None, description="Filter by specific endpoint"),
-        start_time: Optional[datetime] = Query(None, description="Start of time range (default: last hour)"),
-        end_time: Optional[datetime] = Query(None, description="End of time range (default: now)"),
+        endpoint_path: str | None = Query(None, description="Filter by specific endpoint"),
+        start_time: datetime | None = Query(None, description="Start of time range (default: last hour)"),
+        end_time: datetime | None = Query(None, description="End of time range (default: now)"),
     ) -> EndpointMetricsResponse:
         """
         Get per-endpoint API metrics.
@@ -464,7 +463,7 @@ def create_metrics_router(
         try:
             # Default to last hour
             if not end_time:
-                end_time = datetime.now(timezone.utc)
+                end_time = datetime.now(UTC)
             if not start_time:
                 start_time = end_time - timedelta(hours=1)
 
@@ -482,15 +481,17 @@ def create_metrics_router(
                 req_count = metrics.get("request_count", 0)
                 err_count = metrics.get("error_count", 0)
 
-                endpoints.append({
-                    "endpoint_path": path,
-                    "request_count": req_count,
-                    "error_count": err_count,
-                    "error_rate_percent": (err_count / req_count * 100) if req_count > 0 else 0.0,
-                    "latency_p50_ms": metrics.get("latency_p50_ms", 0.0),
-                    "latency_p95_ms": metrics.get("latency_p95_ms", 0.0),
-                    "latency_p99_ms": metrics.get("latency_p99_ms", 0.0),
-                })
+                endpoints.append(
+                    {
+                        "endpoint_path": path,
+                        "request_count": req_count,
+                        "error_count": err_count,
+                        "error_rate_percent": (err_count / req_count * 100) if req_count > 0 else 0.0,
+                        "latency_p50_ms": metrics.get("latency_p50_ms", 0.0),
+                        "latency_p95_ms": metrics.get("latency_p95_ms", 0.0),
+                        "latency_p99_ms": metrics.get("latency_p99_ms", 0.0),
+                    }
+                )
 
                 total_requests += req_count
                 total_errors += err_count
@@ -507,7 +508,7 @@ def create_metrics_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve endpoint metrics: {str(e)}",
+                detail=f"Failed to retrieve endpoint metrics: {e!s}",
             )
 
     @router.get(
@@ -518,9 +519,9 @@ def create_metrics_router(
         dependencies=auth_dependency,
     )
     async def get_agent_execution_metrics(
-        agent_name: Optional[str] = Query(None, description="Filter by specific agent"),
-        start_time: Optional[datetime] = Query(None, description="Start of time range (default: last hour)"),
-        end_time: Optional[datetime] = Query(None, description="End of time range (default: now)"),
+        agent_name: str | None = Query(None, description="Filter by specific agent"),
+        start_time: datetime | None = Query(None, description="Start of time range (default: last hour)"),
+        end_time: datetime | None = Query(None, description="End of time range (default: now)"),
     ) -> AgentExecutionMetricsResponse:
         """
         Get agent execution metrics.
@@ -540,7 +541,7 @@ def create_metrics_router(
         try:
             # Default to last hour
             if not end_time:
-                end_time = datetime.now(timezone.utc)
+                end_time = datetime.now(UTC)
             if not start_time:
                 start_time = end_time - timedelta(hours=1)
 
@@ -559,15 +560,17 @@ def create_metrics_router(
                 success_count = metrics.get("success_count", 0)
                 failure_count = metrics.get("failure_count", 0)
 
-                agents.append({
-                    "agent_name": name,
-                    "execution_count": exec_count,
-                    "success_count": success_count,
-                    "failure_count": failure_count,
-                    "success_rate_percent": (success_count / exec_count * 100) if exec_count > 0 else 0.0,
-                    "avg_duration_seconds": metrics.get("avg_duration_seconds", 0.0),
-                    "p95_duration_seconds": metrics.get("p95_duration_seconds", 0.0),
-                })
+                agents.append(
+                    {
+                        "agent_name": name,
+                        "execution_count": exec_count,
+                        "success_count": success_count,
+                        "failure_count": failure_count,
+                        "success_rate_percent": (success_count / exec_count * 100) if exec_count > 0 else 0.0,
+                        "avg_duration_seconds": metrics.get("avg_duration_seconds", 0.0),
+                        "p95_duration_seconds": metrics.get("p95_duration_seconds", 0.0),
+                    }
+                )
 
                 total_executions += exec_count
                 total_successes += success_count
@@ -575,7 +578,9 @@ def create_metrics_router(
             return AgentExecutionMetricsResponse(
                 agents=agents,
                 total_executions=total_executions,
-                overall_success_rate_percent=(total_successes / total_executions * 100) if total_executions > 0 else 0.0,
+                overall_success_rate_percent=(
+                    (total_successes / total_executions * 100) if total_executions > 0 else 0.0
+                ),
                 start_time=start_time,
                 end_time=end_time,
             )
@@ -583,7 +588,7 @@ def create_metrics_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve agent execution metrics: {str(e)}",
+                detail=f"Failed to retrieve agent execution metrics: {e!s}",
             )
 
     # ========================================================================
@@ -598,7 +603,7 @@ def create_metrics_router(
         dependencies=auth_dependency,
     )
     async def list_metric_names(
-        prefix: Optional[str] = Query(None, description="Filter by prefix"),
+        prefix: str | None = Query(None, description="Filter by prefix"),
     ) -> MetricNamesResponse:
         """
         List available metric names.
@@ -623,7 +628,7 @@ def create_metrics_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to list metric names: {str(e)}",
+                detail=f"Failed to list metric names: {e!s}",
             )
 
     # ========================================================================
@@ -674,16 +679,18 @@ def create_metrics_router(
 
             agents = []
             for agent_data in active_agents_data.get("agents", []):
-                agents.append(ActiveAgentResponse(
-                    executionId=agent_data.get("execution_id", ""),
-                    agentName=agent_data.get("agent_name", ""),
-                    workItemId=agent_data.get("work_item_id", ""),
-                    project=agent_data.get("project", ""),
-                    issueNumber=agent_data.get("issue_number"),
-                    status=agent_data.get("status", "unknown"),
-                    startedAt=agent_data.get("started_at", datetime.now(timezone.utc)),
-                    containerName=agent_data.get("container_name"),
-                ))
+                agents.append(
+                    ActiveAgentResponse(
+                        executionId=agent_data.get("execution_id", ""),
+                        agentName=agent_data.get("agent_name", ""),
+                        workItemId=agent_data.get("work_item_id", ""),
+                        project=agent_data.get("project", ""),
+                        issueNumber=agent_data.get("issue_number"),
+                        status=agent_data.get("status", "unknown"),
+                        startedAt=agent_data.get("started_at", datetime.now(UTC)),
+                        containerName=agent_data.get("container_name"),
+                    )
+                )
 
             return ActiveAgentsResponse(
                 agents=agents,
@@ -693,7 +700,7 @@ def create_metrics_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve active agents: {str(e)}",
+                detail=f"Failed to retrieve active agents: {e!s}",
             )
 
     # ========================================================================
@@ -761,7 +768,7 @@ def create_metrics_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve API usage: {str(e)}",
+                detail=f"Failed to retrieve API usage: {e!s}",
             )
 
     # ========================================================================
@@ -776,9 +783,9 @@ def create_metrics_router(
         dependencies=auth_dependency,
     )
     async def get_repair_cycle_metrics(
-        agent_name: Optional[str] = Query(None, description="Filter by specific agent"),
-        start_time: Optional[datetime] = Query(None, description="Start of time range (default: last hour)"),
-        end_time: Optional[datetime] = Query(None, description="End of time range (default: now)"),
+        agent_name: str | None = Query(None, description="Filter by specific agent"),
+        start_time: datetime | None = Query(None, description="Start of time range (default: last hour)"),
+        end_time: datetime | None = Query(None, description="End of time range (default: now)"),
     ) -> RepairCycleMetricsResponse:
         """
         Get repair cycle metrics.
@@ -806,7 +813,7 @@ def create_metrics_router(
         try:
             # Default to last hour
             if not end_time:
-                end_time = datetime.now(timezone.utc)
+                end_time = datetime.now(UTC)
             if not start_time:
                 start_time = end_time - timedelta(hours=1)
 
@@ -823,12 +830,14 @@ def create_metrics_router(
                 iterations = test_data.get("iterations", 0)
                 avg_iterations = (iterations / executions) if executions > 0 else None
 
-                test_type_metrics.append({
-                    "test_type": test_type,
-                    "total_executions": executions,
-                    "total_iterations": iterations,
-                    "avg_iterations_per_cycle": avg_iterations,
-                })
+                test_type_metrics.append(
+                    {
+                        "test_type": test_type,
+                        "total_executions": executions,
+                        "total_iterations": iterations,
+                        "avg_iterations_per_cycle": avg_iterations,
+                    }
+                )
 
             # Calculate overall success rate
             overall_success_rate = None
@@ -844,15 +853,17 @@ def create_metrics_router(
                 agent_successful = agent_data.get("successful", 0)
                 agent_success_rate = (agent_successful / agent_completed * 100) if agent_completed > 0 else None
 
-                agent_metrics.append({
-                    "agent_name": agent_name_item,
-                    "cycles_started": agent_data.get("started", 0),
-                    "cycles_completed": agent_completed,
-                    "cycles_successful": agent_successful,
-                    "cycles_failed": agent_data.get("failed", 0),
-                    "cycles_fast_failed": agent_data.get("fast_failed", 0),
-                    "success_rate_percent": agent_success_rate,
-                })
+                agent_metrics.append(
+                    {
+                        "agent_name": agent_name_item,
+                        "cycles_started": agent_data.get("started", 0),
+                        "cycles_completed": agent_completed,
+                        "cycles_successful": agent_successful,
+                        "cycles_failed": agent_data.get("failed", 0),
+                        "cycles_fast_failed": agent_data.get("fast_failed", 0),
+                        "success_rate_percent": agent_success_rate,
+                    }
+                )
 
             # Calculate duration statistics
             durations = metrics_dict.get("durations", [])
@@ -891,7 +902,7 @@ def create_metrics_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve repair cycle metrics: {str(e)}",
+                detail=f"Failed to retrieve repair cycle metrics: {e!s}",
             )
 
     return router

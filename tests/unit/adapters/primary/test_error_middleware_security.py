@@ -9,16 +9,13 @@ Tests the security improvements:
 """
 
 import os
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import Request, status
 from pydantic import ValidationError as PydanticValidationError
 
 from codetoreum.adapters.primary.error_middleware import (
-    DEBUG_MODE,
-    ENV,
-    IS_PRODUCTION,
     error_handling_middleware,
 )
 
@@ -31,7 +28,9 @@ class TestProductionModeCheck:
         """Test that debug mode is always disabled in production."""
         # Re-import to pick up patched env vars
         import importlib
+
         from codetoreum.adapters.primary import error_middleware
+
         importlib.reload(error_middleware)
 
         # Debug mode should be False even though CODETOREUM_DEBUG=true
@@ -43,7 +42,9 @@ class TestProductionModeCheck:
         """Test that debug mode can be enabled in development."""
         # Re-import to pick up patched env vars
         import importlib
+
         from codetoreum.adapters.primary import error_middleware
+
         importlib.reload(error_middleware)
 
         assert error_middleware.IS_PRODUCTION is False
@@ -54,7 +55,9 @@ class TestProductionModeCheck:
         """Test that debug mode is off when explicitly set to false."""
         # Re-import to pick up patched env vars
         import importlib
+
         from codetoreum.adapters.primary import error_middleware
+
         importlib.reload(error_middleware)
 
         assert error_middleware.IS_PRODUCTION is False
@@ -129,7 +132,9 @@ class TestErrorMiddlewareStackTraces:
 
         # Re-import to pick up patched env vars
         import importlib
+
         from codetoreum.adapters.primary import error_middleware
+
         importlib.reload(error_middleware)
 
         response = await error_middleware.error_handling_middleware(request, call_next)
@@ -158,11 +163,13 @@ class TestErrorMiddlewareStackTraces:
 
         # Re-import to pick up patched env vars
         import importlib
+
         from codetoreum.adapters.primary import error_middleware
+
         importlib.reload(error_middleware)
 
         # Patch the logger after reload
-        with patch.object(error_middleware, 'logger') as mock_logger:
+        with patch.object(error_middleware, "logger") as mock_logger:
             await error_middleware.error_handling_middleware(request, call_next)
 
             # Verify that logger.error was called with exc_info=True
@@ -185,7 +192,9 @@ class TestErrorMiddlewareStackTraces:
 
         # Re-import to pick up patched env vars
         import importlib
+
         from codetoreum.adapters.primary import error_middleware
+
         importlib.reload(error_middleware)
 
         response = await error_middleware.error_handling_middleware(request, call_next)
@@ -212,10 +221,10 @@ class TestErrorMiddlewareLogging:
         request.url.path = "/api/test"
         request.headers.get = MagicMock(return_value=None)
 
-        # Use Pydantic V2 error type format: "missing" instead of "value_error.missing"
+        # Use Pydantic V2 error type format with InitErrorDetails required keys
         validation_error = PydanticValidationError.from_exception_data(
             "ValidationError",
-            [{"loc": ("body", "field"), "msg": "field required", "type": "missing"}]
+            [{"loc": ("body", "field"), "type": "missing", "input": {}, "ctx": {}}],
         )
 
         async def call_next(req):
@@ -329,7 +338,9 @@ class TestErrorMiddlewareResponseFormat:
 
         # Re-import to pick up patched env vars
         import importlib
+
         from codetoreum.adapters.primary import error_middleware
+
         importlib.reload(error_middleware)
 
         response = await error_middleware.error_handling_middleware(request, call_next)

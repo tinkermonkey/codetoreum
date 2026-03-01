@@ -7,12 +7,13 @@ and translating them into domain commands.
 
 import hashlib
 import hmac
-import json
 import logging
 import time
+from collections import OrderedDict
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import Header, HTTPException, Request
 
@@ -21,18 +22,18 @@ try:
 except ImportError:
     trace = None
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.infrastructure.observability.instrumentation import instrument_async_function
-from codetoreum.ports.output.config_store import IConfigStore
-from codetoreum.ports.output.event_store import IEventStore
+from codetoreum.infrastructure.observability.instrumentation import (
+    instrument_async_function,
+)
 from codetoreum.ports.input.workflow_command import (
     IWorkflowCommandPort,
     StartWorkflowCommand,
     TriggerType,
-    WorkflowCommandResult,
 )
-from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.ports.output.board_service import IBoardService
+from codetoreum.ports.output.config_store import IConfigStore
 
 # Type aliases for missing interfaces
 IEventBus = EventBus
@@ -53,7 +54,7 @@ class WebhookEvent:
 
     delivery_id: str
     event_type: str
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
     signature: str
     timestamp: datetime
     repository: str
@@ -65,8 +66,8 @@ class WebhookProcessingResult:
 
     success: bool
     message: str
-    commands_created: List[str]
-    errors: Optional[List[str]] = None
+    commands_created: list[str]
+    errors: list[str] | None = None
     processing_time_ms: float = 0.0
 
 
@@ -116,8 +117,6 @@ class WebhookProcessingError(WebhookError):
     http_status = 500
 
 
-
-
 # ============================================================================
 # GitHub Webhook Adapter
 # ============================================================================
@@ -131,6 +130,10 @@ class GitHubWebhookAdapter:
     into domain commands via input ports.
     """
 
+    # Idempotency cache configuration
+    _DEFAULT_CACHE_SIZE = 1000
+    _DEFAULT_EVICTION_THRESHOLD = 0.9  # Evict when at 90% capacity
+
     @staticmethod
     def _get_span():
         """Get current span if OpenTelemetry is available, otherwise return None."""
@@ -139,7 +142,7 @@ class GitHubWebhookAdapter:
         try:
             return trace.get_current_span()
         except Exception as e:
-            logger.debug(f"Failed to get current span: {e}", exc_info=True)
+            logger.debug("Failed to get current span: %s", str(e), exc_info=True)
             return None
 
     def __init__(
@@ -148,6 +151,8 @@ class GitHubWebhookAdapter:
         event_bus: IEventBus,
         config_service: IConfigurationService,
         logger: ILogger,
+        idempotency_cache_size: int = _DEFAULT_CACHE_SIZE,
+        board_service: IBoardService | None = None,
     ):
         """
         Initialize adapter with dependencies.
@@ -157,14 +162,18 @@ class GitHubWebhookAdapter:
             event_bus: Event bus for publishing events
             config_service: Configuration service
             logger: Logging service
+            idempotency_cache_size: Maximum size of idempotency cache (bounded, with LRU eviction)
+            board_service: Optional board service for column-to-stage mapping
         """
         self.workflow_port = workflow_command_port
         self.event_bus = event_bus
         self.config = config_service
         self.logger = logger
+        self.board_service = board_service
+        self._idempotency_cache_size = idempotency_cache_size
 
         # Event handlers by GitHub event type
-        self.handlers: Dict[str, Callable] = {
+        self.handlers: dict[str, Callable] = {
             "project_card": self._handle_project_card_event,
             "issues": self._handle_issues_event,
             "issue_comment": self._handle_issue_comment_event,
@@ -172,20 +181,39 @@ class GitHubWebhookAdapter:
             "discussion": self._handle_discussion_event,
         }
 
-        # Track processed delivery IDs for idempotency (in-memory for now)
-        self._processed_deliveries: Dict[str, WebhookProcessingResult] = {}
+        # Track processed delivery IDs for idempotency (bounded cache with FIFO eviction)
+        # OrderedDict maintains insertion order; popitem(last=False) removes oldest entry
+        self._processed_deliveries: OrderedDict[str, WebhookProcessingResult] = OrderedDict()
 
-    @instrument_async_function(
-        name="github.webhook.receive",
-        attributes={"service": "github_webhook"}
-    )
+    def _evict_old_entries_if_needed(self) -> None:
+        """
+        Evict oldest entries from idempotency cache if it exceeds the threshold.
+
+        Uses FIFO (First In, First Out) eviction strategy based on insertion order.
+        When cache size exceeds 90% of max capacity, removes the oldest 10% of entries.
+        """
+        cache_size = len(self._processed_deliveries)
+        threshold = int(self._idempotency_cache_size * self._DEFAULT_EVICTION_THRESHOLD)
+
+        if cache_size >= threshold:
+            # Evict 10% of cache size (at least 1 entry)
+            evict_count = max(1, self._idempotency_cache_size // 10)
+
+            # Remove oldest entries (FIFO - pop from left)
+            for _ in range(evict_count):
+                self._processed_deliveries.popitem(last=False)
+
+            # Single batched log instead of per-entry logging
+            self.logger.debug("Evicted %d oldest entries from webhook idempotency cache", evict_count)
+
+    @instrument_async_function(name="github.webhook.receive", attributes={"service": "github_webhook"})
     async def receive_webhook(
         self,
         request: Request,
         x_github_delivery: str = Header(...),
         x_github_event: str = Header(...),
         x_hub_signature_256: str = Header(...),
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         FastAPI endpoint handler for webhook reception.
 
@@ -217,9 +245,7 @@ class GitHubWebhookAdapter:
             # Check for idempotency - if already processed, return cached result
             if x_github_delivery in self._processed_deliveries:
                 cached_result = self._processed_deliveries[x_github_delivery]
-                self.logger.info(
-                    f"Webhook {x_github_delivery} already processed, returning cached result"
-                )
+                self.logger.info("Webhook %s already processed, returning cached result", x_github_delivery)
                 return {
                     "status": "accepted",
                     "delivery_id": x_github_delivery,
@@ -237,34 +263,41 @@ class GitHubWebhookAdapter:
                 event_type=x_github_event,
                 payload=payload,
                 signature=x_hub_signature_256,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 repository=payload.get("repository", {}).get("full_name", ""),
             )
 
-            # 3. Verify signature
-            if not await self.verify_signature(payload_bytes, x_hub_signature_256):
-                raise WebhookVerificationError("Invalid HMAC signature")
+            # 3. Identify project early (before signature verification)
+            project_id = await self._identify_project(event.repository)
+            if not project_id:
+                msg = f"Repository {event.repository} not configured"
+                raise UnknownProjectError(msg)
 
-            # 4. Validate payload
+            # 4. Verify signature (pass project_id to avoid re-lookup)
+            if not await self._verify_signature(payload_bytes, x_hub_signature_256, project_id):
+                msg = "Invalid HMAC signature"
+                raise WebhookVerificationError(msg)
+
+            # 5. Validate payload
             if not self._validate_payload(event):
-                raise InvalidPayloadError("Malformed payload structure")
+                msg = "Malformed payload structure"
+                raise InvalidPayloadError(msg)
 
-            # 5. Process event
-            result = await self._process_event(event)
+            # 6. Process event (pass project_id to avoid re-lookup)
+            result = await self._process_event(event, project_id)
 
-            # 6. Calculate metrics
+            # 7. Calculate metrics
             processing_time = (time.time() - start_time) * 1000
             result.processing_time_ms = processing_time
 
-            # 7. Cache result for idempotency
+            # 8. Cache result for idempotency (with bounded cache and eviction)
+            self._evict_old_entries_if_needed()
             self._processed_deliveries[x_github_delivery] = result
 
-            # 8. Emit observability event
-            self.logger.info(
-                f"Webhook {x_github_delivery} processed successfully in {processing_time:.2f}ms"
-            )
+            # 9. Emit observability event
+            self.logger.info("Webhook %s processed successfully in %.2fms", x_github_delivery, processing_time)
 
-            # 9. Return success response
+            # 10. Return success response
             return {
                 "status": "accepted",
                 "delivery_id": event.delivery_id,
@@ -273,42 +306,63 @@ class GitHubWebhookAdapter:
             }
 
         except WebhookVerificationError as e:
-            self.logger.warning(f"Webhook verification failed: {e}")
-            raise HTTPException(status_code=401, detail=str(e))
+            self.logger.warning("Webhook verification failed: %s", str(e), exc_info=True)
+            raise HTTPException(status_code=401, detail=str(e)) from e
 
         except UnknownProjectError as e:
-            self.logger.warning(f"Unknown project: {e}")
-            raise HTTPException(status_code=404, detail=str(e))
+            self.logger.warning("Unknown project: %s", str(e), exc_info=True)
+            raise HTTPException(status_code=404, detail=str(e)) from e
 
         except InvalidPayloadError as e:
-            self.logger.error(f"Invalid payload: {e}", extra={"error_id": ErrorRegistry.ERR_INVALID_INPUT})
-            raise HTTPException(status_code=400, detail=str(e))
+            self.logger.error(
+                f"Invalid payload: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INVALID_INPUT},
+            )
+            raise HTTPException(status_code=400, detail=str(e)) from e
 
         except Exception as e:
-            self.logger.error(f"Webhook processing failed: {e}", extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR})
-            raise HTTPException(status_code=500, detail="Internal error")
+            self.logger.error(
+                f"Webhook processing failed: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+            raise HTTPException(status_code=500, detail="Internal error") from e
 
-    async def verify_signature(self, payload: bytes, signature: str) -> bool:
+    async def _verify_signature(self, payload: bytes, signature: str, project_id: str) -> bool:
         """
         Verify HMAC-SHA256 signature from GitHub.
 
         Args:
             payload: Raw request body bytes
             signature: X-Hub-Signature-256 header (format: 'sha256=<hex>')
+            project_id: Project identifier (already resolved before signature verification)
 
         Returns:
             True if signature matches
         """
-        # Get webhook secret from configuration
-        secret = await self.config.get_webhook_secret()
+        # Get project config to retrieve webhook secret from metadata
+        try:
+            project_config = await self.config.get_project_config(project_id)
+        except Exception as e:
+            self.logger.warning(
+                "Could not load project config for %s: %s",
+                project_id,
+                str(e),
+                exc_info=True,
+            )
+            return False
+
+        secret = project_config.metadata.get("webhook_secret")
         if not secret:
-            self.logger.error("Webhook secret not configured", extra={"error_id": ErrorRegistry.ERR_MISSING_CONFIGURATION})
+            self.logger.warning(
+                "Webhook secret not configured for project %s; " "signature verification cannot proceed",
+                project_id,
+            )
             return False
 
         # Compute expected signature
-        expected = hmac.new(
-            key=secret.encode("utf-8"), msg=payload, digestmod=hashlib.sha256
-        ).hexdigest()
+        expected = hmac.new(key=secret.encode("utf-8"), msg=payload, digestmod=hashlib.sha256).hexdigest()
 
         # Extract provided signature (remove 'sha256=' prefix)
         provided = signature.replace("sha256=", "")
@@ -348,36 +402,34 @@ class GitHubWebhookAdapter:
         # Unknown event type - consider valid (ignore)
         return True
 
-    def _validate_project_card_payload(self, payload: Dict[str, Any]) -> bool:
+    def _validate_project_card_payload(self, payload: dict[str, Any]) -> bool:
         """Validate project_card event payload"""
         return "action" in payload and "project_card" in payload
 
-    def _validate_issues_payload(self, payload: Dict[str, Any]) -> bool:
+    def _validate_issues_payload(self, payload: dict[str, Any]) -> bool:
         """Validate issues event payload"""
         return "action" in payload and "issue" in payload
 
-    def _validate_issue_comment_payload(self, payload: Dict[str, Any]) -> bool:
+    def _validate_issue_comment_payload(self, payload: dict[str, Any]) -> bool:
         """Validate issue_comment event payload"""
         return "action" in payload and "issue" in payload and "comment" in payload
 
-    def _validate_pull_request_payload(self, payload: Dict[str, Any]) -> bool:
+    def _validate_pull_request_payload(self, payload: dict[str, Any]) -> bool:
         """Validate pull_request event payload"""
         return "action" in payload and "pull_request" in payload
 
-    def _validate_discussion_payload(self, payload: Dict[str, Any]) -> bool:
+    def _validate_discussion_payload(self, payload: dict[str, Any]) -> bool:
         """Validate discussion event payload"""
         return "action" in payload and "discussion" in payload
 
-    @instrument_async_function(
-        name="github.webhook.process_event",
-        attributes={"service": "github_webhook"}
-    )
-    async def _process_event(self, event: WebhookEvent) -> WebhookProcessingResult:
+    @instrument_async_function(name="github.webhook.process_event", attributes={"service": "github_webhook"})
+    async def _process_event(self, event: WebhookEvent, project_id: str) -> WebhookProcessingResult:
         """
         Process webhook event and create commands.
 
         Args:
             event: Webhook event to process
+            project_id: Project identifier (resolved before signature verification)
 
         Returns:
             Processing result
@@ -398,15 +450,8 @@ class GitHubWebhookAdapter:
                 commands_created=[],
             )
 
-        # Identify project
-        project = await self._identify_project(event.repository)
-        if not project:
-            raise UnknownProjectError(
-                f"Repository {event.repository} not configured"
-            )
-
-        # Handle event
-        commands = await handler(event, project)
+        # Handle event (project_id already resolved, avoid re-lookup)
+        commands = await handler(event, project_id)
 
         return WebhookProcessingResult(
             success=True,
@@ -416,11 +461,9 @@ class GitHubWebhookAdapter:
 
     @instrument_async_function(
         name="github.webhook.handle_project_card",
-        attributes={"service": "github_webhook", "event_type": "project_card"}
+        attributes={"service": "github_webhook", "event_type": "project_card"},
     )
-    async def _handle_project_card_event(
-        self, event: WebhookEvent, project: str
-    ) -> List[str]:
+    async def _handle_project_card_event(self, event: WebhookEvent, project: str) -> list[str]:
         """
         Handle project_card event (card movement).
 
@@ -452,15 +495,13 @@ class GitHubWebhookAdapter:
         # Extract issue/PR number from content URL
         work_item_id = self._extract_work_item_id(content_url)
         if not work_item_id:
-            self.logger.warning(f"Could not extract work item ID from {content_url}")
+            self.logger.warning("Could not extract work item ID from %s", content_url)
             return []
 
         # Map column ID to stage
         stage_info = await self._map_column_to_stage(project, column_id)
         if not stage_info:
-            self.logger.warning(
-                f"Column {column_id} not mapped for project {project}"
-            )
+            self.logger.warning("Column %s not mapped for project %s", column_id, project)
             return []
 
         # Create workflow command
@@ -473,9 +514,7 @@ class GitHubWebhookAdapter:
             context={
                 "board_name": stage_info.board_name,
                 "column_name": stage_info.column_name,
-                "previous_column_id": payload.get("changes", {})
-                .get("column_id", {})
-                .get("from"),
+                "previous_column_id": payload.get("changes", {}).get("column_id", {}).get("from"),
                 "delivery_id": event.delivery_id,
             },
         )
@@ -487,11 +526,9 @@ class GitHubWebhookAdapter:
 
     @instrument_async_function(
         name="github.webhook.handle_issues",
-        attributes={"service": "github_webhook", "event_type": "issues"}
+        attributes={"service": "github_webhook", "event_type": "issues"},
     )
-    async def _handle_issues_event(
-        self, event: WebhookEvent, project: str
-    ) -> List[str]:
+    async def _handle_issues_event(self, event: WebhookEvent, project: str) -> list[str]:
         """
         Handle issues event (issue created/updated).
 
@@ -513,11 +550,9 @@ class GitHubWebhookAdapter:
 
     @instrument_async_function(
         name="github.webhook.handle_issue_comment",
-        attributes={"service": "github_webhook", "event_type": "issue_comment"}
+        attributes={"service": "github_webhook", "event_type": "issue_comment"},
     )
-    async def _handle_issue_comment_event(
-        self, event: WebhookEvent, project: str
-    ) -> List[str]:
+    async def _handle_issue_comment_event(self, event: WebhookEvent, project: str) -> list[str]:
         """
         Handle issue_comment event (agent feedback).
 
@@ -543,11 +578,9 @@ class GitHubWebhookAdapter:
 
     @instrument_async_function(
         name="github.webhook.handle_pull_request",
-        attributes={"service": "github_webhook", "event_type": "pull_request"}
+        attributes={"service": "github_webhook", "event_type": "pull_request"},
     )
-    async def _handle_pull_request_event(
-        self, event: WebhookEvent, project: str
-    ) -> List[str]:
+    async def _handle_pull_request_event(self, event: WebhookEvent, project: str) -> list[str]:
         """
         Handle pull_request event.
 
@@ -571,11 +604,9 @@ class GitHubWebhookAdapter:
 
     @instrument_async_function(
         name="github.webhook.handle_discussion",
-        attributes={"service": "github_webhook", "event_type": "discussion"}
+        attributes={"service": "github_webhook", "event_type": "discussion"},
     )
-    async def _handle_discussion_event(
-        self, event: WebhookEvent, project: str
-    ) -> List[str]:
+    async def _handle_discussion_event(self, event: WebhookEvent, project: str) -> list[str]:
         """
         Handle discussion event.
 
@@ -595,7 +626,7 @@ class GitHubWebhookAdapter:
         # Placeholder for future implementation
         return []
 
-    async def _identify_project(self, repository: str) -> Optional[str]:
+    async def _identify_project(self, repository: str) -> str | None:
         """
         Map GitHub repository to internal project name.
 
@@ -606,69 +637,52 @@ class GitHubWebhookAdapter:
             Project name or None
         """
         projects = await self.config.list_projects()
-        for project in projects:
-            project_config = await self.config.get_project_config(project)
-            # This assumes project_config has github.org and github.repo attributes
-            # This will need to be adjusted based on actual config structure
-            repo_full_name = f"{project_config.github.org}/{project_config.github.repo}"
+        for project_config in projects:
+            repo_full_name = f"{project_config.github_org}/{project_config.github_repo}"
             if repo_full_name == repository:
-                return project
+                return project_config.id
         return None
 
-    async def _map_column_to_stage(
-        self, project: str, column_id: int
-    ) -> Optional[StageInfo]:
+    async def _map_column_to_stage(self, project: str, column_id: int) -> StageInfo | None:
         """
         Map GitHub project column ID to pipeline stage.
 
+        Maps GitHub project card column ID to a workflow stage by:
+        1. Querying IBoardService to find the column name by ID
+        2. Looking up the workflow template to find the agent for that column
+
         Args:
-            project: Project name
+            project: Project name (ID)
             column_id: GitHub column ID
 
         Returns:
-            Stage information or None
+            Stage information or None if mapping cannot be completed
+
+        Note:
+            Requires board_service to be injected. If not available, returns None.
+            TODO #370: Implement board ID resolution from GitHub project card events
         """
-        # Load GitHub state (contains column ID mappings)
-        state = await self.config.load_github_state(project)
-        if not state:
+        if not self.board_service:
+            self.logger.warning(
+                "Board service not injected; column ID to stage mapping not available " "for project %s column %s",
+                project,
+                column_id,
+            )
             return None
 
-        # Find column name by ID
-        column_name = None
-        board_name = None
-        for board, board_data in state.get("boards", {}).items():
-            for col_name, col_id in board_data.get("columns", {}).items():
-                if col_id == column_id:
-                    column_name = col_name
-                    board_name = board
-                    break
-
-        if not column_name:
-            return None
-
-        # Get project configuration
-        project_config = await self.config.get_project_config(project)
-
-        # Find pipeline for this board
-        for pipeline in project_config.pipelines:
-            if pipeline.board_name == board_name:
-                # Get workflow template
-                workflow = await self.config.get_workflow_template(pipeline.workflow)
-
-                # Find column in workflow
-                for col in workflow.columns:
-                    if col.name == column_name:
-                        return StageInfo(
-                            pipeline_name=pipeline.name,
-                            board_name=board_name,
-                            stage_name=col.name,
-                            column_name=col.name,
-                            agent_name=col.agent,
-                        )
-
+        # TODO #370: Get board ID from project configuration or GitHub event
+        # For now, we cannot reliably map GitHub project IDs to our board IDs
+        # without additional configuration or the board_id in the webhook event
+        self.logger.warning(
+            "Column ID to stage mapping requires board_id resolution; "
+            "not implemented for project %s column %s. "
+            "See #370 for tracking.",
+            project,
+            column_id,
+        )
         return None
 
-    def _extract_work_item_id(self, content_url: str) -> Optional[str]:
+    def _extract_work_item_id(self, content_url: str) -> str | None:
         """
         Extract issue/PR number from GitHub API URL.
 

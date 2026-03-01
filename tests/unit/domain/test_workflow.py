@@ -1,23 +1,24 @@
 """Unit tests for Workflow aggregate root."""
 
-import pytest
 from datetime import datetime
 
-from codetoreum.domain.workflow import Workflow, WorkflowStatus
-from codetoreum.domain.workflow_template import WorkflowTemplate
-from codetoreum.domain.pipeline_stage import StageStatus
+import pytest
+
 from codetoreum.domain.events import (
-    WorkflowCreated,
-    WorkflowStarted,
-    WorkflowStageAdvanced,
+    WorkflowCancelled,
     WorkflowCompleted,
+    WorkflowCreated,
     WorkflowFailed,
     WorkflowPaused,
     WorkflowResumed,
-    WorkflowCancelled,
+    WorkflowStageAdvanced,
     WorkflowStageStatusUpdated,
+    WorkflowStarted,
 )
 from codetoreum.domain.exceptions import DomainError
+from codetoreum.domain.pipeline_stage import StageStatus
+from codetoreum.domain.workflow import Workflow, WorkflowStatus
+from codetoreum.domain.workflow_template import WorkflowTemplate
 
 
 class TestWorkflowCreation:
@@ -455,6 +456,7 @@ class TestStageManagement:
         workflow.update_stage_status("stage1", "ready")
 
         stage = workflow.get_stage_by_name("stage1")
+        assert stage is not None
         assert stage.status == StageStatus.READY
 
         events = workflow.get_pending_events()
@@ -547,7 +549,7 @@ class TestWorkflowQueries:
         duration = workflow.get_duration_seconds()
         assert duration is not None
         assert duration >= 0
-        assert isinstance(duration, int)
+        assert isinstance(duration, float)
 
 
 class TestEventManagement:

@@ -1,6 +1,6 @@
 # Mock Adapters Reference
 
-**Complete inventory of 18 testing and simulation adapters**
+**Complete inventory of 24 testing and simulation adapters**
 
 ## Overview
 
@@ -8,17 +8,18 @@ Mock adapters provide fast, deterministic implementations of port interfaces for
 
 ## Adapter Categories
 
-### 1. **Mock Workflow Adapters** (3)
+### 1. **Mock Workflow Adapters** (4)
 - MockLLMAdapter - Agent/LLM execution simulation
 - MockBoardAdapter - Project board operations
 - MockReviewCycleAdapter - Code review workflow
+- MockDiscussionAdapter - Discussion/comment thread management
 
 ### 2. **Mock System Adapters** (3)
 - MockNotifierAdapter - Notification delivery
 - MockRepairCycleAdapter - Test-fix-validate loops
 - MockContainerRecoveryAdapter - Container failure recovery
 
-### 3. **In-Memory Persistence Adapters** (7)
+### 3. **In-Memory Persistence Adapters** (8)
 - InMemoryEventStore - Event sourcing
 - InMemoryStorageAdapter - File/object storage
 - InMemoryRepositoryAdapter - Git operations
@@ -26,15 +27,22 @@ Mock adapters provide fast, deterministic implementations of port interfaces for
 - InMemoryWorkflowConfigService - Workflow configuration
 - InMemoryQueueService - Work item queue
 - InMemoryCheckpointStore - Repair cycle state
+- InMemoryVersionControlService - Version control operations
 
-### 4. **Utility Adapters** (4)
-- FakeContainerAdapter - Container execution
-- SimpleEncryptionService - Data encryption
+### 4. **In-Memory Infrastructure Adapters** (2)
+- InMemoryMessageBroker - Pub/sub message distribution
 - InMemoryMetricsAdapter - Metrics collection
-- InMemoryConfigStore - Configuration storage
 
-### 5. **Support Adapters** (1)
-- Specialized encryption, messaging (as needed)
+### 5. **Utility Adapters** (5)
+- FakeContainerAdapter - Container execution
+- SimpleEncryptionAdapter - Data encryption
+- InMemoryConfigStore - Configuration storage
+- ConfigurableIdentityService - Bot/user identification
+- MockProjectManagerAdapter - Multi-project management
+
+### 6. **Support Adapters** (2)
+- CapturingMockEventEmitter - Domain event capture
+- MockAgentExecutor - Agent execution simulation
 
 ---
 
@@ -208,6 +216,59 @@ assert_feedback = adapter.get_feedback_for_iteration("item-1", 1)
 - Maker-checker workflow testing
 - Revision cycle simulation
 - Review gate validation
+
+#### 4. MockDiscussionAdapter
+**File**: `mock_discussion_adapter.py`
+**Implements**: IDiscussionAdapter
+**Purpose**: Simulate discussion threads and comment management
+
+**Key Features**:
+- ✅ In-memory discussion thread storage
+- ✅ Comment creation and retrieval
+- ✅ Work-item-specific monitoring
+- ✅ Event emission for comment actions
+- ✅ Test helpers for setup and verification
+
+**Configuration**:
+```python
+adapter = MockDiscussionAdapter(identity_service=identity_svc)
+config = DiscussionMonitoringConfig(project_id="proj-1")
+adapter.start_monitoring("item-1", config)
+```
+
+**Core Methods**:
+```python
+# Query
+thread = await adapter.get_thread("item-1")
+comments = adapter.get_comments_by_author("item-1", "alice")
+count = adapter.get_comment_count("item-1")
+
+# Commands
+comment = await adapter.add_comment("item-1", "Agent response")
+
+# Monitoring
+adapter.start_monitoring("item-1", config)
+adapter.stop_monitoring("item-1")
+```
+
+**Test Helpers**:
+- `simulate_comment()` - Simulate human comment (emits event)
+- `simulate_bot_comment()` - Simulate bot comment
+- `create_thread()` - Create discussion with initial comment
+- `get_processed_comment_ids()` - Get comment IDs for deduplication
+- `reset_monitoring_state()` - Reset for restart simulation
+- `clear_threads()` - Clear all threads
+- `clear_monitoring()` - Clear monitoring state
+- `get_thread_info()` - Get diagnostic thread information
+
+**Event Emission**:
+- `comment.needs_response` - Human comment posted (if monitoring)
+- `comment.posted` - Bot comment posted
+
+**Use Cases**:
+- Discussion monitoring workflow testing
+- Comment response handling validation
+- Duplicate prevention testing
 
 ---
 
@@ -501,31 +562,53 @@ await store.subscribe(on_event)
 - ✅ Directory-like structure
 - ✅ Metadata tracking
 - ✅ Object retrieval
+- ✅ **Thread-safe concurrent access** (using `threading.Lock()`)
 
 **Usage**:
 ```python
 storage = InMemoryStorageAdapter()
 
 # Store file
-await storage.put_object(
+await storage.upload(
     key="outputs/result.txt",
-    data=b"Agent output here"
+    content=b"Agent output here"
 )
 
 # Retrieve
-obj = await storage.get_object("outputs/result.txt")
-content = obj.data  # bytes
+content = await storage.download("outputs/result.txt")
 
 # List objects
-objects = await storage.list_objects("outputs/")
+objects = await storage.list_files("outputs/")
 
 # Delete
-await storage.delete_object("outputs/result.txt")
+await storage.delete("outputs/result.txt")
 ```
+
+**Thread Safety Contract**:
+
+All storage operations are protected by an internal lock to ensure thread-safe concurrent access matching production storage adapter behavior (S3, Azure Blob Storage, etc.).
+
+| Operation | Concurrency | Behavior |
+|-----------|-------------|----------|
+| Multiple uploads to **same key** | Concurrent | **Last-write-wins**: One completely overwrites the other. Result is deterministic (one of the uploaded contents), never corrupted partial data. |
+| Upload + download **same key** | Concurrent | Download returns either old or new complete content, never partial/corrupted data. Lock ensures consistent snapshot. |
+| Upload + delete **same key** | Concurrent | One operation wins: either artifact exists (if upload won) or doesn't (if delete won). Final state is consistent. |
+| Multiple downloads **same key** | Concurrent | All downloads return identical, complete content. No partial reads or corruption. |
+| List + upload **different keys** | Concurrent | List returns consistent snapshot: either sees new file or doesn't, but never partial/corrupted data. |
+| Multiple deletes **same key** | Concurrent | First delete succeeds, second raises `ResourceNotFoundError`. Lock ensures serialization. |
+
+**Guarantees**:
+- ✅ All state changes are atomic (protected by lock)
+- ✅ No partial writes or reads due to concurrent operations
+- ✅ No data corruption from simultaneous access
+- ✅ Deterministic results (not racy/flaky)
+- ✅ Same concurrency semantics as production storage (eventual consistency with atomic operations)
 
 **Use Cases**:
 - Agent output storage testing
 - Artifact management validation
+- **Concurrent workflow testing** (ensures multi-threaded code is tested realistically)
+- **Production adapter behavior simulation** (matches S3/Azure concurrency guarantees)
 
 ---
 
@@ -688,9 +771,148 @@ state = saved.state
 
 ---
 
+#### 14. InMemoryVersionControlService
+**File**: `in_memory_version_control_service.py`
+**Implements**: IVersionControlService
+**Purpose**: Version control operations without git
+
+**Key Features**:
+- ✅ Repository cloning simulation
+- ✅ Branch management (checkout, create)
+- ✅ Commit simulation with SHA generation
+- ✅ Push simulation
+- ✅ Repository metadata retrieval
+
+**Usage**:
+```python
+service = InMemoryVersionControlService()
+
+# Clone repository
+await service.clone_repository(
+    url="https://github.com/org/repo.git",
+    target_path="/workspace/repo",
+    branch="main"
+)
+
+# Checkout branch
+await service.checkout("/workspace/repo", "feature/new-feature")
+
+# Commit changes
+commit_sha = await service.commit(
+    "/workspace/repo",
+    "Add feature implementation"
+)
+
+# Push to remote
+await service.push("/workspace/repo", "feature/new-feature")
+
+# Get repository info
+repo = await service.get_repository("repo-123")
+assert repo.name == "repo"
+```
+
+**Use Cases**:
+- Version control workflow testing
+- Git operation orchestration validation
+- Branch management testing
+
+---
+
+#### 15. InMemoryMessageBroker
+**File**: `in_memory_message_broker.py`
+**Implements**: IMessageBroker
+**Purpose**: Pub/sub message distribution without Redis
+
+**Key Features**:
+- ✅ Channel-based pub/sub messaging
+- ✅ Event and control message publication
+- ✅ Async and sync callback support
+- ✅ Statistics tracking
+- ✅ Test helper methods
+
+**Configuration**:
+```python
+broker = InMemoryMessageBroker()
+
+# Initialize
+await broker.initialize()
+
+# Subscribe to channel
+messages = []
+async def handler(msg):
+    messages.append(msg)
+
+await broker.subscribe("events.workflow", handler)
+```
+
+**Core Methods**:
+```python
+# Publish
+await broker.publish_event(domain_event)
+await broker.publish_control_message("disconnect", {"client_id": "123"})
+
+# Subscribe
+await broker.subscribe("channel_name", callback)
+await broker.unsubscribe("channel_name", callback)
+
+# Statistics
+stats = broker.get_stats()
+# Returns: {
+#   'events_published': N,
+#   'control_messages_published': N,
+#   'messages_delivered': N,
+#   'delivery_failures': N,
+#   'active_subscriptions': N,
+#   'channels': N
+# }
+```
+
+**Test Helpers**:
+- `get_published_messages()` - Get all published messages
+- `get_subscriptions_for_channel()` - Count subscriptions on channel
+- `clear_published_messages()` - Clear message log
+
+**Use Cases**:
+- Pub/sub message distribution testing
+- Horizontal scalability testing
+- Control message coordination testing
+
+---
+
+### In-Memory Infrastructure Adapters
+
+#### 16. InMemoryMetricsAdapter
+**File**: `in_memory_metrics_adapter.py`
+**Implements**: IMetrics
+**Purpose**: Metrics collection without Prometheus
+
+**Usage**:
+```python
+adapter = InMemoryMetricsAdapter()
+
+# Record metrics
+await adapter.increment_counter("requests", 1)
+await adapter.set_gauge("queue_size", 42)
+await adapter.record_histogram("response_time", 150)
+
+# Query
+value = adapter.get_counter_value("requests")
+all_metrics = adapter.get_all_metrics()
+
+# Assertions
+count = adapter.get_metric_count("requests")
+assert count == 5
+```
+
+**Use Cases**:
+- Metrics emission validation
+- Performance tracking testing
+
+---
+
 ### Utility Adapters
 
-#### 14. FakeContainerAdapter
+#### 17. FakeContainerAdapter
 **File**: `fake_container_adapter.py`
 **Implements**: IContainer
 **Purpose**: Container execution without Docker
@@ -738,8 +960,8 @@ await adapter.stop_container(...)
 
 ---
 
-#### 15. SimpleEncryptionService
-**File**: `simple_encryption_service.py`
+#### 18. SimpleEncryptionAdapter
+**File**: `simple_encryption_adapter.py`
 **Implements**: IEncryptionService
 **Purpose**: In-process encryption for testing
 
@@ -750,7 +972,7 @@ await adapter.stop_container(...)
 
 **Usage**:
 ```python
-service = SimpleEncryptionService()
+service = SimpleEncryptionAdapter()
 
 # Encrypt
 ciphertext = await service.encrypt("secret data")
@@ -764,36 +986,7 @@ assert plaintext == "secret data"
 
 ---
 
-#### 16. InMemoryMetricsAdapter
-**File**: `in_memory_metrics_adapter.py`
-**Implements**: IMetrics
-**Purpose**: Metrics collection without Prometheus
-
-**Usage**:
-```python
-adapter = InMemoryMetricsAdapter()
-
-# Record metrics
-await adapter.increment_counter("requests", 1)
-await adapter.set_gauge("queue_size", 42)
-await adapter.record_histogram("response_time", 150)
-
-# Query
-value = adapter.get_counter_value("requests")
-all_metrics = adapter.get_all_metrics()
-
-# Assertions
-count = adapter.get_metric_count("requests")
-assert count == 5
-```
-
-**Use Cases**:
-- Metrics emission validation
-- Performance tracking testing
-
----
-
-#### 17. InMemoryConfigStore
+#### 19. InMemoryConfigStore
 **File**: `in_memory_config_store.py`
 **Implements**: IConfigStore (if applicable)
 **Purpose**: Configuration storage without database
@@ -811,6 +1004,233 @@ config = await store.get("app_config")
 # List
 all_keys = await store.list()
 ```
+
+---
+
+#### 20. ConfigurableIdentityService
+**File**: `../secondary/configurable_identity_service.py`
+**Implements**: IIdentityService
+**Purpose**: Bot/user identification with configuration
+
+**Key Features**:
+- ✅ Bot user identification
+- ✅ Human user identification
+- ✅ Configurable bot username
+- ✅ Testing and debugging support
+
+**Configuration**:
+```python
+service = ConfigurableIdentityService(bot_username="codetoreum-bot")
+
+# Identify users
+is_bot = service.is_bot_user("codetoreum-bot")  # True
+is_bot = service.is_bot_user("alice")  # False
+
+# Get bot username
+name = service.get_bot_username()  # "codetoreum-bot"
+```
+
+**Use Cases**:
+- Bot comment filtering
+- Author attribution testing
+- Discussion thread filtering
+
+---
+
+#### 21. MockProjectManagerAdapter
+**File**: `mock_project_manager_adapter.py`
+**Implements**: IProjectManager
+**Purpose**: Multi-project management simulation
+
+**Key Features**:
+- ✅ Project CRUD operations
+- ✅ Project configuration management
+- ✅ Test helper methods
+
+**Configuration**:
+```python
+adapter = MockProjectManagerAdapter()
+
+# Add project
+adapter.add_project("proj-1", ProjectConfig(...))
+
+# Get project
+project = adapter.get_project("proj-1")
+
+# List projects
+projects = adapter.list_projects()
+```
+
+**Use Cases**:
+- Multi-project orchestration testing
+- Project configuration validation
+
+---
+
+### Support Adapters
+
+#### 22. CapturingMockEventEmitter
+**File**: `capturing_mock_event_emitter.py`
+**Implements**: IEventEmitter
+**Purpose**: Event capture and verification for testing
+
+**Key Features**:
+- ✅ Event capture
+- ✅ Event history tracking
+- ✅ Query and assertion helpers
+- ✅ Event filtering
+
+**Usage**:
+```python
+emitter = CapturingMockEventEmitter()
+
+# Capture events
+emitter.emit(domain_event)
+
+# Query
+events = emitter.get_all_events()
+filtered = emitter.get_events_by_type("WorkItemColumnChanged")
+
+# Assertions
+assert len(events) == 1
+assert events[0].event_type == "WorkItemColumnChanged"
+
+# Clear
+emitter.clear()
+```
+
+**Use Cases**:
+- Domain event capture testing
+- Event workflow validation
+- Event source verification
+
+---
+
+#### 23. MockAgentExecutor
+**File**: `mock_agent_executor.py`
+**Purpose**: Agent execution simulation without containers
+
+**Key Features**:
+- ✅ Agent execution simulation
+- ✅ Configurable delays
+- ✅ Execution tracking
+- ✅ Completion callbacks
+
+**Configuration**:
+```python
+executor = MockAgentExecutor(execution_delay_seconds=3.0)
+
+# Execute agent
+execution_id = await executor.execute_agent(
+    agent_id="agent-1",
+    work_item_id="item-1",
+    context={"issue": "..."}
+)
+
+# Track execution
+executions = executor.get_executions()
+
+# Set completion handler
+async def on_complete(result):
+    print(f"Agent execution completed: {result}")
+
+executor.set_completion_handler(on_complete, "board-1")
+```
+
+**Use Cases**:
+- Agent execution workflow testing
+- Board automation testing
+- Execution tracking validation
+
+---
+
+#### 24. MockEventEmitter (Legacy)
+**File**: `../secondary/mock_event_emitter.py`
+**Purpose**: Basic event emission mock (deprecated in favor of CapturingMockEventEmitter)
+
+**Note**: Use CapturingMockEventEmitter for new tests. This adapter is maintained for backward compatibility.
+
+---
+
+## Thread Safety in Mock Adapters
+
+Mock adapters replicate production storage adapter concurrency semantics using `threading.Lock()` for thread-safe access. This ensures multi-threaded code is tested realistically without introducing subtle race conditions.
+
+### Adapters with Thread Safety
+
+The following adapters protect concurrent access with internal locks:
+
+1. **InMemoryStorageAdapter** - File/object storage with atomic operations
+2. **InMemoryQueueService** - Queue operations (enqueue, dequeue, position updates)
+3. **InMemoryEventStore** - Event persistence and retrieval (if applicable)
+
+### Design Principle
+
+Mock adapters use the same thread-safety pattern as production adapters:
+- Each adapter maintains internal state in dictionaries/lists
+- All state-changing operations (`upload`, `download`, `delete`, `enqueue`, etc.) are protected by `with self._lock:`
+- Read-only operations (`exists`, `list_files`, `get_queue_entries`) also acquire the lock for consistent snapshots
+- No external locks required - thread safety is internal to the adapter
+
+### Concurrent Testing Example
+
+```python
+@pytest.mark.asyncio
+async def test_concurrent_storage_operations():
+    """Test that concurrent storage operations don't corrupt data."""
+    storage = InMemoryStorageAdapter()
+
+    # Setup initial data
+    await storage.upload("file-1", b"initial content")
+
+    # Race: concurrent operations
+    results = await asyncio.gather(
+        storage.upload("file-1", b"updated content"),
+        storage.download("file-1")
+    )
+
+    # Download returns consistent snapshot (not partial data)
+    download_result = results[1]
+    assert download_result in [b"initial content", b"updated content"]
+
+    # No corruption or partial reads
+    assert len(download_result) > 0
+```
+
+### Testing Concurrent Failures
+
+```python
+@pytest.mark.asyncio
+async def test_concurrent_delete_race():
+    """Test that delete operations are atomic even under concurrency."""
+    storage = InMemoryStorageAdapter()
+    await storage.upload("file-1", b"content")
+
+    # Two concurrent deletes
+    results = await asyncio.gather(
+        storage.delete("file-1"),  # Should succeed
+        storage.delete("file-1"),  # Should fail with ResourceNotFoundError
+        return_exceptions=True
+    )
+
+    # One succeeds, one raises error
+    assert any(isinstance(r, Exception) for r in results)
+    assert any(r is None for r in results)
+
+    # File must not exist
+    with pytest.raises(ResourceNotFoundError):
+        await storage.download("file-1")
+```
+
+### Production Behavior Fidelity
+
+Thread-safe mock adapters ensure:
+- ✅ Concurrent tests don't produce flaky/racy results
+- ✅ Same concurrency semantics as production (S3, etc.)
+- ✅ Error conditions are tested realistically (race conditions, concurrent failures)
+- ✅ Multi-threaded code paths are covered (agents executing in parallel)
+
+See `tests/unit/adapters/testing/test_adapter_error_handling.py` for comprehensive concurrent access tests.
 
 ---
 
@@ -910,6 +1330,121 @@ runner.clear_captured_data()  # Clear events/metrics
 
 ---
 
+## Error Handling Contract
+
+All mock adapters must raise appropriate exceptions when resources are not found, matching production adapter behavior. This ensures error handling code is tested realistically in simulations.
+
+### Resource Not Found Errors
+
+**Pattern**: Use `ResourceNotFoundError` (from `codetoreum.ports.exceptions`) when a single-item retrieval fails.
+
+**Constructor**: `ResourceNotFoundError(resource_type: str, resource_id: str)`
+- `resource_type`: Resource type label (e.g., "File", "Artifact", "Work item", "Column")
+- `resource_id`: Programmatic identifier for the missing resource
+- **Note**: The constructor formats the message as `"{resource_type} not found: {resource_id}"`
+
+**Examples**:
+
+```python
+# File not found
+if file_key not in self._files:
+    raise ResourceNotFoundError("File", file_path)
+
+# Artifact not found
+if key not in self._objects:
+    raise ResourceNotFoundError("Artifact", key)
+
+# Work item not found
+if work_item_id not in self._item_positions:
+    raise ResourceNotFoundError("Work item", work_item_id)
+
+# Column not found
+if target_col is None:
+    raise ResourceNotFoundError("Column", target_column)
+```
+
+### Collection Queries Return Empty
+
+**Pattern**: Return empty list/dict when querying collections that may have zero items.
+
+**Rationale**: Collection queries expect zero or more items; returning empty is a valid result.
+
+**Examples**:
+
+```python
+# Queue entries - return empty list (valid state)
+async def get_queue_entries(self, project_id: str, board_id: str) -> list[PipelineQueueEntry]:
+    with self._lock:
+        key = f"{project_id}:{board_id}"
+        return self._queues.get(key, [])  # Empty list = no items in queue
+
+# Board items in column - return empty list (valid state)
+async def get_items_in_column(self, board_id: str, column_name: str) -> list[WorkItemPosition]:
+    # ... validate inputs that are required ...
+    # Return empty list if no items - this is normal, not an error
+    return items
+```
+
+### Optional Result Return Patterns
+
+**Pattern**: Return `None` only when explicitly documented in the interface as a valid optional result.
+
+**Examples**:
+
+```python
+# get_next_waiting_item returns None when queue is empty (documented as valid)
+async def get_next_waiting_item(self, project_id: str, board_id: str) -> PipelineQueueEntry | None:
+    # Returns None if no waiting items - this is expected behavior
+    # Does NOT raise error because None is documented as valid return value
+```
+
+### Adapter-Specific Error Behavior
+
+| Adapter | Method | Missing Behavior | Exception |
+|---------|--------|------------------|-----------|
+| InMemoryRepositoryAdapter | `get_file_content()` | Raise error | `ResourceNotFoundError` |
+| InMemoryRepositoryAdapter | `get_file_content()` | Repository missing | `ResourceNotFoundError` |
+| InMemoryStorageAdapter | `download()` | Artifact missing | `ResourceNotFoundError` |
+| InMemoryStorageAdapter | `delete()` | Artifact missing | `ResourceNotFoundError` |
+| MockBoardAdapter | `get_item_position()` | Item missing | `ResourceNotFoundError` |
+| MockBoardAdapter | `move_item_to_column()` | Item/column missing | `ResourceNotFoundError` |
+| InMemoryQueueService | `get_next_waiting_item()` | Queue empty | Returns `None` (valid) |
+| InMemoryQueueService | `mark_item_active()` | Item missing | `QueueItemNotFoundError` |
+
+### Testing Error Conditions
+
+All adapters must include tests validating error conditions:
+
+```python
+@pytest.mark.asyncio
+async def test_get_file_content_missing_file_raises_error(self, adapter):
+    """Test that missing file raises ResourceNotFoundError with details."""
+    await adapter.clone(url="...", destination=Path("/tmp/test"))
+
+    with pytest.raises(ResourceNotFoundError) as exc_info:
+        await adapter.get_file_content(
+            repo_path=Path("/tmp/test"),
+            file_path="nonexistent.py"
+        )
+
+    # Verify error includes identifying information
+    assert "nonexistent.py" in str(exc_info.value)
+    assert exc_info.value.resource_id is not None
+```
+
+### Implementation Checklist
+
+- [ ] Adapter raises `ResourceNotFoundError` for missing single items
+- [ ] Error message includes resource identifier and context
+- [ ] Error message is human-readable and helpful for debugging
+- [ ] `resource_id` field contains programmatic identifier
+- [ ] Adapter returns empty collection for zero-item queries (not error)
+- [ ] Adapter returns `None` only if documented in interface
+- [ ] Unit tests validate error conditions, not just happy paths
+- [ ] Error behavior matches production adapters (GitHub, etc.)
+
+---
+
 ## Performance Characteristics
 
 | Adapter | Speed | Determinism | Memory |
@@ -927,4 +1462,3 @@ runner.clear_captured_data()  # Clear events/metrics
 - `src/codetoreum/adapters/testing/` - Implementation source
 - `tests/simulation/` - Usage examples
 - `src/codetoreum/ports/output/` - Port interface definitions
-

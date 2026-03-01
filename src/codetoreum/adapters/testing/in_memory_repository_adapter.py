@@ -2,17 +2,25 @@
 
 import asyncio
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, List, Optional
 from uuid import uuid4
 
-from codetoreum.domain.types import BranchName, CommitHash, RemoteName, RepositoryId
+from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
+from codetoreum.domain.events.repository_events import (
+    BranchCreatedEvent,
+    CommitCreatedEvent,
+    FilesStagedEvent,
+)
+from codetoreum.domain.types import BranchName, CommitHash, RepositoryId
 from codetoreum.ports.exceptions import (
     ResourceNotFoundError,
     ValidationError,
 )
+from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.repository import (
+    CommitAuthor,
+    CommitInfo,
     IRepository,
     MergeResult,
     RepositoryStatus,
@@ -30,31 +38,42 @@ class InMemoryRepositoryAdapter(IRepository):
     dictionary and list modifications are protected by a lock.
     """
 
-    def __init__(self):
-        """Initialize the in-memory repository adapter with thread-safe storage."""
+    def __init__(self, event_emitter: IEventEmitter | None = None):
+        """Initialize the in-memory repository adapter with thread-safe storage.
+
+        Args:
+            event_emitter: Optional IEventEmitter for emitting domain events.
+                          Defaults to MockEventEmitter.
+        """
         # Repository storage: repo_id -> repo_data
-        self._repositories: Dict[str, Dict] = {}
+        self._repositories: dict[str, dict] = {}
 
         # File storage: (repo_id, path) -> content
-        self._files: Dict[tuple[str, str], str] = {}
+        self._files: dict[tuple[str, str], str] = {}
 
         # Commit storage: (repo_id, commit_sha) -> commit_info
-        self._commits: Dict[tuple[str, str], Dict] = {}
+        self._commits: dict[tuple[str, str], dict] = {}
 
         # Branch storage: (repo_id, branch_name) -> commit_sha
-        self._branches: Dict[tuple[str, str], str] = {}
+        self._branches: dict[tuple[str, str], str] = {}
 
         # Remote storage: (repo_id, remote_name) -> url
-        self._remotes: Dict[tuple[str, str], str] = {}
+        self._remotes: dict[tuple[str, str], str] = {}
+
+        # Staging area: repo_id -> list of staged file paths
+        self._staged_files: dict[str, list[str]] = {}
 
         # Thread safety for concurrent test execution
         self._lock = threading.Lock()
+
+        # Event emission
+        self._event_emitter = event_emitter or MockEventEmitter()
 
     async def clone(
         self,
         url: str,
         destination: Path,
-        branch: Optional[BranchName] = None,
+        branch: BranchName | None = None,
     ) -> RepositoryId:
         """
         Clone a repository.
@@ -71,10 +90,12 @@ class InMemoryRepositoryAdapter(IRepository):
             ValidationError: If url or destination is None/empty
         """
         if not url:
-            raise ValidationError("Repository URL is required")
+            msg = "Repository URL is required"
+            raise ValidationError(msg)
 
         if not destination:
-            raise ValidationError("Destination path is required")
+            msg = "Destination path is required"
+            raise ValidationError(msg)
 
         with self._lock:
             repo_id = str(uuid4())
@@ -86,7 +107,7 @@ class InMemoryRepositoryAdapter(IRepository):
                 "url": url,
                 "path": str(destination),
                 "current_branch": default_branch,
-                "created_at": datetime.now(timezone.utc),
+                "created_at": datetime.now(UTC),
             }
 
             # Create default branch
@@ -99,7 +120,7 @@ class InMemoryRepositoryAdapter(IRepository):
                 "message": "Initial commit",
                 "author_name": "System",
                 "author_email": "system@codetoreum.local",
-                "timestamp": datetime.now(timezone.utc),
+                "timestamp": datetime.now(UTC),
                 "parent": None,
             }
 
@@ -127,10 +148,12 @@ class InMemoryRepositoryAdapter(IRepository):
             ValidationError: If repo_path or branch is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         if not branch:
-            raise ValidationError("Branch name is required")
+            msg = "Branch name is required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
@@ -142,7 +165,8 @@ class InMemoryRepositoryAdapter(IRepository):
                     current_commit = self._branches[(repo_id, current_branch)]
                     self._branches[(repo_id, branch)] = current_commit
                 else:
-                    raise ResourceNotFoundError("Branch", branch)
+                    msg = "Branch"
+                    raise ResourceNotFoundError(msg, branch)
 
             self._repositories[repo_id]["current_branch"] = branch
 
@@ -150,7 +174,7 @@ class InMemoryRepositoryAdapter(IRepository):
         self,
         repo_path: Path,
         branch_name: BranchName,
-        from_branch: Optional[BranchName] = None,
+        from_branch: BranchName | None = None,
     ) -> None:
         """
         Create a new branch.
@@ -165,10 +189,12 @@ class InMemoryRepositoryAdapter(IRepository):
             ValidationError: If repo_path or branch_name is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         if not branch_name:
-            raise ValidationError("Branch name is required")
+            msg = "Branch name is required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
@@ -176,11 +202,79 @@ class InMemoryRepositoryAdapter(IRepository):
             source_branch = from_branch or self._repositories[repo_id]["current_branch"]
 
             if (repo_id, source_branch) not in self._branches:
-                raise ResourceNotFoundError("Branch", source_branch)
+                msg = "Branch"
+                raise ResourceNotFoundError(msg, source_branch)
 
             # Create new branch pointing to same commit as source
             source_commit = self._branches[(repo_id, source_branch)]
             self._branches[(repo_id, branch_name)] = source_commit
+
+            # Emit domain event
+            # Note: source="mock" identifies this as a test/simulation event for traceability
+            self._event_emitter.emit(
+                BranchCreatedEvent(
+                    type="repository.branch_created",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    source="mock",
+                    repository_id=repo_id,
+                    branch_name=str(branch_name),
+                    base_commit=str(source_commit),
+                    project_id=None,
+                )
+            )
+
+    async def stage_files(
+        self,
+        repo_path: Path,
+        files: list[str],
+    ) -> None:
+        """
+        Stage files for commit.
+
+        Adds the specified files to the repository's staging area. This is a
+        prerequisite to committing - staging and committing are independent
+        operations that follow real git semantics.
+
+        Args:
+            repo_path: Path to the repository
+            files: List of file paths to stage
+
+        Raises:
+            ResourceNotFoundError: If repository doesn't exist
+            ValidationError: If repo_path or files is None/empty
+        """
+        if not repo_path:
+            msg = "Repository path is required"
+            raise ValidationError(msg)
+
+        if not files:
+            msg = "Files list is required and cannot be empty"
+            raise ValidationError(msg)
+
+        repo_id = self._get_repo_id_by_path(repo_path)
+
+        with self._lock:
+            # Initialize staging area for this repo if needed
+            if repo_id not in self._staged_files:
+                self._staged_files[repo_id] = []
+
+            # Add files to staging area (avoiding duplicates)
+            for file_path in files:
+                if file_path not in self._staged_files[repo_id]:
+                    self._staged_files[repo_id].append(file_path)
+
+            # Emit FilesStagedEvent
+            # Note: source="mock" identifies this as a test/simulation event for traceability
+            self._event_emitter.emit(
+                FilesStagedEvent(
+                    type="repository.files_staged",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    source="mock",
+                    repository_id=repo_id,
+                    file_paths=tuple(files),
+                    project_id=None,
+                )
+            )
 
     async def commit(
         self,
@@ -188,7 +282,7 @@ class InMemoryRepositoryAdapter(IRepository):
         message: str,
         author_name: str,
         author_email: str,
-        files: Optional[List[str]] = None,
+        files: list[str] | None = None,
     ) -> CommitHash:
         """
         Create a commit.
@@ -208,19 +302,36 @@ class InMemoryRepositoryAdapter(IRepository):
             ValidationError: If required parameters are None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         if not message or not message.strip():
-            raise ValidationError("Commit message is required")
+            msg = "Commit message is required"
+            raise ValidationError(msg)
 
         if not author_name or not author_email:
-            raise ValidationError("Author name and email are required")
+            msg = "Author name and email are required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
         with self._lock:
             current_branch = self._repositories[repo_id]["current_branch"]
             parent_commit = self._branches.get((repo_id, current_branch))
+
+            # Determine which files to commit
+            if files is not None:
+                # Explicit files provided - commit them directly without modifying staging area
+                # This maintains separation between explicit file commits and staged commits
+                changed_files = list(files)  # Make a copy
+            else:
+                # Use staged files if no explicit files provided
+                # Make a copy to avoid referencing the mutable list
+                changed_files = list(self._staged_files.get(repo_id, []))
+
+                # Clear staging area after commit (only when committing staged files)
+                if repo_id in self._staged_files:
+                    self._staged_files[repo_id].clear()
 
             # Create new commit
             commit_sha = CommitHash(str(uuid4()))
@@ -230,13 +341,29 @@ class InMemoryRepositoryAdapter(IRepository):
                 "message": message,
                 "author_name": author_name,
                 "author_email": author_email,
-                "timestamp": datetime.now(timezone.utc),
+                "timestamp": datetime.now(UTC),
                 "parent": parent_commit,
-                "files": files or [],
+                "files": changed_files,
             }
 
             # Update branch pointer
             self._branches[(repo_id, current_branch)] = commit_sha
+
+            # Emit CommitCreatedEvent
+            # Note: source="mock" identifies this as a test/simulation event for traceability
+            self._event_emitter.emit(
+                CommitCreatedEvent(
+                    type="repository.commit_created",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    source="mock",
+                    repository_id=repo_id,
+                    commit_sha=str(commit_sha),
+                    message=message,
+                    author=f"{author_name} <{author_email}>",
+                    changed_files=tuple(changed_files),
+                    project_id=None,
+                )
+            )
 
             return commit_sha
 
@@ -244,7 +371,7 @@ class InMemoryRepositoryAdapter(IRepository):
         self,
         repo_path: Path,
         remote: str = "origin",
-        branch: Optional[str] = None,
+        branch: str | None = None,
         force: bool = False,
     ) -> None:
         """
@@ -261,19 +388,22 @@ class InMemoryRepositoryAdapter(IRepository):
             ValidationError: If repo_path is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
         with self._lock:
             if (repo_id, remote) not in self._remotes:
-                raise ResourceNotFoundError("Remote", remote)
+                msg = "Remote"
+                raise ResourceNotFoundError(msg, remote)
 
             # In-memory simulation, just mark as pushed
             target_branch = branch or self._repositories[repo_id]["current_branch"]
 
             if (repo_id, target_branch) not in self._branches:
-                raise ResourceNotFoundError("Branch", target_branch)
+                msg = "Branch"
+                raise ResourceNotFoundError(msg, target_branch)
 
         # Simulate push delay
         await asyncio.sleep(0.01)
@@ -282,7 +412,7 @@ class InMemoryRepositoryAdapter(IRepository):
         self,
         repo_path: Path,
         remote: str = "origin",
-        branch: Optional[str] = None,
+        branch: str | None = None,
     ) -> None:
         """
         Pull commits from remote.
@@ -297,13 +427,15 @@ class InMemoryRepositoryAdapter(IRepository):
             ValidationError: If repo_path is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
         with self._lock:
             if (repo_id, remote) not in self._remotes:
-                raise ResourceNotFoundError("Remote", remote)
+                msg = "Remote"
+                raise ResourceNotFoundError(msg, remote)
 
         # Simulate pull delay
         await asyncio.sleep(0.01)
@@ -327,13 +459,15 @@ class InMemoryRepositoryAdapter(IRepository):
             ValidationError: If repo_path is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
         with self._lock:
             if (repo_id, remote) not in self._remotes:
-                raise ResourceNotFoundError("Remote", remote)
+                msg = "Remote"
+                raise ResourceNotFoundError(msg, remote)
 
         # Simulate fetch delay
         await asyncio.sleep(0.01)
@@ -360,18 +494,19 @@ class InMemoryRepositoryAdapter(IRepository):
             ValidationError: If any parameter is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         if not base:
-            raise ValidationError("Base ref is required")
+            msg = "Base ref is required"
+            raise ValidationError(msg)
 
         if not target:
-            raise ValidationError("Target ref is required")
-
-        repo_id = self._get_repo_id_by_path(repo_path)
+            msg = "Target ref is required"
+            raise ValidationError(msg)
 
         # Return mock diff
-        return f"""diff --git a/file.txt b/file.txt
+        return """diff --git a/file.txt b/file.txt
 index abc123..def456 100644
 --- a/file.txt
 +++ b/file.txt
@@ -397,19 +532,21 @@ index abc123..def456 100644
             ValidationError: If repo_path is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
         with self._lock:
             current_branch = self._repositories[repo_id]["current_branch"]
+            staged_files = self._staged_files.get(repo_id, [])
 
             return RepositoryStatus(
                 current_branch=current_branch,
-                is_dirty=False,
-                staged_files=[],
-                unstaged_files=[],
-                untracked_files=[],
+                is_dirty=len(staged_files) > 0,
+                staged_files=tuple(staged_files),  # Return as tuple for immutability
+                unstaged_files=(),
+                untracked_files=(),
                 ahead_count=0,
                 behind_count=0,
             )
@@ -418,7 +555,7 @@ index abc123..def456 100644
         self,
         repo_path: Path,
         remote: bool = False,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         List branches.
 
@@ -434,15 +571,13 @@ index abc123..def456 100644
             ValidationError: If repo_path is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
         with self._lock:
-            branches = [
-                branch for (rid, branch) in self._branches.keys()
-                if rid == repo_id
-            ]
+            branches = [branch for (rid, branch) in self._branches.keys() if rid == repo_id]
 
             return branches
 
@@ -468,16 +603,19 @@ index abc123..def456 100644
             ValidationError: If repo_path or branch is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         if not branch:
-            raise ValidationError("Branch name is required")
+            msg = "Branch name is required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
         with self._lock:
             if (repo_id, branch) not in self._branches:
-                raise ResourceNotFoundError("Branch", branch)
+                msg = "Branch"
+                raise ResourceNotFoundError(msg, branch)
 
             current_branch = self._repositories[repo_id]["current_branch"]
             current_commit = self._branches[(repo_id, current_branch)]
@@ -491,7 +629,7 @@ index abc123..def456 100644
                 "message": f"Merge branch '{branch}' into '{current_branch}'",
                 "author_name": "System",
                 "author_email": "system@codetoreum.local",
-                "timestamp": datetime.now(timezone.utc),
+                "timestamp": datetime.now(UTC),
                 "parent": current_commit,
                 "merge_parent": merge_commit,
             }
@@ -501,7 +639,7 @@ index abc123..def456 100644
 
             return MergeResult(
                 success=True,
-                conflicts=[],
+                conflicts=(),
                 merge_commit=new_commit,
             )
 
@@ -509,7 +647,7 @@ index abc123..def456 100644
         self,
         repo_path: Path,
         file_path: str,
-        ref: Optional[str] = None,
+        ref: str | None = None,
     ) -> str:
         """
         Get content of a file at a specific ref.
@@ -520,34 +658,35 @@ index abc123..def456 100644
             ref: Optional ref (commit, branch, tag)
 
         Returns:
-            File content as string (empty if file doesn't exist)
+            File content as string
 
         Raises:
-            ResourceNotFoundError: If repository doesn't exist
+            ResourceNotFoundError: If repository or file doesn't exist
             ValidationError: If repo_path or file_path is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         if not file_path:
-            raise ValidationError("File path is required")
+            msg = "File path is required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
         with self._lock:
             file_key = (repo_id, file_path)
 
-            if file_key in self._files:
-                return self._files[file_key]
+            if file_key not in self._files:
+                raise ResourceNotFoundError("File", file_path)
 
-            # Return empty content if file doesn't exist
-            return ""
+            return self._files[file_key]
 
     async def get_commit_info(
         self,
         repo_path: Path,
         commit_sha: str,
-    ) -> dict:
+    ) -> CommitInfo:
         """
         Get information about a commit.
 
@@ -556,17 +695,19 @@ index abc123..def456 100644
             commit_sha: Commit SHA hash
 
         Returns:
-            Dictionary with commit information
+            CommitInfo with typed commit information
 
         Raises:
             ResourceNotFoundError: If repository or commit doesn't exist
             ValidationError: If repo_path or commit_sha is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         if not commit_sha:
-            raise ValidationError("Commit SHA is required")
+            msg = "Commit SHA is required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
@@ -574,27 +715,30 @@ index abc123..def456 100644
             commit_key = (repo_id, commit_sha)
 
             if commit_key not in self._commits:
-                raise ResourceNotFoundError("Commit", commit_sha)
+                msg = "Commit"
+                raise ResourceNotFoundError(msg, commit_sha)
 
             commit = self._commits[commit_key]
-            return {
-                "sha": commit["sha"],
-                "message": commit["message"],
-                "author": {
-                    "name": commit["author_name"],
-                    "email": commit["author_email"],
-                },
-                "timestamp": commit["timestamp"].isoformat(),
-                "parent": commit.get("parent"),
-            }
+            parent_shas = (commit["parent"],) if commit.get("parent") else ()
+            author = CommitAuthor(
+                name=commit["author_name"],
+                email=commit["author_email"],
+            )
+            return CommitInfo(
+                sha=commit["sha"],
+                author=author,
+                message=commit["message"],
+                timestamp=commit["timestamp"],
+                parent_shas=parent_shas,
+            )
 
     async def get_commit_history(
         self,
         repo_path: Path,
-        branch: Optional[str] = None,
+        branch: str | None = None,
         limit: int = 100,
-        since: Optional[datetime] = None,
-    ) -> List[dict]:
+        since: datetime | None = None,
+    ) -> list[CommitInfo]:
         """
         Get commit history.
 
@@ -605,14 +749,15 @@ index abc123..def456 100644
             since: Optional timestamp to filter commits after
 
         Returns:
-            List of commit information dictionaries
+            List of CommitInfo with typed commit information
 
         Raises:
             ResourceNotFoundError: If repository or branch doesn't exist
             ValidationError: If repo_path is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
@@ -620,7 +765,8 @@ index abc123..def456 100644
             target_branch = branch or self._repositories[repo_id]["current_branch"]
 
             if (repo_id, target_branch) not in self._branches:
-                raise ResourceNotFoundError("Branch", target_branch)
+                msg = "Branch"
+                raise ResourceNotFoundError(msg, target_branch)
 
             # Get commits starting from branch HEAD
             commits = []
@@ -634,15 +780,20 @@ index abc123..def456 100644
                     if since and commit["timestamp"] < since:
                         break
 
-                    commits.append({
-                        "sha": commit["sha"],
-                        "message": commit["message"],
-                        "author": {
-                            "name": commit["author_name"],
-                            "email": commit["author_email"],
-                        },
-                        "timestamp": commit["timestamp"].isoformat(),
-                    })
+                    parent_shas = (commit.get("parent"),) if commit.get("parent") else ()
+                    author = CommitAuthor(
+                        name=commit["author_name"],
+                        email=commit["author_email"],
+                    )
+                    commits.append(
+                        CommitInfo(
+                            sha=commit["sha"],
+                            author=author,
+                            message=commit["message"],
+                            timestamp=commit["timestamp"],
+                            parent_shas=parent_shas,
+                        )
+                    )
 
                     current_commit = commit.get("parent")
                 else:
@@ -669,13 +820,16 @@ index abc123..def456 100644
             ValidationError: If any parameter is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         if not name or not name.strip():
-            raise ValidationError("Remote name is required")
+            msg = "Remote name is required"
+            raise ValidationError(msg)
 
         if not url or not url.strip():
-            raise ValidationError("Remote URL is required")
+            msg = "Remote URL is required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
@@ -699,10 +853,12 @@ index abc123..def456 100644
             ValidationError: If repo_path or name is None/empty
         """
         if not repo_path:
-            raise ValidationError("Repository path is required")
+            msg = "Repository path is required"
+            raise ValidationError(msg)
 
         if not name:
-            raise ValidationError("Remote name is required")
+            msg = "Remote name is required"
+            raise ValidationError(msg)
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
@@ -710,7 +866,8 @@ index abc123..def456 100644
             remote_key = (repo_id, name)
 
             if remote_key not in self._remotes:
-                raise ResourceNotFoundError("Remote", name)
+                msg = "Remote"
+                raise ResourceNotFoundError(msg, name)
 
             del self._remotes[remote_key]
 
@@ -736,7 +893,8 @@ index abc123..def456 100644
                 if repo_data["path"] == path_str:
                     return repo_id
 
-        raise ResourceNotFoundError("Repository", path_str)
+        msg = "Repository"
+        raise ResourceNotFoundError(msg, path_str)
 
     def set_file_content(self, repo_path: Path, file_path: str, content: str) -> None:
         """
@@ -764,6 +922,7 @@ index abc123..def456 100644
             self._commits.clear()
             self._branches.clear()
             self._remotes.clear()
+            self._staged_files.clear()
 
     def get_repository_count(self) -> int:
         """

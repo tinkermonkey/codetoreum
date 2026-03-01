@@ -32,31 +32,31 @@ Usage:
 
 from .client import CodetoreumClient
 from .exceptions import (
-    CodetoreumError,
     AuthenticationError,
+    CodetoreumError,
     NotFoundError,
-    ValidationError,
     RateLimitError,
+    ValidationError,
 )
 from .models import (
-    WorkItem,
     Agent,
     Execution,
     Workflow,
     WorkflowRun,
+    WorkItem,
 )
 
 __version__ = "2.0.0"
 __all__ = [
+    "Agent",
+    "AuthenticationError",
     "CodetoreumClient",
     "CodetoreumError",
-    "AuthenticationError",
-    "NotFoundError",
-    "ValidationError",
-    "RateLimitError",
-    "WorkItem",
-    "Agent",
     "Execution",
+    "NotFoundError",
+    "RateLimitError",
+    "ValidationError",
+    "WorkItem",
     "Workflow",
     "WorkflowRun",
 ]

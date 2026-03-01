@@ -15,7 +15,6 @@ import {
   mockActiveExecutions,
   mockWorkflowRuns,
   createDynamicHealthMock,
-  createDynamicAgentsMock,
 } from './utils/api-mocks'
 import {
   mockWebSocket,
@@ -242,7 +241,7 @@ test.describe('Real-time Updates', () => {
 
     // Simulate disconnect by clearing instances
     await page.evaluate(() => {
-      ;(window as any).__mockWebSocket?.clearInstances()
+      (window as any).__mockWebSocket?.clearInstances()
     })
 
     // Should show disconnected state

@@ -5,7 +5,6 @@ They require a GitHub token to run.
 """
 
 import os
-from datetime import datetime, timezone
 
 import pytest
 
@@ -88,7 +87,13 @@ async def test_search_work_items(github_adapter):
 
         assert isinstance(results, list)
     except Exception as e:
-        if "Not Found" in str(e) or "404" in str(e) or "Validation Failed" in str(e) or "422" in str(e) or "do not exist" in str(e):
+        if (
+            "Not Found" in str(e)
+            or "404" in str(e)
+            or "Validation Failed" in str(e)
+            or "422" in str(e)
+            or "do not exist" in str(e)
+        ):
             pytest.skip("Test repository not found or not accessible")
         raise
 

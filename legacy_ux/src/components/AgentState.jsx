@@ -9,7 +9,7 @@ import { CheckCircle2, Circle, PlayCircle, ChevronDown, ChevronUp } from 'lucide
 // Returns: Unix epoch in seconds, or null if invalid
 const normalizeTimestamp = (timestamp) => {
   if (!timestamp) return null
-  
+
   try {
     // Handle ISO 8601 string (e.g., "2025-10-15T05:35:19.907108Z")
     if (typeof timestamp === 'string') {
@@ -20,13 +20,13 @@ const normalizeTimestamp = (timestamp) => {
       }
       return date.getTime() / 1000 // Convert to Unix epoch seconds
     }
-    
+
     // Handle numeric timestamps
     if (typeof timestamp === 'number') {
       // If timestamp is in milliseconds (> 10 billion), convert to seconds
       return timestamp > 10000000000 ? timestamp / 1000 : timestamp
     }
-    
+
     console.error('[AgentState] Unknown timestamp format:', timestamp, typeof timestamp)
     return null
   } catch (e) {
@@ -54,7 +54,6 @@ export default function AgentState() {
     // Start from most recent logs (end of array since they're appended)
     for (let i = logs.length - 1; i >= 0; i--) {
       const log = logs[i]
-      const event = log.event
 
       // Extract agent name from most recent log
       if (!currentAgent && log.agent) {
@@ -76,7 +75,7 @@ export default function AgentState() {
           break
         }
       }
-      
+
       if (!agentInitTimestamp) {
         console.warn('[AgentState] No agent_initialized event found for agent', currentAgent)
       }
@@ -85,11 +84,11 @@ export default function AgentState() {
     // Now collect data from logs
     // If we have an init timestamp, only accept data after it
     // If we don't have one yet, accept all data from current agent (fall back to original behavior)
-    if (currentAgent) {     
+    if (currentAgent) {
       let logsChecked = 0
       let logsFromAgent = 0
       let logsAfterInit = 0
-      
+
       for (let i = logs.length - 1; i >= 0; i--) {
         const log = logs[i]
         const event = log.event
@@ -98,11 +97,11 @@ export default function AgentState() {
         // Check if this log is from the current agent and after initialization (if we have an init timestamp)
         const isCurrentAgent = log.agent === currentAgent
         if (isCurrentAgent) logsFromAgent++
-        
+
         const normalizedLogTimestamp = normalizeTimestamp(log.timestamp)
         const isAfterInit = agentInitTimestamp === null || (normalizedLogTimestamp && normalizedLogTimestamp >= agentInitTimestamp)
         if (isCurrentAgent && isAfterInit) logsAfterInit++
-        
+
         if (isCurrentAgent && isAfterInit && event?.type === 'assistant' && event?.message?.content) {
           const contents = Array.isArray(event.message.content)
             ? event.message.content
@@ -146,20 +145,20 @@ export default function AgentState() {
 
         if (lastTodoWrite && lastTextMessage && lastToolCall && previousToolCall) break
       }
-      
+
       // Now find the tool result for the previous tool call
       // Tool results have event.type === 'user' and contain tool_result
       if (previousToolCall && currentAgent) {
         for (let i = logs.length - 1; i >= 0; i--) {
           const log = logs[i]
           const event = log.event
-          
+
           const normalizedLogTimestamp = normalizeTimestamp(log.timestamp)
           const isCurrentAgent = log.agent === currentAgent
           const isAfterInit = agentInitTimestamp === null || (normalizedLogTimestamp && normalizedLogTimestamp >= agentInitTimestamp)
           const isBeforeOrAtLastToolCall = normalizedLogTimestamp && lastToolCall.timestamp && normalizedLogTimestamp <= lastToolCall.timestamp
           const isAfterOrAtPreviousToolCall = normalizedLogTimestamp && previousToolCall.timestamp && normalizedLogTimestamp >= previousToolCall.timestamp
-          
+
           if (isCurrentAgent && isAfterInit && isBeforeOrAtLastToolCall && isAfterOrAtPreviousToolCall && event?.type === 'user' && event?.message?.content) {
             const contents = Array.isArray(event.message.content)
               ? event.message.content
@@ -193,7 +192,7 @@ export default function AgentState() {
         const event = events[i]
         if (event.agent === currentAgent && event.event_type === 'prompt_constructed') {
           const eventTimestamp = normalizeTimestamp(event.timestamp)
-          
+
           const isAfterInit = agentInitTimestamp === null || (eventTimestamp && eventTimestamp >= agentInitTimestamp)
           if (isAfterInit && eventTimestamp) {
             inputPrompt = {
@@ -309,17 +308,17 @@ export default function AgentState() {
 
   const formatTimestamp = (timestamp) => {
     if (!timestamp) return ''
-    
+
     try {
       // Timestamps should already be normalized to Unix epoch seconds
       // Convert to milliseconds for Date constructor
       const date = new Date(timestamp * 1000)
-      
+
       if (isNaN(date.getTime())) {
         console.error('[AgentState] Invalid timestamp after normalization:', timestamp)
         return 'Invalid date'
       }
-      
+
       return date.toLocaleTimeString('en-US', { timeZone: 'UTC', hour12: false }) + ' UTC'
     } catch (e) {
       console.error('[AgentState] Error formatting timestamp:', timestamp, e)

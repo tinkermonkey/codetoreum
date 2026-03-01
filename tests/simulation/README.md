@@ -123,9 +123,9 @@ current = clock.now()
 
 **Performance**: With 100x multiplier, 1 hour of simulated time = 36 seconds real time.
 
-### 2. SimulationConfig
+### 2. SimulationConfig & Fidelity Levels
 
-Configures mock adapter behavior.
+Configures mock adapter behavior and timing accuracy.
 
 ```python
 config = SimulationConfig.create_fast_config("test", speed_multiplier=100.0)
@@ -144,6 +144,55 @@ config.set_container_command_result(
     stdout="Tests passed"
 )
 ```
+
+#### Fidelity Levels
+
+Fidelity levels control timing accuracy and realism in simulations:
+
+| Level | Timing | Delays | Use Case | Speed |
+|-------|--------|--------|----------|-------|
+| **LOW** | Disabled | None | Unit tests, fast regression | 100x+ |
+| **MEDIUM** | Proportional | By token/file ops | Integration tests, workflow validation | 10-50x |
+| **HIGH** | Realistic | With jitter/failures | Performance testing, chaos engineering | 1-5x |
+
+**Choose the right level**:
+
+- **LOW** (Default): Use for quick CI/CD feedback. Fastest execution, no timing overhead.
+  ```python
+  config = SimulationConfig.create_fast_config(
+      "test",
+      fidelity_level=FidelityLevel.LOW,
+      speed_multiplier=100.0
+  )
+  ```
+
+- **MEDIUM**: Use for realistic behavior testing without performance focus.
+  ```python
+  config = SimulationConfig.create_fast_config(
+      "test",
+      fidelity_level=FidelityLevel.MEDIUM,
+      ms_per_token=50.0,           # 50ms per LLM token
+      ms_per_file_operation=10.0,  # 10ms per file operation
+      speed_multiplier=20.0
+  )
+  ```
+
+- **HIGH**: Use for performance testing and chaos engineering.
+  ```python
+  config = SimulationConfig.create_realistic_config(
+      "test",
+      fidelity_level=FidelityLevel.HIGH,
+      ms_per_token=100.0,
+      ms_per_file_operation=50.0,
+      speed_multiplier=1.0  # Real-time for accurate measurements
+  )
+  ```
+
+**Timing Mechanism**:
+
+- **LLM Adapter**: Delay = (prompt_tokens + response_tokens) × ms_per_token
+- **Container Adapter**: Delay = base_overhead + (file_operations × ms_per_file_operation)
+- All delays respect `SimulationClock` speed multiplier for proper time scaling
 
 ### 3. SimulationRunner
 

@@ -5,8 +5,7 @@ token generation, API key management, and permission checking.
 """
 
 import secrets
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import bcrypt
@@ -21,7 +20,6 @@ from codetoreum.domain.user import (
     UserRole,
 )
 from codetoreum.ports.input.authentication import (
-    APIKeyNotFoundError,
     AuthenticationError,
     CreateAPIKeyCommand,
     CreateUserCommand,
@@ -31,7 +29,6 @@ from codetoreum.ports.input.authentication import (
     UpdateUserCommand,
     UserAlreadyExistsError,
     UserNotFoundError,
-    ValidationError,
     validate_email,
     validate_password,
     validate_username,
@@ -90,11 +87,11 @@ class AuthenticationService(IAuthenticationPort):
         Passwords longer than this are truncated.
         """
         # Truncate to 72 bytes for bcrypt compatibility
-        password_bytes = password.encode('utf-8')[:72]
+        password_bytes = password.encode("utf-8")[:72]
         salt = bcrypt.gensalt()
         hashed = bcrypt.hashpw(password_bytes, salt)
         # Return as string for consistency with existing code
-        return str(hashed.decode('utf-8'))
+        return str(hashed.decode("utf-8"))
 
     def _verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """Verify a password against a hash.
@@ -103,39 +100,35 @@ class AuthenticationService(IAuthenticationPort):
         Passwords longer than this are truncated to match hashing behavior.
         """
         # Truncate to 72 bytes for bcrypt compatibility
-        password_bytes = plain_password.encode('utf-8')[:72]
+        password_bytes = plain_password.encode("utf-8")[:72]
         # Convert hash string to bytes if needed
         if isinstance(hashed_password, str):
-            hashed_bytes = hashed_password.encode('utf-8')
+            hashed_bytes = hashed_password.encode("utf-8")
         else:
             hashed_bytes = hashed_password
         return bool(bcrypt.checkpw(password_bytes, hashed_bytes))
 
-    def _create_access_token(
-        self, data: dict, expires_delta: Optional[timedelta] = None
-    ) -> str:
+    def _create_access_token(self, data: dict, expires_delta: timedelta | None = None) -> str:
         """Create a JWT access token."""
         to_encode = data.copy()
 
         if expires_delta:
-            expire = datetime.now(timezone.utc) + expires_delta
+            expire = datetime.now(UTC) + expires_delta
         else:
-            expire = datetime.now(timezone.utc) + timedelta(minutes=self.access_token_expire_minutes)
+            expire = datetime.now(UTC) + timedelta(minutes=self.access_token_expire_minutes)
 
         to_encode.update({"exp": expire, "type": "access"})
 
         return str(jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm))
 
-    def _create_refresh_token(
-        self, data: dict, expires_delta: Optional[timedelta] = None
-    ) -> str:
+    def _create_refresh_token(self, data: dict, expires_delta: timedelta | None = None) -> str:
         """Create a JWT refresh token."""
         to_encode = data.copy()
 
         if expires_delta:
-            expire = datetime.now(timezone.utc) + expires_delta
+            expire = datetime.now(UTC) + expires_delta
         else:
-            expire = datetime.now(timezone.utc) + timedelta(days=self.refresh_token_expire_days)
+            expire = datetime.now(UTC) + timedelta(days=self.refresh_token_expire_days)
 
         to_encode.update({"exp": expire, "type": "refresh"})
 
@@ -219,7 +212,7 @@ class AuthenticationService(IAuthenticationPort):
         if command.metadata is not None:
             user.metadata.update(command.metadata)
 
-        user.updated_at = datetime.now(timezone.utc)
+        user.updated_at = datetime.now(UTC)
 
         # Save user
         await self.user_repo.save(user)
@@ -378,7 +371,7 @@ class AuthenticationService(IAuthenticationPort):
         all_keys = await self.api_key_repo.list_all()
 
         # Find matching key
-        matched_key: Optional[APIKey] = None
+        matched_key: APIKey | None = None
         for api_key in all_keys:
             if self._verify_password(key, api_key.key):
                 matched_key = api_key
@@ -417,9 +410,26 @@ class AuthenticationService(IAuthenticationPort):
             api_key_id=matched_key.id,
         )
 
-    async def revoke_api_key(self, key_id: UUID) -> None:
-        """Revoke an API key."""
+    async def revoke_api_key(self, key_id: UUID, requesting_user_id: UUID, is_admin: bool) -> None:
+        """Revoke an API key.
+
+        Users can only revoke their own API keys. Admins can revoke any API key.
+
+        Args:
+            key_id: ID of the API key to revoke
+            requesting_user_id: User ID of the requester
+            is_admin: Whether the requester is an admin
+
+        Raises:
+            APIKeyNotFoundError: If the API key does not exist
+            PermissionError: If the requester is not authorized to revoke this key
+        """
         api_key = await self.api_key_repo.get(key_id)
+
+        # Authorization: users can only revoke their own keys, admins can revoke any
+        if not is_admin and api_key.user_id != requesting_user_id:
+            raise PermissionError("You can only revoke your own API keys")
+
         api_key.revoke()
         await self.api_key_repo.save(api_key)
 

@@ -10,20 +10,20 @@ Tests the get_workflow_run_audit method with comprehensive coverage of:
 - Error handling
 """
 
-import pytest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
+
+import pytest
 
 from codetoreum.adapters.testing import InMemoryEventStore, InMemoryTicketAdapter
 from codetoreum.application.workflow_run_query_service import WorkflowRunQueryService
 from codetoreum.domain.events import (
-    WorkflowCreated,
-    WorkflowStarted,
-    WorkflowStageAdvanced,
     WorkflowCompleted,
-    WorkflowFailed,
+    WorkflowCreated,
+    WorkflowStageAdvanced,
+    WorkflowStarted,
 )
-from codetoreum.domain.work_item import WorkItem, WorkItemStatus, WorkItemPriority
+from codetoreum.domain.work_item import WorkItemPriority
 from codetoreum.ports.exceptions import ResourceNotFoundError
 
 
@@ -83,7 +83,7 @@ async def workflow_with_stages(event_store, ticket_system):
         WorkflowStarted(
             aggregate_id=workflow_id,
             payload={
-                "started_at": datetime.now(timezone.utc).isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
                 "work_item_id": work_item_id,
                 "first_stage": "implementation",
             },
@@ -94,7 +94,7 @@ async def workflow_with_stages(event_store, ticket_system):
                 "from_stage": "implementation",
                 "to_stage": "review",
                 "stage_index": 1,
-                "advanced_at": datetime.now(timezone.utc).isoformat(),
+                "advanced_at": datetime.now(UTC).isoformat(),
             },
         ),
         WorkflowStageAdvanced(
@@ -103,13 +103,13 @@ async def workflow_with_stages(event_store, ticket_system):
                 "from_stage": "review",
                 "to_stage": "merge",
                 "stage_index": 2,
-                "advanced_at": datetime.now(timezone.utc).isoformat(),
+                "advanced_at": datetime.now(UTC).isoformat(),
             },
         ),
         WorkflowCompleted(
             aggregate_id=workflow_id,
             payload={
-                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(UTC).isoformat(),
                 "work_item_id": work_item_id,
                 "duration_seconds": 300.0,
             },
@@ -159,7 +159,7 @@ async def workflow_with_many_events(event_store, ticket_system):
         WorkflowStarted(
             aggregate_id=workflow_id,
             payload={
-                "started_at": datetime.now(timezone.utc).isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
                 "work_item_id": work_item_id,
                 "first_stage": "stage-1",
             },
@@ -174,9 +174,9 @@ async def workflow_with_many_events(event_store, ticket_system):
                 aggregate_id=workflow_id,
                 payload={
                     "from_stage": f"stage-{i}",
-                    "to_stage": f"stage-{i+1}",
+                    "to_stage": f"stage-{i + 1}",
                     "stage_index": 0,
-                    "advanced_at": datetime.now(timezone.utc).isoformat(),
+                    "advanced_at": datetime.now(UTC).isoformat(),
                 },
             )
         )
@@ -186,7 +186,7 @@ async def workflow_with_many_events(event_store, ticket_system):
         WorkflowCompleted(
             aggregate_id=workflow_id,
             payload={
-                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(UTC).isoformat(),
                 "work_item_id": work_item_id,
                 "duration_seconds": 500.0,
             },
@@ -544,10 +544,9 @@ async def test_audit_without_validation(query_service, workflow_with_stages):
 @pytest.mark.asyncio
 async def test_audit_stage_with_no_events(event_store, ticket_system):
     """Test audit handles stage with no matching events correctly."""
-    from codetoreum.domain.workflow import Workflow
-    from codetoreum.domain.pipeline_stage import PipelineStage, StageStatus
-    from codetoreum.domain.agent import Agent
-    from codetoreum.application.workflow_run_query_service import WorkflowRunQueryService
+    from codetoreum.application.workflow_run_query_service import (
+        WorkflowRunQueryService,
+    )
 
     # Create a simple workflow with a stage that has no events
     workflow_id = str(uuid4())
@@ -562,12 +561,9 @@ async def test_audit_stage_with_no_events(event_store, ticket_system):
                 "work_item_id": work_item_id,
                 "template_id": "test-template",
                 "project_id": project_id,
-            }
+            },
         ),
-        WorkflowStarted(
-            aggregate_id=workflow_id,
-            payload={}
-        )
+        WorkflowStarted(aggregate_id=workflow_id, payload={}),
     ]
     await event_store.append(workflow_id, events)
 

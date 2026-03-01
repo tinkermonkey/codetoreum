@@ -4,20 +4,16 @@ Mock Task Query Adapter
 In-memory implementation of ITaskQueryPort for development and testing.
 """
 
-from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from datetime import UTC, datetime
 from threading import RLock
 
 from codetoreum.ports.input.task_query import (
-    ITaskQueryPort,
-    ExecutionStatusInfo,
-    ExecutionStatus,
-    ExecutionListResult,
-    ExecutionListItem,
     ArtifactListResult,
-    ArtifactInfo,
     ExecutionHistory,
-    ExecutionHistoryEntry,
+    ExecutionListResult,
+    ExecutionStatus,
+    ExecutionStatusInfo,
+    ITaskQueryPort,
 )
 
 
@@ -27,12 +23,10 @@ class MockTaskQueryAdapter(ITaskQueryPort):
     """
 
     def __init__(self):
-        self._executions: Dict[str, Dict] = {}
+        self._executions: dict[str, dict] = {}
         self._lock = RLock()
 
-    async def get_execution_status(
-        self, execution_id: str
-    ) -> ExecutionStatusInfo:
+    async def get_execution_status(self, execution_id: str) -> ExecutionStatusInfo:
         """Get execution status."""
         return ExecutionStatusInfo(
             execution_id=execution_id,
@@ -43,17 +37,17 @@ class MockTaskQueryAdapter(ITaskQueryPort):
             stage_name="test-stage",
             agent_name="test-agent",
             status=ExecutionStatus.COMPLETED,
-            started_at=datetime.now(timezone.utc),
-            completed_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
             duration_seconds=10.5,
         )
 
     async def list_executions(
         self,
-        workflow_run_id: Optional[str] = None,
-        work_item_id: Optional[str] = None,
-        project_name: Optional[str] = None,
-        status: Optional[ExecutionStatus] = None,
+        workflow_run_id: str | None = None,
+        work_item_id: str | None = None,
+        project_name: str | None = None,
+        status: ExecutionStatus | None = None,
         page: int = 1,
         page_size: int = 50,
     ) -> ExecutionListResult:
@@ -69,7 +63,7 @@ class MockTaskQueryAdapter(ITaskQueryPort):
     async def get_artifacts(
         self,
         execution_id: str,
-        artifact_type: Optional[str] = None,
+        artifact_type: str | None = None,
     ) -> ArtifactListResult:
         """Get execution artifacts."""
         return ArtifactListResult(artifacts=[], total_count=0)
@@ -77,7 +71,7 @@ class MockTaskQueryAdapter(ITaskQueryPort):
     async def get_execution_history(
         self,
         execution_id: str,
-        limit: Optional[int] = None,
+        limit: int | None = None,
     ) -> ExecutionHistory:
         """Get execution history."""
         return ExecutionHistory(
@@ -86,9 +80,7 @@ class MockTaskQueryAdapter(ITaskQueryPort):
             total_entries=0,
         )
 
-    async def get_workflow_executions(
-        self, workflow_run_id: str
-    ) -> ExecutionListResult:
+    async def get_workflow_executions(self, workflow_run_id: str) -> ExecutionListResult:
         """Get all executions for a workflow run."""
         return ExecutionListResult(
             executions=[],

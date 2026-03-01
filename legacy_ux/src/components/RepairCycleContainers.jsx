@@ -69,11 +69,11 @@ const RepairCycleContainers = () => {
   const fetchLogs = async (project, issueNumber) => {
     const key = `${project}-${issueNumber}`
     setLoadingLogs(prev => ({ ...prev, [key]: true }))
-    
+
     try {
       const response = await fetch(`http://localhost:5001/api/repair-cycle-containers/${project}/${issueNumber}/logs`)
       const data = await response.json()
-      
+
       if (data.success) {
         // Use stable merge for object map updates
         setContainerLogs(prev => mergeObjectMapStable(prev, { [key]: data.logs }))
@@ -90,20 +90,20 @@ const RepairCycleContainers = () => {
   // Kill a container
   const killContainer = async (project, issueNumber) => {
     const key = `${project}-${issueNumber}`
-    
+
     if (!confirm(`Are you sure you want to kill the repair cycle container for ${project} #${issueNumber}?`)) {
       return
     }
-    
+
     setKillingContainer(prev => ({ ...prev, [key]: true }))
-    
+
     try {
       const response = await fetch(
         `http://localhost:5001/api/repair-cycle-containers/${project}/${issueNumber}/kill`,
         { method: 'POST' }
       )
       const data = await response.json()
-      
+
       if (data.success) {
         // Refresh containers (background refresh after kill)
         await fetchContainers(false)
@@ -123,13 +123,13 @@ const RepairCycleContainers = () => {
       setExpandedContainer(null)
     } else {
       setExpandedContainer(containerName)
-      
+
       // Extract project and issue from container name
       const match = containerName.match(/repair-cycle-(.+)-(\d+)-/)
       if (match) {
         const [, project, issueNumber] = match
         const key = `${project}-${issueNumber}`
-        
+
         // Fetch logs if not already loaded
         if (!containerLogs[key]) {
           fetchLogs(project, issueNumber)
@@ -143,7 +143,7 @@ const RepairCycleContainers = () => {
     if (container.is_finished) {
       return container.result?.overall_success ? 'bg-green-500' : 'bg-red-500'
     }
-    
+
     const checkpoint = container.checkpoint
     if (!checkpoint) {
       // No checkpoint yet - starting up
@@ -153,7 +153,7 @@ const RepairCycleContainers = () => {
         return 'bg-yellow-500' // Old container without checkpoint - warning
       }
     }
-    
+
     const checkpointAge = checkpoint.checkpoint_age_seconds || 0
     if (checkpointAge < 300) {
       return 'bg-green-500' // Making progress
@@ -167,11 +167,11 @@ const RepairCycleContainers = () => {
   // Get status icon
   const getStatusIcon = (container) => {
     if (container.is_finished) {
-      return container.result?.overall_success ? 
-        <CheckCircle className="w-5 h-5 text-green-500" /> : 
+      return container.result?.overall_success ?
+        <CheckCircle className="w-5 h-5 text-green-500" /> :
         <XCircle className="w-5 h-5 text-red-500" />
     }
-    
+
     return <Loader className="w-5 h-5 text-blue-500 animate-spin" />
   }
 
@@ -179,10 +179,10 @@ const RepairCycleContainers = () => {
   const getProgress = (container) => {
     const checkpoint = container.checkpoint
     if (!checkpoint) return 0
-    
+
     const iteration = checkpoint.iteration || 0
     const maxIterations = 10 // Could come from config
-    
+
     return Math.min(100, (iteration / maxIterations) * 100)
   }
 
@@ -242,14 +242,14 @@ const RepairCycleContainers = () => {
         const isExpanded = expandedContainer === container.container_name
         const statusColor = getStatusColor(container)
         const progress = getProgress(container)
-        
+
         return (
-          <div 
+          <div
             key={container.container_name}
             className="bg-gh-canvas-subtle border border-gh-border rounded-md overflow-hidden hover:border-gh-border-muted transition-colors"
           >
             {/* Header */}
-            <div 
+            <div
               className="p-4 cursor-pointer"
               onClick={() => toggleExpanded(container.container_name)}
             >
@@ -279,7 +279,7 @@ const RepairCycleContainers = () => {
                         <span>{progress.toFixed(0)}%</span>
                       </div>
                       <div className="h-2 bg-gh-canvas rounded-full overflow-hidden">
-                        <div 
+                        <div
                           className={`h-full ${statusColor} transition-all duration-500`}
                           style={{ width: `${progress}%` }}
                         />
@@ -356,7 +356,7 @@ const RepairCycleContainers = () => {
                     Click to load logs
                   </div>
                 )}
-                
+
                 <div className="mt-3 flex gap-2">
                   <button
                     onClick={() => fetchLogs(container.project, container.issue_number)}

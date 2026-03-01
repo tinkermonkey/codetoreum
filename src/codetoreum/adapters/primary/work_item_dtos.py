@@ -9,18 +9,15 @@ so explicit json_encoders configuration is no longer needed.
 """
 
 from datetime import datetime
-from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from codetoreum.adapters.primary.api_models import PaginatedResponse
 from codetoreum.config import (
     MAX_PROJECT_ID_LENGTH,
     MAX_TITLE_LENGTH,
     MIN_FIELD_LENGTH,
 )
-
-from codetoreum.adapters.primary.api_models import AuditFields, PaginatedResponse
-
 
 # ============================================================================
 # Request Models
@@ -30,13 +27,18 @@ from codetoreum.adapters.primary.api_models import AuditFields, PaginatedRespons
 class CreateWorkItemRequest(BaseModel):
     """Request to create a new work item"""
 
-    project_id: str = Field(..., description="Project ID this work item belongs to", min_length=MIN_FIELD_LENGTH, max_length=MAX_PROJECT_ID_LENGTH)
+    project_id: str = Field(
+        ...,
+        description="Project ID this work item belongs to",
+        min_length=MIN_FIELD_LENGTH,
+        max_length=MAX_PROJECT_ID_LENGTH,
+    )
     title: str = Field(..., description="Work item title", min_length=MIN_FIELD_LENGTH, max_length=MAX_TITLE_LENGTH)
     description: str = Field(..., description="Work item description")
-    labels: Optional[List[str]] = Field(None, description="List of labels/tags")
+    labels: list[str] | None = Field(None, description="List of labels/tags")
     priority: str = Field("MEDIUM", description="Priority: LOW, MEDIUM, HIGH, CRITICAL")
-    external_id: Optional[str] = Field(None, description="External system ID (e.g., GitHub issue #)")
-    external_url: Optional[str] = Field(None, description="External system URL")
+    external_id: str | None = Field(None, description="External system ID (e.g., GitHub issue #)")
+    external_url: str | None = Field(None, description="External system URL")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -47,7 +49,7 @@ class CreateWorkItemRequest(BaseModel):
                 "labels": ["feature", "security"],
                 "priority": "HIGH",
                 "external_id": "42",
-                "external_url": "https://github.com/org/repo/issues/42"
+                "external_url": "https://github.com/org/repo/issues/42",
             }
         }
     )
@@ -56,17 +58,19 @@ class CreateWorkItemRequest(BaseModel):
 class UpdateWorkItemRequest(BaseModel):
     """Request to update an existing work item"""
 
-    title: Optional[str] = Field(None, description="Updated title", min_length=MIN_FIELD_LENGTH, max_length=MAX_TITLE_LENGTH)
-    description: Optional[str] = Field(None, description="Updated description")
-    labels: Optional[List[str]] = Field(None, description="Updated labels")
-    priority: Optional[str] = Field(None, description="Updated priority: LOW, MEDIUM, HIGH, CRITICAL")
+    title: str | None = Field(
+        None, description="Updated title", min_length=MIN_FIELD_LENGTH, max_length=MAX_TITLE_LENGTH
+    )
+    description: str | None = Field(None, description="Updated description")
+    labels: list[str] | None = Field(None, description="Updated labels")
+    priority: str | None = Field(None, description="Updated priority: LOW, MEDIUM, HIGH, CRITICAL")
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "title": "Implement user authentication (updated)",
                 "labels": ["feature", "security", "high-priority"],
-                "priority": "CRITICAL"
+                "priority": "CRITICAL",
             }
         }
     )
@@ -86,16 +90,16 @@ class WorkItemResponse(BaseModel):
     description: str = Field(..., description="Work item description")
     status: str = Field(..., description="Current status (NEW, ASSIGNED, IN_PROGRESS, etc.)")
     priority: str = Field(..., description="Priority level")
-    labels: List[str] = Field(default_factory=list, description="Labels/tags")
-    external_id: Optional[str] = Field(None, description="External system ID")
-    external_url: Optional[str] = Field(None, description="External system URL")
-    assigned_agent_id: Optional[str] = Field(None, description="Assigned agent ID")
-    assigned_at: Optional[datetime] = Field(None, description="Assignment timestamp")
-    current_workflow_id: Optional[str] = Field(None, description="Current workflow ID")
-    current_stage: Optional[str] = Field(None, description="Current workflow stage")
+    labels: list[str] = Field(default_factory=list, description="Labels/tags")
+    external_id: str | None = Field(None, description="External system ID")
+    external_url: str | None = Field(None, description="External system URL")
+    assigned_agent_id: str | None = Field(None, description="Assigned agent ID")
+    assigned_at: datetime | None = Field(None, description="Assignment timestamp")
+    current_workflow_id: str | None = Field(None, description="Current workflow ID")
+    current_stage: str | None = Field(None, description="Current workflow stage")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
-    completed_at: Optional[datetime] = Field(None, description="Completion timestamp")
+    completed_at: datetime | None = Field(None, description="Completion timestamp")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -115,7 +119,7 @@ class WorkItemResponse(BaseModel):
                 "current_stage": "development",
                 "created_at": "2025-11-03T09:00:00Z",
                 "updated_at": "2025-11-03T10:30:00Z",
-                "completed_at": None
+                "completed_at": None,
             }
         }
     )
@@ -125,7 +129,7 @@ class WorkItemDetailResponse(WorkItemResponse):
     """Response with work item details including history"""
 
     history_event_count: int = Field(..., description="Number of historical events")
-    recent_events: List[dict] = Field(default_factory=list, description="Recent domain events")
+    recent_events: list[dict] = Field(default_factory=list, description="Recent domain events")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -151,9 +155,9 @@ class WorkItemDetailResponse(WorkItemResponse):
                     {
                         "event_type": "WorkItemStarted",
                         "occurred_at": "2025-11-03T10:15:00Z",
-                        "payload": {"started_at": "2025-11-03T10:15:00Z"}
+                        "payload": {"started_at": "2025-11-03T10:15:00Z"},
                     }
-                ]
+                ],
             }
         }
     )
@@ -162,7 +166,7 @@ class WorkItemDetailResponse(WorkItemResponse):
 class WorkItemListResponse(PaginatedResponse):
     """Response with list of work items"""
 
-    work_items: List[WorkItemResponse] = Field(..., description="List of work items")
+    work_items: list[WorkItemResponse] = Field(..., description="List of work items")
 
     model_config = ConfigDict()
 
@@ -173,7 +177,7 @@ class WorkItemCommandResult(BaseModel):
     success: bool = Field(..., description="Whether operation succeeded")
     work_item_id: str = Field(..., description="Work item ID")
     message: str = Field(..., description="Result message")
-    errors: Optional[List[str]] = Field(None, description="Error messages if any")
+    errors: list[str] | None = Field(None, description="Error messages if any")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -181,7 +185,7 @@ class WorkItemCommandResult(BaseModel):
                 "success": True,
                 "work_item_id": "wi-123",
                 "message": "Work item deleted successfully",
-                "errors": None
+                "errors": None,
             }
         }
     )

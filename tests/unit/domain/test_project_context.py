@@ -1,16 +1,17 @@
 """Unit tests for ProjectContext aggregate root."""
 
-import pytest
-from datetime import datetime, timezone
+from datetime import datetime
 
+import pytest
+
+from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.project_context import (
     ProjectContext,
     ProjectContextCreated,
-    ProjectTestConfigUpdated,
     ProjectDockerConfigUpdated,
+    ProjectTestConfigUpdated,
     ProjectWorkflowMappingAdded,
 )
-from codetoreum.domain.exceptions import DomainError
 
 
 class TestProjectContextCreation:
@@ -21,7 +22,7 @@ class TestProjectContextCreation:
         project = ProjectContext.create(
             name="test-project",
             display_name="Test Project",
-            repository_url="https://github.com/test/repo"
+            repository_url="https://github.com/test/repo",
         )
 
         assert project.id is not None
@@ -56,7 +57,7 @@ class TestProjectContextCreation:
             default_branch="develop",
             tech_stack=["python", "docker", "postgres"],
             primary_language="python",
-            default_workflow_template_id="custom-default"
+            default_workflow_template_id="custom-default",
         )
 
         assert project.name == "full-project"
@@ -70,7 +71,7 @@ class TestProjectContextCreation:
         project = ProjectContext.create(
             name="test-project",
             display_name="Test Project",
-            repository_url="https://github.com/test/repo"
+            repository_url="https://github.com/test/repo",
         )
 
         events = project.get_pending_events()
@@ -85,20 +86,12 @@ class TestProjectContextCreation:
     def test_create_with_empty_name_raises_error(self):
         """Test that creating with empty name raises DomainError."""
         with pytest.raises(DomainError, match="must have a non-empty name"):
-            ProjectContext.create(
-                name="",
-                display_name="Test",
-                repository_url="https://github.com/test/repo"
-            )
+            ProjectContext.create(name="", display_name="Test", repository_url="https://github.com/test/repo")
 
     def test_create_with_empty_repository_url_raises_error(self):
         """Test that creating with empty repository URL raises DomainError."""
         with pytest.raises(DomainError, match="must have a repository URL"):
-            ProjectContext.create(
-                name="test",
-                display_name="Test",
-                repository_url=""
-            )
+            ProjectContext.create(name="test", display_name="Test", repository_url="")
 
     def test_create_with_empty_default_branch_raises_error(self):
         """Test that creating with empty default branch raises DomainError."""
@@ -107,7 +100,7 @@ class TestProjectContextCreation:
                 name="test",
                 display_name="Test",
                 repository_url="https://github.com/test/repo",
-                default_branch=""
+                default_branch="",
             )
 
 
@@ -119,14 +112,11 @@ class TestTestConfiguration:
         project = ProjectContext.create(
             name="test-project",
             display_name="Test Project",
-            repository_url="https://github.com/test/repo"
+            repository_url="https://github.com/test/repo",
         )
         project.clear_events()
 
-        project.update_test_configuration(
-            test_command="pytest",
-            test_framework="pytest"
-        )
+        project.update_test_configuration(test_command="pytest", test_framework="pytest")
 
         assert project.test_command == "pytest"
         assert project.test_framework == "pytest"
@@ -143,7 +133,7 @@ class TestTestConfiguration:
         project = ProjectContext.create(
             name="test-project",
             display_name="Test Project",
-            repository_url="https://github.com/test/repo"
+            repository_url="https://github.com/test/repo",
         )
 
         project.update_test_configuration(test_command="npm test")
@@ -156,7 +146,7 @@ class TestTestConfiguration:
         project = ProjectContext.create(
             name="test-project",
             display_name="Test Project",
-            repository_url="https://github.com/test/repo"
+            repository_url="https://github.com/test/repo",
         )
 
         with pytest.raises(DomainError, match="Test command cannot be empty"):
@@ -167,7 +157,7 @@ class TestTestConfiguration:
         project = ProjectContext.create(
             name="test-project",
             display_name="Test Project",
-            repository_url="https://github.com/test/repo"
+            repository_url="https://github.com/test/repo",
         )
         original_updated_at = project.updated_at
 
@@ -184,15 +174,11 @@ class TestDockerConfiguration:
         project = ProjectContext.create(
             name="test-project",
             display_name="Test Project",
-            repository_url="https://github.com/test/repo"
+            repository_url="https://github.com/test/repo",
         )
         project.clear_events()
 
-        project.configure_docker(
-            has_dockerfile=True,
-            dockerfile_path="./Dockerfile",
-            requires_dev_container=False
-        )
+        project.configure_docker(has_dockerfile=True, dockerfile_path="./Dockerfile", requires_dev_container=False)
 
         assert project.has_dockerfile is True
         assert project.dockerfile_path == "./Dockerfile"
@@ -210,13 +196,10 @@ class TestDockerConfiguration:
         project = ProjectContext.create(
             name="test-project",
             display_name="Test Project",
-            repository_url="https://github.com/test/repo"
+            repository_url="https://github.com/test/repo",
         )
 
-        project.configure_docker(
-            has_dockerfile=False,
-            requires_dev_container=True
-        )
+        project.configure_docker(has_dockerfile=False, requires_dev_container=True)
 
         assert project.has_dockerfile is False
         assert project.dockerfile_path is None
@@ -227,13 +210,13 @@ class TestDockerConfiguration:
         project = ProjectContext.create(
             name="test-project",
             display_name="Test Project",
-            repository_url="https://github.com/test/repo"
+            repository_url="https://github.com/test/repo",
         )
 
         project.configure_docker(
             has_dockerfile=True,
             dockerfile_path=".devcontainer/Dockerfile",
-            requires_dev_container=True
+            requires_dev_container=True,
         )
 
         assert project.has_dockerfile is True
@@ -245,7 +228,7 @@ class TestDockerConfiguration:
         project = ProjectContext.create(
             name="test-project",
             display_name="Test Project",
-            repository_url="https://github.com/test/repo"
+            repository_url="https://github.com/test/repo",
         )
 
         with pytest.raises(DomainError, match="Dockerfile path required"):
@@ -260,7 +243,7 @@ class TestWorkflowMapping:
         project = ProjectContext.create(
             name="test-project",
             display_name="Test Project",
-            repository_url="https://github.com/test/repo"
+            repository_url="https://github.com/test/repo",
         )
         project.clear_events()
 
@@ -280,7 +263,7 @@ class TestWorkflowMapping:
         project = ProjectContext.create(
             name="test-project",
             display_name="Test Project",
-            repository_url="https://github.com/test/repo"
+            repository_url="https://github.com/test/repo",
         )
 
         project.add_custom_workflow("hotfix", "hotfix-template")
@@ -297,7 +280,7 @@ class TestWorkflowMapping:
         project = ProjectContext.create(
             name="test-project",
             display_name="Test Project",
-            repository_url="https://github.com/test/repo"
+            repository_url="https://github.com/test/repo",
         )
 
         with pytest.raises(DomainError, match="Label cannot be empty"):
@@ -308,7 +291,7 @@ class TestWorkflowMapping:
         project = ProjectContext.create(
             name="test-project",
             display_name="Test Project",
-            repository_url="https://github.com/test/repo"
+            repository_url="https://github.com/test/repo",
         )
 
         with pytest.raises(DomainError, match="Template ID cannot be empty"):
@@ -319,7 +302,7 @@ class TestWorkflowMapping:
         project = ProjectContext.create(
             name="test-project",
             display_name="Test Project",
-            repository_url="https://github.com/test/repo"
+            repository_url="https://github.com/test/repo",
         )
         project.add_custom_workflow("hotfix", "hotfix-template")
         project.add_custom_workflow("feature", "feature-template")
@@ -333,7 +316,7 @@ class TestWorkflowMapping:
         project = ProjectContext.create(
             name="test-project",
             display_name="Test Project",
-            repository_url="https://github.com/test/repo"
+            repository_url="https://github.com/test/repo",
         )
         project.add_custom_workflow("hotfix", "hotfix-template")
 
@@ -346,7 +329,7 @@ class TestWorkflowMapping:
         project = ProjectContext.create(
             name="test-project",
             display_name="Test Project",
-            repository_url="https://github.com/test/repo"
+            repository_url="https://github.com/test/repo",
         )
         project.add_custom_workflow("hotfix", "hotfix-template")
 
@@ -359,7 +342,7 @@ class TestWorkflowMapping:
         project = ProjectContext.create(
             name="test-project",
             display_name="Test Project",
-            repository_url="https://github.com/test/repo"
+            repository_url="https://github.com/test/repo",
         )
         project.add_custom_workflow("hotfix", "hotfix-template")
         project.add_custom_workflow("feature", "feature-template")
@@ -378,7 +361,7 @@ class TestEventManagement:
         project = ProjectContext.create(
             name="test-project",
             display_name="Test Project",
-            repository_url="https://github.com/test/repo"
+            repository_url="https://github.com/test/repo",
         )
 
         events1 = project.get_pending_events()
@@ -392,7 +375,7 @@ class TestEventManagement:
         project = ProjectContext.create(
             name="test-project",
             display_name="Test Project",
-            repository_url="https://github.com/test/repo"
+            repository_url="https://github.com/test/repo",
         )
 
         assert len(project.get_pending_events()) == 1
@@ -406,7 +389,7 @@ class TestEventManagement:
         project = ProjectContext.create(
             name="test-project",
             display_name="Test Project",
-            repository_url="https://github.com/test/repo"
+            repository_url="https://github.com/test/repo",
         )
         project.clear_events()
 
@@ -429,7 +412,7 @@ class TestVersioning:
         project = ProjectContext.create(
             name="test-project",
             display_name="Test Project",
-            repository_url="https://github.com/test/repo"
+            repository_url="https://github.com/test/repo",
         )
 
         assert project._version == 0
@@ -439,7 +422,7 @@ class TestVersioning:
         project = ProjectContext.create(
             name="test-project",
             display_name="Test Project",
-            repository_url="https://github.com/test/repo"
+            repository_url="https://github.com/test/repo",
         )
 
         project.update_test_configuration("pytest")

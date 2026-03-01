@@ -12,19 +12,16 @@ Comprehensive test suite covering all lock flow scenarios:
 """
 
 import asyncio
-import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
-from codetoreum.adapters.secondary.in_memory_queue_lock_service import InMemoryLockService
+import pytest
+
+from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
+    InMemoryLockService,
+)
 from codetoreum.adapters.testing.in_memory_queue_service import InMemoryQueueService
 from codetoreum.application.pipeline_lock_service import LockStatus
-from codetoreum.domain.events.lock_events import (
-    LockAcquiredEvent,
-    LockReleasedEvent,
-    LockStaleDetectedEvent,
-    WorkItemQueuedEvent,
-)
 
 
 @pytest.fixture
@@ -73,32 +70,24 @@ class TestPipelineLockingSimulation:
         queue_service.set_board_order(project_id, board_id, ["#100", "#101", "#102"])
 
         # Step 1: #100 acquires lock
-        result = await lock_service.try_acquire_lock(
-            project_id, board_id, "#100", board_position=0
-        )
+        result = await lock_service.try_acquire_lock(project_id, board_id, "#100", board_position=0)
         assert result.status == LockStatus.ACQUIRED
         state = await lock_service.get_queue_state(project_id, board_id)
         assert state.lock_holder == "#100"
 
         # Step 2: #101 queued
-        result = await lock_service.try_acquire_lock(
-            project_id, board_id, "#101", board_position=1
-        )
+        result = await lock_service.try_acquire_lock(project_id, board_id, "#101", board_position=1)
         assert result.status == LockStatus.QUEUED
 
         # Step 3: #102 queued
-        result = await lock_service.try_acquire_lock(
-            project_id, board_id, "#102", board_position=2
-        )
+        result = await lock_service.try_acquire_lock(project_id, board_id, "#102", board_position=2)
         assert result.status == LockStatus.QUEUED
 
         # Step 4: #100 releases → #101 tries to acquire
         release_result = await lock_service.release_lock(project_id, board_id, "#100")
         assert release_result.next_work_item_id == "#101"
 
-        result = await lock_service.try_acquire_lock(
-            project_id, board_id, "#101", board_position=1
-        )
+        result = await lock_service.try_acquire_lock(project_id, board_id, "#101", board_position=1)
         assert result.status == LockStatus.ALREADY_HELD
         state = await lock_service.get_queue_state(project_id, board_id)
         assert state.lock_holder == "#101"
@@ -107,9 +96,7 @@ class TestPipelineLockingSimulation:
         release_result = await lock_service.release_lock(project_id, board_id, "#101")
         assert release_result.next_work_item_id == "#102"
 
-        result = await lock_service.try_acquire_lock(
-            project_id, board_id, "#102", board_position=2
-        )
+        result = await lock_service.try_acquire_lock(project_id, board_id, "#102", board_position=2)
         assert result.status == LockStatus.ALREADY_HELD
         state = await lock_service.get_queue_state(project_id, board_id)
         assert state.lock_holder == "#102"
@@ -139,13 +126,11 @@ class TestPipelineLockingSimulation:
         await lock_service.try_acquire_lock(project_id, board_id, "#100", board_position=0)
 
         # Simulate lock acquired 3 hours ago (use timezone-aware datetime)
-        three_hours_ago = datetime.now(timezone.utc) - timedelta(hours=3)
+        three_hours_ago = datetime.now(UTC) - timedelta(hours=3)
         lock_service.set_lock_acquired_at(project_id, board_id, three_hours_ago)
 
         # Step 2-4: #101 attempts acquisition → stale recovery
-        result = await lock_service.try_acquire_lock(
-            project_id, board_id, "#101", board_position=0
-        )
+        result = await lock_service.try_acquire_lock(project_id, board_id, "#101", board_position=0)
 
         assert result.status == LockStatus.ACQUIRED
 
@@ -188,15 +173,11 @@ class TestPipelineLockingSimulation:
         board_id = "board-1"
 
         # Initial acquisition
-        result = await lock_service.try_acquire_lock(
-            project_id, board_id, "#100", board_position=0
-        )
+        result = await lock_service.try_acquire_lock(project_id, board_id, "#100", board_position=0)
         assert result.status == LockStatus.ACQUIRED
 
         # Re-acquisition by same work item
-        result = await lock_service.try_acquire_lock(
-            project_id, board_id, "#100", board_position=0
-        )
+        result = await lock_service.try_acquire_lock(project_id, board_id, "#100", board_position=0)
         assert result.status == LockStatus.ALREADY_HELD
 
     # ===== US-5: EXIT COLUMN DETECTION =====
@@ -280,9 +261,7 @@ class TestPipelineLockingSimulation:
 
     # ===== US-8: QUEUE SYNCHRONIZATION =====
 
-    async def test_queue_sync_removes_items_moved_out_of_column(
-        self, lock_service, queue_service
-    ):
+    async def test_queue_sync_removes_items_moved_out_of_column(self, lock_service, queue_service):
         """Test queue respects board position ordering.
 
         This test verifies that when items are in queue with different board positions,
@@ -320,12 +299,10 @@ class TestPipelineLockingSimulation:
 
         # Test 1h59m: NOT stale
         await lock_service.try_acquire_lock(project_id, board_id, "#100", board_position=0)
-        almost_stale = datetime.now(timezone.utc) - timedelta(hours=1, minutes=59)
+        almost_stale = datetime.now(UTC) - timedelta(hours=1, minutes=59)
         lock_service.set_lock_acquired_at(project_id, board_id, almost_stale)
 
-        result = await lock_service.try_acquire_lock(
-            project_id, board_id, "#101", board_position=1
-        )
+        result = await lock_service.try_acquire_lock(project_id, board_id, "#101", board_position=1)
         # 1h59m should NOT trigger stale recovery - lock is still valid
         assert result.status == LockStatus.QUEUED
 
@@ -333,12 +310,10 @@ class TestPipelineLockingSimulation:
         await lock_service.release_lock(project_id, board_id, "#100")
 
         await lock_service.try_acquire_lock(project_id, board_id, "#103", board_position=0)
-        definitely_stale = datetime.now(timezone.utc) - timedelta(hours=2, minutes=1)
+        definitely_stale = datetime.now(UTC) - timedelta(hours=2, minutes=1)
         lock_service.set_lock_acquired_at(project_id, board_id, definitely_stale)
 
-        result = await lock_service.try_acquire_lock(
-            project_id, board_id, "#104", board_position=1
-        )
+        result = await lock_service.try_acquire_lock(project_id, board_id, "#104", board_position=1)
         # 2h01m SHOULD trigger stale recovery
         assert result.status == LockStatus.ACQUIRED
 
@@ -352,9 +327,7 @@ class TestPipelineLockingSimulation:
 
         # Multiple re-entrant attempts
         for _ in range(3):
-            result = await lock_service.try_acquire_lock(
-                project_id, board_id, "#100", board_position=0
-            )
+            result = await lock_service.try_acquire_lock(project_id, board_id, "#100", board_position=0)
             assert result.status == LockStatus.ALREADY_HELD
 
         # Lock still held by #100
@@ -366,15 +339,11 @@ class TestPipelineLockingSimulation:
         project_id = "project-1"
 
         # Board 1: #100 holds lock
-        result = await lock_service.try_acquire_lock(
-            project_id, "board-1", "#100", board_position=0
-        )
+        result = await lock_service.try_acquire_lock(project_id, "board-1", "#100", board_position=0)
         assert result.status == LockStatus.ACQUIRED
 
         # Board 2: #101 can acquire independently (different board)
-        result = await lock_service.try_acquire_lock(
-            project_id, "board-2", "#101", board_position=0
-        )
+        result = await lock_service.try_acquire_lock(project_id, "board-2", "#101", board_position=0)
         assert result.status == LockStatus.ACQUIRED
 
         # Verify both locks held
@@ -408,10 +377,7 @@ class TestPipelineLockingSimulation:
 
         # Launch concurrent acquisitions
         tasks = [
-            lock_service.try_acquire_lock(
-                project_id, board_id, f"#{i:04d}", board_position=i
-            )
-            for i in range(num_items)
+            lock_service.try_acquire_lock(project_id, board_id, f"#{i:04d}", board_position=i) for i in range(num_items)
         ]
         results = await asyncio.gather(*tasks)
 

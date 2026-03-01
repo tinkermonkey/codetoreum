@@ -1,9 +1,9 @@
 """Work Item aggregate root."""
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import uuid4
 
 from codetoreum.domain.events import (
@@ -68,25 +68,25 @@ class WorkItem:
     priority: WorkItemPriority
 
     # Metadata
-    labels: List[str]
-    external_id: Optional[str]  # ID in external system (GitHub issue #, etc.)
-    external_url: Optional[str]
+    labels: list[str]
+    external_id: str | None  # ID in external system (GitHub issue #, etc.)
+    external_url: str | None
 
     # Assignment
-    assigned_agent_id: Optional[str]
-    assigned_at: Optional[datetime]
+    assigned_agent_id: str | None
+    assigned_at: datetime | None
 
     # Workflow tracking
-    current_workflow_id: Optional[str]
-    current_stage: Optional[str]
+    current_workflow_id: str | None
+    current_stage: str | None
 
     # Timestamps
     created_at: datetime
     updated_at: datetime
-    completed_at: Optional[datetime]
+    completed_at: datetime | None
 
     # Event tracking
-    _events: List[DomainEvent] = field(default_factory=list, init=False, repr=False)
+    _events: list[DomainEvent] = field(default_factory=list, init=False, repr=False)
     _version: int = field(default=0, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -104,16 +104,20 @@ class WorkItem:
         - Status must be valid
         """
         if not self.title or not self.title.strip():
-            raise DomainError("Work item must have a non-empty title")
+            msg = "Work item must have a non-empty title"
+            raise DomainError(msg)
 
         if not self.project_id:
-            raise DomainError("Work item must belong to a project")
+            msg = "Work item must belong to a project"
+            raise DomainError(msg)
 
         if not isinstance(self.status, WorkItemStatus):
-            raise DomainError(f"Invalid status: {self.status}")
+            msg = f"Invalid status: {self.status}"
+            raise DomainError(msg)
 
         if not isinstance(self.priority, WorkItemPriority):
-            raise DomainError(f"Invalid priority: {self.priority}")
+            msg = f"Invalid priority: {self.priority}"
+            raise DomainError(msg)
 
     # Creation
     @classmethod
@@ -122,10 +126,10 @@ class WorkItem:
         title: str,
         description: str,
         project_id: str,
-        labels: Optional[List[str]] = None,
+        labels: list[str] | None = None,
         priority: WorkItemPriority = WorkItemPriority.MEDIUM,
-        external_id: Optional[str] = None,
-        external_url: Optional[str] = None,
+        external_id: str | None = None,
+        external_url: str | None = None,
     ) -> "WorkItem":
         """
         Factory method to create a new work item.
@@ -158,8 +162,8 @@ class WorkItem:
             assigned_at=None,
             current_workflow_id=None,
             current_stage=None,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
             completed_at=None,
         )
 
@@ -199,17 +203,17 @@ class WorkItem:
         Emits: AgentAssigned event
         """
         if self.status not in [WorkItemStatus.NEW, WorkItemStatus.ASSIGNED]:
-            raise DomainError(
-                f"Cannot assign agent to work item in status {self.status.value}"
-            )
+            msg = f"Cannot assign agent to work item in status {self.status.value}"
+            raise DomainError(msg)
 
         if self.assigned_agent_id == agent_id:
-            raise DomainError(f"Agent {agent_id} is already assigned")
+            msg = f"Agent {agent_id} is already assigned"
+            raise DomainError(msg)
 
         self.assigned_agent_id = agent_id
-        self.assigned_at = datetime.now(timezone.utc)
+        self.assigned_at = datetime.now(UTC)
         self.status = WorkItemStatus.ASSIGNED
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = AgentAssigned(
@@ -236,13 +240,15 @@ class WorkItem:
         Emits: WorkItemStarted event
         """
         if not self.assigned_agent_id:
-            raise DomainError("Cannot start unassigned work item")
+            msg = "Cannot start unassigned work item"
+            raise DomainError(msg)
 
         if self.status != WorkItemStatus.ASSIGNED:
-            raise DomainError(f"Cannot start work item in status {self.status.value}")
+            msg = f"Cannot start work item in status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = WorkItemStatus.IN_PROGRESS
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = WorkItemStarted(
@@ -267,12 +273,11 @@ class WorkItem:
         Emits: WorkItemUnderReview event
         """
         if self.status != WorkItemStatus.IN_PROGRESS:
-            raise DomainError(
-                f"Cannot review work item in status {self.status.value}"
-            )
+            msg = f"Cannot review work item in status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = WorkItemStatus.UNDER_REVIEW
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = WorkItemUnderReview(
@@ -297,12 +302,11 @@ class WorkItem:
             WorkItemStatus.IN_PROGRESS,
             WorkItemStatus.UNDER_REVIEW,
         ]:
-            raise DomainError(
-                f"Cannot complete work item in status {self.status.value}"
-            )
+            msg = f"Cannot complete work item in status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = WorkItemStatus.COMPLETED
-        self.completed_at = datetime.now(timezone.utc)
+        self.completed_at = datetime.now(UTC)
         self.updated_at = self.completed_at
         self._version += 1
 
@@ -315,7 +319,7 @@ class WorkItem:
         )
         self._add_event(event)
 
-    def fail(self, reason: str, error_details: Optional[Dict[str, Any]] = None) -> None:
+    def fail(self, reason: str, error_details: dict[str, Any] | None = None) -> None:
         """
         Mark work item as failed.
 
@@ -332,12 +336,11 @@ class WorkItem:
         Emits: WorkItemFailed event
         """
         if self.status in [WorkItemStatus.COMPLETED, WorkItemStatus.FAILED]:
-            raise DomainError(
-                f"Cannot fail work item in terminal status {self.status.value}"
-            )
+            msg = f"Cannot fail work item in terminal status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = WorkItemStatus.FAILED
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = WorkItemFailed(
@@ -351,7 +354,7 @@ class WorkItem:
         )
         self._add_event(event)
 
-    def block(self, reason: str, blocking_issue_id: Optional[str] = None) -> None:
+    def block(self, reason: str, blocking_issue_id: str | None = None) -> None:
         """
         Block work item.
 
@@ -368,12 +371,11 @@ class WorkItem:
         Emits: WorkItemBlocked event
         """
         if self.status in [WorkItemStatus.COMPLETED, WorkItemStatus.FAILED]:
-            raise DomainError(
-                f"Cannot block work item in terminal status {self.status.value}"
-            )
+            msg = f"Cannot block work item in terminal status {self.status.value}"
+            raise DomainError(msg)
 
         self.status = WorkItemStatus.BLOCKED
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = WorkItemBlocked(
@@ -399,15 +401,12 @@ class WorkItem:
         Emits: WorkItemUnblocked event
         """
         if self.status != WorkItemStatus.BLOCKED:
-            raise DomainError("Cannot unblock non-blocked work item")
+            msg = "Cannot unblock non-blocked work item"
+            raise DomainError(msg)
 
         # Return to previous state (assume assigned if agent exists)
-        self.status = (
-            WorkItemStatus.ASSIGNED
-            if self.assigned_agent_id
-            else WorkItemStatus.NEW
-        )
-        self.updated_at = datetime.now(timezone.utc)
+        self.status = WorkItemStatus.ASSIGNED if self.assigned_agent_id else WorkItemStatus.NEW
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = WorkItemUnblocked(
@@ -433,12 +432,11 @@ class WorkItem:
         Emits: WorkflowAttached event
         """
         if self.current_workflow_id:
-            raise DomainError(
-                f"Work item already has workflow {self.current_workflow_id}"
-            )
+            msg = f"Work item already has workflow {self.current_workflow_id}"
+            raise DomainError(msg)
 
         self.current_workflow_id = workflow_id
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = WorkflowAttached(
@@ -463,11 +461,12 @@ class WorkItem:
         Emits: WorkItemStageUpdated event
         """
         if not self.current_workflow_id:
-            raise DomainError("Cannot update stage without workflow")
+            msg = "Cannot update stage without workflow"
+            raise DomainError(msg)
 
         old_stage = self.current_stage
         self.current_stage = stage
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = WorkItemStageUpdated(
@@ -482,7 +481,7 @@ class WorkItem:
         self._add_event(event)
 
     # Metadata
-    def update_labels(self, labels: List[str]) -> None:
+    def update_labels(self, labels: list[str]) -> None:
         """
         Update work item labels.
 
@@ -495,18 +494,21 @@ class WorkItem:
         Emits: WorkItemLabelsUpdated event
         """
         if labels is None:
-            raise DomainError("Labels cannot be None")
+            msg = "Labels cannot be None"
+            raise DomainError(msg)
 
         if not isinstance(labels, list):
-            raise DomainError("Labels must be a list")
+            msg = "Labels must be a list"
+            raise DomainError(msg)
 
         # Validate all elements are strings
         if not all(isinstance(label, str) for label in labels):
-            raise DomainError("All labels must be strings")
+            msg = "All labels must be strings"
+            raise DomainError(msg)
 
         old_labels = self.labels.copy()
         self.labels = labels
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = WorkItemLabelsUpdated(
@@ -530,7 +532,7 @@ class WorkItem:
         """
         old_priority = self.priority
         self.priority = priority
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         self._version += 1
 
         event = WorkItemPriorityUpdated(
@@ -551,10 +553,7 @@ class WorkItem:
         Returns:
             True if work item can be started, False otherwise
         """
-        return (
-            self.assigned_agent_id is not None
-            and self.status == WorkItemStatus.ASSIGNED
-        )
+        return self.assigned_agent_id is not None and self.status == WorkItemStatus.ASSIGNED
 
     def is_terminal(self) -> bool:
         """
@@ -587,7 +586,7 @@ class WorkItem:
         """
         self._events.append(event)
 
-    def get_pending_events(self) -> List[DomainEvent]:
+    def get_pending_events(self) -> list[DomainEvent]:
         """
         Get all pending events.
 
@@ -603,7 +602,7 @@ class WorkItem:
 
     # Reconstruction from events
     @classmethod
-    def from_events(cls, events: List[DomainEvent]) -> "WorkItem":
+    def from_events(cls, events: list[DomainEvent]) -> "WorkItem":
         """
         Reconstruct work item from event stream.
 
@@ -619,12 +618,14 @@ class WorkItem:
             DomainError: If event stream is invalid
         """
         if not events:
-            raise DomainError("Cannot reconstruct work item from empty event stream")
+            msg = "Cannot reconstruct work item from empty event stream"
+            raise DomainError(msg)
 
         # First event must be WorkItemCreated
         first_event = events[0]
         if not isinstance(first_event, WorkItemCreated):
-            raise DomainError("First event must be WorkItemCreated")
+            msg = "First event must be WorkItemCreated"
+            raise DomainError(msg)
 
         # Create initial state from creation event
         payload = first_event.payload
@@ -633,9 +634,8 @@ class WorkItem:
         required_fields = ["project_id", "title", "description", "priority", "labels"]
         missing_fields = [f for f in required_fields if f not in payload]
         if missing_fields:
-            raise DomainError(
-                f"Missing required fields in WorkItemCreated event: {', '.join(missing_fields)}"
-            )
+            msg = f"Missing required fields in WorkItemCreated event: {', '.join(missing_fields)}"
+            raise DomainError(msg)
 
         work_item = cls(
             id=first_event.aggregate_id,
@@ -663,6 +663,73 @@ class WorkItem:
         work_item._version = len(events)
         return work_item
 
+    def _apply_agent_assigned(self, event: AgentAssigned) -> None:
+        """Apply AgentAssigned event."""
+        self.assigned_agent_id = event.payload["agent_id"]
+        self.assigned_at = datetime.fromisoformat(event.payload["assigned_at"])
+        self.status = WorkItemStatus.ASSIGNED
+
+    def _apply_work_item_started(self, _event: WorkItemStarted) -> None:
+        """Apply WorkItemStarted event."""
+        self.status = WorkItemStatus.IN_PROGRESS
+
+    def _apply_work_item_under_review(self, _event: WorkItemUnderReview) -> None:
+        """Apply WorkItemUnderReview event."""
+        self.status = WorkItemStatus.UNDER_REVIEW
+
+    def _apply_work_item_completed(self, event: WorkItemCompleted) -> None:
+        """Apply WorkItemCompleted event."""
+        self.status = WorkItemStatus.COMPLETED
+        self.completed_at = datetime.fromisoformat(event.payload["completed_at"])
+
+    def _apply_work_item_failed(self, _event: WorkItemFailed) -> None:
+        """Apply WorkItemFailed event."""
+        self.status = WorkItemStatus.FAILED
+
+    def _apply_work_item_blocked(self, _event: WorkItemBlocked) -> None:
+        """Apply WorkItemBlocked event."""
+        self.status = WorkItemStatus.BLOCKED
+
+    def _apply_work_item_unblocked(self, event: WorkItemUnblocked) -> None:
+        """Apply WorkItemUnblocked event."""
+        self.status = WorkItemStatus(event.payload["new_status"])
+
+    def _apply_workflow_attached(self, event: WorkflowAttached) -> None:
+        """Apply WorkflowAttached event."""
+        self.current_workflow_id = event.payload["workflow_id"]
+
+    def _apply_work_item_stage_updated(self, event: WorkItemStageUpdated) -> None:
+        """Apply WorkItemStageUpdated event."""
+        self.current_stage = event.payload["new_stage"]
+
+    def _apply_work_item_labels_updated(self, event: WorkItemLabelsUpdated) -> None:
+        """Apply WorkItemLabelsUpdated event."""
+        self.labels = event.payload["new_labels"]
+
+    def _apply_work_item_priority_updated(self, event: WorkItemPriorityUpdated) -> None:
+        """Apply WorkItemPriorityUpdated event."""
+        self.priority = WorkItemPriority(event.payload["new_priority"])
+
+    def _get_event_handlers(self) -> dict[type, Any]:
+        """Get mapping of event types to handler methods.
+
+        Returns:
+            Dictionary mapping event types to handler methods
+        """
+        return {
+            AgentAssigned: self._apply_agent_assigned,
+            WorkItemStarted: self._apply_work_item_started,
+            WorkItemUnderReview: self._apply_work_item_under_review,
+            WorkItemCompleted: self._apply_work_item_completed,
+            WorkItemFailed: self._apply_work_item_failed,
+            WorkItemBlocked: self._apply_work_item_blocked,
+            WorkItemUnblocked: self._apply_work_item_unblocked,
+            WorkflowAttached: self._apply_workflow_attached,
+            WorkItemStageUpdated: self._apply_work_item_stage_updated,
+            WorkItemLabelsUpdated: self._apply_work_item_labels_updated,
+            WorkItemPriorityUpdated: self._apply_work_item_priority_updated,
+        }
+
     def _apply_event(self, event: DomainEvent) -> None:
         """
         Apply an event to update state.
@@ -670,40 +737,11 @@ class WorkItem:
         Args:
             event: Domain event to apply
         """
-        if isinstance(event, AgentAssigned):
-            self.assigned_agent_id = event.payload["agent_id"]
-            self.assigned_at = datetime.fromisoformat(event.payload["assigned_at"])
-            self.status = WorkItemStatus.ASSIGNED
+        # Dispatch to event-specific handler using event type
+        handlers = self._get_event_handlers()
+        event_type = type(event)
+        if event_type in handlers:
+            handlers[event_type](event)
 
-        elif isinstance(event, WorkItemStarted):
-            self.status = WorkItemStatus.IN_PROGRESS
-
-        elif isinstance(event, WorkItemUnderReview):
-            self.status = WorkItemStatus.UNDER_REVIEW
-
-        elif isinstance(event, WorkItemCompleted):
-            self.status = WorkItemStatus.COMPLETED
-            self.completed_at = datetime.fromisoformat(event.payload["completed_at"])
-
-        elif isinstance(event, WorkItemFailed):
-            self.status = WorkItemStatus.FAILED
-
-        elif isinstance(event, WorkItemBlocked):
-            self.status = WorkItemStatus.BLOCKED
-
-        elif isinstance(event, WorkItemUnblocked):
-            self.status = WorkItemStatus(event.payload["new_status"])
-
-        elif isinstance(event, WorkflowAttached):
-            self.current_workflow_id = event.payload["workflow_id"]
-
-        elif isinstance(event, WorkItemStageUpdated):
-            self.current_stage = event.payload["new_stage"]
-
-        elif isinstance(event, WorkItemLabelsUpdated):
-            self.labels = event.payload["new_labels"]
-
-        elif isinstance(event, WorkItemPriorityUpdated):
-            self.priority = WorkItemPriority(event.payload["new_priority"])
-
+        # Update timestamp for all events
         self.updated_at = event.occurred_at

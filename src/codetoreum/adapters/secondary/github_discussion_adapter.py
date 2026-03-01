@@ -15,9 +15,9 @@ Features:
 
 import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import Callable, Dict, List, Optional
+from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import httpx
 
@@ -27,6 +27,8 @@ from codetoreum.domain.events.discussion_events import (
     CommentNeedsResponseEvent,
     CommentPostedEvent,
 )
+from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.infrastructure.http.github_graphql_client import GitHubGraphQLClient
 from codetoreum.ports.exceptions import (
     AuthenticationError,
     ExternalServiceError,
@@ -39,7 +41,6 @@ from codetoreum.ports.output.discussion_adapter import (
     IDiscussionAdapter,
 )
 from codetoreum.ports.output.identity_service import IIdentityService
-from codetoreum.infrastructure.http.github_graphql_client import GitHubGraphQLClient
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ class GitHubDiscussionConfig:
     organization: str
     repository: str
     api_base_url: str = "https://api.github.com"
-    graphql_client: Optional[GitHubGraphQLClient] = None
+    graphql_client: GitHubGraphQLClient | None = None
     webhook_enabled: bool = True
     polling_interval_seconds: int = 30
     api_version: str = "2022-11-28"
@@ -117,21 +118,21 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
         """
         self._config = config
         self._identity_service = identity_service
-        self._http_client: Optional[httpx.AsyncClient] = None
+        self._http_client: httpx.AsyncClient | None = None
         self._graphql_client = config.graphql_client
         self._webhook_enabled = config.webhook_enabled
 
         # Event emitter state
-        self._event_handlers: Dict[str, List[Callable]] = {}
+        self._event_handlers: dict[str, list[Callable]] = {}
 
         # Monitoring state: work_item_id -> config
-        self._monitoring: Dict[str, DiscussionMonitoringConfig] = {}
+        self._monitoring: dict[str, DiscussionMonitoringConfig] = {}
 
         # Polling state: work_item_id -> last_comment_id
-        self._last_processed: Dict[str, Optional[str]] = {}
+        self._last_processed: dict[str, str | None] = {}
 
         # Polling tasks: work_item_id -> asyncio.Task
-        self._polling_tasks: Dict[str, asyncio.Task] = {}
+        self._polling_tasks: dict[str, asyncio.Task] = {}
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client for GitHub REST API."""
@@ -184,7 +185,8 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             ValidationError: Invalid work_item_id
         """
         if not work_item_id or not work_item_id.isdigit():
-            raise ValidationError(f"Invalid work_item_id: {work_item_id}")
+            msg = f"Invalid work_item_id: {work_item_id}"
+            raise ValidationError(msg)
 
         client = await self._get_client()
         comments = []
@@ -194,10 +196,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
         try:
             while True:
                 # Fetch page of comments
-                url = (
-                    f"/repos/{self._config.organization}/{self._config.repository}"
-                    f"/issues/{work_item_id}/comments"
-                )
+                url = f"/repos/{self._config.organization}/{self._config.repository}/issues/{work_item_id}/comments"
 
                 response = await client.get(
                     url,
@@ -210,15 +209,17 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
                 )
 
                 if response.status_code == 401:
-                    raise AuthenticationError("GitHub authentication failed")
+                    msg = "GitHub authentication failed"
+                    raise AuthenticationError(msg)
                 if response.status_code == 404:
-                    raise ResourceNotFoundError("Issue", work_item_id)
+                    msg = "Issue"
+                    raise ResourceNotFoundError(msg, work_item_id)
                 if response.status_code == 403:
-                    raise ExternalServiceError("GitHub", "Rate limit exceeded")
+                    msg = "GitHub"
+                    raise ExternalServiceError(msg, "Rate limit exceeded")
                 if response.status_code >= 400:
-                    raise ExternalServiceError(
-                        "GitHub", f"API error: {response.status_code}"
-                    )
+                    msg = "GitHub"
+                    raise ExternalServiceError(msg, f"API error: {response.status_code}")
 
                 page_data = response.json()
                 if not page_data:
@@ -250,7 +251,8 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             )
 
         except (httpx.RequestError, httpx.HTTPError) as e:
-            raise ExternalServiceError(f"GitHub API request failed: {str(e)}")
+            msg = f"GitHub API request failed: {e!s}"
+            raise ExternalServiceError(msg)
 
     # Command Operations
 
@@ -258,7 +260,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
         self,
         work_item_id: str,
         content: str,
-        parent_id: Optional[str] = None,
+        parent_id: str | None = None,
     ) -> Comment:
         """Post a comment to a work item (GitHub issue).
 
@@ -279,21 +281,21 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             ExternalServiceError: API communication failure
         """
         if not work_item_id or not work_item_id.isdigit():
-            raise ValidationError(f"Invalid work_item_id: {work_item_id}")
+            msg = f"Invalid work_item_id: {work_item_id}"
+            raise ValidationError(msg)
 
         if not content or not content.strip():
-            raise ValidationError("Comment content cannot be empty")
+            msg = "Comment content cannot be empty"
+            raise ValidationError(msg)
 
         if len(content) > 65536:  # GitHub limit
-            raise ValidationError("Comment content exceeds maximum length (65536 chars)")
+            msg = "Comment content exceeds maximum length (65536 chars)"
+            raise ValidationError(msg)
 
         client = await self._get_client()
 
         try:
-            url = (
-                f"/repos/{self._config.organization}/{self._config.repository}"
-                f"/issues/{work_item_id}/comments"
-            )
+            url = f"/repos/{self._config.organization}/{self._config.repository}/issues/{work_item_id}/comments"
 
             response = await client.post(
                 url,
@@ -301,15 +303,17 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             )
 
             if response.status_code == 401:
-                raise AuthenticationError("GitHub authentication failed")
+                msg = "GitHub authentication failed"
+                raise AuthenticationError(msg)
             if response.status_code == 404:
-                raise ResourceNotFoundError("Issue", work_item_id)
+                msg = "Issue"
+                raise ResourceNotFoundError(msg, work_item_id)
             if response.status_code == 403:
-                raise ExternalServiceError("GitHub", "Rate limit exceeded")
+                msg = "GitHub"
+                raise ExternalServiceError(msg, "Rate limit exceeded")
             if response.status_code >= 400:
-                raise ExternalServiceError(
-                    "GitHub", f"API error: {response.status_code}"
-                )
+                msg = "GitHub"
+                raise ExternalServiceError(msg, f"API error: {response.status_code}")
 
             data = response.json()
             comment = Comment(
@@ -338,13 +342,12 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             return comment
 
         except (httpx.RequestError, httpx.HTTPError) as e:
-            raise ExternalServiceError(f"GitHub API request failed: {str(e)}")
+            msg = f"GitHub API request failed: {e!s}"
+            raise ExternalServiceError(msg)
 
     # Work-Item-Specific Monitoring
 
-    def start_monitoring(
-        self, work_item_id: str, config: DiscussionMonitoringConfig
-    ) -> None:
+    def start_monitoring(self, work_item_id: str, config: DiscussionMonitoringConfig) -> None:
         """Start monitoring a specific work item for new comments.
 
         Enables change detection via webhook (if enabled) and/or polling.
@@ -359,9 +362,11 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             ResourceNotFoundError: Work item doesn't exist
         """
         if not work_item_id:
-            raise ValidationError("work_item_id cannot be empty")
+            msg = "work_item_id cannot be empty"
+            raise ValidationError(msg)
         if not config.project_id:
-            raise ValidationError("config.project_id cannot be empty")
+            msg = "config.project_id cannot be empty"
+            raise ValidationError(msg)
 
         self._monitoring[work_item_id] = config
 
@@ -373,9 +378,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
 
         # Start polling if webhook not enabled
         if not self._webhook_enabled:
-            self._polling_tasks[work_item_id] = asyncio.create_task(
-                self._poll_comments(work_item_id)
-            )
+            self._polling_tasks[work_item_id] = asyncio.create_task(self._poll_comments(work_item_id))
 
     def stop_monitoring(self, work_item_id: str) -> None:
         """Stop monitoring a specific work item for new comments.
@@ -391,10 +394,12 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             ResourceNotFoundError: Not currently monitoring
         """
         if not work_item_id:
-            raise ValidationError("work_item_id cannot be empty")
+            msg = "work_item_id cannot be empty"
+            raise ValidationError(msg)
 
         if work_item_id not in self._monitoring:
-            raise ResourceNotFoundError("WorkItem", work_item_id)
+            msg = "WorkItem"
+            raise ResourceNotFoundError(msg, work_item_id)
 
         # Cancel polling task if running
         if work_item_id in self._polling_tasks:
@@ -409,12 +414,36 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
         # Close HTTP client if no more work items being monitored
         if not self._monitoring and self._http_client is not None:
             # Schedule close to be called from async context
-            import asyncio
             try:
-                asyncio.create_task(self.close())
-            except RuntimeError:
-                # No event loop running, client will be closed on next close() call
-                pass
+                task = asyncio.create_task(self.close())
+
+                # Attach error handler to catch any failures
+                def _handle_close_error(task: asyncio.Task) -> None:
+                    if task.cancelled():
+                        return
+                    exc = task.exception()
+                    if exc is not None:
+                        logger.error(
+                            f"Failed to close HTTP client: {exc}",
+                            exc_info=exc,
+                            extra={
+                                "error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR,
+                                "operation": "http_client_close",
+                            },
+                        )
+
+                task.add_done_callback(_handle_close_error)
+            except RuntimeError as e:
+                # No event loop running - HTTP client cleanup is deferred
+                logger.warning(
+                    f"Cannot close HTTP client without event loop, cleanup deferred: {e}",
+                    exc_info=True,
+                    extra={
+                        "error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR,
+                        "operation": "async_close_deferred",
+                        "note": "AsyncClient requires async context for graceful shutdown",
+                    },
+                )
 
     # Webhook Handling
 
@@ -440,7 +469,8 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
         comment_data = payload.get("comment")
 
         if not issue or not comment_data:
-            raise ValidationError("Invalid webhook payload: missing issue or comment")
+            msg = "Invalid webhook payload: missing issue or comment"
+            raise ValidationError(msg)
 
         work_item_id = str(issue.get("number", issue.get("id")))
 
@@ -492,13 +522,14 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
                 try:
                     thread = await self.get_thread(work_item_id)
                 except Exception as e:
-                    logger.warning(f"Polling error for {work_item_id}: {e}")
+                    logger.warning(
+                        f"Polling error for {work_item_id}: {e}",
+                        exc_info=True,
+                    )
                     continue
 
                 # Find new comments since last poll
-                new_comments = self._filter_new_comments(
-                    thread.comments, self._last_processed.get(work_item_id)
-                )
+                new_comments = self._filter_new_comments(thread.comments, self._last_processed.get(work_item_id))
 
                 # Process each new comment
                 config = self._monitoring.get(work_item_id)
@@ -506,9 +537,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
                     for comment in new_comments:
                         # Only emit for human comments
                         if not comment.is_bot:
-                            self._emit_comment_needs_response(
-                                work_item_id, config, comment
-                            )
+                            self._emit_comment_needs_response(work_item_id, config, comment)
 
                         # Update last processed
                         self._last_processed[work_item_id] = comment.id
@@ -519,13 +548,11 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
                 logger.error(
                     f"Unexpected error in polling loop for {work_item_id}: {e}",
                     exc_info=True,
-                    extra={"error_id": "ERR_DISCUSSION_ERROR", "work_item_id": work_item_id}
+                    extra={"error_id": "ERR_DISCUSSION_ERROR", "work_item_id": work_item_id},
                 )
                 continue
 
-    def _filter_new_comments(
-        self, comments: List[Comment], last_id: Optional[str]
-    ) -> List[Comment]:
+    def _filter_new_comments(self, comments: list[Comment], last_id: str | None) -> list[Comment]:
         """Filter comments to only new ones.
 
         Returns all comments after the last_id, or all comments if last_id is None.
@@ -607,9 +634,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
 
     # IEventEmitter Implementation
 
-    def on(
-        self, event_type: str, handler: Callable[[object], None]
-    ) -> None:
+    def on(self, event_type: str, handler: Callable[[object], None]) -> None:
         """Subscribe to events of a specific type.
 
         Args:
@@ -620,18 +645,18 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             ValueError: Invalid parameters
         """
         if not event_type:
-            raise ValueError("event_type cannot be empty")
+            msg = "event_type cannot be empty"
+            raise ValueError(msg)
         if not callable(handler):
-            raise ValueError("handler must be callable")
+            msg = "handler must be callable"
+            raise ValueError(msg)
 
         if event_type not in self._event_handlers:
             self._event_handlers[event_type] = []
 
         self._event_handlers[event_type].append(handler)
 
-    def off(
-        self, event_type: str, handler: Callable[[object], None]
-    ) -> None:
+    def off(self, event_type: str, handler: Callable[[object], None]) -> None:
         """Unsubscribe from events.
 
         Args:
@@ -642,30 +667,81 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             ValueError: Handler not registered
         """
         if event_type not in self._event_handlers or handler not in self._event_handlers[event_type]:
-            raise ValueError(f"Handler not subscribed to event type: {event_type}")
+            msg = f"Handler not subscribed to event type: {event_type}"
+            raise ValueError(msg)
 
         self._event_handlers[event_type].remove(handler)
 
     def emit(self, event: object) -> None:
         """Emit an event to all subscribers.
 
+        Handler failures are logged at ERROR level with full stack traces but do not
+        prevent other handlers from executing. This allows event processing to continue
+        while ensuring failures are visible in logs for monitoring and debugging.
+
         Args:
             event: Event to emit
 
         Raises:
             ValueError: Invalid event type
+            asyncio.CancelledError: If cancellation is requested (never suppressed)
         """
-        if not hasattr(event, "type"):
-            raise ValueError("event must have a 'type' attribute")
+        event_type = getattr(event, "type", None)
+        if event_type is None:
+            msg = "event must have a 'type' attribute"
+            raise ValueError(msg)
+        if event_type not in self._event_handlers:
+            return
 
-        event_type = event.type  # type: ignore
-        if event_type in self._event_handlers:
-            for handler in self._event_handlers[event_type]:
+        failures = []
+        for handler in self._event_handlers[event_type]:
+            handler_name = getattr(handler, "__name__", str(handler))
+            try:
                 handler(event)
+            except asyncio.CancelledError:
+                # Never suppress cancellation - propagate immediately
+                raise
+            except (ValueError, TypeError) as e:
+                # Expected validation errors from handlers
+                logger.error(
+                    f"Handler {handler_name} validation error for {event_type}: {e}",
+                    exc_info=True,
+                    extra={
+                        "event_type": event_type,
+                        "handler": handler_name,
+                        "error_id": ErrorRegistry.ERR_VALIDATION_FAILED,
+                    },
+                )
+                failures.append((handler_name, str(e)))
+            except Exception as e:
+                # Unexpected runtime errors from handlers
+                logger.error(
+                    f"Handler {handler_name} execution error for {event_type}: {e}",
+                    exc_info=True,
+                    extra={
+                        "error_id": ErrorRegistry.ERR_HANDLER_EXECUTION,
+                        "event_type": event_type,
+                        "event_id": getattr(event, "event_id", None),
+                        "handler": handler_name,
+                    },
+                )
+                failures.append((handler_name, str(e)))
+
+        # Log summary if any handlers failed
+        if failures:
+            logger.error(
+                f"Event emission for {event_type} completed with {len(failures)} handler failure(s)",
+                extra={
+                    "error_id": ErrorRegistry.ERR_HANDLER_EXECUTION,
+                    "event_type": event_type,
+                    "event_id": getattr(event, "event_id", None),
+                    "failure_count": len(failures),
+                },
+            )
 
     # Utility Methods
 
     @staticmethod
     def _get_iso_timestamp() -> str:
         """Get current time as ISO 8601 timestamp."""
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()

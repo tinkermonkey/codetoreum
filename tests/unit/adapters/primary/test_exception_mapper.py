@@ -16,8 +16,10 @@ from codetoreum.domain.exceptions import (
     ExecutionNotFoundError,
     InvalidStateError,
     PipelineNotFoundError,
-    WorkItemNotFoundError as DomainWorkItemNotFoundError,
     WorkspaceNotFoundError,
+)
+from codetoreum.domain.exceptions import (
+    WorkItemNotFoundError as DomainWorkItemNotFoundError,
 )
 from codetoreum.ports.exceptions import (
     AuthenticationError,
@@ -28,25 +30,35 @@ from codetoreum.ports.exceptions import (
     RateLimitError,
     ResourceNotFoundError,
     TimeoutError,
-    ValidationError as PortValidationError,
 )
+from codetoreum.ports.exceptions import ValidationError as PortValidationError
 from codetoreum.ports.input.exceptions import (
     AgentExecutionNotFoundError,
-    AgentNotFoundError as InputPortAgentNotFoundError,
     ArtifactNotFoundError,
     CommandFileNotFoundError,
     CommandNotFoundError,
-    PermissionError as InputPortPermissionError,
-    PipelineNotFoundError as InputPortPipelineNotFoundError,
     PortException,
     ProjectNotFoundError,
     StageNotFoundError,
     SubAgentNotFoundError,
-    ValidationError as InputPortValidationError,
     VariableNotFoundError,
     WorkflowNotActiveError,
     WorkflowNotFoundError,
     WorkflowNotPausedError,
+)
+from codetoreum.ports.input.exceptions import (
+    AgentNotFoundError as InputPortAgentNotFoundError,
+)
+from codetoreum.ports.input.exceptions import (
+    PermissionError as InputPortPermissionError,
+)
+from codetoreum.ports.input.exceptions import (
+    PipelineNotFoundError as InputPortPipelineNotFoundError,
+)
+from codetoreum.ports.input.exceptions import (
+    ValidationError as InputPortValidationError,
+)
+from codetoreum.ports.input.exceptions import (
     WorkItemNotFoundError as InputPortWorkItemNotFoundError,
 )
 
@@ -205,6 +217,7 @@ class TestPortExceptionMapping:
 
         assert http_exc.status_code == status.HTTP_401_UNAUTHORIZED
         assert "Invalid token" in http_exc.detail
+        assert http_exc.headers is not None
         assert "WWW-Authenticate" in http_exc.headers
         assert http_exc.headers["WWW-Authenticate"] == "Bearer"
 
@@ -220,6 +233,7 @@ class TestPortExceptionMapping:
         http_exc = map_exception_to_http(exc)
 
         assert http_exc.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+        assert http_exc.headers is not None
         assert "Retry-After" in http_exc.headers
         assert http_exc.headers["Retry-After"] == "60"
 
@@ -312,27 +326,30 @@ class TestExceptionMessageHandling:
 class TestAllNotFoundExceptions:
     """Comprehensive test for all NotFound exception types"""
 
-    @pytest.mark.parametrize("exception_class,exception_args", [
-        (AgentNotFoundError, ("agent-1",)),
-        (WorkspaceNotFoundError, ("ws-1",)),
-        (ConfigNotFoundError, ("config-1",)),
-        (ExecutionNotFoundError, ("exec-1",)),
-        (PipelineNotFoundError, ("pipeline-1",)),
-        (DomainWorkItemNotFoundError, ("wi-1",)),
-        (InputPortAgentNotFoundError, ("Agent not found",)),
-        (AgentExecutionNotFoundError, ("Execution not found",)),
-        (ArtifactNotFoundError, ("Artifact not found",)),
-        (CommandFileNotFoundError, ("Command file not found",)),
-        (CommandNotFoundError, ("Command not found",)),
-        (InputPortPipelineNotFoundError, ("Pipeline not found",)),
-        (ProjectNotFoundError, ("Project not found",)),
-        (StageNotFoundError, ("Stage not found",)),
-        (SubAgentNotFoundError, ("SubAgent not found",)),
-        (VariableNotFoundError, ("Variable not found",)),
-        (WorkflowNotFoundError, ("Workflow not found",)),
-        (InputPortWorkItemNotFoundError, ("WorkItem not found",)),
-        (ResourceNotFoundError, ("Resource", "res-1")),
-    ])
+    @pytest.mark.parametrize(
+        "exception_class,exception_args",
+        [
+            (AgentNotFoundError, ("agent-1",)),
+            (WorkspaceNotFoundError, ("ws-1",)),
+            (ConfigNotFoundError, ("config-1",)),
+            (ExecutionNotFoundError, ("exec-1",)),
+            (PipelineNotFoundError, ("pipeline-1",)),
+            (DomainWorkItemNotFoundError, ("wi-1",)),
+            (InputPortAgentNotFoundError, ("Agent not found",)),
+            (AgentExecutionNotFoundError, ("Execution not found",)),
+            (ArtifactNotFoundError, ("Artifact not found",)),
+            (CommandFileNotFoundError, ("Command file not found",)),
+            (CommandNotFoundError, ("Command not found",)),
+            (InputPortPipelineNotFoundError, ("Pipeline not found",)),
+            (ProjectNotFoundError, ("Project not found",)),
+            (StageNotFoundError, ("Stage not found",)),
+            (SubAgentNotFoundError, ("SubAgent not found",)),
+            (VariableNotFoundError, ("Variable not found",)),
+            (WorkflowNotFoundError, ("Workflow not found",)),
+            (InputPortWorkItemNotFoundError, ("WorkItem not found",)),
+            (ResourceNotFoundError, ("Resource", "res-1")),
+        ],
+    )
     def test_all_not_found_exceptions_map_to_404(self, exception_class, exception_args):
         """Test that all NotFound exceptions map to 404"""
         exc = exception_class(*exception_args)

@@ -6,7 +6,6 @@ agent execution.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict
 
 from codetoreum.domain.value_objects import ProjectConfig
 
@@ -25,9 +24,7 @@ class IWorkflowOrchestrator(ABC):
     """
 
     @abstractmethod
-    async def orchestrate_project(
-        self, project_name: str, workspace_path: str, config: ProjectConfig
-    ) -> int:
+    async def orchestrate_project(self, project_name: str, workspace_path: str, config: ProjectConfig) -> int:
         """Execute orchestration for a single project.
 
         Coordinates all workflow activities for the project:
@@ -48,4 +45,3 @@ class IWorkflowOrchestrator(ABC):
         Raises:
             ExternalServiceError: External service communication failure
         """
-        pass

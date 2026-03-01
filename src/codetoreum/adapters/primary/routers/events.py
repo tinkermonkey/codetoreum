@@ -4,22 +4,18 @@ Events REST API Router
 Provides REST endpoints for historical event queries and event replay.
 """
 
-import uuid
-from datetime import datetime, timezone
-from typing import List, Optional
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-
-from codetoreum.config import (
-    EVENTS_DEFAULT_PAGE_SIZE,
-    EVENTS_MAX_PAGE_SIZE,
-    DEFAULT_OFFSET,
-)
 from pydantic import BaseModel, Field
 
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
+from codetoreum.config import (
+    DEFAULT_OFFSET,
+    EVENTS_DEFAULT_PAGE_SIZE,
+    EVENTS_MAX_PAGE_SIZE,
+)
 from codetoreum.ports.output.event_store import IEventStore
-
 
 # ============================================================================
 # DTOs (Data Transfer Objects)
@@ -35,9 +31,9 @@ class EventDTO(BaseModel):
     aggregate_id: str
     aggregate_type: str
     occurred_at: datetime
-    correlation_id: Optional[str] = None
-    causation_id: Optional[str] = None
-    user_id: Optional[str] = None
+    correlation_id: str | None = None
+    causation_id: str | None = None
+    user_id: str | None = None
     payload: dict
     metadata: dict = Field(default_factory=dict)
 
@@ -45,7 +41,7 @@ class EventDTO(BaseModel):
 class EventListResponse(BaseModel):
     """Response for event list queries"""
 
-    events: List[EventDTO]
+    events: list[EventDTO]
     total_count: int
     offset: int
     limit: int
@@ -55,10 +51,10 @@ class EventListResponse(BaseModel):
 class EventReplayRequest(BaseModel):
     """Request to replay events"""
 
-    stream_id: Optional[str] = None
+    stream_id: str | None = None
     from_version: int = 0
-    to_version: Optional[int] = None
-    event_types: Optional[List[str]] = None
+    to_version: int | None = None
+    event_types: list[str] | None = None
 
 
 class EventReplayResponse(BaseModel):
@@ -66,9 +62,9 @@ class EventReplayResponse(BaseModel):
 
     replay_id: str
     status: str = "accepted"
-    stream_id: Optional[str]
+    stream_id: str | None
     from_version: int
-    to_version: Optional[int]
+    to_version: int | None
     estimated_event_count: int
     message: str
 
@@ -79,8 +75,8 @@ class EventStatisticsResponse(BaseModel):
     total_events: int
     total_streams: int
     event_types: dict
-    oldest_event: Optional[datetime]
-    newest_event: Optional[datetime]
+    oldest_event: datetime | None
+    newest_event: datetime | None
 
 
 # ============================================================================
@@ -90,7 +86,7 @@ class EventStatisticsResponse(BaseModel):
 
 def create_events_router(
     event_store: IEventStore,
-    auth_deps: Optional[SimpleAuthDependencies] = None,
+    auth_deps: SimpleAuthDependencies | None = None,
 ) -> APIRouter:
     """
     Create events REST API router.
@@ -115,22 +111,19 @@ def create_events_router(
         description="Query historical events with pagination and filtering",
     )
     async def get_events(
-        event_type: Optional[str] = Query(None, description="Filter by event type"),
-        aggregate_type: Optional[str] = Query(
-            None, description="Filter by aggregate type"
-        ),
-        aggregate_id: Optional[str] = Query(None, description="Filter by aggregate ID"),
-        correlation_id: Optional[str] = Query(
-            None, description="Filter by correlation ID"
-        ),
-        start_time: Optional[datetime] = Query(
-            None, description="Filter events after this timestamp"
-        ),
-        end_time: Optional[datetime] = Query(
-            None, description="Filter events before this timestamp"
-        ),
+        event_type: str | None = Query(None, description="Filter by event type"),
+        aggregate_type: str | None = Query(None, description="Filter by aggregate type"),
+        aggregate_id: str | None = Query(None, description="Filter by aggregate ID"),
+        correlation_id: str | None = Query(None, description="Filter by correlation ID"),
+        start_time: datetime | None = Query(None, description="Filter events after this timestamp"),
+        end_time: datetime | None = Query(None, description="Filter events before this timestamp"),
         offset: int = Query(DEFAULT_OFFSET, ge=0, description="Number of events to skip"),
-        limit: int = Query(EVENTS_DEFAULT_PAGE_SIZE, ge=1, le=EVENTS_MAX_PAGE_SIZE, description=f"Maximum events to return (max {EVENTS_MAX_PAGE_SIZE})"),
+        limit: int = Query(
+            EVENTS_DEFAULT_PAGE_SIZE,
+            ge=1,
+            le=EVENTS_MAX_PAGE_SIZE,
+            description=f"Maximum events to return (max {EVENTS_MAX_PAGE_SIZE})",
+        ),
     ) -> EventListResponse:
         """
         Get historical events with filtering and pagination.
@@ -149,9 +142,7 @@ def create_events_router(
 
             # Query by correlation ID if provided
             if correlation_id:
-                domain_events = await event_store.get_events_by_correlation_id(
-                    correlation_id
-                )
+                domain_events = await event_store.get_events_by_correlation_id(correlation_id)
             # Query by event type if provided
             elif event_type:
                 domain_events = await event_store.get_events_by_type(
@@ -180,23 +171,15 @@ def create_events_router(
                     domain_events.extend(stream_events)
 
                 # Sort by timestamp
-                domain_events.sort(key=lambda e: e.occurred_at if hasattr(e, 'occurred_at') else e.timestamp)
+                domain_events.sort(key=lambda e: e.occurred_at if hasattr(e, "occurred_at") else e.timestamp)
 
             # Filter by aggregate type if specified
             if aggregate_type:
-                domain_events = [
-                    e
-                    for e in domain_events
-                    if getattr(e, "aggregate_type", None) == aggregate_type
-                ]
+                domain_events = [e for e in domain_events if getattr(e, "aggregate_type", None) == aggregate_type]
 
             # Filter by time range
             if end_time:
-                domain_events = [
-                    e
-                    for e in domain_events
-                    if getattr(e, "occurred_at", None) <= end_time
-                ]
+                domain_events = [e for e in domain_events if getattr(e, "occurred_at", None) <= end_time]
 
             # Apply pagination
             total_count = len(domain_events)
@@ -204,9 +187,7 @@ def create_events_router(
 
             # Convert to DTOs
             for event in domain_events:
-                event_dict = (
-                    event.to_dict() if hasattr(event, "to_dict") else event.__dict__
-                )
+                event_dict = event.to_dict() if hasattr(event, "to_dict") else event.__dict__
                 events.append(
                     EventDTO(
                         event_id=str(event_dict.get("event_id", "")),
@@ -214,13 +195,11 @@ def create_events_router(
                         event_version=event_dict.get("event_version", 1),
                         aggregate_id=event_dict.get("aggregate_id", ""),
                         aggregate_type=event_dict.get("aggregate_type", ""),
-                        occurred_at=event_dict.get("occurred_at", datetime.now(timezone.utc)),
-                        correlation_id=str(event_dict.get("correlation_id"))
-                        if event_dict.get("correlation_id")
-                        else None,
-                        causation_id=str(event_dict.get("causation_id"))
-                        if event_dict.get("causation_id")
-                        else None,
+                        occurred_at=event_dict.get("occurred_at", datetime.now(UTC)),
+                        correlation_id=(
+                            str(event_dict.get("correlation_id")) if event_dict.get("correlation_id") else None
+                        ),
+                        causation_id=str(event_dict.get("causation_id")) if event_dict.get("causation_id") else None,
                         user_id=event_dict.get("user_id"),
                         payload=event_dict.get("payload", {}),
                         metadata=event_dict.get("metadata", {}),
@@ -238,7 +217,7 @@ def create_events_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to query events: {str(e)}",
+                detail=f"Failed to query events: {e!s}",
             )
 
     @router.post(

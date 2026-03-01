@@ -9,9 +9,10 @@ Tests cover:
 """
 
 import asyncio
-import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
+
+import pytest
 
 from codetoreum.application.workflow_run_query_service import LRUCache
 
@@ -163,9 +164,9 @@ class TestTTLExpiration:
         """Test TTL expiration using time mocking."""
         cache = LRUCache(max_size=10, ttl_seconds=300)
 
-        base_time = datetime.now(timezone.utc)
+        base_time = datetime.now(UTC)
 
-        with patch('codetoreum.application.workflow_run_query_service.datetime') as mock_datetime:
+        with patch("codetoreum.application.workflow_run_query_service.datetime") as mock_datetime:
             # Set initial time
             mock_datetime.now.return_value = base_time
             await cache.set("key1", "value1")
@@ -280,11 +281,13 @@ class TestConcurrentAccess:
         assert await cache.size() == 3
 
         # At least some of the new keys should exist
-        new_keys_exist = sum([
-            await cache.get("key4") is not None,
-            await cache.get("key5") is not None,
-            await cache.get("key6") is not None,
-        ])
+        new_keys_exist = sum(
+            [
+                await cache.get("key4") is not None,
+                await cache.get("key5") is not None,
+                await cache.get("key6") is not None,
+            ]
+        )
         assert new_keys_exist >= 1
 
 

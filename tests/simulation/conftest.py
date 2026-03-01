@@ -1,9 +1,10 @@
 """Pytest fixtures for simulation testing."""
 
-import pytest
-from datetime import datetime, timezone
-from typing import Dict, Generator, List
+from collections.abc import AsyncGenerator, Generator
+from datetime import UTC, datetime
+from typing import cast
 
+import pytest
 from fastapi import FastAPI
 
 from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
@@ -12,21 +13,20 @@ from codetoreum.adapters.testing.in_memory_metrics_adapter import (
 )
 from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
 from codetoreum.adapters.testing.mock_notifier_adapter import MockNotifierAdapter
+from codetoreum.domain.events import WorkItemColumnChanged
 from codetoreum.infrastructure.simulation import (
     SimulationClock,
     SimulationConfig,
     SimulationRunner,
 )
 from codetoreum.infrastructure.simulation.bootstrap import (
-    SimulationApplicationBootstrap,
     SimulationAdapters,
-    SimulationServices,
-    SimulationPorts,
+    SimulationApplicationBootstrap,
     SimulationInfrastructure,
+    SimulationPorts,
+    SimulationServices,
 )
-from codetoreum.domain.events import WorkItemColumnChanged
 from codetoreum.ports.output.agent_executor import IAgentExecutor
-
 
 # ====================================================================================
 # Shared Test Utilities (Scenario Tests)
@@ -38,7 +38,7 @@ class MockAgentExecutor(IAgentExecutor):
 
     def __init__(self):
         """Initialize the mock agent executor."""
-        self._executions: List[Dict] = []
+        self._executions: list[dict] = []
         self._lock = __import__("threading").Lock()
 
     async def execute(self, work_item_id: str, agent_id: str) -> None:
@@ -53,7 +53,7 @@ class MockAgentExecutor(IAgentExecutor):
                 {
                     "work_item_id": work_item_id,
                     "agent_id": agent_id,
-                    "timestamp": datetime.now(tz=timezone.utc),
+                    "timestamp": datetime.now(tz=UTC),
                 }
             )
 
@@ -68,10 +68,7 @@ class MockAgentExecutor(IAgentExecutor):
             True if agent was triggered for this work item
         """
         with self._lock:
-            return any(
-                e["agent_id"] == agent_id and e["work_item_id"] == work_item_id
-                for e in self._executions
-            )
+            return any(e["agent_id"] == agent_id and e["work_item_id"] == work_item_id for e in self._executions)
 
     def get_execution_count(self, agent_id: str) -> int:
         """Get total execution count for an agent.
@@ -126,7 +123,7 @@ def create_column_changed_event(
 
 
 @pytest.fixture
-def simulation_clock() -> Generator[SimulationClock, None, None]:
+def simulation_clock() -> SimulationClock:
     """
     Provide a simulation clock for tests.
 
@@ -134,8 +131,8 @@ def simulation_clock() -> Generator[SimulationClock, None, None]:
         SimulationClock instance configured for fast execution
     """
     clock = SimulationClock(speed_multiplier=100.0)
-    clock.start_at(datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc))
-    yield clock
+    clock.start_at(datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC))
+    return clock
 
 
 @pytest.fixture
@@ -253,6 +250,7 @@ def custom_simulation_runner():
     Returns:
         Function that creates SimulationRunner with custom config
     """
+
     def _create_runner(config: SimulationConfig) -> SimulationRunner:
         return SimulationRunner(config)
 
@@ -267,7 +265,7 @@ def custom_simulation_runner():
 @pytest.fixture
 async def simulation_bootstrap(
     fast_simulation_config: SimulationConfig,
-) -> Generator[SimulationApplicationBootstrap, None, None]:
+) -> AsyncGenerator[SimulationApplicationBootstrap, None]:
     """
     Provide a fully set up simulation bootstrap.
 
@@ -301,7 +299,9 @@ async def simulation_app(
     """
     if not simulation_bootstrap.app:
         raise RuntimeError("Bootstrap app not initialized")
-    return simulation_bootstrap.app
+    # Cast needed because bootstrap.py has ignore_errors in mypy config,
+    # making app typed as Any despite runtime type being FastAPI | None
+    return cast("FastAPI", simulation_bootstrap.app)
 
 
 @pytest.fixture
@@ -378,23 +378,16 @@ async def simulation_infrastructure(
 
 # Markers for categorizing simulation tests
 
+
 def pytest_configure(config):
     """Register custom pytest markers."""
-    config.addinivalue_line(
-        "markers",
-        "simulation: mark test as a simulation test (fast, no external dependencies)"
-    )
-    config.addinivalue_line(
-        "markers",
-        "slow_simulation: mark test as a slow simulation (more realistic timing)"
-    )
-    config.addinivalue_line(
-        "markers",
-        "scenario: mark test as a predefined scenario test"
-    )
+    config.addinivalue_line("markers", "simulation: mark test as a simulation test (fast, no external dependencies)")
+    config.addinivalue_line("markers", "slow_simulation: mark test as a slow simulation (more realistic timing)")
+    config.addinivalue_line("markers", "scenario: mark test as a predefined scenario test")
 
 
 # Hooks for simulation test collection and execution
+
 
 def pytest_collection_modifyitems(config, items):
     """
@@ -423,7 +416,7 @@ def pytest_collection_modifyitems(config, items):
 @pytest.fixture
 async def simulation_seeder(
     simulation_bootstrap: SimulationApplicationBootstrap,
-):
+) -> AsyncGenerator:
     """
     Provide a simulation data seeder for E2E tests.
 
@@ -448,7 +441,7 @@ async def simulation_seeder(
 async def e2e_client(
     simulation_app: FastAPI,
     simulation_bootstrap: SimulationApplicationBootstrap,
-):
+) -> AsyncGenerator:
     """
     Provide an E2E test client for simulation testing.
 

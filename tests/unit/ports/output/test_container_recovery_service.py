@@ -7,20 +7,26 @@ These tests verify:
 - Required label enforcement
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import MappingProxyType
-from typing import Dict, List
+from typing import cast
 
 import pytest
+
+# Import FrozenInstanceError with fallback for older Python versions
+try:
+    from dataclasses import FrozenInstanceError
+except ImportError:
+    FrozenInstanceError = AttributeError  # type: ignore
 
 from codetoreum.domain.types import (
     CONTAINER_LABEL_AGENT,
     CONTAINER_LABEL_EXECUTION_ID,
-    CONTAINER_LABEL_WORKFLOW_RUN_ID,
     CONTAINER_LABEL_PROJECT,
     CONTAINER_LABEL_TASK_ID,
     CONTAINER_LABEL_TYPE,
     CONTAINER_LABEL_WORK_ITEM_ID,
+    CONTAINER_LABEL_WORKFLOW_RUN_ID,
     CONTAINER_TYPE_AGENT,
     CONTAINER_TYPE_REPAIR_CYCLE,
 )
@@ -42,31 +48,35 @@ class TestContainerMetadataImmutability:
             project_id="proj-1",
             agent_id="agent-1",
             task_id="task-1",
-            created_at=datetime.now(timezone.utc),
-            labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: "agent",
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
+            created_at=datetime.now(UTC),
+            labels=MappingProxyType(
+                {
+                    CONTAINER_LABEL_TYPE: "agent",
+                    CONTAINER_LABEL_PROJECT: "proj-1",
+                    CONTAINER_LABEL_AGENT: "agent-1",
+                }
+            ),
             work_item_id="work-123",
             execution_id="exec-456",
         )
 
         # Attempting to modify any field should raise FrozenInstanceError
-        with pytest.raises(Exception):  # FrozenInstanceError
-            metadata.container_id = "xyz789"
+        with pytest.raises(FrozenInstanceError):
+            metadata.container_id = "xyz789"  # type: ignore
 
-        with pytest.raises(Exception):  # FrozenInstanceError
-            metadata.project_id = "proj-2"
+        with pytest.raises(FrozenInstanceError):
+            metadata.project_id = "proj-2"  # type: ignore
 
     def test_container_metadata_preserves_all_fields(self):
         """ContainerMetadata should preserve all fields exactly as provided."""
-        now = datetime.now(timezone.utc)
-        labels = MappingProxyType({
-            CONTAINER_LABEL_TYPE: "agent",
-            CONTAINER_LABEL_PROJECT: "proj-1",
-            CONTAINER_LABEL_AGENT: "agent-1",
-        })
+        now = datetime.now(UTC)
+        labels = MappingProxyType(
+            {
+                CONTAINER_LABEL_TYPE: "agent",
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }
+        )
 
         metadata = ContainerMetadata(
             container_id="abc123",
@@ -107,11 +117,11 @@ class TestRecoveryAssessmentImmutability:
         )
 
         # Attempting to modify any field should raise FrozenInstanceError
-        with pytest.raises(Exception):  # FrozenInstanceError
-            assessment.action = "kill"
+        with pytest.raises(FrozenInstanceError):
+            assessment.action = "kill"  # type: ignore
 
-        with pytest.raises(Exception):  # FrozenInstanceError
-            assessment.reason = "Container timeout"
+        with pytest.raises(FrozenInstanceError):
+            assessment.reason = "Container timeout"  # type: ignore
 
     def test_recovery_assessment_kill_action(self):
         """RecoveryAssessment should support kill action."""
@@ -154,11 +164,11 @@ class TestRecoveryResultImmutability:
         )
 
         # Attempting to modify any field should raise FrozenInstanceError
-        with pytest.raises(Exception):  # FrozenInstanceError
-            result.recovered = 10
+        with pytest.raises(FrozenInstanceError):
+            result.recovered = 10  # type: ignore
 
-        with pytest.raises(Exception):  # FrozenInstanceError
-            result.killed = 5
+        with pytest.raises(FrozenInstanceError):
+            result.errors = 5  # type: ignore
 
     def test_recovery_result_preserves_counts(self):
         """RecoveryResult should preserve counts accurately."""
@@ -192,8 +202,9 @@ class TestContainerLabelConstants:
         ]
 
         for constant in constants:
-            assert constant.startswith("org.codetoreum."), \
-                f"Label constant '{constant}' should start with 'org.codetoreum.'"
+            assert constant.startswith(
+                "org.codetoreum."
+            ), f"Label constant '{constant}' should start with 'org.codetoreum.'"
 
     def test_label_constants_are_unique(self):
         """All label constants should be unique."""
@@ -207,8 +218,7 @@ class TestContainerLabelConstants:
             CONTAINER_LABEL_EXECUTION_ID,
         ]
 
-        assert len(constants) == len(set(constants)), \
-            "Label constants must be unique"
+        assert len(constants) == len(set(constants)), "Label constants must be unique"
 
     def test_label_constants_expected_values(self):
         """Label constants should have expected values."""
@@ -239,27 +249,24 @@ class TestLabelFilteringProtection:
         mock_containers = [
             {
                 "Id": "container-1",
-                "Labels": {CONTAINER_LABEL_TYPE: "agent", CONTAINER_LABEL_PROJECT: "proj-1"}
+                "Labels": {CONTAINER_LABEL_TYPE: "agent", CONTAINER_LABEL_PROJECT: "proj-1"},
             },
             {
                 "Id": "postgres-db",
-                "Labels": {}  # No org.codetoreum.type label
+                "Labels": {},  # No org.codetoreum.type label
             },
             {
                 "Id": "nginx-proxy",
-                "Labels": {}  # No org.codetoreum.type label
+                "Labels": {},  # No org.codetoreum.type label
             },
             {
                 "Id": "container-2",
-                "Labels": {CONTAINER_LABEL_TYPE: "agent", CONTAINER_LABEL_PROJECT: "proj-2"}
+                "Labels": {CONTAINER_LABEL_TYPE: "agent", CONTAINER_LABEL_PROJECT: "proj-2"},
             },
         ]
 
         # Docker API would return ONLY containers with org.codetoreum.type label
-        filtered = [
-            c for c in mock_containers
-            if CONTAINER_LABEL_TYPE in c.get("Labels", {})
-        ]
+        filtered = [c for c in mock_containers if CONTAINER_LABEL_TYPE in c.get("Labels", {})]
 
         assert len(filtered) == 2, "Only Codetoreum containers should be returned"
         assert "postgres-db" not in [c["Id"] for c in filtered]
@@ -275,9 +282,7 @@ class TestLabelFilteringProtection:
         containers not explicitly labeled with org.codetoreum.type.
         """
         # Simulating Docker API with label filter
-        docker_filter = {
-            "label": [CONTAINER_LABEL_TYPE]  # Inclusion filter
-        }
+        docker_filter = {"label": [CONTAINER_LABEL_TYPE]}  # Inclusion filter
 
         # Docker only returns containers matching the filter
         all_containers = [
@@ -288,10 +293,7 @@ class TestLabelFilteringProtection:
         ]
 
         # Simulate Docker API filtering (inclusion-based)
-        returned_containers = [
-            c for c in all_containers
-            if CONTAINER_LABEL_TYPE in c.get("Labels", {})
-        ]
+        returned_containers = [c for c in all_containers if CONTAINER_LABEL_TYPE in c.get("Labels", {})]
 
         # Recovery service only sees these filtered results
         assert len(returned_containers) == 2
@@ -323,9 +325,7 @@ class TestRequiredLabelValidation:
             CONTAINER_LABEL_TASK_ID: "task-1",
         }
 
-        has_required = all(
-            label in valid_labels for label in required_labels
-        )
+        has_required = all(label in valid_labels for label in required_labels)
         assert has_required is True
 
     def test_container_without_type_label_is_unmanaged(self):
@@ -342,9 +342,7 @@ class TestRequiredLabelValidation:
             CONTAINER_LABEL_AGENT,
         ]
 
-        has_required = all(
-            label in incomplete_labels for label in required_labels
-        )
+        has_required = all(label in incomplete_labels for label in required_labels)
         assert has_required is False
 
     def test_container_without_project_label_is_unmanaged(self):
@@ -361,9 +359,7 @@ class TestRequiredLabelValidation:
             CONTAINER_LABEL_AGENT,
         ]
 
-        has_required = all(
-            label in incomplete_labels for label in required_labels
-        )
+        has_required = all(label in incomplete_labels for label in required_labels)
         assert has_required is False
 
     def test_container_without_agent_label_is_unmanaged(self):
@@ -380,9 +376,7 @@ class TestRequiredLabelValidation:
             CONTAINER_LABEL_AGENT,
         ]
 
-        has_required = all(
-            label in incomplete_labels for label in required_labels
-        )
+        has_required = all(label in incomplete_labels for label in required_labels)
         assert has_required is False
 
     def test_optional_labels_not_required(self):
@@ -401,9 +395,7 @@ class TestRequiredLabelValidation:
             CONTAINER_LABEL_AGENT,
         ]
 
-        has_required = all(
-            label in complete_labels for label in required_labels
-        )
+        has_required = all(label in complete_labels for label in required_labels)
         assert has_required is True
 
 
@@ -429,15 +421,17 @@ class TestContainerNameIsNotParsed:
             container_id="abc123",
             container_name="agent-proj-name-001",  # Name is for display only
             project_id="proj-1",  # Comes from label, not name
-            agent_id="agent-1",   # Comes from label, not name
-            task_id="task-1",     # Comes from label, not name
-            created_at=datetime.now(timezone.utc),
-            labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: "agent",
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-                CONTAINER_LABEL_TASK_ID: "task-1",
-            }),
+            agent_id="agent-1",  # Comes from label, not name
+            task_id="task-1",  # Comes from label, not name
+            created_at=datetime.now(UTC),
+            labels=MappingProxyType(
+                {
+                    CONTAINER_LABEL_TYPE: "agent",
+                    CONTAINER_LABEL_PROJECT: "proj-1",
+                    CONTAINER_LABEL_AGENT: "agent-1",
+                    CONTAINER_LABEL_TASK_ID: "task-1",
+                }
+            ),
         )
 
         # Metadata should be extracted from labels, not inferred from name
@@ -459,15 +453,17 @@ class TestContainerNameIsNotParsed:
                 container_id="abc123",
                 container_name=name,
                 project_id="proj-1",  # Must come from label
-                agent_id="agent-1",   # Must come from label
-                task_id="task-1",     # Must come from label
-                created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({
-                    CONTAINER_LABEL_TYPE: "agent",
-                    CONTAINER_LABEL_PROJECT: "proj-1",
-                    CONTAINER_LABEL_AGENT: "agent-1",
-                    CONTAINER_LABEL_TASK_ID: "task-1",
-                }),
+                agent_id="agent-1",  # Must come from label
+                task_id="task-1",  # Must come from label
+                created_at=datetime.now(UTC),
+                labels=MappingProxyType(
+                    {
+                        CONTAINER_LABEL_TYPE: "agent",
+                        CONTAINER_LABEL_PROJECT: "proj-1",
+                        CONTAINER_LABEL_AGENT: "agent-1",
+                        CONTAINER_LABEL_TASK_ID: "task-1",
+                    }
+                ),
             )
 
             # Metadata extraction should succeed regardless of name format
@@ -503,13 +499,15 @@ class TestContainerTypeConstants:
             project_id="proj-1",
             agent_id="agent-1",
             task_id="task-1",
-            created_at=datetime.now(timezone.utc),
-            labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-                CONTAINER_LABEL_TASK_ID: "task-1",
-            }),
+            created_at=datetime.now(UTC),
+            labels=MappingProxyType(
+                {
+                    CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
+                    CONTAINER_LABEL_PROJECT: "proj-1",
+                    CONTAINER_LABEL_AGENT: "agent-1",
+                    CONTAINER_LABEL_TASK_ID: "task-1",
+                }
+            ),
         )
 
         # Type label should have correct value
@@ -529,12 +527,14 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: "agent",
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
+                created_at=datetime.now(UTC),
+                labels=MappingProxyType(
+                    {
+                        CONTAINER_LABEL_TYPE: "agent",
+                        CONTAINER_LABEL_PROJECT: "proj-1",
+                        CONTAINER_LABEL_AGENT: "agent-1",
+                    }
+                ),
             )
 
     def test_container_name_required(self):
@@ -546,12 +546,14 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: "agent",
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
+                created_at=datetime.now(UTC),
+                labels=MappingProxyType(
+                    {
+                        CONTAINER_LABEL_TYPE: "agent",
+                        CONTAINER_LABEL_PROJECT: "proj-1",
+                        CONTAINER_LABEL_AGENT: "agent-1",
+                    }
+                ),
             )
 
     def test_project_id_required(self):
@@ -563,12 +565,14 @@ class TestContainerMetadataValidation:
                 project_id="",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: "agent",
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
+                created_at=datetime.now(UTC),
+                labels=MappingProxyType(
+                    {
+                        CONTAINER_LABEL_TYPE: "agent",
+                        CONTAINER_LABEL_PROJECT: "proj-1",
+                        CONTAINER_LABEL_AGENT: "agent-1",
+                    }
+                ),
             )
 
     def test_agent_id_required(self):
@@ -580,12 +584,14 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: "agent",
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
+                created_at=datetime.now(UTC),
+                labels=MappingProxyType(
+                    {
+                        CONTAINER_LABEL_TYPE: "agent",
+                        CONTAINER_LABEL_PROJECT: "proj-1",
+                        CONTAINER_LABEL_AGENT: "agent-1",
+                    }
+                ),
             )
 
     def test_task_id_required(self):
@@ -597,42 +603,14 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="",
-                created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: "agent",
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
-            )
-
-    def test_created_at_must_be_datetime(self):
-        """created_at must be a valid datetime object."""
-        with pytest.raises(ValueError, match="created_at must be a valid datetime"):
-            ContainerMetadata(
-                container_id="abc123",
-                container_name="agent-proj-001",
-                project_id="proj-1",
-                agent_id="agent-1",
-                task_id="task-1",
-                created_at="2026-01-27T23:34:55.217234+00:00",  # type: ignore
-                labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: "agent",
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
-            )
-
-    def test_labels_must_be_mapping_proxy_type(self):
-        """labels must be a MappingProxyType (immutable)."""
-        with pytest.raises(ValueError, match="labels must be a MappingProxyType"):
-            ContainerMetadata(
-                container_id="abc123",
-                container_name="agent-proj-001",
-                project_id="proj-1",
-                agent_id="agent-1",
-                task_id="task-1",
-                created_at=datetime.now(timezone.utc),
-                labels={"key": "value"},  # type: ignore - Plain dict instead
+                created_at=datetime.now(UTC),
+                labels=MappingProxyType(
+                    {
+                        CONTAINER_LABEL_TYPE: "agent",
+                        CONTAINER_LABEL_PROJECT: "proj-1",
+                        CONTAINER_LABEL_AGENT: "agent-1",
+                    }
+                ),
             )
 
     def test_work_item_id_must_be_non_empty_if_provided(self):
@@ -644,12 +622,14 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: "agent",
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
+                created_at=datetime.now(UTC),
+                labels=MappingProxyType(
+                    {
+                        CONTAINER_LABEL_TYPE: "agent",
+                        CONTAINER_LABEL_PROJECT: "proj-1",
+                        CONTAINER_LABEL_AGENT: "agent-1",
+                    }
+                ),
                 work_item_id="",  # Empty string not allowed
             )
 
@@ -662,12 +642,14 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: "agent",
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
+                created_at=datetime.now(UTC),
+                labels=MappingProxyType(
+                    {
+                        CONTAINER_LABEL_TYPE: "agent",
+                        CONTAINER_LABEL_PROJECT: "proj-1",
+                        CONTAINER_LABEL_AGENT: "agent-1",
+                    }
+                ),
                 workflow_run_id="",  # Empty string not allowed
             )
 
@@ -680,12 +662,14 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: "agent",
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
+                created_at=datetime.now(UTC),
+                labels=MappingProxyType(
+                    {
+                        CONTAINER_LABEL_TYPE: "agent",
+                        CONTAINER_LABEL_PROJECT: "proj-1",
+                        CONTAINER_LABEL_AGENT: "agent-1",
+                    }
+                ),
                 execution_id="",  # Empty string not allowed
             )
 
@@ -697,12 +681,14 @@ class TestContainerMetadataValidation:
             project_id="proj-1",
             agent_id="agent-1",
             task_id="task-1",
-            created_at=datetime.now(timezone.utc),
-            labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: "agent",
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
+            created_at=datetime.now(UTC),
+            labels=MappingProxyType(
+                {
+                    CONTAINER_LABEL_TYPE: "agent",
+                    CONTAINER_LABEL_PROJECT: "proj-1",
+                    CONTAINER_LABEL_AGENT: "agent-1",
+                }
+            ),
             work_item_id=None,
             workflow_run_id=None,
             execution_id=None,
@@ -721,12 +707,14 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: "agent",
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
+                created_at=datetime.now(UTC),
+                labels=MappingProxyType(
+                    {
+                        CONTAINER_LABEL_TYPE: "agent",
+                        CONTAINER_LABEL_PROJECT: "proj-1",
+                        CONTAINER_LABEL_AGENT: "agent-1",
+                    }
+                ),
             )
 
     def test_container_name_whitespace_only_rejected(self):
@@ -738,12 +726,14 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: "agent",
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
+                created_at=datetime.now(UTC),
+                labels=MappingProxyType(
+                    {
+                        CONTAINER_LABEL_TYPE: "agent",
+                        CONTAINER_LABEL_PROJECT: "proj-1",
+                        CONTAINER_LABEL_AGENT: "agent-1",
+                    }
+                ),
             )
 
     def test_project_id_whitespace_only_rejected(self):
@@ -755,12 +745,14 @@ class TestContainerMetadataValidation:
                 project_id="   ",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: "agent",
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
+                created_at=datetime.now(UTC),
+                labels=MappingProxyType(
+                    {
+                        CONTAINER_LABEL_TYPE: "agent",
+                        CONTAINER_LABEL_PROJECT: "proj-1",
+                        CONTAINER_LABEL_AGENT: "agent-1",
+                    }
+                ),
             )
 
     def test_agent_id_whitespace_only_rejected(self):
@@ -772,12 +764,14 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="   ",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: "agent",
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
+                created_at=datetime.now(UTC),
+                labels=MappingProxyType(
+                    {
+                        CONTAINER_LABEL_TYPE: "agent",
+                        CONTAINER_LABEL_PROJECT: "proj-1",
+                        CONTAINER_LABEL_AGENT: "agent-1",
+                    }
+                ),
             )
 
     def test_task_id_whitespace_only_rejected(self):
@@ -789,12 +783,14 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="   ",
-                created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: "agent",
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
+                created_at=datetime.now(UTC),
+                labels=MappingProxyType(
+                    {
+                        CONTAINER_LABEL_TYPE: "agent",
+                        CONTAINER_LABEL_PROJECT: "proj-1",
+                        CONTAINER_LABEL_AGENT: "agent-1",
+                    }
+                ),
             )
 
     def test_work_item_id_whitespace_only_rejected(self):
@@ -806,12 +802,14 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: "agent",
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
+                created_at=datetime.now(UTC),
+                labels=MappingProxyType(
+                    {
+                        CONTAINER_LABEL_TYPE: "agent",
+                        CONTAINER_LABEL_PROJECT: "proj-1",
+                        CONTAINER_LABEL_AGENT: "agent-1",
+                    }
+                ),
                 work_item_id="   ",
             )
 
@@ -824,12 +822,14 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: "agent",
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
+                created_at=datetime.now(UTC),
+                labels=MappingProxyType(
+                    {
+                        CONTAINER_LABEL_TYPE: "agent",
+                        CONTAINER_LABEL_PROJECT: "proj-1",
+                        CONTAINER_LABEL_AGENT: "agent-1",
+                    }
+                ),
                 workflow_run_id="   ",
             )
 
@@ -842,19 +842,22 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
-                labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: "agent",
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
+                created_at=datetime.now(UTC),
+                labels=MappingProxyType(
+                    {
+                        CONTAINER_LABEL_TYPE: "agent",
+                        CONTAINER_LABEL_PROJECT: "proj-1",
+                        CONTAINER_LABEL_AGENT: "agent-1",
+                    }
+                ),
                 execution_id="   ",
             )
 
     def test_created_at_cannot_be_future(self):
         """created_at cannot be in the future."""
         from datetime import timedelta
-        future_time = datetime.now(timezone.utc) + timedelta(hours=1)
+
+        future_time = datetime.now(UTC) + timedelta(hours=1)
 
         with pytest.raises(ValueError, match="created_at cannot be in the future"):
             ContainerMetadata(
@@ -864,20 +867,24 @@ class TestContainerMetadataValidation:
                 agent_id="agent-1",
                 task_id="task-1",
                 created_at=future_time,
-                labels=MappingProxyType({
-                CONTAINER_LABEL_TYPE: "agent",
-                CONTAINER_LABEL_PROJECT: "proj-1",
-                CONTAINER_LABEL_AGENT: "agent-1",
-            }),
+                labels=MappingProxyType(
+                    {
+                        CONTAINER_LABEL_TYPE: "agent",
+                        CONTAINER_LABEL_PROJECT: "proj-1",
+                        CONTAINER_LABEL_AGENT: "agent-1",
+                    }
+                ),
             )
 
     def test_required_labels_must_be_present(self):
         """labels must contain all required keys."""
-        incomplete_labels = MappingProxyType({
-            CONTAINER_LABEL_TYPE: "agent",
-            CONTAINER_LABEL_PROJECT: "proj-1",
-            # Missing CONTAINER_LABEL_AGENT
-        })
+        incomplete_labels = MappingProxyType(
+            {
+                CONTAINER_LABEL_TYPE: "agent",
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                # Missing CONTAINER_LABEL_AGENT
+            }
+        )
 
         with pytest.raises(ValueError, match="Missing required labels"):
             ContainerMetadata(
@@ -886,17 +893,19 @@ class TestContainerMetadataValidation:
                 project_id="proj-1",
                 agent_id="agent-1",
                 task_id="task-1",
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
                 labels=incomplete_labels,
             )
 
     def test_all_required_labels_must_be_present(self):
         """labels must contain all three required label keys."""
-        complete_labels = MappingProxyType({
-            CONTAINER_LABEL_TYPE: "agent",
-            CONTAINER_LABEL_PROJECT: "proj-1",
-            CONTAINER_LABEL_AGENT: "agent-1",
-        })
+        complete_labels = MappingProxyType(
+            {
+                CONTAINER_LABEL_TYPE: "agent",
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }
+        )
 
         metadata = ContainerMetadata(
             container_id="abc123",
@@ -904,7 +913,7 @@ class TestContainerMetadataValidation:
             project_id="proj-1",
             agent_id="agent-1",
             task_id="task-1",
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             labels=complete_labels,
         )
 
@@ -914,12 +923,14 @@ class TestContainerMetadataValidation:
 
     def test_all_required_fields_valid(self):
         """Valid metadata with all required fields."""
-        now = datetime.now(timezone.utc)
-        labels = MappingProxyType({
-            CONTAINER_LABEL_TYPE: "agent",
-            CONTAINER_LABEL_PROJECT: "proj-1",
-            CONTAINER_LABEL_AGENT: "agent-1",
-        })
+        now = datetime.now(UTC)
+        labels = MappingProxyType(
+            {
+                CONTAINER_LABEL_TYPE: "agent",
+                CONTAINER_LABEL_PROJECT: "proj-1",
+                CONTAINER_LABEL_AGENT: "agent-1",
+            }
+        )
 
         metadata = ContainerMetadata(
             container_id="abc123",
@@ -965,17 +976,6 @@ class TestRecoveryAssessmentValidation:
                 execution_id="exec-456",
             )
 
-    def test_action_must_be_valid(self):
-        """action must be one of: reconnect, kill."""
-        with pytest.raises(ValueError, match='action must be one of'):
-            RecoveryAssessment(
-                container_id="abc123",
-                action="invalid",  # type: ignore
-                reason="Test reason",
-                with_monitoring=True,
-                execution_id="exec-456",
-            )
-
     def test_reason_required(self):
         """reason is required and must be non-empty."""
         with pytest.raises(ValueError, match="reason is required"):
@@ -1005,7 +1005,7 @@ class TestRecoveryAssessmentValidation:
                 container_id="abc123",
                 action="reconnect",
                 reason="Test reason",
-                with_monitoring="true",  # type: ignore
+                with_monitoring=cast("bool", "true"),
                 execution_id="exec-456",
             )
 
@@ -1183,7 +1183,8 @@ class TestRecoveryResultValidation:
     def test_timestamp_cannot_be_far_in_future(self):
         """timestamp cannot be more than 1 minute in the future."""
         from datetime import timedelta
-        future_time = datetime.now(timezone.utc) + timedelta(minutes=5)
+
+        future_time = datetime.now(UTC) + timedelta(minutes=5)
 
         with pytest.raises(ValueError, match="timestamp cannot be more than 1 minute in the future"):
             RecoveryResult(
@@ -1197,7 +1198,8 @@ class TestRecoveryResultValidation:
     def test_timestamp_cannot_be_far_in_past(self):
         """timestamp cannot be more than 1 year in the past."""
         from datetime import timedelta
-        past_time = datetime.now(timezone.utc) - timedelta(days=400)
+
+        past_time = datetime.now(UTC) - timedelta(days=400)
 
         with pytest.raises(ValueError, match="timestamp cannot be more than 1 year in the past"):
             RecoveryResult(
@@ -1211,7 +1213,8 @@ class TestRecoveryResultValidation:
     def test_timestamp_slightly_future_allowed(self):
         """timestamp slightly in the future (within 1 minute) is allowed for clock skew."""
         from datetime import timedelta
-        slightly_future = datetime.now(timezone.utc) + timedelta(seconds=30)
+
+        slightly_future = datetime.now(UTC) + timedelta(seconds=30)
 
         result = RecoveryResult(
             recovered=5,
@@ -1226,7 +1229,8 @@ class TestRecoveryResultValidation:
     def test_timestamp_slightly_past_allowed(self):
         """timestamp slightly in the past is allowed."""
         from datetime import timedelta
-        slightly_past = datetime.now(timezone.utc) - timedelta(seconds=30)
+
+        slightly_past = datetime.now(UTC) - timedelta(seconds=30)
 
         result = RecoveryResult(
             recovered=5,

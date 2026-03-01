@@ -2,18 +2,13 @@
 
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
 from codetoreum.domain.agent_execution import AgentExecution, ExecutionStatus
-from codetoreum.domain.value_objects import (
-    AgentId,
-    ContainerConfig,
-    ExecutionContext,
-    ExecutionId,
-    ExecutionResult,
-    Requirement,
-    TimeRange,
-    TokenUsage,
-    WorkflowId,
-    WorkItemId,
+from codetoreum.domain.board_workflow_template import (
+    BoardReconciliationConfig,
+    BoardWorkflowTemplate,
+    ColumnTemplate,
+    ColumnType,
 )
+from codetoreum.domain.conversational_session import ConversationalSessionState
 from codetoreum.domain.events import (
     AgentAssigned,
     AgentCapabilityAdded,
@@ -68,25 +63,22 @@ from codetoreum.domain.events import (
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.pipeline_stage import PipelineStage, StageStatus, StageType
 from codetoreum.domain.project_context import ProjectContext
+from codetoreum.domain.repair_cycle_types import (
+    CycleResult,
+    RepairCycleResult,
+    RepairCycleStageConfig,
+    RepairTestFailure,
+    RepairTestResult,
+    RepairTestRunConfig,
+    RepairTestType,
+    RepairTestWarning,
+)
 from codetoreum.domain.review_cycle import (
     ReviewCycle,
     ReviewDecision,
     ReviewFeedback,
     ReviewIteration,
     ReviewStatus,
-)
-from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
-from codetoreum.domain.workflow import Workflow, WorkflowStatus
-from codetoreum.domain.workflow_template import StageTemplate, WorkflowTemplate
-from codetoreum.domain.board_workflow_template import (
-    BoardReconciliationConfig,
-    BoardWorkflowTemplate,
-    ColumnTemplate,
-    ColumnType,
-)
-from codetoreum.domain.workspace_context import (
-    WorkspaceContext,
-    WorkspaceType,
 )
 from codetoreum.domain.services import (
     AgentMatchingService,
@@ -96,24 +88,32 @@ from codetoreum.domain.services import (
     WorkflowValidationService,
 )
 from codetoreum.domain.user import (
+    ROLE_PERMISSIONS,
     APIKey,
     AuthContext,
     Permission,
-    ROLE_PERMISSIONS,
     User,
     UserRole,
 )
-from codetoreum.domain.repair_cycle_types import (
-    RepairTestType,
-    RepairTestFailure,
-    RepairTestWarning,
-    RepairTestResult,
-    RepairTestRunConfig,
-    CycleResult,
-    RepairCycleResult,
-    RepairCycleStageConfig,
+from codetoreum.domain.value_objects import (
+    AgentId,
+    ContainerConfig,
+    ExecutionContext,
+    ExecutionId,
+    ExecutionResult,
+    Requirement,
+    TimeRange,
+    TokenUsage,
+    WorkflowId,
+    WorkItemId,
 )
-from codetoreum.domain.conversational_session import ConversationalSessionState
+from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
+from codetoreum.domain.workflow import Workflow, WorkflowStatus
+from codetoreum.domain.workflow_template import StageTemplate, WorkflowTemplate
+from codetoreum.domain.workspace_context import (
+    WorkspaceContext,
+    WorkspaceType,
+)
 
 __all__ = [
     # Base classes

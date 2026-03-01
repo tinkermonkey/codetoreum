@@ -1,28 +1,22 @@
 """Unit tests for ContextBuilder."""
 
 import json
-from pathlib import Path
-from typing import Any, Dict, List, Optional
-from unittest.mock import AsyncMock, MagicMock
+from typing import Any
 
 import pytest
 
 from codetoreum.application.context_builder import (
     ContextBuilder,
     ContextFile,
-    WorkspaceContextResult,
 )
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
 from codetoreum.domain.project_context import ProjectContext
 from codetoreum.domain.value_objects import ExecutionContext
-from codetoreum.domain.workspace_context import WorkspaceContext, WorkspaceType
 from codetoreum.domain.work_item import (
     WorkItem,
     WorkItemPriority,
-    WorkItemStatus,
 )
-from codetoreum.ports.output import IStorage, ITicketSystem
-
+from codetoreum.domain.workspace_context import WorkspaceContext
 
 # Mock Adapters
 
@@ -31,15 +25,13 @@ class MockTicketSystem:
     """Mock ticket system for testing."""
 
     def __init__(self):
-        self.work_items: Dict[str, WorkItem] = {}
+        self.work_items: dict[str, WorkItem] = {}
 
-    async def get_work_item(self, work_item_id: str) -> Optional[WorkItem]:
+    async def get_work_item(self, work_item_id: str) -> WorkItem | None:
         """Get work item by ID."""
         return self.work_items.get(work_item_id)
 
-    async def update_work_item(
-        self, work_item_id: str, updates: Dict[str, Any]
-    ) -> WorkItem:
+    async def update_work_item(self, work_item_id: str, updates: dict[str, Any]) -> WorkItem | None:
         """Update work item."""
         work_item = self.work_items.get(work_item_id)
         if work_item:
@@ -49,13 +41,11 @@ class MockTicketSystem:
                     setattr(work_item, key, value)
         return work_item
 
-    async def create_comment(
-        self, work_item_id: str, body: str, reply_to: Optional[str] = None
-    ) -> str:
+    async def create_comment(self, work_item_id: str, body: str, reply_to: str | None = None) -> str:
         """Create comment on work item."""
         return f"comment-{work_item_id}"
 
-    async def list_work_items(self, filters: Optional[Dict[str, Any]] = None):
+    async def list_work_items(self, filters: dict[str, Any] | None = None) -> list[WorkItem]:
         """List work items."""
         return list(self.work_items.values())
 
@@ -64,20 +54,18 @@ class MockStorage:
     """Mock storage for testing."""
 
     def __init__(self):
-        self.artifacts: Dict[str, bytes] = {}
+        self.artifacts: dict[str, bytes] = {}
 
-    async def store_artifact(
-        self, artifact_id: str, data: bytes, metadata: Optional[Dict[str, Any]] = None
-    ) -> str:
+    async def store_artifact(self, artifact_id: str, data: bytes, metadata: dict[str, Any] | None = None) -> str:
         """Store artifact."""
         self.artifacts[artifact_id] = data
         return artifact_id
 
-    async def retrieve_artifact(self, artifact_id: str) -> Optional[bytes]:
+    async def retrieve_artifact(self, artifact_id: str) -> bytes | None:
         """Retrieve artifact."""
         return self.artifacts.get(artifact_id)
 
-    async def list_artifacts(self, prefix: Optional[str] = None) -> List[str]:
+    async def list_artifacts(self, prefix: str | None = None) -> list[str]:
         """List artifacts."""
         if prefix:
             return [k for k in self.artifacts.keys() if k.startswith(prefix)]
@@ -313,9 +301,7 @@ async def test_build_workspace_context_with_previous_output(
     assert "/context/previous_stage.txt" in file_paths
 
     # Verify content
-    previous_file = next(
-        f for f in result.context_files if f.path == "/context/previous_stage.txt"
-    )
+    previous_file = next(f for f in result.context_files if f.path == "/context/previous_stage.txt")
     assert previous_file.content == previous_output
 
 
@@ -338,9 +324,7 @@ async def test_write_context_files(context_builder, tmp_path):
     workspace_path = tmp_path / "workspace"
     workspace_path.mkdir()
 
-    success = await context_builder.write_context_files(
-        workspace_path, context_files
-    )
+    success = await context_builder.write_context_files(workspace_path, context_files)
 
     assert success
 
@@ -454,31 +438,23 @@ async def test_context_file_structure(
     )
 
     # Verify issue file content
-    issue_file = next(
-        f for f in result.context_files if f.path == "/context/issue.txt"
-    )
+    issue_file = next(f for f in result.context_files if f.path == "/context/issue.txt")
     assert sample_work_item.title in issue_file.content
     assert sample_work_item.description in issue_file.content
 
     # Verify project info can be parsed as JSON
-    project_file = next(
-        f for f in result.context_files if f.path == "/context/project_info.json"
-    )
+    project_file = next(f for f in result.context_files if f.path == "/context/project_info.json")
     project_data = json.loads(project_file.content)
     assert project_data["id"] == sample_project.id
     assert project_data["name"] == sample_project.name
 
     # Verify agent config can be parsed as JSON
-    agent_file = next(
-        f for f in result.context_files if f.path == "/context/agent_config.json"
-    )
+    agent_file = next(f for f in result.context_files if f.path == "/context/agent_config.json")
     agent_data = json.loads(agent_file.content)
     assert agent_data["id"] == sample_agent.id
     assert agent_data["name"] == sample_agent.name
 
     # Verify workspace info can be parsed as JSON
-    workspace_file = next(
-        f for f in result.context_files if f.path == "/context/workspace_info.json"
-    )
+    workspace_file = next(f for f in result.context_files if f.path == "/context/workspace_info.json")
     workspace_data = json.loads(workspace_file.content)
     assert workspace_data["workspace_type"] == sample_workspace.workspace_type.value

@@ -1,57 +1,49 @@
-# Pre-commit hooks configuration
-# See https://pre-commit.com for more information
-
-# Exclude virtual environment directories tracked in git
-exclude: ^venv_test/
+exclude: ^(venv_test/|venv_integration/|legacy_ux/node_modules/|legacy_ux/dist/|node_modules/)
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
+        exclude: ^(legacy_ux/dist/|frontend/playwright-report/|.*-report/)
       - id: check-yaml
       - id: check-added-large-files
         args: ['--maxkb=1000']
       - id: check-json
+        exclude: ^frontend/tsconfig.*\.json$
       - id: check-toml
       - id: check-merge-conflict
       - id: check-case-conflict
       - id: detect-private-key
+        exclude: ^tests/unit/infrastructure/test_logging\.py$
       - id: mixed-line-ending
-
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.7.4
-    hooks:
-      # Run the linter
-      - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
-      # Run the formatter
-      - id: ruff-format
-
-  - repo: https://github.com/psf/black
-    rev: 24.10.0
-    hooks:
-      - id: black
-        language_version: python3.11
-
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.13.0
-    hooks:
-      - id: mypy
-        additional_dependencies:
-          - types-PyYAML
-          - types-redis
-          - types-python-dateutil
-          - pydantic
-        args: [--ignore-missing-imports]
-        files: ^src/
 
   - repo: local
     hooks:
+      - id: ruff
+        name: ruff (linter with auto-fix)
+        language: system
+        entry: ruff check --fix
+        types: [python]
+
+      - id: black
+        name: black (code formatter)
+        language: system
+        entry: black
+        types: [python]
+
+      - id: mypy
+        name: mypy
+        language: system
+        entry: mypy
+        args: [src/, --ignore-missing-imports]
+        pass_filenames: false
+        always_run: true
+
       - id: pytest-check
         name: pytest-check
-        entry: poetry run pytest tests/unit
+        entry: pytest tests/unit
         language: system
         pass_filenames: false
         always_run: true

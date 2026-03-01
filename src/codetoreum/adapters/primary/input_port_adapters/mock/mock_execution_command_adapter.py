@@ -4,10 +4,10 @@ Mock Execution Command Adapter
 In-memory implementation of IExecutionCommandPort for development and testing.
 """
 
-from datetime import datetime, timezone
-from typing import Dict
 from threading import RLock
 
+from codetoreum.domain.agent_execution import AgentExecution
+from codetoreum.domain.exceptions import ExecutionNotFoundError, InvalidStateError
 from codetoreum.ports.input.execution_command import (
     ExecutionCommandResult,
     IExecutionCommandPort,
@@ -15,8 +15,6 @@ from codetoreum.ports.input.execution_command import (
     ResumeExecutionCommand,
     TerminateExecutionCommand,
 )
-from codetoreum.domain.agent_execution import AgentExecution, ExecutionStatus
-from codetoreum.domain.exceptions import ExecutionNotFoundError, InvalidStateError
 
 
 class MockExecutionCommandAdapter(IExecutionCommandPort):
@@ -25,7 +23,7 @@ class MockExecutionCommandAdapter(IExecutionCommandPort):
     """
 
     def __init__(self):
-        self._executions: Dict[str, AgentExecution] = {}
+        self._executions: dict[str, AgentExecution] = {}
         self._lock = RLock()
 
     def add_execution(self, execution: AgentExecution):
@@ -33,9 +31,7 @@ class MockExecutionCommandAdapter(IExecutionCommandPort):
         with self._lock:
             self._executions[execution.id] = execution
 
-    async def terminate_execution(
-        self, command: TerminateExecutionCommand
-    ) -> ExecutionCommandResult:
+    async def terminate_execution(self, command: TerminateExecutionCommand) -> ExecutionCommandResult:
         """Terminate a running execution."""
         with self._lock:
             if command.execution_id not in self._executions:
@@ -45,9 +41,8 @@ class MockExecutionCommandAdapter(IExecutionCommandPort):
 
             # Check if execution is already in a terminal state
             if execution.is_terminal():
-                raise InvalidStateError(
-                    f"Execution {command.execution_id} is already {execution.status.value}"
-                )
+                msg = f"Execution {command.execution_id} is already {execution.status.value}"
+                raise InvalidStateError(msg)
 
             # Use domain method to cancel execution
             execution.cancel(command.reason)
@@ -60,9 +55,7 @@ class MockExecutionCommandAdapter(IExecutionCommandPort):
                 errors=None,
             )
 
-    async def pause_execution(
-        self, command: PauseExecutionCommand
-    ) -> ExecutionCommandResult:
+    async def pause_execution(self, command: PauseExecutionCommand) -> ExecutionCommandResult:
         """Pause a running execution."""
         with self._lock:
             if command.execution_id not in self._executions:
@@ -84,9 +77,7 @@ class MockExecutionCommandAdapter(IExecutionCommandPort):
                 errors=None,
             )
 
-    async def resume_execution(
-        self, command: ResumeExecutionCommand
-    ) -> ExecutionCommandResult:
+    async def resume_execution(self, command: ResumeExecutionCommand) -> ExecutionCommandResult:
         """Resume a paused execution."""
         with self._lock:
             if command.execution_id not in self._executions:

@@ -6,13 +6,11 @@ and comment additions.
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Optional
 
 import pytest
 
 from codetoreum.ports.output.code_review_service import (
     CodeReview,
-    CodeReviewStatus,
     ICodeReviewService,
     ReviewComment,
 )
@@ -29,7 +27,6 @@ class TestCodeReviewServiceContract(ABC):
     @abstractmethod
     async def create_service(self) -> ICodeReviewService:
         """Create and return an ICodeReviewService instance for testing."""
-        pass
 
     # Query Operation Tests
 
@@ -91,7 +88,7 @@ class TestCodeReviewServiceContract(ABC):
         service = await self.create_service()
 
         # Setup monitoring to capture events
-        events: List = []
+        events: list = []
         service.on("review.status_changed", lambda e: events.append(("status_changed", e)))
         service.on("review.comment_added", lambda e: events.append(("comment_added", e)))
 
@@ -109,7 +106,7 @@ class TestCodeReviewServiceContract(ABC):
         service = await self.create_service()
 
         # Setup event capture
-        events: List = []
+        events: list = []
         service.on("review.status_changed", lambda e: events.append(("status_changed", e)))
 
         review = await service.get_review_for_work_item("item-123")
@@ -143,7 +140,7 @@ class TestCodeReviewServiceContract(ABC):
         """Should emit events when review status changes."""
         service = await self.create_service()
 
-        emitted_events: List = []
+        emitted_events: list = []
 
         def capture_event(event):
             emitted_events.append(event)

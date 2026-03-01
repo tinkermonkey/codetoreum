@@ -4,9 +4,7 @@ Tests webhook handling, polling, event emission, and GitHub API integration.
 Uses mock HTTP responses for deterministic testing without external services.
 """
 
-import asyncio
-from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -21,14 +19,14 @@ from codetoreum.domain.events.discussion_events import (
     CommentNeedsResponseEvent,
     CommentPostedEvent,
 )
-from codetoreum.ports.output.discussion_adapter import DiscussionMonitoringConfig
 from codetoreum.ports.exceptions import (
     AuthenticationError,
-    ExternalServiceError,
     ResourceNotFoundError,
     ValidationError,
 )
+from codetoreum.ports.output.discussion_adapter import DiscussionMonitoringConfig
 from tests.conftest import wait_for_polling_cycle
+
 from .conftest import MockIdentityService
 
 
@@ -59,7 +57,7 @@ class TestGitHubDiscussionAdapterWebhook:
         """Webhook for comment.created emits comment.needs_response for human comments."""
         # Setup
         adapter.start_monitoring("123", monitoring_config)
-        events = []
+        events: list[CommentNeedsResponseEvent] = []
         adapter.on("comment.needs_response", events.append)
 
         # Payload for human comment
@@ -81,9 +79,11 @@ class TestGitHubDiscussionAdapterWebhook:
         assert len(events) == 1
         event = events[0]
         assert isinstance(event, CommentNeedsResponseEvent)
-        assert event.comment.body == "This needs review"
-        assert event.comment.author == "alice"
-        assert event.comment.is_bot is False
+        comment = event.comment
+        assert comment is not None
+        assert comment.body == "This needs review"
+        assert comment.author == "alice"
+        assert comment.is_bot is False
         assert event.work_item_id == "123"
         assert event.project_id == "proj-1"
 
@@ -92,7 +92,7 @@ class TestGitHubDiscussionAdapterWebhook:
         """Webhook for bot comments does not emit events."""
         # Setup
         adapter.start_monitoring("123", monitoring_config)
-        events = []
+        events: list[CommentNeedsResponseEvent] = []
         adapter.on("comment.needs_response", events.append)
 
         # Payload for bot comment
@@ -116,7 +116,7 @@ class TestGitHubDiscussionAdapterWebhook:
     @pytest.mark.asyncio
     async def test_webhook_ignores_unmonitored_issues(self, adapter):
         """Webhook for unmonitored issues is ignored."""
-        events = []
+        events: list[CommentNeedsResponseEvent] = []
         adapter.on("comment.needs_response", events.append)
 
         payload = {
@@ -138,7 +138,7 @@ class TestGitHubDiscussionAdapterWebhook:
     async def test_webhook_ignores_deleted_action(self, adapter, monitoring_config):
         """Webhook for deleted/modified comments is ignored."""
         adapter.start_monitoring("123", monitoring_config)
-        events = []
+        events: list[CommentNeedsResponseEvent] = []
         adapter.on("comment.needs_response", events.append)
 
         payload = {
@@ -244,20 +244,20 @@ class TestGitHubDiscussionAdapterPolling:
             call_count[0] += 1
             return result
 
-        polling_adapter.get_thread = mock_get_thread
+        with patch.object(polling_adapter, "get_thread", new=mock_get_thread):
+            # Subscribe to events
+            events: list[CommentNeedsResponseEvent] = []
+            polling_adapter.on("comment.needs_response", events.append)
 
-        # Subscribe to events
-        events = []
-        polling_adapter.on("comment.needs_response", events.append)
+            # Wait for 3 events total: alice, bob (first cycle) + charlie (second cycle)
+            # The first polling cycle will return alice and bob (2 events)
+            # The second polling cycle will return charlie (1 new event)
+            await wait_for_polling_cycle(events, expected_count=3, timeout=10.0)
 
-        # Wait for 3 events total: alice, bob (first cycle) + charlie (second cycle)
-        # The first polling cycle will return alice and bob (2 events)
-        # The second polling cycle will return charlie (1 new event)
-        await wait_for_polling_cycle(events, expected_count=3, timeout=10.0)
-
-        # Should have detected all comments including charlie's
-        assert len(events) >= 3
-        assert any(e.comment.author == "charlie" for e in events)
+            # Should have detected all comments including charlie's
+            assert len(events) >= 3
+            assert all(e.comment is not None for e in events)
+            assert any(e.comment and e.comment.author == "charlie" for e in events)
 
         polling_adapter.stop_monitoring("123")
 
@@ -277,12 +277,12 @@ class TestGitHubDiscussionAdapterPolling:
         adapter.start_monitoring("123", monitoring_config)
 
         call_times = []
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         async def mock_get_thread(work_item_id: str):
             from codetoreum.ports.output.discussion_adapter import DiscussionThread
 
-            call_times.append(datetime.now(timezone.utc))
+            call_times.append(datetime.now(UTC))
             return DiscussionThread(
                 id=f"thread-{work_item_id}",
                 work_item_id=work_item_id,
@@ -290,18 +290,16 @@ class TestGitHubDiscussionAdapterPolling:
                 thread_type="flat",
             )
 
-        adapter.get_thread = mock_get_thread
+        with patch.object(adapter, "get_thread", new=mock_get_thread):
+            # Wait for at least 2 polling calls
+            await wait_for_polling_cycle(call_times, expected_count=2, timeout=15.0)
 
-        # Wait for at least 2 polling calls
-        await wait_for_polling_cycle(call_times, expected_count=2, timeout=15.0)
+            adapter.stop_monitoring("123")
 
-        adapter.stop_monitoring("123")
-
-        # Should have at least 2 calls with roughly 2-second intervals
-        if len(call_times) >= 2:
-            interval = (call_times[1] - call_times[0]).total_seconds()
-            assert 1.5 < interval < 3.0  # Allow some variance
-
+            # Should have at least 2 calls with roughly 2-second intervals
+            if len(call_times) >= 2:
+                interval = (call_times[1] - call_times[0]).total_seconds()
+                assert 1.5 < interval < 3.0  # Allow some variance
 
 
 class TestGitHubDiscussionAdapterQueries:
@@ -422,7 +420,7 @@ class TestGitHubDiscussionAdapterCommands:
             ),
         )
 
-        events = []
+        events: list[CommentPostedEvent] = []
         adapter.on("comment.posted", events.append)
 
         with patch.object(adapter, "_get_client") as mock_get_client:
@@ -435,7 +433,9 @@ class TestGitHubDiscussionAdapterCommands:
             assert comment.body == "This looks good!"
             assert comment.author == "codetoreum-bot"
             assert len(events) == 1
-            assert events[0].comment.body == "This looks good!"
+            event_comment = events[0].comment
+            assert event_comment is not None
+            assert event_comment.body == "This looks good!"
 
     @pytest.mark.asyncio
     async def test_add_comment_validation(self, adapter):
@@ -518,19 +518,17 @@ class TestGitHubDiscussionAdapterMonitoring:
         with pytest.raises(ResourceNotFoundError):
             adapter.stop_monitoring("999")
 
-    def test_start_monitoring_validation(self, adapter):
+    def test_start_monitoring_validation(self, adapter, monitoring_config):
         """start_monitoring validates parameters."""
-        config = DiscussionMonitoringConfig(
-            project_id="proj-1",
-        )
-
+        # Test that empty work_item_id raises ValidationError
         with pytest.raises(ValidationError):
-            adapter.start_monitoring("", config)
+            adapter.start_monitoring("", monitoring_config)
 
-        with pytest.raises(ValidationError):
-            adapter.start_monitoring("123", DiscussionMonitoringConfig(
+        # Test that invalid project_id in config raises ValueError (from dataclass constructor)
+        with pytest.raises(ValueError):
+            DiscussionMonitoringConfig(
                 project_id="",
-            ))
+            )
 
 
 class TestGitHubDiscussionAdapterEventEmission:

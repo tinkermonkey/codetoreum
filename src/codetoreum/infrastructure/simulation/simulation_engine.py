@@ -13,17 +13,28 @@ simulation-agnostic - they never receive or use a clock directly.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Optional, TYPE_CHECKING
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 
 if TYPE_CHECKING:
-    from codetoreum.adapters.testing.mock_review_cycle_adapter import MockReviewCycleAdapter
-    from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
-    from codetoreum.adapters.testing.mock_metrics_query_adapter import MockMetricsQueryAdapter
+    from codetoreum.adapters.testing.mock_metrics_query_adapter import (
+        MockMetricsQueryAdapter,
+    )
+    from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
+        MockRepairCycleAdapter,
+    )
+    from codetoreum.adapters.testing.mock_review_cycle_adapter import (
+        MockReviewCycleAdapter,
+    )
     from codetoreum.application.event_handlers import RepairCycleEventHandler
+    from codetoreum.ports.output.container import IContainer
+    from codetoreum.ports.output.llm_provider import ILLMProvider
+    from codetoreum.ports.output.repair_cycle_checkpoint_store import (
+        IRepairCycleCheckpointStore,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +86,7 @@ class SimulationEngine:
         logger.debug("SimulationEngine initialized")
 
     @staticmethod
-    def create(config: Optional[SimulationConfig] = None) -> "SimulationEngine":
+    def create(config: SimulationConfig | None = None) -> "SimulationEngine":
         """
         Create a new simulation engine with configured clock.
 
@@ -102,7 +113,7 @@ class SimulationEngine:
             extra={
                 "speed_multiplier": config.time.speed_multiplier,
                 "auto_advance": config.time.auto_advance,
-            }
+            },
         )
 
         return SimulationEngine(clock)
@@ -182,8 +193,8 @@ class SimulationEngine:
     def schedule_callback(
         self,
         callback,
-        at_time: Optional[datetime] = None,
-        after_delta: Optional[timedelta] = None,
+        at_time: datetime | None = None,
+        after_delta: timedelta | None = None,
     ) -> None:
         """
         Schedule a callback to be triggered at a specific time.
@@ -226,36 +237,67 @@ class SimulationEngine:
     # Adapter Creation - Injection of clock into time-aware components
     # =========================================================================
 
-    def create_repair_cycle_adapter(self) -> "MockRepairCycleAdapter":
+    def create_repair_cycle_adapter(
+        self,
+        checkpoint_store: "IRepairCycleCheckpointStore | None" = None,
+        container_adapter: "IContainer | None" = None,
+    ) -> "MockRepairCycleAdapter":
         """
         Create mock repair cycle adapter with injected clock.
+
+        Args:
+            checkpoint_store: Optional checkpoint store for recovery testing.
+                            Stores recovery snapshots for repair cycle resumption.
+            container_adapter: Optional container adapter for causal linking (FR-2/US-2.4).
+                             If provided, the adapter will use actual container test results
+                             instead of pre-configured sequences. This enables true causal
+                             linking where container test execution results (exit codes,
+                             stdout, stderr) directly influence repair decisions.
 
         Returns:
             MockRepairCycleAdapter instance with clock already configured
         """
-        from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
+        from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
+            MockRepairCycleAdapter,
+        )
 
-        adapter = MockRepairCycleAdapter(clock=self._clock)
+        adapter = MockRepairCycleAdapter(
+            clock=self._clock,
+            checkpoint_store=checkpoint_store,
+            container_adapter=container_adapter,
+        )
         logger.debug("Created MockRepairCycleAdapter via SimulationEngine")
         return adapter
 
-    def create_review_cycle_adapter(self) -> "MockReviewCycleAdapter":
+    def create_review_cycle_adapter(
+        self,
+        llm_adapter: "ILLMProvider | None" = None,
+    ) -> "MockReviewCycleAdapter":
         """
         Create mock review cycle adapter with injected clock.
+
+        Args:
+            llm_adapter: Optional LLM adapter for causal linking (FR-2/US-2.2).
+                        If provided, the adapter will analyze actual LLM output
+                        instead of using pre-configured sequences. This enables true
+                        causal linking where LLM-generated code quality (syntax errors,
+                        completeness, style issues) directly influences review decisions.
 
         Returns:
             MockReviewCycleAdapter instance with clock already configured
         """
-        from codetoreum.adapters.testing.mock_review_cycle_adapter import MockReviewCycleAdapter
+        from codetoreum.adapters.testing.mock_review_cycle_adapter import (
+            MockReviewCycleAdapter,
+        )
 
-        adapter = MockReviewCycleAdapter(clock=self._clock)
+        adapter = MockReviewCycleAdapter(clock=self._clock, llm_adapter=llm_adapter)
         logger.debug("Created MockReviewCycleAdapter via SimulationEngine")
         return adapter
 
     def create_metrics_query_adapter(
         self,
-        metrics_adapter: Optional[object] = None,
-        event_store: Optional[object] = None,
+        metrics_adapter: object | None = None,
+        event_store: object | None = None,
     ) -> "MockMetricsQueryAdapter":
         """
         Create mock metrics query adapter with injected clock.
@@ -267,7 +309,9 @@ class SimulationEngine:
         Returns:
             MockMetricsQueryAdapter instance with clock already configured
         """
-        from codetoreum.adapters.primary.input_port_adapters.mock import MockMetricsQueryAdapter
+        from codetoreum.adapters.primary.input_port_adapters.mock import (
+            MockMetricsQueryAdapter,
+        )
 
         adapter = MockMetricsQueryAdapter(
             metrics_adapter=metrics_adapter,
@@ -329,5 +373,5 @@ class SimulationEngine:
         Clears scheduled callbacks and resets time to current instant.
         """
         self._clock.clear_scheduled_callbacks()
-        self._clock.start_at(datetime.now(timezone.utc))
+        self._clock.start_at(datetime.now(UTC))
         logger.debug("SimulationEngine reset")

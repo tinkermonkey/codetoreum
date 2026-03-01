@@ -26,7 +26,6 @@ class TestMonitoredServiceContract(ABC):
     @abstractmethod
     async def create_service(self) -> IMonitoredService:
         """Create and return an IMonitoredService instance for testing."""
-        pass
 
     @pytest.mark.asyncio
     async def test_start_monitoring_changes_state_to_active(self):

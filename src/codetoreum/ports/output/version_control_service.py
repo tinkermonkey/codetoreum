@@ -12,12 +12,14 @@ services fit into the adapter architecture.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
 
 
-@dataclass
+@dataclass(frozen=True)
 class Repository:
     """Metadata about a repository.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation.
 
     Attributes:
         id: Unique identifier for the repository
@@ -30,6 +32,24 @@ class Repository:
     name: str
     url: str
     default_branch: str
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.id, str) or not self.id:
+            msg = "id must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.name, str) or not self.name:
+            msg = "name must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.url, str) or not self.url:
+            msg = "url must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.default_branch, str) or not self.default_branch:
+            msg = "default_branch must be a non-empty string"
+            raise ValueError(msg)
 
 
 class IVersionControlService(ABC):
@@ -76,9 +96,7 @@ class IVersionControlService(ABC):
     """
 
     @abstractmethod
-    async def clone_repository(
-        self, url: str, target_path: str, branch: Optional[str] = None
-    ) -> None:
+    async def clone_repository(self, url: str, target_path: str, branch: str | None = None) -> None:
         """Clone a repository to local path.
 
         Args:
@@ -90,7 +108,6 @@ class IVersionControlService(ABC):
             ValidationError: Invalid URL or target path
             RepositoryError: Clone operation failed (network, auth, etc.)
         """
-        pass
 
     @abstractmethod
     async def pull_latest(self, repo_path: str) -> None:
@@ -106,7 +123,6 @@ class IVersionControlService(ABC):
             ValidationError: Invalid repo path
             RepositoryError: Pull operation failed (conflicts, network, etc.)
         """
-        pass
 
     @abstractmethod
     async def checkout(self, repo_path: str, branch: str) -> None:
@@ -122,7 +138,6 @@ class IVersionControlService(ABC):
             ValidationError: Invalid repo path or branch name
             RepositoryError: Checkout failed (branch doesn't exist, etc.)
         """
-        pass
 
     @abstractmethod
     async def commit(self, repo_path: str, message: str) -> str:
@@ -141,7 +156,6 @@ class IVersionControlService(ABC):
             ValidationError: Invalid repo path or message
             RepositoryError: Commit failed (no changes staged, etc.)
         """
-        pass
 
     @abstractmethod
     async def push(self, repo_path: str, branch: str) -> None:
@@ -158,7 +172,6 @@ class IVersionControlService(ABC):
             ValidationError: Invalid repo path or branch name
             RepositoryError: Push failed (auth, rejected, etc.)
         """
-        pass
 
     @abstractmethod
     async def get_repository(self, identifier: str) -> Repository:
@@ -178,4 +191,3 @@ class IVersionControlService(ABC):
             ResourceNotFoundError: Repository not found
             ExternalServiceError: Service communication failure
         """
-        pass

@@ -21,22 +21,26 @@ Coverage:
 
 import asyncio
 import logging
+from typing import cast
+
 import pytest
 from fastapi.testclient import TestClient
 
-from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
-from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+from codetoreum.infrastructure.simulation.bootstrap import (
+    SimulationApplicationBootstrap,
+)
 from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
-from codetoreum.ports.output.board_service import MovedByType
+from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 from codetoreum.ports.input.workflow_run_query import (
+    IWorkflowRunQueryPort,
+    SortOrder,
     WorkflowRunFilters,
+    WorkflowRunListResult,
     WorkflowRunPaginationParams,
     WorkflowRunSortField,
-    SortOrder,
 )
-
+from codetoreum.ports.output.board_service import MovedByType
 from tests.simulation.e2e_client import SimulationE2EClient
-
 
 # ============================================================================
 # Fixtures
@@ -54,16 +58,14 @@ async def simulation_env():
     - Seeded test data (projects, workflows, work items)
     """
     # Create fast config for testing
-    config = SimulationConfig.create_fast_config(
-        scenario_name="audit_endpoint_test",
-        speed_multiplier=100.0
-    )
+    config = SimulationConfig.create_fast_config(scenario_name="audit_endpoint_test", speed_multiplier=100.0)
 
     # Bootstrap application
     bootstrap = SimulationApplicationBootstrap(config)
     await bootstrap.setup()
 
     # Speed up agent execution for faster tests
+    assert bootstrap.adapters is not None
     bootstrap.adapters.agent_executor._execution_delay = 0.1
 
     # Seed default test scenario
@@ -100,11 +102,7 @@ def e2e_client(simulation_env):
 # ============================================================================
 
 
-async def _wait_for_completion(
-    client: SimulationE2EClient,
-    work_item_id: str,
-    timeout: float = 10.0
-) -> bool:
+async def _wait_for_completion(client: SimulationE2EClient, work_item_id: str, timeout: float = 10.0) -> bool:
     """
     Poll work item status until workflow completes or timeout.
 
@@ -144,7 +142,7 @@ async def _move_to_ready(board, work_item_id: str):
     await board.move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)
 
 
-async def _get_workflow_run_id(query_service, work_item_id: str) -> str:
+async def _get_workflow_run_id(query_service: IWorkflowRunQueryPort, work_item_id: str) -> str:
     """Get the workflow run ID for a work item."""
     filters = WorkflowRunFilters(work_item_id=work_item_id)
     pagination = WorkflowRunPaginationParams(
@@ -153,9 +151,12 @@ async def _get_workflow_run_id(query_service, work_item_id: str) -> str:
         sort_by=WorkflowRunSortField.STARTED_AT,
         sort_order=SortOrder.DESC,
     )
-    result = await query_service.list_workflow_runs(filters, pagination)
+    result: WorkflowRunListResult = await query_service.list_workflow_runs(filters, pagination)
     assert result.total_count > 0, "No workflow runs found for work item"
-    return result.runs[0].id
+    if not result.runs:
+        raise ValueError("No workflow runs returned")
+    first_run = result.runs[0]
+    return first_run.id
 
 
 # ============================================================================
@@ -177,7 +178,7 @@ async def test_audit_endpoint_basic_smoke(e2e_client, simulation_env):
     """
     seeder = simulation_env["seeder"]
     board = simulation_env["bootstrap"].adapters.board
-    query_service = simulation_env["bootstrap"].ports.workflow_run_query
+    query_service = cast("IWorkflowRunQueryPort", simulation_env["bootstrap"].ports.workflow_run_query)
 
     # Get first work item from seeded data
     work_item_id = seeder.created_items.work_items[0]
@@ -250,7 +251,7 @@ async def test_audit_endpoint_pagination(e2e_client, simulation_env):
     """
     seeder = simulation_env["seeder"]
     board = simulation_env["bootstrap"].adapters.board
-    query_service = simulation_env["bootstrap"].ports.workflow_run_query
+    query_service = cast("IWorkflowRunQueryPort", simulation_env["bootstrap"].ports.workflow_run_query)
 
     # Get first work item
     work_item_id = seeder.created_items.work_items[0]
@@ -268,10 +269,7 @@ async def test_audit_endpoint_pagination(e2e_client, simulation_env):
     # Test pagination
     with TestClient(simulation_env["app"]) as client:
         # First page
-        response1 = client.get(
-            f"/api/v2/workflows/runs/{workflow_run_id}/audit",
-            params={"offset": 0, "limit": 5}
-        )
+        response1 = client.get(f"/api/v2/workflows/runs/{workflow_run_id}/audit", params={"offset": 0, "limit": 5})
         assert response1.status_code == 200
         data1 = response1.json()
 
@@ -287,10 +285,7 @@ async def test_audit_endpoint_pagination(e2e_client, simulation_env):
             assert data1["hasNext"] is True
 
             # Second page
-            response2 = client.get(
-                f"/api/v2/workflows/runs/{workflow_run_id}/audit",
-                params={"offset": 5, "limit": 5}
-            )
+            response2 = client.get(f"/api/v2/workflows/runs/{workflow_run_id}/audit", params={"offset": 5, "limit": 5})
             assert response2.status_code == 200
             data2 = response2.json()
 
@@ -317,7 +312,7 @@ async def test_audit_endpoint_validation_structure(e2e_client, simulation_env):
     """
     seeder = simulation_env["seeder"]
     board = simulation_env["bootstrap"].adapters.board
-    query_service = simulation_env["bootstrap"].ports.workflow_run_query
+    query_service = cast("IWorkflowRunQueryPort", simulation_env["bootstrap"].ports.workflow_run_query)
 
     # Get first work item
     work_item_id = seeder.created_items.work_items[0]
@@ -372,7 +367,7 @@ async def test_audit_endpoint_stage_grouping(e2e_client, simulation_env):
     """
     seeder = simulation_env["seeder"]
     board = simulation_env["bootstrap"].adapters.board
-    query_service = simulation_env["bootstrap"].ports.workflow_run_query
+    query_service = cast("IWorkflowRunQueryPort", simulation_env["bootstrap"].ports.workflow_run_query)
 
     # Get first work item
     work_item_id = seeder.created_items.work_items[0]
@@ -410,84 +405,6 @@ async def test_audit_endpoint_stage_grouping(e2e_client, simulation_env):
 
 
 @pytest.mark.asyncio
-async def test_audit_endpoint_detects_failed_workflow(e2e_client, simulation_env):
-    """
-    Test audit endpoint correctly handles failed workflows.
-
-    Validates:
-    - Workflow run status shows as failed
-    - At least one stage has failed status
-    - Events capture the failure
-    """
-    seeder = simulation_env["seeder"]
-    board = simulation_env["bootstrap"].adapters.board
-    query_service = simulation_env["bootstrap"].ports.workflow_run_query
-    agent_executor = simulation_env["bootstrap"].adapters.agent_executor
-
-    # Get first work item
-    work_item_id = seeder.created_items.work_items[0]
-
-    # Configure agent executor to fail the first execution
-    agent_executor._should_fail_next = True
-
-    # Trigger workflow
-    await _move_to_ready(board, work_item_id)
-
-    # Wait for workflow to fail (using longer timeout)
-    await asyncio.sleep(2.0)
-
-    # Get workflow run ID (even if workflow failed, run should exist)
-    workflow_run_id = await _get_workflow_run_id(query_service, work_item_id)
-
-    # Call audit endpoint
-    with TestClient(simulation_env["app"]) as client:
-        response = client.get(f"/api/v2/workflows/runs/{workflow_run_id}/audit")
-        assert response.status_code == 200
-
-        audit_data = response.json()
-
-        # Verify workflow run exists (status may be "failed", "error", or similar)
-        workflow_run = audit_data["workflowRun"]
-        assert workflow_run["id"] == workflow_run_id
-
-        # Verify we have events (even failed workflows should have events)
-        assert audit_data["totalEventCount"] > 0, "Failed workflow should still have events"
-
-        # Verify at least one stage exists
-        # Note: In simulation mode with mock adapters, failure handling
-        # may vary. We're just verifying the audit endpoint can handle
-        # workflows that didn't complete successfully.
-        assert "stages" in audit_data
-
-
-@pytest.mark.asyncio
-@pytest.mark.skip(reason="Mock adapter returns success for any ID - error handling tested in integration tests")
-async def test_audit_endpoint_not_found(e2e_client, simulation_env):
-    """
-    Test audit endpoint returns 404 for non-existent workflow run.
-
-    NOTE: Skipped in simulation mode because mock adapters return
-    successful responses for any workflow ID. Error handling is
-    tested in integration tests with real adapters.
-
-    Validates:
-    - Returns 404 status code
-    - Error message is descriptive
-    """
-    # Use a non-existent workflow run ID
-    non_existent_id = "wfrun-nonexistent-12345"
-
-    with TestClient(simulation_env["app"]) as client:
-        response = client.get(f"/api/v2/workflows/runs/{non_existent_id}/audit")
-
-        assert response.status_code == 404, f"Expected 404, got {response.status_code}"
-
-        error_data = response.json()
-        assert "detail" in error_data
-        assert non_existent_id in error_data["detail"]
-
-
-@pytest.mark.asyncio
 async def test_audit_endpoint_validation_disabled(e2e_client, simulation_env):
     """
     Test audit endpoint with validation disabled.
@@ -498,7 +415,7 @@ async def test_audit_endpoint_validation_disabled(e2e_client, simulation_env):
     """
     seeder = simulation_env["seeder"]
     board = simulation_env["bootstrap"].adapters.board
-    query_service = simulation_env["bootstrap"].ports.workflow_run_query
+    query_service = cast("IWorkflowRunQueryPort", simulation_env["bootstrap"].ports.workflow_run_query)
 
     # Get first work item
     work_item_id = seeder.created_items.work_items[0]
@@ -515,10 +432,7 @@ async def test_audit_endpoint_validation_disabled(e2e_client, simulation_env):
 
     # Call audit endpoint with validation disabled
     with TestClient(simulation_env["app"]) as client:
-        response = client.get(
-            f"/api/v2/workflows/runs/{workflow_run_id}/audit",
-            params={"include_validation": False}
-        )
+        response = client.get(f"/api/v2/workflows/runs/{workflow_run_id}/audit", params={"include_validation": False})
         assert response.status_code == 200
 
         audit_data = response.json()

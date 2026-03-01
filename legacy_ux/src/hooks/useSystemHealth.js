@@ -2,7 +2,7 @@
  * Selector hook for system health data
  */
 import { useMemo } from 'react'
-import { useSystemState } from '../contexts/SystemStateContext'
+import { useSystemState } from './useSystemState'
 import { getUnhealthyComponents } from '../utils/stateHelpers'
 
 export function useSystemHealth() {

@@ -15,19 +15,20 @@ import logging
 import signal
 import sys
 from pathlib import Path
-from typing import Optional
 
 import click
 import uvicorn
 import yaml
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
+from rich.table import Table
 
-from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
+from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.infrastructure.simulation.bootstrap import (
+    SimulationApplicationBootstrap,
+)
 from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
-from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -51,9 +52,8 @@ def validate_port(port: int) -> None:
         click.BadParameter: If port is invalid
     """
     if not (MIN_PORT <= port <= MAX_PORT):
-        raise click.BadParameter(
-            f"Port must be between {MIN_PORT} and {MAX_PORT}, got {port}"
-        )
+        msg = f"Port must be between {MIN_PORT} and {MAX_PORT}, got {port}"
+        raise click.BadParameter(msg)
 
 
 def validate_speed_multiplier(speed: float) -> None:
@@ -67,9 +67,8 @@ def validate_speed_multiplier(speed: float) -> None:
         click.BadParameter: If speed multiplier is invalid
     """
     if speed <= 0:
-        raise click.BadParameter(
-            f"Speed multiplier must be positive, got {speed}"
-        )
+        msg = f"Speed multiplier must be positive, got {speed}"
+        raise click.BadParameter(msg)
 
 
 def validate_yaml_file(file_path: Path) -> None:
@@ -87,12 +86,12 @@ def validate_yaml_file(file_path: Path) -> None:
     if file_size_mb > MAX_YAML_FILE_SIZE_MB:
         raise click.FileError(
             str(file_path),
-            f"File too large ({file_size_mb:.1f}MB). Maximum allowed: {MAX_YAML_FILE_SIZE_MB}MB"
+            f"File too large ({file_size_mb:.1f}MB). Maximum allowed: {MAX_YAML_FILE_SIZE_MB}MB",
         )
 
     # Validate YAML structure
     try:
-        with open(file_path, 'r') as f:
+        with open(file_path) as f:
             # Use safe_load with limits
             yaml_content = yaml.safe_load(f)
 
@@ -100,7 +99,8 @@ def validate_yaml_file(file_path: Path) -> None:
             def count_depth_and_nodes(obj, depth=0):
                 """Count depth and number of nodes in YAML structure."""
                 if depth > MAX_YAML_DEPTH:
-                    raise ValueError(f"YAML depth exceeds maximum of {MAX_YAML_DEPTH}")
+                    msg = f"YAML depth exceeds maximum of {MAX_YAML_DEPTH}"
+                    raise ValueError(msg)
 
                 node_count = 1
                 if isinstance(obj, dict):
@@ -111,7 +111,8 @@ def validate_yaml_file(file_path: Path) -> None:
                         node_count += count_depth_and_nodes(item, depth + 1)
 
                 if node_count > MAX_YAML_NODES:
-                    raise ValueError(f"YAML node count exceeds maximum of {MAX_YAML_NODES}")
+                    msg = f"YAML node count exceeds maximum of {MAX_YAML_NODES}"
+                    raise ValueError(msg)
 
                 return node_count
 
@@ -160,17 +161,18 @@ def get_scenario_file_path(scenario: str) -> Path:
     scenario_file = scenarios_dir / f"{scenario}.yaml"
 
     if not scenario_file.exists():
-        raise FileNotFoundError(
+        msg = (
             f"Scenario '{scenario}' not found at {scenario_file}. "
             f"Available scenarios: default, demo, stress_test, review_cycle, failure_recovery"
         )
+        raise FileNotFoundError(msg)
 
     return scenario_file
 
 
 async def bootstrap_application(
     scenario: str,
-    scenario_file: Optional[Path],
+    scenario_file: Path | None,
     speed_multiplier: float,
 ) -> SimulationApplicationBootstrap:
     """
@@ -207,9 +209,11 @@ async def bootstrap_application(
                 speed_multiplier=speed_multiplier,
             )
     except PermissionError as e:
-        raise click.FileError(str(scenario_file), f"Permission denied: {e}")
+        msg = f"Permission denied: {e}"
+        raise click.FileError(str(scenario_file), msg)
     except Exception as e:
-        raise RuntimeError(f"Failed to load configuration: {e}")
+        msg = f"Failed to load configuration: {e}"
+        raise RuntimeError(msg)
 
     console.print(f"[dim]Speed multiplier: {sim_config.time.speed_multiplier}x[/dim]")
 
@@ -220,7 +224,8 @@ async def bootstrap_application(
         bootstrap = SimulationApplicationBootstrap(sim_config)
         await bootstrap.setup()
     except Exception as e:
-        raise RuntimeError(f"Bootstrap failed: {e}")
+        msg = f"Bootstrap failed: {e}"
+        raise RuntimeError(msg)
 
     console.print("[green]✓ Application bootstrapped successfully[/green]")
 
@@ -230,7 +235,7 @@ async def bootstrap_application(
 async def seed_data(
     bootstrap: SimulationApplicationBootstrap,
     scenario: str,
-    scenario_file: Optional[Path],
+    scenario_file: Path | None,
     no_seed: bool,
 ) -> dict:
     """
@@ -275,9 +280,11 @@ async def seed_data(
             console.print(f"Seeding from built-in scenario: {scenario}")
             await seeder.seed_from_yaml(file_path)
     except PermissionError as e:
-        raise click.FileError(str(scenario_file or scenario), f"Permission denied: {e}")
+        msg = f"Permission denied: {e}"
+        raise click.FileError(str(scenario_file or scenario), msg)
     except Exception as e:
-        raise RuntimeError(f"Seeding failed: {e}")
+        msg = f"Seeding failed: {e}"
+        raise RuntimeError(msg)
 
     # Get seeded data counts
     created = seeder.get_created_items()
@@ -288,11 +295,13 @@ async def seed_data(
         "work_items": len(created.work_items),
     }
 
-    console.print(f"[green]✓ Data seeded successfully[/green]")
-    console.print(f"[dim]  Projects: {counts['projects']}, "
-                  f"Workflows: {counts['workflows']}, "
-                  f"Agents: {counts['agents']}, "
-                  f"Work Items: {counts['work_items']}[/dim]")
+    console.print("[green]✓ Data seeded successfully[/green]")
+    console.print(
+        f"[dim]  Projects: {counts['projects']}, "
+        f"Workflows: {counts['workflows']}, "
+        f"Agents: {counts['agents']}, "
+        f"Work Items: {counts['work_items']}[/dim]"
+    )
 
     return counts
 
@@ -301,7 +310,7 @@ def display_startup_info(
     host: str,
     port: int,
     scenario: str,
-    scenario_file: Optional[Path],
+    scenario_file: Path | None,
     speed_multiplier: float,
     debug: bool,
     seeded_data: dict,
@@ -395,20 +404,22 @@ async def run_server(
 
     except OSError as e:
         if "Address already in use" in str(e) or e.errno == 98:
-            raise OSError(f"Port {port} is already in use. Try a different port with --port")
-        elif "Permission denied" in str(e) or e.errno == 13:
-            raise OSError(f"Permission denied to bind to port {port}. Try a port > 1024 or run with elevated privileges")
-        else:
-            raise
+            msg = f"Port {port} is already in use. Try a different port with --port"
+            raise OSError(msg)
+        if "Permission denied" in str(e) or e.errno == 13:
+            msg = f"Permission denied to bind to port {port}. Try a port > 1024 or run with elevated privileges"
+            raise OSError(msg)
+        raise
     except Exception as e:
-        raise RuntimeError(f"Server failed to start: {e}")
+        msg = f"Server failed to start: {e}"
+        raise RuntimeError(msg)
 
 
 async def main_async(
     host: str,
     port: int,
     scenario: str,
-    scenario_file: Optional[Path],
+    scenario_file: Path | None,
     speed_multiplier: float,
     no_seed: bool,
     debug: bool,
@@ -462,15 +473,18 @@ async def main_async(
         console.print("\n[yellow]Interrupted by user[/yellow]")
     except click.FileError as e:
         console.print(f"\n[bold red]File error:[/bold red] {e}")
-        logger.error(f"File error: {e}", extra={"error_id": ErrorRegistry.ERR_FILE_READ_ERROR})
+        logger.error(f"File error: {e}", exc_info=True, extra={"error_id": ErrorRegistry.ERR_FILE_READ_ERROR})
         sys.exit(1)
     except OSError as e:
         console.print(f"\n[bold red]Server error:[/bold red] {e}")
-        logger.error(f"Server error: {e}", extra={"error_id": "ERR_SERVICE_UNAVAILABLE"})
+        logger.error(f"Server error: {e}", exc_info=True, extra={"error_id": "ERR_SERVICE_UNAVAILABLE"})
         sys.exit(1)
     except RuntimeError as e:
         console.print(f"\n[bold red]Runtime error:[/bold red] {e}")
-        logger.exception("Runtime error in simulation server", extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR})
+        logger.exception(
+            "Runtime error in simulation server",
+            extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+        )
         sys.exit(1)
     except Exception as e:
         console.print(f"\n[bold red]Unexpected error:[/bold red] {e}")
@@ -485,7 +499,10 @@ async def main_async(
                 console.print("[green]✓ Cleanup completed successfully[/green]")
             except Exception as e:
                 console.print(f"[red]Error during cleanup: {e}[/red]")
-                logger.error(f"Error during cleanup: {e}", extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR})
+                logger.error(
+                    f"Error during cleanup: {e}",
+                    extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
+                )
 
 
 @click.command()
@@ -534,7 +551,7 @@ def main(
     host: str,
     port: int,
     scenario: str,
-    scenario_file: Optional[Path],
+    scenario_file: Path | None,
     speed_multiplier: float,
     no_seed: bool,
     debug: bool,

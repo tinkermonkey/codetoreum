@@ -6,8 +6,9 @@ and validation for signal-specific endpoints.
 """
 
 import os
-import pytest
 from unittest import mock
+
+import pytest
 
 from codetoreum.infrastructure.observability.config import (
     ObservabilityConfig,
@@ -312,9 +313,7 @@ class TestObservabilityConfigValidation:
             log_level="info",
         )
 
-        with mock.patch(
-            "codetoreum.infrastructure.observability.config.logger"
-        ) as mock_logger:
+        with mock.patch("codetoreum.infrastructure.observability.config.logger") as mock_logger:
             config.validate()
             mock_logger.warning.assert_not_called()
 

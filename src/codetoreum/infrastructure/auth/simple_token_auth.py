@@ -19,12 +19,11 @@ dependency) will remain similar, making the migration straightforward.
 import logging
 import os
 import secrets
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 from jose import JWTError, jwt
 
-from codetoreum.config import DEFAULT_TOKEN_EXPIRY_DAYS, DEFAULT_COOKIE_MAX_AGE_SECONDS
+from codetoreum.config import DEFAULT_COOKIE_MAX_AGE_SECONDS, DEFAULT_TOKEN_EXPIRY_DAYS
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +43,8 @@ class SimpleTokenAuthManager:
 
     def __init__(
         self,
-        secret_key: Optional[str] = None,
-        token_expiry_days: Optional[int] = None,
+        secret_key: str | None = None,
+        token_expiry_days: int | None = None,
     ):
         """
         Initialize the authentication manager.
@@ -71,11 +70,12 @@ class SimpleTokenAuthManager:
 
         # In production, require explicit secret key
         if is_production and (not secret_key or not secret_key.strip()):
-            raise ValueError(
+            message = (
                 "CODETOREUM_SECRET_KEY environment variable is required in production. "
                 "All tokens will be invalidated on server restart without a persistent secret key. "
                 "Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(64))'"
             )
+            raise ValueError(message)
 
         # In development, warn about auto-generated secret
         if not secret_key:
@@ -89,12 +89,10 @@ class SimpleTokenAuthManager:
 
         # Get expiration from env var or use provided value or default
         if token_expiry_days is None:
-            token_expiry_days = int(
-                os.getenv("CODETOREUM_TOKEN_EXPIRATION_DAYS", str(DEFAULT_TOKEN_EXPIRY_DAYS))
-            )
+            token_expiry_days = int(os.getenv("CODETOREUM_TOKEN_EXPIRATION_DAYS", str(DEFAULT_TOKEN_EXPIRY_DAYS)))
 
         # Generate the server token
-        self.server_start_time = datetime.now(timezone.utc)
+        self.server_start_time = datetime.now(UTC)
         self.token_expiry_days = token_expiry_days
         self.server_token = self._generate_server_token()
 
@@ -135,10 +133,7 @@ class SimpleTokenAuthManager:
         return f"{base_url}/?token={self.server_token}"
 
     def create_cookie_response_headers(
-        self,
-        token: str,
-        secure: bool = True,
-        max_age: int = DEFAULT_COOKIE_MAX_AGE_SECONDS
+        self, token: str, secure: bool = True, max_age: int = DEFAULT_COOKIE_MAX_AGE_SECONDS
     ) -> dict:
         """
         Create cookie headers for httpOnly token storage.
@@ -151,26 +146,20 @@ class SimpleTokenAuthManager:
         Returns:
             Dictionary of cookie headers to set on response
         """
-        cookie_value = (
-            f"codetoreum_token={token}; "
-            f"HttpOnly; "
-            f"SameSite=Strict; "
-            f"Path=/; "
-            f"Max-Age={max_age}"
-        )
+        cookie_value = f"codetoreum_token={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age={max_age}"
         if secure:
             cookie_value += "; Secure"
 
         return {"Set-Cookie": cookie_value}
 
-    def validate_token(self, token: str) -> bool:
+    def validate_token(self, token: str | None) -> bool:
         """
         Validate a provided token.
 
         This uses constant-time comparison to prevent timing attacks.
 
         Args:
-            token: Token to validate
+            token: Token to validate (can be None)
 
         Returns:
             True if valid, False otherwise
@@ -247,12 +236,10 @@ class SimpleTokenAuthManager:
             Dictionary with token metadata
         """
         try:
-            payload = jwt.decode(
-                self.server_token, self.secret_key, algorithms=["HS256"]
-            )
+            payload = jwt.decode(self.server_token, self.secret_key, algorithms=["HS256"])
             return {
-                "issued_at": datetime.fromtimestamp(payload["iat"]).isoformat(),
-                "expires_at": datetime.fromtimestamp(payload["exp"]).isoformat(),
+                "issued_at": datetime.fromtimestamp(payload["iat"], tz=UTC).isoformat(),
+                "expires_at": datetime.fromtimestamp(payload["exp"], tz=UTC).isoformat(),
                 "subject": payload["sub"],
                 "is_valid": True,
             }

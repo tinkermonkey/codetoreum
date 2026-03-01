@@ -4,27 +4,25 @@ Workflow Run Mappers
 Maps between domain models and DTOs for workflow runs.
 """
 
-from typing import List
-
+from codetoreum.adapters.primary.audit_dtos import (
+    AuditStageInfo,
+    AuditValidationResult,
+    WorkflowRunAuditResponse,
+)
 from codetoreum.adapters.primary.workflow_run_dtos import (
-    WorkflowRunSummaryResponse,
-    WorkflowRunResponse,
-    WorkflowRunListResponse,
-    WorkflowRunStageResponse,
     WorkflowEventResponse,
     WorkflowEventsListResponse,
-)
-from codetoreum.adapters.primary.audit_dtos import (
-    WorkflowRunAuditResponse,
-    AuditValidationResult,
-    AuditStageInfo,
+    WorkflowRunListResponse,
+    WorkflowRunResponse,
+    WorkflowRunStageResponse,
+    WorkflowRunSummaryResponse,
 )
 from codetoreum.ports.input.workflow_run_query import (
+    WorkflowRunAuditResult,
     WorkflowRunInfo,
-    WorkflowRunSummary,
     WorkflowRunListResult,
     WorkflowRunStageInfo,
-    WorkflowRunAuditResult,
+    WorkflowRunSummary,
 )
 
 
@@ -70,7 +68,7 @@ class WorkflowRunMapper:
             workItemId=run.work_item_id,
             workflowId=run.workflow_id,
             projectId=run.project_id,
-            status=run.status.value if hasattr(run.status, 'value') else str(run.status),
+            status=run.status.value if hasattr(run.status, "value") else str(run.status),
             currentStageIndex=run.current_stage_index,
             currentStageName=run.current_stage_name,
             startedAt=run.started_at,
@@ -99,7 +97,7 @@ class WorkflowRunMapper:
             workItemId=run.work_item_id,
             workflowId=run.workflow_id,
             projectId=run.project_id,
-            status=run.status.value if hasattr(run.status, 'value') else str(run.status),
+            status=run.status.value if hasattr(run.status, "value") else str(run.status),
             stages=[WorkflowRunMapper.to_stage_response(stage) for stage in run.stages],
             metadata=run.metadata,
         )
@@ -146,7 +144,9 @@ class WorkflowRunMapper:
         )
 
     @staticmethod
-    def to_events_list_response(events: List[dict], total_count: int, offset: int, limit: int, has_next: bool) -> WorkflowEventsListResponse:
+    def to_events_list_response(
+        events: list[dict], total_count: int, offset: int, limit: int, has_next: bool
+    ) -> WorkflowEventsListResponse:
         """
         Convert list of events to events list response DTO.
 
@@ -188,48 +188,41 @@ class WorkflowRunMapper:
             WorkflowRunAuditResponse DTO
         """
         # Convert workflow run summary
-        workflow_run_summary = WorkflowRunMapper.to_summary_response(
-            audit_result.workflow_run
-        )
+        workflow_run_summary = WorkflowRunMapper.to_summary_response(audit_result.workflow_run)
 
         # Convert events
-        events = [
-            WorkflowRunMapper.to_event_response(event)
-            for event in audit_result.events
-        ]
+        events = [WorkflowRunMapper.to_event_response(event) for event in audit_result.events]
 
         # Convert stage info (including nested events)
         stages = []
         for stage_dict in audit_result.stages:
             # Validate required fields with meaningful error messages
             if "name" not in stage_dict:
-                raise KeyError(
-                    f"Stage dictionary missing required 'name' field. "
-                    f"Available keys: {list(stage_dict.keys())}"
-                )
+                msg = f"Stage dictionary missing required 'name' field. Available keys: {list(stage_dict.keys())}"
+                raise KeyError(msg)
             if "status" not in stage_dict:
-                raise KeyError(
+                msg = (
                     f"Stage dictionary missing required 'status' field for stage '{stage_dict.get('name', 'unknown')}'. "
                     f"Available keys: {list(stage_dict.keys())}"
                 )
+                raise KeyError(msg)
 
             # Map events within each stage
-            stage_events = [
-                WorkflowRunMapper.to_event_response(event)
-                for event in stage_dict.get("events", [])
-            ]
+            stage_events = [WorkflowRunMapper.to_event_response(event) for event in stage_dict.get("events", [])]
             # Create stage with mapped events
-            stages.append(AuditStageInfo(
-                name=stage_dict["name"],
-                status=stage_dict["status"],
-                startedAt=stage_dict.get("startedAt") or stage_dict.get("started_at"),
-                completedAt=stage_dict.get("completedAt") or stage_dict.get("completed_at"),
-                durationSeconds=stage_dict.get("durationSeconds") or stage_dict.get("duration_seconds"),
-                events=stage_events,
-                output=stage_dict.get("output"),
-                errorMessage=stage_dict.get("errorMessage") or stage_dict.get("error_message"),
-                metadata=stage_dict.get("metadata", {}),
-            ))
+            stages.append(
+                AuditStageInfo(
+                    name=stage_dict["name"],
+                    status=stage_dict["status"],
+                    startedAt=stage_dict.get("startedAt") or stage_dict.get("started_at"),
+                    completedAt=stage_dict.get("completedAt") or stage_dict.get("completed_at"),
+                    durationSeconds=stage_dict.get("durationSeconds") or stage_dict.get("duration_seconds"),
+                    events=stage_events,
+                    output=stage_dict.get("output"),
+                    errorMessage=stage_dict.get("errorMessage") or stage_dict.get("error_message"),
+                    metadata=stage_dict.get("metadata", {}),
+                )
+            )
 
         # Convert validation result (if present)
         validation = None
@@ -237,11 +230,12 @@ class WorkflowRunMapper:
             try:
                 validation = AuditValidationResult(**audit_result.validation)
             except (TypeError, ValueError) as e:
-                raise ValueError(
+                msg = (
                     f"Failed to construct AuditValidationResult from validation data. "
                     f"Error: {e}. "
                     f"Validation data keys: {list(audit_result.validation.keys()) if isinstance(audit_result.validation, dict) else type(audit_result.validation).__name__}"
-                ) from e
+                )
+                raise ValueError(msg) from e
 
         return WorkflowRunAuditResponse(
             workflowRun=workflow_run_summary,

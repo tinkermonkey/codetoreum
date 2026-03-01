@@ -10,17 +10,16 @@ Tests the complete startup flow including:
 """
 
 import pytest
-from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, Mock
 
-from codetoreum.application.container_recovery_service import ContainerRecoveryService
+from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.adapters.testing.mock_container_recovery_adapter import (
     MockContainerRecoveryAdapter,
 )
-from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
-from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
+from codetoreum.application.container_recovery_service import ContainerRecoveryService
+from codetoreum.infrastructure.simulation.bootstrap import (
+    SimulationApplicationBootstrap,
+)
 from codetoreum.ports.output.container_recovery import (
-    ContainerMetadata,
     RecoveryAssessment,
 )
 
@@ -232,27 +231,28 @@ class TestOrchestratorStartupWithContainerRecovery:
     @pytest.mark.asyncio
     async def test_fastapi_lifespan_includes_recovery(self):
         """Test that FastAPI lifespan includes container recovery execution."""
+        import logging
+
         from codetoreum.adapters.primary.fastapi_app import create_app
         from codetoreum.adapters.primary.input_port_adapters.mock import (
-            MockWorkItemCommandAdapter,
-            MockConfigServiceAdapter,
-            MockLoggerAdapter,
-            MockOrchestrationCommandAdapter,
-            MockExecutionCommandAdapter,
-            MockConfigQueryAdapter,
-            MockMetricsQueryAdapter,
-            MockWorkspaceQueryAdapter,
-            MockWorkflowCommandAdapter,
-            MockWorkflowQueryAdapter,
-            MockWorkflowRunQueryAdapter,
             MockAgentCommandAdapter,
             MockAgentQueryAdapter,
+            MockConfigCommandAdapter,
+            MockConfigQueryAdapter,
+            MockExecutionCommandAdapter,
             MockExecutionQueryAdapter,
-            MockWorkflowDefinitionCommandAdapter,
+            MockMetricsQueryAdapter,
+            MockOrchestrationCommandAdapter,
             MockTaskQueryAdapter,
+            MockWorkflowCommandAdapter,
+            MockWorkflowDefinitionCommandAdapter,
+            MockWorkflowQueryAdapter,
+            MockWorkflowRunQueryAdapter,
+            MockWorkItemCommandAdapter,
             MockWorkItemQueryAdapter,
+            MockWorkspaceQueryAdapter,
         )
-        from codetoreum.adapters.testing import InMemoryEventStore
+        from codetoreum.adapters.testing import InMemoryConfigStore, InMemoryEventStore
         from codetoreum.infrastructure.event_bus import EventBus
 
         # Setup minimal ports and adapters
@@ -273,7 +273,7 @@ class TestOrchestratorStartupWithContainerRecovery:
         workflow_run_query = MockWorkflowRunQueryAdapter()
         agent_cmd = MockAgentCommandAdapter()
         agent_query = MockAgentQueryAdapter()
-        config_cmd = Mock()
+        config_cmd = MockConfigCommandAdapter()
         task_query = MockTaskQueryAdapter()
         workflow_def_cmd = MockWorkflowDefinitionCommandAdapter()
 
@@ -305,8 +305,8 @@ class TestOrchestratorStartupWithContainerRecovery:
             execution_query_port=execution_query,
             event_store=InMemoryEventStore(),
             event_bus=EventBus(),
-            config_service=MockConfigServiceAdapter(Mock()),
-            logger=MockLoggerAdapter(),
+            config_service=InMemoryConfigStore(),
+            logger=logging.getLogger(__name__),
             disable_auth=True,
             container_recovery_service=recovery_service,
         )

@@ -35,11 +35,45 @@ class TestHealthEndpoints:
         assert data["version"] == "2.0.0"
 
     def test_readiness_check(self, client):
-        """Test readiness check endpoint"""
+        """Test readiness check endpoint performs actual health checks"""
         response = client.get("/api/v2/health/ready")
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "ready"
+        # Status should be either "ready" (all healthy) or "not-ready" (any unhealthy)
+        assert data["status"] in ["ready", "not-ready"]
+        assert data["service"] == "codetoreum-api"
+
+        # Should include dependency health information
+        assert "dependencies" in data
+        assert isinstance(data["dependencies"], list)
+
+        # Each dependency should have health info
+        for dep in data["dependencies"]:
+            assert "name" in dep
+            assert "status" in dep
+            assert dep["status"] in ["healthy", "degraded", "unhealthy"]
+            assert "response_time_ms" in dep or dep["response_time_ms"] is None
+
+        # Should include system metadata
+        assert "checked_at" in data
+        assert "version" in data
+        assert "uptime_seconds" in data
+
+    def test_readiness_check_detects_unhealthy_dependencies(self, client):
+        """Test readiness check marks service as not-ready when dependencies are unhealthy"""
+        response = client.get("/api/v2/health/ready")
+        assert response.status_code == 200
+        data = response.json()
+
+        # If status is "not-ready", at least one dependency should be unhealthy
+        if data["status"] == "not-ready":
+            unhealthy_deps = [dep for dep in data["dependencies"] if dep["status"] == "unhealthy"]
+            assert len(unhealthy_deps) > 0, "Service marked not-ready but no unhealthy dependencies found"
+        else:
+            # If ready, all dependencies should be healthy or degraded
+            assert data["status"] == "ready"
+            unhealthy_deps = [dep for dep in data["dependencies"] if dep["status"] == "unhealthy"]
+            assert len(unhealthy_deps) == 0, "Service marked ready but has unhealthy dependencies"
 
 
 class TestOpenAPIDoc:

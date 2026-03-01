@@ -7,13 +7,13 @@ Provides endpoints for creating, updating, and deleting agents.
 from fastapi import APIRouter, HTTPException, status
 
 from codetoreum.adapters.primary.agent_dtos import (
+    AgentCommandResult,
     AgentResponse,
     CreateAgentRequest,
     UpdateAgentRequest,
-    AgentCommandResult,
 )
 from codetoreum.adapters.primary.agent_mappers import AgentMapper
-from codetoreum.infrastructure.audit import get_audit_logger, AuditEventType
+from codetoreum.infrastructure.audit import AuditEventType, get_audit_logger
 from codetoreum.ports.input.agent_command import IAgentCommandPort
 from codetoreum.ports.input.agent_query import IAgentQueryPort
 
@@ -40,8 +40,14 @@ def register_crud_endpoints(
         response_description="Created agent",
         responses={
             201: {"description": "Agent created successfully"},
-            400: {"description": "Bad Request - Invalid parameters or agent already exists", "content": {"application/json": {"example": {"detail": "Agent with name 'test-agent' already exists"}}}},
-            401: {"description": "Unauthorized - Authentication required", "content": {"application/json": {"example": {"detail": "Not authenticated"}}}},
+            400: {
+                "description": "Bad Request - Invalid parameters or agent already exists",
+                "content": {"application/json": {"example": {"detail": "Agent with name 'test-agent' already exists"}}},
+            },
+            401: {
+                "description": "Unauthorized - Authentication required",
+                "content": {"application/json": {"example": {"detail": "Not authenticated"}}},
+            },
         },
     )
     async def create_agent(request: CreateAgentRequest) -> AgentResponse:
@@ -122,7 +128,7 @@ def register_crud_endpoints(
                 )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid request: {str(e)}",
+                detail=f"Invalid request: {e!s}",
             )
 
     @router.put(
@@ -214,11 +220,11 @@ def register_crud_endpoints(
             if "not found" in str(e).lower():
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Agent not found: {str(e)}",
+                    detail=f"Agent not found: {e!s}",
                 )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to update agent: {str(e)}",
+                detail=f"Failed to update agent: {e!s}",
             )
 
     @router.delete(
@@ -272,9 +278,9 @@ def register_crud_endpoints(
             if "not found" in str(e).lower():
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Agent not found: {str(e)}",
+                    detail=f"Agent not found: {e!s}",
                 )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to delete agent: {str(e)}",
+                detail=f"Failed to delete agent: {e!s}",
             )

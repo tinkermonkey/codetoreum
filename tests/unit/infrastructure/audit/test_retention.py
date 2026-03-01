@@ -4,14 +4,15 @@ Tests for Audit Retention Policy
 Tests the retention policy manager and cleanup functionality.
 """
 
-import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-from codetoreum.infrastructure.audit.stores import InMemoryAuditStore
+import pytest
+
 from codetoreum.infrastructure.audit.retention import (
     RetentionPolicy,
     RetentionPolicyManager,
 )
+from codetoreum.infrastructure.audit.stores import InMemoryAuditStore
 
 
 class TestRetentionPolicy:
@@ -63,7 +64,7 @@ class TestRetentionPolicyManager:
         manager = RetentionPolicyManager(store, policy)
 
         # Add old events
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         old_date = now - timedelta(days=100)
 
         for i in range(5):
@@ -114,7 +115,7 @@ class TestRetentionPolicyManager:
         manager = RetentionPolicyManager(store, policy)
 
         # Add old events
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         old_date = now - timedelta(days=100)
 
         for i in range(5):
@@ -167,7 +168,7 @@ class TestRetentionPolicyManager:
         manager = RetentionPolicyManager(store, policy)
 
         # Add only recent events
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for i in range(3):
             await store.store_event(
                 timestamp=now,
@@ -196,15 +197,11 @@ class TestRetentionPolicyManager:
     async def test_cleanup_with_different_retention_periods(self):
         """Test cleanup with different retention periods."""
         store = InMemoryAuditStore()
-        manager30 = RetentionPolicyManager(
-            store, RetentionPolicy(default_retention_days=30)
-        )
-        manager90 = RetentionPolicyManager(
-            store, RetentionPolicy(default_retention_days=90)
-        )
+        manager30 = RetentionPolicyManager(store, RetentionPolicy(default_retention_days=30))
+        manager90 = RetentionPolicyManager(store, RetentionPolicy(default_retention_days=90))
 
         # Add events at different ages
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         date_40_days_ago = now - timedelta(days=40)
         date_100_days_ago = now - timedelta(days=100)
 

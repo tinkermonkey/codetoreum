@@ -7,37 +7,35 @@ Provides:
 - Dependency injection support
 """
 
-from codetoreum.infrastructure.adapters.registry_base import (
-    AdapterRegistry,
-    AdapterMetadata
-)
-from codetoreum.infrastructure.adapters.registries import (
-    TicketSystemRegistry,
-    LLMProviderRegistry,
-    ContainerRegistry,
-    RepositoryRegistry,
-    EventStoreRegistry,
-    StorageRegistry
-)
 from codetoreum.infrastructure.adapters.factory import (
     AdapterFactory,
-    AdapterFactoryConfig
+    AdapterFactoryConfig,
+)
+from codetoreum.infrastructure.adapters.registries import (
+    ContainerRegistry,
+    EventStoreRegistry,
+    LLMProviderRegistry,
+    RepositoryRegistry,
+    StorageRegistry,
+    TicketSystemRegistry,
+)
+from codetoreum.infrastructure.adapters.registry_base import (
+    AdapterMetadata,
+    AdapterRegistry,
 )
 
 __all__ = [
     # Base registry
-    'AdapterRegistry',
-    'AdapterMetadata',
-
+    "AdapterRegistry",
+    "AdapterMetadata",
     # Specific registries
-    'TicketSystemRegistry',
-    'LLMProviderRegistry',
-    'ContainerRegistry',
-    'RepositoryRegistry',
-    'EventStoreRegistry',
-    'StorageRegistry',
-
+    "TicketSystemRegistry",
+    "LLMProviderRegistry",
+    "ContainerRegistry",
+    "RepositoryRegistry",
+    "EventStoreRegistry",
+    "StorageRegistry",
     # Factory
-    'AdapterFactory',
-    'AdapterFactoryConfig',
+    "AdapterFactory",
+    "AdapterFactoryConfig",
 ]

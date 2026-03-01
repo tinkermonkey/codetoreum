@@ -10,26 +10,19 @@ Tests verify:
 """
 
 import asyncio
-from datetime import datetime
-from typing import Any, Dict, List, Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
 from codetoreum.adapters.secondary.github_code_review_adapter import (
     GitHubCodeReviewAdapter,
 )
-from codetoreum.adapters.secondary.github_ticket_adapter import GitHubTicketAdapter
 from codetoreum.domain.events.review_events import (
     ReviewCommentAddedEvent,
     ReviewStatusChangedEvent,
 )
-from codetoreum.infrastructure.http.github_graphql_client import (
-    GitHubGraphQLClient,
-    GitHubGraphQLConfig,
-)
 from codetoreum.ports.exceptions import (
-    ExternalServiceError,
     ResourceNotFoundError,
     ValidationError,
 )
@@ -40,24 +33,28 @@ class MockGraphQLClient:
     """Mock GraphQL client for testing without real GitHub API calls."""
 
     def __init__(self):
-        self.queries: List[tuple] = []
-        self.responses: Dict[str, Any] = {}
-        self.call_count: Dict[str, int] = {}  # Track call counts per query type
+        self.queries: list[tuple] = []
+        self.responses: dict[str, Any] = {}
+        self.call_count: dict[str, int] = {}  # Track call counts per query type
 
-    async def execute(self, query: str, variables: Optional[Dict] = None) -> Dict[str, Any]:
+    async def execute(self, query: str, variables: dict | None = None) -> dict[str, Any]:
         """Record query and return mock response."""
         self.queries.append((query, variables))
 
         # Return mock responses based on query type
         # Check for GetPullRequestComments FIRST since it contains "GetPullRequest"
         if "GetPullRequestComments" in query:
-            return self.responses.get("GetPullRequestComments", {
-                "node": {
-                    "id": "PR123",
-                    "reviews": {"nodes": []},
-                    "comments": {"nodes": []},
-                }
-            })
+            result: dict[str, Any] = self.responses.get(
+                "GetPullRequestComments",
+                {
+                    "node": {
+                        "id": "PR123",
+                        "reviews": {"nodes": []},
+                        "comments": {"nodes": []},
+                    }
+                },
+            )
+            return result
 
         if "GetPullRequest" in query and "prId" in str(variables):
             # Track call count to simulate status changes after mutations
@@ -68,56 +65,62 @@ class MockGraphQLClient:
             if f"{query_type}_responses" in self.responses:
                 responses_list = self.responses[f"{query_type}_responses"]
                 call_idx = min(self.call_count[query_type] - 1, len(responses_list) - 1)
-                return responses_list[call_idx]
+                result_seq: dict[str, Any] = responses_list[call_idx]
+                return result_seq
 
             # Otherwise use default or single response
-            return self.responses.get("GetPullRequest", {
-                "node": {
-                    "id": "PR123",
-                    "state": "OPEN",
-                    "isDraft": False,
-                    "reviews": {
-                        "nodes": [
-                            {
-                                "id": "REVIEW1",
-                                "state": "APPROVED",
-                                "author": {"login": "reviewer1"},
-                                "submittedAt": "2024-01-01T10:00:00Z",
-                            }
-                        ]
-                    },
-                }
-            })
+            result_default: dict[str, Any] = self.responses.get(
+                "GetPullRequest",
+                {
+                    "node": {
+                        "id": "PR123",
+                        "state": "OPEN",
+                        "isDraft": False,
+                        "reviews": {
+                            "nodes": [
+                                {
+                                    "id": "REVIEW1",
+                                    "state": "APPROVED",
+                                    "author": {"login": "reviewer1"},
+                                    "submittedAt": "2024-01-01T10:00:00Z",
+                                }
+                            ]
+                        },
+                    }
+                },
+            )
+            return result_default
 
         if "SearchPullRequests" in query:
-            return self.responses.get("SearchPullRequests", {
-                "search": {"nodes": []}
-            })
+            result_search: dict[str, Any] = self.responses.get("SearchPullRequests", {"search": {"nodes": []}})
+            return result_search
 
         if "GetOpenPRs" in query:
-            return self.responses.get("GetOpenPRs", {
-                "repository": {
-                    "pullRequests": {"nodes": []}
-                }
-            })
+            result_prs: dict[str, Any] = self.responses.get(
+                "GetOpenPRs", {"repository": {"pullRequests": {"nodes": []}}}
+            )
+            return result_prs
 
         if "SubmitReview" in query:
-            return self.responses.get("SubmitReview", {
-                "submitPullRequestReview": {
-                    "pullRequestReview": {
-                        "id": "REVIEW_NEW",
-                        "state": "CHANGES_REQUESTED",
-                        "author": {"login": "bot"},
-                        "submittedAt": "2024-01-01T11:00:00Z",
+            result_review: dict[str, Any] = self.responses.get(
+                "SubmitReview",
+                {
+                    "submitPullRequestReview": {
+                        "pullRequestReview": {
+                            "id": "REVIEW_NEW",
+                            "state": "CHANGES_REQUESTED",
+                            "author": {"login": "bot"},
+                            "submittedAt": "2024-01-01T11:00:00Z",
+                        }
                     }
-                }
-            })
+                },
+            )
+            return result_review
 
         return {}
 
     async def close(self) -> None:
         """Close client."""
-        pass
 
 
 class MockTicketAdapter:
@@ -330,6 +333,7 @@ class TestEventEmitter:
 
     def test_emit_logs_handler_context(self, adapter, caplog):
         """Test emit logs structured context with event_type and handler name."""
+
         def named_handler(event):
             raise ValueError("Test error")
 
@@ -354,6 +358,7 @@ class TestEventEmitter:
 
     def test_emit_propagates_cancelled_error(self, adapter):
         """Test emit propagates asyncio.CancelledError instead of suppressing it."""
+
         def handler_with_cancel(event):
             raise asyncio.CancelledError("Task cancelled")
 
@@ -416,7 +421,8 @@ class TestEventEmitter:
 
         # Verify summary log exists
         summary_logs = [
-            record for record in error_logs
+            record
+            for record in error_logs
             if "completed with" in record.message and "handler failure(s)" in record.message
         ]
         assert len(summary_logs) == 1
@@ -473,7 +479,7 @@ class TestMonitoringLifecycle:
     @pytest.mark.asyncio
     async def test_start_monitoring_validates_project_id(self, adapter):
         """Test start_monitoring validates project_id."""
-        config = MonitoringConfig(project_id="")
+        config = MonitoringConfig(project_id="proj-1")
 
         with pytest.raises(ValidationError):
             await adapter.start_monitoring("", config)
@@ -691,7 +697,7 @@ class TestCommandOperations:
             }
         }
 
-        events = []
+        events: list[ReviewStatusChangedEvent] = []
         adapter.on("review.status_changed", events.append)
 
         await adapter.request_changes("PR123", "Please fix X")
@@ -742,7 +748,7 @@ class TestCommandOperations:
             }
         }
 
-        events = []
+        events: list[ReviewCommentAddedEvent] = []
         adapter.on("review.comment_added", events.append)
 
         await adapter.request_changes("PR123", "Please fix X")
@@ -750,6 +756,7 @@ class TestCommandOperations:
         # Should emit comment_added event
         assert len(events) >= 1
         assert events[0].type == "review.comment_added"
+        assert events[0].comment is not None
         assert events[0].comment.body == "Please fix X"
 
     @pytest.mark.asyncio
@@ -813,7 +820,7 @@ class TestCommandOperations:
             }
         }
 
-        events = []
+        events: list[ReviewStatusChangedEvent] = []
         adapter.on("review.status_changed", events.append)
 
         await adapter.approve("PR123")
@@ -851,7 +858,7 @@ class TestWebhookHandling:
             },
         }
 
-        events = []
+        events: list[ReviewStatusChangedEvent] = []
         adapter.on("review.status_changed", events.append)
 
         await adapter.handle_webhook(payload)
@@ -881,7 +888,7 @@ class TestWebhookHandling:
         # Set initial status so we can detect change
         adapter._last_known_status["456"] = "open"
 
-        events = []
+        events: list[ReviewStatusChangedEvent] = []
         adapter.on("review.status_changed", events.append)
 
         await adapter.handle_webhook(payload)
@@ -912,7 +919,7 @@ class TestWebhookHandling:
 
         adapter._last_known_status["456"] = "open"
 
-        events = []
+        events: list[ReviewStatusChangedEvent] = []
         adapter.on("review.status_changed", events.append)
 
         await adapter.handle_webhook(payload)

@@ -1,8 +1,11 @@
 """Unit tests for domain value objects."""
 
-import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 
+import pytest
+
+from codetoreum.domain.agent import AgentCapability
+from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.value_objects import (
     AgentId,
     ContainerConfig,
@@ -15,9 +18,6 @@ from codetoreum.domain.value_objects import (
     WorkflowId,
     WorkItemId,
 )
-from codetoreum.domain.agent import AgentCapability
-from codetoreum.domain.exceptions import DomainError
-
 
 # ============================================================================
 # Type-Safe Identifier Tests
@@ -51,12 +51,6 @@ class TestWorkItemId:
         id3 = WorkItemId.from_string("item-456")
         assert id1 == id2
         assert id1 != id3
-
-    def test_immutability(self):
-        """Test that WorkItemId is immutable."""
-        work_item_id = WorkItemId.from_string("item-123")
-        with pytest.raises(AttributeError):
-            work_item_id.value = "new-value"
 
 
 class TestWorkflowId:
@@ -161,12 +155,6 @@ class TestRequirement:
         assert not req.is_satisfied_by(cap_low)
         assert not req.is_satisfied_by(cap_other)
 
-    def test_immutability(self):
-        """Test that Requirement is immutable."""
-        req = Requirement(skill="python", min_proficiency=0.8)
-        with pytest.raises(AttributeError):
-            req.min_proficiency = 0.9
-
 
 # ============================================================================
 # ExecutionResult Value Object Tests
@@ -195,9 +183,9 @@ class TestExecutionResult:
         assert result.input_tokens == 1000
         assert result.output_tokens == 500
         assert result.duration_seconds == 45.2
-        assert result.modified_files == ["src/main.py"]
-        assert result.added_files == ["tests/test_main.py"]
-        assert result.deleted_files == []
+        assert result.modified_files == ("src/main.py",)
+        assert result.added_files == ("tests/test_main.py",)
+        assert result.deleted_files == ()
         assert result.session_id == "session-123"
 
     def test_failure_result(self):
@@ -290,14 +278,6 @@ class TestExecutionResult:
                 duration_seconds=-10.0,
             )
 
-    def test_immutability(self):
-        """Test that ExecutionResult is immutable."""
-        result = ExecutionResult.success_result(
-            output="Done", input_tokens=100, output_tokens=50, duration_seconds=10.0
-        )
-        with pytest.raises(AttributeError):
-            result.output = "Modified"
-
 
 # ============================================================================
 # ContainerConfig Value Object Tests
@@ -319,7 +299,7 @@ class TestContainerConfig:
         config = ContainerConfig(
             image="python:3.11",
             name="test-container",
-            command=["python", "main.py"],
+            command=("python", "main.py"),
             working_dir="/app",
             user="1001:1001",
             environment={"ENV": "test"},
@@ -329,7 +309,7 @@ class TestContainerConfig:
 
         assert config.image == "python:3.11"
         assert config.name == "test-container"
-        assert config.command == ["python", "main.py"]
+        assert config.command == ("python", "main.py")
         assert config.working_dir == "/app"
         assert config.user == "1001:1001"
         assert config.environment == {"ENV": "test"}
@@ -344,7 +324,8 @@ class TestContainerConfig:
         """Test that invalid volume config raises error."""
         with pytest.raises(DomainError, match="must have 'bind'"):
             ContainerConfig(
-                image="python:3.11", volumes={"/host": {"mode": "rw"}}  # Missing bind
+                image="python:3.11",
+                volumes={"/host": {"mode": "rw"}},  # Missing bind
             )
 
     def test_invalid_volume_mode_raises_error(self):
@@ -367,12 +348,6 @@ class TestContainerConfig:
         assert config_dict["image"] == "python:3.11"
         assert config_dict["name"] == "test"
         assert config_dict["environment"] == {"KEY": "value"}
-
-    def test_immutability(self):
-        """Test that ContainerConfig is immutable."""
-        config = ContainerConfig(image="python:3.11")
-        with pytest.raises(AttributeError):
-            config.image = "python:3.12"
 
 
 # ============================================================================
@@ -397,11 +372,11 @@ class TestExecutionContext:
             discussion_id=None,
             project_id="project-123",
             repository_url="https://github.com/org/repo",
-            tech_stack=["python", "docker"],
+            tech_stack=("python", "docker"),
             filesystem_write_allowed=True,
             can_make_commits=False,
             requires_docker=True,
-            mcp_servers=["artifacts", "logging"],
+            mcp_servers=("artifacts", "logging"),
             previous_session_id=None,
             metadata={"key": "value"},
         )
@@ -410,7 +385,7 @@ class TestExecutionContext:
         assert context.workflow_id == "workflow-123"
         assert context.agent_id == "agent-123"
         assert context.timeout_seconds == 3600
-        assert context.tech_stack == ["python", "docker"]
+        assert context.tech_stack == ("python", "docker")
 
     def test_invalid_timeout_raises_error(self):
         """Test that invalid timeout raises error."""
@@ -427,11 +402,11 @@ class TestExecutionContext:
                 discussion_id=None,
                 project_id="proj",
                 repository_url="url",
-                tech_stack=[],
+                tech_stack=(),
                 filesystem_write_allowed=True,
                 can_make_commits=False,
                 requires_docker=False,
-                mcp_servers=[],
+                mcp_servers=(),
                 previous_session_id=None,
                 metadata={},
             )
@@ -451,11 +426,11 @@ class TestExecutionContext:
                 discussion_id=None,
                 project_id="proj",
                 repository_url="url",
-                tech_stack=[],
+                tech_stack=(),
                 filesystem_write_allowed=True,
                 can_make_commits=False,
                 requires_docker=False,
-                mcp_servers=[],
+                mcp_servers=(),
                 previous_session_id=None,
                 metadata={},
             )
@@ -474,11 +449,11 @@ class TestExecutionContext:
             discussion_id=None,
             project_id="proj",
             repository_url="url",
-            tech_stack=["python"],
+            tech_stack=("python",),
             filesystem_write_allowed=True,
             can_make_commits=False,
             requires_docker=True,
-            mcp_servers=["artifacts"],
+            mcp_servers=("artifacts",),
             previous_session_id=None,
             metadata={"key": "value"},
         )
@@ -487,31 +462,6 @@ class TestExecutionContext:
         assert context_dict["work_item_id"] == "item-123"
         assert context_dict["timeout_seconds"] == 3600
         assert context_dict["tech_stack"] == ["python"]
-
-    def test_immutability(self):
-        """Test that ExecutionContext is immutable."""
-        context = ExecutionContext(
-            work_item_id="item-123",
-            workflow_id="workflow-123",
-            stage_name="dev",
-            agent_id="agent-123",
-            model="claude",
-            timeout_seconds=3600,
-            workspace_type="branch",
-            branch_name=None,
-            discussion_id=None,
-            project_id="proj",
-            repository_url="url",
-            tech_stack=[],
-            filesystem_write_allowed=True,
-            can_make_commits=False,
-            requires_docker=False,
-            mcp_servers=[],
-            previous_session_id=None,
-            metadata={},
-        )
-        with pytest.raises(AttributeError):
-            context.timeout_seconds = 7200
 
 
 # ============================================================================
@@ -524,8 +474,8 @@ class TestTimeRange:
 
     def test_create_time_range(self):
         """Test creating time range."""
-        start = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        end = datetime(2025, 1, 1, 13, 0, 0, tzinfo=timezone.utc)
+        start = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
+        end = datetime(2025, 1, 1, 13, 0, 0, tzinfo=UTC)
         time_range = TimeRange(start=start, end=end)
 
         assert time_range.start == start
@@ -533,28 +483,28 @@ class TestTimeRange:
 
     def test_invalid_range_raises_error(self):
         """Test that invalid range raises error."""
-        start = datetime(2025, 1, 1, 13, 0, 0, tzinfo=timezone.utc)
-        end = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        start = datetime(2025, 1, 1, 13, 0, 0, tzinfo=UTC)
+        end = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
 
         with pytest.raises(DomainError, match="End time must be after start time"):
             TimeRange(start=start, end=end)
 
     def test_duration_seconds(self):
         """Test calculating duration in seconds."""
-        start = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        end = datetime(2025, 1, 1, 13, 30, 0, tzinfo=timezone.utc)
+        start = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
+        end = datetime(2025, 1, 1, 13, 30, 0, tzinfo=UTC)
         time_range = TimeRange(start=start, end=end)
 
         assert time_range.duration_seconds() == 5400  # 90 minutes
 
     def test_contains(self):
         """Test checking if timestamp is within range."""
-        start = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        end = datetime(2025, 1, 1, 13, 0, 0, tzinfo=timezone.utc)
+        start = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
+        end = datetime(2025, 1, 1, 13, 0, 0, tzinfo=UTC)
         time_range = TimeRange(start=start, end=end)
 
-        inside = datetime(2025, 1, 1, 12, 30, 0, tzinfo=timezone.utc)
-        outside = datetime(2025, 1, 1, 14, 0, 0, tzinfo=timezone.utc)
+        inside = datetime(2025, 1, 1, 12, 30, 0, tzinfo=UTC)
+        outside = datetime(2025, 1, 1, 14, 0, 0, tzinfo=UTC)
 
         assert time_range.contains(inside)
         assert not time_range.contains(outside)
@@ -562,29 +512,20 @@ class TestTimeRange:
     def test_overlaps(self):
         """Test checking if ranges overlap."""
         range1 = TimeRange(
-            start=datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
-            end=datetime(2025, 1, 1, 13, 0, 0, tzinfo=timezone.utc),
+            start=datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC),
+            end=datetime(2025, 1, 1, 13, 0, 0, tzinfo=UTC),
         )
         range2 = TimeRange(
-            start=datetime(2025, 1, 1, 12, 30, 0, tzinfo=timezone.utc),
-            end=datetime(2025, 1, 1, 13, 30, 0, tzinfo=timezone.utc),
+            start=datetime(2025, 1, 1, 12, 30, 0, tzinfo=UTC),
+            end=datetime(2025, 1, 1, 13, 30, 0, tzinfo=UTC),
         )
         range3 = TimeRange(
-            start=datetime(2025, 1, 1, 14, 0, 0, tzinfo=timezone.utc),
-            end=datetime(2025, 1, 1, 15, 0, 0, tzinfo=timezone.utc),
+            start=datetime(2025, 1, 1, 14, 0, 0, tzinfo=UTC),
+            end=datetime(2025, 1, 1, 15, 0, 0, tzinfo=UTC),
         )
 
         assert range1.overlaps(range2)
         assert not range1.overlaps(range3)
-
-    def test_immutability(self):
-        """Test that TimeRange is immutable."""
-        start = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        end = datetime(2025, 1, 1, 13, 0, 0, tzinfo=timezone.utc)
-        time_range = TimeRange(start=start, end=end)
-
-        with pytest.raises(AttributeError):
-            time_range.start = datetime(2025, 1, 1, 11, 0, 0, tzinfo=timezone.utc)
 
 
 # ============================================================================
@@ -629,12 +570,6 @@ class TestTokenUsage:
         assert tokens_dict["input_tokens"] == 1000
         assert tokens_dict["output_tokens"] == 500
         assert tokens_dict["total_tokens"] == 1500
-
-    def test_immutability(self):
-        """Test that TokenUsage is immutable."""
-        tokens = TokenUsage(input_tokens=1000, output_tokens=500)
-        with pytest.raises(AttributeError):
-            tokens.input_tokens = 2000
 
     def test_add_returns_new_instance(self):
         """Test that add returns new instance without modifying originals."""

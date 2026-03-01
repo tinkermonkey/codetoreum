@@ -24,9 +24,12 @@ The trade-off (direct import from infrastructure) is acceptable because:
 4. OpenTelemetry support is optional (OPENTELEMETRY_AVAILABLE flag)
 """
 
+import asyncio
 import functools
+import inspect
 import logging
-from typing import Any, Callable, Dict, Optional
+from collections.abc import Callable
+from typing import Any
 
 # Try to import OpenTelemetry - it's optional
 try:
@@ -46,15 +49,16 @@ def _get_tracer():
         return None
     return trace.get_tracer(__name__)
 
+
 logger = logging.getLogger(__name__)
 
 
 def instrument_function(
-    name: Optional[str] = None,
-    attributes: Optional[Dict[str, Any]] = None,
+    name: str | None = None,
+    attributes: dict[str, Any] | None = None,
     capture_args: bool = False,
     capture_result: bool = False,
-    business_context_fields: Optional[list[str]] = None,
+    business_context_fields: list[str] | None = None,
 ) -> Callable:
     """
     Decorator to instrument synchronous functions with OpenTelemetry spans.
@@ -87,8 +91,10 @@ def instrument_function(
     """
     # If OpenTelemetry is not available, return a no-op decorator
     if not OPENTELEMETRY_AVAILABLE:
+
         def decorator(func: Callable) -> Callable:
             return func
+
         return decorator
 
     def decorator(func: Callable) -> Callable:
@@ -135,11 +141,11 @@ def instrument_function(
 
 
 def instrument_async_function(
-    name: Optional[str] = None,
-    attributes: Optional[Dict[str, Any]] = None,
+    name: str | None = None,
+    attributes: dict[str, Any] | None = None,
     capture_args: bool = False,
     capture_result: bool = False,
-    business_context_fields: Optional[list[str]] = None,
+    business_context_fields: list[str] | None = None,
 ) -> Callable:
     """
     Decorator to instrument asynchronous functions with OpenTelemetry spans.
@@ -172,8 +178,10 @@ def instrument_async_function(
     """
     # If OpenTelemetry is not available, return a no-op decorator
     if not OPENTELEMETRY_AVAILABLE:
+
         def decorator(func: Callable) -> Callable:
             return func
+
         return decorator
 
     def decorator(func: Callable) -> Callable:
@@ -219,7 +227,7 @@ def instrument_async_function(
     return decorator
 
 
-def instrument_class(attributes: Optional[Dict[str, Any]] = None) -> Callable:
+def instrument_class(attributes: dict[str, Any] | None = None) -> Callable:
     """
     Class decorator to automatically instrument all public methods.
 
@@ -239,8 +247,10 @@ def instrument_class(attributes: Optional[Dict[str, Any]] = None) -> Callable:
     """
     # If OpenTelemetry is not available, return a no-op decorator
     if not OPENTELEMETRY_AVAILABLE:
+
         def decorator(cls):
             return cls
+
         return decorator
 
     def decorator(cls):
@@ -253,8 +263,6 @@ def instrument_class(attributes: Optional[Dict[str, Any]] = None) -> Callable:
 
             # Instrument callable methods
             if callable(attr):
-                import asyncio
-
                 if asyncio.iscoroutinefunction(attr):
                     decorated = instrument_async_function(attributes=attributes)(attr)
                 else:
@@ -294,7 +302,7 @@ def add_span_attributes(**attributes: Any) -> None:
             span.set_attribute(key, value)
 
 
-def add_span_event(name: str, attributes: Optional[Dict[str, Any]] = None) -> None:
+def add_span_event(name: str, attributes: dict[str, Any] | None = None) -> None:
     """
     Add an event to the current active span.
 
@@ -335,8 +343,6 @@ def _extract_business_context(
         business_context_fields: List of parameter names to extract .id from
     """
     try:
-        import inspect
-
         # Get function signature
         sig = inspect.signature(func)
         bound_args = sig.bind_partial(*args, **kwargs)
@@ -350,9 +356,7 @@ def _extract_business_context(
                     try:
                         span.set_attribute(f"{field_name}.id", str(obj.id))
                     except Exception as e:
-                        logger.debug(
-                            f"Failed to extract {field_name}.id for {func.__name__}: {e}"
-                        )
+                        logger.debug(f"Failed to extract {field_name}.id for {func.__name__}: {e}")
 
     except Exception as e:
         # Don't fail instrumentation if context extraction fails

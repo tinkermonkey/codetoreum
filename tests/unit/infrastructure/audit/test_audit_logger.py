@@ -5,13 +5,14 @@ Tests the core audit logging functionality including event creation,
 storage, and retrieval.
 """
 
+from datetime import UTC, datetime
+
 import pytest
-from datetime import datetime, timezone
 
 from codetoreum.infrastructure.audit.audit_logger import (
-    AuditLogger,
     AuditEvent,
     AuditEventType,
+    AuditLogger,
 )
 from codetoreum.infrastructure.audit.stores import InMemoryAuditStore
 
@@ -22,7 +23,7 @@ class TestAuditEvent:
     def test_audit_event_creation(self):
         """Test creating an audit event."""
         event = AuditEvent(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             event_type=AuditEventType.AGENT_CREATED,
             resource_type="agent",
             resource_id="agent-123",
@@ -42,7 +43,7 @@ class TestAuditEvent:
 
     def test_audit_event_to_dict(self):
         """Test converting audit event to dictionary."""
-        timestamp = datetime.now(timezone.utc)
+        timestamp = datetime.now(UTC)
         event = AuditEvent(
             timestamp=timestamp,
             event_type=AuditEventType.AGENT_DELETED,

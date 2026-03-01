@@ -4,8 +4,8 @@
  * Comprehensive unit tests for the CircuitBreaker implementation
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { CircuitBreaker, CircuitBreakerError, CircuitState } from '../circuitBreaker'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { CircuitBreaker, CircuitBreakerError } from '../circuitBreaker'
 
 describe('CircuitBreaker', () => {
   let circuitBreaker: CircuitBreaker

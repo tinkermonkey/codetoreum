@@ -15,7 +15,6 @@ export function useFlowData(
   // Track agent executions from events
   const agentExecutions = useMemo(() => {
     const execMap = new Map<string, AgentExecution[]>()
-    const activeAgents = new Set<string>()
 
     // Sort events chronologically
     const sortedEvents = [...events].sort(

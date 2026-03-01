@@ -4,14 +4,13 @@ Generate OpenAPI specification with enhanced examples and documentation.
 This script extracts the OpenAPI spec from the FastAPI application and enhances it
 with comprehensive examples, error responses, and authentication documentation.
 """
+
 import json
 import sys
 from pathlib import Path
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
-
-from codetoreum.adapters.primary.fastapi_app import create_app
 
 
 def enhance_openapi_spec(spec: dict) -> dict:
@@ -138,20 +137,20 @@ Legacy v1 API still available for backward compatibility.
             "type": "http",
             "scheme": "bearer",
             "bearerFormat": "JWT",
-            "description": "JWT token authentication. Get token from server startup logs."
+            "description": "JWT token authentication. Get token from server startup logs.",
         },
         "QueryAuth": {
             "type": "apiKey",
             "in": "query",
             "name": "token",
-            "description": "JWT token as query parameter (alternative to Bearer auth)"
+            "description": "JWT token as query parameter (alternative to Bearer auth)",
         },
         "CookieAuth": {
             "type": "apiKey",
             "in": "cookie",
             "name": "codetoreum_token",
-            "description": "JWT token in cookie (set after login)"
-        }
+            "description": "JWT token in cookie (set after login)",
+        },
     }
 
     # Add example components
@@ -169,7 +168,7 @@ Legacy v1 API still available for backward compatibility.
                 "workflow_stage": "development",
                 "priority": "high",
                 "created_at": "2025-11-05T10:00:00Z",
-                "updated_at": "2025-11-05T11:30:00Z"
+                "updated_at": "2025-11-05T11:30:00Z",
             }
         },
         "AgentExample": {
@@ -182,10 +181,10 @@ Legacy v1 API still available for backward compatibility.
                 "configuration": {
                     "model": "claude-sonnet-4",
                     "temperature": 0.7,
-                    "max_tokens": 4000
+                    "max_tokens": 4000,
                 },
                 "active": True,
-                "created_at": "2025-11-01T09:00:00Z"
+                "created_at": "2025-11-01T09:00:00Z",
             }
         },
         "ExecutionExample": {
@@ -198,11 +197,7 @@ Legacy v1 API still available for backward compatibility.
                 "status": "running",
                 "started_at": "2025-11-05T11:30:00Z",
                 "container_id": "abc123def456",
-                "progress": {
-                    "current_step": "writing_code",
-                    "total_steps": 5,
-                    "percentage": 40
-                }
+                "progress": {"current_step": "writing_code", "total_steps": 5, "percentage": 40},
             }
         },
         "WorkflowExample": {
@@ -217,22 +212,22 @@ Legacy v1 API still available for backward compatibility.
                         "name": "analysis",
                         "agent_id": "agent-analyzer",
                         "entry_conditions": ["work_item.labels contains 'feature'"],
-                        "timeout_minutes": 30
+                        "timeout_minutes": 30,
                     },
                     {
                         "name": "development",
                         "agent_id": "agent-backend-dev",
                         "entry_conditions": ["previous_stage.status == 'completed'"],
-                        "timeout_minutes": 120
-                    }
-                ]
+                        "timeout_minutes": 120,
+                    },
+                ],
             }
         },
         "ErrorResponse": {
             "value": {
                 "detail": "Work item not found",
                 "error_code": "WORK_ITEM_NOT_FOUND",
-                "timestamp": "2025-11-05T12:00:00Z"
+                "timestamp": "2025-11-05T12:00:00Z",
             }
         },
         "ValidationError": {
@@ -241,7 +236,7 @@ Legacy v1 API still available for backward compatibility.
                     {
                         "loc": ["body", "title"],
                         "msg": "field required",
-                        "type": "value_error.missing"
+                        "type": "value_error.missing",
                     }
                 ]
             }
@@ -250,16 +245,16 @@ Legacy v1 API still available for backward compatibility.
             "value": {
                 "detail": "Invalid or expired authentication token",
                 "error_code": "INVALID_TOKEN",
-                "timestamp": "2025-11-05T12:00:00Z"
+                "timestamp": "2025-11-05T12:00:00Z",
             }
         },
         "RateLimitError": {
             "value": {
                 "detail": "Rate limit exceeded. Try again in 60 seconds.",
                 "error_code": "RATE_LIMIT_EXCEEDED",
-                "timestamp": "2025-11-05T12:00:00Z"
+                "timestamp": "2025-11-05T12:00:00Z",
             }
-        }
+        },
     }
 
     # Add common error responses to all authenticated endpoints
@@ -271,10 +266,10 @@ Legacy v1 API still available for backward compatibility.
                     "example": {
                         "detail": "Invalid or expired authentication token",
                         "error_code": "INVALID_TOKEN",
-                        "timestamp": "2025-11-05T12:00:00Z"
+                        "timestamp": "2025-11-05T12:00:00Z",
                     }
                 }
-            }
+            },
         },
         "429": {
             "description": "Too Many Requests - Rate limit exceeded",
@@ -283,10 +278,10 @@ Legacy v1 API still available for backward compatibility.
                     "example": {
                         "detail": "Rate limit exceeded. Try again in 60 seconds.",
                         "error_code": "RATE_LIMIT_EXCEEDED",
-                        "timestamp": "2025-11-05T12:00:00Z"
+                        "timestamp": "2025-11-05T12:00:00Z",
                     }
                 }
-            }
+            },
         },
         "500": {
             "description": "Internal Server Error",
@@ -295,32 +290,33 @@ Legacy v1 API still available for backward compatibility.
                     "example": {
                         "detail": "An unexpected error occurred",
                         "error_code": "INTERNAL_ERROR",
-                        "timestamp": "2025-11-05T12:00:00Z"
+                        "timestamp": "2025-11-05T12:00:00Z",
                     }
                 }
-            }
-        }
+            },
+        },
     }
 
     # Add error responses to all paths
     for path_data in spec.get("paths", {}).values():
         for operation in path_data.values():
-            if isinstance(operation, dict) and "responses" in operation:
+            if (
+                isinstance(operation, dict)
+                and "responses" in operation
+                and operation.get("tags", [None])[0] != "health"
+            ):
                 # Skip health check endpoints (they don't require auth)
-                if operation.get("tags", [None])[0] != "health":
-                    operation["responses"].update(common_error_responses)
+                operation["responses"].update(common_error_responses)
 
     return spec
 
 
-def main():
+def main() -> None:
     """Generate enhanced OpenAPI specification."""
-    # Create app with minimal config (no external dependencies)
-    print("Creating FastAPI application...")
-    app = create_app(
-        disable_auth=True,  # Disable auth for spec generation
-        cors_origins=["*"]
-    )
+    # The app is instantiated at module level in fastapi_app.py
+    # We access it directly to avoid needing to pass all the ports
+    # This works because the module-level app is fully initialized
+    from codetoreum.adapters.primary.fastapi_app import app
 
     # Get OpenAPI spec
     print("Generating OpenAPI specification...")
@@ -336,7 +332,8 @@ def main():
 
     # Convert to YAML for better readability
     try:
-        import yaml
+        import yaml  # type: ignore[import-untyped]
+
         with open(output_path, "w") as f:
             yaml.dump(enhanced_spec, f, default_flow_style=False, sort_keys=False)
         print(f"✓ OpenAPI spec written to {output_path}")

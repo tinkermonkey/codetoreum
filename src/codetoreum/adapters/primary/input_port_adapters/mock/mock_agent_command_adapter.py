@@ -4,11 +4,12 @@ Mock Agent Command Adapter
 In-memory implementation of IAgentCommandPort for development and testing.
 """
 
-from datetime import datetime, timezone
-from typing import Dict
+from datetime import UTC, datetime
 from threading import RLock
 from uuid import uuid4
 
+from codetoreum.domain.agent import Agent, AgentCapability
+from codetoreum.domain.exceptions import AgentNotFoundError, DomainError
 from codetoreum.ports.input.agent_command import (
     AddAgentCapabilityCommand,
     AddMcpServerCommand,
@@ -20,8 +21,6 @@ from codetoreum.ports.input.agent_command import (
     UpdateAgentCapabilityCommand,
     UpdateAgentCommand,
 )
-from codetoreum.domain.agent import Agent, AgentCapability, AgentType
-from codetoreum.domain.exceptions import AgentNotFoundError, DomainError
 
 
 class MockAgentCommandAdapter(IAgentCommandPort):
@@ -34,8 +33,8 @@ class MockAgentCommandAdapter(IAgentCommandPort):
     """
 
     def __init__(self):
-        self._agents: Dict[str, Agent] = {}
-        self._agents_by_name: Dict[str, str] = {}  # name -> agent_id
+        self._agents: dict[str, Agent] = {}
+        self._agents_by_name: dict[str, str] = {}  # name -> agent_id
         self._lock = RLock()
 
     async def create_agent(self, command: CreateAgentCommand) -> Agent:
@@ -43,11 +42,12 @@ class MockAgentCommandAdapter(IAgentCommandPort):
         with self._lock:
             # Check if agent with same name exists
             if command.name in self._agents_by_name:
-                raise DomainError(f"Agent with name '{command.name}' already exists")
+                msg = f"Agent with name '{command.name}' already exists"
+                raise DomainError(msg)
 
             # Create agent
             agent_id = str(uuid4())
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
 
             agent = Agent(
                 id=agent_id,
@@ -111,7 +111,7 @@ class MockAgentCommandAdapter(IAgentCommandPort):
             if command.filesystem_write_allowed is not None:
                 agent.filesystem_write_allowed = command.filesystem_write_allowed
 
-            agent.updated_at = datetime.now(timezone.utc)
+            agent.updated_at = datetime.now(UTC)
 
             return agent
 
@@ -125,13 +125,12 @@ class MockAgentCommandAdapter(IAgentCommandPort):
 
             # Check if capability already exists
             if command.capability.skill in agent.capabilities:
-                raise DomainError(
-                    f"Capability '{command.capability.skill}' already exists for agent"
-                )
+                msg = f"Capability '{command.capability.skill}' already exists for agent"
+                raise DomainError(msg)
 
             # Add capability
             agent.capabilities[command.capability.skill] = command.capability
-            agent.updated_at = datetime.now(timezone.utc)
+            agent.updated_at = datetime.now(UTC)
 
             return agent
 
@@ -145,19 +144,17 @@ class MockAgentCommandAdapter(IAgentCommandPort):
 
             # Check if capability exists
             if command.skill not in agent.capabilities:
-                raise DomainError(
-                    f"Capability '{command.skill}' not found for agent"
-                )
+                msg = f"Capability '{command.skill}' not found for agent"
+                raise DomainError(msg)
 
             # Check if it's the last capability
             if len(agent.capabilities) == 1:
-                raise DomainError(
-                    "Cannot remove the last capability from an agent"
-                )
+                msg = "Cannot remove the last capability from an agent"
+                raise DomainError(msg)
 
             # Remove capability
             del agent.capabilities[command.skill]
-            agent.updated_at = datetime.now(timezone.utc)
+            agent.updated_at = datetime.now(UTC)
 
             return agent
 
@@ -171,13 +168,13 @@ class MockAgentCommandAdapter(IAgentCommandPort):
 
             # Check if capability exists
             if command.skill not in agent.capabilities:
-                raise DomainError(
-                    f"Capability '{command.skill}' not found for agent"
-                )
+                msg = f"Capability '{command.skill}' not found for agent"
+                raise DomainError(msg)
 
             # Validate proficiency
             if not 0.0 <= command.proficiency <= 1.0:
-                raise DomainError("Proficiency must be between 0.0 and 1.0")
+                msg = "Proficiency must be between 0.0 and 1.0"
+                raise DomainError(msg)
 
             # Update proficiency
             capability = agent.capabilities[command.skill]
@@ -186,7 +183,7 @@ class MockAgentCommandAdapter(IAgentCommandPort):
                 proficiency=command.proficiency,
                 description=capability.description,
             )
-            agent.updated_at = datetime.now(timezone.utc)
+            agent.updated_at = datetime.now(UTC)
 
             return agent
 
@@ -200,13 +197,12 @@ class MockAgentCommandAdapter(IAgentCommandPort):
 
             # Check if server already configured
             if command.server_name in agent.mcp_servers:
-                raise DomainError(
-                    f"MCP server '{command.server_name}' already configured for agent"
-                )
+                msg = f"MCP server '{command.server_name}' already configured for agent"
+                raise DomainError(msg)
 
             # Add server
             agent.mcp_servers.append(command.server_name)
-            agent.updated_at = datetime.now(timezone.utc)
+            agent.updated_at = datetime.now(UTC)
 
             return agent
 
@@ -220,13 +216,12 @@ class MockAgentCommandAdapter(IAgentCommandPort):
 
             # Check if server configured
             if command.server_name not in agent.mcp_servers:
-                raise DomainError(
-                    f"MCP server '{command.server_name}' not configured for agent"
-                )
+                msg = f"MCP server '{command.server_name}' not configured for agent"
+                raise DomainError(msg)
 
             # Remove server
             agent.mcp_servers.remove(command.server_name)
-            agent.updated_at = datetime.now(timezone.utc)
+            agent.updated_at = datetime.now(UTC)
 
             return agent
 

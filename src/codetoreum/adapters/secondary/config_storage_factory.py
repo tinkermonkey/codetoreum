@@ -5,7 +5,6 @@ configuration storage with Elasticsearch + Redis caching.
 """
 
 import logging
-from typing import Optional
 
 from elasticsearch import AsyncElasticsearch
 from redis import asyncio as aioredis
@@ -45,10 +44,7 @@ def create_elasticsearch_config_storage(
         replica_count=replica_count,
     )
 
-    logger.info(
-        f"Created Elasticsearch config storage "
-        f"(shards={shard_count}, replicas={replica_count})"
-    )
+    logger.info(f"Created Elasticsearch config storage (shards={shard_count}, replicas={replica_count})")
 
     return storage
 
@@ -78,10 +74,7 @@ def create_redis_config_cache(
         invalidation_channel=invalidation_channel,
     )
 
-    logger.info(
-        f"Created Redis config cache "
-        f"(prefix={key_prefix}, ttl={default_ttl}s)"
-    )
+    logger.info(f"Created Redis config cache (prefix={key_prefix}, ttl={default_ttl}s)")
 
     return cache
 
@@ -168,9 +161,7 @@ def create_cached_config_store(
         cache=cache,
     )
 
-    logger.info(
-        "Created cached config store with Elasticsearch storage and Redis cache"
-    )
+    logger.info("Created cached config store with Elasticsearch storage and Redis cache")
 
     return cached_store
 
@@ -204,14 +195,13 @@ async def initialize_config_store(config_store: IConfigStore) -> None:
         await config_store.initialize()
         logger.info("Elasticsearch config storage initialized successfully")
 
+    # For other implementations, call initialize if available
+    elif hasattr(config_store, "initialize"):
+        logger.info(f"Initializing config store: {type(config_store).__name__}")
+        await config_store.initialize()
+        logger.info("Config store initialized successfully")
     else:
-        # For other implementations, call initialize if available
-        if hasattr(config_store, "initialize"):
-            logger.info(f"Initializing config store: {type(config_store).__name__}")
-            await config_store.initialize()
-            logger.info("Config store initialized successfully")
-        else:
-            logger.info(f"Config store {type(config_store).__name__} requires no initialization")
+        logger.info(f"Config store {type(config_store).__name__} requires no initialization")
 
 
 async def close_config_store(config_store: IConfigStore) -> None:

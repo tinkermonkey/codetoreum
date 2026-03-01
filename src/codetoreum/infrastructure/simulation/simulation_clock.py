@@ -3,11 +3,71 @@
 import asyncio
 import logging
 import threading
-import traceback
-from datetime import datetime, timedelta, timezone
-from typing import Callable, List, Optional, Tuple, Union
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from typing import Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
+
+
+@runtime_checkable
+class ClockProtocol(Protocol):
+    """
+    Formal interface for clock implementations (Protocol).
+
+    Defines the minimal contract that all clock implementations must satisfy for
+    general time-related operations. This protocol enables type-safe polymorphism
+    between RealTimeClock and SimulationClock without relying on union types.
+
+    The protocol defines only operations that are meaningful in both real and
+    simulated time contexts. Simulation-specific operations (like advance(),
+    schedule_callback(), etc.) are not included in this protocol and require
+    using SimulationClock directly.
+
+    Implementations:
+    - RealTimeClock: Uses system time for production
+    - SimulationClock: Uses virtual time for deterministic testing
+
+    Usage:
+        async def wait_for_completion(clock: ClockProtocol, timeout_seconds: float) -> bool:
+            '''Wait for an async operation using either real or simulated time.'''
+            start = clock.now()
+            await clock.sleep(timeout_seconds)
+            return (clock.now() - start).total_seconds() >= timeout_seconds
+
+    Migration Guide:
+    When updating code to use ClockProtocol, check which clock methods are called:
+    - If code only calls now(), sleep(), or wait_for(): Use ClockProtocol
+    - If code calls advance(), schedule_callback(), or other simulation methods: Use SimulationClock
+    This distinction ensures components remain portable across real and simulated time contexts.
+    """
+
+    def now(self) -> datetime:
+        """
+        Get current time (real or simulated).
+
+        Returns:
+            Current datetime in UTC
+        """
+        ...
+
+    async def sleep(self, seconds: float) -> None:
+        """
+        Sleep for a number of seconds (real or simulated time).
+
+        Args:
+            seconds: Number of seconds to sleep
+        """
+        ...
+
+    async def wait_for(self, delta: timedelta) -> None:
+        """
+        Wait for a time delta (real or simulated time).
+
+        Args:
+            delta: Amount of time to wait
+        """
+        ...
 
 
 class SimulationClock:
@@ -45,22 +105,23 @@ class SimulationClock:
             ValueError: If speed_multiplier is <= 0
         """
         if speed_multiplier <= 0:
-            raise ValueError("Speed multiplier must be positive")
+            message = "Speed multiplier must be positive"
+            raise ValueError(message)
 
         self._speed_multiplier = speed_multiplier
         self._auto_advance = auto_advance
 
         # Current simulated time
-        self._current_time: datetime = datetime.now(timezone.utc)
+        self._current_time: datetime = datetime.now(UTC)
 
         # Callbacks scheduled for specific times
-        self._scheduled_callbacks: List[Tuple[datetime, Callable]] = []
+        self._scheduled_callbacks: list[tuple[datetime, Callable]] = []
 
         # Thread safety
         self._lock = threading.RLock()
 
         # Auto-advance task
-        self._auto_advance_task: Optional[asyncio.Task] = None
+        self._auto_advance_task: asyncio.Task | None = None
         self._running = False
 
     def start_at(self, start_time: datetime) -> None:
@@ -71,9 +132,9 @@ class SimulationClock:
             start_time: Starting datetime (will be converted to UTC)
         """
         if start_time.tzinfo is None:
-            start_time = start_time.replace(tzinfo=timezone.utc)
-        elif start_time.tzinfo != timezone.utc:
-            start_time = start_time.astimezone(timezone.utc)
+            start_time = start_time.replace(tzinfo=UTC)
+        elif start_time.tzinfo != UTC:
+            start_time = start_time.astimezone(UTC)
 
         with self._lock:
             self._current_time = start_time
@@ -102,7 +163,8 @@ class SimulationClock:
             ValueError: If delta is negative
         """
         if delta.total_seconds() < 0:
-            raise ValueError("Cannot advance time backwards")
+            message = "Cannot advance time backwards"
+            raise ValueError(message)
 
         # Calculate real-world delay
         real_delay_seconds = delta.total_seconds() / self._speed_multiplier
@@ -129,13 +191,14 @@ class SimulationClock:
             ValueError: If target_time is before current time
         """
         if target_time.tzinfo is None:
-            target_time = target_time.replace(tzinfo=timezone.utc)
-        elif target_time.tzinfo != timezone.utc:
-            target_time = target_time.astimezone(timezone.utc)
+            target_time = target_time.replace(tzinfo=UTC)
+        elif target_time.tzinfo != UTC:
+            target_time = target_time.astimezone(UTC)
 
         with self._lock:
             if target_time < self._current_time:
-                raise ValueError("Cannot advance time backwards")
+                message = "Cannot advance time backwards"
+                raise ValueError(message)
 
             delta = target_time - self._current_time
 
@@ -149,7 +212,6 @@ class SimulationClock:
             target_time: Target datetime
         """
         with self._lock:
-            old_time = self._current_time
             self._current_time = target_time
 
             # Find callbacks to trigger
@@ -176,14 +238,14 @@ class SimulationClock:
                 callback_type = "async" if asyncio.iscoroutinefunction(callback) else "sync"
                 logger.error(
                     f"Error in scheduled {callback_type} callback at {scheduled_time}: {e}",
-                    exc_info=True
+                    exc_info=True,
                 )
 
     def schedule_callback(
         self,
         callback: Callable,
-        at_time: Optional[datetime] = None,
-        after_delta: Optional[timedelta] = None,
+        at_time: datetime | None = None,
+        after_delta: timedelta | None = None,
     ) -> None:
         """
         Schedule a callback to be triggered at a specific time.
@@ -197,7 +259,8 @@ class SimulationClock:
             ValueError: If neither or both time parameters are provided
         """
         if (at_time is None) == (after_delta is None):
-            raise ValueError("Must provide exactly one of at_time or after_delta")
+            message = "Must provide exactly one of at_time or after_delta"
+            raise ValueError(message)
 
         with self._lock:
             if after_delta is not None:
@@ -205,14 +268,14 @@ class SimulationClock:
             else:
                 trigger_time = at_time
                 if trigger_time.tzinfo is None:
-                    trigger_time = trigger_time.replace(tzinfo=timezone.utc)
-                elif trigger_time.tzinfo != timezone.utc:
-                    trigger_time = trigger_time.astimezone(timezone.utc)
+                    trigger_time = trigger_time.replace(tzinfo=UTC)
+                elif trigger_time.tzinfo != UTC:
+                    trigger_time = trigger_time.astimezone(UTC)
 
             self._scheduled_callbacks.append((trigger_time, callback))
             self._scheduled_callbacks.sort(key=lambda x: x[0])
 
-    def get_scheduled_callbacks(self) -> List[Tuple[datetime, Callable]]:
+    def get_scheduled_callbacks(self) -> list[tuple[datetime, Callable]]:
         """
         Get all scheduled callbacks.
 
@@ -258,7 +321,8 @@ class SimulationClock:
             ValueError: If multiplier is <= 0
         """
         if multiplier <= 0:
-            raise ValueError("Speed multiplier must be positive")
+            message = "Speed multiplier must be positive"
+            raise ValueError(message)
 
         with self._lock:
             self._speed_multiplier = multiplier
@@ -302,36 +366,55 @@ class SimulationClock:
 
     async def _auto_advance_loop(self) -> None:
         """Internal loop for automatic clock advancement."""
+        error_count = 0
+        max_consecutive_errors = 5
+        backoff_base = 0.1  # Start with 100ms backoff
+
         while self._running:
             try:
                 # Advance by 1 second of simulated time every (1 / multiplier) real seconds
                 await asyncio.sleep(1.0 / self._speed_multiplier)
                 await self._advance_to(self._current_time + timedelta(seconds=1))
+                error_count = 0  # Reset error count on success
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Error in auto-advance loop: {e}", exc_info=True)
+                error_count += 1
+                logger.error(
+                    f"Error in auto-advance loop (attempt {error_count}/{max_consecutive_errors}): {e}",
+                    exc_info=True,
+                )
+                if error_count >= max_consecutive_errors:
+                    logger.error(
+                        f"Auto-advance loop exceeded maximum consecutive errors ({max_consecutive_errors}), stopping"
+                    )
+                    with self._lock:
+                        self._running = False
+                    break
+                # Exponential backoff: 0.1s, 0.2s, 0.4s, 0.8s, 1.6s
+                backoff_seconds = backoff_base * (2 ** (error_count - 1))
+                try:
+                    await asyncio.sleep(backoff_seconds)
+                except asyncio.CancelledError:
+                    break
 
     def reset(self) -> None:
         """Reset clock to current real time and clear all callbacks."""
         with self._lock:
-            self._current_time = datetime.now(timezone.utc)
+            self._current_time = datetime.now(UTC)
             self._scheduled_callbacks.clear()
 
     def __repr__(self) -> str:
         """String representation."""
-        return (
-            f"SimulationClock(current_time={self._current_time.isoformat()}, "
-            f"speed={self._speed_multiplier}x)"
-        )
+        return f"SimulationClock(current_time={self._current_time.isoformat()}, speed={self._speed_multiplier}x)"
 
 
 class RealTimeClock:
     """
-    Real-time clock adapter that matches the SimulationClock interface.
+    Real-time clock adapter that implements the ClockProtocol.
 
-    This is used in production to provide the same interface as SimulationClock
-    but using actual system time.
+    This is used in production to provide the same interface as defined by
+    ClockProtocol but using actual system time instead of simulated time.
     """
 
     def now(self) -> datetime:
@@ -341,7 +424,7 @@ class RealTimeClock:
         Returns:
             Current datetime in UTC
         """
-        return datetime.now(timezone.utc)
+        return datetime.now(UTC)
 
     async def sleep(self, seconds: float) -> None:
         """
@@ -363,15 +446,15 @@ class RealTimeClock:
 
 
 # Global clock instance that can be swapped for testing
-_global_clock: Optional[Union[SimulationClock, RealTimeClock]] = None
+_global_clock: ClockProtocol | None = None
 
 
-def get_clock() -> Union[SimulationClock, RealTimeClock]:
+def get_clock() -> ClockProtocol:
     """
     Get the global clock instance.
 
     Returns:
-        Global clock (SimulationClock or RealTimeClock)
+        Global clock instance (SimulationClock or RealTimeClock)
     """
     global _global_clock
     if _global_clock is None:
@@ -379,12 +462,12 @@ def get_clock() -> Union[SimulationClock, RealTimeClock]:
     return _global_clock
 
 
-def set_clock(clock: Union[SimulationClock, RealTimeClock]) -> None:
+def set_clock(clock: ClockProtocol) -> None:
     """
     Set the global clock instance.
 
     Args:
-        clock: Clock instance to use globally
+        clock: Clock instance to use globally (must implement ClockProtocol)
     """
     global _global_clock
     _global_clock = clock

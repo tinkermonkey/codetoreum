@@ -1,16 +1,15 @@
 """Negative test cases for WorkspaceRouter."""
 
-import pytest
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
-from codetoreum.application.workspace_router import WorkspaceRouter
-from codetoreum.adapters.testing import InMemoryEventStore
-from codetoreum.domain.agent import Agent, AgentType, AgentCapability
-from codetoreum.domain.project_context import ProjectContext
-from codetoreum.domain.work_item import WorkItem, WorkItemStatus, WorkItemPriority
+import pytest
 
+from codetoreum.adapters.testing import InMemoryEventStore
+from codetoreum.application.workspace_router import WorkspaceRouter
+from codetoreum.domain.agent import Agent, AgentCapability, AgentType
+from codetoreum.domain.project_context import ProjectContext
+from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
 
 # ============================================================================
 # Fixtures
@@ -65,8 +64,8 @@ def code_work_item():
         assigned_at=None,
         current_workflow_id=None,
         current_stage=None,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
         completed_at=None,
     )
 
@@ -88,8 +87,8 @@ def discussion_work_item():
         assigned_at=None,
         current_workflow_id=None,
         current_stage=None,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
         completed_at=None,
     )
 
@@ -115,8 +114,8 @@ def analyst_agent():
         filesystem_write_allowed=False,
         mcp_servers=[],
         metadata={},
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
 
@@ -141,8 +140,8 @@ def developer_agent():
         filesystem_write_allowed=True,
         mcp_servers=[],
         metadata={},
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
 
@@ -170,8 +169,8 @@ def sample_project():
         secrets=[],
         mcp_servers=[],
         metadata={},
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
 
@@ -208,8 +207,12 @@ async def test_route_workspace_analyst_on_code_work_fails(
 
 @pytest.mark.asyncio
 async def test_prepare_workspace_branch_creation_fails(
-    workspace_router, code_work_item, developer_agent, sample_project,
-    mock_repository, repository_path
+    workspace_router,
+    code_work_item,
+    developer_agent,
+    sample_project,
+    mock_repository,
+    repository_path,
 ):
     """Test workspace preparation when branch creation fails."""
     context = await workspace_router.route_workspace(
@@ -235,8 +238,12 @@ async def test_prepare_workspace_branch_creation_fails(
 
 @pytest.mark.asyncio
 async def test_finalize_workspace_commit_fails(
-    workspace_router, code_work_item, developer_agent, sample_project,
-    mock_repository, repository_path
+    workspace_router,
+    code_work_item,
+    developer_agent,
+    sample_project,
+    mock_repository,
+    repository_path,
 ):
     """Test workspace finalization when commit fails."""
     from codetoreum.ports.output.repository import RepositoryStatus
@@ -251,9 +258,9 @@ async def test_finalize_workspace_commit_fails(
     mock_repository.status.return_value = RepositoryStatus(
         current_branch=context.branch_name,
         is_dirty=True,
-        staged_files=["file.py"],
-        unstaged_files=[],
-        untracked_files=[],
+        staged_files=("file.py",),
+        unstaged_files=(),
+        untracked_files=(),
         ahead_count=0,
         behind_count=0,
     )
@@ -274,8 +281,12 @@ async def test_finalize_workspace_commit_fails(
 
 @pytest.mark.asyncio
 async def test_finalize_workspace_push_fails(
-    workspace_router, code_work_item, developer_agent, sample_project,
-    mock_repository, repository_path
+    workspace_router,
+    code_work_item,
+    developer_agent,
+    sample_project,
+    mock_repository,
+    repository_path,
 ):
     """Test workspace finalization when push fails."""
     from codetoreum.ports.output.repository import RepositoryStatus
@@ -290,9 +301,9 @@ async def test_finalize_workspace_push_fails(
     mock_repository.status.return_value = RepositoryStatus(
         current_branch=context.branch_name,
         is_dirty=True,
-        staged_files=["file.py"],
-        unstaged_files=[],
-        untracked_files=[],
+        staged_files=("file.py",),
+        unstaged_files=(),
+        untracked_files=(),
         ahead_count=0,
         behind_count=0,
     )
@@ -324,8 +335,12 @@ async def test_finalize_workspace_push_fails(
 
 @pytest.mark.asyncio
 async def test_prepare_workspace_checkout_fails(
-    workspace_router, code_work_item, developer_agent, sample_project,
-    mock_repository, repository_path
+    workspace_router,
+    code_work_item,
+    developer_agent,
+    sample_project,
+    mock_repository,
+    repository_path,
 ):
     """Test workspace preparation when checkout fails."""
     context = await workspace_router.route_workspace(

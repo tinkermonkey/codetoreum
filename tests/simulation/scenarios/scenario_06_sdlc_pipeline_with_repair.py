@@ -8,19 +8,22 @@ Comprehensive test scenarios validating the full SDLC pipeline workflow includin
 """
 
 import pytest
-from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
-from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
-from codetoreum.adapters.testing.mock_review_cycle_adapter import MockReviewCycleAdapter
+
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
+from codetoreum.adapters.testing.mock_review_cycle_adapter import MockReviewCycleAdapter
+from codetoreum.application.event_handlers.repair_cycle_event_handler import (
+    RepairCycleEventContext,
+)
 from codetoreum.domain.events import WorkItemColumnChanged
 from codetoreum.domain.repair_cycle_types import (
     RepairTestRunConfig,
     RepairTestType,
 )
-from codetoreum.ports.output.review_cycle_service import ReviewCycleRequest
-from codetoreum.application.event_handlers.repair_cycle_event_handler import (
-    RepairCycleEventContext,
+from codetoreum.infrastructure.simulation.bootstrap import (
+    SimulationApplicationBootstrap,
 )
+from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
+from codetoreum.ports.output.review_cycle_service import ReviewCycleRequest
 
 
 class TestScenario06SDLCPipelineWithRepair:
@@ -70,7 +73,7 @@ class TestScenario06SDLCPipelineWithRepair:
             max_iterations=5,
             auto_advance_on_approval=True,
             escalate_on_blocked=True,
-            previous_stage_output="Initial implementation output"
+            previous_stage_output="Initial implementation output",
         )
 
         review_result = await review_adapter.start_review_cycle(review_request)
@@ -90,8 +93,8 @@ class TestScenario06SDLCPipelineWithRepair:
                 "project_id": "test-project",
                 "from_column": "Code Review",
                 "to_column": "Testing",
-                "moved_by": "system"
-            }
+                "moved_by": "system",
+            },
         )
 
         # Execute repair cycle (would be triggered by event handler in full integration)
@@ -160,7 +163,7 @@ class TestScenario06SDLCPipelineWithRepair:
             max_iterations=5,
             auto_advance_on_approval=True,
             escalate_on_blocked=True,
-            previous_stage_output="Initial implementation output"
+            previous_stage_output="Initial implementation output",
         )
 
         review_result = await review_adapter.start_review_cycle(review_request)
@@ -235,7 +238,7 @@ class TestScenario06SDLCPipelineWithRepair:
             max_iterations=5,
             auto_advance_on_approval=True,
             escalate_on_blocked=True,
-            previous_stage_output="Initial implementation"
+            previous_stage_output="Initial implementation",
         )
 
         review_result = await review_adapter.start_review_cycle(review_request)
@@ -245,9 +248,7 @@ class TestScenario06SDLCPipelineWithRepair:
         repair_context = RepairCycleEventContext(
             stage_name="Testing",
             workflow_run_id="work-item-10",
-            test_configs=(
-                RepairTestRunConfig(test_type=RepairTestType.UNIT),
-            ),
+            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
             agent_name="senior_software_engineer",
             max_total_agent_calls=5,  # Limited to force failure
             checkpoint_interval=5,
@@ -278,7 +279,9 @@ class TestScenario06SDLCPipelineWithRepair:
         2. Event handlers are registered
         3. Repair cycle handler is connected to event bus
         """
-        from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+        from codetoreum.infrastructure.simulation.simulation_config import (
+            SimulationConfig,
+        )
 
         # Create bootstrap with fast simulation config
         config = SimulationConfig.create_fast_config("test_bootstrap")
@@ -306,7 +309,7 @@ class TestScenario06SDLCPipelineWithRepair:
             # Verify the clock is shared between repair cycle and engine
             assert bootstrap.adapters.repair_cycle._clock == bootstrap.engine.get_clock_for_testing()
 
-            logger = __import__('logging').getLogger(__name__)
+            logger = __import__("logging").getLogger(__name__)
             logger.info("Bootstrap integration test passed")
 
         finally:
@@ -348,7 +351,7 @@ class TestScenario06SDLCPipelineWithRepair:
             max_iterations=5,
             auto_advance_on_approval=True,
             escalate_on_blocked=True,
-            previous_stage_output="Perf test output"
+            previous_stage_output="Perf test output",
         )
 
         review_result = await review_adapter.start_review_cycle(review_request)
@@ -373,6 +376,4 @@ class TestScenario06SDLCPipelineWithRepair:
         elapsed_time = time.time() - start_time
 
         # Assert performance requirements
-        assert elapsed_time < 10.0, (
-            f"Performance test failed: {elapsed_time:.2f}s (expected <10s)"
-        )
+        assert elapsed_time < 10.0, f"Performance test failed: {elapsed_time:.2f}s (expected <10s)"

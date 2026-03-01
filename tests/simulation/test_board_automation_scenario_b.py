@@ -120,9 +120,9 @@ class TestScenarioB_LockContention:
         template = BoardWorkflowTemplate(
             id="workflow-1",
             name="Lock Contention",
-            pipeline_trigger_columns=["Development"],
-            exit_columns=["Code Review"],
-            columns=[
+            pipeline_trigger_columns=("Development",),
+            exit_columns=("Code Review",),
+            columns=(
                 ColumnTemplate(
                     name="Backlog",
                     type=ColumnType.MANUAL,
@@ -150,7 +150,7 @@ class TestScenarioB_LockContention:
                     position=2,
                     auto_progress_on_completion=False,
                 ),
-            ],
+            ),
         )
 
         # Register workflow template
@@ -206,12 +206,12 @@ class TestScenarioB_LockContention:
         )
 
         queue_state = await lock_service.get_queue_state("proj-1", "board-1")
-        assert queue_state.lock_holder == "work-item-100", (
-            f"Expected lock holder to be 'work-item-100', got '{queue_state.lock_holder}'"
-        )
-        assert len(queue_state.queue) == 0, (
-            f"Expected empty queue after first work item, got {len(queue_state.queue)} items"
-        )
+        assert (
+            queue_state.lock_holder == "work-item-100"
+        ), f"Expected lock holder to be 'work-item-100', got '{queue_state.lock_holder}'"
+        assert (
+            len(queue_state.queue) == 0
+        ), f"Expected empty queue after first work item, got {len(queue_state.queue)} items"
 
         # Verify engineer agent triggered
         assert agent_executor.was_triggered(
@@ -234,15 +234,11 @@ class TestScenarioB_LockContention:
         )
 
         queue_state = await lock_service.get_queue_state("proj-1", "board-1")
-        assert queue_state.lock_holder == "work-item-100", (
-            "Lock holder should still be work-item-100"
-        )
-        assert len(queue_state.queue) == 1, (
-            f"Expected 1 item in queue, got {len(queue_state.queue)}"
-        )
-        assert queue_state.queue[0].work_item_id == "work-item-101", (
-            f"Expected first queue item to be 'work-item-101', got '{queue_state.queue[0].work_item_id}'"
-        )
+        assert queue_state.lock_holder == "work-item-100", "Lock holder should still be work-item-100"
+        assert len(queue_state.queue) == 1, f"Expected 1 item in queue, got {len(queue_state.queue)}"
+        assert (
+            queue_state.queue[0].work_item_id == "work-item-101"
+        ), f"Expected first queue item to be 'work-item-101', got '{queue_state.queue[0].work_item_id}'"
 
         # Step 3: Human moves #102 to Development → added to queue (position 2)
         board_service.add_item_to_column("board-1", "Development", "work-item-102", position=2)
@@ -260,20 +256,16 @@ class TestScenarioB_LockContention:
         )
 
         queue_state = await lock_service.get_queue_state("proj-1", "board-1")
-        assert len(queue_state.queue) == 2, (
-            f"Expected 2 items in queue, got {len(queue_state.queue)}"
-        )
-        assert queue_state.queue[0].work_item_id == "work-item-101", (
-            f"Expected first queue item to be 'work-item-101', got '{queue_state.queue[0].work_item_id}'"
-        )
-        assert queue_state.queue[1].work_item_id == "work-item-102", (
-            f"Expected second queue item to be 'work-item-102', got '{queue_state.queue[1].work_item_id}'"
-        )
+        assert len(queue_state.queue) == 2, f"Expected 2 items in queue, got {len(queue_state.queue)}"
+        assert (
+            queue_state.queue[0].work_item_id == "work-item-101"
+        ), f"Expected first queue item to be 'work-item-101', got '{queue_state.queue[0].work_item_id}'"
+        assert (
+            queue_state.queue[1].work_item_id == "work-item-102"
+        ), f"Expected second queue item to be 'work-item-102', got '{queue_state.queue[1].work_item_id}'"
 
         # Step 4: #100 completes and moves to Code Review
-        await event_handler.handle_agent_completion(
-            work_item_id="work-item-100", board_id="board-1", success=True
-        )
+        await event_handler.handle_agent_completion(work_item_id="work-item-100", board_id="board-1", success=True)
 
         # Manually trigger event handler for Code Review (exit column)
         await event_handler.handle_column_change(
@@ -289,17 +281,13 @@ class TestScenarioB_LockContention:
 
         # Verify lock released and granted to #101
         queue_state = await lock_service.get_queue_state("proj-1", "board-1")
-        assert queue_state.lock_holder == "work-item-101", (
-            f"Expected lock holder to be 'work-item-101' after #100 completion, "
-            f"got '{queue_state.lock_holder}'"
-        )
-        assert len(queue_state.queue) == 1, (
-            f"Expected 1 item in queue after handoff, got {len(queue_state.queue)}"
-        )
-        assert queue_state.queue[0].work_item_id == "work-item-102", (
-            f"Expected remaining queue item to be 'work-item-102', "
-            f"got '{queue_state.queue[0].work_item_id}'"
-        )
+        assert (
+            queue_state.lock_holder == "work-item-101"
+        ), f"Expected lock holder to be 'work-item-101' after #100 completion, got '{queue_state.lock_holder}'"
+        assert len(queue_state.queue) == 1, f"Expected 1 item in queue after handoff, got {len(queue_state.queue)}"
+        assert (
+            queue_state.queue[0].work_item_id == "work-item-102"
+        ), f"Expected remaining queue item to be 'work-item-102', got '{queue_state.queue[0].work_item_id}'"
 
         # Verify agent triggered for #101 (which now holds lock)
         assert agent_executor.was_triggered(
@@ -309,12 +297,8 @@ class TestScenarioB_LockContention:
         # Step 5: #102 still waiting
         board_service.assert_item_in_column("work-item-102", "Development")
         queue_state = await lock_service.get_queue_state("proj-1", "board-1")
-        assert queue_state.lock_holder == "work-item-101", (
-            "Lock holder should still be work-item-101"
-        )
-        assert len(queue_state.queue) == 1, (
-            "Queue should have exactly 1 waiting item (#102)"
-        )
+        assert queue_state.lock_holder == "work-item-101", "Lock holder should still be work-item-101"
+        assert len(queue_state.queue) == 1, "Queue should have exactly 1 waiting item (#102)"
 
     @pytest.mark.asyncio
     async def test_queue_reordering_by_position(self, setup):
@@ -371,43 +355,35 @@ class TestScenarioB_LockContention:
 
         # Verify initial queue order
         queue_state = await lock_service.get_queue_state("proj-1", "board-1")
-        assert queue_state.lock_holder == "work-item-100", (
-            "Lock holder should be work-item-100"
-        )
-        assert queue_state.queue[0].work_item_id == "work-item-101", (
-            "First queue item should be work-item-101"
-        )
-        assert queue_state.queue[1].work_item_id == "work-item-102", (
-            "Second queue item should be work-item-102"
-        )
+        assert queue_state.lock_holder == "work-item-100", "Lock holder should be work-item-100"
+        assert queue_state.queue[0].work_item_id == "work-item-101", "First queue item should be work-item-101"
+        assert queue_state.queue[1].work_item_id == "work-item-102", "Second queue item should be work-item-102"
 
         # Simulate human reordering: #102 moved to position 1 (after lock holder at 0)
         # This updates the board positions directly, which would normally come from
         # a board UI reordering action. The lock service then reorders its queue based
         # on these new board positions.
-        await lock_service.update_queue_positions("proj-1", "board-1", {
-            "work-item-102": 0,
-            "work-item-101": 1,
-        })
+        await lock_service.update_queue_positions(
+            "proj-1",
+            "board-1",
+            {
+                "work-item-102": 0,
+                "work-item-101": 1,
+            },
+        )
 
         # Verify queue reordered
         queue_state = await lock_service.get_queue_state("proj-1", "board-1")
-        assert queue_state.lock_holder == "work-item-100", (
-            "Lock holder should still be work-item-100"
-        )
-        assert queue_state.queue[0].work_item_id == "work-item-102", (
-            f"After reorder, first queue item should be 'work-item-102', "
-            f"got '{queue_state.queue[0].work_item_id}'"
-        )
-        assert queue_state.queue[1].work_item_id == "work-item-101", (
-            f"After reorder, second queue item should be 'work-item-101', "
-            f"got '{queue_state.queue[1].work_item_id}'"
-        )
+        assert queue_state.lock_holder == "work-item-100", "Lock holder should still be work-item-100"
+        assert (
+            queue_state.queue[0].work_item_id == "work-item-102"
+        ), f"After reorder, first queue item should be 'work-item-102', got '{queue_state.queue[0].work_item_id}'"
+        assert (
+            queue_state.queue[1].work_item_id == "work-item-101"
+        ), f"After reorder, second queue item should be 'work-item-101', got '{queue_state.queue[1].work_item_id}'"
 
         # Release lock through event handler to properly trigger next agent
-        await event_handler.handle_agent_completion(
-            work_item_id="work-item-100", board_id="board-1", success=True
-        )
+        await event_handler.handle_agent_completion(work_item_id="work-item-100", board_id="board-1", success=True)
 
         # Trigger exit column event to release lock
         await event_handler.handle_column_change(
@@ -423,17 +399,13 @@ class TestScenarioB_LockContention:
 
         # Verify new lock state after event handler processes release
         queue_state = await lock_service.get_queue_state("proj-1", "board-1")
-        assert queue_state.lock_holder == "work-item-102", (
-            f"After reorder and lock release, lock holder should be 'work-item-102', "
-            f"got '{queue_state.lock_holder}'"
-        )
-        assert len(queue_state.queue) == 1, (
-            f"Queue should have 1 remaining item, got {len(queue_state.queue)}"
-        )
-        assert queue_state.queue[0].work_item_id == "work-item-101", (
-            f"Remaining queue item should be 'work-item-101', "
-            f"got '{queue_state.queue[0].work_item_id}'"
-        )
+        assert (
+            queue_state.lock_holder == "work-item-102"
+        ), f"After reorder and lock release, lock holder should be 'work-item-102', got '{queue_state.lock_holder}'"
+        assert len(queue_state.queue) == 1, f"Queue should have 1 remaining item, got {len(queue_state.queue)}"
+        assert (
+            queue_state.queue[0].work_item_id == "work-item-101"
+        ), f"Remaining queue item should be 'work-item-101', got '{queue_state.queue[0].work_item_id}'"
 
         # Verify agent triggered for #102 (which now holds lock after reorder)
         assert agent_executor.was_triggered(

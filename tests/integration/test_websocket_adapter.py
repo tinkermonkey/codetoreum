@@ -2,15 +2,12 @@
 Integration tests for WebSocket Adapter
 """
 
-import json
 import os
 
 import pytest
 from fastapi.testclient import TestClient
 
 from codetoreum.adapters.primary.fastapi_app import create_development_app
-from codetoreum.domain.events import DomainEvent
-
 
 
 @pytest.fixture(scope="function")
@@ -63,9 +60,7 @@ class TestWebSocketSubscriptions:
             websocket.receive_json()
 
             # Subscribe to all events
-            websocket.send_json(
-                {"type": "subscribe", "subscription_type": "all_events"}
-            )
+            websocket.send_json({"type": "subscribe", "subscription_type": "all_events"})
 
             # Receive subscription confirmation
             data = websocket.receive_json()
@@ -164,9 +159,7 @@ class TestWebSocketSubscriptions:
             websocket.receive_json()
 
             # Subscribe
-            websocket.send_json(
-                {"type": "subscribe", "subscription_type": "all_events"}
-            )
+            websocket.send_json({"type": "subscribe", "subscription_type": "all_events"})
             websocket.receive_json()
 
             # Unsubscribe
@@ -206,9 +199,7 @@ class TestWebSocketErrorHandling:
             websocket.receive_json()
 
             # Send invalid subscription type
-            websocket.send_json(
-                {"type": "subscribe", "subscription_type": "invalid_type"}
-            )
+            websocket.send_json({"type": "subscribe", "subscription_type": "invalid_type"})
 
             # Receive error message
             data = websocket.receive_json()
@@ -245,16 +236,12 @@ class TestWebSocketMultipleConnections:
             websocket.receive_json()
 
             # Subscribe to workflow events
-            websocket.send_json(
-                {"type": "subscribe", "subscription_type": "workflow_events"}
-            )
+            websocket.send_json({"type": "subscribe", "subscription_type": "workflow_events"})
             data1 = websocket.receive_json()
             assert data1["type"] == "subscribed"
 
             # Subscribe to execution events
-            websocket.send_json(
-                {"type": "subscribe", "subscription_type": "execution_events"}
-            )
+            websocket.send_json({"type": "subscribe", "subscription_type": "execution_events"})
             data2 = websocket.receive_json()
             assert data2["type"] == "subscribed"
 

@@ -1,39 +1,21 @@
 """Unit tests for EventBusRegistry with repair cycle support."""
 
-import pytest
-from unittest.mock import Mock, AsyncMock, MagicMock
-from datetime import datetime, timezone
+from unittest.mock import Mock
 
-from codetoreum.infrastructure.event_bus import EventBus
+import pytest
+
+from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
+    MockRepairCycleAdapter,
+)
 from codetoreum.application.event_bus_wiring import (
     EventBusRegistry,
     setup_event_bus,
-    EventBusWiringError,
 )
-from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
-from codetoreum.ports.output.repair_cycle_service import IRepairCycle
 from codetoreum.application.event_handlers.repair_cycle_event_handler import (
     RepairCycleEventHandler,
 )
-
-
-# ====================================================================================
-# Mock Services and Adapters
-# ====================================================================================
-
-
-class MockRepairCycle(IRepairCycle):
-    """Mock repair cycle adapter for testing."""
-
-    def __init__(self):
-        """Initialize mock repair cycle."""
-        self.executed = False
-
-    async def execute(self, context):
-        """Mock execute method."""
-        self.executed = True
-        return Mock()
-
+from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 
 # ====================================================================================
 # Fixtures
@@ -53,9 +35,9 @@ def simulation_clock():
 
 
 @pytest.fixture
-def mock_repair_cycle():
+def mock_repair_cycle(simulation_clock):
     """Create a mock repair cycle adapter."""
-    return MockRepairCycle()
+    return MockRepairCycleAdapter(clock=simulation_clock)
 
 
 @pytest.fixture
@@ -182,7 +164,6 @@ class TestEventBusRegistryServiceRegistration:
         """Test register_services with no arguments (should be no-op)."""
         registry.register_services()
         assert registry._services == {}
-
 
 
 # ====================================================================================
@@ -333,7 +314,6 @@ class TestEventBusRegistryHandlerRegistration:
         assert len(registry._handlers) >= 4
 
 
-
 # ====================================================================================
 # Tests for setup_event_bus Function
 # ====================================================================================
@@ -425,7 +405,6 @@ class TestSetupEventBusFunction:
         # Only repair_cycle and clock should be registered
         assert registry._services.get("repair_cycle") == mock_repair_cycle
         assert registry._services.get("clock") == simulation_clock
-
 
 
 # ====================================================================================

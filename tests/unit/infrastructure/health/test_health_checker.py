@@ -1,25 +1,25 @@
 """Unit tests for health checker implementations."""
 
-import pytest
 import asyncio
-from datetime import datetime
+
+import pytest
 
 from codetoreum.infrastructure.health import (
-    HealthChecker,
-    HealthStatus,
-    HealthCheckResult,
-    DependencyHealth,
     CircuitBreakerHealthCheck,
-    RateLimiterHealthCheck,
-    DatabaseHealthCheck,
-    RedisHealthCheck,
-    EventStoreHealthCheck,
     CompositeHealthCheck,
+    DatabaseHealthCheck,
+    EventStoreHealthCheck,
+    HealthChecker,
+    HealthCheckResult,
+    HealthStatus,
+    IHealthCheck,
+    RateLimiterHealthCheck,
+    RedisHealthCheck,
 )
 from codetoreum.infrastructure.resilience import (
     CircuitBreaker,
-    TokenBucketRateLimiter,
     CircuitState,
+    TokenBucketRateLimiter,
 )
 
 
@@ -34,7 +34,7 @@ class TestHealthChecker:
         result = await checker.check_liveness()
 
         assert result.status == HealthStatus.HEALTHY
-        assert "test_app" in result.message
+        assert result.message and "test_app" in result.message
         assert result.metadata["app_name"] == "test_app"
         assert result.metadata["version"] == "1.0.0"
         assert "uptime_seconds" in result.metadata
@@ -52,13 +52,17 @@ class TestHealthChecker:
     @pytest.mark.asyncio
     async def test_readiness_healthy_with_healthy_dependencies(self):
         """Test readiness is healthy when all dependencies are healthy."""
+
         # Create mock dependency
-        class MockHealthyCheck:
-            async def check_readiness(self):
-                return HealthCheckResult(
-                    status=HealthStatus.HEALTHY,
-                    message="Mock is healthy"
-                )
+        class MockHealthyCheck(IHealthCheck):
+            async def check_liveness(self) -> HealthCheckResult:
+                return HealthCheckResult(status=HealthStatus.HEALTHY)
+
+            async def check_readiness(self) -> HealthCheckResult:
+                return HealthCheckResult(status=HealthStatus.HEALTHY, message="Mock is healthy")
+
+            async def check_dependency(self, dependency_name: str):
+                return None
 
         checker = HealthChecker()
         checker.register_dependency("mock", MockHealthyCheck())
@@ -74,13 +78,17 @@ class TestHealthChecker:
     @pytest.mark.asyncio
     async def test_readiness_unhealthy_with_unhealthy_dependency(self):
         """Test readiness is unhealthy when a dependency is unhealthy."""
+
         # Create mock unhealthy dependency
-        class MockUnhealthyCheck:
-            async def check_readiness(self):
-                return HealthCheckResult(
-                    status=HealthStatus.UNHEALTHY,
-                    message="Mock is unhealthy"
-                )
+        class MockUnhealthyCheck(IHealthCheck):
+            async def check_liveness(self) -> HealthCheckResult:
+                return HealthCheckResult(status=HealthStatus.HEALTHY)
+
+            async def check_readiness(self) -> HealthCheckResult:
+                return HealthCheckResult(status=HealthStatus.UNHEALTHY, message="Mock is unhealthy")
+
+            async def check_dependency(self, dependency_name: str):
+                return None
 
         checker = HealthChecker()
         checker.register_dependency("mock", MockUnhealthyCheck())
@@ -88,19 +96,23 @@ class TestHealthChecker:
         result = await checker.check_readiness()
 
         assert result.status == HealthStatus.UNHEALTHY
-        assert "not ready" in result.message.lower()
+        assert result.message and "not ready" in result.message.lower()
         assert len(result.dependencies) == 1
         assert result.dependencies[0].status == HealthStatus.UNHEALTHY
 
     @pytest.mark.asyncio
     async def test_readiness_degraded_with_degraded_dependency(self):
         """Test readiness is degraded when a dependency is degraded."""
-        class MockDegradedCheck:
-            async def check_readiness(self):
-                return HealthCheckResult(
-                    status=HealthStatus.DEGRADED,
-                    message="Mock is degraded"
-                )
+
+        class MockDegradedCheck(IHealthCheck):
+            async def check_liveness(self) -> HealthCheckResult:
+                return HealthCheckResult(status=HealthStatus.HEALTHY)
+
+            async def check_readiness(self) -> HealthCheckResult:
+                return HealthCheckResult(status=HealthStatus.DEGRADED, message="Mock is degraded")
+
+            async def check_dependency(self, dependency_name: str):
+                return None
 
         checker = HealthChecker()
         checker.register_dependency("mock", MockDegradedCheck())
@@ -118,15 +130,22 @@ class TestHealthChecker:
         result = await checker.check_dependency("nonexistent")
 
         assert result.status == HealthStatus.UNKNOWN
-        assert "not found" in result.message
+        assert result.message and "not found" in result.message
 
     @pytest.mark.asyncio
     async def test_check_dependency_timeout(self):
         """Test that slow dependency checks timeout."""
-        class SlowCheck:
-            async def check_readiness(self):
+
+        class SlowCheck(IHealthCheck):
+            async def check_liveness(self) -> HealthCheckResult:
+                return HealthCheckResult(status=HealthStatus.HEALTHY)
+
+            async def check_readiness(self) -> HealthCheckResult:
                 await asyncio.sleep(10)  # Will timeout at 5 seconds
                 return HealthCheckResult(status=HealthStatus.HEALTHY)
+
+            async def check_dependency(self, dependency_name: str):
+                return None
 
         checker = HealthChecker()
         checker.register_dependency("slow", SlowCheck())
@@ -134,14 +153,21 @@ class TestHealthChecker:
         result = await checker.check_dependency("slow")
 
         assert result.status == HealthStatus.UNHEALTHY
-        assert "timed out" in result.message.lower()
+        assert result.message and "timed out" in result.message.lower()
 
     @pytest.mark.asyncio
     async def test_register_and_unregister_dependency(self):
         """Test registering and unregistering dependencies."""
-        class MockCheck:
-            async def check_readiness(self):
+
+        class MockCheck(IHealthCheck):
+            async def check_liveness(self) -> HealthCheckResult:
                 return HealthCheckResult(status=HealthStatus.HEALTHY)
+
+            async def check_readiness(self) -> HealthCheckResult:
+                return HealthCheckResult(status=HealthStatus.HEALTHY)
+
+            async def check_dependency(self, dependency_name: str):
+                return None
 
         checker = HealthChecker()
 
@@ -166,7 +192,7 @@ class TestCircuitBreakerHealthCheck:
         result = await health_check.check_readiness()
 
         assert result.status == HealthStatus.HEALTHY
-        assert "closed" in result.message.lower()
+        assert result.message and "closed" in result.message.lower()
         assert result.metadata["state"] == CircuitState.CLOSED.value
 
     @pytest.mark.asyncio
@@ -179,7 +205,7 @@ class TestCircuitBreakerHealthCheck:
         result = await health_check.check_readiness()
 
         assert result.status == HealthStatus.UNHEALTHY
-        assert "open" in result.message.lower()
+        assert result.message and "open" in result.message.lower()
 
     @pytest.mark.asyncio
     async def test_circuit_half_open_is_degraded(self):
@@ -193,7 +219,7 @@ class TestCircuitBreakerHealthCheck:
         result = await health_check.check_readiness()
 
         assert result.status == HealthStatus.DEGRADED
-        assert "half-open" in result.message.lower()
+        assert result.message and "half-open" in result.message.lower()
 
     @pytest.mark.asyncio
     async def test_liveness_always_healthy(self):
@@ -235,7 +261,7 @@ class TestRateLimiterHealthCheck:
         result = await health_check.check_readiness()
 
         assert result.status == HealthStatus.DEGRADED
-        assert "high load" in result.message.lower()
+        assert result.message and "high load" in result.message.lower()
 
     @pytest.mark.asyncio
     async def test_full_utilization_is_unhealthy(self):
@@ -251,7 +277,7 @@ class TestRateLimiterHealthCheck:
         result = await health_check.check_readiness()
 
         assert result.status == HealthStatus.UNHEALTHY
-        assert "capacity" in result.message.lower()
+        assert result.message and "capacity" in result.message.lower()
 
 
 class TestDatabaseHealthCheck:
@@ -260,6 +286,7 @@ class TestDatabaseHealthCheck:
     @pytest.mark.asyncio
     async def test_database_healthy(self):
         """Test database health check when healthy."""
+
         async def check_func():
             return True
 
@@ -268,12 +295,13 @@ class TestDatabaseHealthCheck:
         result = await health_check.check_readiness()
 
         assert result.status == HealthStatus.HEALTHY
-        assert "reachable" in result.message.lower()
+        assert result.message and "reachable" in result.message.lower()
         assert "response_time_ms" in result.metadata
 
     @pytest.mark.asyncio
     async def test_database_unhealthy(self):
         """Test database health check when unhealthy."""
+
         async def check_func():
             return False
 
@@ -282,11 +310,12 @@ class TestDatabaseHealthCheck:
         result = await health_check.check_readiness()
 
         assert result.status == HealthStatus.UNHEALTHY
-        assert "not healthy" in result.message.lower()
+        assert result.message and "not healthy" in result.message.lower()
 
     @pytest.mark.asyncio
     async def test_database_error(self):
         """Test database health check when error occurs."""
+
         async def check_func():
             raise Exception("Connection failed")
 
@@ -295,11 +324,12 @@ class TestDatabaseHealthCheck:
         result = await health_check.check_readiness()
 
         assert result.status == HealthStatus.UNHEALTHY
-        assert "failed" in result.message.lower()
+        assert result.message and "failed" in result.message.lower()
 
     @pytest.mark.asyncio
     async def test_liveness_always_healthy(self):
         """Test liveness is always healthy for database check."""
+
         async def check_func():
             return False
 
@@ -316,6 +346,7 @@ class TestRedisHealthCheck:
     @pytest.mark.asyncio
     async def test_redis_healthy(self):
         """Test Redis health check when healthy."""
+
         async def check_func():
             return True
 
@@ -324,11 +355,12 @@ class TestRedisHealthCheck:
         result = await health_check.check_readiness()
 
         assert result.status == HealthStatus.HEALTHY
-        assert "reachable" in result.message.lower()
+        assert result.message and "reachable" in result.message.lower()
 
     @pytest.mark.asyncio
     async def test_redis_unhealthy(self):
         """Test Redis health check when unhealthy."""
+
         async def check_func():
             return False
 
@@ -345,6 +377,7 @@ class TestEventStoreHealthCheck:
     @pytest.mark.asyncio
     async def test_event_store_healthy(self):
         """Test event store health check when healthy."""
+
         async def check_func():
             return True
 
@@ -357,6 +390,7 @@ class TestEventStoreHealthCheck:
     @pytest.mark.asyncio
     async def test_event_store_unhealthy(self):
         """Test event store health check when unhealthy."""
+
         async def check_func():
             return False
 
@@ -373,17 +407,23 @@ class TestCompositeHealthCheck:
     @pytest.mark.asyncio
     async def test_all_healthy(self):
         """Test composite check when all sub-checks are healthy."""
-        class MockHealthyCheck:
-            async def check_readiness(self):
+
+        class MockHealthyCheck(IHealthCheck):
+            async def check_readiness(self) -> HealthCheckResult:
                 return HealthCheckResult(status=HealthStatus.HEALTHY)
 
-            async def check_liveness(self):
+            async def check_liveness(self) -> HealthCheckResult:
                 return HealthCheckResult(status=HealthStatus.HEALTHY)
 
-        composite = CompositeHealthCheck([
-            MockHealthyCheck(),
-            MockHealthyCheck(),
-        ])
+            async def check_dependency(self, dependency_name: str):
+                return None
+
+        composite = CompositeHealthCheck(
+            [
+                MockHealthyCheck(),
+                MockHealthyCheck(),
+            ]
+        )
 
         result = await composite.check_readiness()
 
@@ -392,24 +432,33 @@ class TestCompositeHealthCheck:
     @pytest.mark.asyncio
     async def test_one_unhealthy(self):
         """Test composite check when one sub-check is unhealthy."""
-        class MockHealthyCheck:
-            async def check_readiness(self):
+
+        class MockHealthyCheck(IHealthCheck):
+            async def check_readiness(self) -> HealthCheckResult:
                 return HealthCheckResult(status=HealthStatus.HEALTHY)
 
-            async def check_liveness(self):
+            async def check_liveness(self) -> HealthCheckResult:
                 return HealthCheckResult(status=HealthStatus.HEALTHY)
 
-        class MockUnhealthyCheck:
-            async def check_readiness(self):
+            async def check_dependency(self, dependency_name: str):
+                return None
+
+        class MockUnhealthyCheck(IHealthCheck):
+            async def check_readiness(self) -> HealthCheckResult:
                 return HealthCheckResult(status=HealthStatus.UNHEALTHY)
 
-            async def check_liveness(self):
+            async def check_liveness(self) -> HealthCheckResult:
                 return HealthCheckResult(status=HealthStatus.UNHEALTHY)
 
-        composite = CompositeHealthCheck([
-            MockHealthyCheck(),
-            MockUnhealthyCheck(),
-        ])
+            async def check_dependency(self, dependency_name: str):
+                return None
+
+        composite = CompositeHealthCheck(
+            [
+                MockHealthyCheck(),
+                MockUnhealthyCheck(),
+            ]
+        )
 
         result = await composite.check_readiness()
 
@@ -418,24 +467,33 @@ class TestCompositeHealthCheck:
     @pytest.mark.asyncio
     async def test_one_degraded(self):
         """Test composite check when one sub-check is degraded."""
-        class MockHealthyCheck:
-            async def check_readiness(self):
+
+        class MockHealthyCheck(IHealthCheck):
+            async def check_readiness(self) -> HealthCheckResult:
                 return HealthCheckResult(status=HealthStatus.HEALTHY)
 
-            async def check_liveness(self):
+            async def check_liveness(self) -> HealthCheckResult:
                 return HealthCheckResult(status=HealthStatus.HEALTHY)
 
-        class MockDegradedCheck:
-            async def check_readiness(self):
+            async def check_dependency(self, dependency_name: str):
+                return None
+
+        class MockDegradedCheck(IHealthCheck):
+            async def check_readiness(self) -> HealthCheckResult:
                 return HealthCheckResult(status=HealthStatus.DEGRADED)
 
-            async def check_liveness(self):
+            async def check_liveness(self) -> HealthCheckResult:
                 return HealthCheckResult(status=HealthStatus.HEALTHY)
 
-        composite = CompositeHealthCheck([
-            MockHealthyCheck(),
-            MockDegradedCheck(),
-        ])
+            async def check_dependency(self, dependency_name: str):
+                return None
+
+        composite = CompositeHealthCheck(
+            [
+                MockHealthyCheck(),
+                MockDegradedCheck(),
+            ]
+        )
 
         result = await composite.check_readiness()
 

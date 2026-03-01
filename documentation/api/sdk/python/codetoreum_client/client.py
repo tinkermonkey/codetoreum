@@ -1,20 +1,22 @@
 """
 Main Codetoreum client class
 """
-import requests
-from typing import Optional
+
+from typing import Any, cast
 from urllib.parse import urljoin
 
-from .resources.work_items import WorkItemsResource
+import requests
+
+from .exceptions import AuthenticationError, CodetoreumError, RateLimitError
 from .resources.agents import AgentsResource
-from .resources.workflows import WorkflowsResource
-from .resources.orchestrator import OrchestratorResource
-from .resources.executions import ExecutionsResource
 from .resources.config import ConfigurationResource
-from .resources.metrics import MetricsResource
-from .resources.workspaces import WorkspacesResource
 from .resources.events import EventsResource
-from .exceptions import CodetoreumError, AuthenticationError, RateLimitError
+from .resources.executions import ExecutionsResource
+from .resources.metrics import MetricsResource
+from .resources.orchestrator import OrchestratorResource
+from .resources.work_items import WorkItemsResource
+from .resources.workflows import WorkflowsResource
+from .resources.workspaces import WorkspacesResource
 
 
 class CodetoreumClient:
@@ -41,7 +43,7 @@ class CodetoreumClient:
         base_url: str = "http://localhost:8000",
         timeout: int = 30,
         verify_ssl: bool = True,
-    ):
+    ) -> None:
         if not api_token:
             raise ValueError("api_token is required")
 
@@ -52,11 +54,13 @@ class CodetoreumClient:
 
         # Create session with default headers
         self.session = requests.Session()
-        self.session.headers.update({
-            "Authorization": f"Bearer {api_token}",
-            "Content-Type": "application/json",
-            "User-Agent": f"codetoreum-python-sdk/2.0.0",
-        })
+        self.session.headers.update(
+            {
+                "Authorization": f"Bearer {api_token}",
+                "Content-Type": "application/json",
+                "User-Agent": "codetoreum-python-sdk/2.0.0",
+            }
+        )
         self.session.verify = verify_ssl
 
         # Initialize resource clients
@@ -78,9 +82,9 @@ class CodetoreumClient:
         self,
         method: str,
         path: str,
-        params: Optional[dict] = None,
-        json: Optional[dict] = None,
-        timeout: Optional[int] = None,
+        params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
+        timeout: int | None = None,
     ) -> requests.Response:
         """
         Make HTTP request to API.
@@ -115,9 +119,9 @@ class CodetoreumClient:
             # Handle errors
             if response.status_code == 401:
                 raise AuthenticationError("Invalid or expired authentication token")
-            elif response.status_code == 429:
+            if response.status_code == 429:
                 raise RateLimitError("Rate limit exceeded")
-            elif response.status_code >= 400:
+            if response.status_code >= 400:
                 try:
                     error_data = response.json()
                     error_message = error_data.get("detail", response.text)
@@ -134,38 +138,38 @@ class CodetoreumClient:
             return response
 
         except requests.exceptions.Timeout as e:
-            raise CodetoreumError(f"Request timeout after {timeout}s: {str(e)}") from e
+            raise CodetoreumError(f"Request timeout after {timeout}s: {e!s}") from e
         except requests.exceptions.ConnectionError as e:
-            raise CodetoreumError(f"Connection failed: {str(e)}") from e
+            raise CodetoreumError(f"Connection failed: {e!s}") from e
         except requests.exceptions.RequestException as e:
-            raise CodetoreumError(f"Request failed: {str(e)}") from e
+            raise CodetoreumError(f"Request failed: {e!s}") from e
 
-    def get(self, path: str, params: Optional[dict] = None, **kwargs) -> dict:
+    def get(self, path: str, params: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
         """Make GET request and return JSON response."""
         response = self._request("GET", path, params=params, **kwargs)
-        return response.json()
+        return cast("dict[str, Any]", response.json())
 
-    def post(self, path: str, json: Optional[dict] = None, **kwargs) -> dict:
+    def post(self, path: str, json: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
         """Make POST request and return JSON response."""
         response = self._request("POST", path, json=json, **kwargs)
-        return response.json() if response.text else {}
+        return cast("dict[str, Any]", response.json() if response.text else {})
 
-    def put(self, path: str, json: Optional[dict] = None, **kwargs) -> dict:
+    def put(self, path: str, json: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
         """Make PUT request and return JSON response."""
         response = self._request("PUT", path, json=json, **kwargs)
-        return response.json()
+        return cast("dict[str, Any]", response.json())
 
-    def patch(self, path: str, json: Optional[dict] = None, **kwargs) -> dict:
+    def patch(self, path: str, json: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
         """Make PATCH request and return JSON response."""
         response = self._request("PATCH", path, json=json, **kwargs)
-        return response.json()
+        return cast("dict[str, Any]", response.json())
 
-    def delete(self, path: str, **kwargs) -> dict:
+    def delete(self, path: str, **kwargs: Any) -> dict[str, Any]:
         """Make DELETE request and return JSON response."""
         response = self._request("DELETE", path, **kwargs)
-        return response.json() if response.text else {}
+        return cast("dict[str, Any]", response.json() if response.text else {})
 
-    def health_check(self) -> dict:
+    def health_check(self) -> dict[str, Any]:
         """
         Check API health status.
 
@@ -174,14 +178,14 @@ class CodetoreumClient:
         """
         return self.get("/api/v2/health")
 
-    def close(self):
+    def close(self) -> None:
         """Close the session."""
         self.session.close()
 
-    def __enter__(self):
+    def __enter__(self) -> "CodetoreumClient":
         """Context manager entry."""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Context manager exit."""
         self.close()

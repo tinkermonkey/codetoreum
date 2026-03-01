@@ -50,12 +50,12 @@ export default function ConfigHistoryPage() {
     enabled: (configType === 'all' || configType === 'project') && !!projects?.length,
   })
 
-  const { data: agents } = useQuery({
+  useQuery({
     queryKey: ['agents'],
     queryFn: () => agentConfigApi.getAll(),
   })
 
-  const { data: pipelines } = useQuery({
+  useQuery({
     queryKey: ['pipelines'],
     queryFn: () => pipelineConfigApi.getAll(),
   })

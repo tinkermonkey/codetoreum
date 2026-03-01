@@ -1,18 +1,23 @@
 """Unit tests for InMemoryEventStore."""
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
 
 from codetoreum.adapters.testing import InMemoryEventStore
 from codetoreum.domain.events import (
+    AgentCreated,
     DomainEvent,
+    WorkItemCompleted,
     WorkItemCreated,
     WorkItemStarted,
-    WorkItemCompleted,
-    AgentCreated,
+)
+from codetoreum.infrastructure.simulation.simulation_config import (
+    FidelityLevel,
+    SimulationConfig,
 )
 from codetoreum.ports.exceptions import ConcurrencyConflictError, ResourceNotFoundError
 
@@ -70,7 +75,7 @@ class TestInMemoryEventStore:
             WorkItemStarted(
                 aggregate_id=stream_id,
                 payload={
-                    "started_at": datetime.now(timezone.utc).isoformat(),
+                    "started_at": datetime.now(UTC).isoformat(),
                     "agent_id": "agent-1",
                 },
             ),
@@ -94,7 +99,7 @@ class TestInMemoryEventStore:
         new_event = WorkItemStarted(
             aggregate_id=stream_id,
             payload={
-                "started_at": datetime.now(timezone.utc).isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
                 "agent_id": "agent-1",
             },
         )
@@ -112,7 +117,7 @@ class TestInMemoryEventStore:
         new_event = WorkItemStarted(
             aggregate_id=stream_id,
             payload={
-                "started_at": datetime.now(timezone.utc).isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
                 "agent_id": "agent-1",
             },
         )
@@ -202,7 +207,7 @@ class TestInMemoryEventStore:
         await store.append(stream_id, [old_event])
 
         # Mark the time
-        cutoff_time = datetime.now(timezone.utc)
+        cutoff_time = datetime.now(UTC)
         await asyncio.sleep(0.01)
 
         # Create new events
@@ -210,14 +215,14 @@ class TestInMemoryEventStore:
             WorkItemStarted(
                 aggregate_id=stream_id,
                 payload={
-                    "started_at": datetime.now(timezone.utc).isoformat(),
+                    "started_at": datetime.now(UTC).isoformat(),
                     "agent_id": "agent-1",
                 },
             ),
             WorkItemCompleted(
                 aggregate_id=stream_id,
                 payload={
-                    "completed_at": datetime.now(timezone.utc).isoformat(),
+                    "completed_at": datetime.now(UTC).isoformat(),
                     "agent_id": "agent-1",
                 },
             ),
@@ -249,7 +254,7 @@ class TestInMemoryEventStore:
 
         await store.append(stream1, [event1])
 
-        cutoff_time = datetime.now(timezone.utc)
+        cutoff_time = datetime.now(UTC)
         await asyncio.sleep(0.01)
 
         event2 = WorkItemCreated(
@@ -424,7 +429,7 @@ class TestInMemoryEventStore:
             WorkItemStarted(
                 aggregate_id=stream_id,
                 payload={
-                    "started_at": datetime.now(timezone.utc).isoformat(),
+                    "started_at": datetime.now(UTC).isoformat(),
                     "agent_id": "agent-1",
                 },
             ),
@@ -529,14 +534,14 @@ class TestInMemoryEventStore:
             WorkItemStarted(
                 aggregate_id=stream_id,
                 payload={
-                    "started_at": datetime.now(timezone.utc).isoformat(),
+                    "started_at": datetime.now(UTC).isoformat(),
                     "agent_id": "agent-1",
                 },
             ),
             WorkItemCompleted(
                 aggregate_id=stream_id,
                 payload={
-                    "completed_at": datetime.now(timezone.utc).isoformat(),
+                    "completed_at": datetime.now(UTC).isoformat(),
                     "agent_id": "agent-1",
                 },
             ),
@@ -557,20 +562,20 @@ class TestInMemoryEventStore:
         old_event = WorkItemStarted(
             aggregate_id=stream_id,
             payload={
-                "started_at": datetime.now(timezone.utc).isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
                 "agent_id": "agent-1",
             },
         )
         await store.append(stream_id, [old_event])
 
-        cutoff_time = datetime.now(timezone.utc)
+        cutoff_time = datetime.now(UTC)
         await asyncio.sleep(0.01)
 
         # New event
         new_event = WorkItemStarted(
             aggregate_id=stream_id,
             payload={
-                "started_at": datetime.now(timezone.utc).isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
                 "agent_id": "agent-2",
             },
         )
@@ -592,7 +597,7 @@ class TestInMemoryEventStore:
             WorkItemStarted(
                 aggregate_id=stream_id,
                 payload={
-                    "started_at": datetime.now(timezone.utc).isoformat(),
+                    "started_at": datetime.now(UTC).isoformat(),
                     "agent_id": f"agent-{i}",
                 },
             )
@@ -626,7 +631,7 @@ class TestInMemoryEventStore:
             WorkItemStarted(
                 aggregate_id=stream_id,
                 payload={
-                    "started_at": datetime.now(timezone.utc).isoformat(),
+                    "started_at": datetime.now(UTC).isoformat(),
                     "agent_id": "agent-1",
                 },
                 correlation_id=correlation_id,
@@ -639,7 +644,7 @@ class TestInMemoryEventStore:
         other_event = WorkItemCompleted(
             aggregate_id=stream_id,
             payload={
-                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(UTC).isoformat(),
                 "agent_id": "agent-1",
             },
             correlation_id=uuid4(),
@@ -737,7 +742,7 @@ class TestInMemoryEventStore:
             WorkItemStarted(
                 aggregate_id=stream1,
                 payload={
-                    "started_at": datetime.now(timezone.utc).isoformat(),
+                    "started_at": datetime.now(UTC).isoformat(),
                     "agent_id": "agent-1",
                 },
             ),
@@ -846,7 +851,7 @@ class TestInMemoryEventStore:
         event1 = WorkItemStarted(
             aggregate_id=stream_id,
             payload={
-                "started_at": datetime.now(timezone.utc).isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
                 "agent_id": "agent-1",
             },
         )
@@ -854,7 +859,7 @@ class TestInMemoryEventStore:
         event2 = WorkItemCompleted(
             aggregate_id=stream_id,
             payload={
-                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(UTC).isoformat(),
                 "agent_id": "agent-1",
             },
         )
@@ -886,7 +891,7 @@ class TestInMemoryEventStore:
             WorkItemStarted(
                 aggregate_id="work-item-1",
                 payload={
-                    "started_at": datetime.now(timezone.utc).isoformat(),
+                    "started_at": datetime.now(UTC).isoformat(),
                     "agent_id": "agent-1",
                 },
                 correlation_id=corr_id_1,
@@ -919,3 +924,243 @@ class TestInMemoryEventStore:
         assert len(group_2) == 1
         assert all(e.correlation_id == corr_id_1 for e in group_1)
         assert all(e.correlation_id == corr_id_2 for e in group_2)
+
+
+@pytest.mark.asyncio
+class TestBackpressureMechanism:
+    """Tests for event processing backpressure latency."""
+
+    @pytest.fixture
+    def sample_event(self):
+        """Create a sample event."""
+        return WorkItemCreated(
+            aggregate_id="work-item-123",
+            payload={
+                "title": "Test Work Item",
+                "description": "Test description",
+                "project_id": "project-1",
+                "labels": ["bug"],
+                "priority": 1,
+            },
+        )
+
+    async def test_apply_event_processing_latency_no_config(self):
+        """Test that no latency is applied when config is None."""
+        store = InMemoryEventStore(config=None)
+
+        start = asyncio.get_event_loop().time()
+        await store._apply_event_processing_latency(10)
+        elapsed = asyncio.get_event_loop().time() - start
+
+        # Should complete almost instantly (< 10ms)
+        assert elapsed < 0.01
+
+    async def test_apply_event_processing_latency_low_fidelity(self):
+        """Test that LOW fidelity produces no delay."""
+        config = MagicMock(spec=SimulationConfig)
+        config.fidelity_level = FidelityLevel.LOW
+        config.ms_per_event = 10.0
+        config.event_handler_count = 1
+
+        store = InMemoryEventStore(config=config)
+
+        start = asyncio.get_event_loop().time()
+        await store._apply_event_processing_latency(10)
+        elapsed = asyncio.get_event_loop().time() - start
+
+        # Should complete almost instantly (< 10ms)
+        assert elapsed < 0.01
+
+    async def test_apply_event_processing_latency_medium_fidelity_proportional(self):
+        """Test that MEDIUM fidelity produces proportional delay (event_count * handler_count * ms_per_event)."""
+        config = MagicMock(spec=SimulationConfig)
+        config.fidelity_level = FidelityLevel.MEDIUM
+        config.ms_per_event = 10.0  # 10ms per (event * handler)
+        config.event_handler_count = 1  # 1 handler
+
+        store = InMemoryEventStore(config=config)
+
+        # 5 events * 1 handler * 10ms = 50ms expected
+        start = asyncio.get_event_loop().time()
+        await store._apply_event_processing_latency(5)
+        elapsed = asyncio.get_event_loop().time() - start
+
+        # Should be approximately 50ms (allow ±12ms tolerance for timing variance)
+        assert 0.038 < elapsed < 0.062
+
+    async def test_apply_event_processing_latency_high_fidelity_with_jitter(self):
+        """Test that HIGH fidelity applies jitter to the delay."""
+        config = MagicMock(spec=SimulationConfig)
+        config.fidelity_level = FidelityLevel.HIGH
+        config.ms_per_event = 10.0  # 10ms per (event * handler)
+        config.event_handler_count = 1  # 1 handler
+
+        store = InMemoryEventStore(config=config)
+
+        # 5 events * 1 handler * 10ms = 50ms base, with ±20% jitter
+        # Expected range: 40ms to 60ms (allow 2ms tolerance for timing variance)
+        durations = []
+        for _ in range(5):
+            start = asyncio.get_event_loop().time()
+            await store._apply_event_processing_latency(5)
+            elapsed = asyncio.get_event_loop().time() - start
+            durations.append(elapsed)
+
+        # All durations should be in the jittered range (±2ms tolerance for system variance)
+        for duration in durations:
+            assert 0.038 < duration < 0.062
+
+    async def test_apply_event_processing_latency_zero_events(self):
+        """Test that zero event count produces no delay."""
+        config = MagicMock(spec=SimulationConfig)
+        config.fidelity_level = FidelityLevel.MEDIUM
+        config.ms_per_event = 10.0
+        config.event_handler_count = 1
+
+        store = InMemoryEventStore(config=config)
+
+        start = asyncio.get_event_loop().time()
+        await store._apply_event_processing_latency(0)
+        elapsed = asyncio.get_event_loop().time() - start
+
+        # Should complete almost instantly (< 10ms)
+        assert elapsed < 0.01
+
+    async def test_apply_event_processing_latency_with_simulation_clock(self):
+        """Test that latency uses SimulationClock when available."""
+        config = MagicMock(spec=SimulationConfig)
+        config.fidelity_level = FidelityLevel.MEDIUM
+        config.ms_per_event = 10.0
+        config.event_handler_count = 1
+
+        # Mock clock that tracks sleep calls
+        mock_clock = AsyncMock()
+        store = InMemoryEventStore(config=config, clock=mock_clock)
+
+        await store._apply_event_processing_latency(5)
+
+        # Clock sleep should have been called with 0.05 seconds (5 events * 1 handler * 10ms)
+        mock_clock.sleep.assert_called_once()
+        call_arg = mock_clock.sleep.call_args[0][0]
+        assert 0.04 < call_arg < 0.06  # Allow for jitter in MEDIUM fidelity
+
+    async def test_append_incurs_backpressure_latency(self, sample_event):
+        """Test that append() incurs backpressure latency proportional to event count and handler count."""
+        config = MagicMock(spec=SimulationConfig)
+        config.fidelity_level = FidelityLevel.MEDIUM
+        config.ms_per_event = 10.0  # 10ms per (event * handler)
+        config.event_handler_count = 1  # 1 handler
+
+        store = InMemoryEventStore(config=config)
+
+        # Append 10 events * 1 handler * 10ms = 100ms expected latency
+        events = [sample_event for _ in range(10)]
+
+        start = asyncio.get_event_loop().time()
+        await store.append("work-item-123", events)
+        elapsed = asyncio.get_event_loop().time() - start
+
+        # Should incur latency (allow 80-120ms range for timing variance)
+        assert 0.08 < elapsed < 0.12
+
+    async def test_append_low_fidelity_no_backpressure(self, sample_event):
+        """Test that append() with LOW fidelity produces no backpressure latency."""
+        config = MagicMock(spec=SimulationConfig)
+        config.fidelity_level = FidelityLevel.LOW
+        config.ms_per_event = 10.0
+        config.event_handler_count = 1
+
+        store = InMemoryEventStore(config=config)
+
+        # Append 10 events, expect no latency despite high ms_per_event
+        events = [sample_event for _ in range(10)]
+
+        start = asyncio.get_event_loop().time()
+        await store.append("work-item-123", events)
+        elapsed = asyncio.get_event_loop().time() - start
+
+        # Should complete quickly (< 10ms)
+        assert elapsed < 0.01
+
+    async def test_backpressure_latency_scales_linearly(self, sample_event):
+        """Test that backpressure latency scales linearly with event count and handler count."""
+        config = MagicMock(spec=SimulationConfig)
+        config.fidelity_level = FidelityLevel.MEDIUM
+        config.ms_per_event = 5.0  # 5ms per (event * handler)
+        config.event_handler_count = 1  # 1 handler
+
+        store = InMemoryEventStore(config=config)
+
+        # Measure latency for different event counts
+        durations = {}
+        for count in [5, 10, 20]:
+            events = [sample_event for _ in range(count)]
+            start = asyncio.get_event_loop().time()
+            await store.append("stream-id", events)
+            elapsed = asyncio.get_event_loop().time() - start
+            durations[count] = elapsed
+
+        # Verify approximately linear scaling with event count
+        # 10 events * 1 handler should take ~2x as long as 5 events * 1 handler
+        ratio_10_5 = durations[10] / durations[5]
+        assert 1.8 < ratio_10_5 < 2.2
+
+        # 20 events * 1 handler should take ~4x as long as 5 events * 1 handler
+        ratio_20_5 = durations[20] / durations[5]
+        assert 3.8 < ratio_20_5 < 4.2
+
+    async def test_event_processing_latency_with_multiple_handlers(self, sample_event):
+        """Test that latency scales with handler count per spec (US-3.3).
+
+        Uses same proportional relationship as spec example (100 events * 5 handlers * 10ms = 5 seconds)
+        but with smaller values (100 events * 5 handlers * 0.1ms = 50ms) to avoid slow test.
+        """
+        config = MagicMock(spec=SimulationConfig)
+        config.fidelity_level = FidelityLevel.MEDIUM
+        config.ms_per_event = 0.1  # 0.1ms per (event * handler)
+        config.event_handler_count = 5  # 5 handlers
+
+        store = InMemoryEventStore(config=config)
+
+        # Append 100 events * 5 handlers * 0.1ms = 50ms expected latency
+        # This validates the same formula as spec: event_count * handler_count * ms_per_event
+        events = [sample_event for _ in range(100)]
+
+        start = asyncio.get_event_loop().time()
+        await store.append("work-item-spec-test", events)
+        elapsed = asyncio.get_event_loop().time() - start
+
+        # Should be approximately 50ms (allow 40-60ms range for timing variance)
+        assert 0.040 < elapsed < 0.060
+
+    async def test_event_processing_latency_handler_count_scaling(self, sample_event):
+        """Test that doubling handler count doubles latency."""
+        # Test with 1 handler
+        config_1 = MagicMock(spec=SimulationConfig)
+        config_1.fidelity_level = FidelityLevel.MEDIUM
+        config_1.ms_per_event = 10.0
+        config_1.event_handler_count = 1
+
+        store_1 = InMemoryEventStore(config=config_1)
+
+        events = [sample_event for _ in range(10)]
+
+        start = asyncio.get_event_loop().time()
+        await store_1.append("stream-1", events)
+        elapsed_1 = asyncio.get_event_loop().time() - start
+
+        # Test with 5 handlers
+        config_5 = MagicMock(spec=SimulationConfig)
+        config_5.fidelity_level = FidelityLevel.MEDIUM
+        config_5.ms_per_event = 10.0
+        config_5.event_handler_count = 5
+
+        store_5 = InMemoryEventStore(config=config_5)
+
+        start = asyncio.get_event_loop().time()
+        await store_5.append("stream-5", events)
+        elapsed_5 = asyncio.get_event_loop().time() - start
+
+        # 5 handlers should take approximately 5x as long as 1 handler
+        ratio = elapsed_5 / elapsed_1
+        assert 4.5 < ratio < 5.5

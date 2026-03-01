@@ -5,7 +5,6 @@ Provides migration scripts for setting up audit event storage in PostgreSQL.
 """
 
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +50,8 @@ async def run_migrations(connection_string: str) -> bool:
     Returns:
         True if migrations succeeded, False otherwise
     """
-    from sqlalchemy.ext.asyncio import create_async_engine
     from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import create_async_engine
 
     engine = create_async_engine(connection_string, echo=False)
 
@@ -66,7 +65,7 @@ async def run_migrations(connection_string: str) -> bool:
         logger.error(
             f"Failed to run audit database migrations: {e}",
             exc_info=True,
-            extra={"error_id": "ERR_AUDIT_MIGRATIONS_FAILED"}
+            extra={"error_id": "ERR_AUDIT_MIGRATIONS_FAILED"},
         )
         return False
 
@@ -86,8 +85,8 @@ async def rollback_migrations(connection_string: str) -> bool:
     Returns:
         True if rollback succeeded, False otherwise
     """
-    from sqlalchemy.ext.asyncio import create_async_engine
     from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import create_async_engine
 
     engine = create_async_engine(connection_string, echo=False)
 
@@ -101,7 +100,7 @@ async def rollback_migrations(connection_string: str) -> bool:
         logger.error(
             f"Failed to rollback audit database migrations: {e}",
             exc_info=True,
-            extra={"error_id": "ERR_AUDIT_MIGRATIONS_ROLLBACK_FAILED"}
+            extra={"error_id": "ERR_AUDIT_MIGRATIONS_ROLLBACK_FAILED"},
         )
         return False
 
@@ -119,30 +118,26 @@ async def verify_schema(connection_string: str) -> bool:
     Returns:
         True if schema is valid, False otherwise
     """
-    from sqlalchemy.ext.asyncio import create_async_engine
     from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import create_async_engine
 
     engine = create_async_engine(connection_string, echo=False)
 
     try:
         async with engine.begin() as conn:
             # Check if table exists
-            result = await conn.execute(
-                text(
-                    """
+            result = await conn.execute(text("""
                     SELECT EXISTS (
                         SELECT FROM information_schema.tables
                         WHERE table_name = 'audit_events'
                     )
-                    """
-                )
-            )
+                    """))
             table_exists = result.scalar()
 
             if not table_exists:
                 logger.error(
                     "audit_events table does not exist",
-                    extra={"error_id": "ERR_AUDIT_SCHEMA_VERIFY_TABLE_MISSING"}
+                    extra={"error_id": "ERR_AUDIT_SCHEMA_VERIFY_TABLE_MISSING"},
                 )
                 return False
 
@@ -156,14 +151,12 @@ async def verify_schema(connection_string: str) -> bool:
 
             for index_name in required_indexes:
                 result = await conn.execute(
-                    text(
-                        """
+                    text("""
                         SELECT EXISTS (
                             SELECT FROM pg_indexes
                             WHERE indexname = :index_name
                         )
-                        """
-                    ),
+                        """),
                     {"index_name": index_name},
                 )
                 index_exists = result.scalar()
@@ -178,7 +171,7 @@ async def verify_schema(connection_string: str) -> bool:
         logger.error(
             f"Failed to verify audit schema: {e}",
             exc_info=True,
-            extra={"error_id": "ERR_AUDIT_SCHEMA_VERIFY_FAILED"}
+            extra={"error_id": "ERR_AUDIT_SCHEMA_VERIFY_FAILED"},
         )
         return False
 

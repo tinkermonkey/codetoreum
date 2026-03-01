@@ -6,7 +6,6 @@ import { FlowLegend } from '@/components/workflow-flow/FlowLegend'
 import { useWorkflowRunDetails } from '@/hooks/useWorkflowRunDetails'
 import { useWorkflowEvents } from '@/hooks/useWorkflowEvents'
 import { useFlowData } from '@/hooks/useFlowData'
-import { toggleCycleCollapsed } from '@/utils/cycleDetection'
 
 interface PipelineFlowPageProps {
   chartHeight?: number
@@ -24,7 +23,7 @@ export function PipelineFlowPage({ chartHeight = 600 }: PipelineFlowPageProps = 
   const { refetch } = useWorkflowEvents(id || null)
 
   // Transform events to flow graph
-  const { nodes, edges, cycles, buildFlowchart } = useFlowData(
+  const { nodes, edges } = useFlowData(
     events || [],
     id
   )

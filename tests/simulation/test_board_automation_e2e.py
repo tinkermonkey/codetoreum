@@ -10,23 +10,30 @@ and SimulationDataSeeder to prove the wiring actually works end-to-end.
 """
 
 import asyncio
+from typing import Any, cast
 
 import pytest
 
+from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
 from codetoreum.infrastructure.simulation.bootstrap import (
+    SimulationAdapters,
     SimulationApplicationBootstrap,
 )
 from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 from codetoreum.ports.output.board_service import MovedByType
 
-
 # ============================================================================
 # Helpers
 # ============================================================================
 
 
-async def wait_for_column(board, work_item_id, target_column, timeout=5.0):
+async def wait_for_column(
+    board: MockBoardAdapter,
+    work_item_id: str,
+    target_column: str,
+    timeout: float = 5.0,
+) -> bool:
     """Poll item position until it reaches target column or timeout."""
     elapsed = 0.0
     interval = 0.05
@@ -50,7 +57,8 @@ async def e2e_env():
     config = SimulationConfig.create_fast_config("e2e_cascade")
     bootstrap = SimulationApplicationBootstrap(config)
     await bootstrap.setup()
-    bootstrap.adapters.agent_executor._execution_delay = 0.1
+    adapters = cast("SimulationAdapters", bootstrap.adapters)
+    adapters.agent_executor._execution_delay = 0.1
     seeder = SimulationDataSeeder(bootstrap)
     await seeder.seed_default_scenario()
     yield bootstrap, seeder
@@ -70,7 +78,8 @@ async def test_item_cascades_from_trigger_to_exit(e2e_env):
     Ready (architect) → In Progress (coder) → Review (tester) → Done (exit)
     """
     bootstrap, seeder = e2e_env
-    board = bootstrap.adapters.board
+    adapters = cast("SimulationAdapters", bootstrap.adapters)
+    board = adapters.board
     work_item_id = seeder.created_items.work_items[0]
 
     # Human moves item from Backlog → Ready (pipeline trigger)
@@ -84,27 +93,27 @@ async def test_item_cascades_from_trigger_to_exit(e2e_env):
     )
 
     # Verify all 3 agents were triggered in order
-    executions = bootstrap.adapters.agent_executor.executions
+    executions = adapters.agent_executor.executions
     item_executions = [e for e in executions if e["work_item_id"] == work_item_id]
     agent_order = [e["agent_id"] for e in item_executions]
-    assert agent_order == ["architect", "coder", "tester"], (
-        f"Expected agents [architect, coder, tester], got {agent_order}"
-    )
+    assert agent_order == [
+        "architect",
+        "coder",
+        "tester",
+    ], f"Expected agents [architect, coder, tester], got {agent_order}"
 
     # Verify movement history
     history = board.get_movement_history(work_item_id)
-    assert len(history) == 4, (
-        f"Expected 4 movements (Backlog→Ready, Ready→In Progress, "
-        f"In Progress→Review, Review→Done), got {len(history)}"
-    )
+    assert (
+        len(history) == 4
+    ), f"Expected 4 movements (Backlog→Ready, Ready→In Progress, In Progress→Review, Review→Done), got {len(history)}"
 
     # First move is HUMAN, rest are ORCHESTRATOR
     assert history[0].moved_by == MovedByType.HUMAN
     for move in history[1:]:
-        assert move.moved_by == MovedByType.ORCHESTRATOR, (
-            f"Expected ORCHESTRATOR for {move.from_column}→{move.to_column}, "
-            f"got {move.moved_by}"
-        )
+        assert (
+            move.moved_by == MovedByType.ORCHESTRATOR
+        ), f"Expected ORCHESTRATOR for {move.from_column}→{move.to_column}, got {move.moved_by}"
 
     # Verify column progression path
     columns_visited = [history[0].from_column] + [m.to_column for m in history]
@@ -115,8 +124,9 @@ async def test_item_cascades_from_trigger_to_exit(e2e_env):
 async def test_lock_released_after_cascade(e2e_env):
     """After cascade completes, verify the pipeline lock is released."""
     bootstrap, seeder = e2e_env
-    board = bootstrap.adapters.board
-    lock_service = bootstrap.adapters.lock_service
+    adapters = cast("SimulationAdapters", bootstrap.adapters)
+    board = adapters.board
+    lock_service = adapters.lock_service
     work_item_id = seeder.created_items.work_items[0]
 
     # Determine the project_id the seeder used
@@ -135,13 +145,16 @@ async def test_lock_released_after_cascade(e2e_env):
 
     # Verify lock is released (lock_holder should be None)
     queue_state = await lock_service.get_queue_state(project_id, "board-1")
-    assert queue_state.lock_holder is None, (
-        f"Lock should be released after cascade, but holder is {queue_state.lock_holder}"
-    )
+    assert (
+        queue_state.lock_holder is None
+    ), f"Lock should be released after cascade, but holder is {queue_state.lock_holder}"
 
 
 @pytest.mark.asyncio
-async def test_cascade_stops_on_agent_failure(e2e_env):
+async def test_cascade_stops_on_agent_failure(
+    e2e_env: Any,
+    monkeypatch: Any,
+) -> None:
     """When an agent fails, the cascade stops at that column.
 
     Patch the executor to fail on the second execution (coder).
@@ -150,31 +163,35 @@ async def test_cascade_stops_on_agent_failure(e2e_env):
     without auto-progressing. Item stays in In Progress.
     """
     bootstrap, seeder = e2e_env
-    board = bootstrap.adapters.board
-    executor = bootstrap.adapters.agent_executor
+    adapters = cast("SimulationAdapters", bootstrap.adapters)
+    board = adapters.board
+    executor = adapters.agent_executor
     work_item_id = seeder.created_items.work_items[0]
 
     # Track call count and make the second execution raise
     original_simulate = executor._simulate_execution
     call_count = 0
 
-    async def failing_simulate(work_item_id, agent_id, execution_id, started_at):
+    async def failing_simulate(
+        work_item_id_arg: str,
+        agent_id: str,
+        execution_id: str,
+        started_at: Any,
+    ) -> None:
         nonlocal call_count
         call_count += 1
         if call_count == 2:
             # Second agent (coder) fails
             raise RuntimeError("Simulated coder failure")
-        return await original_simulate(work_item_id, agent_id, execution_id, started_at)
+        await original_simulate(work_item_id_arg, agent_id, execution_id, started_at)
 
-    executor._simulate_execution = failing_simulate
+    monkeypatch.setattr(executor, "_simulate_execution", failing_simulate)
 
     # Move item to trigger cascade
     await board.move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)
 
     # Wait for first agent to complete and item to move to In Progress
-    reached_in_progress = await wait_for_column(
-        board, work_item_id, "In Progress", timeout=5.0
-    )
+    reached_in_progress = await wait_for_column(board, work_item_id, "In Progress", timeout=5.0)
     assert reached_in_progress, "Item did not reach 'In Progress'"
 
     # Give time for the second agent to fail and not progress further
@@ -182,15 +199,12 @@ async def test_cascade_stops_on_agent_failure(e2e_env):
 
     # Item should still be in "In Progress" (coder failed, no auto-progress)
     pos = await board.get_item_position(work_item_id)
-    assert pos.column_name == "In Progress", (
-        f"Expected item to stay in 'In Progress' after coder failure, "
-        f"but found in '{pos.column_name}'"
-    )
+    assert (
+        pos.column_name == "In Progress"
+    ), f"Expected item to stay in 'In Progress' after coder failure, but found in '{pos.column_name}'"
 
     # Verify architect executed but cascade stopped after coder failure
-    item_executions = [
-        e for e in executor.executions if e["work_item_id"] == work_item_id
-    ]
+    item_executions = [e for e in executor.executions if e["work_item_id"] == work_item_id]
     agent_ids = [e["agent_id"] for e in item_executions]
     assert "architect" in agent_ids, "Architect should have been triggered"
     assert "coder" in agent_ids, "Coder should have been triggered (and failed)"

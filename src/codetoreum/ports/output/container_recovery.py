@@ -13,18 +13,15 @@ Design Principles:
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
-from typing import List, Literal, Optional
-
-from dateutil import parser as date_parser
+from typing import Literal
 
 from codetoreum.domain.types import (
     CONTAINER_LABEL_AGENT,
     CONTAINER_LABEL_PROJECT,
     CONTAINER_LABEL_TYPE,
 )
-
 
 # ============================================================================
 # Data Models
@@ -70,40 +67,52 @@ class ContainerMetadata:
     task_id: str
     created_at: datetime
     labels: MappingProxyType
-    work_item_id: Optional[str] = None
-    workflow_run_id: Optional[str] = None
-    execution_id: Optional[str] = None
+    work_item_id: str | None = None
+    workflow_run_id: str | None = None
+    execution_id: str | None = None
 
     def __post_init__(self) -> None:
         """Validate container metadata after initialization."""
         if not self.container_id or not self.container_id.strip():
-            raise ValueError("container_id is required and must be non-empty")
+            msg = "container_id is required and must be non-empty"
+            raise ValueError(msg)
         if not self.container_name or not self.container_name.strip():
-            raise ValueError("container_name is required and must be non-empty")
+            msg = "container_name is required and must be non-empty"
+            raise ValueError(msg)
         if not self.project_id or not self.project_id.strip():
-            raise ValueError("project_id is required and must be non-empty")
+            msg = "project_id is required and must be non-empty"
+            raise ValueError(msg)
         if not self.agent_id or not self.agent_id.strip():
-            raise ValueError("agent_id is required and must be non-empty")
+            msg = "agent_id is required and must be non-empty"
+            raise ValueError(msg)
         if not self.task_id or not self.task_id.strip():
-            raise ValueError("task_id is required and must be non-empty")
+            msg = "task_id is required and must be non-empty"
+            raise ValueError(msg)
         if not isinstance(self.created_at, datetime):
-            raise ValueError("created_at must be a valid datetime object")
-        if self.created_at > datetime.now(timezone.utc):
-            raise ValueError("created_at cannot be in the future")
+            msg = "created_at must be a valid datetime object"
+            raise ValueError(msg)
+        if self.created_at > datetime.now(UTC):
+            msg = "created_at cannot be in the future"
+            raise ValueError(msg)
         if not isinstance(self.labels, MappingProxyType):
-            raise ValueError("labels must be a MappingProxyType (immutable mapping)")
+            msg = "labels must be a MappingProxyType (immutable mapping)"
+            raise ValueError(msg)
         # Validate required labels
         required_labels = {CONTAINER_LABEL_TYPE, CONTAINER_LABEL_PROJECT, CONTAINER_LABEL_AGENT}
         missing = required_labels - set(self.labels.keys())
         if missing:
-            raise ValueError(f"Missing required labels: {missing}")
+            msg = f"Missing required labels: {missing}"
+            raise ValueError(msg)
         # Validate optional fields if provided
         if self.work_item_id is not None and not self.work_item_id.strip():
-            raise ValueError("work_item_id must be non-empty if provided")
+            msg = "work_item_id must be non-empty if provided"
+            raise ValueError(msg)
         if self.workflow_run_id is not None and not self.workflow_run_id.strip():
-            raise ValueError("workflow_run_id must be non-empty if provided")
+            msg = "workflow_run_id must be non-empty if provided"
+            raise ValueError(msg)
         if self.execution_id is not None and not self.execution_id.strip():
-            raise ValueError("execution_id must be non-empty if provided")
+            msg = "execution_id must be non-empty if provided"
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True)
@@ -142,27 +151,34 @@ class RecoveryAssessment:
     action: Literal["reconnect", "kill"]
     reason: str
     with_monitoring: bool
-    execution_id: Optional[str] = None
+    execution_id: str | None = None
 
     def __post_init__(self) -> None:
         """Validate recovery assessment after initialization."""
         if not self.container_id or not self.container_id.strip():
-            raise ValueError("container_id is required and must be non-empty")
+            msg = "container_id is required and must be non-empty"
+            raise ValueError(msg)
         if self.action not in ("reconnect", "kill"):
-            raise ValueError('action must be one of: "reconnect", "kill"')
+            msg = 'action must be one of: "reconnect", "kill"'
+            raise ValueError(msg)
         if not self.reason or not self.reason.strip():
-            raise ValueError("reason is required and must be non-empty")
+            msg = "reason is required and must be non-empty"
+            raise ValueError(msg)
         if not isinstance(self.with_monitoring, bool):
-            raise ValueError("with_monitoring must be a boolean")
+            msg = "with_monitoring must be a boolean"
+            raise ValueError(msg)
         # Validate execution_id if provided
         if self.execution_id is not None and not self.execution_id.strip():
-            raise ValueError("execution_id must be non-empty if provided")
+            msg = "execution_id must be non-empty if provided"
+            raise ValueError(msg)
         # Validate logical consistency: reconnect requires execution_id
         if self.action == "reconnect" and not self.execution_id:
-            raise ValueError("execution_id is required when action is 'reconnect'")
+            msg = "execution_id is required when action is 'reconnect'"
+            raise ValueError(msg)
         # Kill action must not have execution_id
         if self.action == "kill" and self.execution_id is not None:
-            raise ValueError("execution_id must be None when action is 'kill'")
+            msg = "execution_id must be None when action is 'kill'"
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True)
@@ -200,32 +216,38 @@ class RecoveryResult:
     def __post_init__(self) -> None:
         """Validate recovery result after initialization."""
         if self.recovered < 0:
-            raise ValueError("recovered must be >= 0")
+            msg = "recovered must be >= 0"
+            raise ValueError(msg)
         if self.killed < 0:
-            raise ValueError("killed must be >= 0")
+            msg = "killed must be >= 0"
+            raise ValueError(msg)
         if self.errors < 0:
-            raise ValueError("errors must be >= 0")
+            msg = "errors must be >= 0"
+            raise ValueError(msg)
         if self.repair_cycles_processed < 0:
-            raise ValueError("repair_cycles_processed must be >= 0")
+            msg = "repair_cycles_processed must be >= 0"
+            raise ValueError(msg)
         if not self.timestamp:
-            raise ValueError("timestamp is required and must be non-empty")
+            msg = "timestamp is required and must be non-empty"
+            raise ValueError(msg)
         # Validate ISO 8601 timestamp format and reasonable bounds
         try:
-            parsed_dt = date_parser.isoparse(self.timestamp)
+            parsed_dt = datetime.fromisoformat(self.timestamp)
         except (ValueError, TypeError) as e:
-            raise ValueError(
-                f"timestamp must be a valid ISO 8601 datetime string, got: {self.timestamp}"
-            ) from e
+            msg = f"timestamp must be a valid ISO 8601 datetime string, got: {self.timestamp}"
+            raise ValueError(msg) from e
 
         # Validate timestamp is within reasonable bounds
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         # Allow 1 minute grace for clock skew
         if parsed_dt > now.replace(microsecond=0) + timedelta(minutes=1):
-            raise ValueError("timestamp cannot be more than 1 minute in the future")
+            msg = "timestamp cannot be more than 1 minute in the future"
+            raise ValueError(msg)
         # Allow up to 1 year in the past
         one_year_ago = now - timedelta(days=365)
         if parsed_dt < one_year_ago:
-            raise ValueError("timestamp cannot be more than 1 year in the past")
+            msg = "timestamp cannot be more than 1 year in the past"
+            raise ValueError(msg)
 
 
 # ============================================================================
@@ -274,10 +296,9 @@ class IAgentContainerRecoveryService(ABC):
             ContainerError: If Docker API operations fail
             StorageError: If storage operations fail
         """
-        pass
 
     @abstractmethod
-    async def get_running_agent_containers(self) -> List[ContainerMetadata]:
+    async def get_running_agent_containers(self) -> list[ContainerMetadata]:
         """List running containers with Codetoreum labels.
 
         Uses Docker label filtering to ONLY return containers with the
@@ -293,12 +314,9 @@ class IAgentContainerRecoveryService(ABC):
         Raises:
             ContainerError: If Docker API list operation fails
         """
-        pass
 
     @abstractmethod
-    async def assess_container(
-        self, metadata: ContainerMetadata
-    ) -> RecoveryAssessment:
+    async def assess_container(self, metadata: ContainerMetadata) -> RecoveryAssessment:
         """Assess recovery action for a single container.
 
         Evaluates the container's state to determine whether to reconnect
@@ -319,12 +337,9 @@ class IAgentContainerRecoveryService(ABC):
             ContainerError: If container inspection fails
             StorageError: If execution state lookup fails
         """
-        pass
 
     @abstractmethod
-    async def execute_recovery_action(
-        self, assessment: RecoveryAssessment
-    ) -> bool:
+    async def execute_recovery_action(self, assessment: RecoveryAssessment) -> bool:
         """Execute reconnect or kill action.
 
         Performs the recovery action determined during assessment.
@@ -342,10 +357,9 @@ class IAgentContainerRecoveryService(ABC):
         Raises:
             ContainerError: If Docker API operations fail
         """
-        pass
 
     @abstractmethod
-    async def get_running_repair_cycle_containers(self) -> List[ContainerMetadata]:
+    async def get_running_repair_cycle_containers(self) -> list[ContainerMetadata]:
         """List running repair cycle containers using label filtering.
 
         Uses Docker label filtering to ONLY return containers with the
@@ -359,12 +373,9 @@ class IAgentContainerRecoveryService(ABC):
         Raises:
             ContainerError: If Docker API list operation fails
         """
-        pass
 
     @abstractmethod
-    async def assess_repair_cycle_container(
-        self, metadata: ContainerMetadata
-    ) -> RecoveryAssessment:
+    async def assess_repair_cycle_container(self, metadata: ContainerMetadata) -> RecoveryAssessment:
         """Assess recovery action for a repair cycle container.
 
         Evaluates repair cycle container state using specialized logic:
@@ -386,7 +397,6 @@ class IAgentContainerRecoveryService(ABC):
             ContainerError: If container inspection fails
             StorageError: If storage/checkpoint lookup fails
         """
-        pass
 
     @abstractmethod
     async def process_orphaned_repair_results(self) -> int:
@@ -402,4 +412,3 @@ class IAgentContainerRecoveryService(ABC):
         Raises:
             StorageError: If storage operations fail
         """
-        pass

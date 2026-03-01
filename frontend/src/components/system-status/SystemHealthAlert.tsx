@@ -7,7 +7,7 @@
 
 import { AlertTriangle, AlertCircle } from 'lucide-react'
 import { useSystemStatusStore } from '../../store/systemStatusStore'
-import type { HealthCheck, CircuitBreaker } from '../../types/system-status'
+import type { HealthCheck } from '../../types/system-status'
 
 /**
  * Get human-readable component name

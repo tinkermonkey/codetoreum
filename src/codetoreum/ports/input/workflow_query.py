@@ -6,14 +6,15 @@ including retrieving, listing, and searching workflow definitions.
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class WorkflowSortField(Enum):
     """Fields available for sorting workflow lists"""
+
     NAME = "name"
     CREATED_AT = "created_at"
     UPDATED_AT = "updated_at"
@@ -22,6 +23,7 @@ class WorkflowSortField(Enum):
 
 class SortOrder(Enum):
     """Sort order"""
+
     ASC = "asc"
     DESC = "desc"
 
@@ -29,16 +31,18 @@ class SortOrder(Enum):
 @dataclass
 class WorkflowFilters:
     """Filters for listing workflows"""
-    project_id: Optional[str] = None
-    is_template: Optional[bool] = None
-    is_active: Optional[bool] = None
-    work_item_type: Optional[str] = None  # Filter by applicable work item types
-    name_contains: Optional[str] = None  # Partial name match
+
+    project_id: str | None = None
+    is_template: bool | None = None
+    is_active: bool | None = None
+    work_item_type: str | None = None  # Filter by applicable work item types
+    name_contains: str | None = None  # Partial name match
 
 
 @dataclass
 class WorkflowPaginationParams:
     """Pagination parameters for workflow queries"""
+
     offset: int = 0
     limit: int = 20
     sort_by: WorkflowSortField = WorkflowSortField.UPDATED_AT
@@ -48,50 +52,54 @@ class WorkflowPaginationParams:
 @dataclass
 class StageInfo:
     """Information about a workflow stage"""
+
     name: str
     agent_name: str
-    timeout_seconds: Optional[int]
+    timeout_seconds: int | None
     retry_count: int
-    entry_conditions: List[Dict[str, Any]]
-    metadata: Dict[str, Any]
+    entry_conditions: list[dict[str, Any]]
+    metadata: dict[str, Any]
 
 
 @dataclass
 class StageTransitionInfo:
     """Information about a stage transition"""
+
     from_stage: str
     to_stage: str
-    condition: Optional[str]
+    condition: str | None
 
 
 @dataclass
 class WorkflowDefinitionInfo:
     """Complete workflow definition information"""
+
     id: str
     name: str
     description: str
     project_id: str
     version: int
-    stages: List[StageInfo]
-    transitions: List[StageTransitionInfo]
-    work_item_types: List[str]
+    stages: list[StageInfo]
+    transitions: list[StageTransitionInfo]
+    work_item_types: list[str]
     is_template: bool
     is_active: bool
     created_at: datetime
     updated_at: datetime
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
 
 @dataclass
 class WorkflowSummaryInfo:
     """Summary information for workflow list"""
+
     id: str
     name: str
     description: str
     project_id: str
     version: int
     stage_count: int
-    work_item_types: List[str]
+    work_item_types: list[str]
     is_template: bool
     is_active: bool
     created_at: datetime
@@ -101,7 +109,8 @@ class WorkflowSummaryInfo:
 @dataclass
 class WorkflowListResult:
     """Result of listing workflows"""
-    workflows: List[WorkflowSummaryInfo]
+
+    workflows: list[WorkflowSummaryInfo]
     total_count: int
     offset: int
     limit: int
@@ -111,35 +120,39 @@ class WorkflowListResult:
 @dataclass
 class WorkflowVersionInfo:
     """Information about a specific workflow version"""
+
     version: int
     created_at: datetime
-    created_by: Optional[str]
+    created_by: str | None
     changes_summary: str
 
 
 @dataclass
 class WorkflowVersionHistoryResult:
     """Result of querying workflow version history"""
+
     workflow_id: str
-    versions: List[WorkflowVersionInfo]
+    versions: list[WorkflowVersionInfo]
     total_count: int
 
 
 @dataclass
 class WorkflowValidationError:
     """Workflow validation error"""
+
     error_type: str
     message: str
-    stage_name: Optional[str]
-    details: Dict[str, Any]
+    stage_name: str | None
+    details: dict[str, Any]
 
 
 @dataclass
 class WorkflowValidationResult:
     """Result of workflow validation"""
+
     is_valid: bool
-    errors: List[WorkflowValidationError]
-    warnings: List[str]
+    errors: list[WorkflowValidationError]
+    warnings: list[str]
 
 
 class IWorkflowQueryPort(ABC):
@@ -157,11 +170,7 @@ class IWorkflowQueryPort(ABC):
     """
 
     @abstractmethod
-    async def get_workflow(
-        self,
-        workflow_id: str,
-        version: Optional[int] = None
-    ) -> WorkflowDefinitionInfo:
+    async def get_workflow(self, workflow_id: str, version: int | None = None) -> WorkflowDefinitionInfo:
         """
         Retrieves a workflow definition by ID.
 
@@ -176,13 +185,12 @@ class IWorkflowQueryPort(ABC):
             WorkflowNotFoundError: If workflow doesn't exist
             VersionNotFoundError: If requested version doesn't exist
         """
-        pass
 
     @abstractmethod
     async def list_workflows(
         self,
-        filters: Optional[WorkflowFilters] = None,
-        pagination: Optional[WorkflowPaginationParams] = None
+        filters: WorkflowFilters | None = None,
+        pagination: WorkflowPaginationParams | None = None,
     ) -> WorkflowListResult:
         """
         Lists workflows matching the specified criteria.
@@ -197,14 +205,9 @@ class IWorkflowQueryPort(ABC):
         Raises:
             ValidationError: If parameters are invalid
         """
-        pass
 
     @abstractmethod
-    async def get_workflow_versions(
-        self,
-        workflow_id: str,
-        limit: int = 10
-    ) -> WorkflowVersionHistoryResult:
+    async def get_workflow_versions(self, workflow_id: str, limit: int = 10) -> WorkflowVersionHistoryResult:
         """
         Retrieves version history for a workflow.
 
@@ -218,14 +221,9 @@ class IWorkflowQueryPort(ABC):
         Raises:
             WorkflowNotFoundError: If workflow doesn't exist
         """
-        pass
 
     @abstractmethod
-    async def validate_workflow(
-        self,
-        workflow_id: str,
-        version: Optional[int] = None
-    ) -> WorkflowValidationResult:
+    async def validate_workflow(self, workflow_id: str, version: int | None = None) -> WorkflowValidationResult:
         """
         Validates a workflow definition.
 
@@ -245,14 +243,11 @@ class IWorkflowQueryPort(ABC):
         Raises:
             WorkflowNotFoundError: If workflow doesn't exist
         """
-        pass
 
     @abstractmethod
     async def get_workflows_for_work_item_type(
-        self,
-        work_item_type: str,
-        project_id: Optional[str] = None
-    ) -> List[WorkflowSummaryInfo]:
+        self, work_item_type: str, project_id: str | None = None
+    ) -> list[WorkflowSummaryInfo]:
         """
         Retrieves workflows applicable to a specific work item type.
 
@@ -266,13 +261,9 @@ class IWorkflowQueryPort(ABC):
         Raises:
             ValidationError: If work item type is invalid
         """
-        pass
 
     @abstractmethod
-    async def count_active_executions(
-        self,
-        workflow_id: str
-    ) -> int:
+    async def count_active_executions(self, workflow_id: str) -> int:
         """
         Counts active executions for a workflow.
 
@@ -287,4 +278,3 @@ class IWorkflowQueryPort(ABC):
         Raises:
             WorkflowNotFoundError: If workflow doesn't exist
         """
-        pass

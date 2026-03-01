@@ -6,23 +6,17 @@ Tests configuration-driven instantiation and registry integration.
 
 import pytest
 
-from codetoreum.infrastructure.adapters import (
-    AdapterFactory,
-    AdapterFactoryConfig
-)
-from codetoreum.infrastructure.resilience import OperationMode
-from codetoreum.ports.output.ticket_system import ITicketSystem
-from codetoreum.ports.output.llm_provider import ILLMProvider
-from codetoreum.ports.output.container import IContainer
-from codetoreum.ports.output.repository import IRepository
-from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.adapters.testing import (
+    InMemoryEventStore,
     InMemoryTicketAdapter,
-    MockLLMAdapter,
-    FakeContainerAdapter,
-    InMemoryRepositoryAdapter,
-    InMemoryEventStore
 )
+from codetoreum.infrastructure.adapters import AdapterFactory, AdapterFactoryConfig
+from codetoreum.infrastructure.resilience import OperationMode
+from codetoreum.ports.output.container import IContainer
+from codetoreum.ports.output.event_store import IEventStore
+from codetoreum.ports.output.llm_provider import ILLMProvider
+from codetoreum.ports.output.repository import IRepository
+from codetoreum.ports.output.ticket_system import ITicketSystem
 
 
 class TestAdapterFactoryConfig:
@@ -37,10 +31,7 @@ class TestAdapterFactoryConfig:
 
     def test_custom_config(self):
         """Test custom configuration."""
-        config = AdapterFactoryConfig(
-            operation_mode=OperationMode.SIMULATION,
-            enable_resilience=False
-        )
+        config = AdapterFactoryConfig(operation_mode=OperationMode.SIMULATION, enable_resilience=False)
 
         assert config.operation_mode == OperationMode.SIMULATION
         assert config.enable_resilience is False
@@ -57,10 +48,7 @@ class TestAdapterFactory:
 
     def test_initialization_with_config(self):
         """Test factory initialization with custom config."""
-        config = AdapterFactoryConfig(
-            operation_mode=OperationMode.SIMULATION,
-            enable_resilience=False
-        )
+        config = AdapterFactoryConfig(operation_mode=OperationMode.SIMULATION, enable_resilience=False)
 
         factory = AdapterFactory(config)
         assert factory.get_operation_mode() == OperationMode.SIMULATION
@@ -279,7 +267,7 @@ class TestFactoryIntegration:
             name="custom",
             adapter_type=InMemoryTicketAdapter,
             description="Custom adapter",
-            tags=["custom"]
+            tags=["custom"],
         )
 
         # Create instance of custom adapter

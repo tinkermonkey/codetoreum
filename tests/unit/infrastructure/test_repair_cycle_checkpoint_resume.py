@@ -4,36 +4,39 @@ Tests checkpoint save/retrieve, resume from checkpoint, and circuit breaker
 integration with checkpointing.
 """
 
-import pytest
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
-from codetoreum.adapters.testing.in_memory_checkpoint_store import InMemoryCheckpointStore
+import pytest
+
+from codetoreum.adapters.testing.in_memory_checkpoint_store import (
+    InMemoryCheckpointStore,
+)
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
 from codetoreum.domain.repair_cycle_types import (
     RepairCycleCheckpoint,
-    RepairTestFailure,
     RepairTestRunConfig,
     RepairTestType,
 )
-from codetoreum.ports.output.repair_cycle_service import RepairCycleContext
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 
 
 @dataclass
 class _RepairCycleContextImpl:
     """Concrete implementation of RepairCycleContext Protocol for testing."""
+
     stage_name: str
     workflow_run_id: str
-    test_configs: tuple
+    test_configs: tuple[RepairTestRunConfig, ...]
     agent_name: str
     max_total_agent_calls: int
     checkpoint_interval: int
 
 
-def _create_repair_cycle_context(**kwargs) -> RepairCycleContext:
+def _create_repair_cycle_context(**kwargs: Any) -> _RepairCycleContextImpl:
     """Factory function to create RepairCycleContext instances for testing."""
-    defaults = {
+    defaults: dict[str, Any] = {
         "stage_name": "code_review",
         "workflow_run_id": "run-123",
         "test_configs": (),
@@ -57,7 +60,7 @@ class TestCheckpointStorage:
     @pytest.fixture
     def checkpoint(self):
         """Create a valid checkpoint."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return RepairCycleCheckpoint(
             workflow_run_id="run-123",
             test_type=RepairTestType.UNIT,
@@ -105,7 +108,7 @@ class TestCheckpointStorage:
 
     async def test_delete_checkpoint_all_for_pipeline(self, store):
         """Test deleting all checkpoints for pipeline run."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Create checkpoints for multiple test types
         for test_type in [RepairTestType.UNIT, RepairTestType.INTEGRATION, RepairTestType.E2E]:
@@ -127,8 +130,8 @@ class TestCheckpointStorage:
         await store.delete_checkpoint("run-123")
 
         # Verify all deleted
-        for test_type in ["UNIT", "INTEGRATION", "E2E"]:
-            exists = await store.checkpoint_exists("run-123", test_type)
+        for test_type in [RepairTestType.UNIT, RepairTestType.INTEGRATION, RepairTestType.E2E]:
+            exists = await store.checkpoint_exists("run-123", test_type.value)
             assert not exists
 
     async def test_delete_checkpoint_idempotent(self, store):
@@ -138,7 +141,7 @@ class TestCheckpointStorage:
 
     async def test_multiple_checkpoints_different_pipeline_runs(self, store):
         """Test storing checkpoints for different pipeline runs."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Create checkpoints for different runs
         for i in range(1, 4):
@@ -174,8 +177,8 @@ class TestCheckpointStorage:
                 warnings_reviewed=0,
                 elapsed_seconds=0.0,
                 test_results=(),
-                timestamp=datetime.now(timezone.utc).isoformat(),
-                expires_at=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
+                expires_at=datetime.now(UTC).isoformat(),
             )
 
 
@@ -204,9 +207,7 @@ class TestRepairCycleCheckpoint:
         return _create_repair_cycle_context(
             stage_name="code_review",
             workflow_run_id="run-123",
-            test_configs=(
-                RepairTestRunConfig(test_type=RepairTestType.UNIT, max_iterations=3),
-            ),
+            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT, max_iterations=3),),
             agent_name="reviewer",
             max_total_agent_calls=10,
             checkpoint_interval=1,
@@ -274,9 +275,7 @@ class TestRepairCycleResume:
         return _create_repair_cycle_context(
             stage_name="code_review",
             workflow_run_id="run-123",
-            test_configs=(
-                RepairTestRunConfig(test_type=RepairTestType.UNIT, max_iterations=3),
-            ),
+            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT, max_iterations=3),),
             agent_name="reviewer",
             max_total_agent_calls=10,
             checkpoint_interval=1,
@@ -285,7 +284,7 @@ class TestRepairCycleResume:
     async def test_resume_from_checkpoint(self, adapter, context, store):
         """Test resuming execution from checkpoint."""
         # Save checkpoint with state
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         checkpoint = RepairCycleCheckpoint(
             workflow_run_id="run-123",
             test_type=RepairTestType.UNIT,
@@ -309,7 +308,7 @@ class TestRepairCycleResume:
 
     async def test_resume_restores_state(self, adapter, context, store):
         """Test that resume restores internal state."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         checkpoint = RepairCycleCheckpoint(
             workflow_run_id="run-123",
             test_type=RepairTestType.UNIT,

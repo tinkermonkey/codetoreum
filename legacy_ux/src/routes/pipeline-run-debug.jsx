@@ -4,7 +4,7 @@ import Header from '../components/Header'
 import NavigationTabs from '../components/NavigationTabs'
 import PipelineRunEventLog from '../components/PipelineRunEventLog'
 import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, memo } from 'react'
-import { useSocket } from '../contexts/SocketContext'
+import { useSocket } from '../hooks'
 import { formatDuration } from '../utils/stateHelpers'
 import { mergePipelineRunEvents, mergeArrayByIdStable } from '../utils/eventMerging'
 
@@ -185,7 +185,7 @@ function PipelineRunDebugView() {
       isFetchingActiveRef.current = false
     }
   }, [])
-  
+
   // Fetch completed pipeline runs with pagination - no dependencies to avoid circular re-creation
   const fetchCompletedPipelineRuns = useCallback(async (offset = 0, append = false) => {
     // Guard against concurrent fetches
@@ -242,14 +242,14 @@ function PipelineRunDebugView() {
       isFetchingCompletedRef.current = false
     }
   }, [completedLimit])
-  
+
   // Load more completed runs
   const loadMoreCompleted = useCallback(() => {
     const newOffset = completedOffset + completedLimit
     setCompletedOffset(newOffset)
     fetchCompletedPipelineRuns(newOffset, true)
   }, [completedOffset, completedLimit, fetchCompletedPipelineRuns])
-  
+
   // Fetch events for selected pipeline run
   const fetchPipelineRunEvents = useCallback(async (pipelineRunId) => {
     if (!pipelineRunId) return
@@ -281,7 +281,7 @@ function PipelineRunDebugView() {
       setLoadingEvents(false)
     }
   }, [])
-  
+
   // Initial load
   useEffect(() => {
     fetchActivePipelineRuns(true) // Pass true for initial load
@@ -302,21 +302,21 @@ function PipelineRunDebugView() {
     return () => clearInterval(intervalId)
     // Callbacks are now stable (no dependencies), so only depend on them
   }, [fetchActivePipelineRuns, fetchCompletedPipelineRuns])
-  
+
   // Fetch data when tab changes
   useEffect(() => {
     if (selectedTab === 'completed' && completedPipelineRuns.length === 0) {
       fetchCompletedPipelineRuns(0, false)
     }
   }, [selectedTab])
-  
+
   // Load events when pipeline run selected
   useEffect(() => {
     if (selectedPipelineRun) {
       fetchPipelineRunEvents(selectedPipelineRun.id)
     }
   }, [selectedPipelineRun, fetchPipelineRunEvents])
-  
+
   // Track last processed socket event to prevent duplicate processing
   const lastProcessedEventRef = useRef(null)
 
@@ -343,7 +343,7 @@ function PipelineRunDebugView() {
       }
     }
   }, [socketEvents, fetchPipelineRunEvents, fetchActivePipelineRuns, fetchCompletedPipelineRuns])
-  
+
   // Merge API events with live WebSocket events
   const mergedEvents = useMemo(() => {
     if (!selectedPipelineRun) return []
@@ -358,7 +358,7 @@ function PipelineRunDebugView() {
   return (
     <div className="min-h-screen p-5 bg-gh-canvas text-gh-fg">
       <Header />
-      
+
       <div className="flex items-center justify-between my-3">
         <NavigationTabs />
         <button
@@ -370,12 +370,12 @@ function PipelineRunDebugView() {
           Refresh
         </button>
       </div>
-      
+
       <div className="flex gap-4">
         {/* Pipeline Run Selector Sidebar */}
         <div className="w-64 bg-gh-canvas-subtle rounded-md border border-gh-border p-4 h-fit">
           <h3 className="text-lg font-semibold mb-3">Pipeline Runs</h3>
-          
+
           {/* Tabs */}
           <div className="flex gap-2 mb-4 border-b border-gh-border">
             <button
@@ -399,7 +399,7 @@ function PipelineRunDebugView() {
               Completed
             </button>
           </div>
-          
+
           {/* Active Pipeline Runs */}
           {selectedTab === 'active' && (
             <>
@@ -428,7 +428,7 @@ function PipelineRunDebugView() {
               )}
             </>
           )}
-          
+
           {/* Completed Pipeline Runs */}
           {selectedTab === 'completed' && (
             <>
@@ -478,7 +478,7 @@ function PipelineRunDebugView() {
             </>
           )}
         </div>
-        
+
         {/* Pipeline Run Event Log */}
         <div className="flex-1">
           {loadingEvents ? (

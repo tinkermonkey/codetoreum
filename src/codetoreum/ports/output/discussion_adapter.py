@@ -11,14 +11,14 @@ to discussion updates.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Literal, Optional
+from typing import Literal
 
-from codetoreum.domain.events import Comment, CommentContext
+from codetoreum.domain.events import Comment
 
 from .event_emitter import IEventEmitter
 
 
-@dataclass
+@dataclass(frozen=True)
 class DiscussionMonitoringConfig:
     """Configuration for work-item-specific discussion monitoring.
 
@@ -28,6 +28,8 @@ class DiscussionMonitoringConfig:
     This configuration focuses on discussion-specific concerns (what comments
     have been processed) rather than workflow/board context (column, agent assignment).
     Board context should be tracked separately in the orchestration layer.
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation.
 
     Attributes:
         project_id: Project containing the work item
@@ -36,24 +38,65 @@ class DiscussionMonitoringConfig:
     """
 
     project_id: str
-    last_processed_comment_id: Optional[str] = None
+    last_processed_comment_id: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.project_id, str) or not self.project_id:
+            msg = "project_id must be a non-empty string"
+            raise ValueError(msg)
+
+        if self.last_processed_comment_id is not None:
+            if not isinstance(self.last_processed_comment_id, str) or not self.last_processed_comment_id:
+                msg = "last_processed_comment_id must be a non-empty string or None"
+                raise ValueError(msg)
 
 
-@dataclass
+@dataclass(frozen=True)
 class DiscussionThread:
     """Represents a complete discussion thread on a work item.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. Comments are converted
+    to a tuple for true immutability.
 
     Attributes:
         id: Unique identifier for the thread
         work_item_id: Work item this thread is on
-        comments: All comments in the thread
+        comments: All comments in the thread (tuple for immutability)
         thread_type: 'flat' for sequential comments, 'nested' for threaded replies
     """
 
     id: str
     work_item_id: str
-    comments: List[Comment]
+    comments: tuple[Comment, ...]
     thread_type: Literal["flat", "nested"]
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        # Coerce list to tuple for comments
+        if isinstance(self.comments, list):
+            object.__setattr__(self, "comments", tuple(self.comments))
+
+        if not isinstance(self.id, str) or not self.id:
+            msg = "id must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.work_item_id, str) or not self.work_item_id:
+            msg = "work_item_id must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.comments, tuple):
+            msg = "comments must be a list or tuple of Comment instances"
+            raise ValueError(msg)
+
+        if not all(isinstance(c, Comment) for c in self.comments):
+            msg = "all comments must be Comment instances"
+            raise ValueError(msg)
+
+        if self.thread_type not in ("flat", "nested"):
+            msg = f"thread_type must be 'flat' or 'nested', got: {self.thread_type}"
+            raise ValueError(msg)
 
 
 class IDiscussionAdapter(IEventEmitter, ABC):
@@ -116,7 +159,6 @@ class IDiscussionAdapter(IEventEmitter, ABC):
             ResourceNotFoundError: Work item doesn't exist or has no discussion
             ExternalServiceError: Service communication failure
         """
-        pass
 
     # Command Operations
 
@@ -125,7 +167,7 @@ class IDiscussionAdapter(IEventEmitter, ABC):
         self,
         work_item_id: str,
         content: str,
-        parent_id: Optional[str] = None,
+        parent_id: str | None = None,
     ) -> Comment:
         """Post a comment to a work item.
 
@@ -148,14 +190,11 @@ class IDiscussionAdapter(IEventEmitter, ABC):
         Events:
             Emits 'comment.posted' event with new comment
         """
-        pass
 
     # Work-Item-Specific Monitoring
 
     @abstractmethod
-    def start_monitoring(
-        self, work_item_id: str, config: DiscussionMonitoringConfig
-    ) -> None:
+    def start_monitoring(self, work_item_id: str, config: DiscussionMonitoringConfig) -> None:
         """Start monitoring a specific work item for new comments.
 
         Enables change detection for a particular work item's discussion thread.
@@ -174,7 +213,6 @@ class IDiscussionAdapter(IEventEmitter, ABC):
             ResourceNotFoundError: Work item doesn't exist
             ExternalServiceError: If unable to start monitoring
         """
-        pass
 
     @abstractmethod
     def stop_monitoring(self, work_item_id: str) -> None:
@@ -190,4 +228,3 @@ class IDiscussionAdapter(IEventEmitter, ABC):
             ValidationError: If work_item_id is invalid
             ResourceNotFoundError: If not currently monitoring this item
         """
-        pass

@@ -15,25 +15,28 @@ Tests validate correct integration across component boundaries:
 """
 
 import asyncio
-import pytest
-from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
+import pytest
+
+from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.application.conversational_loop_orchestrator import (
     ConversationalLoopOrchestrator,
 )
 from codetoreum.domain.conversational_session import ConversationalSessionState
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.domain.events.discussion_events import (
     Comment,
     CommentContext,
     CommentNeedsResponseEvent,
 )
-from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.domain.events import DomainEvent
-from codetoreum.ports.output.discussion_adapter import DiscussionMonitoringConfig, DiscussionThread
-from codetoreum.ports.output.identity_service import IIdentityService, BotIdentityConfig
+from codetoreum.ports.output.discussion_adapter import (
+    DiscussionMonitoringConfig,
+    DiscussionThread,
+)
+from codetoreum.ports.output.identity_service import BotIdentityConfig, IIdentityService
 
 
 class MockIdentityService(IIdentityService):
@@ -73,10 +76,10 @@ class MockDiscussionAdapter:
     """
 
     def __init__(self, identity_service: IIdentityService):
-        self.monitoring_sessions: Dict[str, DiscussionMonitoringConfig] = {}
-        self.comments_posted: List[Comment] = []
-        self._threads: Dict[str, List[Comment]] = {}
-        self._event_handlers: Dict[str, List] = {}
+        self.monitoring_sessions: dict[str, DiscussionMonitoringConfig] = {}
+        self.comments_posted: list[Comment] = []
+        self._threads: dict[str, list[Comment]] = {}
+        self._event_handlers: dict[str, list] = {}
         self._identity_service = identity_service
 
     def on(self, event_type: str, handler) -> None:
@@ -85,9 +88,9 @@ class MockDiscussionAdapter:
             self._event_handlers[event_type] = []
         self._event_handlers[event_type].append(handler)
 
-    def _emit_event(self, event: DomainEvent) -> None:
+    def _emit_event(self, event: CodetoreumEvent) -> None:
         """Emit event to all registered handlers."""
-        event_type = event.event_type if hasattr(event, 'event_type') else event.type
+        event_type = event.type
         handlers = self._event_handlers.get(event_type, [])
         for handler in handlers:
             if asyncio.iscoroutinefunction(handler):
@@ -119,7 +122,7 @@ class MockDiscussionAdapter:
         self,
         work_item_id: str,
         content: str,
-        parent_id: Optional[str] = None,
+        parent_id: str | None = None,
     ) -> Comment:
         """Post a comment to a work item."""
         comment_id = f"comment-{len(self.comments_posted)}"
@@ -127,9 +130,9 @@ class MockDiscussionAdapter:
             id=comment_id,
             author=self._identity_service.get_bot_username(),
             body=content,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
             parent_id=parent_id,
-            is_bot=True
+            is_bot=True,
         )
         self.comments_posted.append(comment)
         if work_item_id not in self._threads:
@@ -144,20 +147,20 @@ class MockDiscussionAdapter:
             id=f"thread-{work_item_id}",
             work_item_id=work_item_id,
             comments=comments,
-            thread_type='flat'
+            thread_type="flat",
         )
 
     # Test helper methods
-    def simulate_comment(self, work_item_id: str, author: str, body: str, parent_id: Optional[str] = None) -> Comment:
+    def simulate_comment(self, work_item_id: str, author: str, body: str, parent_id: str | None = None) -> Comment:
         """Simulate a human comment (for testing)."""
         comment_id = f"comment-{len(self.comments_posted)}"
         comment = Comment(
             id=comment_id,
             author=author,
             body=body,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
             parent_id=parent_id,
-            is_bot=False
+            is_bot=False,
         )
         if work_item_id not in self._threads:
             self._threads[work_item_id] = []
@@ -168,7 +171,7 @@ class MockDiscussionAdapter:
         """Get total comments on a work item."""
         return len(self._threads.get(work_item_id, []))
 
-    def get_posted_comments(self) -> List[Comment]:
+    def get_posted_comments(self) -> list[Comment]:
         """Get all comments posted by agent."""
         return self.comments_posted.copy()
 
@@ -180,9 +183,9 @@ class MockLLMProvider:
     """
 
     def __init__(self):
-        self.executions: List[dict] = []
-        self.conversations: Dict[str, List[str]] = {}
-        self._response_patterns: Dict[str, str] = {}
+        self.executions: list[dict] = []
+        self.conversations: dict[str, list[str]] = {}
+        self._response_patterns: dict[str, str] = {}
 
     def add_response_pattern(self, pattern_key: str, response: str) -> None:
         """Add deterministic response for specific patterns."""
@@ -191,6 +194,7 @@ class MockLLMProvider:
     async def execute_prompt(self, prompt: str, context=None, stream_callback=None):
         """Execute a one-time prompt."""
         from unittest.mock import MagicMock
+
         result = MagicMock()
         result.content = "Mock response to prompt"
         result.conversation_id = None
@@ -211,11 +215,13 @@ class MockLLMProvider:
         self.conversations[conversation_id].append(message)
 
         # Record execution
-        self.executions.append({
-            "conversation_id": conversation_id,
-            "message": message,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        self.executions.append(
+            {
+                "conversation_id": conversation_id,
+                "message": message,
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        )
 
         # Generate response
         response_text = f"Agent response to: {message[:50]}..."
@@ -238,15 +244,13 @@ class MockLLMProvider:
             "supports_conversations": True,
         }
 
-    def get_conversation_history(self, conversation_id: str) -> List[str]:
+    def get_conversation_history(self, conversation_id: str) -> list[str]:
         """Get all messages in a conversation."""
         return self.conversations.get(conversation_id, [])
 
     def get_execution_count(self) -> int:
         """Get total number of agent executions."""
         return len(self.executions)
-
-
 
 
 @pytest.fixture
@@ -263,7 +267,7 @@ async def real_event_store():
     work correctly with the orchestrator.
     """
     event_store = InMemoryEventStore()
-    yield event_store
+    return event_store
 
 
 @pytest.fixture
@@ -342,7 +346,7 @@ class TestFullLoopLifecycleIntegration:
             {
                 "column_name": "In Review",
                 "agent_assignment": "code-reviewer",
-            }
+            },
         )
 
         assert session.status == "active"
@@ -351,7 +355,7 @@ class TestFullLoopLifecycleIntegration:
 
         # Verify session persisted to real EventStore
         stored_session = await orchestrator.load_session_state(work_item_id)
-        assert stored_session is not None
+        assert stored_session is not None, "Session should be persisted to event store"
         assert stored_session.session_id == session.session_id
 
         # Step 2: First comment from human
@@ -359,12 +363,12 @@ class TestFullLoopLifecycleIntegration:
             id="comment-1",
             author="user1",
             body="Can you review this code?",
-            created_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            created_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         )
 
         event1 = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id=work_item_id,
             project_id=project_id,
@@ -385,7 +389,7 @@ class TestFullLoopLifecycleIntegration:
 
         # Verify session checkpoint updated in EventStore
         updated_session = await orchestrator.load_session_state(work_item_id)
-        assert updated_session is not None
+        assert updated_session is not None, "Session should remain in event store"
         assert updated_session.last_processed_comment_id == first_comment.id
         assert updated_session.status == "active"
 
@@ -394,13 +398,13 @@ class TestFullLoopLifecycleIntegration:
             id="comment-2",
             author="user1",
             body="What about error handling?",
-            created_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            created_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             parent_id=response1.id,
         )
 
         event2 = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id=work_item_id,
             project_id=project_id,
@@ -430,7 +434,7 @@ class TestFullLoopLifecycleIntegration:
 
         column_change_event = WorkItemColumnChangedEvent(
             type="workitem.column_changed",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id=work_item_id,
             project_id=project_id,
@@ -446,8 +450,8 @@ class TestFullLoopLifecycleIntegration:
 
         # Verify session terminated in EventStore
         final_session = await orchestrator.load_session_state(work_item_id)
+        assert final_session is not None, "Session should still be in event store (marked as terminated)"
         assert final_session.status == "terminated"
-
 
 
 @pytest.mark.integration
@@ -495,12 +499,12 @@ class TestSessionPersistenceAcrossInstancesIntegration:
             id="comment-1",
             author="alice",
             body="First review request",
-            created_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            created_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         )
 
         event_1 = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id=work_item_id,
             project_id=project_id,
@@ -512,6 +516,7 @@ class TestSessionPersistenceAcrossInstancesIntegration:
 
         # Verify checkpoint updated
         session_after_1 = await orchestrator_1.load_session_state(work_item_id)
+        assert session_after_1 is not None, "Session should be persisted after comment handling"
         assert session_after_1.last_processed_comment_id == "comment-1"
         original_session_id = session_1.session_id
 
@@ -528,7 +533,7 @@ class TestSessionPersistenceAcrossInstancesIntegration:
         session_2 = await orchestrator_2.load_session_state(work_item_id)
 
         # FR-5.3: Verify session fully recovered
-        assert session_2 is not None
+        assert session_2 is not None, "Session should be recoverable from event store after restart"
         assert session_2.session_id == original_session_id
         assert session_2.last_processed_comment_id == "comment-1"
         assert session_2.status == "active"
@@ -544,12 +549,12 @@ class TestSessionPersistenceAcrossInstancesIntegration:
             id="comment-2",
             author="bob",
             body="Second question",
-            created_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            created_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         )
 
         event_2 = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id=work_item_id,
             project_id=project_id,
@@ -603,17 +608,15 @@ class TestErrorHandlingIntegration:
             id="comment-1",
             author="user1",
             body="Review this",
-            created_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            created_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         )
 
         # Make LLM provider fail to trigger error event
-        testable_llm_provider.continue_conversation = AsyncMock(
-            side_effect=Exception("Agent execution failed")
-        )
+        testable_llm_provider.continue_conversation = AsyncMock(side_effect=Exception("Agent execution failed"))
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id=work_item_id,
             project_id=project_id,
@@ -630,7 +633,7 @@ class TestErrorHandlingIntegration:
 
         # Session should still be active
         loaded_session = await orchestrator.load_session_state(work_item_id)
-        assert loaded_session is not None
+        assert loaded_session is not None, "Session should remain active after transient error"
         assert loaded_session.status == "active"
 
         # FR-7.1: Verify that error handling logic executes
@@ -668,6 +671,7 @@ class TestErrorHandlingIntegration:
 
         # Verify session terminated and persisted
         loaded_session = await orchestrator.load_session_state(work_item_id)
+        assert loaded_session is not None, "Session should be persisted even when terminated"
         assert loaded_session.status == "terminated"
 
         # FR-7.1: Verify that cleanup properly terminates session
@@ -715,7 +719,7 @@ class TestConcurrentSessionsWithRealEventStoreIntegration:
         ]
 
         sessions = []
-        for orch, (work_item_id, project_id, agent) in zip(orchestrators, session_configs):
+        for orch, (work_item_id, project_id, agent) in zip(orchestrators, session_configs, strict=False):
             session = await orch.initialize_loop(
                 work_item_id,
                 project_id,
@@ -735,11 +739,11 @@ class TestConcurrentSessionsWithRealEventStoreIntegration:
                 id=comment_id,
                 author="user",
                 body=f"Comment for {work_item_id}",
-                created_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                created_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             )
             event = CommentNeedsResponseEvent(
                 type="comment.needs_response",
-                timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
                 source="github",
                 work_item_id=work_item_id,
                 project_id=project_id,
@@ -750,7 +754,7 @@ class TestConcurrentSessionsWithRealEventStoreIntegration:
 
         # Process comments concurrently (FR-9.2: sequential per item, parallel across items)
         tasks = []
-        for orch, (work_item_id, project_id, _) in zip(orchestrators, session_configs):
+        for orch, (work_item_id, project_id, _) in zip(orchestrators, session_configs, strict=False):
             task = process_comment(orch, work_item_id, "proj-1", f"{work_item_id}-comment-1")
             tasks.append(task)
 
@@ -764,6 +768,7 @@ class TestConcurrentSessionsWithRealEventStoreIntegration:
                 event_store=real_event_store,
             )
             updated = await orch.load_session_state(work_item_id)
+            assert updated is not None, f"Session for {work_item_id} should be persisted"
             assert updated.last_processed_comment_id == f"{work_item_id}-comment-1"
 
     async def test_session_state_isolation_across_work_items(
@@ -794,11 +799,13 @@ class TestConcurrentSessionsWithRealEventStoreIntegration:
         # Load each session and verify isolation
         for work_item_id in work_items:
             session = await orchestrator.load_session_state(work_item_id)
+            assert session is not None, f"Session for {work_item_id} should exist"
             assert session.work_item_id == work_item_id
             assert session.last_processed_comment_id == "__checkpoint_start"
 
         # Update one session
         session_1 = await orchestrator.load_session_state("item-1")
+        assert session_1 is not None, "Session for item-1 should exist"
         updated_session_1 = ConversationalSessionState(
             session_id=session_1.session_id,
             work_item_id=session_1.work_item_id,
@@ -807,7 +814,7 @@ class TestConcurrentSessionsWithRealEventStoreIntegration:
             column_name=session_1.column_name,
             llm_conversation_id=session_1.llm_conversation_id,
             last_processed_comment_id="updated-comment-id",
-            last_interaction_timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            last_interaction_timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             status="active",
         )
         await orchestrator.save_session_state(updated_session_1)
@@ -815,10 +822,12 @@ class TestConcurrentSessionsWithRealEventStoreIntegration:
         # Verify other sessions unchanged
         for work_item_id in ["item-2", "item-3"]:
             session = await orchestrator.load_session_state(work_item_id)
+            assert session is not None, f"Session for {work_item_id} should exist"
             assert session.last_processed_comment_id == "__checkpoint_start"
 
         # Verify updated session
         updated = await orchestrator.load_session_state("item-1")
+        assert updated is not None, "Session for item-1 should be updated"
         assert updated.last_processed_comment_id == "updated-comment-id"
 
 
@@ -862,13 +871,14 @@ class TestAdapterInteractionIntegration:
             column_name=session.column_name,
             llm_conversation_id="conv-abc123",
             last_processed_comment_id="__checkpoint_start",
-            last_interaction_timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            last_interaction_timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             status="active",
         )
         await orchestrator.save_session_state(updated_session)
 
         # Verify conversation ID persisted to EventStore
         loaded = await orchestrator.load_session_state(work_item_id)
+        assert loaded is not None, "Session should be persisted with conversation ID"
         assert loaded.llm_conversation_id == "conv-abc123"
 
         # Handle comment - should use persisted conversation ID
@@ -876,12 +886,12 @@ class TestAdapterInteractionIntegration:
             id="comment-1",
             author="user1",
             body="Question?",
-            created_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            created_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         )
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             source="github",
             work_item_id=work_item_id,
             project_id="proj-1",

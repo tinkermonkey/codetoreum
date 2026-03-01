@@ -1,21 +1,22 @@
 """Unit tests for ReviewCycle aggregate root."""
 
-import pytest
-from datetime import datetime, timezone
+from dataclasses import FrozenInstanceError
+from datetime import UTC, datetime
 
+import pytest
+
+from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.review_cycle import (
     ReviewCycle,
-    ReviewStatus,
+    ReviewCycleApproved,
+    ReviewCycleCreated,
+    ReviewCycleEscalated,
     ReviewDecision,
     ReviewFeedback,
-    ReviewIteration,
-    ReviewCycleCreated,
-    ReviewIterationStarted,
     ReviewFeedbackSubmitted,
-    ReviewCycleApproved,
-    ReviewCycleEscalated,
+    ReviewIterationStarted,
+    ReviewStatus,
 )
-from codetoreum.domain.exceptions import DomainError
 
 
 class TestReviewCycleCreation:
@@ -27,7 +28,7 @@ class TestReviewCycleCreation:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
 
         assert cycle.id is not None
@@ -52,7 +53,7 @@ class TestReviewCycleCreation:
             stage_name="coding",
             maker_agent_id="maker-1",
             reviewer_agent_id="reviewer-1",
-            max_iterations=5
+            max_iterations=5,
         )
 
         assert cycle.max_iterations == 5
@@ -63,7 +64,7 @@ class TestReviewCycleCreation:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
 
         events = cycle.get_pending_events()
@@ -82,7 +83,7 @@ class TestReviewCycleCreation:
                 workflow_id="wf-1",
                 stage_name="coding",
                 maker_agent_id="agent-1",
-                reviewer_agent_id="agent-1"
+                reviewer_agent_id="agent-1",
             )
 
     def test_create_with_zero_max_iterations_raises_error(self):
@@ -93,7 +94,7 @@ class TestReviewCycleCreation:
                 stage_name="coding",
                 maker_agent_id="maker-1",
                 reviewer_agent_id="reviewer-1",
-                max_iterations=0
+                max_iterations=0,
             )
 
     def test_create_with_negative_max_iterations_raises_error(self):
@@ -104,7 +105,7 @@ class TestReviewCycleCreation:
                 stage_name="coding",
                 maker_agent_id="maker-1",
                 reviewer_agent_id="reviewer-1",
-                max_iterations=-1
+                max_iterations=-1,
             )
 
 
@@ -117,7 +118,7 @@ class TestIterationManagement:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
         cycle.clear_events()
 
@@ -148,7 +149,7 @@ class TestIterationManagement:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
 
         cycle.start_iteration("output1", "exec-1")
@@ -167,7 +168,7 @@ class TestIterationManagement:
             stage_name="coding",
             maker_agent_id="maker-1",
             reviewer_agent_id="reviewer-1",
-            max_iterations=2
+            max_iterations=2,
         )
 
         cycle.start_iteration("output1", "exec-1")
@@ -175,8 +176,9 @@ class TestIterationManagement:
         cycle.start_iteration("output2", "exec-3")
         cycle.submit_review(ReviewDecision.REQUEST_CHANGES, "Still issues", "exec-4")
 
-        # Should escalate automatically, but attempting to start iteration should fail
-        with pytest.raises(DomainError, match="Exceeded max iterations"):
+        # After max iterations with REQUEST_CHANGES, cycle auto-escalates
+        # Attempting to start new iteration should fail because cycle is now ESCALATED
+        with pytest.raises(DomainError, match="Cannot start iteration on escalated cycle"):
             cycle.start_iteration("output3", "exec-5")
 
 
@@ -189,7 +191,7 @@ class TestReviewSubmission:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
         cycle.start_iteration("output1", "exec-1")
         cycle.clear_events()
@@ -199,15 +201,15 @@ class TestReviewSubmission:
             comment="Looks good!",
             reviewer_execution_id="exec-2",
             issues=[],
-            suggestions=["Consider adding more tests"]
+            suggestions=["Consider adding more tests"],
         )
 
         iteration = cycle.iterations[0]
         assert iteration.reviewer_feedback is not None
         assert iteration.reviewer_feedback.decision == ReviewDecision.APPROVE
         assert iteration.reviewer_feedback.comment == "Looks good!"
-        assert iteration.reviewer_feedback.issues == []
-        assert iteration.reviewer_feedback.suggestions == ["Consider adding more tests"]
+        assert iteration.reviewer_feedback.issues == ()
+        assert iteration.reviewer_feedback.suggestions == ("Consider adding more tests",)
         assert isinstance(iteration.reviewer_feedback.timestamp, datetime)
         assert iteration.reviewer_execution_id == "exec-2"
         assert isinstance(iteration.completed_at, datetime)
@@ -227,7 +229,7 @@ class TestReviewSubmission:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
         cycle.start_iteration("output1", "exec-1")
         cycle.clear_events()
@@ -237,10 +239,11 @@ class TestReviewSubmission:
             comment="Please fix these issues",
             reviewer_execution_id="exec-2",
             issues=["Missing error handling", "Incomplete tests"],
-            suggestions=["Add try-catch blocks"]
+            suggestions=["Add try-catch blocks"],
         )
 
         iteration = cycle.iterations[0]
+        assert iteration.reviewer_feedback is not None
         assert iteration.reviewer_feedback.decision == ReviewDecision.REQUEST_CHANGES
         assert len(iteration.reviewer_feedback.issues) == 2
         assert "Missing error handling" in iteration.reviewer_feedback.issues
@@ -259,7 +262,7 @@ class TestReviewSubmission:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
         cycle.start_iteration("output1", "exec-1")
         cycle.clear_events()
@@ -267,7 +270,7 @@ class TestReviewSubmission:
         cycle.submit_review(
             decision=ReviewDecision.ESCALATE,
             comment="This needs human review",
-            reviewer_execution_id="exec-2"
+            reviewer_execution_id="exec-2",
         )
 
         assert cycle.status == ReviewStatus.ESCALATED
@@ -285,19 +288,16 @@ class TestReviewSubmission:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
         cycle.start_iteration("output1", "exec-1")
 
-        cycle.submit_review(
-            decision=ReviewDecision.APPROVE,
-            comment="Perfect",
-            reviewer_execution_id="exec-2"
-        )
+        cycle.submit_review(decision=ReviewDecision.APPROVE, comment="Perfect", reviewer_execution_id="exec-2")
 
         feedback = cycle.get_latest_feedback()
-        assert feedback.issues == []
-        assert feedback.suggestions == []
+        assert feedback is not None
+        assert feedback.issues == ()
+        assert feedback.suggestions == ()
 
     def test_submit_review_without_iteration_raises_error(self):
         """Test that submitting review without iteration raises error."""
@@ -305,15 +305,11 @@ class TestReviewSubmission:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
 
         with pytest.raises(DomainError, match="No iterations to review"):
-            cycle.submit_review(
-                decision=ReviewDecision.APPROVE,
-                comment="Good",
-                reviewer_execution_id="exec-1"
-            )
+            cycle.submit_review(decision=ReviewDecision.APPROVE, comment="Good", reviewer_execution_id="exec-1")
 
     def test_submit_review_twice_raises_error(self):
         """Test that submitting review twice for same iteration raises error."""
@@ -321,21 +317,17 @@ class TestReviewSubmission:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
         cycle.start_iteration("output1", "exec-1")
-        cycle.submit_review(
-            decision=ReviewDecision.APPROVE,
-            comment="Good",
-            reviewer_execution_id="exec-2"
-        )
+        cycle.submit_review(decision=ReviewDecision.APPROVE, comment="Good", reviewer_execution_id="exec-2")
 
         # Cannot submit review again for same iteration
         with pytest.raises(DomainError, match="already reviewed"):
             cycle.submit_review(
                 decision=ReviewDecision.APPROVE,
                 comment="Good again",
-                reviewer_execution_id="exec-3"
+                reviewer_execution_id="exec-3",
             )
 
 
@@ -348,7 +340,7 @@ class TestApprovalFlow:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
         cycle.start_iteration("output1", "exec-1")
         cycle.submit_review(ReviewDecision.APPROVE, "Great work", "exec-2")
@@ -357,6 +349,46 @@ class TestApprovalFlow:
         assert cycle.final_decision == ReviewDecision.APPROVE
         assert cycle.current_iteration == 1
         assert isinstance(cycle.completed_at, datetime)
+
+    def test_approve_from_pending_raises_error(self):
+        """Test that approving from PENDING state raises error."""
+        cycle = ReviewCycle.create(
+            workflow_id="wf-1",
+            stage_name="coding",
+            maker_agent_id="maker-1",
+            reviewer_agent_id="reviewer-1",
+        )
+
+        with pytest.raises(DomainError, match="Can only approve cycle in IN_PROGRESS state"):
+            cycle.approve()
+
+    def test_approve_from_changes_requested_raises_error(self):
+        """Test that approving from CHANGES_REQUESTED state raises error."""
+        cycle = ReviewCycle.create(
+            workflow_id="wf-1",
+            stage_name="coding",
+            maker_agent_id="maker-1",
+            reviewer_agent_id="reviewer-1",
+        )
+        cycle.start_iteration("output1", "exec-1")
+        cycle.submit_review(ReviewDecision.REQUEST_CHANGES, "Fix this", "exec-2")
+
+        with pytest.raises(DomainError, match="Can only approve cycle in IN_PROGRESS state"):
+            cycle.approve()
+
+    def test_approve_twice_raises_error(self):
+        """Test that approving twice raises error."""
+        cycle = ReviewCycle.create(
+            workflow_id="wf-1",
+            stage_name="coding",
+            maker_agent_id="maker-1",
+            reviewer_agent_id="reviewer-1",
+        )
+        cycle.start_iteration("output1", "exec-1")
+        cycle.approve()
+
+        with pytest.raises(DomainError, match="Can only approve cycle in IN_PROGRESS state"):
+            cycle.approve()
 
 
 class TestEscalationFlow:
@@ -368,7 +400,7 @@ class TestEscalationFlow:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
         cycle.start_iteration("output1", "exec-1")
         cycle.submit_review(ReviewDecision.ESCALATE, "Too complex", "exec-2")
@@ -383,23 +415,53 @@ class TestEscalationFlow:
             stage_name="coding",
             maker_agent_id="maker-1",
             reviewer_agent_id="reviewer-1",
-            max_iterations=2
+            max_iterations=2,
         )
 
         # Iteration 1
         cycle.start_iteration("output1", "exec-1")
         cycle.submit_review(ReviewDecision.REQUEST_CHANGES, "Fix this", "exec-2")
 
-        assert cycle.status == ReviewStatus.CHANGES_REQUESTED
+        status_after_iter1 = cycle.status
+        assert status_after_iter1 == ReviewStatus.CHANGES_REQUESTED
 
         # Iteration 2
         cycle.start_iteration("output2", "exec-3")
         cycle.submit_review(ReviewDecision.REQUEST_CHANGES, "Still issues", "exec-4")
 
         # Should escalate automatically
-        assert cycle.status == ReviewStatus.ESCALATED
+        status_after_iter2 = cycle.status
+        assert status_after_iter2 == ReviewStatus.ESCALATED
         assert cycle.escalation_reason == "Max iterations reached"
         assert cycle.current_iteration == 2
+
+    def test_escalate_from_approved_raises_error(self):
+        """Test that escalating an already-approved cycle raises error."""
+        cycle = ReviewCycle.create(
+            workflow_id="wf-1",
+            stage_name="coding",
+            maker_agent_id="maker-1",
+            reviewer_agent_id="reviewer-1",
+        )
+        cycle.start_iteration("output1", "exec-1")
+        cycle.submit_review(ReviewDecision.APPROVE, "Great work", "exec-2")
+
+        with pytest.raises(DomainError, match="Cannot escalate approved cycle"):
+            cycle.escalate("Too late")
+
+    def test_escalate_twice_raises_error(self):
+        """Test that escalating twice raises error."""
+        cycle = ReviewCycle.create(
+            workflow_id="wf-1",
+            stage_name="coding",
+            maker_agent_id="maker-1",
+            reviewer_agent_id="reviewer-1",
+        )
+        cycle.start_iteration("output1", "exec-1")
+        cycle.escalate("First escalation")
+
+        with pytest.raises(DomainError, match="Cannot escalate escalated cycle"):
+            cycle.escalate("Second escalation")
 
 
 class TestIterativeFlow:
@@ -411,7 +473,7 @@ class TestIterativeFlow:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
 
         # Iteration 1: Changes requested
@@ -420,7 +482,7 @@ class TestIterativeFlow:
             ReviewDecision.REQUEST_CHANGES,
             "Add error handling",
             "exec-2",
-            issues=["Missing error handling"]
+            issues=["Missing error handling"],
         )
 
         assert cycle.current_iteration == 1
@@ -432,7 +494,7 @@ class TestIterativeFlow:
             ReviewDecision.REQUEST_CHANGES,
             "Add more tests",
             "exec-4",
-            issues=["Insufficient test coverage"]
+            issues=["Insufficient test coverage"],
         )
 
         assert cycle.current_iteration == 2
@@ -457,7 +519,7 @@ class TestQueryMethods:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
 
         assert not cycle.is_complete()
@@ -474,7 +536,7 @@ class TestQueryMethods:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
 
         assert not cycle.needs_maker_revision()
@@ -490,7 +552,7 @@ class TestQueryMethods:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
 
         assert cycle.get_latest_feedback() is None
@@ -514,7 +576,7 @@ class TestEventManagement:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
 
         events1 = cycle.get_pending_events()
@@ -529,7 +591,7 @@ class TestEventManagement:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
 
         assert len(cycle.get_pending_events()) == 1
@@ -544,7 +606,7 @@ class TestEventManagement:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
         cycle.clear_events()
 
@@ -564,7 +626,7 @@ class TestVersioning:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
 
         assert cycle._version == 0
@@ -575,7 +637,7 @@ class TestVersioning:
             workflow_id="wf-1",
             stage_name="coding",
             maker_agent_id="maker-1",
-            reviewer_agent_id="reviewer-1"
+            reviewer_agent_id="reviewer-1",
         )
 
         cycle.start_iteration("output1", "exec-1")
@@ -598,11 +660,78 @@ class TestReviewFeedbackValueObject:
             comment="Good",
             issues=[],
             suggestions=[],
-            timestamp=datetime.now(timezone.utc)
+            timestamp=datetime.now(UTC),
         )
 
-        with pytest.raises(Exception):  # dataclasses.FrozenInstanceError
-            feedback.comment = "Changed"
+        with pytest.raises(FrozenInstanceError):
+            feedback.comment = "Changed"  # type: ignore[misc]
 
-        with pytest.raises(Exception):
-            feedback.decision = ReviewDecision.REQUEST_CHANGES
+        with pytest.raises(FrozenInstanceError):
+            feedback.decision = ReviewDecision.REQUEST_CHANGES  # type: ignore[misc]
+
+    def test_review_feedback_issues_are_tuples(self):
+        """Test that ReviewFeedback converts list issues to immutable tuples."""
+        feedback = ReviewFeedback(
+            decision=ReviewDecision.APPROVE,
+            comment="Good",
+            issues=["issue1", "issue2"],
+            suggestions=["suggestion1"],
+            timestamp=datetime.now(UTC),
+        )
+
+        assert isinstance(feedback.issues, tuple)
+        assert isinstance(feedback.suggestions, tuple)
+        assert feedback.issues == ("issue1", "issue2")
+        assert feedback.suggestions == ("suggestion1",)
+
+        # Tuples prevent mutation attempts
+        with pytest.raises((TypeError, AttributeError)):
+            feedback.issues.append("new_issue")  # type: ignore[union-attr]
+
+
+class TestIdentityFieldProtection:
+    """Tests for identity field protection."""
+
+    def test_identity_fields_cannot_be_modified(self):
+        """Test that identity fields are protected from external modification."""
+        cycle = ReviewCycle.create(
+            workflow_id="wf-1",
+            stage_name="coding",
+            maker_agent_id="maker-1",
+            reviewer_agent_id="reviewer-1",
+        )
+
+        # Try to modify identity fields
+        with pytest.raises(AttributeError, match="Cannot modify identity field 'id'"):
+            cycle.id = "hacked"  # type: ignore[misc]
+
+        with pytest.raises(AttributeError, match="Cannot modify identity field 'workflow_id'"):
+            cycle.workflow_id = "hacked"  # type: ignore[misc]
+
+        with pytest.raises(AttributeError, match="Cannot modify identity field 'stage_name'"):
+            cycle.stage_name = "hacked"  # type: ignore[misc]
+
+        with pytest.raises(AttributeError, match="Cannot modify identity field 'maker_agent_id'"):
+            cycle.maker_agent_id = "hacked"  # type: ignore[misc]
+
+        with pytest.raises(AttributeError, match="Cannot modify identity field 'reviewer_agent_id'"):
+            cycle.reviewer_agent_id = "hacked"  # type: ignore[misc]
+
+        with pytest.raises(AttributeError, match="Cannot modify identity field 'max_iterations'"):
+            cycle.max_iterations = 999  # type: ignore[misc]
+
+    def test_identity_fields_set_during_creation(self):
+        """Test that identity fields can be set during creation (via __init__)."""
+        cycle = ReviewCycle.create(
+            workflow_id="wf-1",
+            stage_name="coding",
+            maker_agent_id="maker-1",
+            reviewer_agent_id="reviewer-1",
+            max_iterations=5,
+        )
+
+        assert cycle.workflow_id == "wf-1"
+        assert cycle.stage_name == "coding"
+        assert cycle.maker_agent_id == "maker-1"
+        assert cycle.reviewer_agent_id == "reviewer-1"
+        assert cycle.max_iterations == 5

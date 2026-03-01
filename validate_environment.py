@@ -8,43 +8,38 @@ required tools and dependencies installed correctly.
 
 import subprocess
 import sys
+from collections.abc import Sequence
 
 
-def run_command(cmd, description):
+def run_command(cmd: Sequence[str] | str, description: str) -> bool:
     """Run a command in the Docker container and check the result."""
     print(f"Testing: {description}...", end=" ")
     try:
         # Build command as list, handling shell commands properly
-        if isinstance(cmd, list):
-            docker_cmd = ["docker", "run", "--rm", "codetoreum-agent:latest"] + cmd
-        else:
+        if isinstance(cmd, str):
             docker_cmd = ["docker", "run", "--rm", "codetoreum-agent:latest", "sh", "-c", cmd]
+        else:
+            docker_cmd = ["docker", "run", "--rm", "codetoreum-agent:latest"] + list(cmd)
 
-        result = subprocess.run(
-            docker_cmd,
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
+        result = subprocess.run(docker_cmd, capture_output=True, text=True, timeout=30, check=False)
         if result.returncode == 0:
             output = result.stdout.strip()
             if output:
                 print(f"✓ PASS - {output}")
             else:
-                print(f"✓ PASS")
+                print("✓ PASS")
             return True
-        else:
-            print(f"✗ FAIL - {result.stderr.strip()}")
-            return False
+        print(f"✗ FAIL - {result.stderr.strip()}")
+        return False
     except subprocess.TimeoutExpired:
         print("✗ FAIL - Command timed out")
         return False
     except Exception as e:
-        print(f"✗ FAIL - {str(e)}")
+        print(f"✗ FAIL - {e!s}")
         return False
 
 
-def main():
+def main() -> None:
     """Run all validation tests."""
     print("=" * 70)
     print("Codetoreum Agent Environment Validation")
@@ -59,11 +54,9 @@ def main():
         (["git", "--version"], "Git CLI version"),
         (["which", "gh"], "GitHub CLI availability"),
         (["gh", "--version"], "GitHub CLI version"),
-
         # Python environment
         (["python3", "--version"], "Python version"),
         (["pip", "--version"], "pip version"),
-
         # Core Python dependencies
         ("python3 -c 'import fastapi'", "FastAPI import"),
         ("python3 -c 'import sqlalchemy'", "SQLAlchemy import"),
@@ -71,7 +64,6 @@ def main():
         ("python3 -c 'import docker'", "Docker SDK import"),
         ("python3 -c 'import pytest'", "pytest import"),
         ("python3 -c 'import git'", "GitPython import"),
-
         # Build tools
         (["which", "gcc"], "GCC availability"),
         (["which", "make"], "make availability"),

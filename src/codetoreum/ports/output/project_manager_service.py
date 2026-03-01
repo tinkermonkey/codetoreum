@@ -10,7 +10,6 @@ while sharing orchestration infrastructure.
 """
 
 from abc import ABC, abstractmethod
-from typing import List
 
 from codetoreum.domain.value_objects import ProjectConfig
 
@@ -62,7 +61,7 @@ class IProjectManagerService(ABC):
     """
 
     @abstractmethod
-    async def get_enabled_projects(self) -> List[str]:
+    async def get_enabled_projects(self) -> list[str]:
         """Return names of all enabled projects.
 
         Reads project configurations and filters to only those with
@@ -81,7 +80,6 @@ class IProjectManagerService(ABC):
             >>> print(projects)
             ['documentation_robotics', 'api_service']
         """
-        pass
 
     @abstractmethod
     async def get_project_config(self, project_name: str) -> ProjectConfig:
@@ -105,7 +103,6 @@ class IProjectManagerService(ABC):
             >>> print(config.repo_url)
             https://github.com/acme/api-service.git
         """
-        pass
 
     @abstractmethod
     async def get_project_path(self, project_name: str) -> str:
@@ -138,7 +135,6 @@ class IProjectManagerService(ABC):
             >>> print(path)
             /workspace/api-service
         """
-        pass
 
     @abstractmethod
     async def ensure_project_cloned(self, project_name: str) -> str:
@@ -180,7 +176,6 @@ class IProjectManagerService(ABC):
             >>> # Repository now available at workspace path
             >>> # Configured branch is checked out
         """
-        pass
 
     @abstractmethod
     async def reload_config(self) -> None:
@@ -207,4 +202,3 @@ class IProjectManagerService(ABC):
             >>> await svc.reload_config()  # Pick up changes from projects.yaml
             >>> projects = await svc.get_enabled_projects()  # Reflects new config
         """
-        pass

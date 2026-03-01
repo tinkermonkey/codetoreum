@@ -7,29 +7,30 @@ Tests verify that:
 4. Events have correct source='mock' and ISO timestamps
 """
 
-import pytest
 import re
 from datetime import datetime
+from typing import Any
 
-from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
-from codetoreum.adapters.secondary.mock_discussion_adapter import MockDiscussionAdapter
-from codetoreum.adapters.secondary.mock_code_review_adapter import MockCodeReviewAdapter
-from codetoreum.adapters.secondary.in_memory_pipeline_lock_service import (
-    InMemoryPipelineLockService,
-)
+import pytest
+
 from codetoreum.adapters.secondary.configurable_identity_service import (
     ConfigurableIdentityService,
 )
+from codetoreum.adapters.secondary.in_memory_pipeline_lock_service import (
+    InMemoryPipelineLockService,
+)
+from codetoreum.adapters.secondary.mock_code_review_adapter import MockCodeReviewAdapter
+from codetoreum.adapters.testing import MockDiscussionAdapter
+from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
 from codetoreum.domain.events.board_events import (
-    WorkItemColumnChangedEvent,
     BoardReconciledEvent,
+    WorkItemColumnChangedEvent,
 )
 from codetoreum.domain.events.discussion_events import (
     CommentNeedsResponseEvent,
-    CommentPostedEvent,
 )
+from codetoreum.domain.events.lock_events import LockAcquiredEvent
 from codetoreum.domain.events.review_events import ReviewStatusChangedEvent
-from codetoreum.domain.events.lock_events import LockAcquiredEvent, LockReleasedEvent
 from codetoreum.ports.output.board_service import BoardConfig
 from codetoreum.ports.output.discussion_adapter import DiscussionMonitoringConfig
 from codetoreum.ports.output.monitoring import MonitoringConfig
@@ -74,7 +75,7 @@ class TestMockBoardAdapter:
         from codetoreum.ports.output.board_service import MovedByType
 
         adapter.add_item_to_column("board-1", "Backlog", "item-1")
-        events = []
+        events: list[Any] = []
         adapter.on("workitem.column_changed", events.append)
 
         await adapter.move_item_to_column("item-1", "In Progress", MovedByType.HUMAN)
@@ -93,7 +94,7 @@ class TestMockBoardAdapter:
         from codetoreum.ports.output.board_service import MovedByType
 
         adapter.add_item_to_column("board-1", "Backlog", "item-1")
-        events = []
+        events: list[Any] = []
         adapter.on("workitem.column_changed", events.append)
 
         await adapter.move_item_to_column("item-1", "In Progress", MovedByType.ORCHESTRATOR)
@@ -106,7 +107,7 @@ class TestMockBoardAdapter:
         from codetoreum.ports.output.board_service import MovedByType
 
         adapter.add_item_to_column("board-1", "Backlog", "item-1")
-        events = []
+        events: list[Any] = []
         adapter.on("workitem.column_changed", events.append)
 
         await adapter.move_item_to_column("item-1", "In Progress", MovedByType.ORCHESTRATOR)
@@ -116,13 +117,13 @@ class TestMockBoardAdapter:
 
     async def test_reconcile_board_emits_event(self, adapter):
         """Test reconcile_board emits event."""
-        events = []
+        events: list[Any] = []
         adapter.on("board.reconciled", events.append)
 
         config = BoardConfig(
             board_id="board-1",
             expected_columns=["Backlog", "In Progress", "Review", "Done"],
-            auto_create_missing=True
+            auto_create_missing=True,
         )
         result = await adapter.reconcile_board("board-1", config)
 
@@ -136,7 +137,7 @@ class TestMockBoardAdapter:
         from codetoreum.ports.output.board_service import MovedByType
 
         adapter.add_item_to_column("board-1", "Backlog", "item-1")
-        events = []
+        events: list[Any] = []
         adapter.on("workitem.column_changed", events.append)
 
         await adapter.move_item_to_column("item-1", "Done", MovedByType.HUMAN)
@@ -193,7 +194,7 @@ class TestMockDiscussionAdapter:
         )
         adapter.start_monitoring("item-1", config)
 
-        events = []
+        events: list[Any] = []
         adapter.on("comment.needs_response", events.append)
 
         adapter.simulate_comment("item-1", "alice", "Please review this")
@@ -201,6 +202,7 @@ class TestMockDiscussionAdapter:
         assert len(events) == 1
         event = events[0]
         assert isinstance(event, CommentNeedsResponseEvent)
+        assert event.comment is not None
         assert event.comment.author == "alice"
         assert event.comment.body == "Please review this"
         assert event.source == "mock"
@@ -212,7 +214,7 @@ class TestMockDiscussionAdapter:
         )
         adapter.start_monitoring("item-1", config)
 
-        events = []
+        events: list[Any] = []
         adapter.on("comment.needs_response", events.append)
 
         # Register bot username
@@ -267,11 +269,12 @@ class TestMockDiscussionAdapter:
         )
         adapter.start_monitoring("item-1", config)
 
-        events = []
+        events: list[Any] = []
         adapter.on("comment.posted", events.append)
 
         comment = adapter.simulate_bot_comment("item-1", "Processing...")
         assert len(events) == 1
+        assert events[0].comment is not None
         assert events[0].comment.id == comment.id
         assert events[0].source == "mock"
 
@@ -368,10 +371,10 @@ class TestMockDiscussionAdapter:
         """Test get_thread_info helper."""
         # Non-existent thread
         info = adapter.get_thread_info("item-1")
-        assert info['exists'] is False
-        assert info['comment_count'] == 0
-        assert info['is_monitored'] is False
-        assert info['authors'] == []
+        assert info["exists"] is False
+        assert info["comment_count"] == 0
+        assert info["is_monitored"] is False
+        assert info["authors"] == []
 
         # Create thread with multiple comments
         adapter.create_thread("item-1", "First", author="alice")
@@ -379,10 +382,10 @@ class TestMockDiscussionAdapter:
         adapter.simulate_comment("item-1", "alice", "Third")
 
         info = adapter.get_thread_info("item-1")
-        assert info['exists'] is True
-        assert info['comment_count'] == 3
-        assert info['is_monitored'] is False
-        assert set(info['authors']) == {"alice", "bob"}
+        assert info["exists"] is True
+        assert info["comment_count"] == 3
+        assert info["is_monitored"] is False
+        assert set(info["authors"]) == {"alice", "bob"}
 
     async def test_get_thread_info_with_monitoring(self, adapter):
         """Test get_thread_info shows monitoring state."""
@@ -393,7 +396,7 @@ class TestMockDiscussionAdapter:
         adapter.start_monitoring("item-1", config)
 
         info = adapter.get_thread_info("item-1")
-        assert info['is_monitored'] is True
+        assert info["is_monitored"] is True
 
     async def test_helper_methods_integration(self, adapter):
         """Test multiple helper methods working together."""
@@ -411,8 +414,8 @@ class TestMockDiscussionAdapter:
 
         # Verify with helpers
         info = adapter.get_thread_info("item-1")
-        assert info['comment_count'] == 3
-        assert info['is_monitored'] is True
+        assert info["comment_count"] == 3
+        assert info["is_monitored"] is True
 
         reviewer_comments = adapter.get_comments_by_author("item-1", "reviewer")
         assert len(reviewer_comments) == 1
@@ -430,7 +433,7 @@ class TestMockDiscussionAdapter:
         )
         adapter.start_monitoring("item-1", config)
 
-        events = []
+        events: list[Any] = []
         adapter.on("workitem.column_changed", events.append)
 
         adapter.simulate_column_change("item-1", "Backlog", "In Review")
@@ -577,7 +580,7 @@ class TestMockCodeReviewAdapter:
 
     async def test_simulate_approval_emits_event(self, adapter):
         """Test simulate_approval emits status change event."""
-        events = []
+        events: list[Any] = []
         adapter.on("review.status_changed", events.append)
 
         adapter.simulate_approval("pr-1", "reviewer-1")
@@ -592,7 +595,7 @@ class TestMockCodeReviewAdapter:
 
     async def test_simulate_changes_requested_emits_event(self, adapter):
         """Test simulate_changes_requested emits status change event."""
-        events = []
+        events: list[Any] = []
         adapter.on("review.status_changed", events.append)
 
         adapter.simulate_changes_requested("pr-1", "reviewer-1")
@@ -602,7 +605,7 @@ class TestMockCodeReviewAdapter:
 
     async def test_approve_method_emits_event(self, adapter):
         """Test approve method emits event."""
-        events = []
+        events: list[Any] = []
         adapter.on("review.status_changed", events.append)
 
         await adapter.approve("pr-1")
@@ -633,7 +636,7 @@ class TestInMemoryPipelineLockService:
 
     async def test_try_acquire_lock_success(self, service):
         """Test successful lock acquisition."""
-        events = []
+        events: list[Any] = []
         service.on("lock.acquired", events.append)
 
         success, reason = await service.try_acquire_lock("proj-1", "board-1", "item-1")
@@ -653,7 +656,7 @@ class TestInMemoryPipelineLockService:
 
     async def test_lock_acquired_event_emitted(self, service):
         """Test that lock acquired events are correct."""
-        events = []
+        events: list[Any] = []
         service.on("lock.acquired", events.append)
 
         await service.try_acquire_lock("proj-1", "board-1", "item-1")
@@ -669,7 +672,7 @@ class TestInMemoryPipelineLockService:
         """Test lock release emits event."""
         await service.try_acquire_lock("proj-1", "board-1", "item-1")
 
-        events = []
+        events: list[Any] = []
         service.on("lock.released", events.append)
 
         success = await service.release_lock("proj-1", "board-1", "item-1")
@@ -699,7 +702,7 @@ class TestInMemoryPipelineLockService:
 
     async def test_simulate_lock_acquired(self, service):
         """Test direct lock acquired event simulation."""
-        events = []
+        events: list[Any] = []
         service.on("lock.acquired", events.append)
 
         service.simulate_lock_acquired("proj-1", "board-1", "item-1", "stale_recovery")
@@ -709,12 +712,10 @@ class TestInMemoryPipelineLockService:
 
     async def test_simulate_lock_released(self, service):
         """Test direct lock released event simulation."""
-        events = []
+        events: list[Any] = []
         service.on("lock.released", events.append)
 
-        service.simulate_lock_released(
-            "proj-1", "board-1", "item-1", "timeout", next_in_queue="item-2"
-        )
+        service.simulate_lock_released("proj-1", "board-1", "item-1", "timeout", next_in_queue="item-2")
 
         assert len(events) == 1
         assert events[0].reason == "timeout"
@@ -733,10 +734,7 @@ class TestConfigurableIdentityService:
         """Test bot detection with exact username match."""
         from codetoreum.ports.output.identity_service import BotIdentityConfig
 
-        config = BotIdentityConfig(
-            bot_usernames=["dependabot", "renovate"],
-            bot_patterns=[]
-        )
+        config = BotIdentityConfig(bot_usernames=["dependabot", "renovate"], bot_patterns=[])
         service.configure(config)
 
         assert service.is_bot_user("dependabot") is True
@@ -747,13 +745,7 @@ class TestConfigurableIdentityService:
         """Test bot detection with regex pattern."""
         from codetoreum.ports.output.identity_service import BotIdentityConfig
 
-        config = BotIdentityConfig(
-            bot_usernames=[],
-            bot_patterns=[
-                re.compile("^bot-.*"),
-                re.compile(".*-bot$")
-            ]
-        )
+        config = BotIdentityConfig(bot_usernames=[], bot_patterns=[re.compile("^bot-.*"), re.compile(".*-bot$")])
         service.configure(config)
 
         assert service.is_bot_user("bot-ci") is True
@@ -764,15 +756,10 @@ class TestConfigurableIdentityService:
         """Test filtering to get only human users."""
         from codetoreum.ports.output.identity_service import BotIdentityConfig
 
-        config = BotIdentityConfig(
-            bot_usernames=["dependabot"],
-            bot_patterns=[re.compile("^bot-.*")]
-        )
+        config = BotIdentityConfig(bot_usernames=["dependabot"], bot_patterns=[re.compile("^bot-.*")])
         service.configure(config)
 
-        humans = service.get_human_users(
-            ["alice", "dependabot", "bob", "bot-ci"]
-        )
+        humans = service.get_human_users(["alice", "dependabot", "bob", "bot-ci"])
 
         assert humans == ["alice", "bob"]
 

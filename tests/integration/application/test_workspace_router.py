@@ -1,22 +1,20 @@
 """Integration tests for WorkspaceRouter."""
 
-import pytest
-from datetime import datetime, timezone
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 
+import pytest
+
+from codetoreum.adapters.testing import InMemoryEventStore
 from codetoreum.application.workspace_router import (
     WorkspaceRouter,
-    WorkspacePreparationResult,
-    WorkspaceFinalizationResult,
 )
-from codetoreum.adapters.testing import InMemoryEventStore
-from codetoreum.domain.agent import Agent, AgentType, AgentCapability
+from codetoreum.domain.agent import Agent, AgentCapability, AgentType
 from codetoreum.domain.project_context import ProjectContext
-from codetoreum.domain.work_item import WorkItem, WorkItemStatus, WorkItemPriority
+from codetoreum.domain.types import BranchName
+from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
 from codetoreum.domain.workspace_context import WorkspaceType
 from codetoreum.ports.output.repository import RepositoryStatus
-
 
 # ============================================================================
 # Fixtures
@@ -35,15 +33,17 @@ def mock_repository():
     repo.pull = AsyncMock()
     repo.commit = AsyncMock(return_value="abc123")
     repo.push = AsyncMock()
-    repo.status = AsyncMock(return_value=RepositoryStatus(
-        current_branch="main",
-        is_dirty=False,
-        staged_files=[],
-        unstaged_files=[],
-        untracked_files=[],
-        ahead_count=0,
-        behind_count=0,
-    ))
+    repo.status = AsyncMock(
+        return_value=RepositoryStatus(
+            current_branch=BranchName("main"),
+            is_dirty=False,
+            staged_files=(),
+            unstaged_files=(),
+            untracked_files=(),
+            ahead_count=0,
+            behind_count=0,
+        )
+    )
 
     return repo
 
@@ -90,8 +90,8 @@ def sample_work_item():
         assigned_at=None,
         current_workflow_id=None,
         current_stage=None,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
         completed_at=None,
     )
 
@@ -113,8 +113,8 @@ def discussion_work_item():
         assigned_at=None,
         current_workflow_id=None,
         current_stage=None,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
         completed_at=None,
     )
 
@@ -129,7 +129,6 @@ def sample_agent():
         agent_type=AgentType.DEVELOPER,
         capabilities={
             "code_generation": AgentCapability(skill="code_generation", proficiency=0.9),
-            "makes_code_changes": True,
         },
         role_description="Develops code",
         model="claude-sonnet-4-5",
@@ -141,8 +140,8 @@ def sample_agent():
         filesystem_write_allowed=True,
         mcp_servers=[],
         metadata={},
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
 
@@ -156,7 +155,6 @@ def analyst_agent():
         agent_type=AgentType.REQUIREMENTS_ANALYST,
         capabilities={
             "analysis": AgentCapability(skill="analysis", proficiency=0.95),
-            "makes_code_changes": False,
         },
         role_description="Analyzes requirements",
         model="claude-sonnet-4-5",
@@ -168,8 +166,8 @@ def analyst_agent():
         filesystem_write_allowed=False,
         mcp_servers=[],
         metadata={},
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
 
@@ -200,8 +198,8 @@ def sample_project():
         secrets=[],
         mcp_servers=[],
         metadata={},
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
 
@@ -280,7 +278,14 @@ async def test_branch_name_generation(workspace_router, sample_work_item, sample
 
 
 @pytest.mark.asyncio
-async def test_prepare_workspace_new_branch(workspace_router, sample_work_item, sample_agent, sample_project, mock_repository, repository_path):
+async def test_prepare_workspace_new_branch(
+    workspace_router,
+    sample_work_item,
+    sample_agent,
+    sample_project,
+    mock_repository,
+    repository_path,
+):
     """Test preparing workspace with new branch creation."""
     # Arrange
     context = await workspace_router.route_workspace(
@@ -307,7 +312,14 @@ async def test_prepare_workspace_new_branch(workspace_router, sample_work_item, 
 
 
 @pytest.mark.asyncio
-async def test_prepare_workspace_existing_branch(workspace_router, sample_work_item, sample_agent, sample_project, mock_repository, repository_path):
+async def test_prepare_workspace_existing_branch(
+    workspace_router,
+    sample_work_item,
+    sample_agent,
+    sample_project,
+    mock_repository,
+    repository_path,
+):
     """Test preparing workspace with existing branch."""
     # Arrange
     context = await workspace_router.route_workspace(
@@ -333,7 +345,9 @@ async def test_prepare_workspace_existing_branch(workspace_router, sample_work_i
 
 
 @pytest.mark.asyncio
-async def test_prepare_workspace_discussion(workspace_router, discussion_work_item, analyst_agent, sample_project, repository_path):
+async def test_prepare_workspace_discussion(
+    workspace_router, discussion_work_item, analyst_agent, sample_project, repository_path
+):
     """Test preparing discussion workspace requires no git operations."""
     # Arrange
     context = await workspace_router.route_workspace(
@@ -361,7 +375,14 @@ async def test_prepare_workspace_discussion(workspace_router, discussion_work_it
 
 
 @pytest.mark.asyncio
-async def test_finalize_workspace_with_changes(workspace_router, sample_work_item, sample_agent, sample_project, mock_repository, repository_path):
+async def test_finalize_workspace_with_changes(
+    workspace_router,
+    sample_work_item,
+    sample_agent,
+    sample_project,
+    mock_repository,
+    repository_path,
+):
     """Test finalizing workspace with code changes."""
     # Arrange
     context = await workspace_router.route_workspace(
@@ -372,11 +393,11 @@ async def test_finalize_workspace_with_changes(workspace_router, sample_work_ite
 
     # Mock repository status with changes
     mock_repository.status.return_value = RepositoryStatus(
-        current_branch=context.branch_name,
+        current_branch=BranchName(context.branch_name),
         is_dirty=True,
-        staged_files=["file1.py"],
-        unstaged_files=["file2.py"],
-        untracked_files=[],
+        staged_files=("file1.py",),
+        unstaged_files=("file2.py",),
+        untracked_files=(),
         ahead_count=0,
         behind_count=0,
     )
@@ -403,7 +424,14 @@ async def test_finalize_workspace_with_changes(workspace_router, sample_work_ite
 
 
 @pytest.mark.asyncio
-async def test_finalize_workspace_no_changes(workspace_router, sample_work_item, sample_agent, sample_project, mock_repository, repository_path):
+async def test_finalize_workspace_no_changes(
+    workspace_router,
+    sample_work_item,
+    sample_agent,
+    sample_project,
+    mock_repository,
+    repository_path,
+):
     """Test finalizing workspace with no changes."""
     # Arrange
     context = await workspace_router.route_workspace(
@@ -414,11 +442,11 @@ async def test_finalize_workspace_no_changes(workspace_router, sample_work_item,
 
     # Mock repository status without changes
     mock_repository.status.return_value = RepositoryStatus(
-        current_branch=context.branch_name,
+        current_branch=BranchName(context.branch_name),
         is_dirty=False,
-        staged_files=[],
-        unstaged_files=[],
-        untracked_files=[],
+        staged_files=(),
+        unstaged_files=(),
+        untracked_files=(),
         ahead_count=0,
         behind_count=0,
     )
@@ -441,7 +469,9 @@ async def test_finalize_workspace_no_changes(workspace_router, sample_work_item,
 
 
 @pytest.mark.asyncio
-async def test_finalize_workspace_discussion(workspace_router, discussion_work_item, analyst_agent, sample_project, repository_path):
+async def test_finalize_workspace_discussion(
+    workspace_router, discussion_work_item, analyst_agent, sample_project, repository_path
+):
     """Test finalizing discussion workspace is no-op."""
     # Arrange
     context = await workspace_router.route_workspace(
@@ -490,10 +520,17 @@ async def test_prepare_container_environment(workspace_router, sample_work_item,
     assert env_vars["CODETOREUM_WORKSPACE_TYPE"] == "issue"
     assert env_vars["CODETOREUM_AGENT_ID"] == "developer-agent"
     assert env_vars["ENV"] == "test"  # From project env vars
+    # Git identity env vars (replaces .gitconfig bind mount for DinD compatibility)
+    assert env_vars["GIT_AUTHOR_NAME"] == "Codetoreum"
+    assert env_vars["GIT_AUTHOR_EMAIL"] == "noreply@codetoreum.ai"
+    assert env_vars["GIT_COMMITTER_NAME"] == "Codetoreum"
+    assert env_vars["GIT_COMMITTER_EMAIL"] == "noreply@codetoreum.ai"
 
 
 @pytest.mark.asyncio
-async def test_prepare_container_volumes_read_write(workspace_router, sample_work_item, sample_agent, sample_project, repository_path):
+async def test_prepare_container_volumes_read_write(
+    workspace_router, sample_work_item, sample_agent, sample_project, repository_path
+):
     """Test volume mounts for code-changing agents."""
     context = await workspace_router.route_workspace(
         work_item=sample_work_item,
@@ -512,7 +549,9 @@ async def test_prepare_container_volumes_read_write(workspace_router, sample_wor
 
 
 @pytest.mark.asyncio
-async def test_prepare_container_volumes_read_only(workspace_router, discussion_work_item, analyst_agent, sample_project, repository_path):
+async def test_prepare_container_volumes_read_only(
+    workspace_router, discussion_work_item, analyst_agent, sample_project, repository_path
+):
     """Test volume mounts for non-code-changing agents."""
     context = await workspace_router.route_workspace(
         work_item=discussion_work_item,

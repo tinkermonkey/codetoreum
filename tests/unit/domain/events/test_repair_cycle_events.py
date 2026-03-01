@@ -3,25 +3,25 @@
 import pytest
 
 from codetoreum.domain.events import (
-    RepairCycleStartedEvent,
-    RepairCycleTestExecutionStartedEvent,
-    RepairCycleTestExecutionCompletedEvent,
-    RepairCycleFixCycleStartedEvent,
-    RepairCycleFileFixStartedEvent,
-    RepairCycleFileFixCompletedEvent,
-    RepairCycleWarningReviewStartedEvent,
-    RepairCycleWarningReviewCompletedEvent,
-    RepairCycleTestCycleCompletedEvent,
-    RepairCycleFastFailEvent,
     RepairCycleCompletedEvent,
+    RepairCycleFastFailEvent,
+    RepairCycleFileFixCompletedEvent,
+    RepairCycleFileFixStartedEvent,
+    RepairCycleFixCycleStartedEvent,
+    RepairCycleStartedEvent,
+    RepairCycleTestCycleCompletedEvent,
+    RepairCycleTestExecutionCompletedEvent,
+    RepairCycleTestExecutionStartedEvent,
+    RepairCycleWarningReviewCompletedEvent,
+    RepairCycleWarningReviewStartedEvent,
     now_iso,
 )
 from codetoreum.domain.repair_cycle_types import (
-    RepairTestType,
-    RepairTestFailure,
-    RepairTestWarning,
     CycleResult,
+    RepairTestFailure,
     RepairTestResult,
+    RepairTestType,
+    RepairTestWarning,
 )
 
 # For immutability tests
@@ -277,7 +277,7 @@ class TestRepairCycleTestExecutionCompletedEvent:
                     "file": "test_auth.py",
                     "test": "test_logout",
                     "message": "KeyError",
-                }
+                },
             ],
             "workflow_run_id": "run-123",
         }
@@ -791,6 +791,7 @@ class TestDeprecationWarnings:
 
         # Should NOT warn when workflow_run_id is present
         import warnings as warnings_module
+
         with warnings_module.catch_warnings(record=True) as warning_list:
             warnings_module.simplefilter("always")
             event = RepairCycleStartedEvent.from_dict(data)

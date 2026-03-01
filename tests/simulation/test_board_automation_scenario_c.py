@@ -123,9 +123,9 @@ class TestScenarioC_ReviewRejectionLoop:
         template = BoardWorkflowTemplate(
             id="workflow-1",
             name="SDLC Execution",
-            pipeline_trigger_columns=["Development"],
-            exit_columns=["Staged"],
-            columns=[
+            pipeline_trigger_columns=("Development",),
+            exit_columns=("Staged",),
+            columns=(
                 ColumnTemplate(
                     name="Backlog",
                     type=ColumnType.MANUAL,
@@ -180,7 +180,7 @@ class TestScenarioC_ReviewRejectionLoop:
                     position=5,
                     auto_progress_on_completion=False,
                 ),
-            ],
+            ),
         )
 
         # Register workflow template
@@ -246,14 +246,12 @@ class TestScenarioC_ReviewRejectionLoop:
 
         # Verify lock acquired
         queue_state = await lock_service.get_queue_state("proj-1", "board-1")
-        assert queue_state.lock_holder == "work-item-100", (
-            "Expected lock holder to be 'work-item-100' when entering Development"
-        )
+        assert (
+            queue_state.lock_holder == "work-item-100"
+        ), "Expected lock holder to be 'work-item-100' when entering Development"
 
         # Step 2: Engineer completes work → auto-progression to Code Review
-        await event_handler.handle_agent_completion(
-            work_item_id="work-item-100", board_id="board-1", success=True
-        )
+        await event_handler.handle_agent_completion(work_item_id="work-item-100", board_id="board-1", success=True)
 
         # Verify auto-progression to Code Review
         board_service.assert_item_in_column("work-item-100", "Code Review")
@@ -277,9 +275,7 @@ class TestScenarioC_ReviewRejectionLoop:
 
         # Step 3: Simulate reviewer requesting changes (CHANGES_REQUESTED outcome)
         # Reviewer moves item back to Development
-        await board_service.move_item_to_column(
-            "work-item-100", "Development", MovedByType.HUMAN
-        )
+        await board_service.move_item_to_column("work-item-100", "Development", MovedByType.HUMAN)
 
         # Verify moved back to Development
         board_service.assert_item_in_column("work-item-100", "Development")
@@ -298,14 +294,12 @@ class TestScenarioC_ReviewRejectionLoop:
 
         # Verify engineer agent re-triggered (FR6)
         # Check execution count: should have 2 executions now (initial + re-trigger on second entry to Development)
-        assert agent_executor.get_execution_count("senior_software_engineer") >= 2, (
-            "Engineer should be re-triggered when work item re-enters Development after rejection"
-        )
+        assert (
+            agent_executor.get_execution_count("senior_software_engineer") >= 2
+        ), "Engineer should be re-triggered when work item re-enters Development after rejection"
 
         # Step 4: Engineer fixes the issues and completes → auto-progression to Code Review (second time)
-        await event_handler.handle_agent_completion(
-            work_item_id="work-item-100", board_id="board-1", success=True
-        )
+        await event_handler.handle_agent_completion(work_item_id="work-item-100", board_id="board-1", success=True)
 
         # Verify auto-progression to Code Review (second time)
         board_service.assert_item_in_column("work-item-100", "Code Review")
@@ -324,15 +318,13 @@ class TestScenarioC_ReviewRejectionLoop:
 
         # Verify code_reviewer agent triggered again (second review)
         # Check execution count: should have 2 executions now (initial rejection + second approval review)
-        assert agent_executor.get_execution_count("code_reviewer") >= 2, (
-            "Code reviewer should be triggered twice (initial rejection + second approval)"
-        )
+        assert (
+            agent_executor.get_execution_count("code_reviewer") >= 2
+        ), "Code reviewer should be triggered twice (initial rejection + second approval)"
 
         # Step 5: Simulate reviewer approving (APPROVED outcome)
         # Auto-progression to Testing
-        await event_handler.handle_agent_completion(
-            work_item_id="work-item-100", board_id="board-1", success=True
-        )
+        await event_handler.handle_agent_completion(work_item_id="work-item-100", board_id="board-1", success=True)
 
         # Verify auto-progression to Testing
         board_service.assert_item_in_column("work-item-100", "Testing")
@@ -362,9 +354,9 @@ class TestScenarioC_ReviewRejectionLoop:
         expected_columns = ["Code Review", "Development", "Code Review", "Testing"]
         actual_path = [h.to_column for h in history]
 
-        assert len(history) >= 4, (
-            f"Expected at least 4 movements in history (Dev→CR→Dev→CR→Testing), got {len(history)}"
-        )
+        assert (
+            len(history) >= 4
+        ), f"Expected at least 4 movements in history (Dev→CR→Dev→CR→Testing), got {len(history)}"
 
         # Verify the rejection loop pattern: Code Review appears twice
         code_review_count = actual_path.count("Code Review")
@@ -374,9 +366,9 @@ class TestScenarioC_ReviewRejectionLoop:
         )
 
         # Verify Development appears in the middle (backward movement)
-        assert "Development" in actual_path[1:], (
-            "Development should appear in the middle of the path (indicating backward movement)"
-        )
+        assert (
+            "Development" in actual_path[1:]
+        ), "Development should appear in the middle of the path (indicating backward movement)"
 
         # Verify movement metadata is correct for rejection (human move back to Development)
         # Find the movement where work item goes back to Development
@@ -386,12 +378,10 @@ class TestScenarioC_ReviewRejectionLoop:
                 dev_rejection_move = h
                 break
 
-        assert dev_rejection_move is not None, (
-            "Should have a movement from Code Review back to Development"
-        )
-        assert dev_rejection_move.moved_by == MovedByType.HUMAN, (
-            "Rejection move (CR→Dev) should be marked as HUMAN movement"
-        )
+        assert dev_rejection_move is not None, "Should have a movement from Code Review back to Development"
+        assert (
+            dev_rejection_move.moved_by == MovedByType.HUMAN
+        ), "Rejection move (CR→Dev) should be marked as HUMAN movement"
 
     @pytest.mark.asyncio
     async def test_review_approved_auto_progresses(self, setup):
@@ -436,9 +426,7 @@ class TestScenarioC_ReviewRejectionLoop:
         agent_executor.clear()
 
         # Simulate reviewer approval
-        await event_handler.handle_agent_completion(
-            work_item_id="work-item-200", board_id="board-1", success=True
-        )
+        await event_handler.handle_agent_completion(work_item_id="work-item-200", board_id="board-1", success=True)
 
         # Verify auto-progression to Testing
         board_service.assert_item_in_column("work-item-200", "Testing")
@@ -459,9 +447,9 @@ class TestScenarioC_ReviewRejectionLoop:
         assert agent_executor.was_triggered(
             "test_runner", "work-item-200"
         ), "Test runner should be triggered after approval"
-        assert agent_executor.get_execution_count("code_reviewer") == 0, (
-            "Code reviewer should not be triggered again after approval"
-        )
+        assert (
+            agent_executor.get_execution_count("code_reviewer") == 0
+        ), "Code reviewer should not be triggered again after approval"
 
     @pytest.mark.asyncio
     async def test_review_blocked_outcome(self, setup):
@@ -498,21 +486,17 @@ class TestScenarioC_ReviewRejectionLoop:
         )
 
         # Simulate reviewer blocking the change (success=False)
-        await event_handler.handle_agent_completion(
-            work_item_id="work-item-300", board_id="board-1", success=False
-        )
+        await event_handler.handle_agent_completion(work_item_id="work-item-300", board_id="board-1", success=False)
 
         # Verify work item stays in Code Review (no auto-progression)
-        board_service.assert_item_in_column(
-            "work-item-300", "Code Review"
-        )
+        board_service.assert_item_in_column("work-item-300", "Code Review")
 
         # Verify no movement to next column
         history = board_service.get_movement_history("work-item-300")
         for h in history:
-            assert h.from_column != "Code Review" or h.to_column == "Code Review", (
-                "Should not have moved away from Code Review after BLOCKED"
-            )
+            assert (
+                h.from_column != "Code Review" or h.to_column == "Code Review"
+            ), "Should not have moved away from Code Review after BLOCKED"
 
     @pytest.mark.asyncio
     async def test_multiple_rejection_cycles(self, setup):
@@ -557,9 +541,7 @@ class TestScenarioC_ReviewRejectionLoop:
         assert queue_state.lock_holder == "work-item-400"
 
         # Cycle 1: Dev → CR → Dev (first rejection)
-        await event_handler.handle_agent_completion(
-            work_item_id="work-item-400", board_id="board-1", success=True
-        )
+        await event_handler.handle_agent_completion(work_item_id="work-item-400", board_id="board-1", success=True)
         board_service.assert_item_in_column("work-item-400", "Code Review")
 
         await event_handler.handle_column_change(
@@ -574,9 +556,7 @@ class TestScenarioC_ReviewRejectionLoop:
         )
 
         # First rejection: move back to Development
-        await board_service.move_item_to_column(
-            "work-item-400", "Development", MovedByType.HUMAN
-        )
+        await board_service.move_item_to_column("work-item-400", "Development", MovedByType.HUMAN)
         board_service.assert_item_in_column("work-item-400", "Development")
 
         await event_handler.handle_column_change(
@@ -591,9 +571,7 @@ class TestScenarioC_ReviewRejectionLoop:
         )
 
         # Cycle 2: Dev → CR → Dev (second rejection)
-        await event_handler.handle_agent_completion(
-            work_item_id="work-item-400", board_id="board-1", success=True
-        )
+        await event_handler.handle_agent_completion(work_item_id="work-item-400", board_id="board-1", success=True)
         board_service.assert_item_in_column("work-item-400", "Code Review")
 
         await event_handler.handle_column_change(
@@ -608,9 +586,7 @@ class TestScenarioC_ReviewRejectionLoop:
         )
 
         # Second rejection: move back to Development
-        await board_service.move_item_to_column(
-            "work-item-400", "Development", MovedByType.HUMAN
-        )
+        await board_service.move_item_to_column("work-item-400", "Development", MovedByType.HUMAN)
         board_service.assert_item_in_column("work-item-400", "Development")
 
         await event_handler.handle_column_change(
@@ -625,9 +601,7 @@ class TestScenarioC_ReviewRejectionLoop:
         )
 
         # Cycle 3: Dev → CR → Testing (approval)
-        await event_handler.handle_agent_completion(
-            work_item_id="work-item-400", board_id="board-1", success=True
-        )
+        await event_handler.handle_agent_completion(work_item_id="work-item-400", board_id="board-1", success=True)
         board_service.assert_item_in_column("work-item-400", "Code Review")
 
         await event_handler.handle_column_change(
@@ -642,9 +616,7 @@ class TestScenarioC_ReviewRejectionLoop:
         )
 
         # Third attempt: approval, move to Testing
-        await event_handler.handle_agent_completion(
-            work_item_id="work-item-400", board_id="board-1", success=True
-        )
+        await event_handler.handle_agent_completion(work_item_id="work-item-400", board_id="board-1", success=True)
         board_service.assert_item_in_column("work-item-400", "Testing")
 
         await event_handler.handle_column_change(
@@ -659,12 +631,12 @@ class TestScenarioC_ReviewRejectionLoop:
         )
 
         # Verify agent execution counts
-        assert agent_executor.get_execution_count("senior_software_engineer") >= 3, (
-            "Engineer should be triggered 3 times (initial + 2 rejections)"
-        )
-        assert agent_executor.get_execution_count("code_reviewer") >= 3, (
-            "Code reviewer should be triggered 3 times (all 3 review cycles)"
-        )
+        assert (
+            agent_executor.get_execution_count("senior_software_engineer") >= 3
+        ), "Engineer should be triggered 3 times (initial + 2 rejections)"
+        assert (
+            agent_executor.get_execution_count("code_reviewer") >= 3
+        ), "Code reviewer should be triggered 3 times (all 3 review cycles)"
 
         # Verify lock maintained throughout
         queue_state = await lock_service.get_queue_state("proj-1", "board-1")

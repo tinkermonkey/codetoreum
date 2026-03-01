@@ -46,6 +46,11 @@ RUN if [ -f requirements.txt ]; then \
     pip install --no-cache-dir -r requirements.txt; \
     fi
 
+# Install pre-commit so repair cycle agents can run `pre-commit run --all-files`.
+# The local hooks in .pre-commit-config.yaml use `language: system`, meaning they
+# rely on binaries already in PATH (ruff, black, mypy) — these come from the base image.
+RUN pip install --no-cache-dir pre-commit
+
 # ============================================================================
 # Stage 4: Ownership and Permissions
 # ============================================================================
@@ -54,13 +59,35 @@ RUN if [ -f requirements.txt ]; then \
 
 # Python packages are installed as root in /usr/local, no chown needed
 
+# NOTE: Do NOT touch /home/orchestrator/.gitconfig here.
+# It is a runtime bind mount injected by the orchestrator — never create,
+# remove, or modify it during the image build.
+
 # ============================================================================
-# Stage 5: Switch to Runtime User
+# Stage 5: Configure Headless Environment
+# ============================================================================
+# Disable dbus-based secret storage for gh CLI. In a headless container there
+# is no session bus, so gh would fail or hang trying to reach gnome-keyring.
+# GH_NO_KEYRING tells gh to fall back to file-based token storage.
+ENV GH_NO_KEYRING=1
+# Prevent any tool from attempting a dbus session connection.
+ENV DBUS_SESSION_BUS_ADDRESS=disabled:
+
+# ============================================================================
+# Stage 6: Install Entrypoint Script
+# ============================================================================
+# The entrypoint validates the git environment at startup and repairs common
+# DinD mount corruption (e.g. .gitconfig appearing as a directory).
+COPY scripts/agent-entrypoint.sh /usr/local/bin/agent-entrypoint.sh
+RUN chmod +x /usr/local/bin/agent-entrypoint.sh
+
+# ============================================================================
+# Stage 7: Switch to Runtime User
 # ============================================================================
 USER orchestrator
 
 # ============================================================================
-# Stage 6: Verification (MANDATORY)
+# Stage 8: Verification (MANDATORY)
 # ============================================================================
 # Verify all critical CLIs are present (from base image)
 RUN claude --version && \
@@ -69,7 +96,13 @@ RUN claude --version && \
     python3 --version && \
     pip --version
 
+# Verify ruff and pre-commit are installed and accessible (required by pre-commit
+# hooks which use 'language: system' and expect these binaries in PATH)
+RUN ruff --version && \
+    pre-commit --version
+
 # ============================================================================
 # Default command
 # ============================================================================
+ENTRYPOINT ["agent-entrypoint.sh"]
 CMD ["/bin/bash"]

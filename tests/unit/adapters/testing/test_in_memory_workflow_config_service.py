@@ -24,9 +24,9 @@ def sample_workflow_template():
     return BoardWorkflowTemplate(
         id="workflow-1",
         name="Standard Workflow",
-        pipeline_trigger_columns=["In Progress"],
-        exit_columns=["Done"],
-        columns=[
+        pipeline_trigger_columns=("In Progress",),
+        exit_columns=("Done",),
+        columns=(
             ColumnTemplate(
                 name="Backlog",
                 type=ColumnType.MANUAL,
@@ -54,7 +54,7 @@ def sample_workflow_template():
                 position=2,
                 auto_progress_on_completion=False,
             ),
-        ],
+        ),
     )
 
 
@@ -197,9 +197,7 @@ class TestIntegration:
     """Integration tests for the service."""
 
     @pytest.mark.asyncio
-    async def test_full_workflow_template_retrieval_flow(
-        self, config_service, sample_workflow_template
-    ):
+    async def test_full_workflow_template_retrieval_flow(self, config_service, sample_workflow_template):
         """Test complete workflow: register template and retrieve it."""
         # Register template
         config_service.register_template("board-1", sample_workflow_template)
@@ -215,18 +213,16 @@ class TestIntegration:
         assert "In Progress" in retrieved.pipeline_trigger_columns
 
     @pytest.mark.asyncio
-    async def test_multiple_boards_independent_templates(
-        self, config_service, sample_workflow_template
-    ):
+    async def test_multiple_boards_independent_templates(self, config_service, sample_workflow_template):
         """Test that different boards can have different templates."""
         template1 = sample_workflow_template
 
         template2 = BoardWorkflowTemplate(
             id="workflow-alt",
             name="Alternative Workflow",
-            pipeline_trigger_columns=["Backlog"],
-            exit_columns=["Archived"],
-            columns=[
+            pipeline_trigger_columns=("Backlog",),
+            exit_columns=("Archived",),
+            columns=(
                 ColumnTemplate(
                     name="Backlog",
                     type=ColumnType.MANUAL,
@@ -245,7 +241,7 @@ class TestIntegration:
                     position=1,
                     auto_progress_on_completion=False,
                 ),
-            ],
+            ),
         )
 
         # Register different templates for different boards

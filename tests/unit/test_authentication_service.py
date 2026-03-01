@@ -1,21 +1,23 @@
 """Unit tests for authentication service."""
 
-import pytest
-from datetime import datetime, timedelta
 from uuid import uuid4
 
-from codetoreum.application.authentication_service import AuthenticationService
-from codetoreum.adapters.secondary.in_memory_user_repository import InMemoryUserRepository
+import pytest
+
 from codetoreum.adapters.secondary.in_memory_api_key_repository import (
     InMemoryAPIKeyRepository,
 )
-from codetoreum.domain.user import UserRole, Permission
+from codetoreum.adapters.secondary.in_memory_user_repository import (
+    InMemoryUserRepository,
+)
+from codetoreum.application.authentication_service import AuthenticationService
+from codetoreum.domain.user import Permission, UserRole
 from codetoreum.ports.input.authentication import (
-    CreateUserCommand,
+    AuthenticationError,
     CreateAPIKeyCommand,
+    CreateUserCommand,
     LoginCommand,
     UpdateUserCommand,
-    AuthenticationError,
     UserAlreadyExistsError,
     UserNotFoundError,
 )
@@ -375,8 +377,87 @@ class TestAPIKeys:
         )
         api_key, plaintext_key = await auth_service.create_api_key(command)
 
-        # Revoke API key
-        await auth_service.revoke_api_key(api_key.id)
+        # Revoke API key - user can revoke their own key
+        await auth_service.revoke_api_key(
+            key_id=api_key.id,
+            requesting_user_id=user.id,
+            is_admin=False,
+        )
+
+        # Try to validate revoked key
+        with pytest.raises(AuthenticationError):
+            await auth_service.validate_api_key(plaintext_key)
+
+    @pytest.mark.asyncio
+    async def test_revoke_api_key_unauthorized(self, auth_service):
+        """Test that users cannot revoke other users' API keys."""
+        # Create two users
+        user1_command = CreateUserCommand(
+            username="user1",
+            email="user1@example.com",
+            password="TestPass123",
+            roles={UserRole.DEVELOPER},
+        )
+        user1 = await auth_service.create_user(user1_command)
+
+        user2_command = CreateUserCommand(
+            username="user2",
+            email="user2@example.com",
+            password="TestPass123",
+            roles={UserRole.DEVELOPER},
+        )
+        user2 = await auth_service.create_user(user2_command)
+
+        # Create API key for user1
+        command = CreateAPIKeyCommand(
+            name="User1's API Key",
+            user_id=user1.id,
+            roles={UserRole.SERVICE_ACCOUNT},
+        )
+        api_key, _ = await auth_service.create_api_key(command)
+
+        # Try to revoke user1's key as user2 (non-admin)
+        with pytest.raises(PermissionError, match="only revoke your own"):
+            await auth_service.revoke_api_key(
+                key_id=api_key.id,
+                requesting_user_id=user2.id,
+                is_admin=False,
+            )
+
+    @pytest.mark.asyncio
+    async def test_revoke_api_key_admin(self, auth_service):
+        """Test that admins can revoke any API key."""
+        # Create user and admin
+        user_command = CreateUserCommand(
+            username="testuser",
+            email="test@example.com",
+            password="TestPass123",
+            roles={UserRole.DEVELOPER},
+        )
+        user = await auth_service.create_user(user_command)
+
+        admin_command = CreateUserCommand(
+            username="admin",
+            email="admin@example.com",
+            password="TestPass123",
+            roles={UserRole.ADMIN},
+        )
+        admin = await auth_service.create_user(admin_command)
+
+        # Create API key for user
+        command = CreateAPIKeyCommand(
+            name="Test API Key",
+            user_id=user.id,
+            roles={UserRole.SERVICE_ACCOUNT},
+        )
+        api_key, plaintext_key = await auth_service.create_api_key(command)
+
+        # Admin should be able to revoke user's key
+        await auth_service.revoke_api_key(
+            key_id=api_key.id,
+            requesting_user_id=admin.id,
+            is_admin=True,
+        )
 
         # Try to validate revoked key
         with pytest.raises(AuthenticationError):
@@ -395,12 +476,8 @@ class TestAPIKeys:
         user = await auth_service.create_user(user_command)
 
         # Create multiple API keys
-        command1 = CreateAPIKeyCommand(
-            name="Key 1", user_id=user.id, roles={UserRole.SERVICE_ACCOUNT}
-        )
-        command2 = CreateAPIKeyCommand(
-            name="Key 2", user_id=user.id, roles={UserRole.SERVICE_ACCOUNT}
-        )
+        command1 = CreateAPIKeyCommand(name="Key 1", user_id=user.id, roles={UserRole.SERVICE_ACCOUNT})
+        command2 = CreateAPIKeyCommand(name="Key 2", user_id=user.id, roles={UserRole.SERVICE_ACCOUNT})
 
         await auth_service.create_api_key(command1)
         await auth_service.create_api_key(command2)
@@ -435,12 +512,8 @@ class TestPermissions:
         auth_context = await auth_service.validate_token(result.access_token)
 
         # Check permissions
-        assert await auth_service.check_permission(
-            auth_context, Permission.WORKFLOW_VIEW.value
-        )
-        assert await auth_service.check_permission(
-            auth_context, Permission.WORKFLOW_CREATE.value
-        )
+        assert await auth_service.check_permission(auth_context, Permission.WORKFLOW_VIEW.value)
+        assert await auth_service.check_permission(auth_context, Permission.WORKFLOW_CREATE.value)
         assert not await auth_service.check_permission(
             auth_context, Permission.USER_DELETE.value
         )  # Developer doesn't have this
@@ -463,12 +536,6 @@ class TestPermissions:
         auth_context = await auth_service.validate_token(result.access_token)
 
         # Admin should have all permissions
-        assert await auth_service.check_permission(
-            auth_context, Permission.WORKFLOW_CREATE.value
-        )
-        assert await auth_service.check_permission(
-            auth_context, Permission.USER_DELETE.value
-        )
-        assert await auth_service.check_permission(
-            auth_context, Permission.CONFIG_UPDATE.value
-        )
+        assert await auth_service.check_permission(auth_context, Permission.WORKFLOW_CREATE.value)
+        assert await auth_service.check_permission(auth_context, Permission.USER_DELETE.value)
+        assert await auth_service.check_permission(auth_context, Permission.CONFIG_UPDATE.value)

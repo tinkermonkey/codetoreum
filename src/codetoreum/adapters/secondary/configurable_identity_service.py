@@ -4,8 +4,7 @@ This module provides an in-memory implementation of IIdentityService
 with configurable bot detection for testing purposes.
 """
 
-import re
-from typing import List, Optional, Pattern
+from re import Pattern
 
 from codetoreum.ports.output.identity_service import BotIdentityConfig, IIdentityService
 
@@ -45,9 +44,9 @@ class ConfigurableIdentityService(IIdentityService):
 
     def __init__(self) -> None:
         """Initialize the identity service with default values."""
-        self._bot_usernames: List[str] = []
-        self._bot_patterns: List[Pattern] = []  # type: ignore
-        self._system_bot_username: str = 'codetoreum-bot'
+        self._bot_usernames: list[str] = []
+        self._bot_patterns: list[Pattern] = []  # type: ignore
+        self._system_bot_username: str = "codetoreum-bot"
 
     def is_bot_user(self, username: str) -> bool:
         """Check if username belongs to a bot.
@@ -65,7 +64,8 @@ class ConfigurableIdentityService(IIdentityService):
             ValueError: If username is empty
         """
         if not username:
-            raise ValueError("username cannot be empty")
+            msg = "username cannot be empty"
+            raise ValueError(msg)
 
         # Check exact matches
         if username in self._bot_usernames:
@@ -90,10 +90,11 @@ class ConfigurableIdentityService(IIdentityService):
             ValueError: If no bot username configured
         """
         if not self._system_bot_username:
-            raise ValueError("No bot username configured")
+            msg = "No bot username configured"
+            raise ValueError(msg)
         return self._system_bot_username
 
-    def get_human_users(self, usernames: List[str]) -> List[str]:
+    def get_human_users(self, usernames: list[str]) -> list[str]:
         """Filter list to only human users.
 
         Removes any bots from the provided list of usernames,
@@ -126,9 +127,8 @@ class ConfigurableIdentityService(IIdentityService):
                        and empty bot_patterns)
         """
         if not config.bot_usernames and not config.bot_patterns:
-            raise ValueError(
-                "At least one of bot_usernames or bot_patterns must be provided"
-            )
+            msg = "At least one of bot_usernames or bot_patterns must be provided"
+            raise ValueError(msg)
 
         self._bot_usernames = config.bot_usernames or []
         self._bot_patterns = config.bot_patterns or []
@@ -146,5 +146,6 @@ class ConfigurableIdentityService(IIdentityService):
             ValueError: If username is empty
         """
         if not username:
-            raise ValueError("username cannot be empty")
+            msg = "username cannot be empty"
+            raise ValueError(msg)
         self._system_bot_username = username

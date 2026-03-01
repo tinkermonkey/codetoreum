@@ -5,27 +5,27 @@ Tests the real WorkflowRunQueryService implementation with an in-memory event st
 validating event sourcing, filtering, pagination, and error handling.
 """
 
-import pytest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
+
+import pytest
 
 from codetoreum.adapters.testing import InMemoryEventStore, InMemoryTicketAdapter
 from codetoreum.application.workflow_run_query_service import WorkflowRunQueryService
 from codetoreum.domain.events import (
-    WorkflowCreated,
-    WorkflowStarted,
-    WorkflowStageAdvanced,
     WorkflowCompleted,
+    WorkflowCreated,
     WorkflowFailed,
+    WorkflowStarted,
 )
-from codetoreum.domain.work_item import WorkItem, WorkItemStatus, WorkItemPriority
+from codetoreum.domain.work_item import WorkItemPriority
 from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.ports.input.workflow_run_query import (
+    SortOrder,
     WorkflowRunFilters,
     WorkflowRunPaginationParams,
     WorkflowRunSortField,
     WorkflowRunStatus,
-    SortOrder,
 )
 
 
@@ -71,7 +71,7 @@ async def sample_workflow_events(event_store):
         WorkflowStarted(
             aggregate_id=workflow_id,
             payload={
-                "started_at": datetime.now(timezone.utc).isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
                 "work_item_id": work_item_id,
                 "first_stage": "stage-1",
             },
@@ -79,7 +79,7 @@ async def sample_workflow_events(event_store):
         WorkflowCompleted(
             aggregate_id=workflow_id,
             payload={
-                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(UTC).isoformat(),
                 "work_item_id": work_item_id,
                 "duration_seconds": 120.5,
             },
@@ -119,7 +119,7 @@ async def multiple_workflows(event_store):
             WorkflowStarted(
                 aggregate_id=workflow_id,
                 payload={
-                    "started_at": datetime.now(timezone.utc).isoformat(),
+                    "started_at": datetime.now(UTC).isoformat(),
                     "work_item_id": work_item_id,
                     "first_stage": "stage-1",
                 },
@@ -132,7 +132,7 @@ async def multiple_workflows(event_store):
                 WorkflowCompleted(
                     aggregate_id=workflow_id,
                     payload={
-                        "completed_at": datetime.now(timezone.utc).isoformat(),
+                        "completed_at": datetime.now(UTC).isoformat(),
                         "work_item_id": work_item_id,
                         "duration_seconds": 100.0 + i * 10,
                     },
@@ -143,7 +143,7 @@ async def multiple_workflows(event_store):
                 WorkflowFailed(
                     aggregate_id=workflow_id,
                     payload={
-                        "failed_at": datetime.now(timezone.utc).isoformat(),
+                        "failed_at": datetime.now(UTC).isoformat(),
                         "reason": "Agent execution failed",
                         "failed_stage": "stage-2",
                         "completed_stages": ["stage-1"],
@@ -152,14 +152,18 @@ async def multiple_workflows(event_store):
             )
 
         await event_store.append(workflow_id, events)
-        workflows.append({
-            "workflow_id": workflow_id,
-            "work_item_id": work_item_id,
-            "project_id": project_id,
-            "status": WorkflowRunStatus.COMPLETED if i < 2 else (
-                WorkflowRunStatus.FAILED if i == 2 else WorkflowRunStatus.RUNNING
-            ),
-        })
+        workflows.append(
+            {
+                "workflow_id": workflow_id,
+                "work_item_id": work_item_id,
+                "project_id": project_id,
+                "status": (
+                    WorkflowRunStatus.COMPLETED
+                    if i < 2
+                    else (WorkflowRunStatus.FAILED if i == 2 else WorkflowRunStatus.RUNNING)
+                ),
+            }
+        )
 
     return workflows
 
@@ -195,9 +199,7 @@ class TestGetWorkflowRun:
         assert "nonexistent-id" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_get_workflow_run_with_work_item_metadata(
-        self, event_store, ticket_system, sample_workflow_events
-    ):
+    async def test_get_workflow_run_with_work_item_metadata(self, event_store, ticket_system, sample_workflow_events):
         """Test workflow run enriched with work item metadata."""
         # Create work item in ticket system
         work_item = await ticket_system.create_work_item(
@@ -218,9 +220,7 @@ class TestGetWorkflowRun:
         )
 
         # Act
-        result = await query_service.get_workflow_run(
-            sample_workflow_events["workflow_id"]
-        )
+        result = await query_service.get_workflow_run(sample_workflow_events["workflow_id"])
 
         # Assert
         assert result.issue_title == "Test Issue"
@@ -248,14 +248,10 @@ class TestListWorkflowRuns:
     async def test_list_workflow_runs_with_pagination(self, query_service, multiple_workflows):
         """Test workflow run listing with pagination."""
         # Act - Page 1
-        page1 = await query_service.list_workflow_runs(
-            pagination=WorkflowRunPaginationParams(offset=0, limit=2)
-        )
+        page1 = await query_service.list_workflow_runs(pagination=WorkflowRunPaginationParams(offset=0, limit=2))
 
         # Act - Page 2
-        page2 = await query_service.list_workflow_runs(
-            pagination=WorkflowRunPaginationParams(offset=2, limit=2)
-        )
+        page2 = await query_service.list_workflow_runs(pagination=WorkflowRunPaginationParams(offset=2, limit=2))
 
         # Assert
         assert page1.total_count == 5
@@ -287,9 +283,7 @@ class TestListWorkflowRuns:
     async def test_list_workflow_runs_filter_by_project(self, query_service, multiple_workflows):
         """Test filtering workflow runs by project."""
         # Act
-        result = await query_service.list_workflow_runs(
-            filters=WorkflowRunFilters(project_id="project-1")
-        )
+        result = await query_service.list_workflow_runs(filters=WorkflowRunFilters(project_id="project-1"))
 
         # Assert
         assert result.total_count == 3
@@ -301,18 +295,14 @@ class TestListWorkflowRuns:
         work_item_id = multiple_workflows[0]["work_item_id"]
 
         # Act
-        result = await query_service.list_workflow_runs(
-            filters=WorkflowRunFilters(work_item_id=work_item_id)
-        )
+        result = await query_service.list_workflow_runs(filters=WorkflowRunFilters(work_item_id=work_item_id))
 
         # Assert
         assert result.total_count == 1
         assert result.runs[0].work_item_id == work_item_id
 
     @pytest.mark.asyncio
-    async def test_list_workflow_runs_sort_by_started_at_desc(
-        self, query_service, multiple_workflows
-    ):
+    async def test_list_workflow_runs_sort_by_started_at_desc(self, query_service, multiple_workflows):
         """Test sorting workflow runs by started_at descending (default)."""
         # Act
         result = await query_service.list_workflow_runs(
@@ -331,9 +321,7 @@ class TestListWorkflowRuns:
                 assert result.runs[i].started_at >= result.runs[i + 1].started_at
 
     @pytest.mark.asyncio
-    async def test_list_workflow_runs_sort_by_duration(
-        self, query_service, multiple_workflows
-    ):
+    async def test_list_workflow_runs_sort_by_duration(self, query_service, multiple_workflows):
         """Test sorting workflow runs by duration."""
         # Act
         result = await query_service.list_workflow_runs(
@@ -341,7 +329,7 @@ class TestListWorkflowRuns:
             pagination=WorkflowRunPaginationParams(
                 sort_by=WorkflowRunSortField.DURATION,
                 sort_order=SortOrder.ASC,
-            )
+            ),
         )
 
         # Assert - completed workflows sorted by duration ascending
@@ -353,9 +341,7 @@ class TestListWorkflowRuns:
     async def test_list_workflow_runs_empty_result(self, query_service, multiple_workflows):
         """Test listing with filters that match no workflows."""
         # Act
-        result = await query_service.list_workflow_runs(
-            filters=WorkflowRunFilters(project_id="nonexistent-project")
-        )
+        result = await query_service.list_workflow_runs(filters=WorkflowRunFilters(project_id="nonexistent-project"))
 
         # Assert
         assert result.total_count == 0
@@ -382,16 +368,12 @@ class TestGetWorkflowRunEvents:
         assert result.has_next is False
 
     @pytest.mark.asyncio
-    async def test_get_workflow_run_events_with_pagination(
-        self, query_service, sample_workflow_events
-    ):
+    async def test_get_workflow_run_events_with_pagination(self, query_service, sample_workflow_events):
         """Test event retrieval with pagination."""
         workflow_id = sample_workflow_events["workflow_id"]
 
         # Act
-        result = await query_service.get_workflow_run_events(
-            workflow_id, offset=0, limit=2
-        )
+        result = await query_service.get_workflow_run_events(workflow_id, offset=0, limit=2)
 
         # Assert
         assert result.total_count == 3
@@ -399,9 +381,7 @@ class TestGetWorkflowRunEvents:
         assert result.has_next is True
 
     @pytest.mark.asyncio
-    async def test_get_workflow_run_events_filter_by_type(
-        self, query_service, sample_workflow_events
-    ):
+    async def test_get_workflow_run_events_filter_by_type(self, query_service, sample_workflow_events):
         """Test filtering events by event type."""
         workflow_id = sample_workflow_events["workflow_id"]
 
@@ -427,9 +407,7 @@ class TestGetWorkflowRunEvents:
         assert "WorkflowRun" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_get_workflow_run_events_structure(
-        self, query_service, sample_workflow_events
-    ):
+    async def test_get_workflow_run_events_structure(self, query_service, sample_workflow_events):
         """Test event data structure in response."""
         workflow_id = sample_workflow_events["workflow_id"]
 
@@ -452,9 +430,7 @@ class TestCaching:
     """Tests for work item metadata caching."""
 
     @pytest.mark.asyncio
-    async def test_work_item_metadata_cached(
-        self, event_store, ticket_system, sample_workflow_events
-    ):
+    async def test_work_item_metadata_cached(self, event_store, ticket_system, sample_workflow_events):
         """Test that work item metadata is cached across queries."""
         # Create work item
         work_item = await ticket_system.create_work_item(
@@ -475,14 +451,10 @@ class TestCaching:
         )
 
         # First query
-        result1 = await query_service.get_workflow_run(
-            sample_workflow_events["workflow_id"]
-        )
+        result1 = await query_service.get_workflow_run(sample_workflow_events["workflow_id"])
 
         # Second query (should use cache)
-        result2 = await query_service.get_workflow_run(
-            sample_workflow_events["workflow_id"]
-        )
+        result2 = await query_service.get_workflow_run(sample_workflow_events["workflow_id"])
 
         # Assert metadata is the same (verifies caching behavior)
         assert result1.issue_title == result2.issue_title == "Cached Issue"
@@ -493,9 +465,7 @@ class TestCaching:
         assert cache_size > 0
 
     @pytest.mark.asyncio
-    async def test_graceful_degradation_on_ticket_system_error(
-        self, event_store, sample_workflow_events
-    ):
+    async def test_graceful_degradation_on_ticket_system_error(self, event_store, sample_workflow_events):
         """Test that service works even if ticket system fails."""
         # Create query service without ticket system
         query_service = WorkflowRunQueryService(
@@ -504,9 +474,7 @@ class TestCaching:
         )
 
         # Act
-        result = await query_service.get_workflow_run(
-            sample_workflow_events["workflow_id"]
-        )
+        result = await query_service.get_workflow_run(sample_workflow_events["workflow_id"])
 
         # Assert - metadata fields are None but query succeeds
         assert result.id == sample_workflow_events["workflow_id"]
@@ -528,8 +496,8 @@ class TestStageOutputFields:
             name="implementation",
             agent_name="developer_agent",
             status="completed",
-            started_at=datetime.now(timezone.utc),
-            completed_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
             execution_id="exec-123",
             output="Implementation completed successfully",
             error_message=None,
@@ -540,7 +508,9 @@ class TestStageOutputFields:
         assert stage.name == "implementation"
         assert stage.output == "Implementation completed successfully"
         assert stage.error_message is None
-        assert stage.metadata == {"iterations": 3, "files_changed": 5}
+        assert stage.metadata is not None
+        assert stage.metadata["iterations"] == 3
+        assert stage.metadata["files_changed"] == 5
 
     @pytest.mark.asyncio
     async def test_stage_info_with_error_message(self):
@@ -551,8 +521,8 @@ class TestStageOutputFields:
             name="testing",
             agent_name="test_agent",
             status="failed",
-            started_at=datetime.now(timezone.utc),
-            completed_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
             execution_id="exec-456",
             output=None,
             error_message="Test suite failed with 3 errors",
@@ -562,19 +532,22 @@ class TestStageOutputFields:
         assert stage.status == "failed"
         assert stage.output is None
         assert stage.error_message == "Test suite failed with 3 errors"
+        assert stage.metadata is not None
         assert stage.metadata["failed_tests"] == 3
 
     @pytest.mark.asyncio
     async def test_stage_dto_mapping_includes_output_fields(self):
         """Test that WorkflowRunStageResponse DTO includes output fields."""
-        from codetoreum.adapters.primary.workflow_run_dtos import WorkflowRunStageResponse
+        from codetoreum.adapters.primary.workflow_run_dtos import (
+            WorkflowRunStageResponse,
+        )
 
         response = WorkflowRunStageResponse(
             name="review",
             agentName="reviewer_agent",
             status="completed",
-            startedAt=datetime.now(timezone.utc),
-            completedAt=datetime.now(timezone.utc),
+            startedAt=datetime.now(UTC),
+            completedAt=datetime.now(UTC),
             executionId="exec-789",
             output="Code review passed",
             errorMessage=None,
@@ -583,7 +556,8 @@ class TestStageOutputFields:
 
         assert response.output == "Code review passed"
         assert response.errorMessage is None
-        assert response.metadata == {"approval_count": 2}
+        assert response.metadata is not None
+        assert response.metadata["approval_count"] == 2
 
     @pytest.mark.asyncio
     async def test_audit_stage_info_includes_output_fields(self):
@@ -593,8 +567,8 @@ class TestStageOutputFields:
         stage_info = AuditStageInfo(
             name="deployment",
             status="completed",
-            startedAt=datetime.now(timezone.utc),
-            completedAt=datetime.now(timezone.utc),
+            startedAt=datetime.now(UTC),
+            completedAt=datetime.now(UTC),
             durationSeconds=45.5,
             events=[],
             output="Deployment successful",
@@ -604,20 +578,21 @@ class TestStageOutputFields:
 
         assert stage_info.output == "Deployment successful"
         assert stage_info.errorMessage is None
-        assert stage_info.metadata == {"environment": "production"}
+        assert stage_info.metadata is not None
+        assert stage_info.metadata["environment"] == "production"
 
     @pytest.mark.asyncio
     async def test_mapper_preserves_output_fields(self):
         """Test that WorkflowRunMapper preserves output fields during mapping."""
-        from codetoreum.ports.input.workflow_run_query import WorkflowRunStageInfo
         from codetoreum.adapters.primary.workflow_run_mappers import WorkflowRunMapper
+        from codetoreum.ports.input.workflow_run_query import WorkflowRunStageInfo
 
         stage = WorkflowRunStageInfo(
             name="build",
             agent_name="build_agent",
             status="completed",
-            started_at=datetime.now(timezone.utc),
-            completed_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
             execution_id="exec-build-1",
             output="Build artifacts created",
             error_message=None,
@@ -628,4 +603,5 @@ class TestStageOutputFields:
 
         assert response.output == "Build artifacts created"
         assert response.errorMessage is None
-        assert response.metadata == {"build_number": 42}
+        assert response.metadata is not None
+        assert response.metadata["build_number"] == 42

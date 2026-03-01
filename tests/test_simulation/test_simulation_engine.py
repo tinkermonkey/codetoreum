@@ -1,13 +1,13 @@
 """Unit tests for SimulationEngine."""
 
-import pytest
-from datetime import datetime, timedelta, timezone
-from unittest.mock import Mock, AsyncMock, patch
+from datetime import UTC, datetime, timedelta
+from unittest.mock import Mock
 
-from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
+import pytest
+
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
-
+from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
 
 # ====================================================================================
 # Fixtures
@@ -70,7 +70,7 @@ class TestSimulationEngineInitialization:
     def test_engine_create_sets_start_time_if_configured(self):
         """Test engine creation sets start time if configured."""
         config = SimulationConfig.create_fast_config("test")
-        start_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        start_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
         config.time.start_time = start_time
 
         engine = SimulationEngine.create(config)
@@ -97,26 +97,26 @@ class TestSimulationEngineTimeOperations:
     def test_now_returns_utc_time(self, simulation_engine):
         """Test now() returns UTC time."""
         current_time = simulation_engine.now()
-        assert current_time.tzinfo == timezone.utc or current_time.tzinfo is not None
+        assert current_time.tzinfo == UTC or current_time.tzinfo is not None
 
     def test_advance_method_exists(self, simulation_engine):
         """Test advance() method exists and is callable."""
-        assert hasattr(simulation_engine, 'advance')
+        assert hasattr(simulation_engine, "advance")
         assert callable(simulation_engine.advance)
 
     def test_advance_to_method_exists(self, simulation_engine):
         """Test advance_to() method exists and is callable."""
-        assert hasattr(simulation_engine, 'advance_to')
+        assert hasattr(simulation_engine, "advance_to")
         assert callable(simulation_engine.advance_to)
 
     def test_wait_for_method_exists(self, simulation_engine):
         """Test wait_for() method exists and is callable."""
-        assert hasattr(simulation_engine, 'wait_for')
+        assert hasattr(simulation_engine, "wait_for")
         assert callable(simulation_engine.wait_for)
 
     def test_sleep_method_exists(self, simulation_engine):
         """Test sleep() method exists and is callable."""
-        assert hasattr(simulation_engine, 'sleep')
+        assert hasattr(simulation_engine, "sleep")
         assert callable(simulation_engine.sleep)
 
     @pytest.mark.asyncio
@@ -248,6 +248,50 @@ class TestSimulationEngineAdapterCreation:
         assert hasattr(adapter, "clock")
         assert adapter.clock is simulation_engine._clock
 
+    def test_create_repair_cycle_adapter_passes_container_adapter(self, simulation_engine):
+        """Test create_repair_cycle_adapter() passes container_adapter parameter.
+
+        Verifies that when a container_adapter is provided, it's correctly
+        passed to the MockRepairCycleAdapter for causal linking (FR-2/US-2.4).
+        This enables the repair adapter to extract test results from the
+        container adapter instead of using pre-configured sequences.
+        """
+        container_mock = Mock()
+        adapter = simulation_engine.create_repair_cycle_adapter(container_adapter=container_mock)
+
+        # Adapter should have received the container_adapter
+        assert adapter._container_adapter is container_mock
+
+    def test_create_repair_cycle_adapter_passes_checkpoint_store(self, simulation_engine):
+        """Test create_repair_cycle_adapter() passes checkpoint_store parameter.
+
+        Verifies that when a checkpoint_store is provided, it's correctly
+        passed to the MockRepairCycleAdapter for recovery testing.
+        """
+        checkpoint_mock = Mock()
+        adapter = simulation_engine.create_repair_cycle_adapter(checkpoint_store=checkpoint_mock)
+
+        # Adapter should have received the checkpoint_store
+        assert adapter._checkpoint_store is checkpoint_mock
+
+    def test_create_repair_cycle_adapter_passes_both_parameters(self, simulation_engine):
+        """Test create_repair_cycle_adapter() passes both parameters correctly.
+
+        Verifies parameter ordering is correct: checkpoint_store before
+        container_adapter, matching the adapter's __init__ signature.
+        """
+        checkpoint_mock = Mock()
+        container_mock = Mock()
+
+        adapter = simulation_engine.create_repair_cycle_adapter(
+            checkpoint_store=checkpoint_mock,
+            container_adapter=container_mock,
+        )
+
+        # Both should be passed correctly
+        assert adapter._checkpoint_store is checkpoint_mock
+        assert adapter._container_adapter is container_mock
+
     def test_create_review_cycle_adapter(self, simulation_engine):
         """Test create_review_cycle_adapter() creates adapter."""
         adapter = simulation_engine.create_review_cycle_adapter()
@@ -258,6 +302,21 @@ class TestSimulationEngineAdapterCreation:
         adapter = simulation_engine.create_review_cycle_adapter()
         assert hasattr(adapter, "clock")
         assert adapter.clock is simulation_engine._clock
+
+    def test_create_review_cycle_adapter_passes_llm_adapter(self, simulation_engine):
+        """Test create_review_cycle_adapter() passes llm_adapter parameter.
+
+        Verifies that when an llm_adapter is provided, it's correctly
+        passed to the MockReviewCycleAdapter for causal linking (FR-2/US-2.2).
+        This enables the review adapter to analyze actual LLM output instead
+        of using pre-configured sequences, allowing LLM code quality to
+        influence review decisions.
+        """
+        llm_mock = Mock()
+        adapter = simulation_engine.create_review_cycle_adapter(llm_adapter=llm_mock)
+
+        # Adapter should have received the llm_adapter
+        assert adapter._llm_adapter is llm_mock
 
     def test_create_metrics_query_adapter(self, simulation_engine):
         """Test create_metrics_query_adapter() creates adapter."""
@@ -341,6 +400,7 @@ class TestSimulationEngineCallbackScheduling:
 
     def test_schedule_callback_with_async_function(self, simulation_engine):
         """Test schedule_callback() with async function."""
+
         async def async_callback():
             pass
 

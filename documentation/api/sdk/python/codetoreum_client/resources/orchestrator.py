@@ -1,20 +1,25 @@
 """
 Orchestrator resource client
 """
-from typing import Optional
+
+from typing import TYPE_CHECKING, Any
+
 from ..models import WorkflowRun
+
+if TYPE_CHECKING:
+    from ..client import CodetoreumClient
 
 
 class OrchestratorResource:
     """Client for orchestrator endpoints."""
 
-    def __init__(self, client):
+    def __init__(self, client: "CodetoreumClient") -> None:
         self.client = client
 
     def start_workflow(
         self,
         work_item_id: str,
-        workflow_id: Optional[str] = None,
+        workflow_id: str | None = None,
     ) -> WorkflowRun:
         """
         Start workflow execution for a work item.
@@ -90,7 +95,7 @@ class OrchestratorResource:
         self,
         work_item_id: str,
         stage_name: str,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Check if entry conditions are met for a stage.
 
@@ -114,7 +119,5 @@ class OrchestratorResource:
             "stage_name": stage_name,
         }
 
-        return self.client.post(
-            "/api/v2/orchestrator/check-entry-conditions",
-            json=payload
-        )
+        result: dict[str, Any] = self.client.post("/api/v2/orchestrator/check-entry-conditions", json=payload)
+        return result

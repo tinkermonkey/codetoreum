@@ -91,9 +91,7 @@ def reviewer_agent():
 class TestBuildContext:
     """Tests for build_context method."""
 
-    def test_builds_complete_context(
-        self, work_item, developer_agent, project_context, workspace_context
-    ):
+    def test_builds_complete_context(self, work_item, developer_agent, project_context, workspace_context):
         """Test building complete execution context."""
         context = ExecutionContextBuilder.build_context(
             work_item=work_item,
@@ -112,9 +110,7 @@ class TestBuildContext:
         assert context.model == developer_agent.model
         assert context.timeout_seconds == developer_agent.timeout_seconds
 
-    def test_sets_workspace_details(
-        self, work_item, developer_agent, project_context, workspace_context
-    ):
+    def test_sets_workspace_details(self, work_item, developer_agent, project_context, workspace_context):
         """Test that workspace details are set correctly."""
         context = ExecutionContextBuilder.build_context(
             work_item=work_item,
@@ -129,9 +125,7 @@ class TestBuildContext:
         assert context.branch_name == "feature/issue-123"
         assert context.discussion_id is None
 
-    def test_sets_project_details(
-        self, work_item, developer_agent, project_context, workspace_context
-    ):
+    def test_sets_project_details(self, work_item, developer_agent, project_context, workspace_context):
         """Test that project details are set correctly."""
         context = ExecutionContextBuilder.build_context(
             work_item=work_item,
@@ -144,11 +138,9 @@ class TestBuildContext:
 
         assert context.project_id == project_context.id
         assert context.repository_url == project_context.repository_url
-        assert context.tech_stack == ["python", "docker"]
+        assert context.tech_stack == ("python", "docker")
 
-    def test_sets_permissions_for_code_agent(
-        self, work_item, developer_agent, project_context, workspace_context
-    ):
+    def test_sets_permissions_for_code_agent(self, work_item, developer_agent, project_context, workspace_context):
         """Test that permissions are set correctly for code-making agent."""
         context = ExecutionContextBuilder.build_context(
             work_item=work_item,
@@ -163,9 +155,7 @@ class TestBuildContext:
         assert context.can_make_commits is True
         assert context.requires_docker is True
 
-    def test_sets_permissions_for_reviewer_agent(
-        self, work_item, reviewer_agent, project_context, workspace_context
-    ):
+    def test_sets_permissions_for_reviewer_agent(self, work_item, reviewer_agent, project_context, workspace_context):
         """Test that permissions are set correctly for reviewer agent."""
         context = ExecutionContextBuilder.build_context(
             work_item=work_item,
@@ -179,9 +169,7 @@ class TestBuildContext:
         assert context.filesystem_write_allowed is False
         assert context.can_make_commits is False
 
-    def test_sets_permissions_for_discussion_workspace(
-        self, work_item, developer_agent, project_context
-    ):
+    def test_sets_permissions_for_discussion_workspace(self, work_item, developer_agent, project_context):
         """Test that permissions respect workspace type."""
         discussion_workspace = WorkspaceContext.for_discussion(
             project_id=project_context.id,
@@ -202,9 +190,7 @@ class TestBuildContext:
         assert context.filesystem_write_allowed is False
         assert context.can_make_commits is False
 
-    def test_includes_previous_session_id(
-        self, work_item, developer_agent, project_context, workspace_context
-    ):
+    def test_includes_previous_session_id(self, work_item, developer_agent, project_context, workspace_context):
         """Test that previous session ID is included."""
         context = ExecutionContextBuilder.build_context(
             work_item=work_item,
@@ -218,9 +204,7 @@ class TestBuildContext:
 
         assert context.previous_session_id == "session-456"
 
-    def test_merges_additional_metadata(
-        self, work_item, developer_agent, project_context, workspace_context
-    ):
+    def test_merges_additional_metadata(self, work_item, developer_agent, project_context, workspace_context):
         """Test that additional metadata is merged."""
         additional = {"custom_key": "custom_value", "stage_config": {"timeout": 600}}
 
@@ -237,9 +221,7 @@ class TestBuildContext:
         assert context.metadata["custom_key"] == "custom_value"
         assert context.metadata["stage_config"] == {"timeout": 600}
 
-    def test_validates_workflow_id(
-        self, work_item, developer_agent, project_context, workspace_context
-    ):
+    def test_validates_workflow_id(self, work_item, developer_agent, project_context, workspace_context):
         """Test validation of workflow ID."""
         with pytest.raises(DomainError, match="Workflow ID cannot be empty"):
             ExecutionContextBuilder.build_context(
@@ -251,9 +233,7 @@ class TestBuildContext:
                 workspace=workspace_context,
             )
 
-    def test_validates_stage_name(
-        self, work_item, developer_agent, project_context, workspace_context
-    ):
+    def test_validates_stage_name(self, work_item, developer_agent, project_context, workspace_context):
         """Test validation of stage name."""
         with pytest.raises(DomainError, match="Stage name cannot be empty"):
             ExecutionContextBuilder.build_context(
@@ -265,9 +245,7 @@ class TestBuildContext:
                 workspace=workspace_context,
             )
 
-    def test_validates_workspace_work_item_id_match(
-        self, work_item, developer_agent, project_context
-    ):
+    def test_validates_workspace_work_item_id_match(self, work_item, developer_agent, project_context):
         """Test validation that workspace and work item IDs match."""
         # Create workspace with different work item ID
         mismatched_workspace = WorkspaceContext.for_issue(
@@ -286,9 +264,7 @@ class TestBuildContext:
                 workspace=mismatched_workspace,
             )
 
-    def test_validates_workspace_project_id_match(
-        self, work_item, developer_agent, project_context
-    ):
+    def test_validates_workspace_project_id_match(self, work_item, developer_agent, project_context):
         """Test validation that workspace and project IDs match."""
         # Create workspace with different project ID
         mismatched_workspace = WorkspaceContext.for_issue(
@@ -307,9 +283,7 @@ class TestBuildContext:
                 workspace=mismatched_workspace,
             )
 
-    def test_validates_dev_container_requirement(
-        self, work_item, project_context, workspace_context
-    ):
+    def test_validates_dev_container_requirement(self, work_item, project_context, workspace_context):
         """Test validation when agent requires dev container but project doesn't have one."""
         dev_container_agent = Agent.create(
             name="special_agent",
@@ -335,9 +309,7 @@ class TestBuildContext:
 class TestBuildMetadata:
     """Tests for _build_metadata method."""
 
-    def test_includes_work_item_metadata(
-        self, work_item, developer_agent, project_context, workspace_context
-    ):
+    def test_includes_work_item_metadata(self, work_item, developer_agent, project_context, workspace_context):
         """Test that work item metadata is included."""
         metadata = ExecutionContextBuilder._build_metadata(
             work_item, developer_agent, project_context, workspace_context, {}
@@ -348,9 +320,7 @@ class TestBuildMetadata:
         assert metadata["work_item_priority"] == work_item.priority.value
         assert metadata["work_item_labels"] == work_item.labels
 
-    def test_includes_agent_metadata(
-        self, work_item, developer_agent, project_context, workspace_context
-    ):
+    def test_includes_agent_metadata(self, work_item, developer_agent, project_context, workspace_context):
         """Test that agent metadata is included."""
         metadata = ExecutionContextBuilder._build_metadata(
             work_item, developer_agent, project_context, workspace_context, {}
@@ -360,9 +330,7 @@ class TestBuildMetadata:
         assert metadata["agent_display_name"] == developer_agent.display_name
         assert metadata["agent_type"] == developer_agent.agent_type.value
 
-    def test_includes_project_metadata(
-        self, work_item, developer_agent, project_context, workspace_context
-    ):
+    def test_includes_project_metadata(self, work_item, developer_agent, project_context, workspace_context):
         """Test that project metadata is included."""
         metadata = ExecutionContextBuilder._build_metadata(
             work_item, developer_agent, project_context, workspace_context, {}
@@ -457,9 +425,7 @@ class TestMergeMcpServers:
 class TestBuildContextForStage:
     """Tests for build_context_for_stage method."""
 
-    def test_builds_context_with_agent_lookup(
-        self, work_item, developer_agent, project_context, workspace_context
-    ):
+    def test_builds_context_with_agent_lookup(self, work_item, developer_agent, project_context, workspace_context):
         """Test building context with agent lookup."""
         agents = [developer_agent]
 
@@ -475,9 +441,7 @@ class TestBuildContextForStage:
 
         assert context.agent_id == developer_agent.id
 
-    def test_raises_error_when_agent_not_found(
-        self, work_item, developer_agent, project_context, workspace_context
-    ):
+    def test_raises_error_when_agent_not_found(self, work_item, developer_agent, project_context, workspace_context):
         """Test error when agent not found in list."""
         agents = [developer_agent]
 
@@ -492,9 +456,7 @@ class TestBuildContextForStage:
                 workspace=workspace_context,
             )
 
-    def test_includes_previous_session_id(
-        self, work_item, developer_agent, project_context, workspace_context
-    ):
+    def test_includes_previous_session_id(self, work_item, developer_agent, project_context, workspace_context):
         """Test that previous session ID is passed through."""
         agents = [developer_agent]
 

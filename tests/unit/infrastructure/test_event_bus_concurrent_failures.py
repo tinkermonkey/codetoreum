@@ -14,9 +14,11 @@ Tests verify that:
 """
 
 import asyncio
+from typing import Any
+
 import pytest
 
-from codetoreum.domain.events import DomainEvent, WorkItemCreated, WorkItemCompleted
+from codetoreum.domain.events import DomainEvent, WorkItemCompleted, WorkItemCreated
 from codetoreum.infrastructure.event_bus import EventBus, EventHandler, event_handler
 
 
@@ -52,7 +54,7 @@ class _StatefulHandler(EventHandler):
 
     def __init__(self, handler_id: str):
         self.handler_id = handler_id
-        self.state = {"count": 0, "events": [], "event_ids": set()}
+        self.state: dict[str, Any] = {"count": 0, "events": [], "event_ids": set()}
 
     async def handle(self, event: DomainEvent) -> None:
         """Handle event with state."""
@@ -69,7 +71,7 @@ class _StatefulExceptionHandler(EventHandler):
 
     def __init__(self, handler_id: str):
         self.handler_id = handler_id
-        self.state = {"processed": 0, "failed": 0}
+        self.state: dict[str, int] = {"processed": 0, "failed": 0}
 
     async def handle(self, event: DomainEvent) -> None:
         """Handle event with state tracking, but fail."""
@@ -86,11 +88,7 @@ class _MultiEventStatefulHandler(EventHandler):
 
     def __init__(self, handler_id: str):
         self.handler_id = handler_id
-        self.state = {
-            "created_count": 0,
-            "completed_count": 0,
-            "all_events": []
-        }
+        self.state: dict[str, Any] = {"created_count": 0, "completed_count": 0, "all_events": []}
 
     async def handle(self, event: DomainEvent) -> None:
         """Handle multiple event types with state."""
@@ -108,7 +106,7 @@ class _StatefulWildcardHandler(EventHandler):
 
     def __init__(self, handler_id: str):
         self.handler_id = handler_id
-        self.state = {"event_types": [], "count": 0}
+        self.state: dict[str, Any] = {"event_types": [], "count": 0}
 
     async def handle(self, event: DomainEvent) -> None:
         """Handle all events with state."""
@@ -239,7 +237,7 @@ class TestEventBusConcurrentFailures:
         bus.register_handler(handler_success)
         bus.register_handler(handler_fail)
 
-        events = [
+        events: list[DomainEvent] = [
             WorkItemCreated(
                 aggregate_id=f"work-item-{i}",
                 payload={"title": f"Test {i}"},
@@ -446,14 +444,16 @@ class TestEventBusConcurrentFailures:
 
         # Mix of different event types
         events = [
-            WorkItemCreated(
-                aggregate_id=f"work-{i}",
-                payload={"title": f"Test {i}"},
-            )
-            if i % 2 == 0
-            else WorkItemCompleted(
-                aggregate_id=f"work-{i}",
-                payload={"completed_at": "2025-10-27T12:00:00Z"},
+            (
+                WorkItemCreated(
+                    aggregate_id=f"work-{i}",
+                    payload={"title": f"Test {i}"},
+                )
+                if i % 2 == 0
+                else WorkItemCompleted(
+                    aggregate_id=f"work-{i}",
+                    payload={"completed_at": "2025-10-27T12:00:00Z"},
+                )
             )
             for i in range(10)
         ]
@@ -548,7 +548,7 @@ class TestEventBusConcurrentFailures:
         # Handler stores in its own state dict, callback stores in callback_events list
         assert isinstance(handler.state, dict)
         assert isinstance(callback_events, list)
-        assert handler.state is not {"events": callback_events}  # Different objects
+        assert handler.state != {"events": callback_events}  # Different objects
 
     async def test_async_handler_execution_order_independence(self):
         """Test async handler execution order independence.
