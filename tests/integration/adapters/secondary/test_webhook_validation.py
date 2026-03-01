@@ -6,7 +6,6 @@ and replay attack prevention in the GitHub webhook adapter.
 
 import hashlib
 import hmac
-import time
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -275,7 +274,7 @@ class TestReplayAttackPrevention:
     """Test replay attack prevention (idempotency)."""
 
     @pytest.fixture
-    async def adapter(self):
+    def adapter(self):
         """Create a GitHubWebhookAdapter for testing."""
         workflow_port = AsyncMock()
         board_service = AsyncMock()

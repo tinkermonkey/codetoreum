@@ -249,28 +249,28 @@ class ContractTestGenerator:
 
             # Test 2: Async behavior validation
             lines.append("    @pytest.mark.asyncio")
-            lines.append(f"    async def test_{method_name}_is_async_or_callable(self) -> None:")
-            lines.append(f'        """Contract: {method_name} must be async or return a coroutine."""')
+            lines.append(f"    async def test_{method_name}_is_async(self) -> None:")
+            lines.append(f'        """Contract: {method_name} must be an async coroutine function."""')
             lines.append("        service = await self.create_service()")
             lines.append(f"        method = getattr(service, '{method_name}')")
-            lines.append("        import inspect")
-            lines.append("        # Method should be either async or be a callable that returns awaitable")
             lines.append("        is_coroutine_function = inspect.iscoroutinefunction(method)")
-            lines.append("        assert callable(method) or is_coroutine_function")
+            lines.append("        assert is_coroutine_function, \\")
+            lines.append(f"            '{method_name} must be defined as async (coroutine function)'")
             lines.append("")
 
-            # Test 3: Basic error handling
+            # Test 3: Error handling validation
             lines.append("    @pytest.mark.asyncio")
             lines.append(f"    async def test_{method_name}_error_handling(self) -> None:")
-            lines.append(f'        """Contract: {method_name} should handle errors gracefully."""')
+            lines.append(f'        """Contract: {method_name} must raise appropriate exceptions on invalid input."""')
             lines.append("        service = await self.create_service()")
             lines.append(f"        method = getattr(service, '{method_name}')")
-            lines.append("        # Verify method exists and can be inspected")
-            lines.append("        import inspect")
             lines.append("        sig = inspect.signature(method)")
-            lines.append("        # Should have parameters (not including self)")
-            lines.append("        # or be able to be called")
-            lines.append("        assert method is not None")
+            lines.append("        # Verify method accepts parameters and will raise on missing required args")
+            lines.append("        params = [p for p in sig.parameters.values() if p.default == inspect.Parameter.empty]")
+            lines.append("        if params:  # Method has required parameters")
+            lines.append("            # Calling without required params should raise TypeError")
+            lines.append("            with pytest.raises((TypeError, ValueError)):")
+            lines.append("                await method()")
             lines.append("")
 
         return lines
