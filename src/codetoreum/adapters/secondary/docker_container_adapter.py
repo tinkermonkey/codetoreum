@@ -1168,6 +1168,14 @@ class DockerContainerAdapter(IContainer):
 
         await loop.run_in_executor(None, _copy)
 
+    @instrument_async_function(
+        name="container.get_file_content",
+        attributes={
+            "service": "docker_container_adapter",
+            "operation": "get_file_content",
+        },
+        capture_args=True,
+    )
     async def get_file_content(
         self,
         container_id: str,
@@ -1187,6 +1195,11 @@ class DockerContainerAdapter(IContainer):
             ResourceNotFoundError: If container or file doesn't exist
             ContainerError: If read operation failed
         """
+        # Validate file_path to prevent traversal attacks
+        if ".." in file_path or file_path.startswith("/"):
+            msg = f"Invalid file path: {file_path}. Path must be relative to /output/ and cannot contain '..' or start with '/'"
+            raise ValidationError(msg)
+
         client = self._get_client()
         loop = asyncio.get_event_loop()
 
@@ -1207,15 +1220,24 @@ class DockerContainerAdapter(IContainer):
 
                 tar_stream.seek(0)
                 with tarfile.open(fileobj=tar_stream, mode="r") as tar:
-                    # The tar archive contains a single directory entry
-                    # Extract just the file content
-                    member = tar.getmember(file_path.lstrip("/"))
-                    extracted_file = tar.extractfile(member)
-                    if extracted_file is None:
-                        msg = f"Failed to extract file content: {file_path}"
-                        raise ContainerError(msg)
-                    return extracted_file.read()
+                    # Docker's get_archive returns a tar where the member name
+                    # is the basename, not the full path. Iterate through members
+                    # and select the first file-type member.
+                    for member in tar.getmembers():
+                        if member.isfile():
+                            extracted_file = tar.extractfile(member)
+                            if extracted_file is None:
+                                msg = f"Failed to extract file content: {file_path}"
+                                raise ContainerError(msg)
+                            return extracted_file.read()
 
+                    # No file found in archive
+                    msg = f"File not found in container output: {file_path}"
+                    raise ResourceNotFoundError(msg, file_path)
+
+            except (ContainerError, ResourceNotFoundError):
+                # Re-raise port exceptions without reprocessing to preserve exception chain
+                raise
             except Exception as e:
                 if "not found" in str(e).lower():
                     if "container" in str(e).lower():

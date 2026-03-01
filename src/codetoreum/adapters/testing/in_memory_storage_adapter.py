@@ -1,5 +1,6 @@
 """In-memory storage adapter for testing."""
 
+import logging
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,6 +19,8 @@ from codetoreum.ports.output.storage import IStorage, StorageObject
 
 if TYPE_CHECKING:
     from codetoreum.ports.output.container import IContainer
+
+logger = logging.getLogger(__name__)
 
 
 class InMemoryStorageAdapter(IStorage):
@@ -336,9 +339,12 @@ class InMemoryStorageAdapter(IStorage):
                         event.container_id,
                         file_path,
                     )
-                except ResourceNotFoundError:
-                    # File not found in container, fall back to placeholder
-                    pass
+                except ResourceNotFoundError as e:
+                    # File not found in container, log and fall back to placeholder
+                    logger.warning(
+                        f"Failed to retrieve file content from container: {e}",
+                        exc_info=True,
+                    )
 
             # If no container adapter or file not found, use placeholder for testing
             if content is None:

@@ -1025,7 +1025,11 @@ class FakeContainerAdapter(IContainer):
             content = virtual_fs[file_path]
             if isinstance(content, bytes):
                 return content
-            return content.encode("utf-8") if isinstance(content, str) else content
+            if isinstance(content, str):
+                return content.encode("utf-8")
+            # All content from write_output_file is str, so this shouldn't occur
+            msg = f"Invalid content type for file '{file_path}': {type(content)}"
+            raise ContainerError(msg)
 
     # Helper methods for testing
 
