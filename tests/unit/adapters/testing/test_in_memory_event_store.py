@@ -1110,24 +1110,28 @@ class TestBackpressureMechanism:
         assert 3.8 < ratio_20_5 < 4.2
 
     async def test_event_processing_latency_with_multiple_handlers(self, sample_event):
-        """Test that latency scales with handler count per spec (US-3.3)."""
+        """Test that latency scales with handler count per spec (US-3.3).
+
+        Uses same proportional relationship as spec example (100 events × 5 handlers × 10ms = 5 seconds)
+        but with smaller values (100 events × 5 handlers × 0.1ms = 50ms) to avoid slow test.
+        """
         config = MagicMock(spec=SimulationConfig)
         config.fidelity_level = FidelityLevel.MEDIUM
-        config.ms_per_event = 1.0  # 1ms per (event × handler)
+        config.ms_per_event = 0.1  # 0.1ms per (event × handler)
         config.event_handler_count = 5  # 5 handlers
 
         store = InMemoryEventStore(config=config)
 
-        # Append 1000 events × 5 handlers × 1ms = 5 seconds expected latency
-        # This matches the spec example: "1000 events × 5 handlers × 1ms = 5 seconds"
-        events = [sample_event for _ in range(1000)]
+        # Append 100 events × 5 handlers × 0.1ms = 50ms expected latency
+        # This validates the same formula as spec: event_count × handler_count × ms_per_event
+        events = [sample_event for _ in range(100)]
 
         start = asyncio.get_event_loop().time()
         await store.append("work-item-spec-test", events)
         elapsed = asyncio.get_event_loop().time() - start
 
-        # Should be approximately 5 seconds (allow 4.8-5.2s range for timing variance)
-        assert 4.8 < elapsed < 5.2
+        # Should be approximately 50ms (allow 40-60ms range for timing variance)
+        assert 0.040 < elapsed < 0.060
 
     async def test_event_processing_latency_handler_count_scaling(self, sample_event):
         """Test that doubling handler count doubles latency."""

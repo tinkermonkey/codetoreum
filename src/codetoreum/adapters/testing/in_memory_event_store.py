@@ -316,15 +316,18 @@ class InMemoryEventStore(IEventStore):
                 events = self._all_events[from_version:].copy()
 
         delay_seconds = await self._get_event_delay_seconds()
+        # Multiply by handler count per spec: latency = event_count × handler_count × ms_per_event
+        handler_count = self._config.event_handler_count if self._config else 1
+        delay_with_handlers = delay_seconds * handler_count
 
         for event in events:
-            if delay_seconds > 0:
+            if delay_with_handlers > 0:
                 if self._clock:
                     # Use simulated clock for time manipulation
-                    await self._clock.sleep(delay_seconds)
+                    await self._clock.sleep(delay_with_handlers)
                 else:
                     # Fall back to asyncio.sleep
-                    await asyncio.sleep(delay_seconds)
+                    await asyncio.sleep(delay_with_handlers)
             yield event
 
     async def get_stream_version(self, stream_id: str) -> int:
@@ -594,15 +597,18 @@ class InMemoryEventStore(IEventStore):
             events = events.copy()
 
         delay_seconds = await self._get_event_delay_seconds()
+        # Multiply by handler count per spec: latency = event_count × handler_count × ms_per_event
+        handler_count = self._config.event_handler_count if self._config else 1
+        delay_with_handlers = delay_seconds * handler_count
 
         for event in events:
-            if delay_seconds > 0:
+            if delay_with_handlers > 0:
                 if self._clock:
                     # Use simulated clock for time manipulation
-                    await self._clock.sleep(delay_seconds)
+                    await self._clock.sleep(delay_with_handlers)
                 else:
                     # Fall back to asyncio.sleep
-                    await asyncio.sleep(delay_seconds)
+                    await asyncio.sleep(delay_with_handlers)
             yield event
 
     async def get_statistics(self) -> dict[str, Any]:

@@ -263,6 +263,7 @@ class SimulationConfig:
         ms_per_token: float = 50.0,
         ms_per_file_operation: float = 10.0,
         ms_per_event: float = 1.0,
+        event_handler_count: int = 1,
     ) -> "SimulationConfig":
         """
         Create a configuration optimized for fast test execution.
@@ -274,6 +275,7 @@ class SimulationConfig:
             ms_per_token: Milliseconds per LLM token for proportional timing
             ms_per_file_operation: Milliseconds per file operation for proportional timing
             ms_per_event: Milliseconds per event processing for proportional timing
+            event_handler_count: Number of handlers processing each event
 
         Returns:
             SimulationConfig optimized for speed
@@ -295,6 +297,7 @@ class SimulationConfig:
             ms_per_token=ms_per_token,
             ms_per_file_operation=ms_per_file_operation,
             ms_per_event=ms_per_event,
+            event_handler_count=event_handler_count,
         )
 
     @classmethod
@@ -306,6 +309,7 @@ class SimulationConfig:
         ms_per_token: float = 50.0,
         ms_per_file_operation: float = 10.0,
         ms_per_event: float = 1.0,
+        event_handler_count: int = 1,
     ) -> "SimulationConfig":
         """
         Create a configuration that mimics realistic behavior.
@@ -317,6 +321,7 @@ class SimulationConfig:
             ms_per_token: Milliseconds per LLM token for proportional timing
             ms_per_file_operation: Milliseconds per file operation for proportional timing
             ms_per_event: Milliseconds per event processing for proportional timing
+            event_handler_count: Number of handlers processing each event
 
         Returns:
             SimulationConfig with realistic timing
@@ -338,6 +343,7 @@ class SimulationConfig:
             ms_per_token=ms_per_token,
             ms_per_file_operation=ms_per_file_operation,
             ms_per_event=ms_per_event,
+            event_handler_count=event_handler_count,
         )
 
     @classmethod
@@ -348,6 +354,7 @@ class SimulationConfig:
         ms_per_token: float = 50.0,
         ms_per_file_operation: float = 10.0,
         ms_per_event: float = 1.0,
+        event_handler_count: int = 1,
     ) -> "SimulationConfig":
         """
         Create a configuration with high fidelity simulation.
@@ -365,6 +372,7 @@ class SimulationConfig:
             ms_per_token: Milliseconds per LLM token for proportional timing
             ms_per_file_operation: Milliseconds per file operation for proportional timing
             ms_per_event: Milliseconds per event processing for proportional timing
+            event_handler_count: Number of handlers processing each event
 
         Returns:
             SimulationConfig with HIGH fidelity
@@ -388,6 +396,7 @@ class SimulationConfig:
             ms_per_token=ms_per_token,
             ms_per_file_operation=ms_per_file_operation,
             ms_per_event=ms_per_event,
+            event_handler_count=event_handler_count,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -433,6 +442,7 @@ class SimulationConfig:
             "ms_per_token": self.ms_per_token,
             "ms_per_file_operation": self.ms_per_file_operation,
             "ms_per_event": self.ms_per_event,
+            "event_handler_count": self.event_handler_count,
             "metadata": self.metadata,
         }
 
@@ -504,6 +514,7 @@ class SimulationConfig:
             ms_per_token=data.get("ms_per_token", 50.0),
             ms_per_file_operation=data.get("ms_per_file_operation", 10.0),
             ms_per_event=data.get("ms_per_event", 1.0),
+            event_handler_count=data.get("event_handler_count", 1),
             metadata=data.get("metadata", {}),
         )
 
@@ -563,6 +574,7 @@ class SimulationConfig:
             "ms_per_token": data.get("ms_per_token", 50.0),
             "ms_per_file_operation": data.get("ms_per_file_operation", 10.0),
             "ms_per_event": data.get("ms_per_event", 1.0),
+            "event_handler_count": data.get("event_handler_count", 1),
             "metadata": data.get("metadata", {}),
         }
 
