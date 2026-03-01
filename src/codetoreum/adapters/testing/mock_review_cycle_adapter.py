@@ -335,7 +335,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         human_escalation = False
 
         # Get or use default sequence
-        # If LLM adapter is configured, prefer using actual LLM output (causal linking FR-2/US-2.2)
+        # If LLM adapter is configured, prefer using actual prior LLM output (causal linking FR-2/US-2.2)
         # Otherwise fall back to pre-configured sequences for backwards compatibility
         sequence = self._review_sequences.get(work_item_id, None)
         use_llm_output = self._llm_adapter is not None and sequence is None
@@ -350,23 +350,13 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
 
         try:
             for iteration in range(1, request.max_iterations + 1):
-                # Determine decision: either from sequence or by evaluating LLM output
+                # Determine decision: either from sequence or by evaluating actual prior LLM output
                 if use_llm_output:
-                    # Causal linking: get actual LLM maker output and derive decision (FR-2/US-2.2)
-                    # Execute a prompt through the LLM adapter to get real output
-                    try:
-                        llm_prompt = (
-                            f"Review code changes for work item {work_item_id} iteration {iteration}. "
-                            f"Provide summary of changes made."
-                        )
-                        result = await self._llm_adapter.execute(llm_prompt)
-                        maker_output = result.content if result else ""
-                    except Exception as llm_error:
-                        logger.warning(
-                            f"Failed to get LLM output for review decision: {llm_error}",
-                            exc_info=True,
-                        )
-                        maker_output = ""
+                    # Causal linking: evaluate actual LLM maker output from previous stage (FR-2/US-2.2)
+                    # Use request.previous_stage_output which contains the actual maker output
+                    # On iteration 1, this is the initial output; on later iterations, this
+                    # would be updated with the maker's revision based on review feedback
+                    maker_output = request.previous_stage_output
 
                     decision_item = self._evaluate_llm_output(maker_output)
                 else:
