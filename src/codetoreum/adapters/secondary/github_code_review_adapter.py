@@ -282,9 +282,14 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
                 pass
             del self._polling_tasks[project_id]
 
-        # Mark as stopped
-        if project_id in self._monitoring:
-            self._monitoring[project_id].state = MonitoringState.STOPPED
+        # Mark as stopped (create new MonitoringStatus since it's frozen)
+        old_status = self._monitoring[project_id]
+        self._monitoring[project_id] = MonitoringStatus(
+            state=MonitoringState.STOPPED,
+            project_id=project_id,
+            started_at=old_status.started_at,
+            error_message=old_status.error_message,
+        )
 
         logger.info(f"Stopped monitoring project {project_id} for PR changes")
 

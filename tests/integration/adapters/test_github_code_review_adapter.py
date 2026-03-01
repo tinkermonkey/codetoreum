@@ -479,7 +479,7 @@ class TestMonitoringLifecycle:
     @pytest.mark.asyncio
     async def test_start_monitoring_validates_project_id(self, adapter):
         """Test start_monitoring validates project_id."""
-        config = MonitoringConfig(project_id="")
+        config = MonitoringConfig(project_id="proj-1")
 
         with pytest.raises(ValidationError):
             await adapter.start_monitoring("", config)
