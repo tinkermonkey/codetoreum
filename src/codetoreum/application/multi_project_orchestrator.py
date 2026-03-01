@@ -562,7 +562,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
             f"Reconciling boards for project {project_name}",
             extra={"project_name": project_name},
         )
-        await self._board_service.reconcile_board(project_name, BoardConfig(board_id=project_name, expected_columns=[]))
+        await self._board_service.reconcile_board(project_name, BoardConfig(board_id=project_name, expected_columns=()))
 
     @staticmethod
     def _get_iso_timestamp() -> str:

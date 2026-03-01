@@ -3,10 +3,11 @@
 import asyncio
 import logging
 import re
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
+from types import MappingProxyType
 from typing import Any
 
 from codetoreum.domain.agent import Agent
@@ -797,13 +798,23 @@ class ExecutionService:
         Returns:
             LLM provider execution context
         """
+        # Convert environment_variables to MappingProxyType if it's a dict
+        env_vars = context.environment_variables
+        if isinstance(env_vars, dict) and not isinstance(env_vars, MappingProxyType):
+            env_vars = MappingProxyType(env_vars)
+
+        # Convert metadata to MappingProxyType if it's a dict
+        metadata = context.metadata
+        if isinstance(metadata, dict) and not isinstance(metadata, MappingProxyType):
+            metadata = MappingProxyType(metadata)
+
         return LLMExecutionContext(
             model=context.model,
             timeout_seconds=context.timeout_seconds,
-            environment_variables=context.metadata,
+            environment_variables=env_vars,
             session_id=context.previous_session_id,
             execution_id=None,  # Will be set by provider
-            metadata=context.metadata,
+            metadata=metadata,
         )
 
     def _create_stream_callback(
