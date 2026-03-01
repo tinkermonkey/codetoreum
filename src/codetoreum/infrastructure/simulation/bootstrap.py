@@ -129,6 +129,10 @@ from codetoreum.infrastructure.error_ids import ErrorRegistry
 # Infrastructure
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.resilience import OperationMode
+from codetoreum.infrastructure.simulation.causal_link_registry import (
+    CausalLinkRegistry,
+    LinkType,
+)
 
 # Mock tracer for trace propagation testing
 from codetoreum.infrastructure.simulation.mock_tracer import MockTracer
@@ -244,6 +248,7 @@ class SimulationInfrastructure:
     event_bus: EventBus
     logger: logging.Logger
     mock_tracer: MockTracer
+    causal_link_registry: CausalLinkRegistry
 
 
 class SimulationApplicationBootstrap:
@@ -329,6 +334,10 @@ class SimulationApplicationBootstrap:
             logger.info("Phase 2: Creating 24 adapters...")
             self.adapters = await self._create_adapters()
 
+            # Register causal links between adapters and domain events
+            logger.info("Phase 2b: Registering causal links...")
+            self._register_causal_links()
+
             # Phase 3: Create services
             logger.info("Phase 3: Creating services...")
             self.services = await self._create_services()
@@ -340,6 +349,10 @@ class SimulationApplicationBootstrap:
             # Phase 5: Create FastAPI app
             logger.info("Phase 5: Creating FastAPI app...")
             self.app = self._create_fastapi_app()
+
+            # Validate causal link consistency (Phase 5b)
+            logger.info("Phase 5b: Validating causal link consistency...")
+            self._validate_causal_links()
 
             self._is_setup = True
             logger.info("Simulation bootstrap completed successfully")
@@ -378,6 +391,10 @@ class SimulationApplicationBootstrap:
             if self.infrastructure and self.infrastructure.event_bus:
                 # Event bus cleanup (no async stop needed for in-memory implementation)
                 self.infrastructure.event_bus.reset_statistics()
+
+            # Clear causal link registry
+            if self.infrastructure and self.infrastructure.causal_link_registry:
+                self.infrastructure.causal_link_registry.clear()
 
             # Clear references
             self.app = None
@@ -555,15 +572,153 @@ class SimulationApplicationBootstrap:
         )
 
     # =========================================================================
+    # Phase 5b: Validate Causal Links
+    # =========================================================================
+
+    def _validate_causal_links(self) -> None:
+        """
+        Validate causal link consistency and log dependency summary.
+
+        Ensures:
+        - No cycles in the dependency graph
+        - All registered links are acyclic
+        - Event subscriptions don't create circular dependencies
+
+        Provides visibility into the adapter dependency graph for debugging
+        and understanding system integration points.
+        """
+        if not self.infrastructure:
+            logger.warning("Cannot validate causal links: infrastructure not ready")
+            return
+
+        registry = self.infrastructure.causal_link_registry
+
+        try:
+            registry.validate_consistency()
+            logger.info("Causal link validation passed - no cycles detected")
+
+            # Log summary of causal links for debugging
+            all_links = registry.get_all_links()
+            all_subs = registry.get_all_subscriptions()
+
+            if all_links or all_subs:
+                logger.info(
+                    f"Causal link summary: {len(all_links)} direct dependencies, {len(all_subs)} event subscriptions"
+                )
+
+                # Log direct dependencies
+                for link in all_links:
+                    logger.debug(f"  {link.source} → {link.target} ({link.link_type.value})")
+
+                # Log event subscriptions
+                for sub in all_subs:
+                    logger.debug(f"  {sub.publisher} ⟹ {sub.subscriber} ({sub.event_type})")
+            else:
+                logger.info("No causal links registered (adapters may not use event subscriptions)")
+
+        except Exception as e:
+            logger.error(
+                f"Causal link validation failed: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+            raise
+
+    # =========================================================================
+    # Phase 2b: Register Causal Links
+    # =========================================================================
+
+    def _register_causal_links(self) -> None:
+        """
+        Register causal dependencies between adapters and domain events.
+
+        This enables runtime enforcement and discoverability of causal links,
+        providing visibility into which adapters depend on which domain events.
+
+        Causal links are registered in the CausalLinkRegistry, enabling:
+        - Discovery of adapter dependencies (e.g., which adapters depend on container output)
+        - Cycle detection to ensure no circular dependencies
+        - Audit trail of system integration points
+        - Potential future enforcement of causal link consistency
+
+        Key dependencies documented here:
+        - InMemoryQueueService subscribes to WorkItemColumnChangedEvent
+        - InMemoryStorageAdapter subscribes to ContainerExecutionCompletedEvent
+        - RepairCycleAdapter subscribes to WorkItemColumnChangedEvent
+        - ReviewCycleAdapter receives events via event emitter (event-driven)
+        """
+        if not self.infrastructure or not self.adapters:
+            logger.warning("Cannot register causal links: infrastructure or adapters not ready")
+            return
+
+        registry = self.infrastructure.causal_link_registry
+
+        # Container adapter → Storage adapter (test results flow)
+        registry.register_dependency(
+            source="FakeContainerAdapter",
+            target="InMemoryStorageAdapter",
+            link_type=LinkType.TEST_RESULTS,
+            metadata={"event_type": "ContainerExecutionCompletedEvent", "purpose": "Store execution artifacts"},
+        )
+
+        # Container adapter → Repair cycle adapter (test output feeds repair decisions)
+        registry.register_dependency(
+            source="FakeContainerAdapter",
+            target="MockRepairCycleAdapter",
+            link_type=LinkType.TEST_RESULTS,
+            metadata={"event_type": "ContainerExecutionCompletedEvent", "purpose": "Drive repair cycle"},
+        )
+
+        # LLM adapter → Review cycle adapter (code quality metrics inform review)
+        registry.register_dependency(
+            source="MockLLMAdapter",
+            target="MockReviewCycleAdapter",
+            link_type=LinkType.CODE_QUALITY,
+            metadata={"purpose": "Code quality assessment drives review cycle"},
+        )
+
+        # Event bus → Queue service (board position changes trigger queue updates)
+        registry.register_event_subscription(
+            publisher="EventBus",
+            subscriber="InMemoryQueueService",
+            event_type="WorkItemColumnChangedEvent",
+            metadata={"purpose": "Track work item position in queue"},
+        )
+
+        # Event bus → Repair cycle adapter (column changes trigger repair checks)
+        registry.register_event_subscription(
+            publisher="EventBus",
+            subscriber="MockRepairCycleAdapter",
+            event_type="WorkItemColumnChangedEvent",
+            metadata={"purpose": "Trigger repair cycle when item moves to repair stage"},
+        )
+
+        # Event bus → Storage adapter (container completion stores artifacts)
+        registry.register_event_subscription(
+            publisher="EventBus",
+            subscriber="InMemoryStorageAdapter",
+            event_type="ContainerExecutionCompletedEvent",
+            metadata={"purpose": "Store container execution artifacts"},
+        )
+
+        logger.info(
+            f"Registered {len(registry.get_all_links())} causal links and "
+            f"{len(registry.get_all_subscriptions())} event subscriptions"
+        )
+
+    # =========================================================================
     # Phase 1: Create Infrastructure (Early for Event Bus Subscriptions)
     # =========================================================================
 
     def _create_infrastructure(self) -> SimulationInfrastructure:
         """
-        Create infrastructure components (event bus, logger).
+        Create infrastructure components (event bus, logger, causal link registry).
 
         The SimulationEngine manages the clock internally. The engine is used
         directly to access clock functionality, not through infrastructure.
+
+        The CausalLinkRegistry enables runtime enforcement and discoverability of
+        causal dependencies between adapters and domain events.
 
         Returns:
             SimulationInfrastructure with configured components
@@ -581,7 +736,10 @@ class SimulationApplicationBootstrap:
         # Create mock tracer for trace propagation testing in simulation mode
         mock_tracer = MockTracer(service_name="simulation")
 
-        logger.info("Created infrastructure components")
+        # Create causal link registry for managing adapter dependencies
+        causal_link_registry = CausalLinkRegistry()
+
+        logger.info("Created infrastructure components (including CausalLinkRegistry)")
 
         # Note: Clock is no longer exposed here - it's managed by SimulationEngine
         # The engine is the single point of control for all timing operations
@@ -589,6 +747,7 @@ class SimulationApplicationBootstrap:
             event_bus=event_bus,
             logger=app_logger,
             mock_tracer=mock_tracer,
+            causal_link_registry=causal_link_registry,
         )
 
     # =========================================================================
@@ -1174,3 +1333,20 @@ class SimulationApplicationBootstrap:
             SimulationEngine instance (None if not yet set up)
         """
         return self._engine
+
+    @property
+    def causal_link_registry(self) -> CausalLinkRegistry | None:
+        """
+        Get the CausalLinkRegistry instance.
+
+        The registry manages causal dependencies between adapters and domain events,
+        providing:
+        - Discovery of adapter integration points
+        - Cycle detection for dependency consistency
+        - Audit trail of system wiring
+        - Runtime enforcement of causal constraints
+
+        Returns:
+            CausalLinkRegistry instance (None if not yet set up)
+        """
+        return self.infrastructure.causal_link_registry if self.infrastructure else None

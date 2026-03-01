@@ -15,6 +15,7 @@ from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationPorts,
     SimulationServices,
 )
+from codetoreum.infrastructure.simulation.causal_link_registry import CausalLinkRegistry
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 
 
@@ -292,6 +293,143 @@ class TestBootstrapWithFixtures:
         assert simulation_infrastructure is not None
         assert simulation_infrastructure.event_bus is not None
         # Clock is now managed by SimulationEngine, not exposed through infrastructure
+
+
+@pytest.mark.asyncio
+class TestCausalLinkRegistryIntegration:
+    """Tests for CausalLinkRegistry integration in bootstrap."""
+
+    async def test_causal_link_registry_created(self) -> None:
+        """Test that CausalLinkRegistry is created during bootstrap."""
+        config = SimulationConfig.create_fast_config("test")
+        bootstrap = SimulationApplicationBootstrap(config)
+
+        await bootstrap.setup()
+
+        # Verify registry exists
+        assert bootstrap.infrastructure is not None
+        assert bootstrap.infrastructure.causal_link_registry is not None
+        assert isinstance(bootstrap.infrastructure.causal_link_registry, CausalLinkRegistry)
+
+        await bootstrap.teardown()
+
+    async def test_causal_links_registered(self) -> None:
+        """Test that causal links are registered between adapters."""
+        config = SimulationConfig.create_fast_config("test")
+        bootstrap = SimulationApplicationBootstrap(config)
+
+        await bootstrap.setup()
+
+        registry = bootstrap.causal_link_registry
+        assert registry is not None
+
+        # Verify causal links are registered
+        all_links = registry.get_all_links()
+        assert len(all_links) > 0, "No causal links registered"
+
+        # Check for specific expected links
+        container_to_storage = registry.get_links(
+            source="FakeContainerAdapter",
+            target="InMemoryStorageAdapter",
+        )
+        assert len(container_to_storage) > 0, "Container → Storage link not registered"
+
+        container_to_repair = registry.get_links(
+            source="FakeContainerAdapter",
+            target="MockRepairCycleAdapter",
+        )
+        assert len(container_to_repair) > 0, "Container → Repair link not registered"
+
+        await bootstrap.teardown()
+
+    async def test_event_subscriptions_registered(self) -> None:
+        """Test that event subscriptions are registered in the registry."""
+        config = SimulationConfig.create_fast_config("test")
+        bootstrap = SimulationApplicationBootstrap(config)
+
+        await bootstrap.setup()
+
+        registry = bootstrap.causal_link_registry
+        assert registry is not None
+
+        # Verify event subscriptions are registered
+        all_subs = registry.get_all_subscriptions()
+        assert len(all_subs) > 0, "No event subscriptions registered"
+
+        # Check for specific expected subscriptions
+        queue_subs = registry.get_subscriptions(
+            subscriber="InMemoryQueueService",
+            event_type="WorkItemColumnChangedEvent",
+        )
+        assert len(queue_subs) > 0, "Queue service subscription not registered"
+
+        storage_subs = registry.get_subscriptions(
+            subscriber="InMemoryStorageAdapter",
+            event_type="ContainerExecutionCompletedEvent",
+        )
+        assert len(storage_subs) > 0, "Storage adapter subscription not registered"
+
+        await bootstrap.teardown()
+
+    async def test_causal_link_consistency_validated(self) -> None:
+        """Test that causal links are validated for consistency (no cycles)."""
+        config = SimulationConfig.create_fast_config("test")
+        bootstrap = SimulationApplicationBootstrap(config)
+
+        # Setup should complete without errors (validation passes)
+        await bootstrap.setup()
+
+        registry = bootstrap.causal_link_registry
+        assert registry is not None
+
+        # Validate should not raise (meaning no cycles detected)
+        registry.validate_consistency()
+
+        await bootstrap.teardown()
+
+    async def test_causal_registry_cleared_on_teardown(self) -> None:
+        """Test that causal link registry is cleared during teardown."""
+        config = SimulationConfig.create_fast_config("test")
+        bootstrap = SimulationApplicationBootstrap(config)
+
+        await bootstrap.setup()
+
+        registry = bootstrap.causal_link_registry
+        assert registry is not None
+        assert len(registry.get_all_links()) > 0
+        assert len(registry.get_all_subscriptions()) > 0
+
+        await bootstrap.teardown()
+
+        # After teardown, registry should be cleared
+        assert len(registry.get_all_links()) == 0
+        assert len(registry.get_all_subscriptions()) == 0
+
+    async def test_causal_registry_accessible_via_property(self) -> None:
+        """Test that causal link registry is accessible via bootstrap property."""
+        config = SimulationConfig.create_fast_config("test")
+        bootstrap = SimulationApplicationBootstrap(config)
+
+        # Before setup, property returns None
+        assert bootstrap.causal_link_registry is None
+
+        await bootstrap.setup()
+
+        # After setup, property returns registry
+        registry = bootstrap.causal_link_registry
+        assert registry is not None
+        assert isinstance(registry, CausalLinkRegistry)
+
+        # Keep a reference to the registry before teardown
+        registry_ref = registry
+
+        await bootstrap.teardown()
+
+        # After teardown, infrastructure is cleared, so property returns None
+        # but the original registry reference should be empty
+        assert bootstrap.causal_link_registry is None
+        assert len(registry_ref.get_all_links()) == 0
+        assert len(registry_ref.get_all_subscriptions()) == 0
 
 
 @pytest.mark.asyncio

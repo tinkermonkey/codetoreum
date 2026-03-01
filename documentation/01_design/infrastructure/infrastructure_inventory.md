@@ -246,6 +246,49 @@ This document provides an inventory of all infrastructure components in the Code
 
 ---
 
+### 12. Causal Link Registry Infrastructure
+
+**Purpose**: Manage and track causal dependencies between adapters and domain events.
+
+**Location**: `src/codetoreum/infrastructure/simulation/causal_link_registry.py`
+
+**Components**:
+- `CausalLinkRegistry` - Central registry for managing causal dependencies
+- `CausalLink` - Represents a dependency between two components
+- `EventSubscription` - Represents an event subscription relationship
+- `LinkType` - Enum of causal link types (TEST_RESULTS, CODE_QUALITY, DOMAIN_EVENTS, STATE_UPDATES, CUSTOM)
+
+**Purpose**:
+- Provides runtime enforcement of causal dependencies between adapters
+- Enables discoverability of adapter integration points
+- Validates dependency consistency (no cycles)
+- Tracks data flows between components
+- Provides audit trail of system integration points
+
+**Key Dependencies**:
+- Container → Storage (test results flow)
+- Container → Repair cycle (test output drives repair decisions)
+- LLM provider → Review cycle (code quality metrics inform decisions)
+- EventBus → Queue service (board position changes)
+- EventBus → Repair cycle (column changes trigger checks)
+- EventBus → Storage (execution artifacts)
+
+**Integration Points**:
+- Wired into `SimulationApplicationBootstrap` during Phase 2b (adapter registration)
+- Validated during Phase 5b (consistency validation)
+- Accessible via `bootstrap.causal_link_registry` property
+- Cleared during teardown for clean test isolation
+
+**Features**:
+- Register direct dependencies between adapters (`register_dependency`)
+- Register event subscriptions (`register_event_subscription`)
+- Query dependencies by source, target, or link type
+- Query subscriptions by publisher, subscriber, or event type
+- Validate graph consistency (detects cycles)
+- Clear all links and subscriptions for cleanup
+
+---
+
 ## Infrastructure Patterns
 
 ### Decorator Pattern
