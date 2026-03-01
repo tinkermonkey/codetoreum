@@ -556,6 +556,10 @@ class SimulationConfig:
             "container": data.get("container", {}),
             "notifications": data.get("notifications", {}),
             "metrics": data.get("metrics", {}),
+            "fidelity_level": data.get("fidelity_level", "low"),
+            "ms_per_token": data.get("ms_per_token", 50.0),
+            "ms_per_file_operation": data.get("ms_per_file_operation", 10.0),
+            "ms_per_event": data.get("ms_per_event", 1.0),
             "metadata": data.get("metadata", {}),
         }
 
