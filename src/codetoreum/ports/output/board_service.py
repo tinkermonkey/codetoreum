@@ -65,7 +65,7 @@ class BoardColumn:
 
         # Coerce list to tuple for deep immutability
         if isinstance(self.work_item_ids, list):
-            object.__setattr__(self, 'work_item_ids', tuple(self.work_item_ids))
+            object.__setattr__(self, "work_item_ids", tuple(self.work_item_ids))
 
         if not isinstance(self.work_item_ids, tuple):
             msg = "work_item_ids must be a list or tuple of strings"
@@ -150,7 +150,7 @@ class ProjectBoard:
 
         # Coerce list to tuple for deep immutability
         if isinstance(self.columns, list):
-            object.__setattr__(self, 'columns', tuple(self.columns))
+            object.__setattr__(self, "columns", tuple(self.columns))
 
         if not isinstance(self.columns, tuple):
             msg = "columns must be a list or tuple of BoardColumn instances"
@@ -238,13 +238,13 @@ class ReconciliationResult:
 
         # Coerce list to tuple for deep immutability
         if isinstance(self.columns_added, list):
-            object.__setattr__(self, 'columns_added', tuple(self.columns_added))
+            object.__setattr__(self, "columns_added", tuple(self.columns_added))
         if isinstance(self.columns_removed, list):
-            object.__setattr__(self, 'columns_removed', tuple(self.columns_removed))
+            object.__setattr__(self, "columns_removed", tuple(self.columns_removed))
         if isinstance(self.columns_renamed, list):
-            object.__setattr__(self, 'columns_renamed', tuple(self.columns_renamed))
+            object.__setattr__(self, "columns_renamed", tuple(self.columns_renamed))
         if isinstance(self.orphaned_items, list):
-            object.__setattr__(self, 'orphaned_items', tuple(self.orphaned_items))
+            object.__setattr__(self, "orphaned_items", tuple(self.orphaned_items))
 
         if not isinstance(self.columns_added, tuple):
             msg = "columns_added must be a list or tuple of strings"
@@ -309,7 +309,7 @@ class BoardConfig:
 
         # Coerce list to tuple for deep immutability
         if isinstance(self.expected_columns, list):
-            object.__setattr__(self, 'expected_columns', tuple(self.expected_columns))
+            object.__setattr__(self, "expected_columns", tuple(self.expected_columns))
 
         if not isinstance(self.expected_columns, tuple):
             msg = "expected_columns must be a list or tuple of strings"

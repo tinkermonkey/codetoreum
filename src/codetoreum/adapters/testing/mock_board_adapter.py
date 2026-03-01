@@ -302,7 +302,7 @@ class MockBoardAdapter(IBoardService):
                             # Create new work_item_ids tuple with item removed
                             new_items = list(col.work_item_ids)
                             new_items.remove(work_item_id)
-                            object.__setattr__(col, 'work_item_ids', tuple(new_items))
+                            object.__setattr__(col, "work_item_ids", tuple(new_items))
                             # Recalculate positions of remaining items after the removed position
                             for i in range(removed_position, len(col.work_item_ids)):
                                 item_id = col.work_item_ids[i]
@@ -328,7 +328,7 @@ class MockBoardAdapter(IBoardService):
                 # Add to new column
                 new_items = list(target_col.work_item_ids)
                 new_items.append(work_item_id)
-                object.__setattr__(target_col, 'work_item_ids', tuple(new_items))
+                object.__setattr__(target_col, "work_item_ids", tuple(new_items))
                 self._item_positions[work_item_id] = (
                     board_id,
                     target_column,
@@ -408,7 +408,7 @@ class MockBoardAdapter(IBoardService):
                         )
                         new_columns = list(board.columns)
                         new_columns.append(new_col)
-                        object.__setattr__(board, 'columns', tuple(new_columns))
+                        object.__setattr__(board, "columns", tuple(new_columns))
                         columns_added.append(expected_col)
 
             # Check for extra columns
@@ -580,7 +580,7 @@ class MockBoardAdapter(IBoardService):
             # Create new work_item_ids tuple with item inserted at position
             new_items = list(target_column.work_item_ids)
             new_items.insert(position, work_item_id)
-            object.__setattr__(target_column, 'work_item_ids', tuple(new_items))
+            object.__setattr__(target_column, "work_item_ids", tuple(new_items))
             self._item_positions[work_item_id] = (board_id, column_name, position)
 
             # Update positions of items after insertion

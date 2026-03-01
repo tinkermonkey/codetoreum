@@ -35,11 +35,11 @@ class BotIdentityConfig:
         """Validate all fields at construction time."""
         # Coerce list to tuple for bot_usernames
         if isinstance(self.bot_usernames, list):
-            object.__setattr__(self, 'bot_usernames', tuple(self.bot_usernames))
+            object.__setattr__(self, "bot_usernames", tuple(self.bot_usernames))
 
         # Coerce list to tuple for bot_patterns
         if isinstance(self.bot_patterns, list):
-            object.__setattr__(self, 'bot_patterns', tuple(self.bot_patterns))
+            object.__setattr__(self, "bot_patterns", tuple(self.bot_patterns))
 
         if not isinstance(self.bot_usernames, tuple):
             msg = "bot_usernames must be a list or tuple of strings"

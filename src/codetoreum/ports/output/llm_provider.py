@@ -61,27 +61,27 @@ class ExecutionContext:
         """Validate all fields at construction time."""
         # Coerce list to tuple for message_history
         if isinstance(self.message_history, list):
-            object.__setattr__(self, 'message_history', tuple(self.message_history))
+            object.__setattr__(self, "message_history", tuple(self.message_history))
 
         # Coerce list to tuple for available_files
         if isinstance(self.available_files, list):
-            object.__setattr__(self, 'available_files', tuple(self.available_files))
+            object.__setattr__(self, "available_files", tuple(self.available_files))
 
         # Coerce list to tuple for mcp_servers
         if isinstance(self.mcp_servers, list):
-            object.__setattr__(self, 'mcp_servers', tuple(self.mcp_servers))
+            object.__setattr__(self, "mcp_servers", tuple(self.mcp_servers))
 
         # Coerce dict to MappingProxyType for mounted_context_files
         if isinstance(self.mounted_context_files, dict):
-            object.__setattr__(self, 'mounted_context_files', MappingProxyType(self.mounted_context_files))
+            object.__setattr__(self, "mounted_context_files", MappingProxyType(self.mounted_context_files))
 
         # Coerce dict to MappingProxyType for environment_variables
         if isinstance(self.environment_variables, dict):
-            object.__setattr__(self, 'environment_variables', MappingProxyType(self.environment_variables))
+            object.__setattr__(self, "environment_variables", MappingProxyType(self.environment_variables))
 
         # Coerce dict to MappingProxyType for metadata
         if isinstance(self.metadata, dict):
-            object.__setattr__(self, 'metadata', MappingProxyType(self.metadata))
+            object.__setattr__(self, "metadata", MappingProxyType(self.metadata))
 
         if self.model is not None:
             if not isinstance(self.model, str) or not self.model:
@@ -123,7 +123,11 @@ class ExecutionContext:
                 msg = "system_prompt must be a non-empty string or None"
                 raise ValueError(msg)
 
-        if isinstance(self.timeout_seconds, bool) or not isinstance(self.timeout_seconds, int) or self.timeout_seconds <= 0:
+        if (
+            isinstance(self.timeout_seconds, bool)
+            or not isinstance(self.timeout_seconds, int)
+            or self.timeout_seconds <= 0
+        ):
             msg = "timeout_seconds must be a positive integer"
             raise ValueError(msg)
 
@@ -194,11 +198,11 @@ class ToolDefinition:
         """Validate all fields at construction time."""
         # Coerce dict to MappingProxyType for parameters
         if isinstance(self.parameters, dict):
-            object.__setattr__(self, 'parameters', MappingProxyType(self.parameters))
+            object.__setattr__(self, "parameters", MappingProxyType(self.parameters))
 
         # Coerce list to tuple for required
         if isinstance(self.required, list):
-            object.__setattr__(self, 'required', tuple(self.required))
+            object.__setattr__(self, "required", tuple(self.required))
 
         if not isinstance(self.name, str) or not self.name:
             msg = "name must be a non-empty string"
@@ -238,7 +242,7 @@ class ToolCall:
         """Validate all fields at construction time."""
         # Coerce dict to MappingProxyType for arguments
         if isinstance(self.arguments, dict):
-            object.__setattr__(self, 'arguments', MappingProxyType(self.arguments))
+            object.__setattr__(self, "arguments", MappingProxyType(self.arguments))
 
         if not isinstance(self.tool_name, str) or not self.tool_name:
             msg = "tool_name must be a non-empty string"
@@ -269,7 +273,7 @@ class ToolCallDelta:
         """Validate all fields at construction time."""
         # Coerce dict to MappingProxyType for delta
         if isinstance(self.delta, dict):
-            object.__setattr__(self, 'delta', MappingProxyType(self.delta))
+            object.__setattr__(self, "delta", MappingProxyType(self.delta))
 
         if not isinstance(self.call_id, str) or not self.call_id:
             msg = "call_id must be a non-empty string"
@@ -304,7 +308,7 @@ class StreamChunk:
         """Validate all fields at construction time."""
         # Coerce dict to MappingProxyType for metadata
         if isinstance(self.metadata, dict):
-            object.__setattr__(self, 'metadata', MappingProxyType(self.metadata))
+            object.__setattr__(self, "metadata", MappingProxyType(self.metadata))
 
         if not isinstance(self.content, str):
             msg = "content must be a string"
@@ -369,11 +373,11 @@ class ExecutionResult:
         """Validate all fields at construction time."""
         # Coerce list to tuple for tool_calls
         if isinstance(self.tool_calls, list):
-            object.__setattr__(self, 'tool_calls', tuple(self.tool_calls))
+            object.__setattr__(self, "tool_calls", tuple(self.tool_calls))
 
         # Coerce dict to MappingProxyType for metadata
         if isinstance(self.metadata, dict):
-            object.__setattr__(self, 'metadata', MappingProxyType(self.metadata))
+            object.__setattr__(self, "metadata", MappingProxyType(self.metadata))
 
         if not isinstance(self.content, str) or not self.content:
             msg = "content must be a non-empty string"
@@ -396,7 +400,11 @@ class ExecutionResult:
                 msg = "model must be a non-empty string or None"
                 raise ValueError(msg)
 
-        if isinstance(self.completion_tokens, bool) or not isinstance(self.completion_tokens, int) or self.completion_tokens < 0:
+        if (
+            isinstance(self.completion_tokens, bool)
+            or not isinstance(self.completion_tokens, int)
+            or self.completion_tokens < 0
+        ):
             msg = "completion_tokens must be a non-negative integer"
             raise ValueError(msg)
 
@@ -467,7 +475,7 @@ class ModelInfo:
         """Validate all fields at construction time."""
         # Coerce dict to MappingProxyType for metadata
         if isinstance(self.metadata, dict):
-            object.__setattr__(self, 'metadata', MappingProxyType(self.metadata))
+            object.__setattr__(self, "metadata", MappingProxyType(self.metadata))
 
         if not isinstance(self.model_id, str) or not self.model_id:
             msg = "model_id must be a non-empty string"
@@ -481,11 +489,19 @@ class ModelInfo:
             msg = "display_name must be a non-empty string"
             raise ValueError(msg)
 
-        if isinstance(self.context_window, bool) or not isinstance(self.context_window, int) or self.context_window <= 0:
+        if (
+            isinstance(self.context_window, bool)
+            or not isinstance(self.context_window, int)
+            or self.context_window <= 0
+        ):
             msg = "context_window must be a positive integer"
             raise ValueError(msg)
 
-        if isinstance(self.max_output_tokens, bool) or not isinstance(self.max_output_tokens, int) or self.max_output_tokens <= 0:
+        if (
+            isinstance(self.max_output_tokens, bool)
+            or not isinstance(self.max_output_tokens, int)
+            or self.max_output_tokens <= 0
+        ):
             msg = "max_output_tokens must be a positive integer"
             raise ValueError(msg)
 
@@ -532,7 +548,7 @@ class UsageStats:
         """Validate all fields at construction time."""
         # Coerce dict to MappingProxyType for by_model
         if isinstance(self.by_model, dict):
-            object.__setattr__(self, 'by_model', MappingProxyType(self.by_model))
+            object.__setattr__(self, "by_model", MappingProxyType(self.by_model))
 
         if isinstance(self.total_requests, bool) or not isinstance(self.total_requests, int) or self.total_requests < 0:
             msg = "total_requests must be a non-negative integer"

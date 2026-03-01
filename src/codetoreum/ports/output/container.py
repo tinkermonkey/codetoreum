@@ -71,7 +71,14 @@ class ContainerStatus:
             msg = "id must be a non-empty string"
             raise ValueError(msg)
 
-        if not isinstance(self.status, str) or self.status not in ("running", "stopped", "exited", "paused", "restarting", "dead"):
+        if not isinstance(self.status, str) or self.status not in (
+            "running",
+            "stopped",
+            "exited",
+            "paused",
+            "restarting",
+            "dead",
+        ):
             msg = "status must be one of: running, stopped, exited, paused, restarting, dead"
             raise ValueError(msg)
 

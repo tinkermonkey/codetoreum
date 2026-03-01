@@ -89,7 +89,7 @@ class ReviewResult:
         """Validate result data."""
         # Coerce list to tuple for findings
         if isinstance(self.findings, list):
-            object.__setattr__(self, 'findings', tuple(self.findings))
+            object.__setattr__(self, "findings", tuple(self.findings))
 
         if self.status not in ("APPROVED", "CHANGES_REQUESTED", "BLOCKED"):
             msg = f"status must be one of: APPROVED, CHANGES_REQUESTED, BLOCKED. Got: {self.status}"
@@ -184,13 +184,24 @@ class ReviewCycleRequest:
 
     def __post_init__(self) -> None:
         """Validate request data."""
-        for field_name in ("work_item_id", "project_id", "board_id", "maker_agent", "reviewer_agent", "previous_stage_output"):
+        for field_name in (
+            "work_item_id",
+            "project_id",
+            "board_id",
+            "maker_agent",
+            "reviewer_agent",
+            "previous_stage_output",
+        ):
             val = getattr(self, field_name)
             if not isinstance(val, str) or not val:
                 msg = f"{field_name} must be a non-empty string"
                 raise ValueError(msg)
 
-        if isinstance(self.max_iterations, bool) or not isinstance(self.max_iterations, int) or self.max_iterations <= 0:
+        if (
+            isinstance(self.max_iterations, bool)
+            or not isinstance(self.max_iterations, int)
+            or self.max_iterations <= 0
+        ):
             msg = f"max_iterations must be positive, got {self.max_iterations}"
             raise ValueError(msg)
 
@@ -252,11 +263,11 @@ class ReviewCycleState:
         """Validate state data."""
         # Coerce list to tuple for maker_outputs
         if isinstance(self.maker_outputs, list):
-            object.__setattr__(self, 'maker_outputs', tuple(self.maker_outputs))
+            object.__setattr__(self, "maker_outputs", tuple(self.maker_outputs))
 
         # Coerce list to tuple for review_outputs
         if isinstance(self.review_outputs, list):
-            object.__setattr__(self, 'review_outputs', tuple(self.review_outputs))
+            object.__setattr__(self, "review_outputs", tuple(self.review_outputs))
 
         for field_name in ("work_item_id", "project_id", "board_id", "maker_agent", "reviewer_agent"):
             val = getattr(self, field_name)
@@ -264,7 +275,11 @@ class ReviewCycleState:
                 msg = f"{field_name} must be a non-empty string"
                 raise ValueError(msg)
 
-        if isinstance(self.max_iterations, bool) or not isinstance(self.max_iterations, int) or self.max_iterations <= 0:
+        if (
+            isinstance(self.max_iterations, bool)
+            or not isinstance(self.max_iterations, int)
+            or self.max_iterations <= 0
+        ):
             msg = "max_iterations must be a positive integer"
             raise ValueError(msg)
 
@@ -273,7 +288,11 @@ class ReviewCycleState:
                 msg = "workflow_run_id must be a string or None"
                 raise ValueError(msg)
 
-        if isinstance(self.current_iteration, bool) or not isinstance(self.current_iteration, int) or self.current_iteration < 0:
+        if (
+            isinstance(self.current_iteration, bool)
+            or not isinstance(self.current_iteration, int)
+            or self.current_iteration < 0
+        ):
             msg = "current_iteration must be a non-negative integer"
             raise ValueError(msg)
 
@@ -293,7 +312,13 @@ class ReviewCycleState:
             msg = "all review_outputs must be IterationOutput instances"
             raise ValueError(msg)
 
-        if self.status not in ("initialized", "maker_working", "reviewer_working", "awaiting_human_feedback", "completed"):
+        if self.status not in (
+            "initialized",
+            "maker_working",
+            "reviewer_working",
+            "awaiting_human_feedback",
+            "completed",
+        ):
             msg = f"status must be one of: initialized, maker_working, reviewer_working, awaiting_human_feedback, completed. Got: {self.status}"
             raise ValueError(msg)
 

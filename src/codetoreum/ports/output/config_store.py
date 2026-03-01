@@ -41,34 +41,33 @@ class ProjectConfig:
         """Validate all fields at construction time."""
         # Coerce list to tuple and dicts to MappingProxyType for pipelines
         if isinstance(self.pipelines, list):
-            object.__setattr__(self, 'pipelines', tuple(
-                MappingProxyType(p) if isinstance(p, dict) else p
-                for p in self.pipelines
-            ))
+            object.__setattr__(
+                self, "pipelines", tuple(MappingProxyType(p) if isinstance(p, dict) else p for p in self.pipelines)
+            )
 
         # Coerce dict to MappingProxyType for tech_stacks
         if isinstance(self.tech_stacks, dict):
-            object.__setattr__(self, 'tech_stacks', MappingProxyType(self.tech_stacks))
+            object.__setattr__(self, "tech_stacks", MappingProxyType(self.tech_stacks))
 
         # Coerce dict to MappingProxyType for testing
         if isinstance(self.testing, dict):
-            object.__setattr__(self, 'testing', MappingProxyType(self.testing))
+            object.__setattr__(self, "testing", MappingProxyType(self.testing))
 
         # Coerce dict to MappingProxyType for environment_variables
         if isinstance(self.environment_variables, dict):
-            object.__setattr__(self, 'environment_variables', MappingProxyType(self.environment_variables))
+            object.__setattr__(self, "environment_variables", MappingProxyType(self.environment_variables))
 
         # Coerce dict to MappingProxyType for mounted_commands
         if isinstance(self.mounted_commands, dict):
-            object.__setattr__(self, 'mounted_commands', MappingProxyType(self.mounted_commands))
+            object.__setattr__(self, "mounted_commands", MappingProxyType(self.mounted_commands))
 
         # Coerce dict to MappingProxyType for mounted_subagents
         if isinstance(self.mounted_subagents, dict):
-            object.__setattr__(self, 'mounted_subagents', MappingProxyType(self.mounted_subagents))
+            object.__setattr__(self, "mounted_subagents", MappingProxyType(self.mounted_subagents))
 
         # Coerce dict to MappingProxyType for metadata
         if isinstance(self.metadata, dict):
-            object.__setattr__(self, 'metadata', MappingProxyType(self.metadata))
+            object.__setattr__(self, "metadata", MappingProxyType(self.metadata))
 
         if not isinstance(self.id, str) or not self.id:
             msg = "id must be a non-empty string"
@@ -159,19 +158,19 @@ class AgentConfig:
         """Validate all fields at construction time."""
         # Coerce list to tuple for mcp_servers
         if isinstance(self.mcp_servers, list):
-            object.__setattr__(self, 'mcp_servers', tuple(self.mcp_servers))
+            object.__setattr__(self, "mcp_servers", tuple(self.mcp_servers))
 
         # Coerce list to tuple for capabilities
         if isinstance(self.capabilities, list):
-            object.__setattr__(self, 'capabilities', tuple(self.capabilities))
+            object.__setattr__(self, "capabilities", tuple(self.capabilities))
 
         # Coerce dict to MappingProxyType for constraints
         if isinstance(self.constraints, dict):
-            object.__setattr__(self, 'constraints', MappingProxyType(self.constraints))
+            object.__setattr__(self, "constraints", MappingProxyType(self.constraints))
 
         # Coerce dict to MappingProxyType for metadata
         if isinstance(self.metadata, dict):
-            object.__setattr__(self, 'metadata', MappingProxyType(self.metadata))
+            object.__setattr__(self, "metadata", MappingProxyType(self.metadata))
 
         for field_name in ("project_id", "agent_name", "model"):
             val = getattr(self, field_name)
@@ -230,18 +229,17 @@ class PipelineConfig:
         """Validate all fields at construction time."""
         # Coerce list to tuple and dicts to MappingProxyType for stages
         if isinstance(self.stages, list):
-            object.__setattr__(self, 'stages', tuple(
-                MappingProxyType(s) if isinstance(s, dict) else s
-                for s in self.stages
-            ))
+            object.__setattr__(
+                self, "stages", tuple(MappingProxyType(s) if isinstance(s, dict) else s for s in self.stages)
+            )
 
         # Coerce list to tuple for triggers
         if isinstance(self.triggers, list):
-            object.__setattr__(self, 'triggers', tuple(self.triggers))
+            object.__setattr__(self, "triggers", tuple(self.triggers))
 
         # Coerce dict to MappingProxyType for metadata
         if isinstance(self.metadata, dict):
-            object.__setattr__(self, 'metadata', MappingProxyType(self.metadata))
+            object.__setattr__(self, "metadata", MappingProxyType(self.metadata))
 
         for field_name in ("id", "project_id", "name"):
             val = getattr(self, field_name)
@@ -291,14 +289,13 @@ class WorkflowTemplate:
         """Validate all fields at construction time."""
         # Coerce list to tuple and dicts to MappingProxyType for stages
         if isinstance(self.stages, list):
-            object.__setattr__(self, 'stages', tuple(
-                MappingProxyType(s) if isinstance(s, dict) else s
-                for s in self.stages
-            ))
+            object.__setattr__(
+                self, "stages", tuple(MappingProxyType(s) if isinstance(s, dict) else s for s in self.stages)
+            )
 
         # Coerce dict to MappingProxyType for metadata
         if isinstance(self.metadata, dict):
-            object.__setattr__(self, 'metadata', MappingProxyType(self.metadata))
+            object.__setattr__(self, "metadata", MappingProxyType(self.metadata))
 
         for field_name in ("id", "name", "description"):
             val = getattr(self, field_name)
@@ -421,7 +418,7 @@ class MountedSubAgent:
         """Validate all fields at construction time."""
         # Coerce dict to MappingProxyType for config
         if isinstance(self.config, dict):
-            object.__setattr__(self, 'config', MappingProxyType(self.config))
+            object.__setattr__(self, "config", MappingProxyType(self.config))
 
         if not isinstance(self.name, str) or not self.name:
             msg = "name must be a non-empty string"
@@ -461,7 +458,7 @@ class ConfigVersion:
         """Validate all fields at construction time."""
         # Coerce dict to MappingProxyType for changes
         if isinstance(self.changes, dict):
-            object.__setattr__(self, 'changes', MappingProxyType(self.changes))
+            object.__setattr__(self, "changes", MappingProxyType(self.changes))
 
         if isinstance(self.version, bool) or not isinstance(self.version, int) or self.version < 1:
             msg = "version must be a positive integer"

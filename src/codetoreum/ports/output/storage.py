@@ -34,7 +34,7 @@ class StorageObject:
         """Validate all fields at construction time."""
         # Coerce dict to MappingProxyType for metadata
         if isinstance(self.metadata, dict):
-            object.__setattr__(self, 'metadata', MappingProxyType(self.metadata))
+            object.__setattr__(self, "metadata", MappingProxyType(self.metadata))
 
         if not isinstance(self.key, str) or not self.key:
             msg = "key must be a non-empty string"

@@ -10,7 +10,6 @@ flow through a review process before merging.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from types import MappingProxyType
 from typing import Literal
 
 from .event_emitter import IEventEmitter
@@ -77,11 +76,11 @@ class CodeReview:
         """Validate all fields at construction time."""
         # Coerce list to tuple for reviewers
         if isinstance(self.reviewers, list):
-            object.__setattr__(self, 'reviewers', tuple(self.reviewers))
+            object.__setattr__(self, "reviewers", tuple(self.reviewers))
 
         # Coerce list to tuple for approvals
         if isinstance(self.approvals, list):
-            object.__setattr__(self, 'approvals', tuple(self.approvals))
+            object.__setattr__(self, "approvals", tuple(self.approvals))
 
         if not isinstance(self.id, str) or not self.id:
             msg = "id must be a non-empty string"

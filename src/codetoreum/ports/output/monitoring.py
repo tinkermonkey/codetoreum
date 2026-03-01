@@ -94,7 +94,11 @@ class MonitoringConfig:
             raise ValueError(msg)
 
         if self.poll_interval_seconds is not None:
-            if isinstance(self.poll_interval_seconds, bool) or not isinstance(self.poll_interval_seconds, int) or self.poll_interval_seconds <= 0:
+            if (
+                isinstance(self.poll_interval_seconds, bool)
+                or not isinstance(self.poll_interval_seconds, int)
+                or self.poll_interval_seconds <= 0
+            ):
                 msg = "poll_interval_seconds must be a positive integer or None"
                 raise ValueError(msg)
 

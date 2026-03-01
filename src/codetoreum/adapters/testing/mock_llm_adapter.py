@@ -338,7 +338,7 @@ class MockLLMAdapter(ILLMProvider):
                     )
                 )
 
-        object.__setattr__(result, 'tool_calls', tuple(tool_calls))
+        object.__setattr__(result, "tool_calls", tuple(tool_calls))
         return result
 
     async def stream_completion(
