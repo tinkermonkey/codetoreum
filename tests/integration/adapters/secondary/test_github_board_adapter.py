@@ -176,28 +176,6 @@ class TestGetBoard:
             await board_adapter.get_board("proj-123", "board-456")
 
 
-class TestGetColumns:
-    """Tests for get_columns method.
-
-    NOTE: get_columns currently requires project context (project_id) that it doesn't have access to.
-    The interface signature doesn't provide project_id, but the implementation requires it.
-    These tests are removed until the design is clarified.
-    """
-
-    pass
-
-
-class TestGetItemsInColumn:
-    """Tests for get_items_in_column method.
-
-    NOTE: get_items_in_column currently requires project context (project_id) that it doesn't have access to.
-    The interface signature doesn't provide project_id, but the implementation requires it.
-    These tests are removed until the design is clarified.
-    """
-
-    pass
-
-
 class TestMoveItemToColumn:
     """Tests for move_item_to_column method."""
 
@@ -206,10 +184,6 @@ class TestMoveItemToColumn:
         """Test move without project/board context."""
         with pytest.raises(ValidationError):
             await board_adapter.move_item_to_column("item-1", "In Progress", MovedByType.ORCHESTRATOR)
-
-
-class TestReconcileBoard:
-    """Tests for reconcile_board method."""
 
 
 class TestWebhookHandler:
