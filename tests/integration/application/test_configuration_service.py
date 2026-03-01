@@ -837,8 +837,6 @@ async def test_reserved_environment_variable_validation(config_service, sample_p
         assert "reserved" in str(exc_info.value).lower()
 
 
-
-
 @pytest.mark.asyncio
 async def test_concurrent_agent_config_updates(config_service, config_store, sample_project):
     """Test concurrent updates to different agent configurations."""
