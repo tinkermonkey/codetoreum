@@ -78,16 +78,21 @@ class InMemoryEventStore(IEventStore):
         expected_version: int | None = None,
     ) -> None:
         """
-        Append events to a stream with simulated processing latency.
+        Append events to a stream with spec-compliant processing latency.
 
-        Implements proportional event processing latency based on:
-        - Number of events appended
-        - SimulationConfig.ms_per_event (processing delay per event)
-        - Fidelity level (LOW: no delay, MEDIUM/HIGH: with delay)
+        Implements the event store timing model (US-3.3):
+        Latency = event_count × handler_count × ms_per_event
 
-        This simulates the real-world cost of event handlers processing events.
-        The backpressure mechanism ensures that appending many events
-        incurs proportional delays, matching real event processing costs.
+        Example: Appending 1000 events with 5 handlers and 1ms per unit = 5 seconds latency
+
+        Latency components:
+        - event_count: Number of events being appended
+        - handler_count: Number of event handlers (SimulationConfig.event_handler_count)
+        - ms_per_event: Processing delay per unit (SimulationConfig.ms_per_event)
+        - Fidelity level: Affects whether delay is applied (LOW: no delay, MEDIUM/HIGH: with delay)
+
+        This backpressure mechanism ensures that appending many events incurs proportional
+        delays, accurately modeling real event processing costs.
 
         Args:
             stream_id: Unique stream identifier
@@ -215,15 +220,18 @@ class InMemoryEventStore(IEventStore):
 
     async def _get_event_delay_seconds(self) -> float:
         """
-        Calculate delay for streaming/replaying a single event.
+        Calculate base delay per (event × handler) unit.
+
+        This is the unit latency that will be multiplied by both event_count and handler_count
+        in the full latency formula: latency = event_count × handler_count × delay_per_unit
 
         Uses fidelity-aware timing from SimulationConfig if available.
         - LOW: 0 delay
-        - MEDIUM: ms_per_event from config
+        - MEDIUM: ms_per_event from config (e.g., 1ms per unit)
         - HIGH: ms_per_event with ±20% jitter
 
         Returns:
-            Delay in seconds
+            Delay in seconds per (event × handler) unit
         """
         if not self._config:
             # Default behavior (for backward compatibility)
@@ -248,17 +256,14 @@ class InMemoryEventStore(IEventStore):
         """
         Apply backpressure latency for event processing.
 
-        Simulates the real-world cost of event handlers processing events.
-        Proportional to the number of events appended and ms_per_event config.
+        Implements the event store timing model per specification (US-3.3):
+        Latency = event_count × handler_count × ms_per_event
 
-        Design Note - Handler Count Factor:
-        The original specification mentions "event count x handler count" for latency.
-        In practice, ms_per_event is pre-calibrated to include the expected number
-        of handlers processing each event. This approach is simpler, more testable,
-        and avoids tight coupling to handler registration details.
+        Example: 1000 events × 5 handlers × 1ms = 5 seconds
 
         This is the **backpressure mechanism** that ensures appending many
         events incurs proportional delays, matching real event processing costs.
+        The formula accounts for all event handlers that process the events.
 
         Args:
             event_count: Number of events being processed
@@ -269,8 +274,9 @@ class InMemoryEventStore(IEventStore):
         # Get per-event delay (handles fidelity level and jitter)
         delay_per_event = await self._get_event_delay_seconds()
 
-        # Apply proportional delay: total = event_count x delay_per_event
-        total_delay_seconds = delay_per_event * event_count
+        # Apply spec-compliant formula: total = event_count × handler_count × delay_per_event
+        handler_count = self._config.event_handler_count
+        total_delay_seconds = delay_per_event * event_count * handler_count
 
         if total_delay_seconds > 0:
             if self._clock:

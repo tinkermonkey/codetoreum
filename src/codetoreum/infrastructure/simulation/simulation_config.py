@@ -164,7 +164,8 @@ class SimulationConfig:
     # Proportional timing parameters (used when fidelity >= MEDIUM)
     ms_per_token: float = 50.0  # LLM latency
     ms_per_file_operation: float = 10.0  # Container/repo file operations
-    ms_per_event: float = 1.0  # Event processing latency
+    ms_per_event: float = 1.0  # Event processing latency per (event × handler)
+    event_handler_count: int = 1  # Number of handlers processing each event (for latency: event_count × handler_count × ms_per_event)
 
     # Additional metadata
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -179,6 +180,8 @@ class SimulationConfig:
             raise ValueError(f"ms_per_file_operation must be non-negative, got {self.ms_per_file_operation}")
         if self.ms_per_event < 0:
             raise ValueError(f"ms_per_event must be non-negative, got {self.ms_per_event}")
+        if self.event_handler_count < 1:
+            raise ValueError(f"event_handler_count must be at least 1, got {self.event_handler_count}")
 
     def get_agent_config(self, agent_id: str) -> AgentBehaviorConfig:
         """
