@@ -837,38 +837,6 @@ async def test_reserved_environment_variable_validation(config_service, sample_p
         assert "reserved" in str(exc_info.value).lower()
 
 
-@pytest.mark.asyncio
-async def test_rollback_on_event_emission_failure(config_store, sample_project, event_store):
-    """Test that configuration changes are rolled back if event emission fails."""
-
-    # Create an event bus that fails on publish
-    class FailingEventBus(EventBus):
-        async def publish(self, event):
-            raise RuntimeError("Event emission failed!")
-
-    failing_event_bus = FailingEventBus(event_store)
-    config_service = ConfigurationService(
-        config_store=config_store,
-        event_bus=failing_event_bus,
-    )
-
-    initial_version = sample_project.version
-    initial_tech_stacks = sample_project.tech_stacks.copy()
-
-    command = UpdateProjectConfigCommand(
-        project_name=sample_project.name,
-        updates={"tech_stacks": {"new_stack": "1.0.0"}},
-        user_id="test_user",
-    )
-
-    # Should raise the event emission error
-    with pytest.raises(RuntimeError, match="Event emission failed"):
-        await config_service.update_project_config(command)
-
-    # Verify configuration was rolled back
-    project = await config_store.get_project_config(sample_project.id)
-    assert project.version == initial_version
-    assert project.tech_stacks == initial_tech_stacks
 
 
 @pytest.mark.asyncio

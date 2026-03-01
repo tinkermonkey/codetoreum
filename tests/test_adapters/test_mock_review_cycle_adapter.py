@@ -480,23 +480,20 @@ class TestReviewResultParsing:
 class TestErrorHandling:
     """Test error handling and validation."""
 
-    @pytest.mark.asyncio
-    async def test_invalid_work_item_id(self, adapter):
+    def test_invalid_work_item_id(self, adapter):
         """Test validation of missing work item ID."""
-        request = ReviewCycleRequest(
-            work_item_id="",
-            project_id="proj-1",
-            board_id="board-1",
-            maker_agent="junior_dev",
-            reviewer_agent="senior_dev",
-            max_iterations=3,
-            auto_advance_on_approval=True,
-            escalate_on_blocked=True,
-            previous_stage_output="Initial implementation",
-        )
-
-        with pytest.raises(ValueError, match="work_item_id is required"):
-            await adapter.start_review_cycle(request)
+        with pytest.raises(ValueError, match="work_item_id must be a non-empty string"):
+            ReviewCycleRequest(
+                work_item_id="",
+                project_id="proj-1",
+                board_id="board-1",
+                maker_agent="junior_dev",
+                reviewer_agent="senior_dev",
+                max_iterations=3,
+                auto_advance_on_approval=True,
+                escalate_on_blocked=True,
+                previous_stage_output="Initial implementation",
+            )
 
     @pytest.mark.asyncio
     async def test_invalid_max_iterations(self, adapter):
