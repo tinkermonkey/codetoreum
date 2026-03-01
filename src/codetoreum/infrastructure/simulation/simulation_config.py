@@ -179,15 +179,11 @@ class SimulationConfig:
         if self.ms_per_token < 0:
             raise ValueError(f"ms_per_token must be non-negative, got {self.ms_per_token}")
         if self.ms_per_file_operation < 0:
-            raise ValueError(
-                f"ms_per_file_operation must be non-negative, got {self.ms_per_file_operation}"
-            )
+            raise ValueError(f"ms_per_file_operation must be non-negative, got {self.ms_per_file_operation}")
         if self.ms_per_event < 0:
             raise ValueError(f"ms_per_event must be non-negative, got {self.ms_per_event}")
         if self.event_handler_count < 1:
-            raise ValueError(
-                f"event_handler_count must be at least 1, got {self.event_handler_count}"
-            )
+            raise ValueError(f"event_handler_count must be at least 1, got {self.event_handler_count}")
 
     def get_agent_config(self, agent_id: str) -> AgentBehaviorConfig:
         """
@@ -213,9 +209,7 @@ class SimulationConfig:
             config: Agent behavior configuration
         """
         if config.agent_id != agent_id:
-            raise ValueError(
-                f"config.agent_id ({config.agent_id}) does not match agent_id ({agent_id})"
-            )
+            raise ValueError(f"config.agent_id ({config.agent_id}) does not match agent_id ({agent_id})")
         self.agents[agent_id] = config
 
     def add_agent_response_pattern(
@@ -508,9 +502,7 @@ class SimulationConfig:
         )
 
         fidelity_str = data.get("fidelity_level", "low")
-        fidelity_level = (
-            FidelityLevel(fidelity_str) if isinstance(fidelity_str, str) else fidelity_str
-        )
+        fidelity_level = FidelityLevel(fidelity_str) if isinstance(fidelity_str, str) else fidelity_str
 
         return cls(
             scenario_name=data["scenario_name"],

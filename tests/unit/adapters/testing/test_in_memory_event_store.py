@@ -972,15 +972,15 @@ class TestBackpressureMechanism:
         assert elapsed < 0.01
 
     async def test_apply_event_processing_latency_medium_fidelity_proportional(self):
-        """Test that MEDIUM fidelity produces proportional delay (event_count × handler_count × ms_per_event)."""
+        """Test that MEDIUM fidelity produces proportional delay (event_count * handler_count * ms_per_event)."""
         config = MagicMock(spec=SimulationConfig)
         config.fidelity_level = FidelityLevel.MEDIUM
-        config.ms_per_event = 10.0  # 10ms per (event × handler)
+        config.ms_per_event = 10.0  # 10ms per (event * handler)
         config.event_handler_count = 1  # 1 handler
 
         store = InMemoryEventStore(config=config)
 
-        # 5 events × 1 handler × 10ms = 50ms expected
+        # 5 events * 1 handler * 10ms = 50ms expected
         start = asyncio.get_event_loop().time()
         await store._apply_event_processing_latency(5)
         elapsed = asyncio.get_event_loop().time() - start
@@ -992,12 +992,12 @@ class TestBackpressureMechanism:
         """Test that HIGH fidelity applies jitter to the delay."""
         config = MagicMock(spec=SimulationConfig)
         config.fidelity_level = FidelityLevel.HIGH
-        config.ms_per_event = 10.0  # 10ms per (event × handler)
+        config.ms_per_event = 10.0  # 10ms per (event * handler)
         config.event_handler_count = 1  # 1 handler
 
         store = InMemoryEventStore(config=config)
 
-        # 5 events × 1 handler × 10ms = 50ms base, with ±20% jitter
+        # 5 events * 1 handler * 10ms = 50ms base, with ±20% jitter
         # Expected range: 40ms to 60ms (allow 2ms tolerance for timing variance)
         durations = []
         for _ in range(5):
@@ -1039,7 +1039,7 @@ class TestBackpressureMechanism:
 
         await store._apply_event_processing_latency(5)
 
-        # Clock sleep should have been called with 0.05 seconds (5 events × 1 handler × 10ms)
+        # Clock sleep should have been called with 0.05 seconds (5 events * 1 handler * 10ms)
         mock_clock.sleep.assert_called_once()
         call_arg = mock_clock.sleep.call_args[0][0]
         assert 0.04 < call_arg < 0.06  # Allow for jitter in MEDIUM fidelity
@@ -1048,12 +1048,12 @@ class TestBackpressureMechanism:
         """Test that append() incurs backpressure latency proportional to event count and handler count."""
         config = MagicMock(spec=SimulationConfig)
         config.fidelity_level = FidelityLevel.MEDIUM
-        config.ms_per_event = 10.0  # 10ms per (event × handler)
+        config.ms_per_event = 10.0  # 10ms per (event * handler)
         config.event_handler_count = 1  # 1 handler
 
         store = InMemoryEventStore(config=config)
 
-        # Append 10 events × 1 handler × 10ms = 100ms expected latency
+        # Append 10 events * 1 handler * 10ms = 100ms expected latency
         events = [sample_event for _ in range(10)]
 
         start = asyncio.get_event_loop().time()
@@ -1086,7 +1086,7 @@ class TestBackpressureMechanism:
         """Test that backpressure latency scales linearly with event count and handler count."""
         config = MagicMock(spec=SimulationConfig)
         config.fidelity_level = FidelityLevel.MEDIUM
-        config.ms_per_event = 5.0  # 5ms per (event × handler)
+        config.ms_per_event = 5.0  # 5ms per (event * handler)
         config.event_handler_count = 1  # 1 handler
 
         store = InMemoryEventStore(config=config)
@@ -1101,29 +1101,29 @@ class TestBackpressureMechanism:
             durations[count] = elapsed
 
         # Verify approximately linear scaling with event count
-        # 10 events × 1 handler should take ~2x as long as 5 events × 1 handler
+        # 10 events * 1 handler should take ~2x as long as 5 events * 1 handler
         ratio_10_5 = durations[10] / durations[5]
         assert 1.8 < ratio_10_5 < 2.2
 
-        # 20 events × 1 handler should take ~4x as long as 5 events × 1 handler
+        # 20 events * 1 handler should take ~4x as long as 5 events * 1 handler
         ratio_20_5 = durations[20] / durations[5]
         assert 3.8 < ratio_20_5 < 4.2
 
     async def test_event_processing_latency_with_multiple_handlers(self, sample_event):
         """Test that latency scales with handler count per spec (US-3.3).
 
-        Uses same proportional relationship as spec example (100 events × 5 handlers × 10ms = 5 seconds)
-        but with smaller values (100 events × 5 handlers × 0.1ms = 50ms) to avoid slow test.
+        Uses same proportional relationship as spec example (100 events * 5 handlers * 10ms = 5 seconds)
+        but with smaller values (100 events * 5 handlers * 0.1ms = 50ms) to avoid slow test.
         """
         config = MagicMock(spec=SimulationConfig)
         config.fidelity_level = FidelityLevel.MEDIUM
-        config.ms_per_event = 0.1  # 0.1ms per (event × handler)
+        config.ms_per_event = 0.1  # 0.1ms per (event * handler)
         config.event_handler_count = 5  # 5 handlers
 
         store = InMemoryEventStore(config=config)
 
-        # Append 100 events × 5 handlers × 0.1ms = 50ms expected latency
-        # This validates the same formula as spec: event_count × handler_count × ms_per_event
+        # Append 100 events * 5 handlers * 0.1ms = 50ms expected latency
+        # This validates the same formula as spec: event_count * handler_count * ms_per_event
         events = [sample_event for _ in range(100)]
 
         start = asyncio.get_event_loop().time()
