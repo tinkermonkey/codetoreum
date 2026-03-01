@@ -253,11 +253,16 @@ class CausalLinkRegistry:
             components.add(link.source)
             components.add(link.target)
 
-        # Check for cycles using DFS
+        # Check for cycles using DFS with memoization
         visited = set()
         rec_stack = set()
+        validated = set()  # Track components already checked for cycles
 
         def has_cycle(node: str) -> bool:
+            # Early return for already-validated components
+            if node in validated:
+                return False
+
             visited.add(node)
             rec_stack.add(node)
 
@@ -271,6 +276,7 @@ class CausalLinkRegistry:
                         return True
 
             rec_stack.remove(node)
+            validated.add(node)  # Mark as validated after successful DFS
             return False
 
         for component in components:
