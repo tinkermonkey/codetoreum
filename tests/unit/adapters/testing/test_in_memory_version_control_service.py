@@ -69,9 +69,7 @@ class TestInMemoryVersionControlServiceExceptions:
         """Committing with empty message should raise ValidationError."""
         service = InMemoryVersionControlService()
         # First clone to create the repository
-        await service.clone_repository(
-            "https://github.com/test/repo.git", "/workspace/test-repo"
-        )
+        await service.clone_repository("https://github.com/test/repo.git", "/workspace/test-repo")
 
         with pytest.raises(ValidationError):
             await service.commit("/workspace/test-repo", "")
@@ -89,9 +87,7 @@ class TestInMemoryVersionControlServiceExceptions:
         """Pushing nonexistent branch should raise RepositoryError."""
         service = InMemoryVersionControlService()
         # First clone to create the repository
-        await service.clone_repository(
-            "https://github.com/test/repo.git", "/workspace/test-repo"
-        )
+        await service.clone_repository("https://github.com/test/repo.git", "/workspace/test-repo")
 
         with pytest.raises(RepositoryError):
             await service.push("/workspace/test-repo", "nonexistent-branch")
@@ -237,12 +233,8 @@ class TestInMemoryVersionControlServiceBehavior:
         service = InMemoryVersionControlService()
 
         # Clone two repositories
-        await service.clone_repository(
-            "https://github.com/test/repo1.git", "/workspace/repo1"
-        )
-        await service.clone_repository(
-            "https://github.com/test/repo2.git", "/workspace/repo2"
-        )
+        await service.clone_repository("https://github.com/test/repo1.git", "/workspace/repo1")
+        await service.clone_repository("https://github.com/test/repo2.git", "/workspace/repo2")
 
         # Commit to first repo
         sha1 = await service.commit("/workspace/repo1", "Repo 1 commit")
@@ -269,9 +261,7 @@ class TestInMemoryVersionControlServiceBehavior:
         """Repository default branch should be 'main'."""
         service = InMemoryVersionControlService()
 
-        await service.clone_repository(
-            "https://github.com/test/repo.git", "/workspace/test-repo"
-        )
+        await service.clone_repository("https://github.com/test/repo.git", "/workspace/test-repo")
 
         repo = await service.get_repository("/workspace/test-repo")
         assert repo.default_branch == "main"

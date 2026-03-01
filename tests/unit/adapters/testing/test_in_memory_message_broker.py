@@ -465,9 +465,7 @@ class TestInMemoryMessageBrokerConcurrency:
         event = create_test_event()
 
         # Subscribe and publish concurrently
-        await asyncio.gather(
-            broker.subscribe("events", handler), broker.publish_event(event)
-        )
+        await asyncio.gather(broker.subscribe("events", handler), broker.publish_event(event))
 
         # Message should eventually be delivered
         await asyncio.sleep(0.01)

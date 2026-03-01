@@ -42,14 +42,12 @@ class TestWebhookSignatureValidation:
 
         payload = b'{"action": "opened", "pull_request": {"id": 123}}'
         secret = "test-webhook-secret"
-        expected_signature = "sha256=" + hmac.new(
-            key=secret.encode("utf-8"), msg=payload, digestmod=hashlib.sha256
-        ).hexdigest()
+        expected_signature = (
+            "sha256=" + hmac.new(key=secret.encode("utf-8"), msg=payload, digestmod=hashlib.sha256).hexdigest()
+        )
 
         # Mock config to return project with webhook secret
-        config.get_project_config.return_value = MagicMock(
-            metadata={"webhook_secret": secret}
-        )
+        config.get_project_config.return_value = MagicMock(metadata={"webhook_secret": secret})
 
         result = await adapter._verify_signature(payload, expected_signature, "test-project")
 
@@ -64,9 +62,7 @@ class TestWebhookSignatureValidation:
         secret = "test-webhook-secret"
         wrong_signature = "sha256=" + "0" * 64  # Invalid signature
 
-        config.get_project_config.return_value = MagicMock(
-            metadata={"webhook_secret": secret}
-        )
+        config.get_project_config.return_value = MagicMock(metadata={"webhook_secret": secret})
 
         result = await adapter._verify_signature(payload, wrong_signature, "test-project")
 
@@ -82,13 +78,11 @@ class TestWebhookSignatureValidation:
         wrong_secret = "wrong-secret"
 
         # Sign with wrong secret
-        wrong_signature = "sha256=" + hmac.new(
-            key=wrong_secret.encode("utf-8"), msg=payload, digestmod=hashlib.sha256
-        ).hexdigest()
-
-        config.get_project_config.return_value = MagicMock(
-            metadata={"webhook_secret": correct_secret}
+        wrong_signature = (
+            "sha256=" + hmac.new(key=wrong_secret.encode("utf-8"), msg=payload, digestmod=hashlib.sha256).hexdigest()
         )
+
+        config.get_project_config.return_value = MagicMock(metadata={"webhook_secret": correct_secret})
 
         result = await adapter._verify_signature(payload, wrong_signature, "test-project")
 
@@ -103,16 +97,14 @@ class TestWebhookSignatureValidation:
         secret = "test-webhook-secret"
 
         # Sign original payload
-        signature = "sha256=" + hmac.new(
-            key=secret.encode("utf-8"), msg=original_payload, digestmod=hashlib.sha256
-        ).hexdigest()
+        signature = (
+            "sha256=" + hmac.new(key=secret.encode("utf-8"), msg=original_payload, digestmod=hashlib.sha256).hexdigest()
+        )
 
         # Modify payload
         modified_payload = b'{"action": "closed"}'
 
-        config.get_project_config.return_value = MagicMock(
-            metadata={"webhook_secret": secret}
-        )
+        config.get_project_config.return_value = MagicMock(metadata={"webhook_secret": secret})
 
         result = await adapter._verify_signature(modified_payload, signature, "test-project")
 
@@ -127,14 +119,10 @@ class TestWebhookSignatureValidation:
         secret = "test-webhook-secret"
 
         # Create signature without prefix
-        hex_signature = hmac.new(
-            key=secret.encode("utf-8"), msg=payload, digestmod=hashlib.sha256
-        ).hexdigest()
+        hex_signature = hmac.new(key=secret.encode("utf-8"), msg=payload, digestmod=hashlib.sha256).hexdigest()
         signature = f"sha256={hex_signature}"
 
-        config.get_project_config.return_value = MagicMock(
-            metadata={"webhook_secret": secret}
-        )
+        config.get_project_config.return_value = MagicMock(metadata={"webhook_secret": secret})
 
         result = await adapter._verify_signature(payload, signature, "test-project")
 
@@ -149,14 +137,10 @@ class TestWebhookSignatureValidation:
         secret = "test-webhook-secret"
 
         # Create signature with lowercase hex
-        expected_hex = hmac.new(
-            key=secret.encode("utf-8"), msg=payload, digestmod=hashlib.sha256
-        ).hexdigest()
+        expected_hex = hmac.new(key=secret.encode("utf-8"), msg=payload, digestmod=hashlib.sha256).hexdigest()
 
         # Test with lowercase (should match)
-        config.get_project_config.return_value = MagicMock(
-            metadata={"webhook_secret": secret}
-        )
+        config.get_project_config.return_value = MagicMock(metadata={"webhook_secret": secret})
 
         result = await adapter._verify_signature(payload, f"sha256={expected_hex}", "test-project")
         assert result is True
@@ -221,9 +205,7 @@ class TestTimingAttackPrevention:
         secret = "test-webhook-secret"
 
         # Compute correct signature
-        correct_sig_hex = hmac.new(
-            key=secret.encode("utf-8"), msg=payload, digestmod=hashlib.sha256
-        ).hexdigest()
+        correct_sig_hex = hmac.new(key=secret.encode("utf-8"), msg=payload, digestmod=hashlib.sha256).hexdigest()
         correct_signature = f"sha256={correct_sig_hex}"
 
         # Create wrong signature that differs in first character
@@ -233,9 +215,7 @@ class TestTimingAttackPrevention:
         # Create wrong signature that differs in last character
         wrong_signature_last = f"sha256={correct_sig_hex[:-1]}{'0' if correct_sig_hex[-1] != '0' else '1'}"
 
-        config.get_project_config.return_value = MagicMock(
-            metadata={"webhook_secret": secret}
-        )
+        config.get_project_config.return_value = MagicMock(metadata={"webhook_secret": secret})
 
         # Both invalid signatures should be rejected (timing-safe comparison should
         # take approximately the same time regardless of where mismatch occurs)
@@ -259,9 +239,7 @@ class TestTimingAttackPrevention:
         # Too long signature
         long_signature = "sha256=" + "0" * 128
 
-        config.get_project_config.return_value = MagicMock(
-            metadata={"webhook_secret": secret}
-        )
+        config.get_project_config.return_value = MagicMock(metadata={"webhook_secret": secret})
 
         result_short = await adapter._verify_signature(payload, short_signature, "test-project")
         result_long = await adapter._verify_signature(payload, long_signature, "test-project")
@@ -331,13 +309,9 @@ class TestWebhookSignatureEdgeCases:
         payload = b""
         secret = "test-webhook-secret"
 
-        signature = "sha256=" + hmac.new(
-            key=secret.encode("utf-8"), msg=payload, digestmod=hashlib.sha256
-        ).hexdigest()
+        signature = "sha256=" + hmac.new(key=secret.encode("utf-8"), msg=payload, digestmod=hashlib.sha256).hexdigest()
 
-        config.get_project_config.return_value = MagicMock(
-            metadata={"webhook_secret": secret}
-        )
+        config.get_project_config.return_value = MagicMock(metadata={"webhook_secret": secret})
 
         result = await adapter._verify_signature(payload, signature, "test-project")
 
@@ -352,13 +326,9 @@ class TestWebhookSignatureEdgeCases:
         payload = b"x" * (1024 * 1024)
         secret = "test-webhook-secret"
 
-        signature = "sha256=" + hmac.new(
-            key=secret.encode("utf-8"), msg=payload, digestmod=hashlib.sha256
-        ).hexdigest()
+        signature = "sha256=" + hmac.new(key=secret.encode("utf-8"), msg=payload, digestmod=hashlib.sha256).hexdigest()
 
-        config.get_project_config.return_value = MagicMock(
-            metadata={"webhook_secret": secret}
-        )
+        config.get_project_config.return_value = MagicMock(metadata={"webhook_secret": secret})
 
         result = await adapter._verify_signature(payload, signature, "test-project")
 
@@ -372,13 +342,9 @@ class TestWebhookSignatureEdgeCases:
         payload = b'{"action": "opened"}'
         secret = "webhook-secret-with-émojis-🔐"
 
-        signature = "sha256=" + hmac.new(
-            key=secret.encode("utf-8"), msg=payload, digestmod=hashlib.sha256
-        ).hexdigest()
+        signature = "sha256=" + hmac.new(key=secret.encode("utf-8"), msg=payload, digestmod=hashlib.sha256).hexdigest()
 
-        config.get_project_config.return_value = MagicMock(
-            metadata={"webhook_secret": secret}
-        )
+        config.get_project_config.return_value = MagicMock(metadata={"webhook_secret": secret})
 
         result = await adapter._verify_signature(payload, signature, "test-project")
 
@@ -392,13 +358,9 @@ class TestWebhookSignatureEdgeCases:
         payload = b'{"action": "opened"}'
         secret = "webhook-secret!@#$%^&*()"
 
-        signature = "sha256=" + hmac.new(
-            key=secret.encode("utf-8"), msg=payload, digestmod=hashlib.sha256
-        ).hexdigest()
+        signature = "sha256=" + hmac.new(key=secret.encode("utf-8"), msg=payload, digestmod=hashlib.sha256).hexdigest()
 
-        config.get_project_config.return_value = MagicMock(
-            metadata={"webhook_secret": secret}
-        )
+        config.get_project_config.return_value = MagicMock(metadata={"webhook_secret": secret})
 
         result = await adapter._verify_signature(payload, signature, "test-project")
 
@@ -412,16 +374,14 @@ class TestWebhookSignatureEdgeCases:
         payload = b'{"action": "opened"}'
         secret = "test-webhook-secret"
 
-        correct_sig = "sha256=" + hmac.new(
-            key=secret.encode("utf-8"), msg=payload, digestmod=hashlib.sha256
-        ).hexdigest()
+        correct_sig = (
+            "sha256=" + hmac.new(key=secret.encode("utf-8"), msg=payload, digestmod=hashlib.sha256).hexdigest()
+        )
 
         # Add whitespace
         signature_with_space = f"sha256= {correct_sig.split('=')[1]}"
 
-        config.get_project_config.return_value = MagicMock(
-            metadata={"webhook_secret": secret}
-        )
+        config.get_project_config.return_value = MagicMock(metadata={"webhook_secret": secret})
 
         result = await adapter._verify_signature(payload, signature_with_space, "test-project")
 
@@ -439,9 +399,7 @@ class TestWebhookSignatureEdgeCases:
         # Non-hex signature
         invalid_signature = "sha256=zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
 
-        config.get_project_config.return_value = MagicMock(
-            metadata={"webhook_secret": secret}
-        )
+        config.get_project_config.return_value = MagicMock(metadata={"webhook_secret": secret})
 
         result = await adapter._verify_signature(payload, invalid_signature, "test-project")
 

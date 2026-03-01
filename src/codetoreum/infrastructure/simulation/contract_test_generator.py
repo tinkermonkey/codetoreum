@@ -266,7 +266,9 @@ class ContractTestGenerator:
             lines.append(f"        method = getattr(service, '{method_name}')")
             lines.append("        sig = inspect.signature(method)")
             lines.append("        # Verify method accepts parameters and will raise on missing required args")
-            lines.append("        params = [p for p in sig.parameters.values() if p.default == inspect.Parameter.empty]")
+            lines.append(
+                "        params = [p for p in sig.parameters.values() if p.default == inspect.Parameter.empty]"
+            )
             lines.append("        if params:  # Method has required parameters")
             lines.append("            # Calling without required params should raise TypeError")
             lines.append("            with pytest.raises((TypeError, ValueError)):")
