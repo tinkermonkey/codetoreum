@@ -8,6 +8,7 @@ import logging
 import threading
 from datetime import UTC, datetime
 
+from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.domain.events.work_item_events import (
     WorkItemCreatedEvent,
     WorkItemUpdatedEvent,
@@ -28,7 +29,7 @@ from codetoreum.ports.output.work_item_service import IWorkItemService
 logger = logging.getLogger(__name__)
 
 
-class MockWorkItemService(IWorkItemService):
+class MockWorkItemService(MockEventEmitter, IWorkItemService):
     """Mock implementation of IWorkItemService for testing and simulation.
 
     This adapter provides:
@@ -64,48 +65,10 @@ class MockWorkItemService(IWorkItemService):
 
     def __init__(self) -> None:
         """Initialize the mock work item service."""
+        super().__init__()
         self._work_items: dict[str, WorkItem] = {}
         self._monitoring_status: dict[str, MonitoringStatus] = {}
-        self._event_listeners: dict[str, list] = {}
         self._lock = threading.Lock()
-
-    # ===== Event Emitter Implementation =====
-
-    def on(self, event_type: str, handler) -> None:
-        """Register event listener.
-
-        Args:
-            event_type: Type of event to listen for (e.g., "workitem.created")
-            handler: Callable to invoke when event is emitted
-        """
-        if event_type not in self._event_listeners:
-            self._event_listeners[event_type] = []
-        self._event_listeners[event_type].append(handler)
-
-    def off(self, event_type: str, handler) -> None:
-        """Unregister event listener.
-
-        Args:
-            event_type: Type of event to stop listening for
-            handler: Handler to remove
-        """
-        if event_type in self._event_listeners:
-            self._event_listeners[event_type] = [h for h in self._event_listeners[event_type] if h != handler]
-
-    def emit(self, event) -> None:
-        """Emit event to all registered listeners.
-
-        Args:
-            event: Event to emit
-        """
-        event_type = getattr(event, "type", event.__class__.__name__)
-
-        if event_type in self._event_listeners:
-            for handler in self._event_listeners[event_type]:
-                try:
-                    handler(event)
-                except Exception as e:
-                    logger.error(f"Error in event handler: {e}", exc_info=True)
 
     # ===== Monitoring Lifecycle =====
 
@@ -352,7 +315,7 @@ class MockWorkItemService(IWorkItemService):
         with self._lock:
             self._work_items.clear()
             self._monitoring_status.clear()
-            self._event_listeners.clear()
+            self._handlers.clear()
 
     def reset_monitoring(self) -> None:
         """Reset monitoring status for all projects."""

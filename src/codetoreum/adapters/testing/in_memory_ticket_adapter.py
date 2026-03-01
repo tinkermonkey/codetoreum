@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
+from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.domain.comment import Comment
 from codetoreum.domain.events.discussion_events import (
     Comment as DiscussionComment,
@@ -30,7 +31,7 @@ from codetoreum.ports.output.ticket_system import ITicketSystem
 logger = logging.getLogger(__name__)
 
 
-class InMemoryTicketAdapter(ITicketSystem):
+class InMemoryTicketAdapter(MockEventEmitter, ITicketSystem):
     """
     In-memory implementation of ticket system for testing.
 
@@ -44,51 +45,13 @@ class InMemoryTicketAdapter(ITicketSystem):
 
     def __init__(self):
         """Initialize the in-memory ticket adapter with thread-safe storage."""
+        super().__init__()
         self._work_items: dict[str, WorkItem] = {}
         self._comments: dict[str, list[Comment]] = {}  # work_item_id -> comments
         self._webhooks: dict[str, dict[str, Any]] = {}
         self._relationships: dict[str, list[tuple[str, str]]] = {}  # source_id -> [(target_id, relationship)]
         self._next_work_item_number = 1
         self._lock = threading.Lock()  # Thread safety for concurrent test execution
-        self._event_listeners: dict[str, list] = {}  # Event type -> list of handlers
-
-    # ===== Event Emitter Implementation =====
-
-    def on(self, event_type: str, handler) -> None:
-        """Register event listener.
-
-        Args:
-            event_type: Type of event to listen for
-            handler: Callable to invoke when event is emitted
-        """
-        if event_type not in self._event_listeners:
-            self._event_listeners[event_type] = []
-        self._event_listeners[event_type].append(handler)
-
-    def off(self, event_type: str, handler) -> None:
-        """Unregister event listener.
-
-        Args:
-            event_type: Type of event to stop listening for
-            handler: Handler to remove
-        """
-        if event_type in self._event_listeners:
-            self._event_listeners[event_type] = [h for h in self._event_listeners[event_type] if h != handler]
-
-    def emit(self, event) -> None:
-        """Emit event to all registered listeners.
-
-        Args:
-            event: Event to emit
-        """
-        event_type = getattr(event, "type", event.__class__.__name__)
-
-        if event_type in self._event_listeners:
-            for handler in self._event_listeners[event_type]:
-                try:
-                    handler(event)
-                except Exception as e:
-                    logger.error(f"Error in event handler: {e}", exc_info=True)
 
     # ===== Query Operations =====
 
@@ -672,6 +635,7 @@ class InMemoryTicketAdapter(ITicketSystem):
             self._comments.clear()
             self._webhooks.clear()
             self._relationships.clear()
+            self._handlers.clear()
             self._next_work_item_number = 1
 
     def get_all_work_items(self) -> list[WorkItem]:
