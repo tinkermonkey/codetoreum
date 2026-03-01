@@ -210,13 +210,21 @@ class TestContainerStorageCausalLinking:
         container and persists it to storage, establishing the causal link between
         container execution completion and artifact persistence.
         """
-        # Setup: Write files to container's virtual output directory
+        # Setup: Run container to initialize its virtual filesystem
+        result = await container_adapter.run(
+            image="test-image:latest",
+            command=["echo", "test"],
+            volumes={},
+            environment={"PROJECT_ID": "test-proj"},
+        )
+        container_id = result.container_id
+
+        # Write files to container's virtual output directory
         test_file_1 = "results.json"
         test_file_2 = "coverage.xml"
         test_content_1 = '{"passed": 10, "failed": 0}'
         test_content_2 = '<?xml version="1.0"?><coverage><stats/></coverage>'
 
-        container_id = "test-container"
         container_adapter.write_output_file(container_id, test_file_1, test_content_1)
         container_adapter.write_output_file(container_id, test_file_2, test_content_2)
 
@@ -225,10 +233,9 @@ class TestContainerStorageCausalLinking:
             type="container.execution_completed",
             timestamp=datetime.now(UTC).isoformat(),
             source="test",
-            event_id="test-event-id",
             container_id=container_id,
-            command="pytest tests/",
-            exit_code=0,
+            command="echo test",
+            exit_code=result.exit_code,
             output_files=(test_file_1, test_file_2),
             project_id="test-proj",
         )
