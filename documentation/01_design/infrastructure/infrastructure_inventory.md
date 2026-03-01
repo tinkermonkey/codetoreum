@@ -258,7 +258,7 @@ This document provides an inventory of all infrastructure components in the Code
 - `EventSubscription` - Represents an event subscription relationship
 - `LinkType` - Enum of causal link types (TEST_RESULTS, CODE_QUALITY, DOMAIN_EVENTS, STATE_UPDATES, CUSTOM)
 
-**Purpose**:
+**Capabilities**:
 - Provides runtime enforcement of causal dependencies between adapters
 - Enables discoverability of adapter integration points
 - Validates dependency consistency (no cycles)

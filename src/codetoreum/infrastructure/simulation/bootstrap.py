@@ -572,59 +572,6 @@ class SimulationApplicationBootstrap:
         )
 
     # =========================================================================
-    # Phase 5b: Validate Causal Links
-    # =========================================================================
-
-    def _validate_causal_links(self) -> None:
-        """
-        Validate causal link consistency and log dependency summary.
-
-        Ensures:
-        - No cycles in the dependency graph
-        - All registered links are acyclic
-        - Event subscriptions don't create circular dependencies
-
-        Provides visibility into the adapter dependency graph for debugging
-        and understanding system integration points.
-        """
-        if not self.infrastructure:
-            logger.warning("Cannot validate causal links: infrastructure not ready")
-            return
-
-        registry = self.infrastructure.causal_link_registry
-
-        try:
-            registry.validate_consistency()
-            logger.info("Causal link validation passed - no cycles detected")
-
-            # Log summary of causal links for debugging
-            all_links = registry.get_all_links()
-            all_subs = registry.get_all_subscriptions()
-
-            if all_links or all_subs:
-                logger.info(
-                    f"Causal link summary: {len(all_links)} direct dependencies, {len(all_subs)} event subscriptions"
-                )
-
-                # Log direct dependencies
-                for link in all_links:
-                    logger.debug(f"  {link.source} → {link.target} ({link.link_type.value})")
-
-                # Log event subscriptions
-                for sub in all_subs:
-                    logger.debug(f"  {sub.publisher} ⟹ {sub.subscriber} ({sub.event_type})")
-            else:
-                logger.info("No causal links registered (adapters may not use event subscriptions)")
-
-        except Exception as e:
-            logger.error(
-                f"Causal link validation failed: {e}",
-                exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
-            )
-            raise
-
-    # =========================================================================
     # Phase 2b: Register Causal Links
     # =========================================================================
 
@@ -705,6 +652,58 @@ class SimulationApplicationBootstrap:
             f"Registered {len(registry.get_all_links())} causal links and "
             f"{len(registry.get_all_subscriptions())} event subscriptions"
         )
+
+    # =========================================================================
+    # Phase 5b: Validate Causal Links
+    # =========================================================================
+
+    def _validate_causal_links(self) -> None:
+        """
+        Validate causal link consistency and log dependency summary.
+
+        Ensures:
+        - No cycles in the dependency graph
+        - All registered links are acyclic
+
+        Provides visibility into the adapter dependency graph for debugging
+        and understanding system integration points.
+        """
+        if not self.infrastructure:
+            logger.warning("Cannot validate causal links: infrastructure not ready")
+            return
+
+        registry = self.infrastructure.causal_link_registry
+
+        try:
+            registry.validate_consistency()
+            logger.info("Causal link validation passed - no cycles detected")
+
+            # Log summary of causal links for debugging
+            all_links = registry.get_all_links()
+            all_subs = registry.get_all_subscriptions()
+
+            if all_links or all_subs:
+                logger.info(
+                    f"Causal link summary: {len(all_links)} direct dependencies, {len(all_subs)} event subscriptions"
+                )
+
+                # Log direct dependencies
+                for link in all_links:
+                    logger.debug(f"  {link.source} → {link.target} ({link.link_type.value})")
+
+                # Log event subscriptions
+                for sub in all_subs:
+                    logger.debug(f"  {sub.publisher} ⟹ {sub.subscriber} ({sub.event_type})")
+            else:
+                logger.info("No causal links registered (adapters may not use event subscriptions)")
+
+        except Exception as e:
+            logger.error(
+                f"Causal link validation failed: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+            raise
 
     # =========================================================================
     # Phase 1: Create Infrastructure (Early for Event Bus Subscriptions)
