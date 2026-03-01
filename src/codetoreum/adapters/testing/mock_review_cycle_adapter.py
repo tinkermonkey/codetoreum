@@ -146,6 +146,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         # Store whether causal linking is enabled (llm_adapter presence indicates intent)
         # The actual LLM adapter object is not invoked; only its presence signals mode selection
         self._use_causal_linking = llm_adapter is not None
+        self._llm_adapter = llm_adapter
 
         # Review state tracking
         self._review_cycles: dict[str, ReviewCycle] = {}
