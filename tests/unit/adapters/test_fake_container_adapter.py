@@ -87,7 +87,7 @@ class TestFakeContainerAdapter:
 
         assert container_id == "test-container"
         status = await adapter.status(container_id)
-        assert status.status == "created"
+        assert status.status == "exited"
 
     async def test_start_container(self):
         """Test starting a container."""
