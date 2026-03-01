@@ -122,14 +122,18 @@ class ConfigurationService:
 
             # Store old values for computing changes
             old_config: dict[str, Any] = {
-                "tech_stacks": dict(config.tech_stacks) if isinstance(config.tech_stacks, Mapping) else config.tech_stacks.copy(),
+                "tech_stacks": (
+                    dict(config.tech_stacks) if isinstance(config.tech_stacks, Mapping) else config.tech_stacks.copy()
+                ),
                 "pipelines": [p.copy() for p in config.pipelines],
                 "testing": dict(config.testing) if isinstance(config.testing, Mapping) else config.testing.copy(),
             }
 
             # Apply updates - create new immutable config with updated fields
             # Convert MappingProxyType to dict for merging, then back to MappingProxyType
-            tech_stacks_dict = dict(config.tech_stacks) if isinstance(config.tech_stacks, Mapping) else config.tech_stacks.copy()
+            tech_stacks_dict = (
+                dict(config.tech_stacks) if isinstance(config.tech_stacks, Mapping) else config.tech_stacks.copy()
+            )
             self._deep_merge(tech_stacks_dict, command.updates.get("tech_stacks", {}))
 
             testing_dict = dict(config.testing) if isinstance(config.testing, Mapping) else config.testing.copy()
@@ -456,7 +460,11 @@ class ConfigurationService:
                     )
 
             # Convert MappingProxyType to dict, update, and convert back
-            env_vars_dict = dict(config.environment_variables) if isinstance(config.environment_variables, Mapping) else config.environment_variables.copy()
+            env_vars_dict = (
+                dict(config.environment_variables)
+                if isinstance(config.environment_variables, Mapping)
+                else config.environment_variables.copy()
+            )
             env_vars_dict[command.variable_name] = {
                 "value": stored_value,
                 "is_secret": command.is_secret,
@@ -542,7 +550,11 @@ class ConfigurationService:
             raise ValidationError(message)
 
         # Convert MappingProxyType to dict, remove, and convert back
-        env_vars_dict = dict(config.environment_variables) if isinstance(config.environment_variables, Mapping) else config.environment_variables.copy()
+        env_vars_dict = (
+            dict(config.environment_variables)
+            if isinstance(config.environment_variables, Mapping)
+            else config.environment_variables.copy()
+        )
         del env_vars_dict[command.variable_name]
 
         # Update metadata dict
@@ -614,7 +626,11 @@ class ConfigurationService:
             raise ValidationError(message)
 
         # Convert MappingProxyType to dict, add command, and convert back
-        commands_dict = dict(config.mounted_commands) if isinstance(config.mounted_commands, Mapping) else config.mounted_commands.copy()
+        commands_dict = (
+            dict(config.mounted_commands)
+            if isinstance(config.mounted_commands, Mapping)
+            else config.mounted_commands.copy()
+        )
         commands_dict[command.command_name] = {
             "path": command.command_path,
             "description": command.description,
@@ -684,7 +700,11 @@ class ConfigurationService:
             raise ValidationError(message)
 
         # Convert MappingProxyType to dict, remove command, and convert back
-        commands_dict = dict(config.mounted_commands) if isinstance(config.mounted_commands, Mapping) else config.mounted_commands.copy()
+        commands_dict = (
+            dict(config.mounted_commands)
+            if isinstance(config.mounted_commands, Mapping)
+            else config.mounted_commands.copy()
+        )
         del commands_dict[command.command_name]
 
         # Update metadata dict
@@ -748,7 +768,11 @@ class ConfigurationService:
             raise ValidationError("; ".join(validation.errors or []))
 
         # Convert MappingProxyType to dict, add sub-agent, and convert back
-        subagents_dict = dict(config.mounted_subagents) if isinstance(config.mounted_subagents, Mapping) else config.mounted_subagents.copy()
+        subagents_dict = (
+            dict(config.mounted_subagents)
+            if isinstance(config.mounted_subagents, Mapping)
+            else config.mounted_subagents.copy()
+        )
         subagents_dict[command.subagent_name] = {
             "config": command.subagent_config,
             "description": command.description,
@@ -817,7 +841,11 @@ class ConfigurationService:
             raise ValidationError(message)
 
         # Convert MappingProxyType to dict, remove sub-agent, and convert back
-        subagents_dict = dict(config.mounted_subagents) if isinstance(config.mounted_subagents, Mapping) else config.mounted_subagents.copy()
+        subagents_dict = (
+            dict(config.mounted_subagents)
+            if isinstance(config.mounted_subagents, Mapping)
+            else config.mounted_subagents.copy()
+        )
         del subagents_dict[command.subagent_name]
 
         # Update metadata dict
