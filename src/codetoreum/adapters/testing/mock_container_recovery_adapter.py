@@ -13,6 +13,7 @@ from codetoreum.ports.output.container_recovery import (
     ContainerMetadata,
     IAgentContainerRecoveryService,
     RecoveryAssessment,
+    RecoveryResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -383,22 +384,89 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         return self.repair_cycles_to_process
 
     async def recover_or_cleanup_containers(self) -> "RecoveryResult":
-        """Execute full recovery/cleanup cycle - DEPRECATED.
+        """Execute full recovery/cleanup cycle for all containers.
 
-        This method is kept for interface compatibility but should not be called directly.
-        The recovery orchestration logic has been moved to ContainerRecoveryService.
+        Coordinates the complete recovery process:
+        1. Discovers running agent containers via label filtering
+        2. Assesses each container for recovery or cleanup
+        3. Executes recovery actions
+        4. Discovers and assesses repair cycle containers
+        5. Executes repair cycle recovery actions
+        6. Processes orphaned repair results
 
         Returns:
-            RecoveryResult: Placeholder result (not used)
+            RecoveryResult: Summary of recovery operations (recovered, killed, errors counts)
 
         Raises:
-            NotImplementedError: This method should be called through ContainerRecoveryService
+            ContainerError: If Docker API operations fail (simulated)
+            StorageError: If storage operations fail (simulated)
         """
-        msg = (
-            "recover_or_cleanup_containers is orchestrated by ContainerRecoveryService. "
-            "Call the service instead of invoking this method directly."
+        recovered = 0
+        killed = 0
+        errors = 0
+
+        # Process agent containers
+        agent_containers = await self.get_running_agent_containers()
+        for container_metadata in agent_containers:
+            try:
+                assessment = await self.assess_container(container_metadata)
+                success = await self.execute_recovery_action(assessment)
+                if success:
+                    if assessment.action == "reconnect":
+                        recovered += 1
+                    elif assessment.action == "kill":
+                        killed += 1
+                else:
+                    errors += 1
+            except Exception as e:
+                logger.error(
+                    f"Error recovering container {container_metadata.container_id}: {e}",
+                    exc_info=True,
+                )
+                errors += 1
+
+        # Process repair cycle containers
+        repair_containers = await self.get_running_repair_cycle_containers()
+        for container_metadata in repair_containers:
+            try:
+                assessment = await self.assess_repair_cycle_container(container_metadata)
+                success = await self.execute_recovery_action(assessment)
+                if success:
+                    if assessment.action == "reconnect":
+                        recovered += 1
+                    elif assessment.action == "kill":
+                        killed += 1
+                else:
+                    errors += 1
+            except Exception as e:
+                logger.error(
+                    f"Error recovering repair cycle container {container_metadata.container_id}: {e}",
+                    exc_info=True,
+                )
+                errors += 1
+
+        # Process orphaned repair results
+        try:
+            repair_cycles_processed = await self.process_orphaned_repair_results()
+        except Exception as e:
+            logger.error(f"Error processing orphaned repair results: {e}", exc_info=True)
+            repair_cycles_processed = 0
+
+        # Create and return recovery result
+        result = RecoveryResult(
+            recovered=recovered,
+            killed=killed,
+            errors=errors,
+            repair_cycles_processed=repair_cycles_processed,
+            timestamp=datetime.now(UTC).isoformat(),
         )
-        raise NotImplementedError(msg)
+
+        logger.info(
+            f"Recovery cycle completed: {recovered} recovered, {killed} killed, "
+            f"{errors} errors, {repair_cycles_processed} repair cycles processed"
+        )
+
+        return result
 
     def reset(self) -> None:
         """Reset all mock state."""

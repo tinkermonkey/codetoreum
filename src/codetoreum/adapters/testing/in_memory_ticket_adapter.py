@@ -1,6 +1,7 @@
 """In-memory ticket system adapter for testing."""
 
 import asyncio
+import logging
 import threading
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -8,6 +9,16 @@ from typing import Any
 from uuid import uuid4
 
 from codetoreum.domain.comment import Comment
+from codetoreum.domain.events.discussion_events import (
+    Comment as DiscussionComment,
+)
+from codetoreum.domain.events.discussion_events import (
+    CommentPostedEvent,
+)
+from codetoreum.domain.events.work_item_events import (
+    WorkItemCreatedEvent,
+    WorkItemUpdatedEvent,
+)
 from codetoreum.domain.types import CommentId, ProjectId, UserId, WorkItemId
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
 from codetoreum.ports.exceptions import (
@@ -15,6 +26,8 @@ from codetoreum.ports.exceptions import (
     ValidationError,
 )
 from codetoreum.ports.output.ticket_system import ITicketSystem
+
+logger = logging.getLogger(__name__)
 
 
 class InMemoryTicketAdapter(ITicketSystem):
@@ -37,6 +50,47 @@ class InMemoryTicketAdapter(ITicketSystem):
         self._relationships: dict[str, list[tuple[str, str]]] = {}  # source_id -> [(target_id, relationship)]
         self._next_work_item_number = 1
         self._lock = threading.Lock()  # Thread safety for concurrent test execution
+        self._event_listeners: dict[str, list] = {}  # Event type -> list of handlers
+
+    # ===== Event Emitter Implementation =====
+
+    def on(self, event_type: str, handler) -> None:
+        """Register event listener.
+
+        Args:
+            event_type: Type of event to listen for
+            handler: Callable to invoke when event is emitted
+        """
+        if event_type not in self._event_listeners:
+            self._event_listeners[event_type] = []
+        self._event_listeners[event_type].append(handler)
+
+    def off(self, event_type: str, handler) -> None:
+        """Unregister event listener.
+
+        Args:
+            event_type: Type of event to stop listening for
+            handler: Handler to remove
+        """
+        if event_type in self._event_listeners:
+            self._event_listeners[event_type] = [h for h in self._event_listeners[event_type] if h != handler]
+
+    def emit(self, event) -> None:
+        """Emit event to all registered listeners.
+
+        Args:
+            event: Event to emit
+        """
+        event_type = getattr(event, "type", event.__class__.__name__)
+
+        if event_type in self._event_listeners:
+            for handler in self._event_listeners[event_type]:
+                try:
+                    handler(event)
+                except Exception as e:
+                    logger.error(f"Error in event handler: {e}", exc_info=True)
+
+    # ===== Query Operations =====
 
     async def get_work_item(self, item_id: WorkItemId) -> WorkItem:
         """
@@ -115,6 +169,17 @@ class InMemoryTicketAdapter(ITicketSystem):
             # Clear events after storage
             work_item.clear_events()
 
+            # Emit creation event
+            event = WorkItemCreatedEvent(
+                type="workitem.created",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="in_memory_ticket",
+                work_item_id=work_item.id,
+                project_id=str(project_id),
+                title=title,
+            )
+            self.emit(event)
+
             return work_item
 
     async def update_work_item(self, item_id: WorkItemId, updates: dict[str, Any]) -> WorkItem:
@@ -158,6 +223,18 @@ class InMemoryTicketAdapter(ITicketSystem):
 
             work_item.updated_at = datetime.now(UTC)
             work_item.clear_events()
+
+            # Emit update event
+            event = WorkItemUpdatedEvent(
+                type="workitem.updated",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="in_memory_ticket",
+                work_item_id=work_item.id,
+                project_id=work_item.project_id,
+                changes=dict(updates),
+            )
+            self.emit(event)
+
             return work_item
 
     async def delete_work_item(self, item_id: WorkItemId) -> None:
@@ -378,7 +455,7 @@ class InMemoryTicketAdapter(ITicketSystem):
             raise ValidationError(msg)
 
         # Verify work item exists
-        await self.get_work_item(item_id)
+        work_item = await self.get_work_item(item_id)
 
         with self._lock:
             comment = Comment(
@@ -390,6 +467,24 @@ class InMemoryTicketAdapter(ITicketSystem):
             )
 
             self._comments[str(item_id)].append(comment)
+
+            # Emit comment posted event
+            discussion_comment = DiscussionComment(
+                id=comment.id,
+                author=str(comment.author_id),
+                body=body,
+                created_at=datetime.now(UTC).isoformat(),
+            )
+            event = CommentPostedEvent(
+                type="comment.posted",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="in_memory_ticket",
+                work_item_id=str(item_id),
+                project_id=work_item.project_id,
+                comment=discussion_comment,
+            )
+            self.emit(event)
+
             return comment
 
     async def get_comments(
