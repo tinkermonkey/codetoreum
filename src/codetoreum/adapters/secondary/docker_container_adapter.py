@@ -1243,9 +1243,8 @@ class DockerContainerAdapter(IContainer):
                     if "container" in str(e).lower():
                         msg = "Container"
                         raise ResourceNotFoundError(msg, container_id) from e
-                    else:
-                        msg = f"File not found in container output: {file_path}"
-                        raise ResourceNotFoundError(msg, file_path) from e
+                    msg = f"File not found in container output: {file_path}"
+                    raise ResourceNotFoundError(msg, file_path) from e
                 msg = f"Failed to get file content from container: {e!s}"
                 raise ContainerError(msg) from e
 

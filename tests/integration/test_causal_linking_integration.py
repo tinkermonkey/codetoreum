@@ -214,7 +214,7 @@ class TestContainerStorageCausalLinking:
         test_file_1 = "results.json"
         test_file_2 = "coverage.xml"
         test_content_1 = '{"passed": 10, "failed": 0}'
-        test_content_2 = "<?xml version=\"1.0\"?><coverage><stats/></coverage>"
+        test_content_2 = '<?xml version="1.0"?><coverage><stats/></coverage>'
 
         container_id = "test-container"
         container_adapter.write_output_file(container_id, test_file_1, test_content_1)
