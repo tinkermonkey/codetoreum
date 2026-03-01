@@ -13,9 +13,13 @@ from dataclasses import dataclass
 from re import Pattern
 
 
-@dataclass
+@dataclass(frozen=True)
 class BotIdentityConfig:
     """Configuration for bot identity detection.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. Lists are converted to
+    tuples for immutability.
 
     Attributes:
         bot_usernames: Exact usernames to identify as bots
@@ -24,8 +28,26 @@ class BotIdentityConfig:
                      (e.g., [re.compile("^bot-.*"), re.compile(".*-bot$")])
     """
 
-    bot_usernames: list[str]
-    bot_patterns: list[Pattern]
+    bot_usernames: tuple[str, ...]
+    bot_patterns: tuple[Pattern, ...]
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.bot_usernames, tuple):
+            msg = "bot_usernames must be a tuple of strings"
+            raise ValueError(msg)
+
+        if not all(isinstance(u, str) and u for u in self.bot_usernames):
+            msg = "all bot_usernames must be non-empty strings"
+            raise ValueError(msg)
+
+        if not isinstance(self.bot_patterns, tuple):
+            msg = "bot_patterns must be a tuple of Pattern instances"
+            raise ValueError(msg)
+
+        if not all(isinstance(p, Pattern) for p in self.bot_patterns):
+            msg = "all bot_patterns must be Pattern instances"
+            raise ValueError(msg)
 
 
 class IIdentityService(ABC):

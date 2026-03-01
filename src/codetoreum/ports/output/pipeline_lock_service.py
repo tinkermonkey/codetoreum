@@ -16,9 +16,12 @@ from typing import Literal
 from .event_emitter import IEventEmitter
 
 
-@dataclass
+@dataclass(frozen=True)
 class PipelineLock:
     """Represents a lock held on a work item.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation.
 
     Attributes:
         project_id: Project containing the locked work item
@@ -36,6 +39,32 @@ class PipelineLock:
     locked_by_work_item: str
     lock_acquired_at: str
     lock_status: Literal["locked", "unlocked"]
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.project_id, str) or not self.project_id:
+            msg = "project_id must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.board_id, str) or not self.board_id:
+            msg = "board_id must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.work_item_id, str) or not self.work_item_id:
+            msg = "work_item_id must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.locked_by_work_item, str) or not self.locked_by_work_item:
+            msg = "locked_by_work_item must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.lock_acquired_at, str) or not self.lock_acquired_at:
+            msg = "lock_acquired_at must be a non-empty string"
+            raise ValueError(msg)
+
+        if self.lock_status not in ("locked", "unlocked"):
+            msg = f"lock_status must be 'locked' or 'unlocked', got: {self.lock_status}"
+            raise ValueError(msg)
 
 
 class IPipelineLockService(IEventEmitter, ABC):

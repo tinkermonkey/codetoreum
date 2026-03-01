@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 from codetoreum.domain.types import ExecutionId, UserId
@@ -14,9 +15,14 @@ from codetoreum.domain.types import ExecutionId, UserId
 # ============================================================================
 
 
-@dataclass
+@dataclass(frozen=True)
 class ExecutionContext:
-    """Context for LLM execution."""
+    """Context for LLM execution.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. Mutable collections are
+    converted to immutable equivalents.
+    """
 
     # Model configuration
     model: str | None = None
@@ -28,7 +34,7 @@ class ExecutionContext:
 
     # Conversation context
     conversation_id: str | None = None
-    message_history: list[dict[str, Any]] = field(default_factory=list)
+    message_history: tuple[dict[str, Any], ...] = ()
     system_prompt: str | None = None
 
     # Execution options
@@ -38,50 +44,210 @@ class ExecutionContext:
 
     # Workspace context (for containerized execution)
     working_directory: Path | None = None
-    mounted_context_files: dict[str, Path] = field(default_factory=dict)
-    available_files: list[str] = field(default_factory=list)
-    environment_variables: dict[str, str] = field(default_factory=dict)
+    mounted_context_files: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
+    available_files: tuple[str, ...] = ()
+    environment_variables: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
 
     # MCP Server configuration
-    mcp_servers: list[dict[str, Any]] = field(default_factory=list)
+    mcp_servers: tuple[dict[str, Any], ...] = ()
 
     # Metadata
     user_id: UserId | None = None
     session_id: str | None = None
     execution_id: ExecutionId | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if self.model is not None:
+            if not isinstance(self.model, str) or not self.model:
+                msg = "model must be a non-empty string or None"
+                raise ValueError(msg)
+
+        if not isinstance(self.temperature, (int, float)) or not (0.0 <= self.temperature <= 2.0):
+            msg = "temperature must be a number between 0.0 and 2.0"
+            raise ValueError(msg)
+
+        if self.max_tokens is not None:
+            if isinstance(self.max_tokens, bool) or not isinstance(self.max_tokens, int) or self.max_tokens <= 0:
+                msg = "max_tokens must be a positive integer or None"
+                raise ValueError(msg)
+
+        if not isinstance(self.top_p, (int, float)) or not (0.0 <= self.top_p <= 1.0):
+            msg = "top_p must be a number between 0.0 and 1.0"
+            raise ValueError(msg)
+
+        if not isinstance(self.frequency_penalty, (int, float)) or not (-2.0 <= self.frequency_penalty <= 2.0):
+            msg = "frequency_penalty must be a number between -2.0 and 2.0"
+            raise ValueError(msg)
+
+        if not isinstance(self.presence_penalty, (int, float)) or not (-2.0 <= self.presence_penalty <= 2.0):
+            msg = "presence_penalty must be a number between -2.0 and 2.0"
+            raise ValueError(msg)
+
+        if self.conversation_id is not None:
+            if not isinstance(self.conversation_id, str) or not self.conversation_id:
+                msg = "conversation_id must be a non-empty string or None"
+                raise ValueError(msg)
+
+        if not isinstance(self.message_history, tuple):
+            msg = "message_history must be a tuple of dicts"
+            raise ValueError(msg)
+
+        if self.system_prompt is not None:
+            if not isinstance(self.system_prompt, str) or not self.system_prompt:
+                msg = "system_prompt must be a non-empty string or None"
+                raise ValueError(msg)
+
+        if isinstance(self.timeout_seconds, bool) or not isinstance(self.timeout_seconds, int) or self.timeout_seconds <= 0:
+            msg = "timeout_seconds must be a positive integer"
+            raise ValueError(msg)
+
+        if not isinstance(self.retry_on_error, bool):
+            msg = "retry_on_error must be a boolean"
+            raise ValueError(msg)
+
+        if not isinstance(self.cache_response, bool):
+            msg = "cache_response must be a boolean"
+            raise ValueError(msg)
+
+        if self.working_directory is not None:
+            if not isinstance(self.working_directory, Path):
+                msg = "working_directory must be a Path or None"
+                raise ValueError(msg)
+
+        if not isinstance(self.mounted_context_files, MappingProxyType):
+            msg = "mounted_context_files must be a MappingProxyType"
+            raise ValueError(msg)
+
+        if not isinstance(self.available_files, tuple):
+            msg = "available_files must be a tuple of strings"
+            raise ValueError(msg)
+
+        if not isinstance(self.environment_variables, MappingProxyType):
+            msg = "environment_variables must be a MappingProxyType"
+            raise ValueError(msg)
+
+        if not isinstance(self.mcp_servers, tuple):
+            msg = "mcp_servers must be a tuple of dicts"
+            raise ValueError(msg)
+
+        if self.user_id is not None:
+            if not isinstance(self.user_id, str):
+                msg = "user_id must be a string or None"
+                raise ValueError(msg)
+
+        if self.session_id is not None:
+            if not isinstance(self.session_id, str) or not self.session_id:
+                msg = "session_id must be a non-empty string or None"
+                raise ValueError(msg)
+
+        if self.execution_id is not None:
+            if not isinstance(self.execution_id, str):
+                msg = "execution_id must be a string or None"
+                raise ValueError(msg)
+
+        if not isinstance(self.metadata, MappingProxyType):
+            msg = "metadata must be a MappingProxyType"
+            raise ValueError(msg)
 
 
-@dataclass
+@dataclass(frozen=True)
 class ToolDefinition:
-    """Definition of a tool/function the LLM can call."""
+    """Definition of a tool/function the LLM can call.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. Mutable collections are
+    converted to immutable equivalents.
+    """
 
     name: str
     description: str
-    parameters: dict[str, Any]
-    required: list[str] = field(default_factory=list)
+    parameters: MappingProxyType
+    required: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.name, str) or not self.name:
+            msg = "name must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.description, str) or not self.description:
+            msg = "description must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.parameters, MappingProxyType):
+            msg = "parameters must be a MappingProxyType"
+            raise ValueError(msg)
+
+        if not isinstance(self.required, tuple):
+            msg = "required must be a tuple of strings"
+            raise ValueError(msg)
+
+        if not all(isinstance(r, str) and r for r in self.required):
+            msg = "all required items must be non-empty strings"
+            raise ValueError(msg)
 
 
-@dataclass
+@dataclass(frozen=True)
 class ToolCall:
-    """Represents a tool call made by the LLM."""
+    """Represents a tool call made by the LLM.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. Arguments dict is
+    converted to MappingProxyType for immutability.
+    """
 
     tool_name: str
-    arguments: dict[str, Any]
+    arguments: MappingProxyType
     call_id: str
 
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.tool_name, str) or not self.tool_name:
+            msg = "tool_name must be a non-empty string"
+            raise ValueError(msg)
 
-@dataclass
+        if not isinstance(self.arguments, MappingProxyType):
+            msg = "arguments must be a MappingProxyType"
+            raise ValueError(msg)
+
+        if not isinstance(self.call_id, str) or not self.call_id:
+            msg = "call_id must be a non-empty string"
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True)
 class ToolCallDelta:
-    """Incremental update to a tool call (for streaming)."""
+    """Incremental update to a tool call (for streaming).
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. Delta dict is converted
+    to MappingProxyType for immutability.
+    """
 
     call_id: str
-    delta: dict[str, Any]
+    delta: MappingProxyType
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.call_id, str) or not self.call_id:
+            msg = "call_id must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.delta, MappingProxyType):
+            msg = "delta must be a MappingProxyType"
+            raise ValueError(msg)
 
 
-@dataclass
+@dataclass(frozen=True)
 class StreamChunk:
-    """Single chunk in streaming response."""
+    """Single chunk in streaming response.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. Metadata dict is converted
+    to MappingProxyType for immutability.
+    """
 
     content: str
     chunk_index: int
@@ -92,19 +258,51 @@ class StreamChunk:
 
     # Metadata
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.content, str):
+            msg = "content must be a string"
+            raise ValueError(msg)
+
+        if isinstance(self.chunk_index, bool) or not isinstance(self.chunk_index, int) or self.chunk_index < 0:
+            msg = "chunk_index must be a non-negative integer"
+            raise ValueError(msg)
+
+        if not isinstance(self.is_final, bool):
+            msg = "is_final must be a boolean"
+            raise ValueError(msg)
+
+        if self.tool_call_delta is not None:
+            if not isinstance(self.tool_call_delta, ToolCallDelta):
+                msg = "tool_call_delta must be a ToolCallDelta or None"
+                raise ValueError(msg)
+
+        if not isinstance(self.timestamp, datetime):
+            msg = "timestamp must be a datetime instance"
+            raise ValueError(msg)
+
+        if not isinstance(self.metadata, MappingProxyType):
+            msg = "metadata must be a MappingProxyType"
+            raise ValueError(msg)
 
 
-@dataclass
+@dataclass(frozen=True)
 class ExecutionResult:
-    """Result from LLM execution."""
+    """Result from LLM execution.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. Tool calls and metadata
+    are converted to immutable equivalents.
+    """
 
     # Response content
     content: str
     role: str = "assistant"
 
     # Tool calls (if any)
-    tool_calls: list[ToolCall] = field(default_factory=list)
+    tool_calls: tuple[ToolCall, ...] = ()
 
     # Metadata
     model: str | None = None
@@ -121,7 +319,71 @@ class ExecutionResult:
     finish_reason: str = "stop"
     conversation_id: str | None = None
     cached: bool = False
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.content, str) or not self.content:
+            msg = "content must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.role, str) or not self.role:
+            msg = "role must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.tool_calls, tuple):
+            msg = "tool_calls must be a tuple of ToolCall instances"
+            raise ValueError(msg)
+
+        if not all(isinstance(tc, ToolCall) for tc in self.tool_calls):
+            msg = "all tool_calls must be ToolCall instances"
+            raise ValueError(msg)
+
+        if self.model is not None:
+            if not isinstance(self.model, str) or not self.model:
+                msg = "model must be a non-empty string or None"
+                raise ValueError(msg)
+
+        if isinstance(self.completion_tokens, bool) or not isinstance(self.completion_tokens, int) or self.completion_tokens < 0:
+            msg = "completion_tokens must be a non-negative integer"
+            raise ValueError(msg)
+
+        if isinstance(self.prompt_tokens, bool) or not isinstance(self.prompt_tokens, int) or self.prompt_tokens < 0:
+            msg = "prompt_tokens must be a non-negative integer"
+            raise ValueError(msg)
+
+        if isinstance(self.total_tokens, bool) or not isinstance(self.total_tokens, int) or self.total_tokens < 0:
+            msg = "total_tokens must be a non-negative integer"
+            raise ValueError(msg)
+
+        if not isinstance(self.started_at, datetime):
+            msg = "started_at must be a datetime instance"
+            raise ValueError(msg)
+
+        if not isinstance(self.completed_at, datetime):
+            msg = "completed_at must be a datetime instance"
+            raise ValueError(msg)
+
+        if isinstance(self.duration_ms, bool) or not isinstance(self.duration_ms, int) or self.duration_ms < 0:
+            msg = "duration_ms must be a non-negative integer"
+            raise ValueError(msg)
+
+        if not isinstance(self.finish_reason, str) or not self.finish_reason:
+            msg = "finish_reason must be a non-empty string"
+            raise ValueError(msg)
+
+        if self.conversation_id is not None:
+            if not isinstance(self.conversation_id, str) or not self.conversation_id:
+                msg = "conversation_id must be a non-empty string or None"
+                raise ValueError(msg)
+
+        if not isinstance(self.cached, bool):
+            msg = "cached must be a boolean"
+            raise ValueError(msg)
+
+        if not isinstance(self.metadata, MappingProxyType):
+            msg = "metadata must be a MappingProxyType"
+            raise ValueError(msg)
 
     @property
     def total_cost(self) -> float:
@@ -129,9 +391,14 @@ class ExecutionResult:
         return 0.0
 
 
-@dataclass
+@dataclass(frozen=True)
 class ModelInfo:
-    """Information about an LLM model."""
+    """Information about an LLM model.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. Metadata dict is converted
+    to MappingProxyType for immutability.
+    """
 
     model_id: str
     provider: str
@@ -142,12 +409,59 @@ class ModelInfo:
     supports_streaming: bool = False
     cost_per_input_token: float = 0.0
     cost_per_output_token: float = 0.0
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.model_id, str) or not self.model_id:
+            msg = "model_id must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.provider, str) or not self.provider:
+            msg = "provider must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.display_name, str) or not self.display_name:
+            msg = "display_name must be a non-empty string"
+            raise ValueError(msg)
+
+        if isinstance(self.context_window, bool) or not isinstance(self.context_window, int) or self.context_window <= 0:
+            msg = "context_window must be a positive integer"
+            raise ValueError(msg)
+
+        if isinstance(self.max_output_tokens, bool) or not isinstance(self.max_output_tokens, int) or self.max_output_tokens <= 0:
+            msg = "max_output_tokens must be a positive integer"
+            raise ValueError(msg)
+
+        if not isinstance(self.supports_tools, bool):
+            msg = "supports_tools must be a boolean"
+            raise ValueError(msg)
+
+        if not isinstance(self.supports_streaming, bool):
+            msg = "supports_streaming must be a boolean"
+            raise ValueError(msg)
+
+        if not isinstance(self.cost_per_input_token, (int, float)) or self.cost_per_input_token < 0:
+            msg = "cost_per_input_token must be a non-negative number"
+            raise ValueError(msg)
+
+        if not isinstance(self.cost_per_output_token, (int, float)) or self.cost_per_output_token < 0:
+            msg = "cost_per_output_token must be a non-negative number"
+            raise ValueError(msg)
+
+        if not isinstance(self.metadata, MappingProxyType):
+            msg = "metadata must be a MappingProxyType"
+            raise ValueError(msg)
 
 
-@dataclass
+@dataclass(frozen=True)
 class UsageStats:
-    """Usage statistics for the LLM provider."""
+    """Usage statistics for the LLM provider.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. By-model dict is converted
+    to MappingProxyType for immutability.
+    """
 
     total_requests: int
     total_tokens: int
@@ -156,7 +470,41 @@ class UsageStats:
     total_cost: float
     period_start: datetime
     period_end: datetime
-    by_model: dict[str, dict[str, Any]] = field(default_factory=dict)
+    by_model: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if isinstance(self.total_requests, bool) or not isinstance(self.total_requests, int) or self.total_requests < 0:
+            msg = "total_requests must be a non-negative integer"
+            raise ValueError(msg)
+
+        if isinstance(self.total_tokens, bool) or not isinstance(self.total_tokens, int) or self.total_tokens < 0:
+            msg = "total_tokens must be a non-negative integer"
+            raise ValueError(msg)
+
+        if isinstance(self.input_tokens, bool) or not isinstance(self.input_tokens, int) or self.input_tokens < 0:
+            msg = "input_tokens must be a non-negative integer"
+            raise ValueError(msg)
+
+        if isinstance(self.output_tokens, bool) or not isinstance(self.output_tokens, int) or self.output_tokens < 0:
+            msg = "output_tokens must be a non-negative integer"
+            raise ValueError(msg)
+
+        if not isinstance(self.total_cost, (int, float)) or self.total_cost < 0:
+            msg = "total_cost must be a non-negative number"
+            raise ValueError(msg)
+
+        if not isinstance(self.period_start, datetime):
+            msg = "period_start must be a datetime instance"
+            raise ValueError(msg)
+
+        if not isinstance(self.period_end, datetime):
+            msg = "period_end must be a datetime instance"
+            raise ValueError(msg)
+
+        if not isinstance(self.by_model, MappingProxyType):
+            msg = "by_model must be a MappingProxyType"
+            raise ValueError(msg)
 
 
 # Type alias for stream callback

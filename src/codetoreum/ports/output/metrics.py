@@ -3,6 +3,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
+from types import MappingProxyType
 from typing import Any
 
 from codetoreum.domain.types import MetricName
@@ -12,15 +13,47 @@ from codetoreum.domain.types import MetricName
 # ============================================================================
 
 
-@dataclass
+@dataclass(frozen=True)
 class MetricData:
-    """Metric data point."""
+    """Metric data point.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. Labels dict is converted
+    to MappingProxyType for immutability.
+    """
 
     timestamp: datetime
     name: MetricName
     value: float
-    labels: dict[str, str]
+    labels: MappingProxyType
     metric_type: str  # counter, gauge, histogram, summary
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.timestamp, datetime):
+            msg = "timestamp must be a datetime instance"
+            raise ValueError(msg)
+
+        if not isinstance(self.name, str) or not self.name:
+            msg = "name must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.value, (int, float)):
+            msg = "value must be a number"
+            raise ValueError(msg)
+
+        if not isinstance(self.labels, MappingProxyType):
+            msg = "labels must be a MappingProxyType"
+            raise ValueError(msg)
+
+        for k, v in self.labels.items():
+            if not isinstance(k, str) or not isinstance(v, str):
+                msg = "all label keys and values must be strings"
+                raise ValueError(msg)
+
+        if self.metric_type not in ("counter", "gauge", "histogram", "summary"):
+            msg = f"metric_type must be one of: counter, gauge, histogram, summary. Got: {self.metric_type}"
+            raise ValueError(msg)
 
 
 # ============================================================================

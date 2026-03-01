@@ -24,9 +24,12 @@ class MonitoringState(Enum):
     ERROR = "error"
 
 
-@dataclass
+@dataclass(frozen=True)
 class MonitoringStatus:
     """Current status of monitoring for a service.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation.
 
     Attributes:
         state: Current monitoring state (ACTIVE, STOPPED, ERROR, etc.)
@@ -40,14 +43,36 @@ class MonitoringStatus:
     started_at: str | None = None
     error_message: str | None = None
 
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.state, MonitoringState):
+            msg = "state must be a MonitoringState instance"
+            raise ValueError(msg)
 
-@dataclass
+        if not isinstance(self.project_id, str) or not self.project_id:
+            msg = "project_id must be a non-empty string"
+            raise ValueError(msg)
+
+        if self.started_at is not None:
+            if not isinstance(self.started_at, str) or not self.started_at:
+                msg = "started_at must be a non-empty string or None"
+                raise ValueError(msg)
+
+        if self.error_message is not None:
+            if not isinstance(self.error_message, str) or not self.error_message:
+                msg = "error_message must be a non-empty string or None"
+                raise ValueError(msg)
+
+
+@dataclass(frozen=True)
 class MonitoringConfig:
     """Base configuration for monitoring services.
 
     Specifies how a service should monitor for changes. Subclasses can
     extend this with service-specific configuration (e.g., polling intervals,
     webhook settings, rate limits).
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation.
 
     Attributes:
         project_id: Project to monitor
@@ -61,6 +86,21 @@ class MonitoringConfig:
     project_id: str
     poll_interval_seconds: int | None = None
     webhook_enabled: bool = True
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.project_id, str) or not self.project_id:
+            msg = "project_id must be a non-empty string"
+            raise ValueError(msg)
+
+        if self.poll_interval_seconds is not None:
+            if isinstance(self.poll_interval_seconds, bool) or not isinstance(self.poll_interval_seconds, int) or self.poll_interval_seconds <= 0:
+                msg = "poll_interval_seconds must be a positive integer or None"
+                raise ValueError(msg)
+
+        if not isinstance(self.webhook_enabled, bool):
+            msg = "webhook_enabled must be a boolean"
+            raise ValueError(msg)
 
 
 class IMonitoredService(ABC):

@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from types import MappingProxyType
 from typing import Any
 
 # ============================================================================
@@ -44,58 +45,200 @@ class DeliveryStatus(Enum):
 # ============================================================================
 
 
-@dataclass
+@dataclass(frozen=True)
 class Notification:
-    """Notification data."""
+    """Notification data.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. Metadata dict is converted
+    to MappingProxyType for true immutability.
+    """
 
     channel: NotificationChannel
     recipient: str
     subject: str
     message: str
     priority: NotificationPriority
-    metadata: dict[str, Any]
+    metadata: MappingProxyType
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.channel, NotificationChannel):
+            msg = "channel must be a NotificationChannel instance"
+            raise ValueError(msg)
+
+        if not isinstance(self.recipient, str) or not self.recipient:
+            msg = "recipient must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.subject, str) or not self.subject:
+            msg = "subject must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.message, str) or not self.message:
+            msg = "message must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.priority, NotificationPriority):
+            msg = "priority must be a NotificationPriority instance"
+            raise ValueError(msg)
+
+        if not isinstance(self.metadata, MappingProxyType):
+            msg = "metadata must be a MappingProxyType (immutable dict)"
+            raise ValueError(msg)
 
 
-@dataclass
+@dataclass(frozen=True)
 class NotificationResult:
-    """Notification send result."""
+    """Notification send result.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation.
+    """
 
     success: bool
     notification_id: str
     error: str | None
     timestamp: datetime
 
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.success, bool):
+            msg = "success must be a boolean"
+            raise ValueError(msg)
 
-@dataclass
+        if not isinstance(self.notification_id, str) or not self.notification_id:
+            msg = "notification_id must be a non-empty string"
+            raise ValueError(msg)
+
+        if self.error is not None:
+            if not isinstance(self.error, str) or not self.error:
+                msg = "error must be a non-empty string or None"
+                raise ValueError(msg)
+
+        if not isinstance(self.timestamp, datetime):
+            msg = "timestamp must be a datetime instance"
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True)
 class Attachment:
-    """File attachment for notifications."""
+    """File attachment for notifications.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation.
+    """
 
     filename: str
     content: bytes
     content_type: str
 
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.filename, str) or not self.filename:
+            msg = "filename must be a non-empty string"
+            raise ValueError(msg)
 
-@dataclass
+        if not isinstance(self.content, bytes) or len(self.content) == 0:
+            msg = "content must be non-empty bytes"
+            raise ValueError(msg)
+
+        if not isinstance(self.content_type, str) or not self.content_type:
+            msg = "content_type must be a non-empty string"
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True)
 class Action:
-    """Action button for rich notifications."""
+    """Action button for rich notifications.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation.
+    """
 
     label: str
     url: str
     style: str | None = None  # primary, danger, default
 
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.label, str) or not self.label:
+            msg = "label must be a non-empty string"
+            raise ValueError(msg)
 
-@dataclass
+        if not isinstance(self.url, str) or not self.url:
+            msg = "url must be a non-empty string"
+            raise ValueError(msg)
+
+        if self.style is not None:
+            if self.style not in ("primary", "danger", "default"):
+                msg = f"style must be 'primary', 'danger', 'default', or None. Got: {self.style}"
+                raise ValueError(msg)
+
+
+@dataclass(frozen=True)
 class RichContent:
-    """Rich notification content."""
+    """Rich notification content.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. Lists are converted to
+    tuples for true immutability.
+    """
 
     title: str
     body: str
-    attachments: list[Attachment]
-    actions: list[Action]
+    attachments: tuple[Attachment, ...]
+    actions: tuple[Action, ...]
     color: str | None = None
     footer: str | None = None
     thumbnail_url: str | None = None
     image_url: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.title, str) or not self.title:
+            msg = "title must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.body, str) or not self.body:
+            msg = "body must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.attachments, tuple):
+            msg = "attachments must be a tuple of Attachment instances"
+            raise ValueError(msg)
+
+        if not all(isinstance(a, Attachment) for a in self.attachments):
+            msg = "all attachments must be Attachment instances"
+            raise ValueError(msg)
+
+        if not isinstance(self.actions, tuple):
+            msg = "actions must be a tuple of Action instances"
+            raise ValueError(msg)
+
+        if not all(isinstance(a, Action) for a in self.actions):
+            msg = "all actions must be Action instances"
+            raise ValueError(msg)
+
+        if self.color is not None:
+            if not isinstance(self.color, str) or not self.color:
+                msg = "color must be a non-empty string or None"
+                raise ValueError(msg)
+
+        if self.footer is not None:
+            if not isinstance(self.footer, str) or not self.footer:
+                msg = "footer must be a non-empty string or None"
+                raise ValueError(msg)
+
+        if self.thumbnail_url is not None:
+            if not isinstance(self.thumbnail_url, str) or not self.thumbnail_url:
+                msg = "thumbnail_url must be a non-empty string or None"
+                raise ValueError(msg)
+
+        if self.image_url is not None:
+            if not isinstance(self.image_url, str) or not self.image_url:
+                msg = "image_url must be a non-empty string or None"
+                raise ValueError(msg)
 
 
 # ============================================================================

@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 from codetoreum.domain.types import StorageKey
@@ -13,16 +14,60 @@ from codetoreum.domain.types import StorageKey
 # ============================================================================
 
 
-@dataclass
+@dataclass(frozen=True)
 class StorageObject:
-    """Storage object metadata."""
+    """Storage object metadata.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. Metadata dict is converted
+    to MappingProxyType for true immutability.
+    """
 
     key: StorageKey
     size: int
     last_modified: datetime
     content_type: str | None
-    metadata: dict[str, str]
+    metadata: MappingProxyType
     etag: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.key, str) or not self.key:
+            msg = "key must be a non-empty string"
+            raise ValueError(msg)
+
+        # Explicitly reject bool (subclass of int)
+        if isinstance(self.size, bool):
+            msg = "size must be a non-negative integer, got bool"
+            raise ValueError(msg)
+
+        if not isinstance(self.size, int) or self.size < 0:
+            msg = "size must be a non-negative integer"
+            raise ValueError(msg)
+
+        if not isinstance(self.last_modified, datetime):
+            msg = "last_modified must be a datetime instance"
+            raise ValueError(msg)
+
+        if self.content_type is not None:
+            if not isinstance(self.content_type, str) or not self.content_type:
+                msg = "content_type must be a non-empty string or None"
+                raise ValueError(msg)
+
+        if not isinstance(self.metadata, MappingProxyType):
+            msg = "metadata must be a MappingProxyType (immutable dict)"
+            raise ValueError(msg)
+
+        # Validate metadata contents
+        for k, v in self.metadata.items():
+            if not isinstance(k, str) or not isinstance(v, str):
+                msg = "all metadata keys and values must be strings"
+                raise ValueError(msg)
+
+        if self.etag is not None:
+            if not isinstance(self.etag, str) or not self.etag:
+                msg = "etag must be a non-empty string or None"
+                raise ValueError(msg)
 
 
 # ============================================================================

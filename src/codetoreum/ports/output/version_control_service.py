@@ -14,9 +14,12 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 
-@dataclass
+@dataclass(frozen=True)
 class Repository:
     """Metadata about a repository.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation.
 
     Attributes:
         id: Unique identifier for the repository
@@ -29,6 +32,24 @@ class Repository:
     name: str
     url: str
     default_branch: str
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.id, str) or not self.id:
+            msg = "id must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.name, str) or not self.name:
+            msg = "name must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.url, str) or not self.url:
+            msg = "url must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.default_branch, str) or not self.default_branch:
+            msg = "default_branch must be a non-empty string"
+            raise ValueError(msg)
 
 
 class IVersionControlService(ABC):

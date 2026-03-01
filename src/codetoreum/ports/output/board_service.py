@@ -23,9 +23,14 @@ class MovedByType(Enum):
     ORCHESTRATOR = "orchestrator"
 
 
-@dataclass
+@dataclass(frozen=True)
 class BoardColumn:
     """Represents a column (lane) on a project board.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. Work item IDs are converted
+    to a tuple for true immutability - the dataclass is only shallowly frozen when
+    fields contain mutable types, so we enforce deep immutability via conversion.
 
     Attributes:
         id: Unique identifier for the column in the external system
@@ -37,12 +42,42 @@ class BoardColumn:
     id: str
     name: str
     position: int
-    work_item_ids: list[str]
+    work_item_ids: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.id, str) or not self.id:
+            msg = "id must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.name, str) or not self.name:
+            msg = "name must be a non-empty string"
+            raise ValueError(msg)
+
+        # Explicitly reject bool (subclass of int)
+        if isinstance(self.position, bool):
+            msg = "position must be a non-negative integer, got bool"
+            raise ValueError(msg)
+
+        if not isinstance(self.position, int) or self.position < 0:
+            msg = "position must be a non-negative integer"
+            raise ValueError(msg)
+
+        if not isinstance(self.work_item_ids, tuple):
+            msg = "work_item_ids must be a tuple of strings"
+            raise ValueError(msg)
+
+        if not all(isinstance(item_id, str) for item_id in self.work_item_ids):
+            msg = "all work_item_ids must be strings"
+            raise ValueError(msg)
 
 
-@dataclass
+@dataclass(frozen=True)
 class WorkItemPosition:
     """Position of a work item within a board column.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation.
 
     Attributes:
         work_item_id: Unique identifier of the work item
@@ -54,10 +89,34 @@ class WorkItemPosition:
     column_name: str
     position: int
 
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.work_item_id, str) or not self.work_item_id:
+            msg = "work_item_id must be a non-empty string"
+            raise ValueError(msg)
 
-@dataclass
+        if not isinstance(self.column_name, str) or not self.column_name:
+            msg = "column_name must be a non-empty string"
+            raise ValueError(msg)
+
+        # Explicitly reject bool (subclass of int)
+        if isinstance(self.position, bool):
+            msg = "position must be a non-negative integer, got bool"
+            raise ValueError(msg)
+
+        if not isinstance(self.position, int) or self.position < 0:
+            msg = "position must be a non-negative integer"
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True)
 class ProjectBoard:
     """Represents a project board with all columns and structure.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. Columns are converted to
+    a tuple for true immutability - the dataclass is only shallowly frozen when
+    fields contain mutable types, so we enforce deep immutability via conversion.
 
     Attributes:
         id: Unique identifier for the board
@@ -69,12 +128,37 @@ class ProjectBoard:
     id: str
     name: str
     project_id: str
-    columns: list[BoardColumn]
+    columns: tuple[BoardColumn, ...]
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.id, str) or not self.id:
+            msg = "id must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.name, str) or not self.name:
+            msg = "name must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.project_id, str) or not self.project_id:
+            msg = "project_id must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.columns, tuple):
+            msg = "columns must be a tuple of BoardColumn instances"
+            raise ValueError(msg)
+
+        if not all(isinstance(col, BoardColumn) for col in self.columns):
+            msg = "all columns must be BoardColumn instances"
+            raise ValueError(msg)
 
 
-@dataclass
+@dataclass(frozen=True)
 class ColumnMovementResult:
     """Result of moving a work item between columns.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation.
 
     Attributes:
         work_item_id: ID of the work item that was moved
@@ -90,46 +174,132 @@ class ColumnMovementResult:
     moved_by: MovedByType
     timestamp: str
 
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.work_item_id, str) or not self.work_item_id:
+            msg = "work_item_id must be a non-empty string"
+            raise ValueError(msg)
 
-@dataclass
+        if self.from_column is not None:
+            if not isinstance(self.from_column, str) or not self.from_column:
+                msg = "from_column must be a non-empty string or None"
+                raise ValueError(msg)
+
+        if not isinstance(self.to_column, str) or not self.to_column:
+            msg = "to_column must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.moved_by, MovedByType):
+            msg = "moved_by must be a MovedByType instance"
+            raise ValueError(msg)
+
+        if not isinstance(self.timestamp, str) or not self.timestamp:
+            msg = "timestamp must be a non-empty string"
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True)
 class ReconciliationResult:
     """Result of board reconciliation operation.
 
     Tracks what changes were made when reconciling board structure
     to expected configuration (adding missing columns, removing extras, etc.).
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. Lists are converted to
+    tuples for true immutability.
 
     Attributes:
         board_id: ID of the board that was reconciled
         columns_added: Names of columns that were created
         columns_removed: Names of columns that were deleted
-        columns_renamed: List of (old_name, new_name) tuples for renamed columns
+        columns_renamed: Tuple of (old_name, new_name) tuples for renamed columns
         orphaned_items: Work item IDs that were in deleted columns
     """
 
     board_id: str
-    columns_added: list[str]
-    columns_removed: list[str]
-    columns_renamed: list[tuple[str, str]]
-    orphaned_items: list[str]
+    columns_added: tuple[str, ...]
+    columns_removed: tuple[str, ...]
+    columns_renamed: tuple[tuple[str, str], ...]
+    orphaned_items: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.board_id, str) or not self.board_id:
+            msg = "board_id must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.columns_added, tuple):
+            msg = "columns_added must be a tuple of strings"
+            raise ValueError(msg)
+
+        if not all(isinstance(col, str) for col in self.columns_added):
+            msg = "all columns_added must be strings"
+            raise ValueError(msg)
+
+        if not isinstance(self.columns_removed, tuple):
+            msg = "columns_removed must be a tuple of strings"
+            raise ValueError(msg)
+
+        if not all(isinstance(col, str) for col in self.columns_removed):
+            msg = "all columns_removed must be strings"
+            raise ValueError(msg)
+
+        if not isinstance(self.columns_renamed, tuple):
+            msg = "columns_renamed must be a tuple of (old_name, new_name) tuples"
+            raise ValueError(msg)
+
+        for old_name, new_name in self.columns_renamed:
+            if not isinstance(old_name, str) or not isinstance(new_name, str):
+                msg = "all columns_renamed tuples must contain strings"
+                raise ValueError(msg)
+
+        if not isinstance(self.orphaned_items, tuple):
+            msg = "orphaned_items must be a tuple of strings"
+            raise ValueError(msg)
+
+        if not all(isinstance(item_id, str) for item_id in self.orphaned_items):
+            msg = "all orphaned_items must be strings"
+            raise ValueError(msg)
 
 
-@dataclass
+@dataclass(frozen=True)
 class BoardConfig:
     """Configuration for board reconciliation.
 
     Specifies the desired board structure and behavior when differences
     are found between expected and actual state.
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. Expected columns are
+    converted to a tuple for true immutability.
 
     Attributes:
         board_id: Board to reconcile
-        expected_columns: List of column names that should exist, in order
+        expected_columns: Tuple of column names that should exist, in order
         auto_create_missing: If True, create missing columns.
                             If False, only report differences.
     """
 
     board_id: str
-    expected_columns: list[str]
+    expected_columns: tuple[str, ...]
     auto_create_missing: bool = True
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.board_id, str) or not self.board_id:
+            msg = "board_id must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.expected_columns, tuple):
+            msg = "expected_columns must be a tuple of strings"
+            raise ValueError(msg)
+
+        if not all(isinstance(col, str) and col for col in self.expected_columns):
+            msg = "all expected_columns must be non-empty strings"
+            raise ValueError(msg)
+
+        if not isinstance(self.auto_create_missing, bool):
+            msg = "auto_create_missing must be a boolean"
+            raise ValueError(msg)
 
 
 class IBoardService(IEventEmitter, IMonitoredService, ABC):

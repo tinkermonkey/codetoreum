@@ -13,9 +13,13 @@ from codetoreum.domain.types import ContainerId
 # ============================================================================
 
 
-@dataclass
+@dataclass(frozen=True)
 class ContainerResult:
-    """Result from container execution."""
+    """Result from container execution.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation.
+    """
 
     exit_code: int
     stdout: str
@@ -23,10 +27,36 @@ class ContainerResult:
     duration_ms: int
     container_id: ContainerId
 
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if isinstance(self.exit_code, bool) or not isinstance(self.exit_code, int):
+            msg = "exit_code must be an integer"
+            raise ValueError(msg)
 
-@dataclass
+        if not isinstance(self.stdout, str):
+            msg = "stdout must be a string"
+            raise ValueError(msg)
+
+        if not isinstance(self.stderr, str):
+            msg = "stderr must be a string"
+            raise ValueError(msg)
+
+        if isinstance(self.duration_ms, bool) or not isinstance(self.duration_ms, int) or self.duration_ms < 0:
+            msg = "duration_ms must be a non-negative integer"
+            raise ValueError(msg)
+
+        if not isinstance(self.container_id, str) or not self.container_id:
+            msg = "container_id must be a non-empty string"
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True)
 class ContainerStatus:
-    """Container status information."""
+    """Container status information.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation.
+    """
 
     id: ContainerId
     status: str  # running, stopped, exited, paused, restarting, dead
@@ -34,6 +64,35 @@ class ContainerStatus:
     started_at: datetime | None
     finished_at: datetime | None
     exit_code: int | None = None
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.id, str) or not self.id:
+            msg = "id must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.status, str) or self.status not in ("running", "stopped", "exited", "paused", "restarting", "dead"):
+            msg = "status must be one of: running, stopped, exited, paused, restarting, dead"
+            raise ValueError(msg)
+
+        if not isinstance(self.created_at, datetime):
+            msg = "created_at must be a datetime instance"
+            raise ValueError(msg)
+
+        if self.started_at is not None:
+            if not isinstance(self.started_at, datetime):
+                msg = "started_at must be a datetime instance or None"
+                raise ValueError(msg)
+
+        if self.finished_at is not None:
+            if not isinstance(self.finished_at, datetime):
+                msg = "finished_at must be a datetime instance or None"
+                raise ValueError(msg)
+
+        if self.exit_code is not None:
+            if isinstance(self.exit_code, bool) or not isinstance(self.exit_code, int):
+                msg = "exit_code must be an integer or None"
+                raise ValueError(msg)
 
 
 # ============================================================================
