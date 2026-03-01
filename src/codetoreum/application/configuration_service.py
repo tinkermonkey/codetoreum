@@ -160,7 +160,6 @@ class ConfigurationService:
             )
 
             # Save configuration with rollback on event emission failure
-            old_version = config.version - 1
             try:
                 await self.config_store.save_project_config(config)
 
