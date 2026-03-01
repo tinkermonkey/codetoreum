@@ -1,4 +1,4 @@
-exclude: ^venv_test/
+exclude: ^(venv_test/|venv_integration/|legacy_ux/node_modules/|legacy_ux/dist/|node_modules/)
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks

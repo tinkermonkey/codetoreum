@@ -81,7 +81,7 @@ class InMemoryEventStore(IEventStore):
         Append events to a stream with spec-compliant processing latency.
 
         Implements the event store timing model (US-3.3):
-        Latency = event_count × handler_count × ms_per_event
+        Latency = event_count * handler_count * ms_per_event
 
         Example: Appending 1000 events with 5 handlers and 1ms per unit = 5 seconds latency
 
@@ -220,10 +220,10 @@ class InMemoryEventStore(IEventStore):
 
     async def _get_event_delay_seconds(self) -> float:
         """
-        Calculate base delay per (event × handler) unit.
+        Calculate base delay per (event * handler) unit.
 
         This is the unit latency that will be multiplied by both event_count and handler_count
-        in the full latency formula: latency = event_count × handler_count × delay_per_unit
+        in the full latency formula: latency = event_count * handler_count * delay_per_unit
 
         Uses fidelity-aware timing from SimulationConfig if available.
         - LOW: 0 delay
@@ -231,7 +231,7 @@ class InMemoryEventStore(IEventStore):
         - HIGH: ms_per_event with ±20% jitter
 
         Returns:
-            Delay in seconds per (event × handler) unit
+            Delay in seconds per (event * handler) unit
         """
         if not self._config:
             # Default behavior (for backward compatibility)
@@ -257,9 +257,9 @@ class InMemoryEventStore(IEventStore):
         Apply backpressure latency for event processing.
 
         Implements the event store timing model per specification (US-3.3):
-        Latency = event_count × handler_count × ms_per_event
+        Latency = event_count * handler_count * ms_per_event
 
-        Example: 1000 events × 5 handlers × 1ms = 5 seconds
+        Example: 1000 events * 5 handlers * 1ms = 5 seconds
 
         This is the **backpressure mechanism** that ensures appending many
         events incurs proportional delays, matching real event processing costs.
@@ -274,7 +274,7 @@ class InMemoryEventStore(IEventStore):
         # Get per-event delay (handles fidelity level and jitter)
         delay_per_event = await self._get_event_delay_seconds()
 
-        # Apply spec-compliant formula: total = event_count × handler_count × delay_per_event
+        # Apply spec-compliant formula: total = event_count * handler_count * delay_per_event
         handler_count = self._config.event_handler_count
         total_delay_seconds = delay_per_event * event_count * handler_count
 
@@ -316,7 +316,7 @@ class InMemoryEventStore(IEventStore):
                 events = self._all_events[from_version:].copy()
 
         delay_seconds = await self._get_event_delay_seconds()
-        # Multiply by handler count per spec: latency = event_count × handler_count × ms_per_event
+        # Multiply by handler count per spec: latency = event_count * handler_count * ms_per_event
         handler_count = self._config.event_handler_count if self._config else 1
         delay_with_handlers = delay_seconds * handler_count
 
@@ -597,7 +597,7 @@ class InMemoryEventStore(IEventStore):
             events = events.copy()
 
         delay_seconds = await self._get_event_delay_seconds()
-        # Multiply by handler count per spec: latency = event_count × handler_count × ms_per_event
+        # Multiply by handler count per spec: latency = event_count * handler_count * ms_per_event
         handler_count = self._config.event_handler_count if self._config else 1
         delay_with_handlers = delay_seconds * handler_count
 
