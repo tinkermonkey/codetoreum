@@ -518,21 +518,16 @@ class TestGitHubDiscussionAdapterMonitoring:
         with pytest.raises(ResourceNotFoundError):
             adapter.stop_monitoring("999")
 
-    def test_start_monitoring_validation(self, adapter):
+    def test_start_monitoring_validation(self, adapter, monitoring_config):
         """start_monitoring validates parameters."""
-        config = DiscussionMonitoringConfig(
-            project_id="proj-1",
-        )
-
+        # Test that empty work_item_id raises ValidationError
         with pytest.raises(ValidationError):
-            adapter.start_monitoring("", config)
+            adapter.start_monitoring("", monitoring_config)
 
-        with pytest.raises(ValidationError):
-            adapter.start_monitoring(
-                "123",
-                DiscussionMonitoringConfig(
-                    project_id="",
-                ),
+        # Test that invalid project_id in config raises ValueError (from dataclass constructor)
+        with pytest.raises(ValueError):
+            DiscussionMonitoringConfig(
+                project_id="",
             )
 
 
