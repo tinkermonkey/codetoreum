@@ -217,6 +217,7 @@ class SimulationRunner:
             error_traceback = traceback.format_exc()
             errors.append(f"{error_msg}\n{error_traceback}")
             logger.error(error_msg, exc_info=True)
+            raise
 
         self._end_time = datetime.now(UTC)
         simulated_end_time = self._get_clock_now()

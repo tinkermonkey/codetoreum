@@ -366,15 +366,37 @@ class SimulationClock:
 
     async def _auto_advance_loop(self) -> None:
         """Internal loop for automatic clock advancement."""
+        error_count = 0
+        max_consecutive_errors = 5
+        backoff_base = 0.1  # Start with 100ms backoff
+
         while self._running:
             try:
                 # Advance by 1 second of simulated time every (1 / multiplier) real seconds
                 await asyncio.sleep(1.0 / self._speed_multiplier)
                 await self._advance_to(self._current_time + timedelta(seconds=1))
+                error_count = 0  # Reset error count on success
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Error in auto-advance loop: {e}", exc_info=True)
+                error_count += 1
+                logger.error(
+                    f"Error in auto-advance loop (attempt {error_count}/{max_consecutive_errors}): {e}",
+                    exc_info=True,
+                )
+                if error_count >= max_consecutive_errors:
+                    logger.error(
+                        f"Auto-advance loop exceeded maximum consecutive errors ({max_consecutive_errors}), stopping"
+                    )
+                    with self._lock:
+                        self._running = False
+                    break
+                # Exponential backoff: 0.1s, 0.2s, 0.4s, 0.8s, 1.6s
+                backoff_seconds = backoff_base * (2 ** (error_count - 1))
+                try:
+                    await asyncio.sleep(backoff_seconds)
+                except asyncio.CancelledError:
+                    break
 
     def reset(self) -> None:
         """Reset clock to current real time and clear all callbacks."""
