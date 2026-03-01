@@ -952,6 +952,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
                 except ExternalServiceError as e:
                     logger.warning(
                         f"Transient error in PR polling for {project_id}: {e}",
+                        exc_info=True,
                         extra={"project_id": project_id, "error_type": "transient"},
                     )
                     continue

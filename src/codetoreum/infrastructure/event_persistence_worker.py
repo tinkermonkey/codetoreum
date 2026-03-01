@@ -227,7 +227,8 @@ class EventPersistenceWorker:
             except (EventStoreError, RedisEventBufferError) as e:
                 logger.warning(
                     f"Worker {self.worker_id} failed to process batch "
-                    f"(attempt {attempt + 1}/{self.max_retries + 1}): {e}"
+                    f"(attempt {attempt + 1}/{self.max_retries + 1}): {e}",
+                    exc_info=True,
                 )
 
             except Exception as e:

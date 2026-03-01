@@ -85,7 +85,7 @@ class EventSerializer:
 
         except Exception as e:
             message = f"Failed to serialize event {event.event_type}: {e}"
-            raise EventSerializationError(message)
+            raise EventSerializationError(message) from e
 
     @classmethod
     def deserialize(cls, json_str: str) -> DomainEvent:
@@ -144,7 +144,7 @@ class EventSerializer:
             raise
         except Exception as e:
             message = f"Failed to deserialize event: {e}"
-            raise EventSerializationError(message)
+            raise EventSerializationError(message) from e
 
     @classmethod
     def to_dict(cls, event: DomainEvent) -> dict[str, Any]:
@@ -177,7 +177,7 @@ class EventSerializer:
 
         except Exception as e:
             message = f"Failed to convert event to dict: {e}"
-            raise EventSerializationError(message)
+            raise EventSerializationError(message) from e
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> DomainEvent:
@@ -216,7 +216,7 @@ class EventSerializer:
 
         except Exception as e:
             message = f"Failed to reconstruct event from dict: {e}"
-            raise EventSerializationError(message)
+            raise EventSerializationError(message) from e
 
 
 class _EventJSONEncoder(json.JSONEncoder):

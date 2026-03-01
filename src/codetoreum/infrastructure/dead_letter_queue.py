@@ -243,6 +243,7 @@ class DeadLetterQueue:
                 event.retry_count,
                 event.max_retries,
                 str(e),
+                exc_info=True,
                 extra={
                     "event_id": event_id,
                     "event_type": event.event_type,
@@ -262,6 +263,7 @@ class DeadLetterQueue:
                     "Event %s exhausted all retries (%d attempts)",
                     event_id,
                     event.retry_count,
+                    exc_info=True,
                     extra={
                         "event_id": event_id,
                         "event_type": event.event_type,

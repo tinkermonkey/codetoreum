@@ -522,7 +522,10 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
                 try:
                     thread = await self.get_thread(work_item_id)
                 except Exception as e:
-                    logger.warning(f"Polling error for {work_item_id}: {e}")
+                    logger.warning(
+                        f"Polling error for {work_item_id}: {e}",
+                        exc_info=True,
+                    )
                     continue
 
                 # Find new comments since last poll

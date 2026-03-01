@@ -471,7 +471,8 @@ class EventBus:
                 last_exception = e
 
                 logger.warning(
-                    f"Handler {handler.__class__.__name__} failed (attempt {attempt + 1}/{self.max_retries + 1}): {e}"
+                    f"Handler {handler.__class__.__name__} failed (attempt {attempt + 1}/{self.max_retries + 1}): {e}",
+                    exc_info=True,
                 )
 
                 if attempt < self.max_retries:
@@ -526,7 +527,10 @@ class EventBus:
             except Exception as e:
                 last_exception = e
 
-                logger.warning(f"Callback failed (attempt {attempt + 1}/{self.max_retries + 1}): {e}")
+                logger.warning(
+                    f"Callback failed (attempt {attempt + 1}/{self.max_retries + 1}): {e}",
+                    exc_info=True,
+                )
 
                 if attempt < self.max_retries:
                     await asyncio.sleep(self.retry_delay_seconds * (attempt + 1))

@@ -108,7 +108,7 @@ class RedisConfigCache:
 
             except Exception as e:
                 message = f"Failed to initialize cache: {e}"
-                raise RedisConfigCacheError(message)
+                raise RedisConfigCacheError(message) from e
 
     async def _listen_for_invalidations(self) -> None:
         """Listen for cache invalidation messages."""
