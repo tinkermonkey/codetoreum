@@ -372,3 +372,28 @@ class IContainer(ABC):
             ResourceNotFoundError: Container or file doesn't exist
             ContainerError: Copy operation failed
         """
+
+    @abstractmethod
+    async def get_file_content(
+        self,
+        container_id: str,
+        file_path: str,
+    ) -> bytes:
+        """
+        Get file content from a container's output directory.
+
+        This method enables retrieval of files written by container execution,
+        supporting the causal link between ContainerExecutionCompletedEvent and
+        artifact persistence in InMemoryStorageAdapter.
+
+        Args:
+            container_id: Container identifier
+            file_path: Path to file within container (relative to /output/)
+
+        Returns:
+            bytes: File content
+
+        Raises:
+            ResourceNotFoundError: Container or file doesn't exist
+            ContainerError: Read operation failed
+        """

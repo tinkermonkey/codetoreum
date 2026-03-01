@@ -491,6 +491,7 @@ class SimulationApplicationBootstrap:
         storage = InMemoryStorageAdapter(
             event_emitter=event_emitter,
             event_bus=event_bus,  # Subscribe to container execution completion events
+            container=container,  # Enable retrieval of actual file content from container
         )
         config_store = InMemoryConfigStore()
         notifier = MockNotifierAdapter()

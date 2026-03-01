@@ -1168,6 +1168,67 @@ class DockerContainerAdapter(IContainer):
 
         await loop.run_in_executor(None, _copy)
 
+    async def get_file_content(
+        self,
+        container_id: str,
+        file_path: str,
+    ) -> bytes:
+        """
+        Get file content from a container's output directory.
+
+        Args:
+            container_id: Container identifier
+            file_path: Path to file within container (relative to /output/)
+
+        Returns:
+            File content as bytes
+
+        Raises:
+            ResourceNotFoundError: If container or file doesn't exist
+            ContainerError: If read operation failed
+        """
+        client = self._get_client()
+        loop = asyncio.get_event_loop()
+
+        def _get_file():
+            try:
+                container = client.containers.get(container_id)
+
+                # Construct full path to file in /output/ directory
+                full_path = f"/output/{file_path}"
+
+                # Get file from container via tar archive
+                bits, _stat = container.get_archive(full_path)
+
+                # Extract tar archive to get file content
+                tar_stream = io.BytesIO()
+                for chunk in bits:
+                    tar_stream.write(chunk)
+
+                tar_stream.seek(0)
+                with tarfile.open(fileobj=tar_stream, mode="r") as tar:
+                    # The tar archive contains a single directory entry
+                    # Extract just the file content
+                    member = tar.getmember(file_path.lstrip("/"))
+                    extracted_file = tar.extractfile(member)
+                    if extracted_file is None:
+                        msg = f"Failed to extract file content: {file_path}"
+                        raise ContainerError(msg)
+                    return extracted_file.read()
+
+            except Exception as e:
+                if "not found" in str(e).lower():
+                    if "container" in str(e).lower():
+                        msg = "Container"
+                        raise ResourceNotFoundError(msg, container_id) from e
+                    else:
+                        msg = f"File not found in container output: {file_path}"
+                        raise ResourceNotFoundError(msg, file_path) from e
+                msg = f"Failed to get file content from container: {e!s}"
+                raise ContainerError(msg) from e
+
+        return await loop.run_in_executor(None, _get_file)
+
     def close(self) -> None:
         """Close Docker client and clean up all resources."""
         if self._docker_client is not None:

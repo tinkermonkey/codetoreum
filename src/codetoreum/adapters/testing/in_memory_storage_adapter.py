@@ -3,7 +3,7 @@
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.domain.events.container_events import ContainerExecutionCompletedEvent
@@ -15,6 +15,9 @@ from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.storage import IStorage, StorageObject
+
+if TYPE_CHECKING:
+    from codetoreum.ports.output.container import IContainer
 
 
 class InMemoryStorageAdapter(IStorage):
@@ -28,6 +31,7 @@ class InMemoryStorageAdapter(IStorage):
         self,
         event_emitter: IEventEmitter | None = None,
         event_bus: EventBus | None = None,
+        container: "IContainer | None" = None,
     ):
         """Initialize in-memory storage.
 
@@ -36,12 +40,16 @@ class InMemoryStorageAdapter(IStorage):
                           Defaults to MockEventEmitter.
             event_bus: Optional EventBus for subscribing to domain events
                       (e.g., ContainerExecutionCompletedEvent)
+            container: Optional IContainer for retrieving file content from
+                      container output directory when handling completion events.
+                      Without this, files cannot be persisted.
         """
         self._objects: dict[str, bytes] = {}
         self._metadata: dict[str, dict[str, Any]] = {}
         self._lock = threading.Lock()
         self._event_emitter = event_emitter or MockEventEmitter()
         self._event_bus = event_bus
+        self._container = container
 
         # Subscribe to container execution completion events if event bus provided
         if self._event_bus:
@@ -305,6 +313,9 @@ class InMemoryStorageAdapter(IStorage):
         This handler is invoked when ContainerExecutionCompletedEvent is emitted by the container
         adapter, enabling automatic artifact persistence to storage via event subscription.
 
+        The handler retrieves actual file content from the container using the IContainer port,
+        establishing a causal link between container execution and artifact storage.
+
         Args:
             event: ContainerExecutionCompletedEvent containing container_id, command,
                   exit_code, output_files list, and project_id
@@ -317,15 +328,27 @@ class InMemoryStorageAdapter(IStorage):
             else:
                 storage_key = f"container/{event.container_id}/{file_path}"
 
-            # In a fake environment, we store a placeholder file reference
-            # In production, this would read from the actual /output/ directory
-            content = f"Output from container {event.container_id}: {file_path}\nCommand: {event.command}\nExit code: {event.exit_code}".encode()
+            # Retrieve actual file content from container if available
+            content = None
+            if self._container:
+                try:
+                    content = await self._container.get_file_content(
+                        event.container_id,
+                        file_path,
+                    )
+                except ResourceNotFoundError:
+                    # File not found in container, fall back to placeholder
+                    pass
+
+            # If no container adapter or file not found, use placeholder for testing
+            if content is None:
+                content = f"Output from container {event.container_id}: {file_path}\nCommand: {event.command}\nExit code: {event.exit_code}".encode()
 
             with self._lock:
                 self._objects[storage_key] = content
                 self._metadata[storage_key] = {
                     "size": len(content),
-                    "content_type": "text/plain",
+                    "content_type": "application/octet-stream",
                     "metadata": {
                         "container_id": event.container_id,
                         "file_path": file_path,
@@ -343,7 +366,7 @@ class InMemoryStorageAdapter(IStorage):
                         source="mock",
                         key=storage_key,
                         size_bytes=len(content),
-                        content_type="text/plain",
+                        content_type="application/octet-stream",
                         project_id=event.project_id,
                     )
                 )

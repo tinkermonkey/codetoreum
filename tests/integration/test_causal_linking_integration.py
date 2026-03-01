@@ -65,9 +65,21 @@ def queue_service(event_emitter: CapturingMockEventEmitter, event_bus: EventBus)
 
 
 @pytest.fixture
-def storage_adapter(event_emitter: CapturingMockEventEmitter, event_bus: EventBus) -> InMemoryStorageAdapter:
-    """Create storage adapter with event bus for causal linking."""
-    return InMemoryStorageAdapter(event_emitter=event_emitter, event_bus=event_bus)
+def storage_adapter(
+    event_emitter: CapturingMockEventEmitter,
+    event_bus: EventBus,
+    container_adapter: FakeContainerAdapter,
+) -> InMemoryStorageAdapter:
+    """Create storage adapter with event bus and container for causal linking.
+
+    The container adapter is passed to enable retrieval of actual file content
+    when handling ContainerExecutionCompletedEvent.
+    """
+    return InMemoryStorageAdapter(
+        event_emitter=event_emitter,
+        event_bus=event_bus,
+        container=container_adapter,
+    )
 
 
 @pytest.fixture
@@ -190,22 +202,34 @@ class TestContainerStorageCausalLinking:
         self,
         event_bus: EventBus,
         storage_adapter: InMemoryStorageAdapter,
+        container_adapter: FakeContainerAdapter,
     ):
         """Storage adapter handler processes ContainerExecutionCompletedEvent.
 
-        This test validates that the handler can be invoked and processes events
-        without errors.
+        This test validates that the handler retrieves actual file content from the
+        container and persists it to storage, establishing the causal link between
+        container execution completion and artifact persistence.
         """
-        # Create test event
+        # Setup: Write files to container's virtual output directory
+        test_file_1 = "results.json"
+        test_file_2 = "coverage.xml"
+        test_content_1 = '{"passed": 10, "failed": 0}'
+        test_content_2 = "<?xml version=\"1.0\"?><coverage><stats/></coverage>"
+
+        container_id = "test-container"
+        container_adapter.write_output_file(container_id, test_file_1, test_content_1)
+        container_adapter.write_output_file(container_id, test_file_2, test_content_2)
+
+        # Create test event with output file references
         event = ContainerExecutionCompletedEvent(
             type="container.execution_completed",
             timestamp=datetime.now(UTC).isoformat(),
             source="test",
             event_id="test-event-id",
-            container_id="test-container",
+            container_id=container_id,
             command="pytest tests/",
             exit_code=0,
-            output_files=("results.json", "coverage.xml"),
+            output_files=(test_file_1, test_file_2),
             project_id="test-proj",
         )
 
@@ -218,6 +242,17 @@ class TestContainerStorageCausalLinking:
         # Verify: Storage handler created artifact entries
         artifacts = await storage_adapter.list_files(prefix="container/")
         assert len(artifacts) >= 2, "Storage handler should persist container output files"
+
+        # Verify: Actual file content was persisted (causal link established)
+        storage_key_1 = f"container/test-proj/{container_id}/{test_file_1}"
+        storage_key_2 = f"container/test-proj/{container_id}/{test_file_2}"
+
+        # Retrieve and verify content
+        content_1 = await storage_adapter.download(storage_key_1)
+        content_2 = await storage_adapter.download(storage_key_2)
+
+        assert content_1 == test_content_1.encode(), "Storage should contain actual file content from container"
+        assert content_2 == test_content_2.encode(), "Storage should contain actual file content from container"
 
 
 # ============================================================================

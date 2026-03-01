@@ -986,6 +986,47 @@ class FakeContainerAdapter(IContainer):
                 return []
             return list(self._virtual_filesystems[container_id].keys())
 
+    async def get_file_content(
+        self,
+        container_id: str,
+        file_path: str,
+    ) -> bytes:
+        """
+        Get file content from the virtual output directory.
+
+        Args:
+            container_id: Container ID
+            file_path: Path to file within /output/
+
+        Returns:
+            File content as bytes
+
+        Raises:
+            ResourceNotFoundError: If container or file does not exist
+        """
+        if not container_id:
+            msg = "Container ID cannot be empty"
+            raise ValidationError(msg)
+        if not file_path:
+            msg = "File path cannot be empty"
+            raise ValidationError(msg)
+
+        with self._lock:
+            if container_id not in self._virtual_filesystems:
+                msg = "Container"
+                raise ResourceNotFoundError(msg, container_id)
+
+            virtual_fs = self._virtual_filesystems[container_id]
+            if file_path not in virtual_fs:
+                msg = f"File '{file_path}' not found in container output"
+                raise ResourceNotFoundError(msg, file_path)
+
+            # Return content as bytes
+            content = virtual_fs[file_path]
+            if isinstance(content, bytes):
+                return content
+            return content.encode("utf-8") if isinstance(content, str) else content
+
     # Helper methods for testing
 
     def clear(self) -> None:
