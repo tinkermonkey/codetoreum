@@ -7,6 +7,11 @@ git operations. Useful for testing orchestration logic without external dependen
 
 import hashlib
 
+from codetoreum.ports.exceptions import (
+    RepositoryError,
+    ResourceNotFoundError,
+    ValidationError,
+)
 from codetoreum.ports.output.version_control_service import (
     IVersionControlService,
     Repository,
@@ -64,10 +69,10 @@ class InMemoryVersionControlService(IVersionControlService):
         """
         if not url:
             msg = "Repository URL cannot be empty"
-            raise ValueError(msg)
+            raise ValidationError(msg)
         if not target_path:
             msg = "Target path cannot be empty"
-            raise ValueError(msg)
+            raise ValidationError(msg)
 
         # Extract repository name from URL
         repo_name = url.rstrip("/").split("/")[-1].replace(".git", "")
@@ -111,7 +116,7 @@ class InMemoryVersionControlService(IVersionControlService):
         """
         if repo_path not in self._repositories:
             msg = f"Repository not found at path: {repo_path}"
-            raise ValueError(msg)
+            raise RepositoryError(msg)
 
         # Simulate pulling latest from remote
         # In this mock, just mark that a pull occurred
@@ -138,7 +143,7 @@ class InMemoryVersionControlService(IVersionControlService):
         """
         if repo_path not in self._repositories:
             msg = f"Repository not found at path: {repo_path}"
-            raise ValueError(msg)
+            raise RepositoryError(msg)
 
         repo = self._repositories[repo_path]
 
@@ -167,11 +172,11 @@ class InMemoryVersionControlService(IVersionControlService):
         """
         if repo_path not in self._repositories:
             msg = f"Repository not found at path: {repo_path}"
-            raise ValueError(msg)
+            raise RepositoryError(msg)
 
         if not message:
             msg = "Commit message cannot be empty"
-            raise ValueError(msg)
+            raise ValidationError(msg)
 
         repo = self._repositories[repo_path]
         current_branch = repo["current_branch"]
@@ -203,13 +208,13 @@ class InMemoryVersionControlService(IVersionControlService):
         """
         if repo_path not in self._repositories:
             msg = f"Repository not found at path: {repo_path}"
-            raise ValueError(msg)
+            raise RepositoryError(msg)
 
         repo = self._repositories[repo_path]
 
         if branch not in repo["branches"]:
             msg = f"Branch not found: {branch}"
-            raise ValueError(msg)
+            raise RepositoryError(msg)
 
         # Simulate pushing to remote
         # In this mock, we just mark the push occurred
@@ -235,5 +240,4 @@ class InMemoryVersionControlService(IVersionControlService):
         if identifier in self._repository_index:
             return self._repository_index[identifier]
 
-        msg = f"Repository not found: {identifier}"
-        raise ValueError(msg)
+        raise ResourceNotFoundError("Repository", identifier)
