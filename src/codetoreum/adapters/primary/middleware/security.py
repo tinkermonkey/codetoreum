@@ -46,7 +46,7 @@ async def security_headers_middleware(request: Request, call_next):
         "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data:; "
         "font-src 'self'; "
-        "connect-src 'self'"
+        "connect-src 'self' ws: wss:"
     )
 
     return response
