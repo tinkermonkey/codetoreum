@@ -10,6 +10,7 @@ flow through a review process before merging.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Literal
 
 from .event_emitter import IEventEmitter
@@ -74,6 +75,14 @@ class CodeReview:
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
+        # Coerce list to tuple for reviewers
+        if isinstance(self.reviewers, list):
+            object.__setattr__(self, 'reviewers', tuple(self.reviewers))
+
+        # Coerce list to tuple for approvals
+        if isinstance(self.approvals, list):
+            object.__setattr__(self, 'approvals', tuple(self.approvals))
+
         if not isinstance(self.id, str) or not self.id:
             msg = "id must be a non-empty string"
             raise ValueError(msg)
@@ -95,7 +104,7 @@ class CodeReview:
             raise ValueError(msg)
 
         if not isinstance(self.reviewers, tuple):
-            msg = "reviewers must be a tuple of strings"
+            msg = "reviewers must be a list or tuple of strings"
             raise ValueError(msg)
 
         if not all(isinstance(r, str) and r for r in self.reviewers):
@@ -103,7 +112,7 @@ class CodeReview:
             raise ValueError(msg)
 
         if not isinstance(self.approvals, tuple):
-            msg = "approvals must be a tuple of Approval instances"
+            msg = "approvals must be a list or tuple of Approval instances"
             raise ValueError(msg)
 
         if not all(isinstance(a, Approval) for a in self.approvals):

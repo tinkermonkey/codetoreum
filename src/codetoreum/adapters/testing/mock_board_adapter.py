@@ -299,7 +299,10 @@ class MockBoardAdapter(IBoardService):
                     if col.name == from_column:
                         if work_item_id in col.work_item_ids:
                             removed_position = col.work_item_ids.index(work_item_id)
-                            col.work_item_ids.remove(work_item_id)
+                            # Create new work_item_ids tuple with item removed
+                            new_items = list(col.work_item_ids)
+                            new_items.remove(work_item_id)
+                            object.__setattr__(col, 'work_item_ids', tuple(new_items))
                             # Recalculate positions of remaining items after the removed position
                             for i in range(removed_position, len(col.work_item_ids)):
                                 item_id = col.work_item_ids[i]
@@ -323,7 +326,9 @@ class MockBoardAdapter(IBoardService):
                         break
 
                 # Add to new column
-                target_col.work_item_ids.append(work_item_id)
+                new_items = list(target_col.work_item_ids)
+                new_items.append(work_item_id)
+                object.__setattr__(target_col, 'work_item_ids', tuple(new_items))
                 self._item_positions[work_item_id] = (
                     board_id,
                     target_column,
@@ -401,7 +406,9 @@ class MockBoardAdapter(IBoardService):
                             position=len(board.columns),
                             work_item_ids=[],
                         )
-                        board.columns.append(new_col)
+                        new_columns = list(board.columns)
+                        new_columns.append(new_col)
+                        object.__setattr__(board, 'columns', tuple(new_columns))
                         columns_added.append(expected_col)
 
             # Check for extra columns
@@ -455,7 +462,14 @@ class MockBoardAdapter(IBoardService):
         """
         with self._lock:
             if project_id in self._monitoring:
-                self._monitoring[project_id].state = MonitoringState.STOPPED
+                status = self._monitoring[project_id]
+                stopped_status = MonitoringStatus(
+                    state=MonitoringState.STOPPED,
+                    project_id=status.project_id,
+                    started_at=status.started_at,
+                    error_message=status.error_message,
+                )
+                self._monitoring[project_id] = stopped_status
 
     async def get_monitoring_status(self, project_id: str) -> MonitoringStatus:
         """Query current monitoring state.
@@ -563,7 +577,10 @@ class MockBoardAdapter(IBoardService):
             if position is None:
                 position = len(target_column.work_item_ids)
 
-            target_column.work_item_ids.insert(position, work_item_id)
+            # Create new work_item_ids tuple with item inserted at position
+            new_items = list(target_column.work_item_ids)
+            new_items.insert(position, work_item_id)
+            object.__setattr__(target_column, 'work_item_ids', tuple(new_items))
             self._item_positions[work_item_id] = (board_id, column_name, position)
 
             # Update positions of items after insertion

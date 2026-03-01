@@ -11,6 +11,7 @@ to discussion updates.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Literal
 
 from codetoreum.domain.events import Comment
@@ -74,6 +75,10 @@ class DiscussionThread:
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
+        # Coerce list to tuple for comments
+        if isinstance(self.comments, list):
+            object.__setattr__(self, 'comments', tuple(self.comments))
+
         if not isinstance(self.id, str) or not self.id:
             msg = "id must be a non-empty string"
             raise ValueError(msg)
@@ -83,7 +88,7 @@ class DiscussionThread:
             raise ValueError(msg)
 
         if not isinstance(self.comments, tuple):
-            msg = "comments must be a tuple of Comment instances"
+            msg = "comments must be a list or tuple of Comment instances"
             raise ValueError(msg)
 
         if not all(isinstance(c, Comment) for c in self.comments):

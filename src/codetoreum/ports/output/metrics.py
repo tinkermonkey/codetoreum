@@ -30,6 +30,10 @@ class MetricData:
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
+        # Coerce dict to MappingProxyType for labels
+        if isinstance(self.labels, dict):
+            object.__setattr__(self, 'labels', MappingProxyType(self.labels))
+
         if not isinstance(self.timestamp, datetime):
             msg = "timestamp must be a datetime instance"
             raise ValueError(msg)
@@ -43,7 +47,7 @@ class MetricData:
             raise ValueError(msg)
 
         if not isinstance(self.labels, MappingProxyType):
-            msg = "labels must be a MappingProxyType"
+            msg = "labels must be a dict or MappingProxyType"
             raise ValueError(msg)
 
         for k, v in self.labels.items():

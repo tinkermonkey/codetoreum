@@ -32,6 +32,10 @@ class StorageObject:
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
+        # Coerce dict to MappingProxyType for metadata
+        if isinstance(self.metadata, dict):
+            object.__setattr__(self, 'metadata', MappingProxyType(self.metadata))
+
         if not isinstance(self.key, str) or not self.key:
             msg = "key must be a non-empty string"
             raise ValueError(msg)
@@ -55,7 +59,7 @@ class StorageObject:
                 raise ValueError(msg)
 
         if not isinstance(self.metadata, MappingProxyType):
-            msg = "metadata must be a MappingProxyType (immutable dict)"
+            msg = "metadata must be a dict or MappingProxyType (immutable dict)"
             raise ValueError(msg)
 
         # Validate metadata contents

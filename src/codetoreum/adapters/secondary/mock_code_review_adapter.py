@@ -134,7 +134,17 @@ class MockCodeReviewAdapter(MockEventEmitter, ICodeReviewService):
         previous_status = review.status
 
         if previous_status != "changes_requested":
-            review.status = "changes_requested"
+            new_review = CodeReview(
+                id=review.id,
+                title=review.title,
+                source_branch=review.source_branch,
+                target_branch=review.target_branch,
+                status="changes_requested",
+                reviewers=review.reviewers,
+                approvals=review.approvals,
+                work_item_id=review.work_item_id,
+            )
+            self._reviews[review_id] = new_review
 
             if self.current_project is not None:
                 self.emit(
@@ -168,8 +178,19 @@ class MockCodeReviewAdapter(MockEventEmitter, ICodeReviewService):
         previous_status = review.status
 
         if previous_status != "approved":
-            review.status = "approved"
-            review.approvals.append(Approval(reviewer="reviewer-1", approved_at=self._get_iso_timestamp()))
+            new_approval = Approval(reviewer="reviewer-1", approved_at=self._get_iso_timestamp())
+            new_approvals = tuple(list(review.approvals) + [new_approval])
+            new_review = CodeReview(
+                id=review.id,
+                title=review.title,
+                source_branch=review.source_branch,
+                target_branch=review.target_branch,
+                status="approved",
+                reviewers=review.reviewers,
+                approvals=new_approvals,
+                work_item_id=review.work_item_id,
+            )
+            self._reviews[review_id] = new_review
 
             if self.current_project is not None:
                 self.emit(
@@ -208,7 +229,14 @@ class MockCodeReviewAdapter(MockEventEmitter, ICodeReviewService):
             project_id: Project to stop monitoring
         """
         if project_id in self._monitoring:
-            self._monitoring[project_id].state = MonitoringState.STOPPED
+            status = self._monitoring[project_id]
+            stopped_status = MonitoringStatus(
+                state=MonitoringState.STOPPED,
+                project_id=status.project_id,
+                started_at=status.started_at,
+                error_message=status.error_message,
+            )
+            self._monitoring[project_id] = stopped_status
 
     async def get_monitoring_status(self, project_id: str) -> MonitoringStatus:
         """Query current monitoring state.
@@ -263,8 +291,19 @@ class MockCodeReviewAdapter(MockEventEmitter, ICodeReviewService):
         review = self._reviews[review_id]
         previous_status = review.status
 
-        review.status = "approved"
-        review.approvals.append(Approval(reviewer=reviewer, approved_at=self._get_iso_timestamp()))
+        new_approval = Approval(reviewer=reviewer, approved_at=self._get_iso_timestamp())
+        new_approvals = tuple(list(review.approvals) + [new_approval])
+        new_review = CodeReview(
+            id=review.id,
+            title=review.title,
+            source_branch=review.source_branch,
+            target_branch=review.target_branch,
+            status="approved",
+            reviewers=review.reviewers,
+            approvals=new_approvals,
+            work_item_id=review.work_item_id,
+        )
+        self._reviews[review_id] = new_review
 
         if self.current_project is not None:
             self.emit(
@@ -301,7 +340,17 @@ class MockCodeReviewAdapter(MockEventEmitter, ICodeReviewService):
         review = self._reviews[review_id]
         previous_status = review.status
 
-        review.status = "changes_requested"
+        new_review = CodeReview(
+            id=review.id,
+            title=review.title,
+            source_branch=review.source_branch,
+            target_branch=review.target_branch,
+            status="changes_requested",
+            reviewers=review.reviewers,
+            approvals=review.approvals,
+            work_item_id=review.work_item_id,
+        )
+        self._reviews[review_id] = new_review
 
         if self.current_project is not None:
             self.emit(

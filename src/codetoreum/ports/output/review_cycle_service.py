@@ -87,12 +87,16 @@ class ReviewResult:
 
     def __post_init__(self) -> None:
         """Validate result data."""
+        # Coerce list to tuple for findings
+        if isinstance(self.findings, list):
+            object.__setattr__(self, 'findings', tuple(self.findings))
+
         if self.status not in ("APPROVED", "CHANGES_REQUESTED", "BLOCKED"):
             msg = f"status must be one of: APPROVED, CHANGES_REQUESTED, BLOCKED. Got: {self.status}"
             raise ValueError(msg)
 
         if not isinstance(self.findings, tuple):
-            msg = "findings must be a tuple of ReviewFinding instances"
+            msg = "findings must be a list or tuple of ReviewFinding instances"
             raise ValueError(msg)
 
         if not all(isinstance(f, ReviewFinding) for f in self.findings):
@@ -246,6 +250,14 @@ class ReviewCycleState:
 
     def __post_init__(self) -> None:
         """Validate state data."""
+        # Coerce list to tuple for maker_outputs
+        if isinstance(self.maker_outputs, list):
+            object.__setattr__(self, 'maker_outputs', tuple(self.maker_outputs))
+
+        # Coerce list to tuple for review_outputs
+        if isinstance(self.review_outputs, list):
+            object.__setattr__(self, 'review_outputs', tuple(self.review_outputs))
+
         for field_name in ("work_item_id", "project_id", "board_id", "maker_agent", "reviewer_agent"):
             val = getattr(self, field_name)
             if not isinstance(val, str) or not val:
@@ -266,7 +278,7 @@ class ReviewCycleState:
             raise ValueError(msg)
 
         if not isinstance(self.maker_outputs, tuple):
-            msg = "maker_outputs must be a tuple of IterationOutput instances"
+            msg = "maker_outputs must be a list or tuple of IterationOutput instances"
             raise ValueError(msg)
 
         if not all(isinstance(o, IterationOutput) for o in self.maker_outputs):
@@ -274,7 +286,7 @@ class ReviewCycleState:
             raise ValueError(msg)
 
         if not isinstance(self.review_outputs, tuple):
-            msg = "review_outputs must be a tuple of IterationOutput instances"
+            msg = "review_outputs must be a list or tuple of IterationOutput instances"
             raise ValueError(msg)
 
         if not all(isinstance(o, IterationOutput) for o in self.review_outputs):

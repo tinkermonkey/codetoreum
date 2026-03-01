@@ -63,8 +63,12 @@ class BoardColumn:
             msg = "position must be a non-negative integer"
             raise ValueError(msg)
 
+        # Coerce list to tuple for deep immutability
+        if isinstance(self.work_item_ids, list):
+            object.__setattr__(self, 'work_item_ids', tuple(self.work_item_ids))
+
         if not isinstance(self.work_item_ids, tuple):
-            msg = "work_item_ids must be a tuple of strings"
+            msg = "work_item_ids must be a list or tuple of strings"
             raise ValueError(msg)
 
         if not all(isinstance(item_id, str) for item_id in self.work_item_ids):
@@ -144,8 +148,12 @@ class ProjectBoard:
             msg = "project_id must be a non-empty string"
             raise ValueError(msg)
 
+        # Coerce list to tuple for deep immutability
+        if isinstance(self.columns, list):
+            object.__setattr__(self, 'columns', tuple(self.columns))
+
         if not isinstance(self.columns, tuple):
-            msg = "columns must be a tuple of BoardColumn instances"
+            msg = "columns must be a list or tuple of BoardColumn instances"
             raise ValueError(msg)
 
         if not all(isinstance(col, BoardColumn) for col in self.columns):
@@ -228,8 +236,18 @@ class ReconciliationResult:
             msg = "board_id must be a non-empty string"
             raise ValueError(msg)
 
+        # Coerce list to tuple for deep immutability
+        if isinstance(self.columns_added, list):
+            object.__setattr__(self, 'columns_added', tuple(self.columns_added))
+        if isinstance(self.columns_removed, list):
+            object.__setattr__(self, 'columns_removed', tuple(self.columns_removed))
+        if isinstance(self.columns_renamed, list):
+            object.__setattr__(self, 'columns_renamed', tuple(self.columns_renamed))
+        if isinstance(self.orphaned_items, list):
+            object.__setattr__(self, 'orphaned_items', tuple(self.orphaned_items))
+
         if not isinstance(self.columns_added, tuple):
-            msg = "columns_added must be a tuple of strings"
+            msg = "columns_added must be a list or tuple of strings"
             raise ValueError(msg)
 
         if not all(isinstance(col, str) for col in self.columns_added):
@@ -237,7 +255,7 @@ class ReconciliationResult:
             raise ValueError(msg)
 
         if not isinstance(self.columns_removed, tuple):
-            msg = "columns_removed must be a tuple of strings"
+            msg = "columns_removed must be a list or tuple of strings"
             raise ValueError(msg)
 
         if not all(isinstance(col, str) for col in self.columns_removed):
@@ -245,7 +263,7 @@ class ReconciliationResult:
             raise ValueError(msg)
 
         if not isinstance(self.columns_renamed, tuple):
-            msg = "columns_renamed must be a tuple of (old_name, new_name) tuples"
+            msg = "columns_renamed must be a list or tuple of (old_name, new_name) tuples"
             raise ValueError(msg)
 
         for old_name, new_name in self.columns_renamed:
@@ -254,7 +272,7 @@ class ReconciliationResult:
                 raise ValueError(msg)
 
         if not isinstance(self.orphaned_items, tuple):
-            msg = "orphaned_items must be a tuple of strings"
+            msg = "orphaned_items must be a list or tuple of strings"
             raise ValueError(msg)
 
         if not all(isinstance(item_id, str) for item_id in self.orphaned_items):
@@ -289,8 +307,12 @@ class BoardConfig:
             msg = "board_id must be a non-empty string"
             raise ValueError(msg)
 
+        # Coerce list to tuple for deep immutability
+        if isinstance(self.expected_columns, list):
+            object.__setattr__(self, 'expected_columns', tuple(self.expected_columns))
+
         if not isinstance(self.expected_columns, tuple):
-            msg = "expected_columns must be a tuple of strings"
+            msg = "expected_columns must be a list or tuple of strings"
             raise ValueError(msg)
 
         if not all(isinstance(col, str) and col for col in self.expected_columns):

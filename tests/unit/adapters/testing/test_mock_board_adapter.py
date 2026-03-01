@@ -74,7 +74,7 @@ class TestCreateBoard:
 
         board = asyncio.run(adapter.get_board("proj-1", "board-1"))
         for column in board.columns:
-            assert column.work_item_ids == []
+            assert column.work_item_ids == ()
 
 
 class TestAddItemToColumn:

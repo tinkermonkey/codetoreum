@@ -59,6 +59,30 @@ class ExecutionContext:
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
+        # Coerce list to tuple for message_history
+        if isinstance(self.message_history, list):
+            object.__setattr__(self, 'message_history', tuple(self.message_history))
+
+        # Coerce list to tuple for available_files
+        if isinstance(self.available_files, list):
+            object.__setattr__(self, 'available_files', tuple(self.available_files))
+
+        # Coerce list to tuple for mcp_servers
+        if isinstance(self.mcp_servers, list):
+            object.__setattr__(self, 'mcp_servers', tuple(self.mcp_servers))
+
+        # Coerce dict to MappingProxyType for mounted_context_files
+        if isinstance(self.mounted_context_files, dict):
+            object.__setattr__(self, 'mounted_context_files', MappingProxyType(self.mounted_context_files))
+
+        # Coerce dict to MappingProxyType for environment_variables
+        if isinstance(self.environment_variables, dict):
+            object.__setattr__(self, 'environment_variables', MappingProxyType(self.environment_variables))
+
+        # Coerce dict to MappingProxyType for metadata
+        if isinstance(self.metadata, dict):
+            object.__setattr__(self, 'metadata', MappingProxyType(self.metadata))
+
         if self.model is not None:
             if not isinstance(self.model, str) or not self.model:
                 msg = "model must be a non-empty string or None"
@@ -91,7 +115,7 @@ class ExecutionContext:
                 raise ValueError(msg)
 
         if not isinstance(self.message_history, tuple):
-            msg = "message_history must be a tuple of dicts"
+            msg = "message_history must be a list or tuple of dicts"
             raise ValueError(msg)
 
         if self.system_prompt is not None:
@@ -117,19 +141,19 @@ class ExecutionContext:
                 raise ValueError(msg)
 
         if not isinstance(self.mounted_context_files, MappingProxyType):
-            msg = "mounted_context_files must be a MappingProxyType"
+            msg = "mounted_context_files must be a dict or MappingProxyType"
             raise ValueError(msg)
 
         if not isinstance(self.available_files, tuple):
-            msg = "available_files must be a tuple of strings"
+            msg = "available_files must be a list or tuple of strings"
             raise ValueError(msg)
 
         if not isinstance(self.environment_variables, MappingProxyType):
-            msg = "environment_variables must be a MappingProxyType"
+            msg = "environment_variables must be a dict or MappingProxyType"
             raise ValueError(msg)
 
         if not isinstance(self.mcp_servers, tuple):
-            msg = "mcp_servers must be a tuple of dicts"
+            msg = "mcp_servers must be a list or tuple of dicts"
             raise ValueError(msg)
 
         if self.user_id is not None:
@@ -148,7 +172,7 @@ class ExecutionContext:
                 raise ValueError(msg)
 
         if not isinstance(self.metadata, MappingProxyType):
-            msg = "metadata must be a MappingProxyType"
+            msg = "metadata must be a dict or MappingProxyType"
             raise ValueError(msg)
 
 
@@ -168,6 +192,14 @@ class ToolDefinition:
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
+        # Coerce dict to MappingProxyType for parameters
+        if isinstance(self.parameters, dict):
+            object.__setattr__(self, 'parameters', MappingProxyType(self.parameters))
+
+        # Coerce list to tuple for required
+        if isinstance(self.required, list):
+            object.__setattr__(self, 'required', tuple(self.required))
+
         if not isinstance(self.name, str) or not self.name:
             msg = "name must be a non-empty string"
             raise ValueError(msg)
@@ -177,11 +209,11 @@ class ToolDefinition:
             raise ValueError(msg)
 
         if not isinstance(self.parameters, MappingProxyType):
-            msg = "parameters must be a MappingProxyType"
+            msg = "parameters must be a dict or MappingProxyType"
             raise ValueError(msg)
 
         if not isinstance(self.required, tuple):
-            msg = "required must be a tuple of strings"
+            msg = "required must be a list or tuple of strings"
             raise ValueError(msg)
 
         if not all(isinstance(r, str) and r for r in self.required):
@@ -204,12 +236,16 @@ class ToolCall:
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
+        # Coerce dict to MappingProxyType for arguments
+        if isinstance(self.arguments, dict):
+            object.__setattr__(self, 'arguments', MappingProxyType(self.arguments))
+
         if not isinstance(self.tool_name, str) or not self.tool_name:
             msg = "tool_name must be a non-empty string"
             raise ValueError(msg)
 
         if not isinstance(self.arguments, MappingProxyType):
-            msg = "arguments must be a MappingProxyType"
+            msg = "arguments must be a dict or MappingProxyType"
             raise ValueError(msg)
 
         if not isinstance(self.call_id, str) or not self.call_id:
@@ -231,12 +267,16 @@ class ToolCallDelta:
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
+        # Coerce dict to MappingProxyType for delta
+        if isinstance(self.delta, dict):
+            object.__setattr__(self, 'delta', MappingProxyType(self.delta))
+
         if not isinstance(self.call_id, str) or not self.call_id:
             msg = "call_id must be a non-empty string"
             raise ValueError(msg)
 
         if not isinstance(self.delta, MappingProxyType):
-            msg = "delta must be a MappingProxyType"
+            msg = "delta must be a dict or MappingProxyType"
             raise ValueError(msg)
 
 
@@ -262,6 +302,10 @@ class StreamChunk:
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
+        # Coerce dict to MappingProxyType for metadata
+        if isinstance(self.metadata, dict):
+            object.__setattr__(self, 'metadata', MappingProxyType(self.metadata))
+
         if not isinstance(self.content, str):
             msg = "content must be a string"
             raise ValueError(msg)
@@ -284,7 +328,7 @@ class StreamChunk:
             raise ValueError(msg)
 
         if not isinstance(self.metadata, MappingProxyType):
-            msg = "metadata must be a MappingProxyType"
+            msg = "metadata must be a dict or MappingProxyType"
             raise ValueError(msg)
 
 
@@ -323,6 +367,14 @@ class ExecutionResult:
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
+        # Coerce list to tuple for tool_calls
+        if isinstance(self.tool_calls, list):
+            object.__setattr__(self, 'tool_calls', tuple(self.tool_calls))
+
+        # Coerce dict to MappingProxyType for metadata
+        if isinstance(self.metadata, dict):
+            object.__setattr__(self, 'metadata', MappingProxyType(self.metadata))
+
         if not isinstance(self.content, str) or not self.content:
             msg = "content must be a non-empty string"
             raise ValueError(msg)
@@ -332,7 +384,7 @@ class ExecutionResult:
             raise ValueError(msg)
 
         if not isinstance(self.tool_calls, tuple):
-            msg = "tool_calls must be a tuple of ToolCall instances"
+            msg = "tool_calls must be a list or tuple of ToolCall instances"
             raise ValueError(msg)
 
         if not all(isinstance(tc, ToolCall) for tc in self.tool_calls):
@@ -382,7 +434,7 @@ class ExecutionResult:
             raise ValueError(msg)
 
         if not isinstance(self.metadata, MappingProxyType):
-            msg = "metadata must be a MappingProxyType"
+            msg = "metadata must be a dict or MappingProxyType"
             raise ValueError(msg)
 
     @property
@@ -413,6 +465,10 @@ class ModelInfo:
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
+        # Coerce dict to MappingProxyType for metadata
+        if isinstance(self.metadata, dict):
+            object.__setattr__(self, 'metadata', MappingProxyType(self.metadata))
+
         if not isinstance(self.model_id, str) or not self.model_id:
             msg = "model_id must be a non-empty string"
             raise ValueError(msg)
@@ -450,7 +506,7 @@ class ModelInfo:
             raise ValueError(msg)
 
         if not isinstance(self.metadata, MappingProxyType):
-            msg = "metadata must be a MappingProxyType"
+            msg = "metadata must be a dict or MappingProxyType"
             raise ValueError(msg)
 
 
@@ -474,6 +530,10 @@ class UsageStats:
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
+        # Coerce dict to MappingProxyType for by_model
+        if isinstance(self.by_model, dict):
+            object.__setattr__(self, 'by_model', MappingProxyType(self.by_model))
+
         if isinstance(self.total_requests, bool) or not isinstance(self.total_requests, int) or self.total_requests < 0:
             msg = "total_requests must be a non-negative integer"
             raise ValueError(msg)
@@ -503,7 +563,7 @@ class UsageStats:
             raise ValueError(msg)
 
         if not isinstance(self.by_model, MappingProxyType):
-            msg = "by_model must be a MappingProxyType"
+            msg = "by_model must be a dict or MappingProxyType"
             raise ValueError(msg)
 
 
