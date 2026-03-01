@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
 from types import MappingProxyType
-from typing import Any
+from typing import Any, cast
 
 from codetoreum.domain.agent import Agent
 from codetoreum.domain.agent_execution import AgentExecution, ExecutionStatus
@@ -798,18 +798,15 @@ class ExecutionService:
         Returns:
             LLM provider execution context
         """
-        # Ensure metadata is a MappingProxyType (domain layer wraps it during __post_init__)
-        metadata = context.metadata
-        if isinstance(metadata, dict) and not isinstance(metadata, MappingProxyType):
-            metadata = MappingProxyType(metadata)
-
+        # Cast metadata to MappingProxyType for type safety.
+        # LLMExecutionContext.__post_init__ will validate it at runtime.
         return LLMExecutionContext(
             model=context.model,
             timeout_seconds=context.timeout_seconds,
             environment_variables=MappingProxyType({}),
             session_id=context.previous_session_id,
             execution_id=None,  # Will be set by provider
-            metadata=metadata,
+            metadata=cast("MappingProxyType", context.metadata),
         )
 
     def _create_stream_callback(

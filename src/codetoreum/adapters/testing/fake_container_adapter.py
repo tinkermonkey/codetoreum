@@ -242,15 +242,25 @@ class FakeContainerAdapter(IContainer):
                 cmd_key = " ".join(command)
                 if cmd_key in self._command_results:
                     result = self._command_results[cmd_key]
-                    result.container_id = container_id
-                    return result
+                    return ContainerResult(
+                        exit_code=result.exit_code,
+                        stdout=result.stdout,
+                        stderr=result.stderr,
+                        duration_ms=result.duration_ms,
+                        container_id=container_id,
+                    )
 
                 # Check for first word match
                 first_word = command[0]
                 if first_word in self._command_results:
                     result = self._command_results[first_word]
-                    result.container_id = container_id
-                    return result
+                    return ContainerResult(
+                        exit_code=result.exit_code,
+                        stdout=result.stdout,
+                        stderr=result.stderr,
+                        duration_ms=result.duration_ms,
+                        container_id=container_id,
+                    )
 
             # Apply probabilistic failures for HIGH fidelity
             if self._should_fail_for_high_fidelity():
@@ -444,7 +454,7 @@ class FakeContainerAdapter(IContainer):
                 "user": user,
                 "network": network,
                 "labels": labels or {},
-                "status": "created",
+                "status": "exited",
                 "created_at": datetime.now(UTC),
                 "started_at": None,
                 "finished_at": None,
