@@ -798,12 +798,7 @@ class ExecutionService:
         Returns:
             LLM provider execution context
         """
-        # Convert environment_variables to MappingProxyType if it's a dict
-        env_vars = context.environment_variables
-        if isinstance(env_vars, dict) and not isinstance(env_vars, MappingProxyType):
-            env_vars = MappingProxyType(env_vars)
-
-        # Convert metadata to MappingProxyType if it's a dict
+        # Ensure metadata is a MappingProxyType (domain layer wraps it during __post_init__)
         metadata = context.metadata
         if isinstance(metadata, dict) and not isinstance(metadata, MappingProxyType):
             metadata = MappingProxyType(metadata)
@@ -811,7 +806,7 @@ class ExecutionService:
         return LLMExecutionContext(
             model=context.model,
             timeout_seconds=context.timeout_seconds,
-            environment_variables=env_vars,
+            environment_variables=MappingProxyType({}),
             session_id=context.previous_session_id,
             execution_id=None,  # Will be set by provider
             metadata=metadata,

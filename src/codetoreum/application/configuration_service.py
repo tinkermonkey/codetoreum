@@ -253,31 +253,39 @@ class ConfigurationService:
         old_values = {
             "model": config.model,
             "timeout": config.timeout,
-            "mcp_servers": config.mcp_servers.copy(),
+            "mcp_servers": list(config.mcp_servers) if config.mcp_servers else [],
         }
 
-        # Apply updates
+        # Apply updates - create new immutable config with updated fields
+        updates_dict: dict[str, Any] = {}
         if "model" in command.updates:
-            config.model = command.updates["model"]
+            updates_dict["model"] = command.updates["model"]
         if "timeout" in command.updates:
-            config.timeout = command.updates["timeout"]
+            updates_dict["timeout"] = command.updates["timeout"]
         if "requires_docker" in command.updates:
-            config.requires_docker = command.updates["requires_docker"]
+            updates_dict["requires_docker"] = command.updates["requires_docker"]
         if "makes_code_changes" in command.updates:
-            config.makes_code_changes = command.updates["makes_code_changes"]
+            updates_dict["makes_code_changes"] = command.updates["makes_code_changes"]
         if "mcp_servers" in command.updates:
-            config.mcp_servers = command.updates["mcp_servers"]
+            updates_dict["mcp_servers"] = command.updates["mcp_servers"]
         if "capabilities" in command.updates:
-            config.capabilities = command.updates["capabilities"]
+            updates_dict["capabilities"] = command.updates["capabilities"]
         if "constraints" in command.updates:
-            config.constraints = command.updates["constraints"]
+            updates_dict["constraints"] = command.updates["constraints"]
 
-        # Update metadata
-        config.updated_at = datetime.now(UTC)
-        config.version += 1
-        config.metadata["updated_by"] = command.user_id
+        # Update metadata dict
+        metadata_dict = dict(config.metadata) if isinstance(config.metadata, Mapping) else config.metadata.copy()
+        metadata_dict["updated_by"] = command.user_id
         if command.reason:
-            config.metadata["update_reason"] = command.reason
+            metadata_dict["update_reason"] = command.reason
+        updates_dict["metadata"] = MappingProxyType(metadata_dict)
+
+        # Add timestamp and version
+        updates_dict["updated_at"] = datetime.now(UTC)
+        updates_dict["version"] = config.version + 1
+
+        # Create new config instance with updated fields (frozen dataclass)
+        config = replace(config, **updates_dict)
 
         # Save configuration
         await self.config_store.save_agent_config(config)
@@ -355,22 +363,30 @@ class ConfigurationService:
 
         # Store old values
         old_values = {
-            "stages": config.stages.copy(),
-            "triggers": config.triggers.copy(),
+            "stages": list(config.stages) if config.stages else [],
+            "triggers": list(config.triggers) if config.triggers else [],
         }
 
-        # Apply updates
+        # Apply updates - create new immutable config with updated fields
+        updates_dict: dict[str, Any] = {}
         if "stages" in command.updates:
-            config.stages = command.updates["stages"]
+            updates_dict["stages"] = command.updates["stages"]
         if "triggers" in command.updates:
-            config.triggers = command.updates["triggers"]
+            updates_dict["triggers"] = command.updates["triggers"]
 
-        # Update metadata
-        config.updated_at = datetime.now(UTC)
-        config.version += 1
-        config.metadata["updated_by"] = command.user_id
+        # Update metadata dict
+        metadata_dict = dict(config.metadata) if isinstance(config.metadata, Mapping) else config.metadata.copy()
+        metadata_dict["updated_by"] = command.user_id
         if command.reason:
-            config.metadata["update_reason"] = command.reason
+            metadata_dict["update_reason"] = command.reason
+        updates_dict["metadata"] = MappingProxyType(metadata_dict)
+
+        # Add timestamp and version
+        updates_dict["updated_at"] = datetime.now(UTC)
+        updates_dict["version"] = config.version + 1
+
+        # Create new config instance with updated fields (frozen dataclass)
+        config = replace(config, **updates_dict)
 
         # Save configuration
         await self.config_store.save_pipeline_config(config)
@@ -888,6 +904,8 @@ class ConfigurationService:
         """
         Deep merge source into target dict.
 
+        Handles both mutable dicts and immutable Mapping types (MappingProxyType).
+
         Args:
             target: Target dictionary to merge into
             source: Source dictionary or Mapping to merge from
@@ -895,9 +913,18 @@ class ConfigurationService:
         Returns:
             The merged target dictionary
         """
-        for key, value in source.items():
-            if key in target and isinstance(target[key], dict) and isinstance(value, dict):
-                self._deep_merge(target[key], value)
+        # Convert Mapping to dict if needed for iteration
+        source_dict = dict(source) if isinstance(source, Mapping) and not isinstance(source, dict) else source
+
+        for key, value in source_dict.items():
+            if key in target and isinstance(target[key], dict):
+                # Recursively merge if target value is dict and source value is dict-like
+                if isinstance(value, (dict, Mapping)):
+                    # Convert Mapping to dict for recursive merge
+                    value_dict = dict(value) if isinstance(value, Mapping) and not isinstance(value, dict) else value
+                    self._deep_merge(target[key], value_dict)
+                else:
+                    target[key] = value
             else:
                 target[key] = value
         return target

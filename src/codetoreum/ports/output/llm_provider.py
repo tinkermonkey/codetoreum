@@ -1,7 +1,7 @@
 """ILLMProvider output port interface."""
 
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -72,15 +72,21 @@ class ExecutionContext:
             object.__setattr__(self, "mcp_servers", tuple(self.mcp_servers))
 
         # Coerce dict to MappingProxyType for mounted_context_files
-        if isinstance(self.mounted_context_files, dict):
+        if isinstance(self.mounted_context_files, dict) and not isinstance(self.mounted_context_files, MappingProxyType):
+            object.__setattr__(self, "mounted_context_files", MappingProxyType(self.mounted_context_files))
+        elif isinstance(self.mounted_context_files, Mapping) and not isinstance(self.mounted_context_files, MappingProxyType):
             object.__setattr__(self, "mounted_context_files", MappingProxyType(self.mounted_context_files))
 
         # Coerce dict to MappingProxyType for environment_variables
-        if isinstance(self.environment_variables, dict):
+        if isinstance(self.environment_variables, dict) and not isinstance(self.environment_variables, MappingProxyType):
+            object.__setattr__(self, "environment_variables", MappingProxyType(self.environment_variables))
+        elif isinstance(self.environment_variables, Mapping) and not isinstance(self.environment_variables, MappingProxyType):
             object.__setattr__(self, "environment_variables", MappingProxyType(self.environment_variables))
 
         # Coerce dict to MappingProxyType for metadata
-        if isinstance(self.metadata, dict):
+        if isinstance(self.metadata, dict) and not isinstance(self.metadata, MappingProxyType):
+            object.__setattr__(self, "metadata", MappingProxyType(self.metadata))
+        elif isinstance(self.metadata, Mapping) and not isinstance(self.metadata, MappingProxyType):
             object.__setattr__(self, "metadata", MappingProxyType(self.metadata))
 
         if self.model is not None:
