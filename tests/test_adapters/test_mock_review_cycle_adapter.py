@@ -777,6 +777,13 @@ class TestCausalLinkingWithLLMOutput:
 
         result = await adapter.start_review_cycle(request)
 
+        # Verify the LLM adapter was never called (critical to the fix)
+        # The review decision was derived from analyzing prior_stage_output, not from an LLM call
+        assert llm_adapter.get_request_count() == 0, (
+            "LLM adapter should NOT be invoked during causal linking; "
+            "review decisions are derived from prior_stage_output deterministically"
+        )
+
         # Retrieve the cycle state to verify the prior output was evaluated
         cycle_state = await adapter.get_cycle_state("item-4")
         assert cycle_state is not None

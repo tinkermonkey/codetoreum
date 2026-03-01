@@ -134,13 +134,18 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         Args:
             clock: SimulationClock instance for deterministic time advancement
             llm_adapter: Optional LLM adapter for causal linking (evaluates actual LLM output
-                        instead of using pre-configured sequences). If provided, the adapter
-                        will analyze LLM maker output to derive review decisions (FR-2/US-2.2)
+                        instead of using pre-configured sequences). If provided, signals that
+                        causal linking should be enabled. NOTE: The adapter's execute() method
+                        is NOT invoked; only its presence signals mode selection. Review decisions
+                        are derived deterministically from analyzing request.previous_stage_output
+                        (FR-2/US-2.2)
         """
         super().__init__()
         self._clock = clock or SimulationClock()
         self._current_project: str | None = None
-        self._llm_adapter = llm_adapter
+        # Store whether causal linking is enabled (llm_adapter presence indicates intent)
+        # The actual LLM adapter object is not invoked; only its presence signals mode selection
+        self._use_causal_linking = llm_adapter is not None
 
         # Review state tracking
         self._review_cycles: dict[str, ReviewCycle] = {}
@@ -335,10 +340,10 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         human_escalation = False
 
         # Get or use default sequence
-        # If LLM adapter is configured, prefer using actual prior LLM output (causal linking FR-2/US-2.2)
+        # If causal linking is enabled, prefer using actual prior LLM output (causal linking FR-2/US-2.2)
         # Otherwise fall back to pre-configured sequences for backwards compatibility
         sequence = self._review_sequences.get(work_item_id, None)
-        use_llm_output = self._llm_adapter is not None and sequence is None
+        use_llm_output = self._use_causal_linking and sequence is None
 
         if sequence is None and not use_llm_output:
             # Default to approve on first iteration (backward compatibility)
@@ -353,9 +358,13 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
                 # Determine decision: either from sequence or by evaluating actual prior LLM output
                 if use_llm_output:
                     # Causal linking: evaluate actual LLM maker output from previous stage (FR-2/US-2.2)
-                    # Use request.previous_stage_output which contains the actual maker output
-                    # On iteration 1, this is the initial output; on later iterations, this
-                    # would be updated with the maker's revision based on review feedback
+                    # request.previous_stage_output is FROZEN (immutable) and contains the maker output
+                    # from the previous stage. The reviewer analyzes this static output deterministically.
+                    # In a multi-iteration review, the orchestrator would update request.previous_stage_output
+                    # between cycles if the maker revised their work; within a single cycle iteration,
+                    # the same maker_output is analyzed and produces the same decision. If the decision is
+                    # REQUEST_CHANGES, subsequent iterations will also request changes (deterministic behavior)
+                    # until max_iterations is reached and the cycle escalates to human review.
                     maker_output = request.previous_stage_output
 
                     decision_item = self._evaluate_llm_output(maker_output)
