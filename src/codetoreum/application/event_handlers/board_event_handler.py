@@ -390,19 +390,28 @@ class BoardColumnEventHandler(EventHandler):
                     },
                 )
                 # Next item holds lock but agent never triggered — emit event for observability.
-                # EventBus.publish is typed for DomainEvent; LockStuckEvent is a CodetoreumEvent
-                # but satisfies the same duck-typed interface (event_type property, metadata dict).
-                await self.event_bus.publish(
-                    LockStuckEvent(  # type: ignore[arg-type]
-                        type="lock.stuck",
-                        timestamp=datetime.now(UTC).isoformat(),
-                        source="board_event_handler",
-                        project_id=project_id,
-                        board_id=board_id,
-                        work_item_id=release_result.next_work_item_id,
-                        reason=str(e),
+                # NOTE: LockStuckEvent is a CodetoreumEvent; EventBus.publish is typed for
+                # DomainEvent and its Redis persistence path accesses DomainEvent-only fields
+                # (aggregate_id, aggregate_type, occurred_at). Wrap in try/except so an emission
+                # failure never cascades back into the lock-release flow.
+                try:
+                    await self.event_bus.publish(
+                        LockStuckEvent(  # type: ignore[arg-type]
+                            type="lock.stuck",
+                            timestamp=datetime.now(UTC).isoformat(),
+                            source="board_event_handler",
+                            project_id=project_id,
+                            board_id=board_id,
+                            work_item_id=release_result.next_work_item_id,
+                            reason=str(e),
+                        )
                     )
-                )
+                except Exception as emit_err:
+                    logger.error(
+                        f"Failed to emit LockStuckEvent for '{release_result.next_work_item_id}': {emit_err}",
+                        exc_info=True,
+                        extra={"error_id": "ERR_BOARD_EVENT_LOCK_STUCK_EMIT_FAILURE"},
+                    )
 
     # ========================================================================
     # Workflow Run Lifecycle Tracking
