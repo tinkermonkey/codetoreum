@@ -165,6 +165,10 @@ class MockCircuitBreaker(ICircuitBreaker):
         """Get current state."""
         return self._state
 
+    def is_open(self) -> bool:
+        """Return True if the circuit is currently open (rejecting calls)."""
+        return self._state == CircuitState.OPEN
+
     def get_stats(self) -> CircuitBreakerStats:
         """Return mock stats."""
         return CircuitBreakerStats(

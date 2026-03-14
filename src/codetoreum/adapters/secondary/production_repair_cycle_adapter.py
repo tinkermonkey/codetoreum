@@ -60,7 +60,6 @@ from codetoreum.domain.repair_cycle_types import (
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.resilience.exceptions import CircuitBreakerOpenError
-from codetoreum.infrastructure.resilience.interfaces import CircuitState
 from codetoreum.ports.output.repair_cycle_checkpoint_store import (
     IRepairCycleCheckpointStore,
 )
@@ -186,7 +185,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
         for test_type_index, test_config in enumerate(context.test_configs, start=1):
             # Check circuit breaker before starting test type
-            if self.circuit_breaker and self.circuit_breaker.get_state() == CircuitState.OPEN:
+            if self.circuit_breaker and self.circuit_breaker.is_open():
                 logger.warning(
                     "Circuit breaker triggered: max agent calls reached",
                     extra={
@@ -396,7 +395,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
         for file_path, failures in grouped_failures.items():
             # Check circuit breaker
-            if self.circuit_breaker and self.circuit_breaker.get_state() == CircuitState.OPEN:
+            if self.circuit_breaker and self.circuit_breaker.is_open():
                 logger.warning(
                     "Circuit breaker triggered during file fixes",
                     extra={
@@ -533,7 +532,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
         for warning in test_result.warning_list:
             # Check circuit breaker
-            if self.circuit_breaker and self.circuit_breaker.get_state() == CircuitState.OPEN:
+            if self.circuit_breaker and self.circuit_breaker.is_open():
                 logger.warning(
                     "Circuit breaker triggered during warning review",
                     extra={
@@ -1065,7 +1064,7 @@ Return a JSON response with the status of fixes applied."""
 
         for iteration in range(1, config.max_iterations + 1):
             # Check circuit breaker
-            if self.circuit_breaker and self.circuit_breaker.get_state() == CircuitState.OPEN:
+            if self.circuit_breaker and self.circuit_breaker.is_open():
                 error = "Circuit breaker: max agent calls reached"
                 logger.warning(
                     error,

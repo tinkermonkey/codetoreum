@@ -4,14 +4,34 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 
-@dataclass
+@dataclass(frozen=True)
 class ActiveRunInfo:
-    """Information about an active workflow run."""
+    """Information about an active workflow run.
+
+    Value object at the port boundary. All fields are validated at
+    construction to ensure contract integrity. Frozen to prevent
+    accidental mutation after creation.
+    """
 
     work_item_id: str
     run_id: str
     stage_name: str
     project_id: str
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not self.work_item_id:
+            msg = "work_item_id must be non-empty"
+            raise ValueError(msg)
+        if not self.run_id:
+            msg = "run_id must be non-empty"
+            raise ValueError(msg)
+        if not self.stage_name:
+            msg = "stage_name must be non-empty"
+            raise ValueError(msg)
+        if not self.project_id:
+            msg = "project_id must be non-empty"
+            raise ValueError(msg)
 
 
 class IActiveWorkflowRunRegistry(ABC):

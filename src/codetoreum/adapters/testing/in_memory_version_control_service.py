@@ -115,33 +115,6 @@ class InMemoryVersionControlService(IVersionControlService):
             default_branch="main",
         )
 
-    async def pull_latest(self, repo_path: str) -> None:
-        """Pull latest changes from remote.
-
-        Updates the local repository to match the remote, pulling all
-        new commits, branches, and tags.
-
-        Args:
-            repo_path: Local repository path
-
-        Raises:
-            ValidationError: Invalid repo path
-            RepositoryError: Pull operation failed (conflicts, network, etc.)
-        """
-        if repo_path not in self._repositories:
-            msg = f"Repository not found at path: {repo_path}"
-            raise RepositoryError(msg)
-
-        # Simulate pulling latest from remote
-        # In this mock, just mark that a pull occurred
-        repo = self._repositories[repo_path]
-        current_branch = repo["current_branch"]
-
-        # Add a new commit to simulate remote changes
-        if current_branch not in repo["commits"]:
-            repo["commits"][current_branch] = []
-        repo["commits"][current_branch].append("pull-latest-sha")
-
     async def checkout(self, repo_path: str, branch: str) -> None:
         """Checkout specific branch.
 
@@ -335,7 +308,7 @@ class InMemoryVersionControlService(IVersionControlService):
             raise RepositoryError(msg)
 
         # Simulation always treats workspace as having changes (agent produced output)
-        return RepositoryStatus(is_dirty=True, staged_files=["*"], unstaged_files=[])
+        return RepositoryStatus(is_dirty=True, staged_files=("*",), unstaged_files=())
 
     async def pull(self, repo_path: str, branch: str, remote: str = "origin") -> None:
         """Pull latest changes - no-op in simulation (already up to date)."""

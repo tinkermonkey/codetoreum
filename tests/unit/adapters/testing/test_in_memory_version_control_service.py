@@ -41,14 +41,6 @@ class TestInMemoryVersionControlServiceExceptions:
             await service.clone_repository("https://github.com/test/repo.git", "")
 
     @pytest.mark.asyncio
-    async def test_pull_latest_nonexistent_repo_raises_repository_error(self):
-        """Pulling from nonexistent repository should raise RepositoryError."""
-        service = InMemoryVersionControlService()
-
-        with pytest.raises(RepositoryError):
-            await service.pull_latest("/nonexistent/repo/path")
-
-    @pytest.mark.asyncio
     async def test_checkout_nonexistent_repo_raises_repository_error(self):
         """Checking out in nonexistent repository should raise RepositoryError."""
         service = InMemoryVersionControlService()
@@ -206,16 +198,6 @@ class TestInMemoryVersionControlServiceBehavior:
             int(sha, 16)  # Should be valid hex
         except ValueError:
             pytest.fail(f"Commit SHA is not valid hex: {sha}")
-
-    @pytest.mark.asyncio
-    async def test_pull_latest_succeeds(self):
-        """Pull latest should succeed without raising."""
-        service = InMemoryVersionControlService()
-        path = "/workspace/test-repo"
-
-        await service.clone_repository("https://github.com/test/repo.git", path)
-        # Should not raise
-        await service.pull_latest(path)
 
     @pytest.mark.asyncio
     async def test_push_existing_branch_succeeds(self):

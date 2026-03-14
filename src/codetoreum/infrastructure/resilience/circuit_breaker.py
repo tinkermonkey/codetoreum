@@ -138,6 +138,10 @@ class CircuitBreaker(ICircuitBreaker):
         """Get current circuit state."""
         return self._state
 
+    def is_open(self) -> bool:
+        """Return True if the circuit is currently open (rejecting calls)."""
+        return self._state == CircuitState.OPEN
+
     def get_stats(self) -> CircuitBreakerStats:
         """Get statistics."""
         return CircuitBreakerStats(

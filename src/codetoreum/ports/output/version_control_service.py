@@ -23,8 +23,8 @@ class RepositoryStatus:
     """
 
     is_dirty: bool
-    staged_files: list[str]
-    unstaged_files: list[str]
+    staged_files: tuple[str, ...]
+    unstaged_files: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -120,21 +120,6 @@ class IVersionControlService(ABC):
         Raises:
             ValidationError: Invalid URL or target path
             RepositoryError: Clone operation failed (network, auth, etc.)
-        """
-
-    @abstractmethod
-    async def pull_latest(self, repo_path: str) -> None:
-        """Pull latest changes from remote.
-
-        Updates the local repository to match the remote, pulling all
-        new commits, branches, and tags.
-
-        Args:
-            repo_path: Local repository path
-
-        Raises:
-            ValidationError: Invalid repo path
-            RepositoryError: Pull operation failed (conflicts, network, etc.)
         """
 
     @abstractmethod

@@ -141,6 +141,10 @@ class ICircuitBreaker(ABC):
         """Manually open circuit (for maintenance)."""
 
     @abstractmethod
+    def is_open(self) -> bool:
+        """Return True if the circuit is currently open (rejecting calls)."""
+
+    @abstractmethod
     def force_close(self) -> None:
         """Manually close circuit (for recovery)."""
 

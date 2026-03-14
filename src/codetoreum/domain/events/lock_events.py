@@ -417,6 +417,87 @@ class PipelineLockReleasedEvent(CodetoreumEvent):
 
 
 @dataclass(frozen=True)
+class LockStuckEvent(CodetoreumEvent):
+    """Emitted when a pipeline lock is stuck due to agent triggering failure.
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Events represent immutable facts—attempting to modify any field
+    will raise `FrozenInstanceError`. This immutability is essential because
+    events are the permanent record of state changes in the system and must
+    never be altered once created.
+
+    The next queued work item has acquired the lock but the agent failed to
+    start. Manual intervention is required to release the lock.
+
+    Attributes:
+        type (str): Fixed to "lock.stuck"
+        project_id (str): ID of the project
+        board_id (str): ID of the board containing the work item
+        work_item_id (str): ID of the work item holding the stuck lock
+        reason (str): Human-readable description of why the agent trigger failed
+
+    Example:
+        >>> event = LockStuckEvent(
+        ...     type="lock.stuck",
+        ...     timestamp="2025-01-14T10:30:00+00:00",
+        ...     source="board_event_handler",
+        ...     project_id="proj-1",
+        ...     board_id="board-1",
+        ...     work_item_id="123",
+        ...     reason="Agent executor timed out"
+        ... )
+        >>> event.reason = "other"  # ❌ Raises FrozenInstanceError
+    """
+
+    project_id: str = ""
+    board_id: str = ""
+    work_item_id: str = ""
+    reason: str = ""
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.project_id:
+            msg = "project_id is required"
+            raise ValueError(msg)
+        if not self.board_id:
+            msg = "board_id is required"
+            raise ValueError(msg)
+        if not self.work_item_id:
+            msg = "work_item_id is required"
+            raise ValueError(msg)
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update(
+            {
+                "project_id": self.project_id,
+                "board_id": self.board_id,
+                "work_item_id": self.work_item_id,
+                "reason": self.reason,
+            }
+        )
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "LockStuckEvent":
+        """Deserialize from dictionary."""
+        return cls(
+            type=data.get("type", "lock.stuck"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            project_id=data.get("project_id", ""),
+            board_id=data.get("board_id", ""),
+            work_item_id=data.get("work_item_id", ""),
+            reason=data.get("reason", ""),
+        )
+
+
+@dataclass(frozen=True)
 class WorkItemQueuedEvent(CodetoreumEvent):
     """Emitted when a work item is added to pipeline lock queue.
 
