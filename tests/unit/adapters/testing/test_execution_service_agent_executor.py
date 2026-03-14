@@ -238,7 +238,7 @@ class TestExecutionServiceAgentExecutorFailurePaths:
 
     @pytest.mark.asyncio
     async def test_start_execution_failure_calls_completion_with_failure(self):
-        """Step 9: start_execution returns success=False → completion called with False."""
+        """Step 9: start_execution returns success=False → finalize_workspace called, completion=False."""
         fx = ExecutorFixture()
         start_result = MagicMock()
         start_result.success = False
@@ -250,6 +250,10 @@ class TestExecutionServiceAgentExecutorFailurePaths:
 
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, False)
         fx.execution_service.execute_with_llm.assert_not_called()
+        # finalize_workspace must also be called with success=False (mirrors create_execution failure path)
+        fx.workspace_router.finalize_workspace.assert_called_once()
+        call_args = fx.workspace_router.finalize_workspace.call_args
+        assert call_args.args[2] == {"success": False}
 
     @pytest.mark.asyncio
     async def test_unexpected_exception_calls_completion_with_failure(self):
