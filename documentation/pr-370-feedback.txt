@@ -1,0 +1,114 @@
+Critical Issues — Must Fix Before Merge
+
+  1. Silent except Exception: pass in cleanup — CLAUDE.md violation
+  execution_service_agent_executor.py:340-344
+  Empty catch block in the finally clause swallows cleanup errors silently. If clear_run or clear_branch fails, the work item remains stuck in the
+  registry forever with no log, no error ID, and no signal.
+  # VIOLATION: replace pass with:
+  except Exception as cleanup_err:
+      logger.error("Failed to clean up ...", exc_info=True,
+                   extra={"error_id": "ERR_EXEC_CHAIN_CLEANUP_FAILURE"})
+
+  2. ProductionRepairCycleAdapter contract mismatch — docstring says raises CircuitBreakerOpenError, implementation never does
+  production_repair_cycle_adapter.py (execute docstring + inner loop)
+  The old code raised CircuitBreakerTripped; the new code logs a warning and breaks the loop — no exception is raised. Callers cannot distinguish
+  "circuit breaker fired" from "tests failed."
+
+  3. Port interface still references deleted exception class
+  ports/output/repair_cycle_service.py:70,90
+  IRepairCycle.execute() still documents Raises: CircuitBreakerTripped — a class deleted in Phase 0. Any caller who catches this exception type gets
+  nothing. Should reference CircuitBreakerOpenError from the resilience infrastructure.
+
+  4. InMemoryAgentRepository.save() doesn't update the project index — real bug
+  adapters/testing/in_memory_agent_repository.py:54-61
+  save() updates _agents_by_id and _agents_by_name but NOT _project_agents. Any application code that calls save() via the IAgentRepository interface and
+   then calls list_by_project() gets an empty list. Only the out-of-band save_for_project() helper maintains all three indexes. This is a functional bug
+  in Phase 3 execution.
+
+  5. SimulationDataSeeder docstring example is non-functional
+  infrastructure/simulation/seeding.py:77-86
+  The class docstring shows fluent chaining of async def methods which is impossible without await at each step. The example will raise AttributeError at
+   runtime. Additionally, create_agents takes list[dict[str, Any]] but the example passes list[str].
+
+  ---
+  Important Issues — Should Fix
+
+  6. Multiple logger.error/warning calls missing exc_info=True (CLAUDE.md: all errors logged with exc_info=True)
+  - VCS clone failure warning execution_service_agent_executor.py:232
+  - Workspace preparation failure execution_service_agent_executor.py:259
+  - Execution start failure execution_service_agent_executor.py:291
+
+  7. _branch_tracker.set_branch and create_execution are unguarded inside the outer try
+  execution_service_agent_executor.py:251, 281-308
+  Failures in these steps collapse into the generic ERR_EXEC_CHAIN_UNEXPECTED_FAILURE, making triage impossible. Each deserves its own catch with a
+  specific error ID.
+
+  8. Next-item trigger failure leaves pipeline lock permanently stuck
+  board_event_handler.py:382-391
+  When the next queued item acquires the lock but agent triggering fails, only a log comment (# PROBLEM) is written. No domain event is emitted, no
+  compensating action is taken. The work item is permanently blocked. At minimum, emit a LockStuckEvent.
+
+  9. RepositoryStatus uses mutable list[str] in a frozen dataclass
+  ports/output/version_control_service.py:17-27
+  Fields should be tuple[str, ...] to match the codebase standard (e.g., repository.py's existing RepositoryStatus). As-is, callers can mutate the
+  returned status object. This also creates two RepositoryStatus types in the codebase — the new one is weaker (no validation, missing fields like
+  current_branch, mutable).
+
+  10. pull_latest and pull have overlapping semantics
+  ports/output/version_control_service.py
+  Both methods pull from remote but with incompatible signatures. The interface doesn't specify what pull_latest does (which branch? all branches?). This
+   will produce divergent implementations. One should be removed or their relationship explicitly documented.
+
+  11. ActiveRunInfo is missing frozen=True and __post_init__ validation
+  ports/output/active_workflow_run_registry.py
+  It's a value object at a port boundary. All four fields are bare str with no validation — empty-string IDs are silently valid. Compare: Repository in
+  the same codebase has frozen=True and thorough __post_init__ guards.
+
+  12. No unit tests for ExecutionServiceAgentExecutor._run_execution failure paths
+  The 369-line adapter has 11 distinct early-exit paths, each calling _call_completion(success=False). The E2E tests cover only the happy path. A
+  regression that accidentally double-invokes _call_completion (triggering a double board auto-progression) would not be caught.
+
+  13. No tests for Phase 0 ProductionRepairCycleAdapter circuit breaker behavior
+  The architectural change (remove agent_call_count, inject ICircuitBreaker) has zero new test coverage. The total_agent_calls field emitted in
+  RepairCycleCompletedEvent now reads 0 when circuit_breaker is None, which is misleading.
+
+  14. ExecutionServiceAgentExecutor class docstring lists 9 steps; implementation has 11
+  execution_service_agent_executor.py:38-48
+  The docstring skips the workspace preparation step (a hard failure point that aborts execution) and merges four distinct steps into two. Developers
+  debugging workspace failures won't find them in the class overview.
+
+  15. CircuitState runtime import in adapter (partial resilience violation)
+  production_repair_cycle_adapter.py:62
+  ICircuitBreaker is correctly behind TYPE_CHECKING, but CircuitState (infrastructure enum) is a runtime import used in conditional logic throughout the
+  adapter. Adding is_open() -> bool to ICircuitBreaker would eliminate this coupling.
+
+  ---
+  Suggestions — Nice to Have
+
+  ┌─────┬──────────────────────────────────────────────────────────────────────────────────────────────┬──────────────────────────────────────────────┐
+  │  #  │                                           Finding                                            │                   Location                   │
+  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────┤
+  │ 16  │ VCS events assertion should be >= 3 (one per stage), not >= 1                                │ test_execution_chain_e2e.py:124-135          │
+  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────┤
+  │ 17  │ test_yaml_scenario_seeding_and_cascade conditionally skips cascade assertion; add            │ test_yaml_scenario_seeding.py:55-87          │
+  │     │ unconditional len(work_items) > 0 guard                                                      │                                              │
+  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────┤
+  │ 18  │ Multi-project test doesn't verify EventStore stream isolation (events from one run shouldn't │ test_multi_project_e2e.py                    │
+  │     │  appear in the other's stream)                                                               │                                              │
+  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────┤
+  │ 19  │ Rename IWorkItemBranchTracker.clear → clear_branch for symmetry with get_branch/set_branch   │ ports/output/work_item_branch_tracker.py     │
+  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────┤
+  │ 20  │ Use BranchName type alias (from domain/types.py) in IWorkItemBranchTracker.set_branch        │ ports/output/work_item_branch_tracker.py     │
+  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────┤
+  │ 21  │ set_active_run / set_branch docstrings don't specify overwrite-vs-raise on collision         │ Both new port interfaces                     │
+  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────┤
+  │ 22  │ Hardcoded self._default_board_id = "board-1" in __init__ creates a window before             │ execution_service_agent_executor.py          │
+  │     │ set_completion_handler is called                                                             │                                              │
+  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────┤
+  │ 23  │ Remove unused EventBuilder, AssertionHelpers, ScenarioHelpers from helpers.py                │ tests/simulation/helpers.py                  │
+  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────┤
+  │ 24  │ IActiveWorkflowRunRegistry class docstring should explain who calls set_active_run and       │ ports/output/active_workflow_run_registry.py │
+  │     │ get_active_run                                                                               │                                              │
+  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────┤
+  │ 25  │ seeding.py YAML parse error missing logger context before propagation                        │ infrastructure/simulation/seeding.py:1104    │
+  └─────┴──────────────────────────────────────────────────────────────────────────────────────────────┴──────────────────────────────────────────────┘
