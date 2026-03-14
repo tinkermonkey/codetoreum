@@ -41,18 +41,20 @@ class MockAgentExecutor(IAgentExecutor):
         self._executions: list[dict] = []
         self._lock = __import__("threading").Lock()
 
-    async def execute(self, work_item_id: str, agent_id: str) -> None:
+    async def execute(self, work_item_id: str, agent_id: str, board_id: str | None = None) -> None:
         """Record agent execution.
 
         Args:
             work_item_id: ID of work item being processed
             agent_id: ID of agent being executed
+            board_id: ID of the board containing the work item (optional)
         """
         with self._lock:
             self._executions.append(
                 {
                     "work_item_id": work_item_id,
                     "agent_id": agent_id,
+                    "board_id": board_id,
                     "timestamp": datetime.now(tz=UTC),
                 }
             )

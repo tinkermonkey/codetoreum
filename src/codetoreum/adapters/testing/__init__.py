@@ -9,6 +9,12 @@ from codetoreum.adapters.testing.capturing_mock_event_emitter import (
     CapturingMockEventEmitter,
 )
 from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
+from codetoreum.adapters.testing.in_memory_active_workflow_run_registry import (
+    InMemoryActiveWorkflowRunRegistry,
+)
+from codetoreum.adapters.testing.in_memory_agent_repository import (
+    InMemoryAgentRepository,
+)
 from codetoreum.adapters.testing.in_memory_checkpoint_store import InMemoryCheckpointStore
 from codetoreum.adapters.testing.in_memory_config_store import InMemoryConfigStore
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
@@ -22,6 +28,9 @@ from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorag
 from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
 from codetoreum.adapters.testing.in_memory_version_control_service import (
     InMemoryVersionControlService,
+)
+from codetoreum.adapters.testing.in_memory_work_item_branch_tracker import (
+    InMemoryWorkItemBranchTracker,
 )
 from codetoreum.adapters.testing.in_memory_workflow_config_service import (
     InMemoryWorkflowConfigService,
@@ -52,6 +61,9 @@ from codetoreum.adapters.testing.simple_encryption_adapter import (
 
 __all__ = [
     "CapturingMockEventEmitter",
+    "InMemoryActiveWorkflowRunRegistry",
+    "InMemoryAgentRepository",
+    "InMemoryWorkItemBranchTracker",
     "CircuitBreakerTripped",
     "ConfigurableIdentityService",
     "FakeContainerAdapter",

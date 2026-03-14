@@ -75,7 +75,7 @@ class MockAgentExecutor(IAgentExecutor):
         """
         self._execution_query = adapter
 
-    async def execute(self, work_item_id: str, agent_id: str) -> None:
+    async def execute(self, work_item_id: str, agent_id: str, board_id: str | None = None) -> None:
         """Execute an agent on a work item (fire-and-forget).
 
         Records the execution and schedules background work via
@@ -84,13 +84,16 @@ class MockAgentExecutor(IAgentExecutor):
         Args:
             work_item_id: ID of the work item to process
             agent_id: ID of the agent to execute
+            board_id: ID of the board containing the work item (optional, uses default if None)
         """
         execution_id = str(uuid4())
         now = datetime.now(UTC)
+        resolved_board_id = board_id or self._default_board_id
         self._executions.append(
             {
                 "work_item_id": work_item_id,
                 "agent_id": agent_id,
+                "board_id": resolved_board_id,
                 "started_at": now.isoformat(),
                 "execution_id": execution_id,
             }
@@ -122,7 +125,9 @@ class MockAgentExecutor(IAgentExecutor):
             )
             self._execution_query.add_execution(info)
 
-        task = asyncio.create_task(self._simulate_execution(work_item_id, agent_id, execution_id, now))
+        task = asyncio.create_task(
+            self._simulate_execution(work_item_id, agent_id, execution_id, now, resolved_board_id)
+        )
         self._pending_tasks.add(task)
         task.add_done_callback(self._pending_tasks.discard)
 
@@ -132,6 +137,7 @@ class MockAgentExecutor(IAgentExecutor):
         agent_id: str,
         execution_id: str,
         started_at: datetime,
+        board_id: str,
     ) -> None:
         """Simulate agent work then invoke completion callback."""
         try:
@@ -148,7 +154,7 @@ class MockAgentExecutor(IAgentExecutor):
             )
 
             if self._completion_callback:
-                await self._completion_callback(work_item_id, self._default_board_id, True)
+                await self._completion_callback(work_item_id, board_id, True)
             else:
                 logger.warning(
                     f"No completion callback set for MockAgentExecutor. "
@@ -175,7 +181,7 @@ class MockAgentExecutor(IAgentExecutor):
 
             if self._completion_callback:
                 try:
-                    await self._completion_callback(work_item_id, self._default_board_id, False)
+                    await self._completion_callback(work_item_id, board_id, False)
                 except Exception as cb_err:
                     logger.error(
                         f"Completion callback also failed for {work_item_id}: {cb_err}",

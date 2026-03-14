@@ -14,37 +14,13 @@ from typing import Any, cast
 
 import pytest
 
-from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
 from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationAdapters,
     SimulationApplicationBootstrap,
 )
 from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
-from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 from codetoreum.ports.output.board_service import MovedByType
-
-# ============================================================================
-# Helpers
-# ============================================================================
-
-
-async def wait_for_column(
-    board: MockBoardAdapter,
-    work_item_id: str,
-    target_column: str,
-    timeout: float = 5.0,
-) -> bool:
-    """Poll item position until it reaches target column or timeout."""
-    elapsed = 0.0
-    interval = 0.05
-    while elapsed < timeout:
-        await asyncio.sleep(interval)
-        elapsed += interval
-        pos = await board.get_item_position(work_item_id)
-        if pos.column_name == target_column:
-            return True
-    return False
-
+from tests.simulation.helpers import wait_for_column
 
 # ============================================================================
 # Fixtures
@@ -52,17 +28,15 @@ async def wait_for_column(
 
 
 @pytest.fixture
-async def e2e_env():
+async def e2e_env(
+    simulation_bootstrap: SimulationApplicationBootstrap,
+    simulation_seeder: SimulationDataSeeder,
+):
     """Bootstrap + seed, with fast agent execution delay."""
-    config = SimulationConfig.create_fast_config("e2e_cascade")
-    bootstrap = SimulationApplicationBootstrap(config)
-    await bootstrap.setup()
-    adapters = cast("SimulationAdapters", bootstrap.adapters)
+    adapters = cast("SimulationAdapters", simulation_bootstrap.adapters)
     adapters.agent_executor._execution_delay = 0.1
-    seeder = SimulationDataSeeder(bootstrap)
-    await seeder.seed_default_scenario()
-    yield bootstrap, seeder
-    await bootstrap.teardown()
+    await simulation_seeder.seed_default_scenario()
+    return simulation_bootstrap, simulation_seeder
 
 
 # ============================================================================
@@ -92,6 +66,9 @@ async def test_item_cascades_from_trigger_to_exit(e2e_env):
         f"Current position: {(await board.get_item_position(work_item_id)).column_name}"
     )
 
+    # Allow async event handlers (e.g., _complete_workflow_run) to finish
+    await asyncio.sleep(0.3)
+
     # Verify all 3 agents were triggered in order
     executions = adapters.agent_executor.executions
     item_executions = [e for e in executions if e["work_item_id"] == work_item_id]
@@ -118,6 +95,31 @@ async def test_item_cascades_from_trigger_to_exit(e2e_env):
     # Verify column progression path
     columns_visited = [history[0].from_column] + [m.to_column for m in history]
     assert columns_visited == ["Backlog", "Ready", "In Progress", "Review", "Done"]
+
+    # Verify workflow lifecycle events in EventStore
+    event_store = adapters.event_store
+    all_events = event_store.get_all_events_list()
+
+    # Find the workflow run ID for this work item by locating events with work_item_id in payload
+    workflow_run_id_events = [
+        e for e in all_events if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == work_item_id
+    ]
+    assert len(workflow_run_id_events) > 0, "No workflow lifecycle events found for this work item in EventStore"
+
+    # All workflow events for this run share the same aggregate_id (workflow_run_id)
+    workflow_run_id = workflow_run_id_events[0].aggregate_id
+
+    # Retrieve all events for this workflow run stream
+    workflow_events = [e for e in all_events if e.aggregate_id == workflow_run_id]
+    event_types = [e.event_type for e in workflow_events]
+
+    assert "WorkflowCreated" in event_types, f"WorkflowCreated not found, got: {event_types}"
+    assert "WorkflowStarted" in event_types, f"WorkflowStarted not found, got: {event_types}"
+    assert "WorkflowCompleted" in event_types, f"WorkflowCompleted not found, got: {event_types}"
+
+    # Verify stage advances happened (3 stages = 3 advances)
+    stage_advances = [e for e in workflow_events if e.event_type == "WorkflowStageAdvanced"]
+    assert len(stage_advances) == 3, f"Expected 3 stage advances (one per agent), got {len(stage_advances)}"
 
 
 @pytest.mark.asyncio
@@ -177,13 +179,14 @@ async def test_cascade_stops_on_agent_failure(
         agent_id: str,
         execution_id: str,
         started_at: Any,
+        board_id: str = "board-1",
     ) -> None:
         nonlocal call_count
         call_count += 1
         if call_count == 2:
             # Second agent (coder) fails
             raise RuntimeError("Simulated coder failure")
-        await original_simulate(work_item_id_arg, agent_id, execution_id, started_at)
+        await original_simulate(work_item_id_arg, agent_id, execution_id, started_at, board_id)
 
     monkeypatch.setattr(executor, "_simulate_execution", failing_simulate)
 

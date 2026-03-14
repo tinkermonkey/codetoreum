@@ -31,6 +31,7 @@ from codetoreum.domain.events import (
 )
 from codetoreum.infrastructure.event_bus import EventBus, EventHandler, event_handler
 from codetoreum.ports.exceptions import ExternalServiceError, ResourceNotFoundError
+from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
 from codetoreum.ports.output.agent_executor import IAgentExecutor
 from codetoreum.ports.output.board_service import IBoardService, MovedByType
 from codetoreum.ports.output.event_store import IEventStore
@@ -83,6 +84,7 @@ class BoardColumnEventHandler(EventHandler):
         agent_executor: IAgentExecutor,
         event_bus: EventBus,
         event_store: IEventStore | None = None,
+        run_registry: IActiveWorkflowRunRegistry | None = None,
     ):
         """
         Initialize board column event handler.
@@ -94,6 +96,7 @@ class BoardColumnEventHandler(EventHandler):
             agent_executor: Service for triggering agent executions
             event_bus: Event bus for publishing domain events
             event_store: Optional event store for persisting workflow lifecycle events
+            run_registry: Optional registry for tracking active workflow runs
         """
         self.board_service = board_service
         self.lock_service = lock_service
@@ -101,6 +104,7 @@ class BoardColumnEventHandler(EventHandler):
         self.agent_executor = agent_executor
         self.event_bus = event_bus
         self.event_store = event_store
+        self.run_registry = run_registry
         # Tracks active workflow runs: work_item_id -> run metadata
         self._active_runs: dict[str, dict[str, Any]] = {}
 
@@ -184,7 +188,7 @@ class BoardColumnEventHandler(EventHandler):
 
         # Trigger agent if column has one and is automated
         if column_config.agent_id and column_config.type == ColumnType.AUTOMATED:
-            await self._trigger_agent(work_item_id, column_config)
+            await self._trigger_agent(work_item_id, column_config, board_id)
 
     async def _handle_pipeline_trigger(
         self,
@@ -278,7 +282,7 @@ class BoardColumnEventHandler(EventHandler):
 
             # Trigger agent if column has one
             if column_config.agent_id:
-                await self._trigger_agent(work_item_id, column_config)
+                await self._trigger_agent(work_item_id, column_config, board_id)
 
         elif result.status == LockStatus.QUEUED:
             logger.info(
@@ -294,7 +298,7 @@ class BoardColumnEventHandler(EventHandler):
             # Even though the lock is already held, we should still trigger the agent
             # when re-entering the column (e.g., after reviewer rejection in maker-checker flow)
             if column_config.agent_id:
-                await self._trigger_agent(work_item_id, column_config)
+                await self._trigger_agent(work_item_id, column_config, board_id)
 
     async def _handle_exit_column(
         self,
@@ -364,7 +368,7 @@ class BoardColumnEventHandler(EventHandler):
 
                 if next_column_config and next_column_config.agent_id:
                     logger.info(f"Triggering agent for next queued item: {release_result.next_work_item_id}")
-                    await self._trigger_agent(release_result.next_work_item_id, next_column_config)
+                    await self._trigger_agent(release_result.next_work_item_id, next_column_config, board_id)
             except ResourceNotFoundError as e:
                 logger.warning(
                     f"Next queued item {release_result.next_work_item_id} not found: {e}",
@@ -441,6 +445,22 @@ class BoardColumnEventHandler(EventHandler):
                 exc_info=True,
                 extra={"error_id": "ERR_BOARD_EVENT_WORKFLOW_RUN_START_FAILURE"},
             )
+
+        # Also register in active run registry if available
+        if self.run_registry:
+            try:
+                await self.run_registry.set_active_run(
+                    work_item_id=work_item_id,
+                    run_id=workflow_run_id,
+                    stage_name=column_config.name,
+                    project_id=project_id,
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to register active run for {work_item_id}: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_BOARD_EVENT_RUN_REGISTRY_FAILURE"},
+                )
 
     async def _advance_workflow_stage(
         self,
@@ -538,13 +558,14 @@ class BoardColumnEventHandler(EventHandler):
                 extra={"error_id": "ERR_BOARD_EVENT_WORKFLOW_RUN_FAIL_FAILURE"},
             )
 
-    async def _trigger_agent(self, work_item_id: str, column_config: ColumnTemplate) -> None:
+    async def _trigger_agent(self, work_item_id: str, column_config: ColumnTemplate, board_id: str = "board-1") -> None:
         """
         Trigger agent execution for a work item.
 
         Args:
             work_item_id: ID of work item to process
             column_config: Column configuration with agent assignment
+            board_id: ID of the board containing the work item (default: "board-1")
 
         Raises:
             Exception: Logs error but doesn't re-raise to prevent event
@@ -556,8 +577,27 @@ class BoardColumnEventHandler(EventHandler):
 
         logger.info(f"Triggering agent '{column_config.agent_id}' for {work_item_id}")
 
+        # Update registry with current stage (so executor knows which stage is active)
+        if self.run_registry and work_item_id in self._active_runs:
+            run_info = self._active_runs[work_item_id]
+            try:
+                await self.run_registry.set_active_run(
+                    work_item_id=work_item_id,
+                    run_id=run_info["run_id"],
+                    stage_name=column_config.name,
+                    project_id=run_info.get("project_id", ""),
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to update active run registry for {work_item_id}: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_BOARD_EVENT_RUN_REGISTRY_UPDATE_FAILURE"},
+                )
+
         try:
-            await self.agent_executor.execute(work_item_id=work_item_id, agent_id=column_config.agent_id)
+            await self.agent_executor.execute(
+                work_item_id=work_item_id, agent_id=column_config.agent_id, board_id=board_id
+            )
         except Exception as e:
             logger.error(
                 f"Agent execution failed for {work_item_id}: {e}",

@@ -19,6 +19,7 @@ import yaml
 from codetoreum.adapters.testing.in_memory_config_store import InMemoryConfigStore
 from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
+from codetoreum.domain.agent import Agent, AgentCapability, AgentType
 from codetoreum.domain.board_workflow_template import (
     BoardWorkflowTemplate,
     ColumnTemplate,
@@ -31,11 +32,13 @@ from codetoreum.infrastructure.simulation.bootstrap import (
 )
 from codetoreum.infrastructure.simulation.scenario_models import ScenarioModel
 from codetoreum.ports.exceptions import ValidationError
+from codetoreum.ports.output.agent_repository import IAgentRepository
 from codetoreum.ports.output.config_store import (
     AgentConfig,
     PipelineConfig,
     ProjectConfig,
 )
+from codetoreum.ports.output.work_item_service import IWorkItemService
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +90,8 @@ class SimulationDataSeeder:
         self,
         bootstrap: SimulationApplicationBootstrap,
         track_items: bool = True,
+        agent_repository: IAgentRepository | None = None,
+        work_item_service: IWorkItemService | None = None,
     ):
         """
         Initialize data seeder.
@@ -94,6 +99,8 @@ class SimulationDataSeeder:
         Args:
             bootstrap: Simulation bootstrap with configured adapters
             track_items: Whether to track created items for cleanup
+            agent_repository: Optional agent repository to populate with domain Agent objects
+            work_item_service: Optional work item service to mirror work items into
         """
         if not bootstrap._is_setup:
             message = "Bootstrap must be set up before seeding"
@@ -108,6 +115,8 @@ class SimulationDataSeeder:
         self._ticket_adapter: InMemoryTicketAdapter = self.adapters.ticket_system
         self._config_store: InMemoryConfigStore = self.adapters.config_store
         self._board_adapter: MockBoardAdapter = self.adapters.board
+        self._agent_repository: IAgentRepository | None = agent_repository
+        self._work_item_service: IWorkItemService | None = work_item_service
 
         # Defaults
         self._current_project_id: str | None = None
@@ -326,6 +335,40 @@ class SimulationDataSeeder:
 
             await self._config_store.save_agent_config(agent_config)
 
+            # Also save to agent repository if available (for ExecutionServiceAgentExecutor)
+            if self._agent_repository is not None:
+                # Build default capabilities from the agent's capability list
+                # Each capability string becomes an AgentCapability with full proficiency
+                cap_list = agent_def.get("capabilities", ["code_generation"])
+                default_capabilities: dict[str, AgentCapability] = {
+                    cap: AgentCapability(skill=cap, proficiency=1.0, description=cap)
+                    for cap in (cap_list if cap_list else ["code_generation"])
+                }
+                agent_domain = Agent(
+                    id=agent_name,  # Use agent_name as ID so column_config.agent_id matches
+                    name=agent_name,
+                    display_name=agent_def.get("description", agent_name),
+                    agent_type=AgentType.MAKER,
+                    capabilities=default_capabilities,
+                    role_description=agent_def.get("description", ""),
+                    model=agent_def.get("llm_model", "claude-sonnet-4-6"),
+                    timeout_seconds=agent_def.get("timeout", 3600),
+                    max_retries=3,
+                    requires_docker=agent_def.get("requires_docker", False),
+                    requires_dev_container=False,
+                    makes_code_changes=agent_def.get("makes_code_changes", True),
+                    filesystem_write_allowed=True,
+                    mcp_servers=[],
+                    metadata={},
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
+                )
+                # Use save_for_project if available (InMemoryAgentRepository), else just save
+                if hasattr(self._agent_repository, "save_for_project"):
+                    await self._agent_repository.save_for_project(project_id, agent_domain)
+                else:
+                    await self._agent_repository.save(agent_domain)
+
             if self.track_items:
                 self.created_items.agents.append(agent_name)
 
@@ -381,6 +424,10 @@ class SimulationDataSeeder:
             # Update status if not NEW
             if status != WorkItemStatus.NEW:
                 work_item.status = status
+
+            # Mirror into work_item_service if available (for ExecutionServiceAgentExecutor)
+            if self._work_item_service is not None and hasattr(self._work_item_service, "_work_items"):
+                self._work_item_service._work_items[work_item.id] = work_item  # type: ignore[attr-defined]
 
             if self.track_items:
                 self.created_items.work_items.append(work_item.id)
@@ -608,6 +655,138 @@ class SimulationDataSeeder:
 
         logger.info("Default scenario seeded successfully")
         return self
+
+    async def seed_two_project_scenario(self) -> tuple[str, str]:
+        """Seed two independent projects (Alpha and Beta) for multi-project testing.
+
+        Creates two separate boards with independent agents and work items.
+        Each project has the same workflow columns:
+        Backlog -> Ready -> In Progress -> Review -> Done
+
+        Project Alpha uses board-alpha with agents: alpha-architect, alpha-coder, alpha-tester
+        Project Beta uses board-beta with agents: beta-architect, beta-coder, beta-tester
+
+        Returns:
+            Tuple of (alpha_work_item_id, beta_work_item_id)
+        """
+        logger.info("Seeding two-project scenario (Alpha + Beta)...")
+
+        # ---- Project Alpha ----
+        await self.create_project(
+            name="alpha-project",
+            description="Alpha test project",
+        )
+        alpha_project_id = self._current_project_id
+
+        await self.create_workflow(
+            name="alpha-workflow",
+            description="Alpha 3-stage workflow",
+        )
+
+        await self.create_agents(
+            [
+                {
+                    "name": "alpha-architect",
+                    "agent_type": "architect",
+                    "description": "Alpha architect agent",
+                    "capabilities": ["code_generation", "code_review"],
+                },
+                {
+                    "name": "alpha-coder",
+                    "agent_type": "coder",
+                    "description": "Alpha developer agent",
+                    "capabilities": ["code_generation"],
+                },
+                {
+                    "name": "alpha-tester",
+                    "agent_type": "tester",
+                    "description": "Alpha QA tester agent",
+                    "capabilities": ["code_review", "testing"],
+                },
+            ]
+        )
+
+        await self.create_work_items(
+            count=1,
+            title_prefix="Alpha Issue",
+            labels=["alpha", "test"],
+        )
+        alpha_work_item_id = self.created_items.work_items[-1]
+
+        await self.create_board(
+            board_id="board-alpha",
+            board_name="Alpha Board",
+            column_names=["Backlog", "Ready", "In Progress", "Review", "Done"],
+            project_id=alpha_project_id,
+        )
+
+        self.register_workflow_template(
+            board_id="board-alpha",
+            column_names=["Backlog", "Ready", "In Progress", "Review", "Done"],
+            agent_types=["alpha-architect", "alpha-coder", "alpha-tester"],
+        )
+
+        await self.place_item_on_board("board-alpha", "Backlog", alpha_work_item_id, project_id=alpha_project_id)
+
+        # ---- Project Beta ----
+        await self.create_project(
+            name="beta-project",
+            description="Beta test project",
+        )
+        beta_project_id = self._current_project_id
+
+        await self.create_workflow(
+            name="beta-workflow",
+            description="Beta 3-stage workflow",
+        )
+
+        await self.create_agents(
+            [
+                {
+                    "name": "beta-architect",
+                    "agent_type": "architect",
+                    "description": "Beta architect agent",
+                    "capabilities": ["code_generation", "code_review"],
+                },
+                {
+                    "name": "beta-coder",
+                    "agent_type": "coder",
+                    "description": "Beta developer agent",
+                    "capabilities": ["code_generation"],
+                },
+                {
+                    "name": "beta-tester",
+                    "agent_type": "tester",
+                    "description": "Beta QA tester agent",
+                    "capabilities": ["code_review", "testing"],
+                },
+            ]
+        )
+
+        await self.create_work_items(
+            count=1,
+            title_prefix="Beta Issue",
+            labels=["beta", "test"],
+        )
+        beta_work_item_id = self.created_items.work_items[-1]
+
+        await self.create_board(
+            board_id="board-beta",
+            board_name="Beta Board",
+            column_names=["Backlog", "Ready", "In Progress", "Review", "Done"],
+            project_id=beta_project_id,
+        )
+
+        self.register_workflow_template(
+            board_id="board-beta",
+            column_names=["Backlog", "Ready", "In Progress", "Review", "Done"],
+            agent_types=["beta-architect", "beta-coder", "beta-tester"],
+        )
+
+        await self.place_item_on_board("board-beta", "Backlog", beta_work_item_id, project_id=beta_project_id)
+
+        logger.info(f"Two-project scenario seeded: alpha={alpha_work_item_id}, beta={beta_work_item_id}")
+        return alpha_work_item_id, beta_work_item_id
 
     async def seed_simple_workflow(self) -> "SimulationDataSeeder":
         """
