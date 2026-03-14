@@ -79,11 +79,11 @@ class SimulationDataSeeder:
         await seeder.seed_default_scenario()
 
         # Or custom:
-        await seeder \
-            .create_project("my-project") \
-            .create_workflow("3-stage-workflow") \
-            .create_agents(["coder", "reviewer"]) \
-            .create_work_items(count=10)
+        await seeder.create_project("my-project")
+        await seeder.create_workflow("3-stage-workflow")
+        await seeder.create_agents([{"name": "coder", "capabilities": ["code_generation"]},
+                                    {"name": "reviewer", "capabilities": ["review"]}])
+        await seeder.create_work_items(count=10)
     """
 
     def __init__(
@@ -363,11 +363,7 @@ class SimulationDataSeeder:
                     created_at=datetime.now(UTC),
                     updated_at=datetime.now(UTC),
                 )
-                # Use save_for_project if available (InMemoryAgentRepository), else just save
-                if hasattr(self._agent_repository, "save_for_project"):
-                    await self._agent_repository.save_for_project(project_id, agent_domain)
-                else:
-                    await self._agent_repository.save(agent_domain)
+                await self._agent_repository.save(agent_domain, project_id)
 
             if self.track_items:
                 self.created_items.agents.append(agent_name)

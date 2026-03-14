@@ -341,7 +341,12 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                     await self._run_registry.clear_run(work_item_id)
                     await self._branch_tracker.clear(work_item_id)
                 except Exception:
-                    pass
+                    logger.error(
+                        f"Failed to clean up registry/branch-tracker for '{work_item_id}' "
+                        "after execution failure — work item may be stuck",
+                        exc_info=True,
+                        extra={"error_id": "ERR_EXEC_CHAIN_CLEANUP_FAILURE"},
+                    )
 
         await self._call_completion(work_item_id, board_id, success)
 

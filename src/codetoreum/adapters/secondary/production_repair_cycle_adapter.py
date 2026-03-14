@@ -59,6 +59,7 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestWarning,
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.infrastructure.resilience.exceptions import CircuitBreakerOpenError
 from codetoreum.infrastructure.resilience.interfaces import CircuitState
 from codetoreum.ports.output.repair_cycle_checkpoint_store import (
     IRepairCycleCheckpointStore,
@@ -204,7 +205,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         workflow_run_id=context.workflow_run_id,
                     )
                 )
-                break
+                raise CircuitBreakerOpenError("Max agent calls reached; circuit breaker is open")
 
             # Execute test type cycle
             cycle_result = await self._run_test_cycle(
@@ -405,7 +406,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     },
                     exc_info=False,
                 )
-                break
+                raise CircuitBreakerOpenError("Max agent calls reached; circuit breaker is open")
 
             # Emit file fix started event
             timestamp = datetime.now(UTC).isoformat()
@@ -541,7 +542,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     },
                     exc_info=False,
                 )
-                break
+                raise CircuitBreakerOpenError("Max agent calls reached; circuit breaker is open")
 
             # Emit warning review started event
             timestamp = datetime.now(UTC).isoformat()
@@ -1075,7 +1076,7 @@ Return a JSON response with the status of fixes applied."""
                     },
                     exc_info=False,
                 )
-                break
+                raise CircuitBreakerOpenError("Max agent calls reached; circuit breaker is open")
 
             try:
                 # Run tests

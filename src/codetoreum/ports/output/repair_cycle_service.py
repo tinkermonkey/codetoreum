@@ -67,7 +67,7 @@ class IRepairCycle(Protocol):
     6. Optionally review warnings after success
 
     Raises:
-        CircuitBreakerTripped: When max_total_agent_calls exceeded
+        CircuitBreakerOpenError: When max_total_agent_calls exceeded
         TimeoutError: When test execution exceeds timeout
         JSONParseError: When agent returns invalid JSON (after retries)
     """
@@ -87,7 +87,7 @@ class IRepairCycle(Protocol):
             RepairCycleResult with overall success status and per-test-type results
 
         Raises:
-            CircuitBreakerTripped: When max_total_agent_calls exceeded
+            CircuitBreakerOpenError: When circuit breaker is open
         """
         ...
 
@@ -133,6 +133,9 @@ class IRepairCycle(Protocol):
 
         Returns:
             Number of files fixed (may be less than input if some fail)
+
+        Raises:
+            CircuitBreakerOpenError: When circuit breaker is open
         """
         ...
 
@@ -158,6 +161,9 @@ class IRepairCycle(Protocol):
 
         Returns:
             Number of warning files reviewed
+
+        Raises:
+            CircuitBreakerOpenError: When circuit breaker is open
         """
         ...
 

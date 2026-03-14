@@ -51,14 +51,17 @@ class InMemoryAgentRepository(IAgentRepository):
             raise ResourceNotFoundError("Agent", name)
         return self._agents_by_name[name]
 
-    async def save(self, agent: Agent) -> None:
+    async def save(self, agent: Agent, project_id: str | None = None) -> None:
         """Persist an agent.
 
         Args:
             agent: Agent domain object to persist
+            project_id: Optional project to associate the agent with
         """
         self._agents_by_id[agent.id] = agent
         self._agents_by_name[agent.name] = agent
+        if project_id:
+            self._project_agents.setdefault(project_id, set()).add(agent.id)
 
     async def list_by_project(self, project_id: str) -> list[Agent]:
         """List all agents for a project.
@@ -82,7 +85,4 @@ class InMemoryAgentRepository(IAgentRepository):
             project_id: Project identifier
             agent: Agent domain object to persist
         """
-        await self.save(agent)
-        if project_id not in self._project_agents:
-            self._project_agents[project_id] = set()
-        self._project_agents[project_id].add(agent.id)
+        await self.save(agent, project_id)

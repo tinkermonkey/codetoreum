@@ -37,11 +37,12 @@ class IAgentRepository(ABC):
         """
 
     @abstractmethod
-    async def save(self, agent: Agent) -> None:
+    async def save(self, agent: Agent, project_id: str | None = None) -> None:
         """Persist an agent.
 
         Args:
             agent: Agent domain object to persist
+            project_id: Optional project to associate the agent with
         """
 
     @abstractmethod
