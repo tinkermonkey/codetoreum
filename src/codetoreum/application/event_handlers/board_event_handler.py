@@ -22,6 +22,7 @@ from codetoreum.domain.board_workflow_template import (
 )
 from codetoreum.domain.events import (
     DomainEvent,
+    LockStuckEvent,
     WorkflowCompleted,
     WorkflowCreated,
     WorkflowFailed,
@@ -388,7 +389,20 @@ class BoardColumnEventHandler(EventHandler):
                         "work_item_id": release_result.next_work_item_id,
                     },
                 )
-                # Next item holds lock but agent never triggered - PROBLEM
+                # Next item holds lock but agent never triggered — emit event for observability.
+                # EventBus.publish is typed for DomainEvent; LockStuckEvent is a CodetoreumEvent
+                # but satisfies the same duck-typed interface (event_type property, metadata dict).
+                await self.event_bus.publish(
+                    LockStuckEvent(  # type: ignore[arg-type]
+                        type="lock.stuck",
+                        timestamp=datetime.now(UTC).isoformat(),
+                        source="board_event_handler",
+                        project_id=project_id,
+                        board_id=board_id,
+                        work_item_id=release_result.next_work_item_id,
+                        reason=str(e),
+                    )
+                )
 
     # ========================================================================
     # Workflow Run Lifecycle Tracking

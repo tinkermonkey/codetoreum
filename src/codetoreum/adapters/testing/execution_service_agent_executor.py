@@ -36,15 +36,17 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
 
     This adapter replaces MockAgentExecutor for Phase 3 testing. It drives the
     full execution chain:
-    1. Looks up active run from registry (set by BoardColumnEventHandler)
-    2. Loads domain objects (Agent, WorkItem, ProjectConfig → ProjectContext)
-    3. Clones repository and routes workspace
-    4. Builds execution context
-    5. Creates and starts execution via ExecutionService
-    6. Executes via LLM path (default) or Container path (requires_docker=True)
-    7. Finalizes workspace (commits, pushes)
-    8. Clears registry entries
-    9. Calls completion callback for board auto-progression
+    1.  Looks up active run from registry (set by BoardColumnEventHandler)
+    2.  Loads domain objects (Agent, WorkItem, ProjectConfig → ProjectContext)
+    3.  Clones repository (synthetic path in simulation)
+    4.  Routes workspace
+    5.  Tracks branch in IWorkItemBranchTracker
+    6.  Prepares workspace (writes context files, etc.)
+    7.  Builds execution context via ExecutionContextBuilder
+    8.  Creates execution via ExecutionService
+    9.  Starts execution and validates start result
+    10. Executes via LLM path (default) or Container path (requires_docker=True)
+    11. Finalizes workspace, clears registry/branch-tracker, calls completion callback
     """
 
     def __init__(
@@ -230,6 +232,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             except Exception as e:
                 logger.warning(
                     f"VCS clone failed (non-fatal in simulation): {e}",
+                    exc_info=True,
                     extra={"error_id": "ERR_EXEC_CHAIN_VCS_CLONE_FAILURE"},
                 )
                 # In simulation, continue even if clone "fails" (path may already exist)
@@ -248,7 +251,16 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
 
             # Step 5: Track branch
             if workspace.branch_name:
-                await self._branch_tracker.set_branch(work_item_id, workspace.branch_name)
+                try:
+                    await self._branch_tracker.set_branch(work_item_id, workspace.branch_name)
+                except Exception as e:
+                    logger.error(
+                        f"Branch tracker set_branch failed for '{work_item_id}': {e}",
+                        exc_info=True,
+                        extra={"error_id": "ERR_EXEC_CHAIN_BRANCH_TRACKER_FAILURE"},
+                    )
+                    await self._call_completion(work_item_id, board_id, False)
+                    return
 
             # Step 6: Prepare workspace
             prep_result = await self._workspace_router.prepare_workspace(
@@ -257,6 +269,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             if not prep_result.success:
                 logger.error(
                     f"Workspace preparation failed for '{work_item_id}': {prep_result.reason}",
+                    exc_info=True,
                     extra={"error_id": "ERR_EXEC_CHAIN_WORKSPACE_PREPARE_FAILURE"},
                 )
                 await self._call_completion(work_item_id, board_id, False)
@@ -272,23 +285,38 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 workspace=workspace,
             )
 
-            # Step 8: Create and start execution
+            # Step 8: Create execution
             prompt = (
                 f"Process work item {work_item_id}: "
                 f"{getattr(work_item, 'title', work_item_id)} "
                 f"— stage: {run_info.stage_name}"
             )
-            execution = await self._execution_service.create_execution(
-                agent=agent,
-                work_item=work_item,
-                workflow_id=run_info.run_id,
-                stage_name=run_info.stage_name,
-                prompt=prompt,
-            )
+            try:
+                execution = await self._execution_service.create_execution(
+                    agent=agent,
+                    work_item=work_item,
+                    workflow_id=run_info.run_id,
+                    stage_name=run_info.stage_name,
+                    prompt=prompt,
+                )
+            except Exception as e:
+                logger.error(
+                    f"create_execution failed for '{work_item_id}': {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_EXEC_CHAIN_CREATE_EXECUTION_FAILURE"},
+                )
+                await self._workspace_router.finalize_workspace(
+                    workspace, project_context, {"success": False}, repo_path
+                )
+                await self._call_completion(work_item_id, board_id, False)
+                return
+
+            # Step 9: Start execution
             start_result = await self._execution_service.start_execution(execution, context)
             if not start_result.success:
                 logger.error(
                     f"Failed to start execution for '{work_item_id}': {start_result.error}",
+                    exc_info=True,
                     extra={"error_id": "ERR_EXEC_CHAIN_EXECUTION_START_FAILURE"},
                 )
                 await self._workspace_router.finalize_workspace(
@@ -297,7 +325,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 await self._call_completion(work_item_id, board_id, False)
                 return
 
-            # Step 9: Execute via LLM or Container
+            # Step 10: Execute via LLM or Container
             if agent.requires_docker:
                 container_config = ContainerConfig(
                     image="codetoreum-agent:latest",
@@ -307,7 +335,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             else:
                 exec_result = await self._execution_service.execute_with_llm(execution, context)
 
-            # Step 10: Finalize workspace
+            # Step 11: Finalize workspace
             await self._workspace_router.finalize_workspace(
                 workspace,
                 project_context,
@@ -315,7 +343,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 repo_path,
             )
 
-            # Step 11: Clear registry
+            # Step 11 (continued): Clear registry
             await self._run_registry.clear_run(work_item_id)
             await self._branch_tracker.clear(work_item_id)
 
