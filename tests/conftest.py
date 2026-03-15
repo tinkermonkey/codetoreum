@@ -341,10 +341,11 @@ def _cleanup_dead_letter_queues() -> Generator[None, None, None]:
         loop = asyncio.get_event_loop()
         if loop and not loop.is_closed():
             # Import here to avoid circular imports
+            import gc
+
             from codetoreum.infrastructure.dead_letter_queue import DeadLetterQueue
 
             # Find all DeadLetterQueue instances that might be running
-            import gc
             for obj in gc.get_objects():
                 if isinstance(obj, DeadLetterQueue) and obj._running:
                     # Stop the retry processor
