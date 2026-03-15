@@ -22,13 +22,18 @@ Architecture:
 - Circuit breaker preventing exceeding max_total_agent_calls
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from codetoreum.infrastructure.resilience.interfaces import ICircuitBreaker
 
 from codetoreum.domain.events.repair_cycle_events import (
     RepairCycleCheckpointFailedEvent,
@@ -54,6 +59,7 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestWarning,
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.infrastructure.resilience.exceptions import CircuitBreakerOpenError
 from codetoreum.ports.output.repair_cycle_checkpoint_store import (
     IRepairCycleCheckpointStore,
 )
@@ -63,10 +69,6 @@ from codetoreum.ports.output.repair_cycle_service import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-class CircuitBreakerTripped(Exception):
-    """Raised when max_total_agent_calls exceeded."""
 
 
 class JSONParseError(Exception):
@@ -123,6 +125,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         config: RepairCycleConfig = None,
         event_emitter: Any = None,
         checkpoint_store: IRepairCycleCheckpointStore = None,
+        circuit_breaker: ICircuitBreaker | None = None,
     ) -> None:
         """Initialize production repair cycle adapter.
 
@@ -131,12 +134,13 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             config: Optional RepairCycleConfig (uses defaults if not provided)
             event_emitter: Optional event emitter (uses null-object if not provided)
             checkpoint_store: Optional checkpoint store for resumable repairs
+            circuit_breaker: Optional circuit breaker for LLM call protection
         """
         self.llm_provider = llm_provider
         self.config = config or RepairCycleConfig()
         self.event_emitter = event_emitter or NullEventEmitter()
         self.checkpoint_store = checkpoint_store
-        self.agent_call_count = 0
+        self.circuit_breaker = circuit_breaker
 
     async def execute(self, context: RepairCycleContext) -> RepairCycleResult:
         """Execute complete repair cycle for all configured test types.
@@ -153,7 +157,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             RepairCycleResult with overall success status and per-test-type results
 
         Raises:
-            CircuitBreakerTripped: When max_total_agent_calls exceeded
+            CircuitBreakerOpenError: When circuit breaker is open
             ValueError: If test_configs is empty
         """
         if not context.test_configs:
@@ -181,14 +185,12 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
         for test_type_index, test_config in enumerate(context.test_configs, start=1):
             # Check circuit breaker before starting test type
-            if self.agent_call_count >= context.max_total_agent_calls:
+            if self.circuit_breaker and self.circuit_breaker.is_open():
                 logger.warning(
                     "Circuit breaker triggered: max agent calls reached",
                     extra={
                         "workflow_run_id": context.workflow_run_id,
                         "test_type": test_config.test_type.value,
-                        "agent_calls": self.agent_call_count,
-                        "max_calls": context.max_total_agent_calls,
                     },
                     exc_info=False,
                 )
@@ -202,7 +204,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         workflow_run_id=context.workflow_run_id,
                     )
                 )
-                break
+                raise CircuitBreakerOpenError("Max agent calls reached; circuit breaker is open")
 
             # Execute test type cycle
             cycle_result = await self._run_test_cycle(
@@ -222,6 +224,8 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         end_time = datetime.now(UTC)
         duration_seconds = (end_time - start_time).total_seconds()
 
+        total_agent_calls = self.circuit_breaker.get_stats().total_calls if self.circuit_breaker else 0
+
         if test_results:
             self.event_emitter.emit(
                 RepairCycleCompletedEvent(
@@ -230,7 +234,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     source="production_repair_cycle",
                     overall_success=overall_success,
                     test_results=tuple(test_results),
-                    total_agent_calls=self.agent_call_count,
+                    total_agent_calls=total_agent_calls,
                     duration_seconds=duration_seconds,
                     workflow_run_id=context.workflow_run_id,
                 )
@@ -240,7 +244,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             stage=context.stage_name,
             test_results=tuple(test_results),
             overall_success=overall_success,
-            total_agent_calls=self.agent_call_count,
+            total_agent_calls=total_agent_calls,
             duration_seconds=duration_seconds,
             timestamp=cycle_start_timestamp,
         )
@@ -263,17 +267,10 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             RepairTestResult with pass/fail counts and failure details
 
         Raises:
-            CircuitBreakerTripped: When max_total_agent_calls exceeded
+            CircuitBreakerOpenError: When circuit breaker is open
             TimeoutError: When test execution exceeds timeout
             JSONParseError: When agent returns invalid JSON (after retries)
         """
-        # Check circuit breaker
-        if self.agent_call_count >= context.max_total_agent_calls:
-            msg = f"Max agent calls ({context.max_total_agent_calls}) exceeded"
-            raise CircuitBreakerTripped(msg)
-
-        self.agent_call_count += 1
-
         # Build test command based on framework detection
         test_command = self._detect_and_build_test_command(config)
 
@@ -290,11 +287,20 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         )
 
         try:
-            # Call LLM to execute tests
-            agent_response = await self.llm_provider.execute(
-                prompt=f"Execute the following test command and return results as JSON:\n\n{test_command}",
-                timeout=config.timeout,
-            )
+            # Call LLM to execute tests (with circuit breaker if configured)
+            prompt = f"Execute the following test command and return results as JSON:\n\n{test_command}"
+            if self.circuit_breaker:
+                agent_response = await self.circuit_breaker.call(
+                    self.llm_provider.execute,
+                    "repair_cycle.run_tests",
+                    prompt=prompt,
+                    timeout=config.timeout,
+                )
+            else:
+                agent_response = await self.llm_provider.execute(
+                    prompt=prompt,
+                    timeout=config.timeout,
+                )
 
             # Parse test output with retry logic
             test_output = await self._parse_test_output_with_retry(agent_response, config.test_type)
@@ -383,26 +389,23 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             Number of files fixed (may be less than input if some fail)
 
         Raises:
-            CircuitBreakerTripped: When max_total_agent_calls exceeded
+            CircuitBreakerOpenError: When circuit breaker is open
         """
         fixed = 0
 
         for file_path, failures in grouped_failures.items():
             # Check circuit breaker
-            if self.agent_call_count >= context.max_total_agent_calls:
+            if self.circuit_breaker and self.circuit_breaker.is_open():
                 logger.warning(
                     "Circuit breaker triggered during file fixes",
                     extra={
                         "workflow_run_id": context.workflow_run_id,
                         "file": file_path,
                         "failures": len(failures),
-                        "agent_calls": self.agent_call_count,
                     },
                     exc_info=False,
                 )
-                break
-
-            self.agent_call_count += 1
+                raise CircuitBreakerOpenError("Max agent calls reached; circuit breaker is open")
 
             # Emit file fix started event
             timestamp = datetime.now(UTC).isoformat()
@@ -433,10 +436,18 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     exc_info=False,
                 )
 
-                await self.llm_provider.execute(
-                    prompt=fix_prompt,
-                    timeout=config.timeout,
-                )
+                if self.circuit_breaker:
+                    await self.circuit_breaker.call(
+                        self.llm_provider.execute,
+                        "repair_cycle.fix_failures_by_file",
+                        prompt=fix_prompt,
+                        timeout=config.timeout,
+                    )
+                else:
+                    await self.llm_provider.execute(
+                        prompt=fix_prompt,
+                        timeout=config.timeout,
+                    )
 
                 # Emit file fix completed event (success)
                 self.event_emitter.emit(
@@ -512,7 +523,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             Number of warning files reviewed
 
         Raises:
-            CircuitBreakerTripped: When max_total_agent_calls exceeded
+            CircuitBreakerOpenError: When circuit breaker is open
         """
         if not test_result.warning_list or not config.review_warnings:
             return 0
@@ -521,19 +532,16 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
         for warning in test_result.warning_list:
             # Check circuit breaker
-            if self.agent_call_count >= context.max_total_agent_calls:
+            if self.circuit_breaker and self.circuit_breaker.is_open():
                 logger.warning(
                     "Circuit breaker triggered during warning review",
                     extra={
                         "workflow_run_id": context.workflow_run_id,
                         "file": warning.file,
-                        "agent_calls": self.agent_call_count,
                     },
                     exc_info=False,
                 )
-                break
-
-            self.agent_call_count += 1
+                raise CircuitBreakerOpenError("Max agent calls reached; circuit breaker is open")
 
             # Emit warning review started event
             timestamp = datetime.now(UTC).isoformat()
@@ -565,10 +573,18 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     exc_info=False,
                 )
 
-                await self.llm_provider.execute(
-                    prompt=review_prompt,
-                    timeout=config.timeout,
-                )
+                if self.circuit_breaker:
+                    await self.circuit_breaker.call(
+                        self.llm_provider.execute,
+                        "repair_cycle.handle_warnings",
+                        prompt=review_prompt,
+                        timeout=config.timeout,
+                    )
+                else:
+                    await self.llm_provider.execute(
+                        prompt=review_prompt,
+                        timeout=config.timeout,
+                    )
 
                 # Emit warning review completed event (success)
                 self.event_emitter.emit(
@@ -649,7 +665,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 workflow_run_id=context.workflow_run_id,
                 test_type=test_type,
                 iteration=iteration,
-                total_agent_calls=self.agent_call_count,
+                total_agent_calls=self.circuit_breaker.get_stats().total_calls if self.circuit_breaker else 0,
                 files_fixed=0,  # Would be tracked by application layer
                 warnings_reviewed=0,  # Would be tracked by application layer
                 elapsed_seconds=0.0,  # Would be tracked by application layer
@@ -667,7 +683,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     "workflow_run_id": context.workflow_run_id,
                     "test_type": test_type.value,
                     "iteration": iteration,
-                    "agent_calls": self.agent_call_count,
+                    "agent_calls": self.circuit_breaker.get_stats().total_calls if self.circuit_breaker else 0,
                     "expires_at": expires_at,
                 },
                 exc_info=False,
@@ -1048,7 +1064,7 @@ Return a JSON response with the status of fixes applied."""
 
         for iteration in range(1, config.max_iterations + 1):
             # Check circuit breaker
-            if self.agent_call_count >= context.max_total_agent_calls:
+            if self.circuit_breaker and self.circuit_breaker.is_open():
                 error = "Circuit breaker: max agent calls reached"
                 logger.warning(
                     error,
@@ -1059,7 +1075,7 @@ Return a JSON response with the status of fixes applied."""
                     },
                     exc_info=False,
                 )
-                break
+                raise CircuitBreakerOpenError("Max agent calls reached; circuit breaker is open")
 
             try:
                 # Run tests
@@ -1112,6 +1128,8 @@ Return a JSON response with the status of fixes applied."""
                             extra={"workflow_run_id": context.workflow_run_id},
                         )
 
+            except CircuitBreakerOpenError:
+                raise
             except Exception as e:
                 error = str(e)
                 logger.error(

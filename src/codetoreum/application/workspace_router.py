@@ -7,10 +7,10 @@ from typing import Any
 
 from codetoreum.domain.agent import Agent
 from codetoreum.domain.project_context import ProjectContext
-from codetoreum.domain.types import BranchName
 from codetoreum.domain.work_item import WorkItem
 from codetoreum.domain.workspace_context import WorkspaceContext
-from codetoreum.ports.output import IContainer, IEventStore, IRepository
+from codetoreum.ports.output import IContainer, IEventStore
+from codetoreum.ports.output.version_control_service import IVersionControlService
 
 logger = logging.getLogger(__name__)
 
@@ -96,21 +96,24 @@ class WorkspaceRouter:
 
     def __init__(
         self,
-        repository: IRepository,
-        container: IContainer,
-        event_store: IEventStore,
+        vcs: IVersionControlService | None = None,
+        container: IContainer | None = None,
+        event_store: IEventStore | None = None,
         config: WorkspaceRouterConfig | None = None,
+        repository: IVersionControlService | None = None,  # Backward-compat: used as vcs if vcs is None
     ):
         """
         Initialize WorkspaceRouter.
 
         Args:
-            repository: Repository operations port
+            vcs: Version control service port (preferred)
             container: Container orchestration port
             event_store: Event store port for emitting events
             config: Optional configuration (uses defaults if not provided)
+            repository: Deprecated; pass vcs instead. Used as vcs if vcs is None.
         """
-        self.repository = repository
+        # Accept repository as vcs for backward compatibility
+        self.vcs: IVersionControlService | None = vcs if vcs is not None else repository
         self.container = container
         self.event_store = event_store
         self.config = config or WorkspaceRouterConfig()
@@ -126,6 +129,8 @@ class WorkspaceRouter:
             event: Event to emit
         """
         try:
+            if self.event_store is None:
+                return
             await self.event_store.append(event.aggregate_id, [event])
         except Exception as e:
             self._logger.error(
@@ -264,36 +269,46 @@ class WorkspaceRouter:
             f"Preparing workspace type={context.workspace_type.value}, project={project.id}, work_item={work_item.id}"
         )
 
+        if self.vcs is None:
+            return WorkspacePreparationResult(
+                success=False,
+                workspace_context=context,
+                workspace_dir=Path(repository_path),
+                reason="No VCS adapter configured",
+                metadata={},
+            )
+
         metadata: dict[str, Any] = {}
 
         try:
             if context.should_create_branch():
                 # Issue workspace - prepare git branch
                 repo_path = Path(repository_path)
+                repo_path_str = str(repo_path)
 
                 # Check if branch exists
-                branches = await self.repository.list_branches(repo_path, remote=True)
+                branches = await self.vcs.list_branches(repo_path_str, remote=True)
                 branch_exists = context.branch_name in branches
 
                 if branch_exists:
                     # Checkout existing branch
                     self._logger.info(f"Checking out existing branch: {context.branch_name}")
-                    await self.repository.checkout(repo_path, BranchName(context.branch_name or ""), create=False)
+                    await self.vcs.checkout(repo_path_str, context.branch_name or "")
                     metadata["branch_action"] = "checkout_existing"
                 else:
                     # Create new branch from base
                     self._logger.info(f"Creating new branch: {context.branch_name}")
-                    await self.repository.create_branch(
-                        repo_path,
-                        BranchName(context.branch_name or ""),
-                        from_branch=BranchName(project.default_branch),
+                    await self.vcs.create_branch(
+                        repo_path_str,
+                        context.branch_name or "",
+                        from_branch=project.default_branch,
                     )
-                    await self.repository.checkout(repo_path, BranchName(context.branch_name or ""), create=False)
+                    await self.vcs.checkout(repo_path_str, context.branch_name or "")
                     metadata["branch_action"] = "create_new"
 
                 # Update branch with latest from base
                 self._logger.info(f"Pulling latest changes from {project.default_branch}")
-                await self.repository.pull(repo_path, remote="origin", branch=project.default_branch)
+                await self.vcs.pull(repo_path_str, branch=project.default_branch)
                 metadata["updated_from_base"] = True
 
                 return WorkspacePreparationResult(
@@ -359,6 +374,15 @@ class WorkspaceRouter:
         """
         self._logger.info(f"Finalizing workspace type={context.workspace_type.value}, project={project.id}")
 
+        if self.vcs is None:
+            return WorkspaceFinalizationResult(
+                success=False,
+                commit_sha=None,
+                pr_url=None,
+                reason="No VCS adapter configured",
+                metadata={},
+            )
+
         metadata: dict[str, Any] = {}
         commit_sha = None
         pr_url = None
@@ -366,10 +390,11 @@ class WorkspaceRouter:
         try:
             if context.is_issue_workspace() and context.create_commits:
                 repo_path = Path(repository_path)
+                repo_path_str = str(repo_path)
 
                 # Check if there are changes to commit
-                status = await self.repository.status(repo_path)
-                has_changes = status.is_dirty or status.staged_files or status.unstaged_files
+                vcs_status = await self.vcs.status(repo_path_str)
+                has_changes = vcs_status.is_dirty or vcs_status.staged_files or vcs_status.unstaged_files
 
                 if has_changes:
                     # Commit changes
@@ -380,8 +405,8 @@ class WorkspaceRouter:
                     author_name = getattr(project, "author_name", self.config.default_author_name)
                     author_email = getattr(project, "author_email", self.config.default_author_email)
 
-                    commit_sha = await self.repository.commit(
-                        repo_path,
+                    commit_sha = await self.vcs.commit(
+                        repo_path_str,
                         message=commit_message,
                         author_name=author_name,
                         author_email=author_email,
@@ -392,7 +417,7 @@ class WorkspaceRouter:
 
                     # Push branch
                     self._logger.info(f"Pushing branch: {context.branch_name}")
-                    await self.repository.push(repo_path, remote="origin", branch=context.branch_name)
+                    await self.vcs.push(repo_path_str, context.branch_name or "")
                     metadata["pushed"] = True
 
                     # TODO: Create PR if needed (requires ticket system integration)

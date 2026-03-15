@@ -101,27 +101,6 @@ class TestVersionControlServiceContract(ABC):
             finally:
                 await self.cleanup_repo_path(target_path)
 
-    # Pull Operation Tests
-
-    @pytest.mark.asyncio
-    async def test_pull_latest_fetches_updates(self):
-        """Pull latest should update local repository."""
-        service = await self.create_service()
-        import os
-        import tempfile
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            target_path = os.path.join(tmpdir, "cloned_repo")
-
-            try:
-                url = self.get_test_repo_url()
-                await service.clone_repository(url, target_path)
-
-                # Pull latest should not fail
-                await service.pull_latest(target_path)
-            finally:
-                await self.cleanup_repo_path(target_path)
-
     # Checkout Operation Tests
 
     @pytest.mark.asyncio
@@ -215,7 +194,7 @@ class TestVersionControlServiceContract(ABC):
         service = await self.create_service()
 
         with pytest.raises(RepositoryError):
-            await service.pull_latest("/nonexistent/path/that/does/not/exist")
+            await service.checkout("/nonexistent/path/that/does/not/exist", "main")
 
     @pytest.mark.asyncio
     async def test_invalid_branch_raises_error(self):

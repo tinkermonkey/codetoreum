@@ -310,6 +310,15 @@ class MockWorkItemService(MockEventEmitter, IWorkItemService):
 
     # ===== Testing Helpers =====
 
+    def add_work_item(self, work_item: WorkItem) -> None:
+        """Insert a work item directly into storage (for test/simulation seeding).
+
+        Args:
+            work_item: Work item to add
+        """
+        with self._lock:
+            self._work_items[work_item.id] = work_item
+
     def clear(self) -> None:
         """Clear all stored data for testing."""
         with self._lock:

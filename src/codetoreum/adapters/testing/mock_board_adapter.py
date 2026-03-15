@@ -100,6 +100,7 @@ class MockBoardAdapter(IBoardService):
         """
         self._boards: dict[str, ProjectBoard] = {}  # key: "project_id:board_id"
         self._item_positions: dict[str, tuple[str, str, int]] = {}  # item_id -> (board_id, column_name, position)
+        self._board_project_map: dict[str, str] = {}  # board_id -> project_id
         self._monitoring: dict[str, MonitoringStatus] = {}  # project_id -> status
         self._movement_log: list[MovementEvent] = []  # Audit trail of all movements
         self._lock = threading.Lock()  # Thread safety for concurrent operations
@@ -274,11 +275,14 @@ class MockBoardAdapter(IBoardService):
 
             board_id, from_column, _ = self._item_positions[work_item_id]
 
-            if self.current_project is None:
+            # Resolve project_id: use board_project_map for multi-project support,
+            # falling back to current_project for backwards compatibility
+            project_id = self._board_project_map.get(board_id) or self.current_project
+            if project_id is None:
                 msg = "current_project not set"
                 raise ValueError(msg)
 
-        board = await self.get_board(self.current_project, board_id)
+        board = await self.get_board(project_id, board_id)
 
         with self._lock:
             # Validate target column exists
@@ -314,7 +318,7 @@ class MockBoardAdapter(IBoardService):
                                         WorkItemPositionChangedEvent(
                                             type="workitem.position_changed",
                                             work_item_id=item_id,
-                                            project_id=self.current_project,
+                                            project_id=project_id,
                                             board_id=board_id,
                                             column_name=col_name,
                                             old_position=old_pos,
@@ -351,7 +355,7 @@ class MockBoardAdapter(IBoardService):
                     WorkItemColumnChangedEvent(
                         type="workitem.column_changed",
                         work_item_id=work_item_id,
-                        project_id=self.current_project,
+                        project_id=project_id,
                         board_id=board_id,
                         from_column=from_column,
                         to_column=target_column,
@@ -524,6 +528,8 @@ class MockBoardAdapter(IBoardService):
                     for i, col in enumerate(column_names)
                 ],
             )
+            # Register board -> project mapping for multi-project support
+            self._board_project_map[board_id] = project_id
 
     def add_item_to_column(
         self,

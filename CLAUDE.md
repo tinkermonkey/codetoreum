@@ -42,20 +42,30 @@ codetoreum/
 │   ├── output_ports/           # Outbound port interfaces
 │   ├── events/                 # Domain event catalog
 │   └── infrastructure/         # Cross-cutting infrastructure
+├── scenarios/                  # Simulation scenario YAML definitions
 └── src/
     ├── domain/                 # Core business logic (pure)
     │   ├── events/             # Domain events (immutable)
-    ├── application/            # Application services
+    │   └── services/           # Domain services
+    ├── application/            # Application services + event handlers
     ├── ports/                  # Port interfaces
-    │   ├── input/              # Inbound ports
-    │   └── output/             # Outbound ports
+    │   ├── input/              # Inbound ports (commands, queries, services)
+    │   └── output/             # Outbound ports (28+ interfaces)
     ├── adapters/               # Adapter implementations
-    │   ├── primary/            # Inbound adapters
-    │   └── secondary/          # Outbound adapters (GitHub, etc.)
+    │   ├── primary/            # FastAPI app, REST routers, webhook adapter
+    │   │   └── input_port_adapters/mock/  # Mock implementations of all input ports
+    │   ├── secondary/          # GitHub, Docker, Claude, Redis, Elasticsearch
+    │   └── testing/            # ~25 mock/in-memory adapters for simulation
+    ├── config/                 # Configuration management
+    ├── cli/                    # CLI commands (simulation server, YAML import)
     └── infrastructure/         # Cross-cutting concerns
         ├── event_bus.py        # Event distribution
         ├── resilience/         # Circuit breakers, retries, rate limiting
-        └── http/               # HTTP clients (GitHub GraphQL, etc.)
+        ├── observability/      # OpenTelemetry tracing, structured logging
+        ├── simulation/         # Simulation framework (bootstrap, runner, clock)
+        ├── auth/               # Authentication infrastructure
+        ├── health/             # Health checks
+        └── http/               # GitHub GraphQL client
 ```
 
 ## Core Concepts
@@ -82,6 +92,10 @@ codetoreum/
 - **ExecutionService**: Manages agent execution lifecycle
 - **ReviewService**: Handles review cycles and feedback
 - **WorkspaceRouter**: Manages container workspaces and file mounting
+- **ConversationalLoopOrchestrator**: Multi-turn agent dialogue management
+- **ContainerRecoveryService**: Handles container failure recovery
+- **MultiProjectOrchestrator**: Coordinates across multiple projects
+- **Event Handlers** (`application/event_handlers/`): Board, workflow, review, execution, repair cycle
 
 ### Port Interfaces (Contracts)
 
@@ -123,6 +137,8 @@ codetoreum/
 - Metrics tracking (Prometheus-compatible)
 - Distributed tracing (OpenTelemetry/Jaeger)
 - Comprehensive error logging (no silent failures)
+- Dead letter queue for failed events (`dead_letter_queue.py`)
+- Audit logging (`infrastructure/audit/`)
 
 ### Adapters (Implementations)
 
@@ -131,10 +147,11 @@ codetoreum/
 - ClaudeCodeAdapter (LLM provider)
 - DockerContainerAdapter
 
-**Testing/Simulation**:
-- InMemoryTicketAdapter, MockBoardAdapter, MockCodeReviewAdapter
-- MockLLMAdapter, MockEventEmitter
-- FakeContainerAdapter
+**Testing/Simulation** (`adapters/testing/`):
+- MockLLMAdapter, MockBoardAdapter, MockCodeReviewAdapter, MockAgentExecutor
+- MockReviewCycleAdapter, MockRepairCycleAdapter, MockContainerRecoveryAdapter
+- InMemoryEventStore, InMemoryConfigStore, InMemoryMetricsAdapter
+- FakeContainerAdapter, MockEventEmitter, CapturingMockEventEmitter
 
 ## Important Design Changes (Gen 1 → Gen 2)
 
@@ -231,12 +248,17 @@ Database-backed configuration with web UI:
 - Resilience patterns MUST be centralized in infrastructure layer
 - Adapters MUST remain pure (no resilience logic embedded)
 - No silent error handling (all errors logged with exc_info=True)
+- Simulation-only routes mount in `SimulationApplicationBootstrap`, NEVER in production `create_app()`
 
 ## Simulation Testing Infrastructure
 
 The system includes a comprehensive simulation framework for fast, deterministic testing without external services.
 
 ### Key Components
+
+**SimulationBootstrap** (`src/codetoreum/infrastructure/simulation/bootstrap.py`)
+- Wires all mock adapters, input port adapters, and simulation-only routes
+- Entry point for all simulation/test environments
 
 **SimulationRunner** (`src/codetoreum/infrastructure/simulation/simulation_runner.py`)
 - Orchestrates test scenarios
@@ -256,20 +278,24 @@ The system includes a comprehensive simulation framework for fast, deterministic
 - `now()` - Get current simulation time
 
 **Mock Adapters** (`src/codetoreum/adapters/testing/`)
-- 18 total adapters (mock + in-memory implementations)
+- ~25 total adapters (mock + in-memory implementations)
 - MockLLMAdapter, MockBoardAdapter, MockReviewCycleAdapter, MockRepairCycleAdapter
 - InMemoryEventStore, InMemoryStorageAdapter, InMemoryMetricsAdapter
 - See `MOCK_ADAPTERS_REFERENCE.md` for complete reference
 
 ### Simulation Scenarios
 
-12 predefined scenarios testing different workflows:
+13+ predefined scenarios testing different workflows:
 - **Scenarios 01-05**: Basic workflows (simple, parallel, review, failure, complex)
 - **Scenarios 06-06b**: Full SDLC pipeline (with/without repair)
 - **Scenario 07**: Repair cycle test-fix-validate loops
 - **Scenario 09**: Queue position-based ordering
 - **Scenarios 10-10b**: Agent execution and multi-turn dialogue
 - **Scenario 12**: Container failure recovery
+- **Scenario 13**: Multi-project orchestration
+- **Board Automation A/B/C**: Board-driven workflow variants
+
+YAML scenario definitions live in `scenarios/` (default, demo, review_cycle, failure_recovery, stress_test).
 
 See `documentation/simulation_scenarios/SCENARIOS_COMPLETE.md` for detailed specifications.
 

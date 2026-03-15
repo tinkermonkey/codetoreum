@@ -1,8 +1,10 @@
 """Test helpers and utilities for simulation testing."""
 
+import asyncio
 from datetime import datetime, timedelta
 from typing import Any
 
+from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
 from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.simulation import SimulationRunner
 
@@ -413,3 +415,31 @@ def print_notifications_summary(runner: SimulationRunner) -> None:
 
     print(f"\nTotal: {len(notifications)} notifications")
     print("=" * 80)
+
+
+async def wait_for_column(
+    board: MockBoardAdapter,
+    work_item_id: str,
+    target_column: str,
+    timeout: float = 5.0,
+) -> bool:
+    """Poll item position until it reaches target column or timeout.
+
+    Args:
+        board: MockBoardAdapter to poll
+        work_item_id: ID of the work item to track
+        target_column: Column name to wait for
+        timeout: Maximum seconds to wait (default 5.0)
+
+    Returns:
+        True if item reached target column within timeout, False otherwise
+    """
+    elapsed = 0.0
+    interval = 0.05
+    while elapsed < timeout:
+        await asyncio.sleep(interval)
+        elapsed += interval
+        pos = await board.get_item_position(work_item_id)
+        if pos.column_name == target_column:
+            return True
+    return False

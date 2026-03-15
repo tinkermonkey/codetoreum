@@ -6,6 +6,7 @@ from codetoreum.domain.events import (
     LockAcquiredEvent,
     LockReleasedEvent,
     LockStaleDetectedEvent,
+    LockStuckEvent,
     now_iso,
 )
 
@@ -475,3 +476,137 @@ class TestLockStaleDetectedEventImmutability:
         # Should raise FrozenInstanceError when attempting modification
         with pytest.raises(FrozenInstanceError):
             event.lock_acquired_at = "2024-01-09T10:00:00+00:00"  # type: ignore
+
+
+class TestLockStuckEvent:
+    """Test LockStuckEvent."""
+
+    def test_create_valid_event(self):
+        """Test creating a valid lock stuck event."""
+        event = LockStuckEvent(
+            type="lock.stuck",
+            timestamp=now_iso(),
+            source="board_event_handler",
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="123",
+            reason="Agent executor timed out",
+        )
+
+        assert event.project_id == "proj-1"
+        assert event.board_id == "board-1"
+        assert event.work_item_id == "123"
+        assert event.reason == "Agent executor timed out"
+
+    def test_missing_project_id(self):
+        """Test that project_id is required."""
+        with pytest.raises(ValueError, match="project_id"):
+            LockStuckEvent(
+                type="lock.stuck",
+                timestamp=now_iso(),
+                source="board_event_handler",
+                project_id="",
+                board_id="board-1",
+                work_item_id="123",
+                reason="some reason",
+            )
+
+    def test_missing_board_id(self):
+        """Test that board_id is required."""
+        with pytest.raises(ValueError, match="board_id"):
+            LockStuckEvent(
+                type="lock.stuck",
+                timestamp=now_iso(),
+                source="board_event_handler",
+                project_id="proj-1",
+                board_id="",
+                work_item_id="123",
+                reason="some reason",
+            )
+
+    def test_missing_work_item_id(self):
+        """Test that work_item_id is required."""
+        with pytest.raises(ValueError, match="work_item_id"):
+            LockStuckEvent(
+                type="lock.stuck",
+                timestamp=now_iso(),
+                source="board_event_handler",
+                project_id="proj-1",
+                board_id="board-1",
+                work_item_id="",
+                reason="some reason",
+            )
+
+    def test_missing_reason(self):
+        """Test that reason is required."""
+        with pytest.raises(ValueError, match="reason"):
+            LockStuckEvent(
+                type="lock.stuck",
+                timestamp=now_iso(),
+                source="board_event_handler",
+                project_id="proj-1",
+                board_id="board-1",
+                work_item_id="123",
+                reason="",
+            )
+
+    def test_lock_stuck_serialization(self):
+        """Test lock stuck event serialization."""
+        event = LockStuckEvent(
+            type="lock.stuck",
+            timestamp=now_iso(),
+            source="board_event_handler",
+            correlation_id="corr-4",
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="123",
+            reason="Failed to trigger agent",
+        )
+
+        d = event.to_dict()
+
+        assert d["project_id"] == "proj-1"
+        assert d["board_id"] == "board-1"
+        assert d["work_item_id"] == "123"
+        assert d["reason"] == "Failed to trigger agent"
+
+    def test_lock_stuck_roundtrip(self):
+        """Test lock stuck event roundtrip."""
+        timestamp = now_iso()
+        original = LockStuckEvent(
+            type="lock.stuck",
+            timestamp=timestamp,
+            source="board_event_handler",
+            project_id="proj-2",
+            board_id="board-2",
+            work_item_id="456",
+            reason="Lock service unreachable",
+        )
+
+        d = original.to_dict()
+        restored = LockStuckEvent.from_dict(d)
+
+        assert restored.project_id == original.project_id
+        assert restored.board_id == original.board_id
+        assert restored.work_item_id == original.work_item_id
+        assert restored.reason == original.reason
+
+    def test_lock_stuck_event_is_frozen(self):
+        """Test that LockStuckEvent is immutable (frozen dataclass)."""
+        event = LockStuckEvent(
+            type="lock.stuck",
+            timestamp=now_iso(),
+            source="board_event_handler",
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="123",
+            reason="test reason",
+        )
+
+        assert event.work_item_id == "123"
+
+        with pytest.raises(FrozenInstanceError):
+            event.work_item_id = "456"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.reason = "different reason"  # type: ignore

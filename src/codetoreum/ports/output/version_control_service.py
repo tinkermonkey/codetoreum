@@ -15,6 +15,19 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
+class VCSStatus:
+    """Repository status information for IVersionControlService.
+
+    Simplified status for version control operations. Frozen to prevent
+    accidental mutation after creation.
+    """
+
+    is_dirty: bool
+    staged_files: tuple[str, ...]
+    unstaged_files: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class Repository:
     """Metadata about a repository.
 
@@ -110,21 +123,6 @@ class IVersionControlService(ABC):
         """
 
     @abstractmethod
-    async def pull_latest(self, repo_path: str) -> None:
-        """Pull latest changes from remote.
-
-        Updates the local repository to match the remote, pulling all
-        new commits, branches, and tags.
-
-        Args:
-            repo_path: Local repository path
-
-        Raises:
-            ValidationError: Invalid repo path
-            RepositoryError: Pull operation failed (conflicts, network, etc.)
-        """
-
-    @abstractmethod
     async def checkout(self, repo_path: str, branch: str) -> None:
         """Checkout specific branch.
 
@@ -140,7 +138,14 @@ class IVersionControlService(ABC):
         """
 
     @abstractmethod
-    async def commit(self, repo_path: str, message: str) -> str:
+    async def commit(
+        self,
+        repo_path: str,
+        message: str,
+        author_name: str | None = None,
+        author_email: str | None = None,
+        files: list[str] | None = None,
+    ) -> str:
         """Create commit with all staged changes.
 
         Creates a commit containing staged changes and returns the commit SHA.
@@ -148,6 +153,9 @@ class IVersionControlService(ABC):
         Args:
             repo_path: Local repository path
             message: Commit message
+            author_name: Optional commit author name
+            author_email: Optional commit author email
+            files: Optional list of files to include (all if None)
 
         Returns:
             str: Commit SHA (full hash)
@@ -171,6 +179,62 @@ class IVersionControlService(ABC):
         Raises:
             ValidationError: Invalid repo path or branch name
             RepositoryError: Push failed (auth, rejected, etc.)
+        """
+
+    @abstractmethod
+    async def create_branch(self, repo_path: str, branch_name: str, from_branch: str | None = None) -> None:
+        """Create a new branch.
+
+        Args:
+            repo_path: Local repository path
+            branch_name: Name for new branch
+            from_branch: Optional branch to create from (defaults to current branch if None)
+
+        Raises:
+            ValidationError: Invalid repo path or branch name
+            RepositoryError: Branch creation failed
+        """
+
+    @abstractmethod
+    async def list_branches(self, repo_path: str, remote: bool = False) -> list[str]:
+        """List all branches.
+
+        Args:
+            repo_path: Local repository path
+            remote: If True, include remote branches (prefixed with 'origin/')
+
+        Returns:
+            list[str]: List of branch names
+
+        Raises:
+            RepositoryError: List operation failed
+        """
+
+    @abstractmethod
+    async def status(self, repo_path: str) -> VCSStatus:
+        """Return repository status.
+
+        Args:
+            repo_path: Local repository path
+
+        Returns:
+            VCSStatus: Current repository status
+
+        Raises:
+            RepositoryError: Status check failed
+        """
+
+    @abstractmethod
+    async def pull(self, repo_path: str, branch: str, remote: str = "origin") -> None:
+        """Pull latest changes from remote for the given branch.
+
+        Args:
+            repo_path: Local repository path
+            branch: Branch to pull
+            remote: Remote name (default: "origin")
+
+        Raises:
+            RepositoryError: Pull failed
         """
 
     @abstractmethod
