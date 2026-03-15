@@ -8,7 +8,7 @@ Subscribes to workitem.column_changed events and orchestrates:
 
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from codetoreum.application.pipeline_lock_service import (
@@ -38,6 +38,11 @@ from codetoreum.ports.output.board_service import IBoardService, MovedByType
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
+
+if TYPE_CHECKING:
+    from codetoreum.application.agent_execution_recovery_service import (
+        AgentExecutionRecoveryService,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +93,7 @@ class BoardColumnEventHandler(EventHandler):
         event_store: IEventStore | None = None,
         run_registry: IActiveWorkflowRunRegistry | None = None,
         event_emitter: IEventEmitter | None = None,
+        recovery_service: AgentExecutionRecoveryService | None = None,
     ):
         """
         Initialize board column event handler.
@@ -101,6 +107,7 @@ class BoardColumnEventHandler(EventHandler):
             event_store: Optional event store for persisting workflow lifecycle events
             run_registry: Optional registry for tracking active workflow runs
             event_emitter: Optional event emitter for CodetoreumEvent instances (e.g. LockStuckEvent)
+            recovery_service: Optional recovery service for handling agent execution failures
         """
         self.board_service = board_service
         self.lock_service = lock_service
@@ -110,6 +117,7 @@ class BoardColumnEventHandler(EventHandler):
         self.event_store = event_store
         self.run_registry = run_registry
         self.event_emitter = event_emitter
+        self.recovery_service = recovery_service
         # Tracks active workflow runs: work_item_id -> run metadata
         self._active_runs: dict[str, dict[str, Any]] = {}
 
@@ -618,7 +626,16 @@ class BoardColumnEventHandler(EventHandler):
 
     async def _trigger_agent(self, work_item_id: str, column_config: ColumnTemplate, board_id: str = "board-1") -> None:
         """
-        Trigger agent execution for a work item.
+        Trigger agent execution for a work item with failure recovery.
+
+        Execution flow:
+        1. Update registry with current stage
+        2. Execute agent (fire-and-forget)
+        3. If execution fails before task creation:
+           - Log the failure with context
+           - Use recovery service to fail workflow run
+           - Release the pipeline lock to unblock next queued item
+           - Emit alert for manual intervention
 
         Args:
             work_item_id: ID of work item to process
@@ -666,6 +683,69 @@ class BoardColumnEventHandler(EventHandler):
                     "work_item_id": work_item_id,
                 },
             )
+
+            # Handle synchronous execution failure (before task creation, lock still held)
+            if work_item_id in self._active_runs:
+                run_info = self._active_runs[work_item_id]
+                project_id = run_info.get("project_id", "")
+
+                # Use recovery service to fail workflow run
+                if self.recovery_service:
+                    await self.recovery_service.handle_agent_execution_failure(
+                        work_item_id=work_item_id,
+                        board_id=board_id,
+                        error=e,
+                    )
+
+                # Release the lock to unblock next queued item (critical for pipeline unblocking)
+                try:
+                    release_result = await self.lock_service.release_lock(
+                        project_id=project_id,
+                        board_id=board_id,
+                        work_item_id=work_item_id,
+                    )
+                    logger.info(
+                        f"Released lock for {work_item_id} due to execution failure, "
+                        f"next item: {release_result.next_work_item_id}",
+                        extra={"error_id": "INFO_BOARD_EVENT_LOCK_RELEASED_AFTER_FAILURE"},
+                    )
+                except ValueError as lock_err:
+                    logger.warning(
+                        f"Cannot release lock for {work_item_id}: {lock_err} "
+                        f"(may have already released)",
+                        exc_info=True,
+                        extra={"error_id": "ERR_BOARD_EVENT_LOCK_RELEASE_NOT_HELD"},
+                    )
+                except Exception as lock_err:
+                    logger.critical(
+                        f"Failed to release lock for {work_item_id} after execution failure: {lock_err} "
+                        f"— PIPELINE IS BLOCKED",
+                        exc_info=True,
+                        extra={
+                            "error_id": "ERR_BOARD_EVENT_LOCK_RELEASE_CRITICAL_FAILURE",
+                            "work_item_id": work_item_id,
+                        },
+                    )
+                    # Emit LockStuckEvent for manual intervention
+                    if self.event_emitter:
+                        try:
+                            self.event_emitter.emit(
+                                LockStuckEvent(
+                                    type="lock.stuck",
+                                    timestamp=datetime.now(UTC).isoformat(),
+                                    source="board_event_handler._trigger_agent",
+                                    project_id=project_id,
+                                    board_id=board_id,
+                                    work_item_id=work_item_id,
+                                    reason=f"Failed to release lock after execution failure: {lock_err}",
+                                )
+                            )
+                        except Exception as emit_err:
+                            logger.error(
+                                f"Failed to emit LockStuckEvent for '{work_item_id}': {emit_err}",
+                                exc_info=True,
+                                extra={"error_id": "ERR_BOARD_EVENT_LOCK_STUCK_EMIT_FAILURE"},
+                            )
 
     async def handle_agent_completion(
         self,

@@ -19,6 +19,9 @@ from codetoreum.domain.value_objects import ContainerConfig
 from codetoreum.ports.output.agent_executor import IAgentExecutor
 
 if TYPE_CHECKING:
+    from codetoreum.application.agent_execution_recovery_service import (
+        AgentExecutionRecoveryService,
+    )
     from codetoreum.application.execution_service import ExecutionService
     from codetoreum.application.workspace_router import WorkspaceRouter
     from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
@@ -59,6 +62,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         run_registry: IActiveWorkflowRunRegistry,
         branch_tracker: IWorkItemBranchTracker,
         vcs: IVersionControlService,
+        recovery_service: AgentExecutionRecoveryService | None = None,
         execution_delay: float = 0.0,
     ) -> None:
         """Initialize ExecutionServiceAgentExecutor.
@@ -72,6 +76,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             run_registry: Tracks active workflow runs per work item
             branch_tracker: Tracks VCS branches per work item
             vcs: Version control service for repository operations
+            recovery_service: Service for handling completion callback failures
             execution_delay: Optional delay (seconds) before execution for testing
         """
         self._execution_service = execution_service
@@ -82,6 +87,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         self._run_registry = run_registry
         self._branch_tracker = branch_tracker
         self._vcs = vcs
+        self._recovery_service = recovery_service
         self._execution_delay = execution_delay
 
         self._completion_callback: Callable[[str, str, bool], Coroutine[Any, Any, None]] | None = None
@@ -394,7 +400,13 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         await self._call_completion(work_item_id, board_id, success)
 
     async def _call_completion(self, work_item_id: str, board_id: str, success: bool) -> None:
-        """Invoke completion callback with error handling.
+        """Invoke completion callback with error handling and recovery.
+
+        If the completion callback (auto-progression) fails, the work item is stuck
+        in its current column. This method handles recovery via:
+        1. Logging the failure with full context
+        2. Using AgentExecutionRecoveryService to queue for manual recovery
+        3. Failing the workflow run to signal pipeline blockage
 
         Args:
             work_item_id: Work item that completed
@@ -410,6 +422,14 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                     exc_info=True,
                     extra={"error_id": "ERR_EXEC_CHAIN_COMPLETION_CALLBACK_FAILURE"},
                 )
+                # Use recovery service to handle the failure (queue for manual recovery, fail workflow)
+                if self._recovery_service:
+                    await self._recovery_service.handle_completion_callback_failure(
+                        work_item_id=work_item_id,
+                        board_id=board_id,
+                        success=success,
+                        error=e,
+                    )
         else:
             logger.warning(
                 f"No completion callback set for ExecutionServiceAgentExecutor. "
