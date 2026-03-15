@@ -63,32 +63,28 @@ async def test_agent_failure_emits_workflow_failed_event(
     work_item_id = seeder.created_items.work_items[0]
 
     # Patch the second agent execution (coder) to simulate failure.
-    # _simulate_execution signature: (work_item_id, agent_id, execution_id, started_at, board_id)
-    # When monkeypatched on the instance, self is NOT passed; the call site passes 5 positional args.
-    # We must NOT raise inside the task (that bypasses the completion callback).
-    # Instead, we call the completion callback with success=False to properly persist WorkflowFailed.
-    original_simulate = executor._simulate_execution
+    # We patch _run_execution to simulate failure by invoking the completion callback
+    # with success=False to properly persist WorkflowFailed.
+    original_run = executor._run_execution
     call_count = 0
 
-    async def failing_simulate(
+    async def failing_run(
         work_item_id_arg: str,
         agent_id: str,
-        execution_id: str,
-        started_at: Any,
-        board_id: str,
+        board_id: str = "board-1",
     ) -> None:
         nonlocal call_count
         call_count += 1
         if call_count == 2:
             # Simulate coder failure by invoking completion callback with success=False.
-            # This mirrors what _simulate_execution does in its except block, ensuring
+            # This mirrors what _run_execution does in its except block, ensuring
             # the board_event_handler's _fail_workflow_run() is called and persists WorkflowFailed.
             if executor._completion_callback:
                 await executor._completion_callback(work_item_id_arg, board_id, False)
             return
-        await original_simulate(work_item_id_arg, agent_id, execution_id, started_at, board_id)
+        await original_run(work_item_id_arg, agent_id, board_id)
 
-    monkeypatch.setattr(executor, "_simulate_execution", failing_simulate)
+    monkeypatch.setattr(executor, "_run_execution", failing_run)
 
     # Trigger cascade: Backlog → Ready (pipeline trigger)
     await board.move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)

@@ -422,6 +422,9 @@ async def simulation_seeder(
     """
     Provide a simulation data seeder for E2E tests.
 
+    This seeder populates domain objects (Agent, WorkItem) required for
+    ExecutionServiceAgentExecutor to function properly in end-to-end tests.
+
     Args:
         simulation_bootstrap: Bootstrap fixture
 
@@ -433,7 +436,13 @@ async def simulation_seeder(
     """
     from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
 
-    seeder = SimulationDataSeeder(simulation_bootstrap, track_items=True)
+    adapters = simulation_bootstrap.adapters
+    seeder = SimulationDataSeeder(
+        simulation_bootstrap,
+        track_items=True,
+        agent_repository=adapters.agent_repository,
+        work_item_service=adapters.work_item_service,
+    )
     yield seeder
     # Cleanup tracked items
     seeder.created_items.clear()

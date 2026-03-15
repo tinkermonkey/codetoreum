@@ -171,14 +171,12 @@ async def test_cascade_stops_on_agent_failure(
     work_item_id = seeder.created_items.work_items[0]
 
     # Track call count and make the second execution raise
-    original_simulate = executor._simulate_execution
+    original_run = executor._run_execution
     call_count = 0
 
-    async def failing_simulate(
+    async def failing_run(
         work_item_id_arg: str,
         agent_id: str,
-        execution_id: str,
-        started_at: Any,
         board_id: str = "board-1",
     ) -> None:
         nonlocal call_count
@@ -186,9 +184,9 @@ async def test_cascade_stops_on_agent_failure(
         if call_count == 2:
             # Second agent (coder) fails
             raise RuntimeError("Simulated coder failure")
-        await original_simulate(work_item_id_arg, agent_id, execution_id, started_at, board_id)
+        await original_run(work_item_id_arg, agent_id, board_id)
 
-    monkeypatch.setattr(executor, "_simulate_execution", failing_simulate)
+    monkeypatch.setattr(executor, "_run_execution", failing_run)
 
     # Move item to trigger cascade
     await board.move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)

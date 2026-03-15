@@ -40,8 +40,13 @@ async def test_yaml_scenario_seeding_and_cascade(
     After seeding, moving the first work item to 'Ready' should trigger the
     board automation cascade and the item should reach 'Done'.
     """
-    seeder = SimulationDataSeeder(simulation_bootstrap, track_items=True)
     adapters = cast("SimulationAdapters", simulation_bootstrap.adapters)
+    seeder = SimulationDataSeeder(
+        simulation_bootstrap,
+        track_items=True,
+        agent_repository=adapters.agent_repository,
+        work_item_service=adapters.work_item_service,
+    )
     adapters.agent_executor._execution_delay = 0.1
 
     # Verify the scenario file exists before attempting to load it
@@ -99,8 +104,13 @@ async def test_yaml_seeding_creates_expected_structure(
     - 3 work items
     - 1 board (board-1) with 5 columns
     """
-    seeder = SimulationDataSeeder(simulation_bootstrap, track_items=True)
     adapters = cast("SimulationAdapters", simulation_bootstrap.adapters)
+    seeder = SimulationDataSeeder(
+        simulation_bootstrap,
+        track_items=True,
+        agent_repository=adapters.agent_repository,
+        work_item_service=adapters.work_item_service,
+    )
 
     assert _DEFAULT_YAML.exists(), f"default.yaml not found at {_DEFAULT_YAML}"
 
@@ -151,8 +161,13 @@ async def test_yaml_seeding_registers_workflow_template(
     The workflow template is what makes board automation work. Without it,
     moving a work item to a trigger column would not start any agent execution.
     """
-    seeder = SimulationDataSeeder(simulation_bootstrap, track_items=True)
     adapters = cast("SimulationAdapters", simulation_bootstrap.adapters)
+    seeder = SimulationDataSeeder(
+        simulation_bootstrap,
+        track_items=True,
+        agent_repository=adapters.agent_repository,
+        work_item_service=adapters.work_item_service,
+    )
 
     assert _DEFAULT_YAML.exists(), f"default.yaml not found at {_DEFAULT_YAML}"
 

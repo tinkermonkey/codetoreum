@@ -42,7 +42,7 @@ Mock adapters provide fast, deterministic implementations of port interfaces for
 
 ### 6. **Support Adapters** (2)
 - CapturingMockEventEmitter - Domain event capture
-- MockAgentExecutor - Agent execution simulation
+- MockAgentExecutor - Agent execution simulation (unit-test utility only, not used in bootstrap)
 
 ---
 
@@ -1106,41 +1106,37 @@ emitter.clear()
 
 ---
 
-#### 23. MockAgentExecutor
+#### 23. MockAgentExecutor (Unit-Test Utility Only)
 **File**: `mock_agent_executor.py`
-**Purpose**: Agent execution simulation without containers
+**Purpose**: Unit-test utility for isolated executor testing (NOT used in SimulationApplicationBootstrap)
+**Status**: ⚠️ **DEPRECATED FROM BOOTSTRAP** - SimulationApplicationBootstrap uses ExecutionServiceAgentExecutor exclusively
+
+**Important Note**: As of Phase 1 of issue #371, MockAgentExecutor is retained only as a unit-test utility for tests that construct their own BoardColumnEventHandler instances. It is no longer wired by SimulationApplicationBootstrap. The bootstrap now uses ExecutionServiceAgentExecutor directly as the unconditional default executor.
 
 **Key Features**:
-- ✅ Agent execution simulation
-- ✅ Configurable delays
-- ✅ Execution tracking
-- ✅ Completion callbacks
+- ✅ Agent execution simulation with configurable delays
+- ✅ Execution tracking for test assertions
+- ✅ Completion callbacks for auto-progression
+- ✅ Fire-and-forget async execution via asyncio.create_task()
 
 **Configuration**:
 ```python
+# Unit-test usage only
 executor = MockAgentExecutor(execution_delay_seconds=3.0)
 
-# Execute agent
-execution_id = await executor.execute_agent(
-    agent_id="agent-1",
-    work_item_id="item-1",
-    context={"issue": "..."}
-)
-
-# Track execution
-executions = executor.get_executions()
-
 # Set completion handler
-async def on_complete(result):
-    print(f"Agent execution completed: {result}")
+async def on_complete(work_item_id, board_id, success):
+    print(f"Agent execution completed: {success}")
 
 executor.set_completion_handler(on_complete, "board-1")
 ```
 
-**Use Cases**:
-- Agent execution workflow testing
-- Board automation testing
-- Execution tracking validation
+**Use Cases** (Unit Tests Only):
+- Isolated board automation handler testing (test_board_automation_scenario_*.py)
+- Handler logic validation without full execution chain
+- Custom test scenarios with specific executor behavior
+
+**Bootstrap Usage**: ❌ Not used. Use ExecutionServiceAgentExecutor for all simulation/E2E testing through SimulationApplicationBootstrap.
 
 ---
 

@@ -37,7 +37,12 @@ async def multi_project_env():
     adapters = cast("SimulationAdapters", bootstrap.adapters)
     adapters.agent_executor._execution_delay = 0.1
 
-    seeder = SimulationDataSeeder(bootstrap, track_items=True)
+    seeder = SimulationDataSeeder(
+        bootstrap,
+        track_items=True,
+        agent_repository=adapters.agent_repository,
+        work_item_service=adapters.work_item_service,
+    )
     alpha_id, beta_id = await seeder.seed_two_project_scenario()
 
     yield bootstrap, seeder, alpha_id, beta_id

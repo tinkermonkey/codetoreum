@@ -27,7 +27,7 @@ dependency injection.
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import FastAPI
 
@@ -81,7 +81,6 @@ from codetoreum.adapters.testing import (
     InMemoryVersionControlService,
     InMemoryWorkflowConfigService,
     InMemoryWorkItemBranchTracker,
-    MockAgentExecutor,
     MockBoardAdapter,
     MockDiscussionAdapter,
     MockLLMAdapter,
@@ -165,6 +164,7 @@ from codetoreum.ports.input.workflow_definition_command import (
 from codetoreum.ports.input.workflow_query import IWorkflowQueryPort
 from codetoreum.ports.input.workflow_run_query import IWorkflowRunQueryPort
 from codetoreum.ports.input.workspace_query import IWorkspaceQueryPort
+from codetoreum.ports.output.agent_executor import IAgentExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -189,7 +189,7 @@ class SimulationAdapters:
     project_manager: MockProjectManagerAdapter  # Multi-project management
     lock_service: InMemoryLockService
     workflow_config: InMemoryWorkflowConfigService
-    agent_executor: MockAgentExecutor
+    agent_executor: Optional[IAgentExecutor]
     queue_service: InMemoryQueueService  # Pipeline queue service for board automation
     event_emitter: CapturingMockEventEmitter  # For domain event capture
 
@@ -205,7 +205,6 @@ class SimulationAdapters:
     agent_repository: InMemoryAgentRepository  # Domain Agent objects for execution chain
     run_registry: InMemoryActiveWorkflowRunRegistry  # Active workflow run tracking
     branch_tracker: InMemoryWorkItemBranchTracker  # Work item → VCS branch tracking
-    execution_service_executor: ExecutionServiceAgentExecutor  # Full execution chain
     work_item_service: MockWorkItemService  # Work item lookups for execution chain
 
 
@@ -532,10 +531,10 @@ class SimulationApplicationBootstrap:
         # Create project manager adapter
         project_manager = MockProjectManagerAdapter()
 
-        # Create pipeline lock, workflow config, and agent executor for board automation
+        # Create pipeline lock, workflow config
         lock_service = InMemoryLockService()
         workflow_config = InMemoryWorkflowConfigService()
-        agent_executor = MockAgentExecutor(execution_delay_seconds=3.0)
+        # agent_executor will be initialized in Phase 3 as ExecutionServiceAgentExecutor
 
         # Pre-configure default test project for simulation testing
         project_manager.add_project(
@@ -564,11 +563,6 @@ class SimulationApplicationBootstrap:
         branch_tracker = InMemoryWorkItemBranchTracker()
         work_item_service = MockWorkItemService()
 
-        # ExecutionServiceAgentExecutor is created later in _create_services
-        # (needs execution_service and workspace_router which don't exist yet)
-        # We use a placeholder here; it's replaced in _create_services.
-        execution_service_executor_placeholder = None  # type: ignore[assignment]
-
         logger.info("Created 24+ simulation adapters with domain event emission")
 
         return SimulationAdapters(
@@ -587,7 +581,7 @@ class SimulationApplicationBootstrap:
             project_manager=project_manager,
             lock_service=lock_service,
             workflow_config=workflow_config,
-            agent_executor=agent_executor,
+            agent_executor=None,
             queue_service=queue_service,
             event_emitter=event_emitter,
             version_control=version_control,
@@ -599,7 +593,6 @@ class SimulationApplicationBootstrap:
             agent_repository=agent_repository,
             run_registry=run_registry,
             branch_tracker=branch_tracker,
-            execution_service_executor=execution_service_executor_placeholder,  # type: ignore[arg-type]
             work_item_service=work_item_service,
         )
 
@@ -825,6 +818,7 @@ class SimulationApplicationBootstrap:
 
         # Phase 3: Create ExecutionServiceAgentExecutor and wire into adapters
         # This requires execution_service + workspace_router which are now available
+        # ExecutionServiceAgentExecutor is now the sole agent executor
         execution_service_executor = ExecutionServiceAgentExecutor(
             execution_service=execution_service,
             workspace_router=workspace_router,
@@ -835,8 +829,8 @@ class SimulationApplicationBootstrap:
             branch_tracker=self.adapters.branch_tracker,
             vcs=self.adapters.version_control,
         )
-        # Store on adapters so it can be accessed by tests
-        self.adapters.execution_service_executor = execution_service_executor
+        # Assign to agent_executor (the primary executor for the board handler)
+        self.adapters.agent_executor = execution_service_executor
 
         # Review Service
         review_service = ReviewService(
@@ -1120,10 +1114,6 @@ class SimulationApplicationBootstrap:
         # and invoke the repair cycle when items enter the configured repair cycle stage
         self._register_repair_cycle_handler()
 
-        # Wire execution query adapter to agent executor for UX visibility
-        # (ports.execution_query is the MockExecutionQueryAdapter created in Phase 4)
-        self.adapters.agent_executor.set_execution_query(self.ports.execution_query)
-
         return app
 
     def _register_repair_cycle_handler(self) -> None:
@@ -1348,6 +1338,11 @@ class SimulationApplicationBootstrap:
             logger.warning("Cannot register board column handler: components not ready")
             return
 
+        # At this point, agent_executor is ExecutionServiceAgentExecutor (assigned in Phase 3)
+        if self.adapters.agent_executor is None:
+            logger.warning("Cannot register board column handler: agent_executor not yet initialized")
+            return
+
         handler = BoardColumnEventHandler(
             board_service=self.adapters.board,
             lock_service=self.adapters.lock_service,
@@ -1359,10 +1354,10 @@ class SimulationApplicationBootstrap:
             event_emitter=self.adapters.event_emitter,
         )
 
-        # Wire completion callback: executor -> handler.handle_agent_completion
+        # Wire completion callback on ExecutionServiceAgentExecutor for auto-progression
         self.adapters.agent_executor.set_completion_handler(handler.handle_agent_completion, "board-1")
 
-        # Store reference to handler for executor swapping
+        # Store reference to handler for potential future reference
         self._board_event_handler = handler
 
         self.infrastructure.event_bus.register_handler(handler)
@@ -1402,38 +1397,3 @@ class SimulationApplicationBootstrap:
         """
         return self.infrastructure.causal_link_registry if self.infrastructure else None
 
-    def enable_execution_service_executor(self) -> "ExecutionServiceAgentExecutor":
-        """Swap the board handler's agent executor to use ExecutionServiceAgentExecutor.
-
-        This enables the full LLM → Container → VCS execution chain for Phase 3
-        testing. The MockAgentExecutor is replaced with ExecutionServiceAgentExecutor
-        on the BoardColumnEventHandler, and the completion callback is wired so
-        agent completions auto-progress items to the next column.
-
-        Returns:
-            The ExecutionServiceAgentExecutor for further configuration.
-
-        Raises:
-            RuntimeError: If bootstrap is not set up or handler not registered.
-        """
-        if not self._is_setup or self.adapters is None:
-            msg = "Bootstrap must be set up before enabling execution service executor"
-            raise RuntimeError(msg)
-        if self._board_event_handler is None:
-            msg = "BoardColumnEventHandler not registered yet"
-            raise RuntimeError(msg)
-
-        executor = self.adapters.execution_service_executor
-        # Wire completion callback so auto-progression works with the new executor
-        executor.set_completion_handler(self._board_event_handler.handle_agent_completion, "board-1")
-        self._swap_executor(executor)
-        return executor
-
-    def _swap_executor(self, executor: Any) -> None:
-        """Replace the agent executor on the BoardColumnEventHandler.
-
-        Args:
-            executor: New agent executor to use
-        """
-        if self._board_event_handler is not None:
-            self._board_event_handler.agent_executor = executor

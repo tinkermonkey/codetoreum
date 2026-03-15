@@ -37,12 +37,13 @@ from tests.simulation.helpers import wait_for_column
 async def exec_chain_env(
     simulation_bootstrap: SimulationApplicationBootstrap,
 ):
-    """Bootstrap + enable ExecutionServiceAgentExecutor + seed, with fast delay."""
+    """Bootstrap ExecutionServiceAgentExecutor + seed, with fast delay."""
     adapters = cast("SimulationAdapters", simulation_bootstrap.adapters)
 
-    # Swap to the real execution chain (wires completion callback too)
-    executor = simulation_bootstrap.enable_execution_service_executor()
-    executor._execution_delay = 0.0  # No artificial delay in tests
+    # ExecutionServiceAgentExecutor is the default executor (wired in bootstrap Phase 3)
+    # Set execution delay to 0.0 for fast tests
+    if adapters.agent_executor is not None:
+        adapters.agent_executor._execution_delay = 0.0
 
     # Seed using the agent_repository and work_item_service so domain objects
     # are available to the executor chain

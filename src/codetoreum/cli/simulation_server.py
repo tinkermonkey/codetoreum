@@ -314,7 +314,6 @@ def display_startup_info(
     speed_multiplier: float,
     debug: bool,
     seeded_data: dict,
-    full_execution: bool = False,
 ) -> None:
     """
     Display startup information.
@@ -327,7 +326,6 @@ def display_startup_info(
         speed_multiplier: Time speed multiplier
         debug: Debug mode enabled
         seeded_data: Seeded data counts
-        full_execution: Whether full ExecutionServiceAgentExecutor chain is active
     """
     console.print("\n")
 
@@ -341,12 +339,7 @@ def display_startup_info(
     table.add_row("Scenario", scenario if not scenario_file else str(scenario_file))
     table.add_row("Speed Multiplier", f"{speed_multiplier}x")
     table.add_row("Debug Mode", "Enabled" if debug else "Disabled")
-    executor_label = (
-        "[green]Full (ExecutionServiceAgentExecutor)[/green]"
-        if full_execution
-        else "[yellow]Mock (MockAgentExecutor)[/yellow]"
-    )
-    table.add_row("Executor", executor_label)
+    table.add_row("Executor", "[green]ExecutionServiceAgentExecutor[/green]")
 
     # Add seeded data counts
     table.add_row("", "")
@@ -431,7 +424,6 @@ async def main_async(
     speed_multiplier: float,
     no_seed: bool,
     debug: bool,
-    full_execution: bool = False,
 ) -> None:
     """
     Main async entry point for simulation server.
@@ -444,7 +436,6 @@ async def main_async(
         speed_multiplier: Time speed multiplier
         no_seed: Skip seeding if True
         debug: Debug mode enabled
-        full_execution: Enable full ExecutionServiceAgentExecutor chain
     """
     bootstrap = None
     shutdown_requested = False
@@ -467,14 +458,6 @@ async def main_async(
         if shutdown_requested:
             return
 
-        # Enable full execution chain if requested
-        if full_execution:
-            console.print("\n[bold cyan]Enabling Full Execution Chain[/bold cyan]")
-            bootstrap.enable_execution_service_executor()
-            console.print("[green]✓ ExecutionServiceAgentExecutor active (full LLM → VCS chain)[/green]")
-        else:
-            console.print("\n[dim]Using MockAgentExecutor (pass --full-execution for full chain)[/dim]")
-
         # Seed data
         seeded_data = await seed_data(bootstrap, scenario, scenario_file, no_seed)
 
@@ -482,7 +465,7 @@ async def main_async(
             return
 
         # Display startup info
-        display_startup_info(host, port, scenario, scenario_file, speed_multiplier, debug, seeded_data, full_execution)
+        display_startup_info(host, port, scenario, scenario_file, speed_multiplier, debug, seeded_data)
 
         # Run server (blocking)
         await run_server(bootstrap, host, port, debug)
@@ -565,11 +548,6 @@ async def main_async(
     is_flag=True,
     help="Enable debug logging",
 )
-@click.option(
-    "--full-execution",
-    is_flag=True,
-    help="Use full ExecutionServiceAgentExecutor (LLM → WorkspaceRouter → VCS chain) instead of MockAgentExecutor",
-)
 def main(
     host: str,
     port: int,
@@ -578,7 +556,6 @@ def main(
     speed_multiplier: float,
     no_seed: bool,
     debug: bool,
-    full_execution: bool,
 ) -> None:
     """
     Start the Codetoreum simulation server.
@@ -602,9 +579,6 @@ def main(
 
         # Start without seeding data
         python -m codetoreum.cli.simulation_server --no-seed
-
-        # Start with full execution chain (LLM + VCS events)
-        python -m codetoreum.cli.simulation_server --scenario demo --full-execution
     """
     # Validate inputs
     try:
@@ -626,7 +600,7 @@ def main(
 
     # Run async main
     try:
-        asyncio.run(main_async(host, port, scenario, scenario_file, speed_multiplier, no_seed, debug, full_execution))
+        asyncio.run(main_async(host, port, scenario, scenario_file, speed_multiplier, no_seed, debug))
     except KeyboardInterrupt:
         console.print("\n[yellow]Server stopped by user[/yellow]")
     except Exception as e:

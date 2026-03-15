@@ -69,7 +69,13 @@ async def simulation_env():
     bootstrap.adapters.agent_executor._execution_delay = 0.1
 
     # Seed default test scenario
-    seeder = SimulationDataSeeder(bootstrap)
+    adapters = bootstrap.adapters
+    seeder = SimulationDataSeeder(
+        bootstrap,
+        track_items=True,
+        agent_repository=adapters.agent_repository,
+        work_item_service=adapters.work_item_service,
+    )
     await seeder.seed_default_scenario()
 
     # The bootstrap already creates the FastAPI app
