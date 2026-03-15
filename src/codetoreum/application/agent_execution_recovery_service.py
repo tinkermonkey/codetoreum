@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from codetoreum.domain.events import WorkflowFailed
-from codetoreum.infrastructure.dead_letter_queue import DeadLetterQueue, FailureReason
+from codetoreum.infrastructure.dead_letter_queue import DeadLetterQueue, DeadLetterQueueStats, FailureReason
 
 if TYPE_CHECKING:
     from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
@@ -241,7 +241,7 @@ class AgentExecutionRecoveryService:
                 extra={"error_id": "ERR_AGENT_EXECUTION_REGISTRY_FAILURE"},
             )
 
-    def get_dead_letter_queue_stats(self):
+    def get_dead_letter_queue_stats(self) -> DeadLetterQueueStats:
         """Get statistics from the dead letter queue.
 
         Returns:
