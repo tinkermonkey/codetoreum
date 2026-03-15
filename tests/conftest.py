@@ -322,6 +322,45 @@ class ModernRedisContainer(DockerContainer):
 
 
 @pytest.fixture(scope="function", autouse=True)
+def _cleanup_dead_letter_queues() -> Generator[None, None, None]:
+    """Ensure all DeadLetterQueue retry processors are stopped after each test.
+
+    DeadLetterQueue instances start a background _retry_loop task when
+    start_retry_processor() is called. This fixture ensures all such tasks
+    are properly stopped to prevent them from hanging indefinitely and
+    blocking test completion.
+
+    This is particularly important because the _retry_loop runs in an infinite
+    loop (while self._running), and if not stopped before the event loop
+    closes, it can cause timeouts and prevent tests from completing.
+    """
+    yield
+
+    # After test completes, stop all DeadLetterQueue instances
+    try:
+        loop = asyncio.get_event_loop()
+        if loop and not loop.is_closed():
+            # Import here to avoid circular imports
+            from codetoreum.infrastructure.dead_letter_queue import DeadLetterQueue
+
+            # Find all DeadLetterQueue instances that might be running
+            import gc
+            for obj in gc.get_objects():
+                if isinstance(obj, DeadLetterQueue) and obj._running:
+                    # Stop the retry processor
+                    try:
+                        loop.run_until_complete(obj.stop_retry_processor())
+                    except Exception:
+                        # If loop is already closed, set flag directly
+                        obj._running = False
+                        if obj._retry_task:
+                            obj._retry_task.cancel()
+    except Exception:
+        # Ignore any errors during cleanup
+        pass
+
+
+@pytest.fixture(scope="function", autouse=True)
 def _cleanup_event_loop() -> Generator[None, None, None]:
     """Ensure event loop is properly closed to prevent ResourceWarnings.
 
