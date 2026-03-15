@@ -314,7 +314,6 @@ class TestBridgeIntegration:
         dead_letter_queue = DeadLetterQueue()
 
         # Mock event bus to fail
-        original_publish = event_bus.publish
         event_bus.publish = AsyncMock(side_effect=EventBusError("Connection failed"))
 
         # Simulate bridge error handling with proper error classification
@@ -369,7 +368,6 @@ class TestBridgeIntegration:
     @pytest.mark.asyncio
     async def test_transient_error_classification_in_bridge(self):
         """Test that transient errors are properly classified even when wrapped in EventBusError."""
-        event_bus = EventBus()
         dead_letter_queue = DeadLetterQueue()
 
         # Create an EventBusError that wraps a ConnectionError (as event_bus.py does)
