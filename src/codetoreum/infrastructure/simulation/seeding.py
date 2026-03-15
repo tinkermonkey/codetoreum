@@ -422,8 +422,8 @@ class SimulationDataSeeder:
                 work_item.status = status
 
             # Mirror into work_item_service if available (for ExecutionServiceAgentExecutor)
-            if self._work_item_service is not None and hasattr(self._work_item_service, "_work_items"):
-                self._work_item_service._work_items[work_item.id] = work_item  # type: ignore[attr-defined]
+            if self._work_item_service is not None and hasattr(self._work_item_service, "add_work_item"):
+                self._work_item_service.add_work_item(work_item)  # type: ignore[union-attr]
 
             if self.track_items:
                 self.created_items.work_items.append(work_item.id)
