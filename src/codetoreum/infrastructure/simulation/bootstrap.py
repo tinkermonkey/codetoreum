@@ -171,7 +171,12 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class SimulationAdapters:
-    """Container for all simulation adapters."""
+    """Container for all simulation adapters.
+
+    Note: agent_executor is assigned in Phase 3 (ExecutionService creation) and is
+    always ExecutionServiceAgentExecutor. It implements IAgentExecutor and provides
+    set_completion_handler() for BoardColumnEventHandler wiring.
+    """
 
     # Output port adapters
     ticket_system: InMemoryTicketAdapter
@@ -189,7 +194,6 @@ class SimulationAdapters:
     project_manager: MockProjectManagerAdapter  # Multi-project management
     lock_service: InMemoryLockService
     workflow_config: InMemoryWorkflowConfigService
-    agent_executor: IAgentExecutor | None
     queue_service: InMemoryQueueService  # Pipeline queue service for board automation
     event_emitter: CapturingMockEventEmitter  # For domain event capture
 
@@ -206,6 +210,9 @@ class SimulationAdapters:
     run_registry: InMemoryActiveWorkflowRunRegistry  # Active workflow run tracking
     branch_tracker: InMemoryWorkItemBranchTracker  # Work item → VCS branch tracking
     work_item_service: MockWorkItemService  # Work item lookups for execution chain
+
+    # Agent executor (assigned in Phase 3, after ExecutionService is created)
+    agent_executor: ExecutionServiceAgentExecutor | None = None
 
 
 @dataclass
