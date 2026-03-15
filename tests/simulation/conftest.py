@@ -1,8 +1,8 @@
 """Pytest fixtures for simulation testing."""
 
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Callable, Coroutine, Generator
 from datetime import UTC, datetime
-from typing import cast
+from typing import Any, cast
 
 import pytest
 from fastapi import FastAPI
@@ -86,7 +86,7 @@ class MockAgentExecutor(IAgentExecutor):
 
     def set_completion_handler(
         self,
-        callback,  # Callable[[str, str, bool], Coroutine[Any, Any, None]]
+        callback: Callable[[str, str, bool], Coroutine[Any, Any, None]],
         default_board_id: str,
     ) -> None:
         """Wire completion callback for agent execution.
