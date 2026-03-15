@@ -68,21 +68,40 @@ def mock_event_bus():
 
 
 @pytest.fixture
+def mock_recovery_service():
+    """Create mock recovery service."""
+    service = AsyncMock()
+    return service
+
+
+@pytest.fixture
+def mock_event_emitter():
+    """Create mock event emitter."""
+    emitter = AsyncMock()
+    return emitter
+
+
+@pytest.fixture
 def handler(
     mock_board_service,
     mock_lock_service,
     mock_workflow_config,
     mock_agent_executor,
     mock_event_bus,
+    mock_recovery_service,
+    mock_event_emitter,
 ):
     """Create handler with mocked dependencies."""
-    return BoardColumnEventHandler(
+    handler_instance = BoardColumnEventHandler(
         board_service=mock_board_service,
         lock_service=mock_lock_service,
         workflow_config=mock_workflow_config,
         agent_executor=mock_agent_executor,
         event_bus=mock_event_bus,
     )
+    handler_instance.recovery_service = mock_recovery_service
+    handler_instance.event_emitter = mock_event_emitter
+    return handler_instance
 
 
 @pytest.fixture
@@ -795,3 +814,196 @@ class TestErrorHandling:
 
         # Assert
         assert "unexpected event type" in caplog.text
+
+
+class TestTriggerAgentExecutionFailureAndLockRelease:
+    """Tests for _trigger_agent error handling and lock release behavior.
+
+    These tests verify that when agent execution fails, the pipeline lock
+    is always released to unblock queued items, even if recovery service fails.
+    """
+
+    @pytest.mark.asyncio
+    async def test_agent_execution_failure_releases_lock(
+        self,
+        handler,
+        mock_workflow_config,
+        mock_lock_service,
+        mock_agent_executor,
+        mock_recovery_service,
+        sample_workflow_config,
+    ):
+        """Should release lock when agent execution fails, unblocking pipeline."""
+        # Setup
+        mock_workflow_config.get_board_workflow_template.return_value = sample_workflow_config
+        mock_agent_executor.execute.side_effect = RuntimeError("Agent execution failed")
+        mock_lock_service.release_lock.return_value = LockReleaseResult(
+            released_work_item_id="item-1",
+            next_work_item_id="item-2",
+            queue_length_after_release=1,
+        )
+        mock_recovery_service.handle_agent_execution_failure.return_value = None
+
+        event = create_column_changed_event(
+            work_item_id="item-1",
+            board_id="board-1",
+            project_id="proj-1",
+            to_column="In Development",
+        )
+
+        # Setup active run tracking (handler tracks running work items)
+        handler._active_runs["item-1"] = {
+            "run_id": "run-1",
+            "project_id": "proj-1",
+            "stage_name": "Backlog",
+        }
+
+        # Act - directly call _trigger_agent to test lock release on failure
+        await handler._trigger_agent(
+            work_item_id="item-1",
+            column_config=sample_workflow_config.get_column_config("In Development"),
+            board_id="board-1",
+        )
+
+        # Assert: Lock should be released despite agent execution failure
+        mock_lock_service.release_lock.assert_called_once_with(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+        )
+
+    @pytest.mark.asyncio
+    async def test_agent_execution_failure_invokes_recovery_service(
+        self,
+        handler,
+        mock_workflow_config,
+        mock_lock_service,
+        mock_agent_executor,
+        mock_recovery_service,
+        sample_workflow_config,
+    ):
+        """Should invoke recovery service when agent execution fails."""
+        # Setup
+        mock_workflow_config.get_board_workflow_template.return_value = sample_workflow_config
+        error = RuntimeError("Agent execution failed")
+        mock_agent_executor.execute.side_effect = error
+        mock_lock_service.release_lock.return_value = LockReleaseResult(
+            released_work_item_id="item-1",
+            next_work_item_id="item-2",
+            queue_length_after_release=1,
+        )
+        mock_recovery_service.handle_agent_execution_failure.return_value = None
+
+        # Setup active run tracking
+        handler._active_runs["item-1"] = {
+            "run_id": "run-1",
+            "project_id": "proj-1",
+            "stage_name": "Backlog",
+        }
+
+        # Act - directly call _trigger_agent
+        await handler._trigger_agent(
+            work_item_id="item-1",
+            column_config=sample_workflow_config.get_column_config("In Development"),
+            board_id="board-1",
+        )
+
+        # Assert: Recovery service should be invoked with failure details
+        mock_recovery_service.handle_agent_execution_failure.assert_called_once_with(
+            work_item_id="item-1",
+            board_id="board-1",
+            error=error,
+        )
+
+    @pytest.mark.asyncio
+    async def test_recovery_service_failure_does_not_prevent_lock_release(
+        self,
+        handler,
+        mock_workflow_config,
+        mock_lock_service,
+        mock_agent_executor,
+        mock_recovery_service,
+        sample_workflow_config,
+    ):
+        """Lock release must happen even if recovery service fails (critical).
+
+        This prevents the scenario where recovery service failure causes
+        pipeline deadlock by preventing lock release.
+        """
+        # Setup
+        mock_workflow_config.get_board_workflow_template.return_value = sample_workflow_config
+        exec_error = RuntimeError("Agent execution failed")
+        mock_agent_executor.execute.side_effect = exec_error
+        recovery_error = RuntimeError("Recovery service unavailable")
+        mock_recovery_service.handle_agent_execution_failure.side_effect = recovery_error
+        mock_lock_service.release_lock.return_value = LockReleaseResult(
+            released_work_item_id="item-1",
+            next_work_item_id="item-2",
+            queue_length_after_release=1,
+        )
+
+        # Setup active run tracking
+        handler._active_runs["item-1"] = {
+            "run_id": "run-1",
+            "project_id": "proj-1",
+            "stage_name": "Backlog",
+        }
+
+        # Act - should not raise despite recovery service failure
+        await handler._trigger_agent(
+            work_item_id="item-1",
+            column_config=sample_workflow_config.get_column_config("In Development"),
+            board_id="board-1",
+        )
+
+        # Assert: Lock release must still be called (happens after recovery attempt)
+        mock_lock_service.release_lock.assert_called_once_with(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+        )
+
+    @pytest.mark.asyncio
+    async def test_lock_release_failure_emits_lock_stuck_event(
+        self,
+        handler,
+        mock_workflow_config,
+        mock_lock_service,
+        mock_agent_executor,
+        mock_recovery_service,
+        mock_event_emitter,
+        sample_workflow_config,
+        caplog,
+    ):
+        """When lock release fails, should emit LockStuckEvent for ops alerting."""
+        # Setup
+        caplog.set_level(logging.INFO)
+        mock_workflow_config.get_board_workflow_template.return_value = sample_workflow_config
+        mock_agent_executor.execute.side_effect = RuntimeError("Agent execution failed")
+        lock_error = Exception("Lock service unavailable")
+        mock_lock_service.release_lock.side_effect = lock_error
+        mock_recovery_service.handle_agent_execution_failure.return_value = None
+
+        # Setup active run tracking
+        handler._active_runs["item-1"] = {
+            "run_id": "run-1",
+            "project_id": "proj-1",
+            "stage_name": "Backlog",
+        }
+
+        # Act
+        await handler._trigger_agent(
+            work_item_id="item-1",
+            column_config=sample_workflow_config.get_column_config("In Development"),
+            board_id="board-1",
+        )
+
+        # Assert: Should log critical error about lock release failure
+        assert "Failed to release lock" in caplog.text
+        assert "PIPELINE IS BLOCKED" in caplog.text
+
+        # LockStuckEvent should be emitted
+        mock_event_emitter.emit.assert_called_once()
+        call_args = mock_event_emitter.emit.call_args[0][0]
+        assert call_args.type == "lock.stuck"
+        assert call_args.work_item_id == "item-1"

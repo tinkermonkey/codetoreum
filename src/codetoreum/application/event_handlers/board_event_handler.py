@@ -11,6 +11,9 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
+from codetoreum.application.agent_execution_recovery_service import (
+    AgentExecutionRecoveryService,
+)
 from codetoreum.application.pipeline_lock_service import (
     IQueuedPipelineLockService,
     LockStatus,
@@ -40,9 +43,7 @@ from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 if TYPE_CHECKING:
-    from codetoreum.application.agent_execution_recovery_service import (
-        AgentExecutionRecoveryService,
-    )
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -689,13 +690,25 @@ class BoardColumnEventHandler(EventHandler):
                 run_info = self._active_runs[work_item_id]
                 project_id = run_info.get("project_id", "")
 
-                # Use recovery service to fail workflow run
+                # Use recovery service to fail workflow run (wrapped in try/except to ensure
+                # lock release is not skipped even if recovery service fails)
                 if self.recovery_service:
-                    await self.recovery_service.handle_agent_execution_failure(
-                        work_item_id=work_item_id,
-                        board_id=board_id,
-                        error=e,
-                    )
+                    try:
+                        await self.recovery_service.handle_agent_execution_failure(
+                            work_item_id=work_item_id,
+                            board_id=board_id,
+                            error=e,
+                        )
+                    except Exception as recovery_err:
+                        logger.error(
+                            f"Recovery service failed for {work_item_id}: {recovery_err}",
+                            exc_info=True,
+                            extra={
+                                "error_id": "ERR_BOARD_EVENT_RECOVERY_SERVICE_FAILURE",
+                                "work_item_id": work_item_id,
+                            },
+                        )
+                        # Continue to lock release (lock release must not be skipped)
 
                 # Release the lock to unblock next queued item (critical for pipeline unblocking)
                 try:

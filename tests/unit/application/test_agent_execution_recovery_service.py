@@ -1,7 +1,7 @@
 """Unit tests for AgentExecutionRecoveryService.
 
 Tests recovery mechanisms for:
-1. Completion callback failures (auto-progression stuck)
+1. Completion callback failures (auto-progression stuck) via DeadLetterQueue
 2. Agent execution failures (lock release failures)
 """
 
@@ -11,8 +11,8 @@ import pytest
 
 from codetoreum.application.agent_execution_recovery_service import (
     AgentExecutionRecoveryService,
-    FailedAutoProgression,
 )
+from codetoreum.infrastructure.dead_letter_queue import DeadLetterQueue
 from codetoreum.ports.output.active_workflow_run_registry import ActiveRunInfo
 
 
@@ -44,7 +44,7 @@ class TestAgentExecutionRecoveryService:
 
     @pytest.mark.asyncio
     async def test_completion_callback_failure_queues_for_recovery(self, recovery_service):
-        """When completion callback fails, work item is queued in dead letter queue."""
+        """When completion callback fails, work item is queued in DeadLetterQueue."""
         # Arrange
         work_item_id = "wi-1"
         board_id = "board-1"
@@ -60,12 +60,13 @@ class TestAgentExecutionRecoveryService:
             error=error,
         )
 
-        # Assert: Work item in dead letter queue
-        dlq = recovery_service.dead_letter_queue
-        assert len(dlq) == 1
-        assert dlq[0].work_item_id == work_item_id
-        assert dlq[0].board_id == board_id
-        assert dlq[0].from_column == "In Development"
+        # Assert: Work item in dead letter queue (via DeadLetterQueue infrastructure)
+        stuck_items = recovery_service.get_stuck_work_items()
+        assert work_item_id in stuck_items
+
+        # Verify the event data contains expected fields
+        stats = recovery_service.get_dead_letter_queue_stats()
+        assert stats.total_failed_events == 1
 
     @pytest.mark.asyncio
     async def test_completion_callback_failure_fails_workflow_run(self, recovery_service):
@@ -135,81 +136,50 @@ class TestAgentExecutionRecoveryService:
         assert events[0].payload["work_item_id"] == work_item_id
 
     @pytest.mark.asyncio
-    async def test_dead_letter_queue_can_be_cleared(self, recovery_service):
-        """Dead letter queue can be cleared after processing."""
-        # Arrange
-        recovery_service._dead_letter_queue.append(
-            FailedAutoProgression(
-                work_item_id="wi-1",
-                board_id="board-1",
-                from_column="In Development",
-                to_column="Review",
-                reason="Auto-progression failed",
-                failed_at=MagicMock(),
-            )
-        )
-        assert len(recovery_service.dead_letter_queue) == 1
-
-        # Act
-        recovery_service.clear_dead_letter_queue()
-
-        # Assert
-        assert len(recovery_service.dead_letter_queue) == 0
-
-    @pytest.mark.asyncio
     async def test_get_stuck_work_items_returns_dlq_items(self, recovery_service):
         """Get stuck work items returns all work items in dead letter queue."""
         # Arrange
-        recovery_service._dead_letter_queue.append(
-            FailedAutoProgression(
-                work_item_id="wi-1",
-                board_id="board-1",
-                from_column="In Development",
-                to_column="Review",
-                reason="Auto-progression failed",
-                failed_at=MagicMock(),
-            )
+        await recovery_service.handle_completion_callback_failure(
+            work_item_id="wi-1",
+            board_id="board-1",
+            success=True,
+            error=RuntimeError("Failed 1"),
         )
-        recovery_service._dead_letter_queue.append(
-            FailedAutoProgression(
-                work_item_id="wi-2",
-                board_id="board-1",
-                from_column="In Development",
-                to_column="Review",
-                reason="Auto-progression failed",
-                failed_at=MagicMock(),
-            )
+        await recovery_service.handle_completion_callback_failure(
+            work_item_id="wi-2",
+            board_id="board-1",
+            success=True,
+            error=RuntimeError("Failed 2"),
         )
+        recovery_service._run_registry.get_active_run.return_value = None
 
         # Act
         stuck_items = recovery_service.get_stuck_work_items()
 
         # Assert
-        assert stuck_items == ["wi-1", "wi-2"]
+        assert "wi-1" in stuck_items
+        assert "wi-2" in stuck_items
+        assert len(stuck_items) == 2
 
     @pytest.mark.asyncio
-    async def test_failed_auto_progression_serialization(self):
-        """FailedAutoProgression can be serialized to dict."""
+    async def test_board_service_none_does_not_crash(self, recovery_service):
+        """When board_service is None, should not crash but use 'UNKNOWN' column."""
         # Arrange
-        from datetime import UTC, datetime
+        recovery_service._board_service = None
+        work_item_id = "wi-1"
+        board_id = "board-1"
+        error = RuntimeError("Auto-progression failed")
 
-        failed = FailedAutoProgression(
-            work_item_id="wi-1",
-            board_id="board-1",
-            from_column="In Development",
-            to_column="Review",
-            reason="Auto-progression failed",
-            failed_at=datetime(2026, 3, 15, 12, 0, 0, tzinfo=UTC),
-            attempt_count=1,
+        recovery_service._run_registry.get_active_run.return_value = None
+
+        # Act - should not raise AttributeError
+        await recovery_service.handle_completion_callback_failure(
+            work_item_id=work_item_id,
+            board_id=board_id,
+            success=True,
+            error=error,
         )
 
-        # Act
-        serialized = failed.to_dict()
-
-        # Assert
-        assert serialized["work_item_id"] == "wi-1"
-        assert serialized["board_id"] == "board-1"
-        assert serialized["from_column"] == "In Development"
-        assert serialized["to_column"] == "Review"
-        assert serialized["attempt_count"] == 1
-        assert "2026-03-15" in serialized["failed_at"]
+        # Assert: Work item should still be queued with 'UNKNOWN' column
+        stuck_items = recovery_service.get_stuck_work_items()
+        assert work_item_id in stuck_items

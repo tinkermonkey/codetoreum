@@ -16,6 +16,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from codetoreum.domain.events import WorkflowFailed
+from codetoreum.infrastructure.dead_letter_queue import DeadLetterQueue, FailureReason
+
 if TYPE_CHECKING:
     from codetoreum.ports.output.board_service import IBoardService
     from codetoreum.ports.output.event_store import IEventStore
@@ -24,36 +27,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class FailedAutoProgression:
-    """Record of a failed auto-progression for recovery."""
-
-    work_item_id: str
-    board_id: str
-    from_column: str
-    to_column: str
-    reason: str
-    failed_at: datetime
-    attempt_count: int = 1
-
-    def to_dict(self) -> dict:
-        """Convert to dictionary for serialization."""
-        return {
-            "work_item_id": self.work_item_id,
-            "board_id": self.board_id,
-            "from_column": self.from_column,
-            "to_column": self.to_column,
-            "reason": self.reason,
-            "failed_at": self.failed_at.isoformat(),
-            "attempt_count": self.attempt_count,
-        }
 
 
 class AgentExecutionRecoveryService:
     """Handles recovery from agent execution failures.
 
     Responsibilities:
-    1. Track failed auto-progressions in dead letter queue
+    1. Track failed auto-progressions in dead letter queue (using DeadLetterQueue infrastructure)
     2. Detect and log lock stuck conditions
     3. Fail workflow runs when recovery is impossible
     4. Provide observability for stuck work items
@@ -68,6 +48,7 @@ class AgentExecutionRecoveryService:
         board_service: IBoardService | None = None,
         event_store: IEventStore | None = None,
         run_registry: IActiveWorkflowRunRegistry | None = None,
+        dead_letter_queue: DeadLetterQueue | None = None,
     ) -> None:
         """Initialize recovery service.
 
@@ -75,16 +56,12 @@ class AgentExecutionRecoveryService:
             board_service: Optional board service for querying work items
             event_store: Optional event store for persisting recovery events
             run_registry: Optional registry for failing workflow runs
+            dead_letter_queue: Optional DeadLetterQueue for tracking failed auto-progressions
         """
         self._board_service = board_service
         self._event_store = event_store
         self._run_registry = run_registry
-        self._dead_letter_queue: list[FailedAutoProgression] = []
-
-    @property
-    def dead_letter_queue(self) -> list[FailedAutoProgression]:
-        """Return dead letter queue for test assertions."""
-        return list(self._dead_letter_queue)
+        self._dead_letter_queue = dead_letter_queue or DeadLetterQueue()
 
     async def handle_completion_callback_failure(
         self,
@@ -124,25 +101,43 @@ class AgentExecutionRecoveryService:
         if success:
             try:
                 # Get current position to determine intended progression
-                current_position = await self._board_service.get_item_position(work_item_id)
-                next_column = None
-                # Note: We don't have workflow config here, so we can't determine next column
-                # This will be handled by admin/recovery process
-                failed_progression = FailedAutoProgression(
-                    work_item_id=work_item_id,
-                    board_id=board_id,
-                    from_column=current_position.column_name,
-                    to_column=next_column or "UNKNOWN",
-                    reason=f"Auto-progression callback failed: {error}",
-                    failed_at=datetime.now(UTC),
-                    attempt_count=1,
+                # Guard against missing board_service (e.g., in test scenarios)
+                from_column = "UNKNOWN"
+                if self._board_service:
+                    try:
+                        current_position = await self._board_service.get_item_position(work_item_id)
+                        from_column = current_position.column_name
+                    except Exception as pos_err:
+                        logger.warning(
+                            f"Could not determine current column for '{work_item_id}': {pos_err}",
+                            exc_info=True,
+                            extra={"error_id": "ERR_AGENT_EXECUTION_POSITION_LOOKUP_FAILURE"},
+                        )
+
+                # Queue in DeadLetterQueue with event_data containing workflow context
+                # Next column is unknown without workflow config; will be determined during recovery
+                event_id = await self._dead_letter_queue.add_failed_event(
+                    event_type="auto_progression_failure",
+                    event_data={
+                        "work_item_id": work_item_id,
+                        "board_id": board_id,
+                        "from_column": from_column,
+                        "to_column": "UNKNOWN",  # Determined during manual recovery
+                        "reason": str(error),
+                    },
+                    failure_reason=FailureReason.PROCESSING_ERROR,
+                    error_message=f"Auto-progression callback failed: {error}",
+                    metadata={
+                        "error_id": "ERR_AGENT_EXECUTION_COMPLETION_CALLBACK_FAILURE",
+                    },
                 )
-                self._dead_letter_queue.append(failed_progression)
                 logger.warning(
-                    f"Work item '{work_item_id}' queued in dead letter queue for manual progression",
+                    f"Work item '{work_item_id}' queued in dead letter queue for manual progression "
+                    f"(DLQ event: {event_id})",
                     extra={
                         "error_id": "ERR_AGENT_EXECUTION_DLQ_ENQUEUED",
                         "work_item_id": work_item_id,
+                        "dlq_event_id": event_id,
                     },
                 )
             except Exception as queue_err:
@@ -153,45 +148,10 @@ class AgentExecutionRecoveryService:
                 )
 
         # Fail workflow run if tracking is available
-        if self._run_registry:
-            try:
-                run_info = await self._run_registry.get_active_run(work_item_id)
-                if run_info:
-                    # Mark workflow as failed due to completion callback error
-                    logger.critical(
-                        f"Failing workflow run for '{work_item_id}' due to completion callback failure",
-                        extra={
-                            "error_id": "ERR_AGENT_EXECUTION_WORKFLOW_FAILED",
-                            "work_item_id": work_item_id,
-                            "run_id": run_info.run_id,
-                        },
-                    )
-                    if self._event_store:
-                        try:
-                            from codetoreum.domain.events import WorkflowFailed
-
-                            workflow_failed = WorkflowFailed(
-                                aggregate_id=run_info.run_id,
-                                payload={
-                                    "failed_at": datetime.now(UTC).isoformat(),
-                                    "reason": f"Completion callback failure: {error}",
-                                    "failed_stage": run_info.stage_name,
-                                    "work_item_id": work_item_id,
-                                },
-                            )
-                            await self._event_store.append(run_info.run_id, [workflow_failed])
-                        except Exception as persist_err:
-                            logger.error(
-                                f"Failed to persist WorkflowFailed event for '{work_item_id}': {persist_err}",
-                                exc_info=True,
-                                extra={"error_id": "ERR_AGENT_EXECUTION_PERSIST_FAILURE"},
-                            )
-            except Exception as registry_err:
-                logger.error(
-                    f"Failed to query/update run registry for '{work_item_id}': {registry_err}",
-                    exc_info=True,
-                    extra={"error_id": "ERR_AGENT_EXECUTION_REGISTRY_FAILURE"},
-                )
+        await self._fail_workflow_run(
+            work_item_id=work_item_id,
+            reason=f"Completion callback failure: {error}",
+        )
 
     async def handle_agent_execution_failure(
         self,
@@ -225,49 +185,84 @@ class AgentExecutionRecoveryService:
         )
 
         # Fail workflow run if available
-        if self._run_registry:
+        await self._fail_workflow_run(
+            work_item_id=work_item_id,
+            reason=f"Agent execution failure: {error}",
+        )
+
+    async def _fail_workflow_run(self, work_item_id: str, reason: str) -> None:
+        """Private helper to fail a workflow run.
+
+        Consolidates duplicate logic for failing workflow runs from both
+        completion callback and execution failure paths.
+
+        Args:
+            work_item_id: Work item whose workflow should fail
+            reason: Reason for workflow failure
+        """
+        if not self._run_registry:
+            return
+
+        try:
+            run_info = await self._run_registry.get_active_run(work_item_id)
+            if not run_info:
+                return
+
+            logger.critical(
+                f"Failing workflow run for '{work_item_id}' due to: {reason}",
+                extra={
+                    "error_id": "ERR_AGENT_EXECUTION_WORKFLOW_FAILED",
+                    "work_item_id": work_item_id,
+                    "run_id": run_info.run_id,
+                },
+            )
+
+            if not self._event_store:
+                return
+
             try:
-                run_info = await self._run_registry.get_active_run(work_item_id)
-                if run_info:
-                    logger.critical(
-                        f"Failing workflow run for '{work_item_id}' due to execution failure",
-                        extra={
-                            "error_id": "ERR_AGENT_EXECUTION_WORKFLOW_FAILED",
-                            "work_item_id": work_item_id,
-                            "run_id": run_info.run_id,
-                        },
-                    )
-                    if self._event_store:
-                        try:
-                            from codetoreum.domain.events import WorkflowFailed
-
-                            workflow_failed = WorkflowFailed(
-                                aggregate_id=run_info.run_id,
-                                payload={
-                                    "failed_at": datetime.now(UTC).isoformat(),
-                                    "reason": f"Agent execution failure: {error}",
-                                    "failed_stage": run_info.stage_name,
-                                    "work_item_id": work_item_id,
-                                },
-                            )
-                            await self._event_store.append(run_info.run_id, [workflow_failed])
-                        except Exception as persist_err:
-                            logger.error(
-                                f"Failed to persist WorkflowFailed event for '{work_item_id}': {persist_err}",
-                                exc_info=True,
-                                extra={"error_id": "ERR_AGENT_EXECUTION_PERSIST_FAILURE"},
-                            )
-            except Exception as registry_err:
-                logger.error(
-                    f"Failed to query/update run registry for '{work_item_id}': {registry_err}",
-                    exc_info=True,
-                    extra={"error_id": "ERR_AGENT_EXECUTION_REGISTRY_FAILURE"},
+                workflow_failed = WorkflowFailed(
+                    aggregate_id=run_info.run_id,
+                    payload={
+                        "failed_at": datetime.now(UTC).isoformat(),
+                        "reason": reason,
+                        "failed_stage": run_info.stage_name,
+                        "work_item_id": work_item_id,
+                    },
                 )
+                await self._event_store.append(run_info.run_id, [workflow_failed])
+            except Exception as persist_err:
+                logger.error(
+                    f"Failed to persist WorkflowFailed event for '{work_item_id}': {persist_err}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_AGENT_EXECUTION_PERSIST_FAILURE"},
+                )
+        except Exception as registry_err:
+            logger.error(
+                f"Failed to query/update run registry for '{work_item_id}': {registry_err}",
+                exc_info=True,
+                extra={"error_id": "ERR_AGENT_EXECUTION_REGISTRY_FAILURE"},
+            )
 
-    def clear_dead_letter_queue(self) -> None:
-        """Clear dead letter queue (typically after processing)."""
-        self._dead_letter_queue.clear()
+    def get_dead_letter_queue_stats(self):
+        """Get statistics from the dead letter queue.
+
+        Returns:
+            DeadLetterQueueStats with failure metrics
+        """
+        return self._dead_letter_queue.get_stats()
 
     def get_stuck_work_items(self) -> list[str]:
-        """Get list of work item IDs stuck in dead letter queue."""
-        return [item.work_item_id for item in self._dead_letter_queue]
+        """Get list of work item IDs stuck in dead letter queue.
+
+        Returns:
+            List of work item IDs with failed auto-progressions
+        """
+        stuck_items = []
+        stats = self._dead_letter_queue.get_stats()
+        # All failed events in DLQ are auto-progression failures
+        # Extract work item IDs from event data
+        for event_id, event in self._dead_letter_queue._storage.items():
+            if "work_item_id" in event.event_data:
+                stuck_items.append(event.event_data["work_item_id"])
+        return stuck_items
