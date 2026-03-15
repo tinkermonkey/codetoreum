@@ -47,7 +47,8 @@ async def test_yaml_scenario_seeding_and_cascade(
         agent_repository=adapters.agent_repository,
         work_item_service=adapters.work_item_service,
     )
-    adapters.agent_executor._execution_delay = 0.1
+    if adapters.agent_executor is not None:
+        adapters.agent_executor._execution_delay = 0.1
 
     # Verify the scenario file exists before attempting to load it
     assert _DEFAULT_YAML.exists(), (

@@ -35,7 +35,8 @@ async def multi_project_env():
     await bootstrap.setup()
 
     adapters = cast("SimulationAdapters", bootstrap.adapters)
-    adapters.agent_executor._execution_delay = 0.1
+    if adapters.agent_executor is not None:
+        adapters.agent_executor._execution_delay = 0.1
 
     seeder = SimulationDataSeeder(
         bootstrap,

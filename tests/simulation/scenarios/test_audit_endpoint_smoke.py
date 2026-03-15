@@ -66,7 +66,8 @@ async def simulation_env():
 
     # Speed up agent execution for faster tests
     assert bootstrap.adapters is not None
-    bootstrap.adapters.agent_executor._execution_delay = 0.1
+    if bootstrap.adapters.agent_executor is not None:
+        bootstrap.adapters.agent_executor._execution_delay = 0.1
 
     # Seed default test scenario
     adapters = bootstrap.adapters

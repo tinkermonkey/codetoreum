@@ -34,7 +34,8 @@ async def e2e_env(
 ):
     """Bootstrap + seed, with fast agent execution delay."""
     adapters = cast("SimulationAdapters", simulation_bootstrap.adapters)
-    adapters.agent_executor._execution_delay = 0.1
+    if adapters.agent_executor is not None:
+        adapters.agent_executor._execution_delay = 0.1
     await simulation_seeder.seed_default_scenario()
     return simulation_bootstrap, simulation_seeder
 

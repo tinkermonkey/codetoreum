@@ -34,7 +34,21 @@ from codetoreum.ports.output.agent_executor import IAgentExecutor
 
 
 class MockAgentExecutor(IAgentExecutor):
-    """Mock agent executor that tracks executions without actually executing."""
+    """Mock agent executor for unit tests constructing BoardColumnEventHandler instances.
+
+    IMPORTANT: This is a simple execution tracking mock for isolated unit tests only.
+    It does NOT support execution delays or the full execution pipeline. Tests that
+    construct their own BoardColumnEventHandler instances (e.g., board_automation_scenario_*.py)
+    should use this class.
+
+    For tests using SimulationApplicationBootstrap, the executor is ExecutionServiceAgentExecutor,
+    which provides the full execution chain with execution delay support. Do not confuse this
+    simple mock with the production-strength MockAgentExecutor in
+    src/codetoreum/adapters/testing/mock_agent_executor.py.
+
+    Attributes:
+        _executions: Record of all agent executions for test assertions
+    """
 
     def __init__(self):
         """Initialize the mock agent executor."""

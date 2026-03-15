@@ -35,7 +35,8 @@ async def test_full_workflow_event_audit_trail(
     """
     # Setup
     adapters = cast("SimulationAdapters", simulation_bootstrap.adapters)
-    adapters.agent_executor._execution_delay = 0.1
+    if adapters.agent_executor is not None:
+        adapters.agent_executor._execution_delay = 0.1
     await simulation_seeder.seed_default_scenario()
 
     board = adapters.board
@@ -138,7 +139,8 @@ async def test_event_store_chronological_across_all_streams(
     timestamps >= events appended earlier within the same aggregate stream.
     """
     adapters = cast("SimulationAdapters", simulation_bootstrap.adapters)
-    adapters.agent_executor._execution_delay = 0.1
+    if adapters.agent_executor is not None:
+        adapters.agent_executor._execution_delay = 0.1
     await simulation_seeder.seed_default_scenario()
 
     board = adapters.board
@@ -185,7 +187,8 @@ async def test_event_emitter_captures_column_change_events(
     via the CapturingMockEventEmitter.
     """
     adapters = cast("SimulationAdapters", simulation_bootstrap.adapters)
-    adapters.agent_executor._execution_delay = 0.1
+    if adapters.agent_executor is not None:
+        adapters.agent_executor._execution_delay = 0.1
     await simulation_seeder.seed_default_scenario()
 
     board = adapters.board
