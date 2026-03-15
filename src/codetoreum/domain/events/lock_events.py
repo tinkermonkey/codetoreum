@@ -467,6 +467,9 @@ class LockStuckEvent(CodetoreumEvent):
         if not self.work_item_id:
             msg = "work_item_id is required"
             raise ValueError(msg)
+        if not self.reason:
+            msg = "reason is required"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""

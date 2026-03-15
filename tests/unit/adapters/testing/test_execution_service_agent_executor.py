@@ -266,6 +266,51 @@ class TestExecutionServiceAgentExecutorFailurePaths:
 
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, False)
 
+    @pytest.mark.asyncio
+    async def test_execute_with_llm_soft_failure_calls_completion_with_false(self):
+        """Step 10: execute_with_llm returns success=False → callback called with False."""
+        fx = ExecutorFixture()
+        exec_result = MagicMock()
+        exec_result.success = False
+        exec_result.execution = MagicMock(output="")
+        fx.execution_service.execute_with_llm.return_value = exec_result
+        executor = fx.make_executor()
+
+        await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, False)
+
+    @pytest.mark.asyncio
+    async def test_execute_with_llm_soft_failure_finalizes_workspace_with_false(self):
+        """Step 10: execute_with_llm returns success=False → finalize_workspace called with success=False."""
+        fx = ExecutorFixture()
+        exec_result = MagicMock()
+        exec_result.success = False
+        exec_result.execution = MagicMock(output="")
+        fx.execution_service.execute_with_llm.return_value = exec_result
+        executor = fx.make_executor()
+
+        await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        fx.workspace_router.finalize_workspace.assert_called_once()
+        call_args = fx.workspace_router.finalize_workspace.call_args
+        assert call_args.args[2]["success"] is False
+
+    @pytest.mark.asyncio
+    async def test_execute_with_llm_soft_failure_no_double_clear(self):
+        """Step 10: soft failure cleans up registry/branch-tracker exactly once (via finally)."""
+        fx = ExecutorFixture()
+        exec_result = MagicMock()
+        exec_result.success = False
+        exec_result.execution = MagicMock(output="")
+        fx.execution_service.execute_with_llm.return_value = exec_result
+        executor = fx.make_executor()
+
+        await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        fx.run_registry.clear_run.assert_called_once_with(fx.WORK_ITEM_ID)
+        fx.branch_tracker.clear.assert_called_once_with(fx.WORK_ITEM_ID)
+
 
 # ---------------------------------------------------------------------------
 # Completion callback guard — exactly one call per execution

@@ -356,8 +356,34 @@ class BoardColumnEventHandler(EventHandler):
                     "board_id": board_id,
                 },
             )
-            # CRITICAL: Lock may be stuck
-            # TODO: Emit LockStuckEvent for manual intervention
+            # CRITICAL: Lock cannot be released — emit LockStuckEvent for manual intervention.
+            # LockStuckEvent is a CodetoreumEvent; emit via IEventEmitter (not EventBus,
+            # which requires DomainEvent with aggregate_id/aggregate_type/occurred_at fields).
+            if self.event_emitter:
+                try:
+                    self.event_emitter.emit(
+                        LockStuckEvent(
+                            type="lock.stuck",
+                            timestamp=datetime.now(UTC).isoformat(),
+                            source="board_event_handler",
+                            project_id=project_id,
+                            board_id=board_id,
+                            work_item_id=work_item_id,
+                            reason=str(e),
+                        )
+                    )
+                except Exception as emit_err:
+                    logger.error(
+                        f"Failed to emit LockStuckEvent for '{work_item_id}': {emit_err}",
+                        exc_info=True,
+                        extra={"error_id": "ERR_BOARD_EVENT_LOCK_STUCK_EMIT_FAILURE"},
+                    )
+            else:
+                logger.warning(
+                    f"LockStuckEvent not emitted for '{work_item_id}': "
+                    "no event_emitter configured on BoardColumnEventHandler",
+                    extra={"work_item_id": work_item_id},
+                )
             return
 
         logger.info(f"Lock released for {work_item_id}, next work item: {release_result.next_work_item_id}")
@@ -625,6 +651,7 @@ class BoardColumnEventHandler(EventHandler):
                     exc_info=True,
                     extra={"error_id": "ERR_BOARD_EVENT_RUN_REGISTRY_UPDATE_FAILURE"},
                 )
+                return
 
         try:
             await self.agent_executor.execute(

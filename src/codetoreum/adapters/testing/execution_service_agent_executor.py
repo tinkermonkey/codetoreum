@@ -369,6 +369,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
 
         except asyncio.CancelledError:
             logger.info(f"ExecutionServiceAgentExecutor: execution cancelled for '{work_item_id}'")
+            await self._call_completion(work_item_id, board_id, False)
             raise
         except Exception as e:
             logger.error(
