@@ -19,9 +19,9 @@ from codetoreum.domain.events import WorkflowFailed
 from codetoreum.infrastructure.dead_letter_queue import DeadLetterQueue, FailureReason
 
 if TYPE_CHECKING:
+    from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
     from codetoreum.ports.output.board_service import IBoardService
     from codetoreum.ports.output.event_store import IEventStore
-    from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
 
 logger = logging.getLogger(__name__)
 

@@ -721,8 +721,7 @@ class BoardColumnEventHandler(EventHandler):
                     )
                 except ValueError as lock_err:
                     logger.warning(
-                        f"Cannot release lock for {work_item_id}: {lock_err} "
-                        f"(may have already released)",
+                        f"Cannot release lock for {work_item_id}: {lock_err} " f"(may have already released)",
                         exc_info=True,
                         extra={"error_id": "ERR_BOARD_EVENT_LOCK_RELEASE_NOT_HELD"},
                     )
