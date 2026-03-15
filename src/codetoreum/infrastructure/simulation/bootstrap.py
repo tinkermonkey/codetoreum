@@ -164,7 +164,6 @@ from codetoreum.ports.input.workflow_definition_command import (
 from codetoreum.ports.input.workflow_query import IWorkflowQueryPort
 from codetoreum.ports.input.workflow_run_query import IWorkflowRunQueryPort
 from codetoreum.ports.input.workspace_query import IWorkspaceQueryPort
-from codetoreum.ports.output.agent_executor import IAgentExecutor
 
 logger = logging.getLogger(__name__)
 

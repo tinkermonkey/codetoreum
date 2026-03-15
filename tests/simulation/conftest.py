@@ -99,7 +99,6 @@ class MockAgentExecutor(IAgentExecutor):
             default_board_id: Board ID to pass to callback when none is provided to execute()
         """
         # No-op: mock executor does not actually execute or invoke callbacks
-        pass
 
     def clear(self) -> None:
         """Clear execution history."""
