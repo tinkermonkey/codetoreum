@@ -769,18 +769,25 @@ class SimulationApplicationBootstrap:
                 raise RuntimeError(message)
 
             # Reconstruct the domain event from the stored data
-            # This is a generic retry - the event type is used to find the handler
-            from codetoreum.domain.events import DomainEvent
+            # Map event type to actual event class for proper reconstruction
+            from codetoreum.domain.events import WorkItemColumnChanged
 
-            # Create a basic domain event wrapper for the stored data
-            class RetryEvent(DomainEvent):
-                def __init__(self, event_type: str, payload: dict[str, Any]):
-                    self.event_type = event_type
-                    self.payload = payload
-                    self.aggregate_id = payload.get("work_item_id", payload.get("board_id", ""))
-                    self.metadata = {}
+            if event_type == "WorkItemColumnChanged":
+                retry_event_obj = WorkItemColumnChanged(
+                    aggregate_id=event_data.get("work_item_id", ""),
+                    payload=event_data,
+                )
+            else:
+                # For unknown event types, log and skip (won't be retried again)
+                logger.warning(
+                    f"Unknown event type {event_type} in dead letter queue - skipping retry",
+                    extra={
+                        "event_type": event_type,
+                        "error_id": ErrorRegistry.ERR_INTERNAL_ERROR,
+                    },
+                )
+                return
 
-            retry_event_obj = RetryEvent(event_type=event_type, payload=event_data)
             await event_bus.publish(retry_event_obj)
 
         return retry_event
@@ -1241,11 +1248,16 @@ class SimulationApplicationBootstrap:
         def board_column_changed_bridge(event):
             """Translate WorkItemColumnChangedEvent (CodetoreumEvent) to WorkItemColumnChanged (DomainEvent).
 
-            Also syncs work item status in the ticket adapter so the UX
-            reflects the current column position.
+            Also syncs work item status in the ticket adapter so the UX reflects the current column position.
 
-            CRITICAL: This bridge MUST publish events reliably. Failures are queued
-            to the dead letter queue for retry. Fire-and-forget tasks are never used.
+            CRITICAL: This bridge runs as a fire-and-forget async task created via loop.create_task().
+            However, failures within the task are NOT silent:
+            1. Event publishing failures are caught and sent to the dead letter queue for automatic retry
+            2. Task exceptions are logged via a done callback, preventing silent swallowing of errors
+            3. The DLQ retry processor handles transient/permanent classification and exponential backoff
+
+            This architecture prevents silent automation failures while allowing the event bridge
+            to be non-blocking (critical for the sync event adapter callback pattern).
             """
             try:
                 loop = asyncio.get_running_loop()
@@ -1260,9 +1272,34 @@ class SimulationApplicationBootstrap:
                         "moved_by": event.moved_by,
                     },
                 )
-                # Create task to handle event publishing AND sync in parallel
-                # Both are awaited together at the end to ensure reliability
+
+                # Create task to handle event publishing with dead letter queue fallback
+                # Add done callback to log any unhandled exceptions (safety net for failures
+                # in _handle_column_changed_event itself, such as DLQ unavailability)
                 task = loop.create_task(_handle_column_changed_event(domain_event, event.work_item_id, event.to_column))
+
+                def task_done_callback(task_result: asyncio.Task[None]) -> None:
+                    """Log any unhandled exceptions from the bridge task."""
+                    try:
+                        task_result.result()
+                    except asyncio.CancelledError:
+                        # Task was cancelled - this is normal during shutdown
+                        pass
+                    except Exception as task_exception:
+                        # Unhandled exception in the bridge handler (e.g., DLQ failure)
+                        # This logs the failure so it's not silently swallowed
+                        logger.error(
+                            f"Unhandled exception in board column event bridge for {event.work_item_id}: {task_exception}",
+                            exc_info=True,
+                            extra={
+                                "work_item_id": event.work_item_id,
+                                "error_type": type(task_exception).__name__,
+                                "error_id": ErrorRegistry.ERR_INTERNAL_ERROR,
+                            },
+                        )
+
+                task.add_done_callback(task_done_callback)
+
             except RuntimeError as e:
                 logger.error(
                     f"Failed to schedule board column event bridge task: {e}",
@@ -1292,16 +1329,33 @@ class SimulationApplicationBootstrap:
                 # Publishing failed - send to dead letter queue for retry
                 # This preserves the event and allows operators to investigate/recover
                 from codetoreum.infrastructure.dead_letter_queue import FailureReason
+                from codetoreum.infrastructure.event_bus import EventBusError
 
                 event_type = domain_event.event_type
+
+                # Classify the error as transient or permanent
+                # EventBusError wraps the original error in __cause__
+                is_transient = False
+                original_error_type = type(publish_error).__name__
+
+                if isinstance(publish_error, EventBusError) and publish_error.__cause__:
+                    # Check the wrapped cause for transient error types
+                    cause = publish_error.__cause__
+                    if isinstance(cause, (ConnectionError, TimeoutError)):
+                        is_transient = True
+                        original_error_type = type(cause).__name__
+                elif isinstance(publish_error, (ConnectionError, TimeoutError)):
+                    # Direct transient error (not wrapped)
+                    is_transient = True
+
                 await dead_letter_queue.add_failed_event(
                     event_type=event_type,
                     event_data=domain_event.payload,
-                    failure_reason=FailureReason.TRANSIENT_ERROR if isinstance(publish_error, (ConnectionError, TimeoutError)) else FailureReason.PROCESSING_ERROR,
+                    failure_reason=FailureReason.TRANSIENT_ERROR if is_transient else FailureReason.PROCESSING_ERROR,
                     error_message=str(publish_error),
                     metadata={
                         "work_item_id": work_item_id,
-                        "original_error": type(publish_error).__name__,
+                        "original_error": original_error_type,
                     },
                 )
 
@@ -1400,8 +1454,14 @@ class SimulationApplicationBootstrap:
         def board_reconciled_bridge(event):
             """Translate BoardReconciledEvent (CodetoreumEvent) to BoardReconciled (DomainEvent).
 
-            CRITICAL: This bridge MUST publish events reliably. Failures are queued
-            to the dead letter queue for retry. Fire-and-forget tasks are never used.
+            CRITICAL: This bridge runs as a fire-and-forget async task created via loop.create_task().
+            However, failures within the task are NOT silent:
+            1. Event publishing failures are caught and sent to the dead letter queue for automatic retry
+            2. Task exceptions are logged via a done callback, preventing silent swallowing of errors
+            3. The DLQ retry processor handles transient/permanent classification and exponential backoff
+
+            This architecture prevents silent automation failures while allowing the event bridge
+            to be non-blocking (critical for the sync event adapter callback pattern).
             """
             try:
                 loop = asyncio.get_running_loop()
@@ -1415,8 +1475,34 @@ class SimulationApplicationBootstrap:
                         "orphaned_items": [],
                     },
                 )
+
                 # Create task to handle event publishing with dead letter queue fallback
+                # Add done callback to log any unhandled exceptions (safety net for failures
+                # in _handle_board_reconciled_event itself, such as DLQ unavailability)
                 task = loop.create_task(_handle_board_reconciled_event(domain_event, event.board_id))
+
+                def task_done_callback(task_result: asyncio.Task[None]) -> None:
+                    """Log any unhandled exceptions from the bridge task."""
+                    try:
+                        task_result.result()
+                    except asyncio.CancelledError:
+                        # Task was cancelled - this is normal during shutdown
+                        pass
+                    except Exception as task_exception:
+                        # Unhandled exception in the bridge handler (e.g., DLQ failure)
+                        # This logs the failure so it's not silently swallowed
+                        logger.error(
+                            f"Unhandled exception in board reconciliation event bridge for {event.board_id}: {task_exception}",
+                            exc_info=True,
+                            extra={
+                                "board_id": event.board_id,
+                                "error_type": type(task_exception).__name__,
+                                "error_id": ErrorRegistry.ERR_INTERNAL_ERROR,
+                            },
+                        )
+
+                task.add_done_callback(task_done_callback)
+
             except RuntimeError as e:
                 logger.error(
                     f"Failed to schedule board reconciliation event bridge task: {e}",
@@ -1439,16 +1525,33 @@ class SimulationApplicationBootstrap:
             except Exception as publish_error:
                 # Publishing failed - send to dead letter queue for retry
                 from codetoreum.infrastructure.dead_letter_queue import FailureReason
+                from codetoreum.infrastructure.event_bus import EventBusError
 
                 event_type = domain_event.event_type
+
+                # Classify the error as transient or permanent
+                # EventBusError wraps the original error in __cause__
+                is_transient = False
+                original_error_type = type(publish_error).__name__
+
+                if isinstance(publish_error, EventBusError) and publish_error.__cause__:
+                    # Check the wrapped cause for transient error types
+                    cause = publish_error.__cause__
+                    if isinstance(cause, (ConnectionError, TimeoutError)):
+                        is_transient = True
+                        original_error_type = type(cause).__name__
+                elif isinstance(publish_error, (ConnectionError, TimeoutError)):
+                    # Direct transient error (not wrapped)
+                    is_transient = True
+
                 await dead_letter_queue.add_failed_event(
                     event_type=event_type,
                     event_data=domain_event.payload,
-                    failure_reason=FailureReason.TRANSIENT_ERROR if isinstance(publish_error, (ConnectionError, TimeoutError)) else FailureReason.PROCESSING_ERROR,
+                    failure_reason=FailureReason.TRANSIENT_ERROR if is_transient else FailureReason.PROCESSING_ERROR,
                     error_message=str(publish_error),
                     metadata={
                         "board_id": board_id,
-                        "original_error": type(publish_error).__name__,
+                        "original_error": original_error_type,
                     },
                 )
 
@@ -1458,7 +1561,7 @@ class SimulationApplicationBootstrap:
                     extra={
                         "board_id": board_id,
                         "event_type": event_type,
-                        "error_type": type(publish_error).__name__,
+                        "error_type": original_error_type,
                         "error_id": ErrorRegistry.ERR_INTERNAL_ERROR,
                     },
                 )
