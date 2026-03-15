@@ -84,6 +84,23 @@ class MockAgentExecutor(IAgentExecutor):
         with self._lock:
             return sum(1 for e in self._executions if e["agent_id"] == agent_id)
 
+    def set_completion_handler(
+        self,
+        callback,  # Callable[[str, str, bool], Coroutine[Any, Any, None]]
+        default_board_id: str,
+    ) -> None:
+        """Wire completion callback for agent execution.
+
+        This is a no-op in the mock implementation since MockAgentExecutor
+        does not actually execute agents or invoke callbacks.
+
+        Args:
+            callback: Async function(work_item_id, board_id, success) invoked when execution completes
+            default_board_id: Board ID to pass to callback when none is provided to execute()
+        """
+        # No-op: mock executor does not actually execute or invoke callbacks
+        pass
+
     def clear(self) -> None:
         """Clear execution history."""
         with self._lock:

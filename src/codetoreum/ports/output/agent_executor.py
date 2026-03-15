@@ -1,6 +1,8 @@
 """Port interface for agent execution."""
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Coroutine
+from typing import Any
 
 
 class IAgentExecutor(ABC):
@@ -26,7 +28,7 @@ class IAgentExecutor(ABC):
     @abstractmethod
     def set_completion_handler(
         self,
-        callback,  # Callable[[str, str, bool], Coroutine[Any, Any, None]]
+        callback: Callable[[str, str, bool], Coroutine[Any, Any, None]],
         default_board_id: str,
     ) -> None:
         """Wire completion callback for agent execution.
