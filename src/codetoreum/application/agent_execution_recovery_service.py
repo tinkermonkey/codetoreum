@@ -12,7 +12,6 @@ Recovery strategies:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -25,8 +24,6 @@ if TYPE_CHECKING:
     from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
 
 logger = logging.getLogger(__name__)
-
-
 
 
 class AgentExecutionRecoveryService:
@@ -259,10 +256,9 @@ class AgentExecutionRecoveryService:
             List of work item IDs with failed auto-progressions
         """
         stuck_items = []
-        stats = self._dead_letter_queue.get_stats()
         # All failed events in DLQ are auto-progression failures
-        # Extract work item IDs from event data
-        for event_id, event in self._dead_letter_queue._storage.items():
+        # Extract work item IDs from event data using public API
+        for event in self._dead_letter_queue.list_events():
             if "work_item_id" in event.event_data:
                 stuck_items.append(event.event_data["work_item_id"])
         return stuck_items
