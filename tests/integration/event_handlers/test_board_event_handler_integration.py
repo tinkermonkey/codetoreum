@@ -208,7 +208,9 @@ class TestEndToEndColumnChangeWorkflow:
         await event_bus.publish(review_event)
 
         # Verify review agent triggered
-        mock_agent_executor.execute.assert_called_with(work_item_id="item-1", agent_id="agent-review", board_id="board-1")
+        mock_agent_executor.execute.assert_called_with(
+            work_item_id="item-1", agent_id="agent-review", board_id="board-1"
+        )
 
         # Stage 3: Item reaches Done (exit column)
         # Lock released, no more processing

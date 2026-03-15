@@ -233,7 +233,9 @@ class TestHandleColumnChangeWithPipelineTrigger:
         await handler.handle_column_change(event)
 
         # Assert
-        mock_agent_executor.execute.assert_called_once_with(work_item_id="item-1", agent_id="agent-dev", board_id="board-1")
+        mock_agent_executor.execute.assert_called_once_with(
+            work_item_id="item-1", agent_id="agent-dev", board_id="board-1"
+        )
 
     @pytest.mark.asyncio
     async def test_queues_when_lock_held(
@@ -445,7 +447,9 @@ class TestHandleColumnChangeWithExitColumn:
         await handler.handle_column_change(event)
 
         # Assert
-        mock_agent_executor.execute.assert_called_once_with(work_item_id="item-2", agent_id="agent-dev", board_id="board-1")
+        mock_agent_executor.execute.assert_called_once_with(
+            work_item_id="item-2", agent_id="agent-dev", board_id="board-1"
+        )
 
     @pytest.mark.asyncio
     async def test_does_not_trigger_agent_if_next_item_has_no_agent(
@@ -514,7 +518,9 @@ class TestHandleColumnChangeWithAutomatedColumn:
         await handler.handle_column_change(event)
 
         # Assert
-        mock_agent_executor.execute.assert_called_once_with(work_item_id="item-1", agent_id="agent-review", board_id="board-1")
+        mock_agent_executor.execute.assert_called_once_with(
+            work_item_id="item-1", agent_id="agent-review", board_id="board-1"
+        )
 
 
 class TestHandleColumnChangeWithManualColumn:
