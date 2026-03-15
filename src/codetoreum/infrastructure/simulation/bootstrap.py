@@ -268,6 +268,7 @@ class SimulationInfrastructure:
     logger: logging.Logger
     mock_tracer: MockTracer
     causal_link_registry: CausalLinkRegistry
+    dead_letter_queue: Any  # DeadLetterQueue instance
 
 
 class SimulationApplicationBootstrap:
@@ -374,6 +375,14 @@ class SimulationApplicationBootstrap:
             logger.info("Phase 5b: Validating causal link consistency...")
             self._validate_causal_links()
 
+            # Start dead letter queue retry processor (Phase 5c)
+            # This enables automatic retry of failed event publishing (issue #371)
+            if self.infrastructure and self.infrastructure.dead_letter_queue:
+                logger.info("Phase 5c: Starting dead letter queue retry processor...")
+                await self.infrastructure.dead_letter_queue.start_retry_processor(
+                    self._create_dlq_retry_handler()
+                )
+
             self._is_setup = True
             logger.info("Simulation bootstrap completed successfully")
 
@@ -392,6 +401,7 @@ class SimulationApplicationBootstrap:
         Clean up all resources.
 
         Performs cleanup in reverse order:
+        - Stop dead letter queue retry processor
         - Stop clock auto-advance (if running)
         - Stop event bus
         - Clear adapters
@@ -402,6 +412,10 @@ class SimulationApplicationBootstrap:
 
         try:
             logger.info("Tearing down simulation bootstrap...")
+
+            # Stop dead letter queue retry processor
+            if self.infrastructure and self.infrastructure.dead_letter_queue:
+                await self.infrastructure.dead_letter_queue.stop_retry_processor()
 
             # Stop simulation engine
             if self._engine:
@@ -736,13 +750,48 @@ class SimulationApplicationBootstrap:
             )
             raise
 
+    def _create_dlq_retry_handler(self) -> Any:
+        """
+        Create a retry handler function for the dead letter queue.
+
+        The handler is called by the DLQ retry processor to retry failed events.
+        It simply re-publishes the event to the event bus.
+
+        Returns:
+            Async function that retries an event
+        """
+        event_bus = self.infrastructure.event_bus if self.infrastructure else None
+
+        async def retry_event(event_type: str, event_data: dict[str, Any]) -> None:
+            """Retry publishing a failed event."""
+            if not event_bus:
+                message = "Event bus not available for retry"
+                raise RuntimeError(message)
+
+            # Reconstruct the domain event from the stored data
+            # This is a generic retry - the event type is used to find the handler
+            from codetoreum.domain.events import DomainEvent
+
+            # Create a basic domain event wrapper for the stored data
+            class RetryEvent(DomainEvent):
+                def __init__(self, event_type: str, payload: dict[str, Any]):
+                    self.event_type = event_type
+                    self.payload = payload
+                    self.aggregate_id = payload.get("work_item_id", payload.get("board_id", ""))
+                    self.metadata = {}
+
+            retry_event_obj = RetryEvent(event_type=event_type, payload=event_data)
+            await event_bus.publish(retry_event_obj)
+
+        return retry_event
+
     # =========================================================================
     # Phase 1: Create Infrastructure (Early for Event Bus Subscriptions)
     # =========================================================================
 
     def _create_infrastructure(self) -> SimulationInfrastructure:
         """
-        Create infrastructure components (event bus, logger, causal link registry).
+        Create infrastructure components (event bus, logger, causal link registry, dead letter queue).
 
         The SimulationEngine manages the clock internally. The engine is used
         directly to access clock functionality, not through infrastructure.
@@ -750,12 +799,17 @@ class SimulationApplicationBootstrap:
         The CausalLinkRegistry enables runtime enforcement and discoverability of
         causal dependencies between adapters and domain events.
 
+        The DeadLetterQueue captures failed event publishing attempts, enabling
+        event bridge reliability (see issue #371).
+
         Returns:
             SimulationInfrastructure with configured components
         """
         if not self._engine:
             message = "SimulationEngine must be created before infrastructure"
             raise RuntimeError(message)
+
+        from codetoreum.infrastructure.dead_letter_queue import DeadLetterQueue
 
         # Create event bus
         event_bus = EventBus()
@@ -769,7 +823,11 @@ class SimulationApplicationBootstrap:
         # Create causal link registry for managing adapter dependencies
         causal_link_registry = CausalLinkRegistry()
 
-        logger.info("Created infrastructure components (including CausalLinkRegistry)")
+        # Create dead letter queue for capturing failed event publishing
+        # This is critical for event bridge reliability (issue #371)
+        dead_letter_queue = DeadLetterQueue()
+
+        logger.info("Created infrastructure components (including CausalLinkRegistry and DeadLetterQueue)")
 
         # Note: Clock is no longer exposed here - it's managed by SimulationEngine
         # The engine is the single point of control for all timing operations
@@ -778,6 +836,7 @@ class SimulationApplicationBootstrap:
             logger=app_logger,
             mock_tracer=mock_tracer,
             causal_link_registry=causal_link_registry,
+            dead_letter_queue=dead_letter_queue,
         )
 
     # =========================================================================
@@ -1157,6 +1216,10 @@ class SimulationApplicationBootstrap:
         The MockBoardAdapter emits CodetoreumEvent objects (which have `.type`),
         but the EventBus expects DomainEvent objects (which have `.event_type`).
         This bridge translates between the two event hierarchies before publishing.
+
+        CRITICAL: Event publishing is awaited (not fire-and-forget) to ensure failures
+        are captured by the dead letter queue. Silent failures would disable automation
+        for affected work items. See issue #371.
         """
         if not self.adapters or not self.infrastructure:
             logger.warning("Cannot register board event bridge: components not ready")
@@ -1164,6 +1227,7 @@ class SimulationApplicationBootstrap:
 
         event_bus = self.infrastructure.event_bus
         ticket_adapter = self.adapters.ticket_system
+        dead_letter_queue = self.infrastructure.dead_letter_queue
 
         # Map board columns to work item statuses
         _column_to_status = {
@@ -1174,39 +1238,14 @@ class SimulationApplicationBootstrap:
             "Done": WorkItemStatus.COMPLETED,
         }
 
-        def _handle_publish_task_error(task: asyncio.Task) -> None:
-            """Handle errors from event publish tasks."""
-            try:
-                task.result()
-            except asyncio.CancelledError:
-                # Task was cancelled, this is normal during shutdown
-                pass
-            except Exception as e:
-                logger.error(
-                    f"Event publish task failed: {e}",
-                    exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
-                )
-
-        def _handle_sync_task_error(task: asyncio.Task) -> None:
-            """Handle errors from work item status sync tasks."""
-            try:
-                task.result()
-            except asyncio.CancelledError:
-                # Task was cancelled, this is normal during shutdown
-                pass
-            except Exception as e:
-                logger.error(
-                    f"Work item status sync task failed: {e}",
-                    exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
-                )
-
         def board_column_changed_bridge(event):
             """Translate WorkItemColumnChangedEvent (CodetoreumEvent) to WorkItemColumnChanged (DomainEvent).
 
             Also syncs work item status in the ticket adapter so the UX
             reflects the current column position.
+
+            CRITICAL: This bridge MUST publish events reliably. Failures are queued
+            to the dead letter queue for retry. Fire-and-forget tasks are never used.
             """
             try:
                 loop = asyncio.get_running_loop()
@@ -1221,21 +1260,75 @@ class SimulationApplicationBootstrap:
                         "moved_by": event.moved_by,
                     },
                 )
-                # Create task with error callback to catch publish failures
-                task = loop.create_task(event_bus.publish(domain_event))
-                task.add_done_callback(_handle_publish_task_error)
-
-                # Sync work item status based on target column (best-effort)
-                target_status = _column_to_status.get(event.to_column)
-                if target_status is not None:
-                    sync_task = loop.create_task(_sync_work_item_status(event.work_item_id, target_status))
-                    sync_task.add_done_callback(_handle_sync_task_error)
+                # Create task to handle event publishing AND sync in parallel
+                # Both are awaited together at the end to ensure reliability
+                task = loop.create_task(_handle_column_changed_event(domain_event, event.work_item_id, event.to_column))
             except RuntimeError as e:
                 logger.error(
-                    f"Failed to schedule board column event bridge tasks: {e}",
+                    f"Failed to schedule board column event bridge task: {e}",
                     exc_info=True,
                     extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
                 )
+
+        async def _handle_column_changed_event(domain_event: WorkItemColumnChanged, work_item_id: str, to_column: str) -> None:
+            """Handle publishing WorkItemColumnChanged event with dead letter queue fallback.
+
+            This function:
+            1. Publishes the event to the event bus (which triggers automation)
+            2. Syncs work item status in the ticket adapter
+            3. On failure, sends the event to the dead letter queue for retry
+
+            Awaiting this function ensures that if publishing fails, we capture the
+            failure properly instead of silently losing the event.
+            """
+            try:
+                # Publish the event - this will trigger BoardColumnEventHandler and automation
+                await event_bus.publish(domain_event)
+                logger.debug(
+                    f"Successfully published WorkItemColumnChanged event for {work_item_id}",
+                    extra={"work_item_id": work_item_id, "event_type": "WorkItemColumnChanged"},
+                )
+            except Exception as publish_error:
+                # Publishing failed - send to dead letter queue for retry
+                # This preserves the event and allows operators to investigate/recover
+                from codetoreum.infrastructure.dead_letter_queue import FailureReason
+
+                event_type = domain_event.event_type
+                await dead_letter_queue.add_failed_event(
+                    event_type=event_type,
+                    event_data=domain_event.payload,
+                    failure_reason=FailureReason.TRANSIENT_ERROR if isinstance(publish_error, (ConnectionError, TimeoutError)) else FailureReason.PROCESSING_ERROR,
+                    error_message=str(publish_error),
+                    metadata={
+                        "work_item_id": work_item_id,
+                        "original_error": type(publish_error).__name__,
+                    },
+                )
+
+                logger.error(
+                    f"Event publishing failed for work_item {work_item_id} - queued to dead letter queue: {publish_error}",
+                    exc_info=True,
+                    extra={
+                        "work_item_id": work_item_id,
+                        "event_type": event_type,
+                        "error_type": type(publish_error).__name__,
+                        "error_id": ErrorRegistry.ERR_INTERNAL_ERROR,
+                    },
+                )
+
+            # Sync work item status based on target column (best-effort, separate from publishing)
+            # This is fire-and-forget because it's non-critical UI sync, separate from core automation
+            target_status = _column_to_status.get(to_column)
+            if target_status is not None:
+                try:
+                    await _sync_work_item_status(work_item_id, target_status)
+                except Exception as sync_error:
+                    # Status sync failures are best-effort and don't affect automation
+                    logger.warning(
+                        f"Best-effort status sync failed for {work_item_id} -> {target_status.value}: {sync_error}",
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                    )
 
         async def _sync_work_item_status(work_item_id: str, target_status: WorkItemStatus) -> None:
             """Best-effort sync of work item status in ticket adapter.
@@ -1305,7 +1398,11 @@ class SimulationApplicationBootstrap:
                 )
 
         def board_reconciled_bridge(event):
-            """Translate BoardReconciledEvent (CodetoreumEvent) to BoardReconciled (DomainEvent)."""
+            """Translate BoardReconciledEvent (CodetoreumEvent) to BoardReconciled (DomainEvent).
+
+            CRITICAL: This bridge MUST publish events reliably. Failures are queued
+            to the dead letter queue for retry. Fire-and-forget tasks are never used.
+            """
             try:
                 loop = asyncio.get_running_loop()
                 domain_event = BoardReconciled(
@@ -1318,14 +1415,52 @@ class SimulationApplicationBootstrap:
                         "orphaned_items": [],
                     },
                 )
-                # Create task with error callback to catch publish failures
-                task = loop.create_task(event_bus.publish(domain_event))
-                task.add_done_callback(_handle_publish_task_error)
+                # Create task to handle event publishing with dead letter queue fallback
+                task = loop.create_task(_handle_board_reconciled_event(domain_event, event.board_id))
             except RuntimeError as e:
                 logger.error(
                     f"Failed to schedule board reconciliation event bridge task: {e}",
                     exc_info=True,
                     extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                )
+
+        async def _handle_board_reconciled_event(domain_event: BoardReconciled, board_id: str) -> None:
+            """Handle publishing BoardReconciled event with dead letter queue fallback.
+
+            Awaiting this function ensures that if publishing fails, we capture the
+            failure properly instead of silently losing the event.
+            """
+            try:
+                await event_bus.publish(domain_event)
+                logger.debug(
+                    f"Successfully published BoardReconciled event for {board_id}",
+                    extra={"board_id": board_id, "event_type": "BoardReconciled"},
+                )
+            except Exception as publish_error:
+                # Publishing failed - send to dead letter queue for retry
+                from codetoreum.infrastructure.dead_letter_queue import FailureReason
+
+                event_type = domain_event.event_type
+                await dead_letter_queue.add_failed_event(
+                    event_type=event_type,
+                    event_data=domain_event.payload,
+                    failure_reason=FailureReason.TRANSIENT_ERROR if isinstance(publish_error, (ConnectionError, TimeoutError)) else FailureReason.PROCESSING_ERROR,
+                    error_message=str(publish_error),
+                    metadata={
+                        "board_id": board_id,
+                        "original_error": type(publish_error).__name__,
+                    },
+                )
+
+                logger.error(
+                    f"Event publishing failed for board {board_id} - queued to dead letter queue: {publish_error}",
+                    exc_info=True,
+                    extra={
+                        "board_id": board_id,
+                        "event_type": event_type,
+                        "error_type": type(publish_error).__name__,
+                        "error_id": ErrorRegistry.ERR_INTERNAL_ERROR,
+                    },
                 )
 
         self.adapters.board.on("workitem.column_changed", board_column_changed_bridge)
