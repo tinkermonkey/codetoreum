@@ -8,7 +8,7 @@ Subscribes to workitem.column_changed events and orchestrates:
 
 import logging
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from uuid import uuid4
 
 from codetoreum.application.agent_execution_recovery_service import (
