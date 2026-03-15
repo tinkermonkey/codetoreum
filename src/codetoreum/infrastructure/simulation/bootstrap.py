@@ -27,7 +27,7 @@ dependency injection.
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import FastAPI
 
@@ -189,7 +189,7 @@ class SimulationAdapters:
     project_manager: MockProjectManagerAdapter  # Multi-project management
     lock_service: InMemoryLockService
     workflow_config: InMemoryWorkflowConfigService
-    agent_executor: Optional[IAgentExecutor]
+    agent_executor: IAgentExecutor | None
     queue_service: InMemoryQueueService  # Pipeline queue service for board automation
     event_emitter: CapturingMockEventEmitter  # For domain event capture
 
@@ -1396,4 +1396,3 @@ class SimulationApplicationBootstrap:
             CausalLinkRegistry instance (None if not yet set up)
         """
         return self.infrastructure.causal_link_registry if self.infrastructure else None
-
