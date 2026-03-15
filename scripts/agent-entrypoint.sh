@@ -61,5 +61,26 @@ if [ -z "${GIT_AUTHOR_EMAIL:-}" ] && ! git config user.email >/dev/null 2>&1; th
     echo "[agent-entrypoint] WARNING: No git user.email configured (env or gitconfig)" >&2
 fi
 
+# --- Validate GitHub token permissions --------------------------------------
+# Agents need GITHUB_TOKEN with 'actions' scope (or 'actions:read') to query
+# GitHub Actions API (e.g. gh run list, gh run view) for CI status verification.
+# This is a non-fatal check — the agent can still operate but CI status queries
+# will fail at runtime without the correct scope.
+if [ -n "${GITHUB_TOKEN:-}" ]; then
+    # Use gh to probe the token scopes via a lightweight API call.
+    # The X-OAuth-Scopes header in the response tells us what scopes the token has.
+    TOKEN_SCOPES=$(gh api -i user 2>/dev/null | grep -i '^x-oauth-scopes:' | cut -d: -f2- | tr -d '[:space:]' || true)
+    if [ -n "$TOKEN_SCOPES" ]; then
+        # Check if 'actions' scope (or fine-grained equivalent) is present
+        if ! echo "$TOKEN_SCOPES" | grep -qi 'actions'; then
+            echo "[agent-entrypoint] WARNING: GITHUB_TOKEN is missing 'actions' scope." >&2
+            echo "[agent-entrypoint] WARNING: CI status queries (gh run list/view) will fail." >&2
+            echo "[agent-entrypoint] WARNING: Token scopes: $TOKEN_SCOPES" >&2
+        fi
+    fi
+    # Fine-grained PATs don't return X-OAuth-Scopes, so skip the check for those.
+    # The agent will get a clear 403 error at runtime if permissions are insufficient.
+fi
+
 # --- Hand off to the requested command --------------------------------------
 exec "$@"

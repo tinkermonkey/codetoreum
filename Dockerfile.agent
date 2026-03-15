@@ -74,6 +74,25 @@ ENV GH_NO_KEYRING=1
 ENV DBUS_SESSION_BUS_ADDRESS=disabled:
 
 # ============================================================================
+# GitHub Token Scope Requirements (Runtime)
+# ============================================================================
+# The orchestrator must provide GITHUB_TOKEN at container runtime with the
+# following scopes for full agent functionality:
+#
+# REQUIRED scopes for classic PATs:
+#   - repo           : Push commits, create branches, manage PRs
+#   - actions         : Query GitHub Actions CI status (gh run list/view)
+#
+# For fine-grained PATs, equivalent permissions are:
+#   - Contents       : Read and write
+#   - Pull requests  : Read and write
+#   - Actions        : Read-only (minimum for CI status verification)
+#
+# The entrypoint script validates token scopes at startup and warns if
+# 'actions' scope is missing. Without it, CI status queries will fail.
+# ============================================================================
+
+# ============================================================================
 # Stage 6: Install Entrypoint Script
 # ============================================================================
 # The entrypoint validates the git environment at startup and repairs common
