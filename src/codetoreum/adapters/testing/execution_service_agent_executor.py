@@ -324,30 +324,47 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 return
 
             # Step 10: Execute via LLM or Container
-            if agent.requires_docker:
-                container_config = ContainerConfig(
-                    image="codetoreum-agent:latest",
-                    working_dir="/workspace",
+            exec_result = None
+            try:
+                if agent.requires_docker:
+                    container_config = ContainerConfig(
+                        image="codetoreum-agent:latest",
+                        working_dir="/workspace",
+                    )
+                    exec_result = await self._execution_service.execute_with_container(
+                        execution, context, container_config
+                    )
+                else:
+                    exec_result = await self._execution_service.execute_with_llm(execution, context)
+            except Exception as exec_err:
+                logger.error(
+                    f"ExecutionServiceAgentExecutor: execution call failed for '{work_item_id}': {exec_err}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_EXEC_CHAIN_EXECUTION_FAILURE"},
                 )
-                exec_result = await self._execution_service.execute_with_container(execution, context, container_config)
-            else:
-                exec_result = await self._execution_service.execute_with_llm(execution, context)
 
-            # Step 11: Finalize workspace
-            await self._workspace_router.finalize_workspace(
-                workspace,
-                project_context,
-                {"success": exec_result.success, "output": getattr(exec_result.execution, "output", "")},
-                repo_path,
-            )
+            # Step 11: Finalize workspace (always runs, even on execution failure, to avoid stuck workspace)
+            exec_succeeded = exec_result is not None and exec_result.success
+            try:
+                await self._workspace_router.finalize_workspace(
+                    workspace,
+                    project_context,
+                    {
+                        "success": exec_succeeded,
+                        "output": getattr(exec_result.execution, "output", "") if exec_result else "",
+                    },
+                    repo_path,
+                )
+            except Exception as finalize_err:
+                logger.error(
+                    f"ExecutionServiceAgentExecutor: finalize_workspace failed for '{work_item_id}': {finalize_err}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_EXEC_CHAIN_FINALIZE_FAILURE"},
+                )
 
-            # Step 11 (cont.): Clear registry and branch tracker
-            await self._run_registry.clear_run(work_item_id)
-            await self._branch_tracker.clear(work_item_id)
-
-            success = exec_result.success
+            success = exec_succeeded
             logger.info(
-                f"ExecutionServiceAgentExecutor: '{agent_id}' completed for '{work_item_id}' " f"(success={success})"
+                f"ExecutionServiceAgentExecutor: '{agent_id}' completed for '{work_item_id}' (success={success})"
             )
 
         except asyncio.CancelledError:
@@ -361,18 +378,17 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             )
             success = False
         finally:
-            if not success:
-                # Clean up registry on failure
-                try:
-                    await self._run_registry.clear_run(work_item_id)
-                    await self._branch_tracker.clear(work_item_id)
-                except Exception:
-                    logger.error(
-                        f"Failed to clean up registry/branch-tracker for '{work_item_id}' "
-                        "after execution failure — work item may be stuck",
-                        exc_info=True,
-                        extra={"error_id": "ERR_EXEC_CHAIN_CLEANUP_FAILURE"},
-                    )
+            # Always clean up registry and branch tracker (avoids double-clear and stuck state)
+            try:
+                await self._run_registry.clear_run(work_item_id)
+                await self._branch_tracker.clear(work_item_id)
+            except Exception:
+                logger.error(
+                    f"Failed to clean up registry/branch-tracker for '{work_item_id}' "
+                    "after execution — work item may be stuck",
+                    exc_info=True,
+                    extra={"error_id": "ERR_EXEC_CHAIN_CLEANUP_FAILURE"},
+                )
 
         await self._call_completion(work_item_id, board_id, success)
 

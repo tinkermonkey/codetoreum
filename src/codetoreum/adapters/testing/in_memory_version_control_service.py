@@ -22,7 +22,7 @@ from codetoreum.ports.exceptions import (
 from codetoreum.ports.output.version_control_service import (
     IVersionControlService,
     Repository,
-    RepositoryStatus,
+    VCSStatus,
 )
 
 
@@ -301,14 +301,14 @@ class InMemoryVersionControlService(IVersionControlService):
 
         return branches
 
-    async def status(self, repo_path: str) -> RepositoryStatus:
+    async def status(self, repo_path: str) -> VCSStatus:
         """Return repository status - simulation always has changes."""
         if repo_path not in self._repositories:
             msg = f"Repository not found at path: {repo_path}"
             raise RepositoryError(msg)
 
         # Simulation always treats workspace as having changes (agent produced output)
-        return RepositoryStatus(is_dirty=True, staged_files=("*",), unstaged_files=())
+        return VCSStatus(is_dirty=True, staged_files=("*",), unstaged_files=())
 
     async def pull(self, repo_path: str, branch: str, remote: str = "origin") -> None:
         """Pull latest changes - no-op in simulation (already up to date)."""

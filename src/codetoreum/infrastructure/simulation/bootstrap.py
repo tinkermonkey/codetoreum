@@ -1356,6 +1356,7 @@ class SimulationApplicationBootstrap:
             agent_executor=self.adapters.agent_executor,
             event_bus=self.infrastructure.event_bus,
             run_registry=self.adapters.run_registry,
+            event_emitter=self.adapters.event_emitter,
         )
 
         # Wire completion callback: executor -> handler.handle_agent_completion

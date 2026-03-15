@@ -1128,6 +1128,8 @@ Return a JSON response with the status of fixes applied."""
                             extra={"workflow_run_id": context.workflow_run_id},
                         )
 
+            except CircuitBreakerOpenError:
+                raise
             except Exception as e:
                 error = str(e)
                 logger.error(

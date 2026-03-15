@@ -15,7 +15,7 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
-class RepositoryStatus:
+class VCSStatus:
     """Repository status information for IVersionControlService.
 
     Simplified status for version control operations. Frozen to prevent
@@ -211,14 +211,14 @@ class IVersionControlService(ABC):
         """
 
     @abstractmethod
-    async def status(self, repo_path: str) -> RepositoryStatus:
+    async def status(self, repo_path: str) -> VCSStatus:
         """Return repository status.
 
         Args:
             repo_path: Local repository path
 
         Returns:
-            RepositoryStatus: Current repository status
+            VCSStatus: Current repository status
 
         Raises:
             RepositoryError: Status check failed

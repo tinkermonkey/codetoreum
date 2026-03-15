@@ -103,6 +103,7 @@ from codetoreum.ports.output.ticket_system import Comment, ITicketSystem
 from codetoreum.ports.output.version_control_service import (
     IVersionControlService,
     Repository,
+    VCSStatus,
 )
 from codetoreum.ports.output.work_item_service import IWorkItemService
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
@@ -205,6 +206,7 @@ __all__ = [
     # Version Control Service
     "IVersionControlService",
     "Repository",
+    "VCSStatus",
     # Work Item Service
     "IWorkItemService",
     # Workflow Config Service

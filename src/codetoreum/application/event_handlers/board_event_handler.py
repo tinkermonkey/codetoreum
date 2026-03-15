@@ -35,6 +35,7 @@ from codetoreum.ports.exceptions import ExternalServiceError, ResourceNotFoundEr
 from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
 from codetoreum.ports.output.agent_executor import IAgentExecutor
 from codetoreum.ports.output.board_service import IBoardService, MovedByType
+from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
@@ -86,6 +87,7 @@ class BoardColumnEventHandler(EventHandler):
         event_bus: EventBus,
         event_store: IEventStore | None = None,
         run_registry: IActiveWorkflowRunRegistry | None = None,
+        event_emitter: IEventEmitter | None = None,
     ):
         """
         Initialize board column event handler.
@@ -98,6 +100,7 @@ class BoardColumnEventHandler(EventHandler):
             event_bus: Event bus for publishing domain events
             event_store: Optional event store for persisting workflow lifecycle events
             run_registry: Optional registry for tracking active workflow runs
+            event_emitter: Optional event emitter for CodetoreumEvent instances (e.g. LockStuckEvent)
         """
         self.board_service = board_service
         self.lock_service = lock_service
@@ -106,6 +109,7 @@ class BoardColumnEventHandler(EventHandler):
         self.event_bus = event_bus
         self.event_store = event_store
         self.run_registry = run_registry
+        self.event_emitter = event_emitter
         # Tracks active workflow runs: work_item_id -> run metadata
         self._active_runs: dict[str, dict[str, Any]] = {}
 
@@ -390,27 +394,32 @@ class BoardColumnEventHandler(EventHandler):
                     },
                 )
                 # Next item holds lock but agent never triggered — emit event for observability.
-                # NOTE: LockStuckEvent is a CodetoreumEvent; EventBus.publish is typed for
-                # DomainEvent and its Redis persistence path accesses DomainEvent-only fields
-                # (aggregate_id, aggregate_type, occurred_at). Wrap in try/except so an emission
-                # failure never cascades back into the lock-release flow.
-                try:
-                    await self.event_bus.publish(
-                        LockStuckEvent(  # type: ignore[arg-type]
-                            type="lock.stuck",
-                            timestamp=datetime.now(UTC).isoformat(),
-                            source="board_event_handler",
-                            project_id=project_id,
-                            board_id=board_id,
-                            work_item_id=release_result.next_work_item_id,
-                            reason=str(e),
+                # LockStuckEvent is a CodetoreumEvent; emit via IEventEmitter (not EventBus,
+                # which requires DomainEvent with aggregate_id/aggregate_type/occurred_at fields).
+                if self.event_emitter:
+                    try:
+                        self.event_emitter.emit(
+                            LockStuckEvent(
+                                type="lock.stuck",
+                                timestamp=datetime.now(UTC).isoformat(),
+                                source="board_event_handler",
+                                project_id=project_id,
+                                board_id=board_id,
+                                work_item_id=release_result.next_work_item_id,
+                                reason=str(e),
+                            )
                         )
-                    )
-                except Exception as emit_err:
-                    logger.error(
-                        f"Failed to emit LockStuckEvent for '{release_result.next_work_item_id}': {emit_err}",
-                        exc_info=True,
-                        extra={"error_id": "ERR_BOARD_EVENT_LOCK_STUCK_EMIT_FAILURE"},
+                    except Exception as emit_err:
+                        logger.error(
+                            f"Failed to emit LockStuckEvent for '{release_result.next_work_item_id}': {emit_err}",
+                            exc_info=True,
+                            extra={"error_id": "ERR_BOARD_EVENT_LOCK_STUCK_EMIT_FAILURE"},
+                        )
+                else:
+                    logger.warning(
+                        f"LockStuckEvent not emitted for '{release_result.next_work_item_id}': "
+                        "no event_emitter configured on BoardColumnEventHandler",
+                        extra={"work_item_id": release_result.next_work_item_id},
                     )
 
     # ========================================================================
