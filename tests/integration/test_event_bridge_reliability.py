@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from codetoreum.domain.events import WorkItemColumnChanged, BoardReconciled
+from codetoreum.domain.events import BoardReconciled, WorkItemColumnChanged
 from codetoreum.infrastructure.dead_letter_queue import DeadLetterQueue, FailureReason
 from codetoreum.infrastructure.event_bus import EventBus, EventBusError
 

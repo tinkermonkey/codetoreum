@@ -379,9 +379,7 @@ class SimulationApplicationBootstrap:
             # This enables automatic retry of failed event publishing (issue #371)
             if self.infrastructure and self.infrastructure.dead_letter_queue:
                 logger.info("Phase 5c: Starting dead letter queue retry processor...")
-                await self.infrastructure.dead_letter_queue.start_retry_processor(
-                    self._create_dlq_retry_handler()
-                )
+                await self.infrastructure.dead_letter_queue.start_retry_processor(self._create_dlq_retry_handler())
 
             self._is_setup = True
             logger.info("Simulation bootstrap completed successfully")
@@ -1307,7 +1305,9 @@ class SimulationApplicationBootstrap:
                     extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
                 )
 
-        async def _handle_column_changed_event(domain_event: WorkItemColumnChanged, work_item_id: str, to_column: str) -> None:
+        async def _handle_column_changed_event(
+            domain_event: WorkItemColumnChanged, work_item_id: str, to_column: str
+        ) -> None:
             """Handle publishing WorkItemColumnChanged event with dead letter queue fallback.
 
             This function:
