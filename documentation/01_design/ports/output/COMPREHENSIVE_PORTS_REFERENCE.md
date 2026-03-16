@@ -66,8 +66,8 @@ This document provides a complete reference for all output ports in the Codetore
 - `get_execution_status()` - Check agent execution status
 
 **Key Implementations**:
-- ClaudeCodeExecutor (production)
-- MockAgentExecutor (testing)
+- ExecutionServiceAgentExecutor (simulation/testing - unconditional default)
+- MockAgentExecutor (unit-test utility only, not used in SimulationApplicationBootstrap)
 
 **Dependencies**: IContainer, ILLMProvider (indirectly through container)
 

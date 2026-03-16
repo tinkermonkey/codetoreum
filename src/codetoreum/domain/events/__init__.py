@@ -147,6 +147,7 @@ from .queue_events import (
     QueueItemAddedEvent,
     QueueItemRemovedEvent,
     QueuePositionChangedEvent,
+    WorkItemDeadLetterQueuedEvent,
 )
 
 # Repair cycle events
@@ -343,6 +344,7 @@ __all__ = [
     "QueueItemAddedEvent",
     "QueueItemRemovedEvent",
     "QueuePositionChangedEvent",
+    "WorkItemDeadLetterQueuedEvent",
     # Repository events
     "CommitCreatedEvent",
     "BranchCreatedEvent",

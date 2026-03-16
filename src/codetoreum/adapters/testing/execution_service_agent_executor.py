@@ -16,9 +16,13 @@ from codetoreum.domain.project_context import ProjectContext
 from codetoreum.domain.services.execution_context_builder import ExecutionContextBuilder
 from codetoreum.domain.types import WorkItemId
 from codetoreum.domain.value_objects import ContainerConfig
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.output.agent_executor import IAgentExecutor
 
 if TYPE_CHECKING:
+    from codetoreum.application.agent_execution_recovery_service import (
+        AgentExecutionRecoveryService,
+    )
     from codetoreum.application.execution_service import ExecutionService
     from codetoreum.application.workspace_router import WorkspaceRouter
     from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
@@ -34,8 +38,8 @@ logger = logging.getLogger(__name__)
 class ExecutionServiceAgentExecutor(IAgentExecutor):
     """Wires IAgentExecutor → ExecutionService → LLM/Container/VCS chain.
 
-    This adapter replaces MockAgentExecutor for Phase 3 testing. It drives the
-    full execution chain:
+    This adapter drives the full execution chain when ExecutionServiceAgentExecutor
+    is active. It replaces MockAgentExecutor for end-to-end testing. The chain:
     1.  Looks up active run from registry (set by BoardColumnEventHandler)
     2.  Loads domain objects (Agent, WorkItem, ProjectConfig → ProjectContext)
     3.  Clones repository (synthetic path in simulation)
@@ -59,6 +63,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         run_registry: IActiveWorkflowRunRegistry,
         branch_tracker: IWorkItemBranchTracker,
         vcs: IVersionControlService,
+        recovery_service: AgentExecutionRecoveryService | None = None,
         execution_delay: float = 0.0,
     ) -> None:
         """Initialize ExecutionServiceAgentExecutor.
@@ -72,6 +77,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             run_registry: Tracks active workflow runs per work item
             branch_tracker: Tracks VCS branches per work item
             vcs: Version control service for repository operations
+            recovery_service: Service for handling completion callback failures
             execution_delay: Optional delay (seconds) before execution for testing
         """
         self._execution_service = execution_service
@@ -82,6 +88,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         self._run_registry = run_registry
         self._branch_tracker = branch_tracker
         self._vcs = vcs
+        self._recovery_service = recovery_service
         self._execution_delay = execution_delay
 
         self._completion_callback: Callable[[str, str, bool], Coroutine[Any, Any, None]] | None = None
@@ -105,6 +112,35 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         self._completion_callback = callback
         self._default_board_id = default_board_id
 
+    def _task_done_callback(self, task: asyncio.Task[None]) -> None:
+        """Handle completion of fire-and-forget execution task.
+
+        Called when asyncio.create_task() completes. Surfaces any unhandled
+        exceptions that occurred during _run_execution so they are not
+        silently lost. This follows the bootstrap pattern used in
+        bootstrap.py:1309-1329 for board event bridge tasks.
+
+        Args:
+            task: The completed asyncio.Task
+        """
+        self._pending_tasks.discard(task)
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            # Task was cancelled — normal during shutdown
+            pass
+        except Exception as task_exception:
+            # Unhandled exception in _run_execution (e.g., recovery service failure)
+            # This logs the failure so it's not silently swallowed
+            logger.error(
+                f"Unhandled exception in ExecutionServiceAgentExecutor background task: {task_exception}",
+                exc_info=True,
+                extra={
+                    "error_type": type(task_exception).__name__,
+                    "error_id": ErrorRegistry.ERR_AGENT_EXECUTION_ERROR,
+                },
+            )
+
     @property
     def executions(self) -> list[dict[str, Any]]:
         """Return recorded executions for test assertions."""
@@ -124,12 +160,19 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         resolved_board_id = board_id or self._default_board_id
         now = datetime.now(UTC)
 
+        # Get active run to obtain workflow_id and stage_name
+        run_info = await self._run_registry.get_active_run(work_item_id)
+        workflow_id = run_info.run_id if run_info else "unknown"
+        stage_name = run_info.stage_name if run_info else "unknown"
+
         self._executions.append(
             {
                 "work_item_id": work_item_id,
                 "agent_id": agent_id,
                 "board_id": resolved_board_id,
                 "started_at": now.isoformat(),
+                "workflow_id": workflow_id,
+                "stage_name": stage_name,
             }
         )
 
@@ -137,7 +180,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
 
         task = asyncio.create_task(self._run_execution(work_item_id, agent_id, resolved_board_id))
         self._pending_tasks.add(task)
-        task.add_done_callback(self._pending_tasks.discard)
+        task.add_done_callback(self._task_done_callback)
 
     async def _run_execution(self, work_item_id: str, agent_id: str, board_id: str) -> None:
         """Drive the full execution chain for a work item.
@@ -394,7 +437,16 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         await self._call_completion(work_item_id, board_id, success)
 
     async def _call_completion(self, work_item_id: str, board_id: str, success: bool) -> None:
-        """Invoke completion callback with error handling.
+        """Invoke completion callback with error handling and recovery.
+
+        If the completion callback (auto-progression) fails, the work item is stuck
+        in its current column. This method handles recovery via:
+        1. Logging the failure with full context
+        2. Using AgentExecutionRecoveryService to queue for manual recovery
+        3. Failing the workflow run to signal pipeline blockage
+
+        If the recovery service itself fails, the exception is caught and logged
+        to prevent it from propagating unhandled through the fire-and-forget task.
 
         Args:
             work_item_id: Work item that completed
@@ -410,6 +462,23 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                     exc_info=True,
                     extra={"error_id": "ERR_EXEC_CHAIN_COMPLETION_CALLBACK_FAILURE"},
                 )
+                # Use recovery service to handle the failure (queue for manual recovery, fail workflow)
+                if self._recovery_service:
+                    try:
+                        await self._recovery_service.handle_completion_callback_failure(
+                            work_item_id=work_item_id,
+                            board_id=board_id,
+                            success=success,
+                            error=e,
+                        )
+                    except Exception as recovery_error:
+                        # Recovery service itself failed (e.g., DLQ add failure, fail_workflow failure)
+                        # Log this failure to prevent silent loss in fire-and-forget task
+                        logger.error(
+                            f"Recovery service failed for '{work_item_id}' after completion callback failure: {recovery_error}",
+                            exc_info=True,
+                            extra={"error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
+                        )
         else:
             logger.warning(
                 f"No completion callback set for ExecutionServiceAgentExecutor. "

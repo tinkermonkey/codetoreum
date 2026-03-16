@@ -1,8 +1,8 @@
 """Pytest fixtures for simulation testing."""
 
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Callable, Coroutine, Generator
 from datetime import UTC, datetime
-from typing import cast
+from typing import Any, cast
 
 import pytest
 from fastapi import FastAPI
@@ -34,7 +34,21 @@ from codetoreum.ports.output.agent_executor import IAgentExecutor
 
 
 class MockAgentExecutor(IAgentExecutor):
-    """Mock agent executor that tracks executions without actually executing."""
+    """Mock agent executor for unit tests constructing BoardColumnEventHandler instances.
+
+    IMPORTANT: This is a simple execution tracking mock for isolated unit tests only.
+    It does NOT support execution delays or the full execution pipeline. Tests that
+    construct their own BoardColumnEventHandler instances (e.g., board_automation_scenario_*.py)
+    should use this class.
+
+    For tests using SimulationApplicationBootstrap, the executor is ExecutionServiceAgentExecutor,
+    which provides the full execution chain with execution delay support. Do not confuse this
+    simple mock with the production-strength MockAgentExecutor in
+    src/codetoreum/adapters/testing/mock_agent_executor.py.
+
+    Attributes:
+        _executions: Record of all agent executions for test assertions
+    """
 
     def __init__(self):
         """Initialize the mock agent executor."""
@@ -83,6 +97,22 @@ class MockAgentExecutor(IAgentExecutor):
         """
         with self._lock:
             return sum(1 for e in self._executions if e["agent_id"] == agent_id)
+
+    def set_completion_handler(
+        self,
+        callback: Callable[[str, str, bool], Coroutine[Any, Any, None]],
+        default_board_id: str,
+    ) -> None:
+        """Wire completion callback for agent execution.
+
+        This is a no-op in the mock implementation since MockAgentExecutor
+        does not actually execute agents or invoke callbacks.
+
+        Args:
+            callback: Async function(work_item_id, board_id, success) invoked when execution completes
+            default_board_id: Board ID to pass to callback when none is provided to execute()
+        """
+        # No-op: mock executor does not actually execute or invoke callbacks
 
     def clear(self) -> None:
         """Clear execution history."""
@@ -422,6 +452,9 @@ async def simulation_seeder(
     """
     Provide a simulation data seeder for E2E tests.
 
+    This seeder populates domain objects (Agent, WorkItem) required for
+    ExecutionServiceAgentExecutor to function properly in end-to-end tests.
+
     Args:
         simulation_bootstrap: Bootstrap fixture
 
@@ -433,7 +466,13 @@ async def simulation_seeder(
     """
     from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
 
-    seeder = SimulationDataSeeder(simulation_bootstrap, track_items=True)
+    adapters = simulation_bootstrap.adapters
+    seeder = SimulationDataSeeder(
+        simulation_bootstrap,
+        track_items=True,
+        agent_repository=adapters.agent_repository,
+        work_item_service=adapters.work_item_service,
+    )
     yield seeder
     # Cleanup tracked items
     seeder.created_items.clear()

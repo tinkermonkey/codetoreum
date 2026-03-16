@@ -183,7 +183,7 @@ class TestEndToEndColumnChangeWorkflow:
 
         # Verify lock acquired and dev agent triggered
         mock_lock_service.try_acquire_lock.assert_called_once()
-        mock_agent_executor.execute.assert_called_with(work_item_id="item-1", agent_id="agent-dev")
+        mock_agent_executor.execute.assert_called_with(work_item_id="item-1", agent_id="agent-dev", board_id="board-1")
 
         # Stage 2: Item moves to Code Review (automated, auto-progress enabled)
         mock_agent_executor.reset_mock()
@@ -208,7 +208,9 @@ class TestEndToEndColumnChangeWorkflow:
         await event_bus.publish(review_event)
 
         # Verify review agent triggered
-        mock_agent_executor.execute.assert_called_with(work_item_id="item-1", agent_id="agent-review")
+        mock_agent_executor.execute.assert_called_with(
+            work_item_id="item-1", agent_id="agent-review", board_id="board-1"
+        )
 
         # Stage 3: Item reaches Done (exit column)
         # Lock released, no more processing
@@ -332,7 +334,7 @@ class TestEndToEndColumnChangeWorkflow:
         await event_bus.publish(exit_event)
 
         # Now item 2's agent should be triggered
-        mock_agent_executor.execute.assert_called_with(work_item_id="item-2", agent_id="agent-dev")
+        mock_agent_executor.execute.assert_called_with(work_item_id="item-2", agent_id="agent-dev", board_id="board-1")
 
     @pytest.mark.asyncio
     async def test_auto_progression_chain(

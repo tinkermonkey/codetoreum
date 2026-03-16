@@ -7,10 +7,13 @@ Subscribes to workitem.column_changed events and orchestrates:
 """
 
 import logging
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
 from uuid import uuid4
 
+from codetoreum.application.agent_execution_recovery_service import (
+    AgentExecutionRecoveryService,
+)
 from codetoreum.application.pipeline_lock_service import (
     IQueuedPipelineLockService,
     LockStatus,
@@ -32,7 +35,9 @@ from codetoreum.domain.events import (
 )
 from codetoreum.infrastructure.event_bus import EventBus, EventHandler, event_handler
 from codetoreum.ports.exceptions import ExternalServiceError, ResourceNotFoundError
-from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
+from codetoreum.ports.output.active_workflow_run_registry import (
+    IActiveWorkflowRunRegistry,
+)
 from codetoreum.ports.output.agent_executor import IAgentExecutor
 from codetoreum.ports.output.board_service import IBoardService, MovedByType
 from codetoreum.ports.output.event_emitter import IEventEmitter
@@ -40,6 +45,26 @@ from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _WorkflowRunMetadata:
+    """Internal metadata for tracking active workflow runs.
+
+    This is distinct from ActiveRunInfo (port-level value object) and stores
+    additional state needed by BoardColumnEventHandler for event sourcing:
+    - Timing information (started_at, stage progression)
+    - Configuration references (board_id, template_id)
+
+    Private dataclass to keep handler implementation details internal.
+    """
+
+    run_id: str
+    project_id: str
+    board_id: str
+    template_id: str
+    started_at: datetime
+    stage_index: int
 
 
 @event_handler("WorkItemColumnChanged")
@@ -88,6 +113,7 @@ class BoardColumnEventHandler(EventHandler):
         event_store: IEventStore | None = None,
         run_registry: IActiveWorkflowRunRegistry | None = None,
         event_emitter: IEventEmitter | None = None,
+        recovery_service: AgentExecutionRecoveryService | None = None,
     ):
         """
         Initialize board column event handler.
@@ -101,6 +127,7 @@ class BoardColumnEventHandler(EventHandler):
             event_store: Optional event store for persisting workflow lifecycle events
             run_registry: Optional registry for tracking active workflow runs
             event_emitter: Optional event emitter for CodetoreumEvent instances (e.g. LockStuckEvent)
+            recovery_service: Optional recovery service for handling agent execution failures
         """
         self.board_service = board_service
         self.lock_service = lock_service
@@ -110,8 +137,10 @@ class BoardColumnEventHandler(EventHandler):
         self.event_store = event_store
         self.run_registry = run_registry
         self.event_emitter = event_emitter
-        # Tracks active workflow runs: work_item_id -> run metadata
-        self._active_runs: dict[str, dict[str, Any]] = {}
+        self.recovery_service = recovery_service
+        # Tracks active workflow runs: work_item_id -> _WorkflowRunMetadata
+        # Provides compile-time key validation and type safety over untyped dict[str, Any]
+        self._active_runs: dict[str, _WorkflowRunMetadata] = {}
 
     def get_event_types(self) -> list[str]:
         """Get list of event types this handler processes.
@@ -468,14 +497,14 @@ class BoardColumnEventHandler(EventHandler):
         now = datetime.now(UTC)
         stage_count = len([c for c in workflow_config.columns if c.agent_id])
 
-        self._active_runs[work_item_id] = {
-            "run_id": workflow_run_id,
-            "project_id": project_id,
-            "board_id": board_id,
-            "template_id": workflow_config.id,
-            "started_at": now,
-            "stage_index": 0,
-        }
+        self._active_runs[work_item_id] = _WorkflowRunMetadata(
+            run_id=workflow_run_id,
+            project_id=project_id,
+            board_id=board_id,
+            template_id=workflow_config.id,
+            started_at=now,
+            stage_index=0,
+        )
 
         created = WorkflowCreated(
             aggregate_id=workflow_run_id,
@@ -531,13 +560,13 @@ class BoardColumnEventHandler(EventHandler):
             return
 
         run_info = self._active_runs[work_item_id]
-        run_info["stage_index"] += 1
-        workflow_run_id = run_info["run_id"]
+        run_info.stage_index += 1
+        workflow_run_id = run_info.run_id
 
         event = WorkflowStageAdvanced(
             aggregate_id=workflow_run_id,
             payload={
-                "stage_index": run_info["stage_index"],
+                "stage_index": run_info.stage_index,
                 "from_stage": from_stage,
                 "to_stage": to_stage,
             },
@@ -561,9 +590,9 @@ class BoardColumnEventHandler(EventHandler):
             return
 
         run_info = self._active_runs.pop(work_item_id)
-        workflow_run_id = run_info["run_id"]
+        workflow_run_id = run_info.run_id
         now = datetime.now(UTC)
-        duration = (now - run_info["started_at"]).total_seconds()
+        duration = (now - run_info.started_at).total_seconds()
 
         event = WorkflowCompleted(
             aggregate_id=workflow_run_id,
@@ -594,7 +623,7 @@ class BoardColumnEventHandler(EventHandler):
             return
 
         run_info = self._active_runs.pop(work_item_id)
-        workflow_run_id = run_info["run_id"]
+        workflow_run_id = run_info.run_id
         now = datetime.now(UTC)
 
         event = WorkflowFailed(
@@ -618,7 +647,16 @@ class BoardColumnEventHandler(EventHandler):
 
     async def _trigger_agent(self, work_item_id: str, column_config: ColumnTemplate, board_id: str = "board-1") -> None:
         """
-        Trigger agent execution for a work item.
+        Trigger agent execution for a work item with failure recovery.
+
+        Execution flow:
+        1. Update registry with current stage
+        2. Execute agent (fire-and-forget)
+        3. If execution fails before task creation:
+           - Log the failure with context
+           - Use recovery service to fail workflow run
+           - Release the pipeline lock to unblock next queued item
+           - Emit alert for manual intervention
 
         Args:
             work_item_id: ID of work item to process
@@ -641,9 +679,9 @@ class BoardColumnEventHandler(EventHandler):
             try:
                 await self.run_registry.set_active_run(
                     work_item_id=work_item_id,
-                    run_id=run_info["run_id"],
+                    run_id=run_info.run_id,
                     stage_name=column_config.name,
-                    project_id=run_info.get("project_id", ""),
+                    project_id=run_info.project_id,
                 )
             except Exception as e:
                 logger.error(
@@ -667,6 +705,81 @@ class BoardColumnEventHandler(EventHandler):
                 },
             )
 
+            # Handle synchronous execution failure (before task creation, lock still held)
+            if work_item_id in self._active_runs:
+                run_info = self._active_runs[work_item_id]
+                project_id = run_info.project_id
+
+                # Use recovery service to fail workflow run (wrapped in try/except to ensure
+                # lock release is not skipped even if recovery service fails)
+                if self.recovery_service:
+                    try:
+                        await self.recovery_service.handle_agent_execution_failure(
+                            work_item_id=work_item_id,
+                            board_id=board_id,
+                            error=e,
+                            project_id=project_id,
+                        )
+                    except Exception as recovery_err:
+                        logger.error(
+                            f"Recovery service failed for {work_item_id}: {recovery_err}",
+                            exc_info=True,
+                            extra={
+                                "error_id": "ERR_BOARD_EVENT_RECOVERY_SERVICE_FAILURE",
+                                "work_item_id": work_item_id,
+                            },
+                        )
+                        # Continue to lock release (lock release must not be skipped)
+
+                # Release the lock to unblock next queued item (critical for pipeline unblocking)
+                try:
+                    release_result = await self.lock_service.release_lock(
+                        project_id=project_id,
+                        board_id=board_id,
+                        work_item_id=work_item_id,
+                    )
+                    logger.info(
+                        f"Released lock for {work_item_id} due to execution failure, "
+                        f"next item: {release_result.next_work_item_id}",
+                        extra={"error_id": "INFO_BOARD_EVENT_LOCK_RELEASED_AFTER_FAILURE"},
+                    )
+                except ValueError as lock_err:
+                    logger.warning(
+                        f"Cannot release lock for {work_item_id}: {lock_err} " f"(may have already released)",
+                        exc_info=True,
+                        extra={"error_id": "ERR_BOARD_EVENT_LOCK_RELEASE_NOT_HELD"},
+                    )
+                except Exception as lock_err:
+                    logger.critical(
+                        f"Failed to release lock for {work_item_id} after execution failure: {lock_err} "
+                        f"— PIPELINE IS BLOCKED",
+                        exc_info=True,
+                        extra={
+                            "error_id": "ERR_BOARD_EVENT_LOCK_RELEASE_CRITICAL_FAILURE",
+                            "work_item_id": work_item_id,
+                        },
+                    )
+                    # Emit LockStuckEvent for manual intervention
+                    if self.event_emitter:
+                        try:
+                            self.event_emitter.emit(
+                                LockStuckEvent(
+                                    type="lock.stuck",
+                                    timestamp=datetime.now(UTC).isoformat(),
+                                    source="board_event_handler._trigger_agent",
+                                    project_id=project_id,
+                                    board_id=board_id,
+                                    work_item_id=work_item_id,
+                                    reason=f"Failed to release lock after execution failure: {lock_err}",
+                                )
+                            )
+                        except Exception as emit_err:
+                            logger.error(
+                                f"Failed to emit LockStuckEvent for '{work_item_id}': {emit_err}",
+                                exc_info=True,
+                                extra={"error_id": "ERR_BOARD_EVENT_LOCK_STUCK_EMIT_FAILURE"},
+                            )
+
     async def handle_agent_completion(
         self,
         work_item_id: str,
@@ -685,7 +798,7 @@ class BoardColumnEventHandler(EventHandler):
             success: Whether agent execution succeeded
 
         Raises:
-            Exception: Logs error but doesn't re-raise
+            Exception: Re-raised after logging if auto-progression fails
         """
         if not success:
             logger.warning(f"Agent failed for {work_item_id}, skipping auto-progression")
@@ -729,3 +842,4 @@ class BoardColumnEventHandler(EventHandler):
                     "work_item_id": work_item_id,
                 },
             )
+            raise

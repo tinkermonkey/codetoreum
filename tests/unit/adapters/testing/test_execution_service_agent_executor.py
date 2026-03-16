@@ -6,6 +6,7 @@ Verifies that every failure mode in _run_execution:
 3. Cleans up registry/branch-tracker on failure (via the finally block)
 """
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -94,7 +95,7 @@ class ExecutorFixture:
         exec_result.execution = MagicMock(output="done")
         self.execution_service.execute_with_llm.return_value = exec_result
 
-    def make_executor(self) -> ExecutionServiceAgentExecutor:
+    def make_executor(self, recovery_service=None) -> ExecutionServiceAgentExecutor:
         executor = ExecutionServiceAgentExecutor(
             execution_service=self.execution_service,
             workspace_router=self.workspace_router,
@@ -104,6 +105,7 @@ class ExecutorFixture:
             run_registry=self.run_registry,
             branch_tracker=self.branch_tracker,
             vcs=self.vcs,
+            recovery_service=recovery_service,
         )
         executor.set_completion_handler(self.completion_callback, self.BOARD_ID)
         return executor
@@ -393,3 +395,137 @@ class TestDockerExecutionPath:
         fx.execution_service.execute_with_container.assert_called_once()
         fx.execution_service.execute_with_llm.assert_not_called()
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, True)
+
+
+# ---------------------------------------------------------------------------
+# Completion callback failure recovery
+# ---------------------------------------------------------------------------
+
+
+class TestCompletionCallbackFailureRecovery:
+    @pytest.mark.asyncio
+    async def test_completion_callback_failure_invokes_recovery_service(self):
+        """When completion callback raises, recovery service is invoked."""
+        from codetoreum.application.agent_execution_recovery_service import (
+            AgentExecutionRecoveryService,
+        )
+
+        fx = ExecutorFixture()
+        recovery_service = AsyncMock(spec=AgentExecutionRecoveryService)
+        fx.completion_callback.side_effect = RuntimeError("Auto-progression failed")
+
+        executor = ExecutionServiceAgentExecutor(
+            execution_service=fx.execution_service,
+            workspace_router=fx.workspace_router,
+            config_store=fx.config_store,
+            agent_repository=fx.agent_repository,
+            work_item_service=fx.work_item_service,
+            run_registry=fx.run_registry,
+            branch_tracker=fx.branch_tracker,
+            vcs=fx.vcs,
+            recovery_service=recovery_service,
+        )
+        executor.set_completion_handler(fx.completion_callback, fx.BOARD_ID)
+
+        # Act
+        await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        # Assert: Recovery service invoked to handle the callback failure
+        assert recovery_service.handle_completion_callback_failure.called
+        call_args = recovery_service.handle_completion_callback_failure.call_args
+        assert call_args.kwargs["work_item_id"] == fx.WORK_ITEM_ID
+        assert call_args.kwargs["board_id"] == fx.BOARD_ID
+        assert call_args.kwargs["success"] is True
+
+    @pytest.mark.asyncio
+    async def test_completion_callback_failure_without_recovery_service(self):
+        """When no recovery service, completion callback failure is just logged."""
+        fx = ExecutorFixture()
+        fx.completion_callback.side_effect = RuntimeError("Auto-progression failed")
+
+        executor = ExecutionServiceAgentExecutor(
+            execution_service=fx.execution_service,
+            workspace_router=fx.workspace_router,
+            config_store=fx.config_store,
+            agent_repository=fx.agent_repository,
+            work_item_service=fx.work_item_service,
+            run_registry=fx.run_registry,
+            branch_tracker=fx.branch_tracker,
+            vcs=fx.vcs,
+            recovery_service=None,  # No recovery service
+        )
+        executor.set_completion_handler(fx.completion_callback, fx.BOARD_ID)
+
+        # Act (should not raise)
+        await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        # Assert: Just logged, cleanup still happens
+        assert fx.run_registry.clear_run.called
+        assert fx.branch_tracker.clear.called
+
+
+# ---------------------------------------------------------------------------
+# CancelledError handling — critical async task cancellation path
+# ---------------------------------------------------------------------------
+
+
+class TestCancelledErrorHandling:
+    @pytest.mark.asyncio
+    async def test_cancelled_error_calls_completion_with_failure_and_reraises(self):
+        """When asyncio.CancelledError is raised during execution, it should:
+        1. Call completion callback with success=False
+        2. Re-raise the CancelledError (so asyncio task machinery works correctly)
+
+        This is a critical path: if the re-raise is accidentally removed,
+        async task cancellation silently breaks and tasks don't clean up properly.
+        """
+        fx = ExecutorFixture()
+        # Simulate a point where CancelledError is raised
+        # For example, during asyncio.sleep in execution delay or during execution
+        fx.execution_service.execute_with_llm.side_effect = asyncio.CancelledError()
+        executor = fx.make_executor()
+
+        # Act & Assert: CancelledError should be re-raised after cleanup
+        with pytest.raises(asyncio.CancelledError):
+            await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        # Assert: Completion callback was called with success=False
+        fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, False)
+
+        # Assert: Cleanup still happens despite re-raise (via finally)
+        fx.run_registry.clear_run.assert_called_once_with(fx.WORK_ITEM_ID)
+        fx.branch_tracker.clear.assert_called_once_with(fx.WORK_ITEM_ID)
+
+    @pytest.mark.asyncio
+    async def test_task_done_callback_suppresses_cancelled_error(self):
+        """The _task_done_callback suppresses CancelledError and cleans up _pending_tasks.
+
+        This tests the actual task callback mechanism (lines 115-132 in source) used by
+        execute() for fire-and-forget tasks. CancelledError should be suppressed during
+        shutdown, and _pending_tasks must be cleaned up even on cancellation.
+        """
+        fx = ExecutorFixture()
+        executor = fx.make_executor()
+
+        # Create a task that will be cancelled
+        task = asyncio.create_task(executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID))
+        # Add task to _pending_tasks as execute() does (line 183 in source)
+        executor._pending_tasks.add(task)
+
+        await asyncio.sleep(0.01)  # Let it start
+        task.cancel()
+        await asyncio.sleep(0.01)  # Let cancellation propagate
+
+        # Act: Invoke _task_done_callback directly (as task.add_done_callback does)
+        # This should NOT raise an exception even though task.result() will raise CancelledError
+        exception_raised = False
+        try:
+            executor._task_done_callback(task)
+        except Exception:
+            exception_raised = True
+
+        # Assert: No exception should propagate from the callback
+        assert not exception_raised, "_task_done_callback should suppress CancelledError"
+
+        # Assert: Task was removed from pending set despite cancellation
+        assert task not in executor._pending_tasks, "Cancelled task should be removed from _pending_tasks"

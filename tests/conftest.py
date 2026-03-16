@@ -2,7 +2,7 @@
 
 import asyncio
 import time
-from collections.abc import Awaitable, Callable, Generator
+from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 
 import docker
 import pytest
@@ -15,6 +15,8 @@ from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorag
 from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
 from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
 from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.infrastructure.simulation import SimulationConfig
+from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
 
 
 def is_docker_available() -> bool:
@@ -322,6 +324,46 @@ class ModernRedisContainer(DockerContainer):
 
 
 @pytest.fixture(scope="function", autouse=True)
+def _cleanup_dead_letter_queues() -> Generator[None, None, None]:
+    """Ensure all DeadLetterQueue retry processors are stopped after each test.
+
+    DeadLetterQueue instances start a background _retry_loop task when
+    start_retry_processor() is called. This fixture ensures all such tasks
+    are properly stopped to prevent them from hanging indefinitely and
+    blocking test completion.
+
+    This is particularly important because the _retry_loop runs in an infinite
+    loop (while self._running), and if not stopped before the event loop
+    closes, it can cause timeouts and prevent tests from completing.
+    """
+    yield
+
+    # After test completes, stop all DeadLetterQueue instances
+    try:
+        loop = asyncio.get_event_loop()
+        if loop and not loop.is_closed():
+            # Import here to avoid circular imports
+            import gc
+
+            from codetoreum.infrastructure.dead_letter_queue import DeadLetterQueue
+
+            # Find all DeadLetterQueue instances that might be running
+            for obj in gc.get_objects():
+                if isinstance(obj, DeadLetterQueue) and obj._running:
+                    # Stop the retry processor
+                    try:
+                        loop.run_until_complete(obj.stop_retry_processor())
+                    except Exception:
+                        # If loop is already closed, set flag directly
+                        obj._running = False
+                        if obj._retry_task:
+                            obj._retry_task.cancel()
+    except Exception:
+        # Ignore any errors during cleanup
+        pass
+
+
+@pytest.fixture(scope="function", autouse=True)
 def _cleanup_event_loop() -> Generator[None, None, None]:
     """Ensure event loop is properly closed to prevent ResourceWarnings.
 
@@ -548,3 +590,77 @@ async def wait_for_polling_cycle(event_list: list, expected_count: int = 1, time
         return len(event_list) >= expected_count
 
     return await wait_for_condition(has_events, timeout=timeout, poll_interval=0.05)
+
+
+# ====================================================================================
+# Simulation Bootstrap Fixtures (Available to all test directories)
+# ====================================================================================
+
+
+@pytest.fixture
+def fast_simulation_config() -> SimulationConfig:
+    """
+    Provide a fast simulation configuration.
+
+    Returns:
+        SimulationConfig optimized for speed (100x multiplier)
+    """
+    return SimulationConfig.create_fast_config(
+        scenario_name="test_scenario",
+        speed_multiplier=100.0,
+    )
+
+
+@pytest.fixture
+async def simulation_bootstrap(
+    fast_simulation_config: SimulationConfig,
+) -> AsyncGenerator[SimulationApplicationBootstrap, None]:
+    """
+    Provide a fully set up simulation bootstrap.
+
+    Args:
+        fast_simulation_config: Fast simulation configuration fixture
+
+    Yields:
+        SimulationApplicationBootstrap instance with app ready for testing
+
+    Cleanup:
+        Tears down all resources after test
+    """
+    bootstrap = SimulationApplicationBootstrap(fast_simulation_config)
+    await bootstrap.setup()
+    yield bootstrap
+    await bootstrap.teardown()
+
+
+@pytest.fixture
+async def simulation_seeder(
+    simulation_bootstrap: SimulationApplicationBootstrap,
+) -> AsyncGenerator:
+    """
+    Provide a simulation data seeder for E2E tests.
+
+    This seeder populates domain objects (Agent, WorkItem) required for
+    ExecutionServiceAgentExecutor to function properly in end-to-end tests.
+
+    Args:
+        simulation_bootstrap: Bootstrap fixture
+
+    Yields:
+        SimulationDataSeeder instance ready for seeding test data
+
+    Cleanup:
+        Clears seeded data after test
+    """
+    from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
+
+    adapters = simulation_bootstrap.adapters
+    seeder = SimulationDataSeeder(
+        simulation_bootstrap,
+        track_items=True,
+        agent_repository=adapters.agent_repository,
+        work_item_service=adapters.work_item_service,
+    )
+    yield seeder
+    # Cleanup tracked items
+    seeder.created_items.clear()

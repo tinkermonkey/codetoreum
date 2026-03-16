@@ -58,6 +58,9 @@ from codetoreum.adapters.primary.input_port_adapters.mock import (
 from codetoreum.adapters.primary.routers.simulation_ticketing import (
     create_simulation_ticketing_router,
 )
+from codetoreum.adapters.secondary.failed_event_store_adapter import (
+    DeadLetterQueueFailedEventStoreAdapter,
+)
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
 )
@@ -81,7 +84,6 @@ from codetoreum.adapters.testing import (
     InMemoryVersionControlService,
     InMemoryWorkflowConfigService,
     InMemoryWorkItemBranchTracker,
-    MockAgentExecutor,
     MockBoardAdapter,
     MockDiscussionAdapter,
     MockLLMAdapter,
@@ -98,6 +100,11 @@ from codetoreum.adapters.testing.mock_container_recovery_adapter import (
     MockContainerRecoveryAdapter,
 )
 from codetoreum.adapters.testing.mock_work_item_service import MockWorkItemService
+
+# Application Services
+from codetoreum.application.agent_execution_recovery_service import (
+    AgentExecutionRecoveryService,
+)
 from codetoreum.application.agent_scheduler import (
     AgentScheduler,
     InMemoryTaskQueue,
@@ -117,8 +124,6 @@ from codetoreum.application.multi_project_orchestrator import MultiProjectOrches
 from codetoreum.application.pipeline_manager import PipelineManager
 from codetoreum.application.review_service import ReviewService
 from codetoreum.application.work_item_service import WorkItemService
-
-# Application Services
 from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator, WorkflowState
 from codetoreum.application.workflow_run_query_service import WorkflowRunQueryService
 from codetoreum.application.workspace_router import WorkspaceRouter
@@ -165,13 +170,20 @@ from codetoreum.ports.input.workflow_definition_command import (
 from codetoreum.ports.input.workflow_query import IWorkflowQueryPort
 from codetoreum.ports.input.workflow_run_query import IWorkflowRunQueryPort
 from codetoreum.ports.input.workspace_query import IWorkspaceQueryPort
+from codetoreum.ports.output.agent_executor import IAgentExecutor
+from codetoreum.ports.output.failed_event_store import IFailedEventStore
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class SimulationAdapters:
-    """Container for all simulation adapters."""
+    """Container for all simulation adapters.
+
+    Note: agent_executor is assigned in Phase 3 (ExecutionService creation) and is
+    always ExecutionServiceAgentExecutor. It implements IAgentExecutor and provides
+    set_completion_handler() for BoardColumnEventHandler wiring.
+    """
 
     # Output port adapters
     ticket_system: InMemoryTicketAdapter
@@ -189,7 +201,6 @@ class SimulationAdapters:
     project_manager: MockProjectManagerAdapter  # Multi-project management
     lock_service: InMemoryLockService
     workflow_config: InMemoryWorkflowConfigService
-    agent_executor: MockAgentExecutor
     queue_service: InMemoryQueueService  # Pipeline queue service for board automation
     event_emitter: CapturingMockEventEmitter  # For domain event capture
 
@@ -205,8 +216,10 @@ class SimulationAdapters:
     agent_repository: InMemoryAgentRepository  # Domain Agent objects for execution chain
     run_registry: InMemoryActiveWorkflowRunRegistry  # Active workflow run tracking
     branch_tracker: InMemoryWorkItemBranchTracker  # Work item → VCS branch tracking
-    execution_service_executor: ExecutionServiceAgentExecutor  # Full execution chain
     work_item_service: MockWorkItemService  # Work item lookups for execution chain
+
+    # Agent executor (assigned in Phase 3, after ExecutionService is created)
+    agent_executor: IAgentExecutor | None = None
 
 
 @dataclass
@@ -222,6 +235,7 @@ class SimulationServices:
     workspace_router: WorkspaceRouter
     configuration_service: ConfigurationService
     work_item_service: WorkItemService
+    agent_execution_recovery_service: AgentExecutionRecoveryService | None = None
     multi_project_orchestrator: Any | None = None  # MultiProjectOrchestrator
     container_recovery_service: Any | None = None
 
@@ -263,6 +277,7 @@ class SimulationInfrastructure:
     logger: logging.Logger
     mock_tracer: MockTracer
     causal_link_registry: CausalLinkRegistry
+    failed_event_store: IFailedEventStore
 
 
 class SimulationApplicationBootstrap:
@@ -369,6 +384,15 @@ class SimulationApplicationBootstrap:
             logger.info("Phase 5b: Validating causal link consistency...")
             self._validate_causal_links()
 
+            # Start dead letter queue retry processor
+            # This enables automatic retry of failed event publishing (issue #371)
+            if self.infrastructure and self.infrastructure.failed_event_store:
+                logger.info("Starting failed event store retry processor...")
+                # Cast to adapter to access infrastructure-specific lifecycle methods
+                dlq_adapter = self.infrastructure.failed_event_store
+                if isinstance(dlq_adapter, DeadLetterQueueFailedEventStoreAdapter):
+                    await dlq_adapter.start_retry_processor(self._create_dlq_retry_handler())
+
             self._is_setup = True
             logger.info("Simulation bootstrap completed successfully")
 
@@ -387,16 +411,28 @@ class SimulationApplicationBootstrap:
         Clean up all resources.
 
         Performs cleanup in reverse order:
+        - Stop dead letter queue retry processor
         - Stop clock auto-advance (if running)
         - Stop event bus
         - Clear adapters
         - Reset state
+
+        Raises:
+            Exception: Re-raises any exception encountered during cleanup with full context.
+                     The _is_setup flag is only cleared if all cleanup steps succeed,
+                     ensuring reliable state tracking even on failure.
         """
         if not self._is_setup:
             return
 
         try:
             logger.info("Tearing down simulation bootstrap...")
+
+            # Stop dead letter queue retry processor
+            if self.infrastructure and self.infrastructure.failed_event_store:
+                dlq_adapter = self.infrastructure.failed_event_store
+                if isinstance(dlq_adapter, DeadLetterQueueFailedEventStoreAdapter):
+                    await dlq_adapter.stop_retry_processor()
 
             # Stop simulation engine
             if self._engine:
@@ -429,6 +465,8 @@ class SimulationApplicationBootstrap:
                 extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
                 exc_info=True,
             )
+            # Re-raise to ensure caller (typically test fixture) knows teardown failed
+            raise
 
     # =========================================================================
     # Phase 2: Create Adapters
@@ -532,10 +570,10 @@ class SimulationApplicationBootstrap:
         # Create project manager adapter
         project_manager = MockProjectManagerAdapter()
 
-        # Create pipeline lock, workflow config, and agent executor for board automation
+        # Create pipeline lock, workflow config
         lock_service = InMemoryLockService()
         workflow_config = InMemoryWorkflowConfigService()
-        agent_executor = MockAgentExecutor(execution_delay_seconds=3.0)
+        # agent_executor will be initialized in Phase 3 as ExecutionServiceAgentExecutor
 
         # Pre-configure default test project for simulation testing
         project_manager.add_project(
@@ -564,11 +602,6 @@ class SimulationApplicationBootstrap:
         branch_tracker = InMemoryWorkItemBranchTracker()
         work_item_service = MockWorkItemService()
 
-        # ExecutionServiceAgentExecutor is created later in _create_services
-        # (needs execution_service and workspace_router which don't exist yet)
-        # We use a placeholder here; it's replaced in _create_services.
-        execution_service_executor_placeholder = None  # type: ignore[assignment]
-
         logger.info("Created 24+ simulation adapters with domain event emission")
 
         return SimulationAdapters(
@@ -587,7 +620,7 @@ class SimulationApplicationBootstrap:
             project_manager=project_manager,
             lock_service=lock_service,
             workflow_config=workflow_config,
-            agent_executor=agent_executor,
+            agent_executor=None,
             queue_service=queue_service,
             event_emitter=event_emitter,
             version_control=version_control,
@@ -599,7 +632,6 @@ class SimulationApplicationBootstrap:
             agent_repository=agent_repository,
             run_registry=run_registry,
             branch_tracker=branch_tracker,
-            execution_service_executor=execution_service_executor_placeholder,  # type: ignore[arg-type]
             work_item_service=work_item_service,
         )
 
@@ -737,13 +769,63 @@ class SimulationApplicationBootstrap:
             )
             raise
 
+    def _create_dlq_retry_handler(self) -> Any:
+        """
+        Create a retry handler function for the dead letter queue.
+
+        The handler is called by the DLQ retry processor to retry failed events.
+        It simply re-publishes the event to the event bus.
+
+        Returns:
+            Async function that retries an event
+        """
+        event_bus = self.infrastructure.event_bus if self.infrastructure else None
+
+        async def retry_event(event_type: str, event_data: dict[str, Any]) -> None:
+            """Retry publishing a failed event."""
+            if not event_bus:
+                message = "Event bus not available for retry"
+                raise RuntimeError(message)
+
+            # Reconstruct the domain event from the stored data
+            # Map event type to actual event class for proper reconstruction
+            retry_event_obj = None
+
+            if event_type == "WorkItemColumnChanged":
+                retry_event_obj = WorkItemColumnChanged(
+                    aggregate_id=event_data.get("work_item_id", ""),
+                    payload=event_data,
+                )
+            elif event_type == "BoardReconciled":
+                retry_event_obj = BoardReconciled(
+                    aggregate_id=event_data.get("board_id", ""),
+                    payload=event_data,
+                )
+            else:
+                # For unknown event types, raise exception to prevent silent deletion
+                # This ensures the DLQ doesn't remove events of unmapped types on first retry.
+                # The retry processor will treat this as a processing failure and retry with backoff.
+                message = f"Unknown event type '{event_type}' in dead letter queue - handler mapping not updated"
+                logger.error(
+                    message,
+                    extra={
+                        "event_type": event_type,
+                        "error_id": ErrorRegistry.ERR_INTERNAL_ERROR,
+                    },
+                )
+                raise ValueError(message)
+
+            await event_bus.publish(retry_event_obj)
+
+        return retry_event
+
     # =========================================================================
     # Phase 1: Create Infrastructure (Early for Event Bus Subscriptions)
     # =========================================================================
 
     def _create_infrastructure(self) -> SimulationInfrastructure:
         """
-        Create infrastructure components (event bus, logger, causal link registry).
+        Create infrastructure components (event bus, logger, causal link registry, dead letter queue).
 
         The SimulationEngine manages the clock internally. The engine is used
         directly to access clock functionality, not through infrastructure.
@@ -751,12 +833,17 @@ class SimulationApplicationBootstrap:
         The CausalLinkRegistry enables runtime enforcement and discoverability of
         causal dependencies between adapters and domain events.
 
+        The DeadLetterQueue captures failed event publishing attempts, enabling
+        event bridge reliability (see issue #371).
+
         Returns:
             SimulationInfrastructure with configured components
         """
         if not self._engine:
             message = "SimulationEngine must be created before infrastructure"
             raise RuntimeError(message)
+
+        from codetoreum.infrastructure.dead_letter_queue import DeadLetterQueue
 
         # Create event bus
         event_bus = EventBus()
@@ -770,7 +857,13 @@ class SimulationApplicationBootstrap:
         # Create causal link registry for managing adapter dependencies
         causal_link_registry = CausalLinkRegistry()
 
-        logger.info("Created infrastructure components (including CausalLinkRegistry)")
+        # Create dead letter queue for capturing failed event publishing
+        # Wrap it with the port adapter to decouple infrastructure from application
+        # This is critical for event bridge reliability (issue #371)
+        dead_letter_queue = DeadLetterQueue()
+        failed_event_store = DeadLetterQueueFailedEventStoreAdapter(dead_letter_queue)
+
+        logger.info("Created infrastructure components (including CausalLinkRegistry and IFailedEventStore)")
 
         # Note: Clock is no longer exposed here - it's managed by SimulationEngine
         # The engine is the single point of control for all timing operations
@@ -779,6 +872,7 @@ class SimulationApplicationBootstrap:
             logger=app_logger,
             mock_tracer=mock_tracer,
             causal_link_registry=causal_link_registry,
+            failed_event_store=failed_event_store,
         )
 
     # =========================================================================
@@ -823,8 +917,20 @@ class SimulationApplicationBootstrap:
             event_store=self.adapters.event_store,
         )
 
-        # Phase 3: Create ExecutionServiceAgentExecutor and wire into adapters
+        # Phase 3a: Create AgentExecutionRecoveryService
+        # This service handles recovery from agent execution failures (completion callback failures,
+        # lock stuck detection, etc.). It's injected into both ExecutionServiceAgentExecutor
+        # (for completion callback failures) and BoardColumnEventHandler (for execution failures).
+        recovery_service = AgentExecutionRecoveryService(
+            board_service=self.adapters.board,
+            event_store=self.adapters.event_store,
+            run_registry=self.adapters.run_registry,
+            failed_event_store=self.infrastructure.failed_event_store,
+        )
+
+        # Phase 3b: Create ExecutionServiceAgentExecutor and wire into adapters
         # This requires execution_service + workspace_router which are now available
+        # ExecutionServiceAgentExecutor is now the sole agent executor
         execution_service_executor = ExecutionServiceAgentExecutor(
             execution_service=execution_service,
             workspace_router=workspace_router,
@@ -834,9 +940,10 @@ class SimulationApplicationBootstrap:
             run_registry=self.adapters.run_registry,
             branch_tracker=self.adapters.branch_tracker,
             vcs=self.adapters.version_control,
+            recovery_service=recovery_service,
         )
-        # Store on adapters so it can be accessed by tests
-        self.adapters.execution_service_executor = execution_service_executor
+        # Assign to agent_executor (the primary executor for the board handler)
+        self.adapters.agent_executor = execution_service_executor
 
         # Review Service
         review_service = ReviewService(
@@ -969,6 +1076,7 @@ class SimulationApplicationBootstrap:
             workspace_router=workspace_router,
             configuration_service=configuration_service,
             work_item_service=work_item_service,
+            agent_execution_recovery_service=recovery_service,
             multi_project_orchestrator=multi_project_orchestrator,
             container_recovery_service=container_recovery_service,
         )
@@ -997,7 +1105,9 @@ class SimulationApplicationBootstrap:
         agent_command = MockAgentCommandAdapter()
         agent_query = MockAgentQueryAdapter()
         execution_command = MockExecutionCommandAdapter()
-        execution_query = MockExecutionQueryAdapter()
+        execution_query = MockExecutionQueryAdapter(
+            agent_executor=self.adapters.agent_executor,
+        )
         config_query = MockConfigQueryAdapter(
             config_store=self.adapters.config_store,
         )
@@ -1120,10 +1230,6 @@ class SimulationApplicationBootstrap:
         # and invoke the repair cycle when items enter the configured repair cycle stage
         self._register_repair_cycle_handler()
 
-        # Wire execution query adapter to agent executor for UX visibility
-        # (ports.execution_query is the MockExecutionQueryAdapter created in Phase 4)
-        self.adapters.agent_executor.set_execution_query(self.ports.execution_query)
-
         return app
 
     def _register_repair_cycle_handler(self) -> None:
@@ -1161,6 +1267,10 @@ class SimulationApplicationBootstrap:
         The MockBoardAdapter emits CodetoreumEvent objects (which have `.type`),
         but the EventBus expects DomainEvent objects (which have `.event_type`).
         This bridge translates between the two event hierarchies before publishing.
+
+        CRITICAL: Event publishing is awaited (not fire-and-forget) to ensure failures
+        are captured by the dead letter queue. Silent failures would disable automation
+        for affected work items. See issue #371.
         """
         if not self.adapters or not self.infrastructure:
             logger.warning("Cannot register board event bridge: components not ready")
@@ -1168,6 +1278,7 @@ class SimulationApplicationBootstrap:
 
         event_bus = self.infrastructure.event_bus
         ticket_adapter = self.adapters.ticket_system
+        failed_event_store = self.infrastructure.failed_event_store
 
         # Map board columns to work item statuses
         _column_to_status = {
@@ -1178,39 +1289,19 @@ class SimulationApplicationBootstrap:
             "Done": WorkItemStatus.COMPLETED,
         }
 
-        def _handle_publish_task_error(task: asyncio.Task) -> None:
-            """Handle errors from event publish tasks."""
-            try:
-                task.result()
-            except asyncio.CancelledError:
-                # Task was cancelled, this is normal during shutdown
-                pass
-            except Exception as e:
-                logger.error(
-                    f"Event publish task failed: {e}",
-                    exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
-                )
-
-        def _handle_sync_task_error(task: asyncio.Task) -> None:
-            """Handle errors from work item status sync tasks."""
-            try:
-                task.result()
-            except asyncio.CancelledError:
-                # Task was cancelled, this is normal during shutdown
-                pass
-            except Exception as e:
-                logger.error(
-                    f"Work item status sync task failed: {e}",
-                    exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
-                )
-
         def board_column_changed_bridge(event):
             """Translate WorkItemColumnChangedEvent (CodetoreumEvent) to WorkItemColumnChanged (DomainEvent).
 
-            Also syncs work item status in the ticket adapter so the UX
-            reflects the current column position.
+            Also syncs work item status in the ticket adapter so the UX reflects the current column position.
+
+            CRITICAL: This bridge runs as a fire-and-forget async task created via loop.create_task().
+            However, failures within the task are NOT silent:
+            1. Event publishing failures are caught and sent to the dead letter queue for automatic retry
+            2. Task exceptions are logged via a done callback, preventing silent swallowing of errors
+            3. The DLQ retry processor handles transient/permanent classification and exponential backoff
+
+            This architecture prevents silent automation failures while allowing the event bridge
+            to be non-blocking (critical for the sync event adapter callback pattern).
             """
             try:
                 loop = asyncio.get_running_loop()
@@ -1225,21 +1316,119 @@ class SimulationApplicationBootstrap:
                         "moved_by": event.moved_by,
                     },
                 )
-                # Create task with error callback to catch publish failures
-                task = loop.create_task(event_bus.publish(domain_event))
-                task.add_done_callback(_handle_publish_task_error)
 
-                # Sync work item status based on target column (best-effort)
-                target_status = _column_to_status.get(event.to_column)
-                if target_status is not None:
-                    sync_task = loop.create_task(_sync_work_item_status(event.work_item_id, target_status))
-                    sync_task.add_done_callback(_handle_sync_task_error)
+                # Create task to handle event publishing with dead letter queue fallback
+                # Add done callback to log any unhandled exceptions (safety net for failures
+                # in _handle_column_changed_event itself, such as DLQ unavailability)
+                task = loop.create_task(_handle_column_changed_event(domain_event, event.work_item_id, event.to_column))
+
+                def task_done_callback(task_result: asyncio.Task[None]) -> None:
+                    """Log any unhandled exceptions from the bridge task."""
+                    try:
+                        task_result.result()
+                    except asyncio.CancelledError:
+                        # Task was cancelled - this is normal during shutdown
+                        pass
+                    except Exception as task_exception:
+                        # Unhandled exception in the bridge handler (e.g., DLQ failure)
+                        # This logs the failure so it's not silently swallowed
+                        logger.error(
+                            f"Unhandled exception in board column event bridge for {event.work_item_id}: {task_exception}",
+                            exc_info=True,
+                            extra={
+                                "work_item_id": event.work_item_id,
+                                "error_type": type(task_exception).__name__,
+                                "error_id": ErrorRegistry.ERR_INTERNAL_ERROR,
+                            },
+                        )
+
+                task.add_done_callback(task_done_callback)
+
             except RuntimeError as e:
                 logger.error(
-                    f"Failed to schedule board column event bridge tasks: {e}",
+                    f"Failed to schedule board column event bridge task: {e}",
                     exc_info=True,
                     extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
                 )
+
+        async def _handle_column_changed_event(
+            domain_event: WorkItemColumnChanged, work_item_id: str, to_column: str
+        ) -> None:
+            """Handle publishing WorkItemColumnChanged event with dead letter queue fallback.
+
+            This function:
+            1. Publishes the event to the event bus (which triggers automation)
+            2. Syncs work item status in the ticket adapter
+            3. On failure, sends the event to the dead letter queue for retry
+
+            Awaiting this function ensures that if publishing fails, we capture the
+            failure properly instead of silently losing the event.
+            """
+            try:
+                # Publish the event - this will trigger BoardColumnEventHandler and automation
+                await event_bus.publish(domain_event)
+                logger.debug(
+                    f"Successfully published WorkItemColumnChanged event for {work_item_id}",
+                    extra={"work_item_id": work_item_id, "event_type": "WorkItemColumnChanged"},
+                )
+            except Exception as publish_error:
+                # Publishing failed - send to failed event store for retry
+                # This preserves the event and allows operators to investigate/recover
+                from codetoreum.infrastructure.event_bus import EventBusError
+                from codetoreum.ports.output.failed_event_store import FailureReason
+
+                event_type = domain_event.event_type
+
+                # Classify the error as transient or permanent
+                # EventBusError wraps the original error in __cause__
+                is_transient = False
+                original_error_type = type(publish_error).__name__
+
+                if isinstance(publish_error, EventBusError) and publish_error.__cause__:
+                    # Check the wrapped cause for transient error types
+                    cause = publish_error.__cause__
+                    if isinstance(cause, (ConnectionError, TimeoutError)):
+                        is_transient = True
+                        original_error_type = type(cause).__name__
+                elif isinstance(publish_error, (ConnectionError, TimeoutError)):
+                    # Direct transient error (not wrapped)
+                    is_transient = True
+
+                await failed_event_store.add_failed_event(
+                    event_type=event_type,
+                    event_data=domain_event.payload,
+                    failure_reason=FailureReason.TRANSIENT_ERROR if is_transient else FailureReason.PROCESSING_ERROR,
+                    error_message=str(publish_error),
+                    metadata={
+                        "work_item_id": work_item_id,
+                        "original_error": original_error_type,
+                    },
+                )
+
+                logger.error(
+                    f"Event publishing failed for work_item {work_item_id} - queued to dead letter queue: {publish_error}",
+                    exc_info=True,
+                    extra={
+                        "work_item_id": work_item_id,
+                        "event_type": event_type,
+                        "error_type": type(publish_error).__name__,
+                        "error_id": ErrorRegistry.ERR_INTERNAL_ERROR,
+                    },
+                )
+
+            # Sync work item status based on target column (best-effort, separate from publishing)
+            # This is fire-and-forget because it's non-critical UI sync, separate from core automation
+            target_status = _column_to_status.get(to_column)
+            if target_status is not None:
+                try:
+                    await _sync_work_item_status(work_item_id, target_status)
+                except Exception as sync_error:
+                    # Status sync failures are best-effort and don't affect automation
+                    logger.warning(
+                        f"Best-effort status sync failed for {work_item_id} -> {target_status.value}: {sync_error}",
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                    )
 
         async def _sync_work_item_status(work_item_id: str, target_status: WorkItemStatus) -> None:
             """Best-effort sync of work item status in ticket adapter.
@@ -1309,7 +1498,17 @@ class SimulationApplicationBootstrap:
                 )
 
         def board_reconciled_bridge(event):
-            """Translate BoardReconciledEvent (CodetoreumEvent) to BoardReconciled (DomainEvent)."""
+            """Translate BoardReconciledEvent (CodetoreumEvent) to BoardReconciled (DomainEvent).
+
+            CRITICAL: This bridge runs as a fire-and-forget async task created via loop.create_task().
+            However, failures within the task are NOT silent:
+            1. Event publishing failures are caught and sent to the dead letter queue for automatic retry
+            2. Task exceptions are logged via a done callback, preventing silent swallowing of errors
+            3. The DLQ retry processor handles transient/permanent classification and exponential backoff
+
+            This architecture prevents silent automation failures while allowing the event bridge
+            to be non-blocking (critical for the sync event adapter callback pattern).
+            """
             try:
                 loop = asyncio.get_running_loop()
                 domain_event = BoardReconciled(
@@ -1322,14 +1521,95 @@ class SimulationApplicationBootstrap:
                         "orphaned_items": [],
                     },
                 )
-                # Create task with error callback to catch publish failures
-                task = loop.create_task(event_bus.publish(domain_event))
-                task.add_done_callback(_handle_publish_task_error)
+
+                # Create task to handle event publishing with dead letter queue fallback
+                # Add done callback to log any unhandled exceptions (safety net for failures
+                # in _handle_board_reconciled_event itself, such as DLQ unavailability)
+                task = loop.create_task(_handle_board_reconciled_event(domain_event, event.board_id))
+
+                def task_done_callback(task_result: asyncio.Task[None]) -> None:
+                    """Log any unhandled exceptions from the bridge task."""
+                    try:
+                        task_result.result()
+                    except asyncio.CancelledError:
+                        # Task was cancelled - this is normal during shutdown
+                        pass
+                    except Exception as task_exception:
+                        # Unhandled exception in the bridge handler (e.g., DLQ failure)
+                        # This logs the failure so it's not silently swallowed
+                        logger.error(
+                            f"Unhandled exception in board reconciliation event bridge for {event.board_id}: {task_exception}",
+                            exc_info=True,
+                            extra={
+                                "board_id": event.board_id,
+                                "error_type": type(task_exception).__name__,
+                                "error_id": ErrorRegistry.ERR_INTERNAL_ERROR,
+                            },
+                        )
+
+                task.add_done_callback(task_done_callback)
+
             except RuntimeError as e:
                 logger.error(
                     f"Failed to schedule board reconciliation event bridge task: {e}",
                     exc_info=True,
                     extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                )
+
+        async def _handle_board_reconciled_event(domain_event: BoardReconciled, board_id: str) -> None:
+            """Handle publishing BoardReconciled event with dead letter queue fallback.
+
+            Awaiting this function ensures that if publishing fails, we capture the
+            failure properly instead of silently losing the event.
+            """
+            try:
+                await event_bus.publish(domain_event)
+                logger.debug(
+                    f"Successfully published BoardReconciled event for {board_id}",
+                    extra={"board_id": board_id, "event_type": "BoardReconciled"},
+                )
+            except Exception as publish_error:
+                # Publishing failed - send to failed event store for retry
+                from codetoreum.infrastructure.event_bus import EventBusError
+                from codetoreum.ports.output.failed_event_store import FailureReason
+
+                event_type = domain_event.event_type
+
+                # Classify the error as transient or permanent
+                # EventBusError wraps the original error in __cause__
+                is_transient = False
+                original_error_type = type(publish_error).__name__
+
+                if isinstance(publish_error, EventBusError) and publish_error.__cause__:
+                    # Check the wrapped cause for transient error types
+                    cause = publish_error.__cause__
+                    if isinstance(cause, (ConnectionError, TimeoutError)):
+                        is_transient = True
+                        original_error_type = type(cause).__name__
+                elif isinstance(publish_error, (ConnectionError, TimeoutError)):
+                    # Direct transient error (not wrapped)
+                    is_transient = True
+
+                await failed_event_store.add_failed_event(
+                    event_type=event_type,
+                    event_data=domain_event.payload,
+                    failure_reason=FailureReason.TRANSIENT_ERROR if is_transient else FailureReason.PROCESSING_ERROR,
+                    error_message=str(publish_error),
+                    metadata={
+                        "board_id": board_id,
+                        "original_error": original_error_type,
+                    },
+                )
+
+                logger.error(
+                    f"Event publishing failed for board {board_id} - queued to failed event store: {publish_error}",
+                    exc_info=True,
+                    extra={
+                        "board_id": board_id,
+                        "event_type": event_type,
+                        "error_type": original_error_type,
+                        "error_id": ErrorRegistry.ERR_INTERNAL_ERROR,
+                    },
                 )
 
         self.adapters.board.on("workitem.column_changed", board_column_changed_bridge)
@@ -1339,14 +1619,25 @@ class SimulationApplicationBootstrap:
     def _register_board_column_handler(self) -> None:
         """Register BoardColumnEventHandler for automated column processing.
 
-        Creates the handler with its 5 dependencies and wires the agent
-        executor's completion callback to the handler's handle_agent_completion
-        method. This closes the loop: column change -> agent execution ->
-        completion callback -> auto-progress to next column.
+        Creates the handler with its 5 dependencies (plus optional recovery_service)
+        and wires the agent executor's completion callback to the handler's
+        handle_agent_completion method. This closes the loop: column change ->
+        agent execution -> completion callback -> auto-progress to next column.
         """
         if not self.adapters or not self.infrastructure:
             logger.warning("Cannot register board column handler: components not ready")
             return
+
+        # At this point, agent_executor is ExecutionServiceAgentExecutor (assigned in Phase 3)
+        if self.adapters.agent_executor is None:
+            logger.warning("Cannot register board column handler: agent_executor not yet initialized")
+            return
+
+        # Retrieve the recovery_service that was created in Phase 3a and stored in SimulationServices
+        # The recovery_service is needed for handling agent execution failures in the handler
+        recovery_service = None
+        if self.services:
+            recovery_service = self.services.agent_execution_recovery_service
 
         handler = BoardColumnEventHandler(
             board_service=self.adapters.board,
@@ -1357,12 +1648,16 @@ class SimulationApplicationBootstrap:
             event_bus=self.infrastructure.event_bus,
             run_registry=self.adapters.run_registry,
             event_emitter=self.adapters.event_emitter,
+            recovery_service=recovery_service,
         )
 
-        # Wire completion callback: executor -> handler.handle_agent_completion
-        self.adapters.agent_executor.set_completion_handler(handler.handle_agent_completion, "board-1")
+        # Wire completion callback on ExecutionServiceAgentExecutor for auto-progression
+        # This method is not part of the IAgentExecutor port interface (lifecycle concern)
+        # but is provided by concrete implementations for bootstrap initialization.
+        if hasattr(self.adapters.agent_executor, "set_completion_handler"):
+            self.adapters.agent_executor.set_completion_handler(handler.handle_agent_completion, "board-1")
 
-        # Store reference to handler for executor swapping
+        # Store reference to handler for potential future reference
         self._board_event_handler = handler
 
         self.infrastructure.event_bus.register_handler(handler)
@@ -1401,39 +1696,3 @@ class SimulationApplicationBootstrap:
             CausalLinkRegistry instance (None if not yet set up)
         """
         return self.infrastructure.causal_link_registry if self.infrastructure else None
-
-    def enable_execution_service_executor(self) -> "ExecutionServiceAgentExecutor":
-        """Swap the board handler's agent executor to use ExecutionServiceAgentExecutor.
-
-        This enables the full LLM → Container → VCS execution chain for Phase 3
-        testing. The MockAgentExecutor is replaced with ExecutionServiceAgentExecutor
-        on the BoardColumnEventHandler, and the completion callback is wired so
-        agent completions auto-progress items to the next column.
-
-        Returns:
-            The ExecutionServiceAgentExecutor for further configuration.
-
-        Raises:
-            RuntimeError: If bootstrap is not set up or handler not registered.
-        """
-        if not self._is_setup or self.adapters is None:
-            msg = "Bootstrap must be set up before enabling execution service executor"
-            raise RuntimeError(msg)
-        if self._board_event_handler is None:
-            msg = "BoardColumnEventHandler not registered yet"
-            raise RuntimeError(msg)
-
-        executor = self.adapters.execution_service_executor
-        # Wire completion callback so auto-progression works with the new executor
-        executor.set_completion_handler(self._board_event_handler.handle_agent_completion, "board-1")
-        self._swap_executor(executor)
-        return executor
-
-    def _swap_executor(self, executor: Any) -> None:
-        """Replace the agent executor on the BoardColumnEventHandler.
-
-        Args:
-            executor: New agent executor to use
-        """
-        if self._board_event_handler is not None:
-            self._board_event_handler.agent_executor = executor

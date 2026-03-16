@@ -61,5 +61,52 @@ if [ -z "${GIT_AUTHOR_EMAIL:-}" ] && ! git config user.email >/dev/null 2>&1; th
     echo "[agent-entrypoint] WARNING: No git user.email configured (env or gitconfig)" >&2
 fi
 
+# --- Fix gh CLI multi-account migration issue --------------------------------
+# gh CLI v2.40.0+ attempts a one-time migration of its config format to support
+# multiple accounts. If stale hosts.yml exists with an expired/invalid token,
+# the migration fails with "cowardly refusing to continue with multi account
+# migration" and blocks ALL gh commands. Fix: ensure config.yml has version: "1"
+# and remove any stale hosts.yml so the migration is never triggered.
+GH_CONFIG_DIR="${GH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/gh}"
+if [ -d "$GH_CONFIG_DIR" ]; then
+    # Remove stale hosts.yml that could trigger the migration
+    if [ -f "$GH_CONFIG_DIR/hosts.yml" ]; then
+        echo "[agent-entrypoint] Clearing stale gh hosts.yml to prevent multi-account migration error." >&2
+        rm -f "$GH_CONFIG_DIR/hosts.yml"
+    fi
+    # Ensure config.yml has version: "1" to mark migration as complete
+    if [ -f "$GH_CONFIG_DIR/config.yml" ]; then
+        if ! grep -q '^version:' "$GH_CONFIG_DIR/config.yml" 2>/dev/null; then
+            echo 'version: "1"' >> "$GH_CONFIG_DIR/config.yml"
+            echo "[agent-entrypoint] Added version marker to gh config.yml." >&2
+        fi
+    fi
+else
+    # Pre-seed gh config directory with version marker so migration never runs
+    mkdir -p "$GH_CONFIG_DIR"
+    echo 'version: "1"' > "$GH_CONFIG_DIR/config.yml"
+fi
+
+# --- Validate GitHub token permissions --------------------------------------
+# Agents need GITHUB_TOKEN with 'actions' scope (or 'actions:read') to query
+# GitHub Actions API (e.g. gh run list, gh run view) for CI status verification.
+# This is a non-fatal check — the agent can still operate but CI status queries
+# will fail at runtime without the correct scope.
+if [ -n "${GITHUB_TOKEN:-}" ]; then
+    # Use gh to probe the token scopes via a lightweight API call.
+    # The X-OAuth-Scopes header in the response tells us what scopes the token has.
+    TOKEN_SCOPES=$(gh api -i user 2>/dev/null | grep -i '^x-oauth-scopes:' | cut -d: -f2- | tr -d '[:space:]' || true)
+    if [ -n "$TOKEN_SCOPES" ]; then
+        # Check if 'actions' scope (or fine-grained equivalent) is present
+        if ! echo "$TOKEN_SCOPES" | grep -qi 'actions'; then
+            echo "[agent-entrypoint] WARNING: GITHUB_TOKEN is missing 'actions' scope." >&2
+            echo "[agent-entrypoint] WARNING: CI status queries (gh run list/view) will fail." >&2
+            echo "[agent-entrypoint] WARNING: Token scopes: $TOKEN_SCOPES" >&2
+        fi
+    fi
+    # Fine-grained PATs don't return X-OAuth-Scopes, so skip the check for those.
+    # The agent will get a clear 403 error at runtime if permissions are insufficient.
+fi
+
 # --- Hand off to the requested command --------------------------------------
 exec "$@"

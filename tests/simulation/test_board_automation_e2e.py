@@ -20,6 +20,7 @@ from codetoreum.infrastructure.simulation.bootstrap import (
 )
 from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
 from codetoreum.ports.output.board_service import MovedByType
+from tests.conftest import assert_condition, wait_for_condition
 from tests.simulation.helpers import wait_for_column
 
 # ============================================================================
@@ -34,7 +35,8 @@ async def e2e_env(
 ):
     """Bootstrap + seed, with fast agent execution delay."""
     adapters = cast("SimulationAdapters", simulation_bootstrap.adapters)
-    adapters.agent_executor._execution_delay = 0.1
+    if adapters.agent_executor is not None:
+        adapters.agent_executor._execution_delay = 0.1
     await simulation_seeder.seed_default_scenario()
     return simulation_bootstrap, simulation_seeder
 
@@ -66,8 +68,33 @@ async def test_item_cascades_from_trigger_to_exit(e2e_env):
         f"Current position: {(await board.get_item_position(work_item_id)).column_name}"
     )
 
-    # Allow async event handlers (e.g., _complete_workflow_run) to finish
-    await asyncio.sleep(0.3)
+    # Wait for async event handlers (e.g., _complete_workflow_run) to finish
+    # Poll the executor to verify all executions are recorded
+    await wait_for_condition(
+        lambda: len([e for e in adapters.agent_executor.executions if e["work_item_id"] == work_item_id]) == 3,
+        timeout=2.0,
+        poll_interval=0.05,
+    )
+
+    # Wait for the WorkflowCompleted event to be persisted
+    # The exit column handler emits this event asynchronously via the event bus bridge
+    async def workflow_completed():
+        event_store = adapters.event_store
+        all_events = event_store.get_all_events_list()
+        workflow_run_id_events = [
+            e for e in all_events if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == work_item_id
+        ]
+        if not workflow_run_id_events:
+            return False
+        workflow_run_id = workflow_run_id_events[0].aggregate_id
+        workflow_events = [e for e in all_events if e.aggregate_id == workflow_run_id]
+        return any(e.event_type == "WorkflowCompleted" for e in workflow_events)
+
+    await wait_for_condition(
+        workflow_completed,
+        timeout=2.0,
+        poll_interval=0.05,
+    )
 
     # Verify all 3 agents were triggered in order
     executions = adapters.agent_executor.executions
@@ -142,14 +169,14 @@ async def test_lock_released_after_cascade(e2e_env):
     assert reached_done, "Item did not reach Done"
 
     # The Done column event is published via create_task in the bridge.
-    # Give the event loop time to process the exit-column handler that releases the lock.
-    await asyncio.sleep(0.3)
+    # Wait for the exit-column handler that releases the lock.
+    async def lock_is_released():
+        queue_state = await lock_service.get_queue_state(project_id, "board-1")
+        return queue_state.lock_holder is None
 
-    # Verify lock is released (lock_holder should be None)
-    queue_state = await lock_service.get_queue_state(project_id, "board-1")
-    assert (
-        queue_state.lock_holder is None
-    ), f"Lock should be released after cascade, but holder is {queue_state.lock_holder}"
+    await assert_condition(
+        lock_is_released, timeout=2.0, poll_interval=0.05, message="Lock should be released after cascade"
+    )
 
 
 @pytest.mark.asyncio
@@ -171,14 +198,12 @@ async def test_cascade_stops_on_agent_failure(
     work_item_id = seeder.created_items.work_items[0]
 
     # Track call count and make the second execution raise
-    original_simulate = executor._simulate_execution
+    original_run = executor._run_execution
     call_count = 0
 
-    async def failing_simulate(
+    async def failing_run(
         work_item_id_arg: str,
         agent_id: str,
-        execution_id: str,
-        started_at: Any,
         board_id: str = "board-1",
     ) -> None:
         nonlocal call_count
@@ -186,9 +211,9 @@ async def test_cascade_stops_on_agent_failure(
         if call_count == 2:
             # Second agent (coder) fails
             raise RuntimeError("Simulated coder failure")
-        await original_simulate(work_item_id_arg, agent_id, execution_id, started_at, board_id)
+        await original_run(work_item_id_arg, agent_id, board_id)
 
-    monkeypatch.setattr(executor, "_simulate_execution", failing_simulate)
+    monkeypatch.setattr(executor, "_run_execution", failing_run)
 
     # Move item to trigger cascade
     await board.move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)
@@ -197,18 +222,45 @@ async def test_cascade_stops_on_agent_failure(
     reached_in_progress = await wait_for_column(board, work_item_id, "In Progress", timeout=5.0)
     assert reached_in_progress, "Item did not reach 'In Progress'"
 
-    # Give time for the second agent to fail and not progress further
-    await asyncio.sleep(0.5)
+    # Wait for second agent (coder) to execute and fail
+    # Poll executor to verify coder execution was attempted
+    async def coder_has_executed():
+        item_executions = [e for e in executor.executions if e["work_item_id"] == work_item_id]
+        # Should have at least architect + coder
+        return len(item_executions) >= 2
+
+    await assert_condition(
+        coder_has_executed, timeout=5.0, poll_interval=0.05, message="Coder should have been executed"
+    )
 
     # Item should still be in "In Progress" (coder failed, no auto-progress)
+    # Verify this multiple times to ensure it's not a race condition
     pos = await board.get_item_position(work_item_id)
     assert (
         pos.column_name == "In Progress"
     ), f"Expected item to stay in 'In Progress' after coder failure, but found in '{pos.column_name}'"
+
+    # Verify cascade stopped by polling executor state for stability
+    # Capture executor count after coder executes
+    initial_count = len([e for e in executor.executions if e["work_item_id"] == work_item_id])
+
+    # Poll for 0.5s to confirm cascade stopped (no more agents execute)
+    async def cascade_has_stopped():
+        # Check if execution count has stabilized (no new executions)
+        current_executions = [e for e in executor.executions if e["work_item_id"] == work_item_id]
+        # Wait a bit and check again
+        await asyncio.sleep(0.1)
+        final_executions = [e for e in executor.executions if e["work_item_id"] == work_item_id]
+        return len(current_executions) == len(final_executions)
+
+    cascade_stable = await wait_for_condition(cascade_has_stopped, timeout=0.5, poll_interval=0.05)
+    assert cascade_stable, "Cascade should have stopped (executor execution count stabilized)"
 
     # Verify architect executed but cascade stopped after coder failure
     item_executions = [e for e in executor.executions if e["work_item_id"] == work_item_id]
     agent_ids = [e["agent_id"] for e in item_executions]
     assert "architect" in agent_ids, "Architect should have been triggered"
     assert "coder" in agent_ids, "Coder should have been triggered (and failed)"
-    assert "tester" not in agent_ids, "Tester should NOT have been triggered"
+    assert "tester" not in agent_ids, (
+        f"Tester should NOT have been triggered after coder failure. " f"Executions: {agent_ids}"
+    )

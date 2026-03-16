@@ -1,12 +1,14 @@
 """Unit tests for BoardColumnEventHandler."""
 
 import logging
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
 
 from codetoreum.application.event_handlers.board_event_handler import (
     BoardColumnEventHandler,
+    _WorkflowRunMetadata,
 )
 from codetoreum.application.pipeline_lock_service import (
     LockAcquisitionResult,
@@ -68,21 +70,40 @@ def mock_event_bus():
 
 
 @pytest.fixture
+def mock_recovery_service():
+    """Create mock recovery service."""
+    service = AsyncMock()
+    return service
+
+
+@pytest.fixture
+def mock_event_emitter():
+    """Create mock event emitter."""
+    emitter = AsyncMock()
+    return emitter
+
+
+@pytest.fixture
 def handler(
     mock_board_service,
     mock_lock_service,
     mock_workflow_config,
     mock_agent_executor,
     mock_event_bus,
+    mock_recovery_service,
+    mock_event_emitter,
 ):
     """Create handler with mocked dependencies."""
-    return BoardColumnEventHandler(
+    handler_instance = BoardColumnEventHandler(
         board_service=mock_board_service,
         lock_service=mock_lock_service,
         workflow_config=mock_workflow_config,
         agent_executor=mock_agent_executor,
         event_bus=mock_event_bus,
     )
+    handler_instance.recovery_service = mock_recovery_service
+    handler_instance.event_emitter = mock_event_emitter
+    return handler_instance
 
 
 @pytest.fixture
@@ -233,7 +254,9 @@ class TestHandleColumnChangeWithPipelineTrigger:
         await handler.handle_column_change(event)
 
         # Assert
-        mock_agent_executor.execute.assert_called_once_with(work_item_id="item-1", agent_id="agent-dev")
+        mock_agent_executor.execute.assert_called_once_with(
+            work_item_id="item-1", agent_id="agent-dev", board_id="board-1"
+        )
 
     @pytest.mark.asyncio
     async def test_queues_when_lock_held(
@@ -445,7 +468,9 @@ class TestHandleColumnChangeWithExitColumn:
         await handler.handle_column_change(event)
 
         # Assert
-        mock_agent_executor.execute.assert_called_once_with(work_item_id="item-2", agent_id="agent-dev")
+        mock_agent_executor.execute.assert_called_once_with(
+            work_item_id="item-2", agent_id="agent-dev", board_id="board-1"
+        )
 
     @pytest.mark.asyncio
     async def test_does_not_trigger_agent_if_next_item_has_no_agent(
@@ -514,7 +539,9 @@ class TestHandleColumnChangeWithAutomatedColumn:
         await handler.handle_column_change(event)
 
         # Assert
-        mock_agent_executor.execute.assert_called_once_with(work_item_id="item-1", agent_id="agent-review")
+        mock_agent_executor.execute.assert_called_once_with(
+            work_item_id="item-1", agent_id="agent-review", board_id="board-1"
+        )
 
 
 class TestHandleColumnChangeWithManualColumn:
@@ -789,3 +816,405 @@ class TestErrorHandling:
 
         # Assert
         assert "unexpected event type" in caplog.text
+
+
+class TestWorkflowLifecycleEventPersistence:
+    """Tests for workflow lifecycle event persistence to event store.
+
+    These tests verify that when workflow lifecycle methods are called,
+    they properly persist domain events to the event store for audit trail.
+    This is critical for observability and debugging.
+    """
+
+    @pytest.fixture
+    def handler_with_event_store(
+        self,
+        mock_board_service,
+        mock_lock_service,
+        mock_workflow_config,
+        mock_agent_executor,
+        mock_recovery_service,
+        mock_event_emitter,
+    ):
+        """Create handler with event store wired for lifecycle event testing."""
+        from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
+        from codetoreum.infrastructure.event_bus import EventBus
+
+        event_store = InMemoryEventStore()
+        handler_instance = BoardColumnEventHandler(
+            board_service=mock_board_service,
+            lock_service=mock_lock_service,
+            workflow_config=mock_workflow_config,
+            agent_executor=mock_agent_executor,
+            event_bus=EventBus(),
+            event_store=event_store,  # Pass event_store to constructor
+        )
+        handler_instance.recovery_service = mock_recovery_service
+        handler_instance.event_emitter = mock_event_emitter
+        return handler_instance, event_store
+
+    @pytest.mark.asyncio
+    async def test_start_workflow_run_persists_event_to_event_store(
+        self, handler_with_event_store, sample_workflow_config
+    ):
+        """Verify that _start_workflow_run persists WorkflowCreated and WorkflowStarted events."""
+        handler, event_store = handler_with_event_store
+        work_item_id = "item-1"
+        project_id = "proj-1"
+        board_id = "board-1"
+        column_config = sample_workflow_config.get_column_config("In Development")
+
+        # Act: Call _start_workflow_run directly
+        await handler._start_workflow_run(
+            work_item_id=work_item_id,
+            project_id=project_id,
+            board_id=board_id,
+            column_config=column_config,
+            workflow_config=sample_workflow_config,
+        )
+
+        # Assert: WorkflowCreated and WorkflowStarted events should be persisted to event store
+        all_events = event_store.get_all_events_list()
+        assert len(all_events) > 0
+
+        # Find WorkflowCreated and WorkflowStarted events
+        workflow_created_found = False
+        workflow_started_found = False
+        run_id = None
+        for evt in all_events:
+            if evt.event_type == "WorkflowCreated":
+                assert evt.payload.get("work_item_id") == work_item_id
+                run_id = evt.aggregate_id
+                workflow_created_found = True
+            elif evt.event_type == "WorkflowStarted":
+                if run_id:
+                    assert evt.aggregate_id == run_id
+                workflow_started_found = True
+
+        assert workflow_created_found, "WorkflowCreated event not persisted to event store"
+        assert workflow_started_found, "WorkflowStarted event not persisted to event store"
+
+    @pytest.mark.asyncio
+    async def test_advance_workflow_stage_persists_event_to_event_store(
+        self, handler_with_event_store, sample_workflow_config
+    ):
+        """Verify that _advance_workflow_stage persists WorkflowStageAdvanced event."""
+        handler, event_store = handler_with_event_store
+        work_item_id = "item-1"
+        project_id = "proj-1"
+        board_id = "board-1"
+        column_config = sample_workflow_config.get_column_config("In Development")
+
+        # First, set up active run (simulating prior _start_workflow_run)
+        await handler._start_workflow_run(
+            work_item_id=work_item_id,
+            project_id=project_id,
+            board_id=board_id,
+            column_config=column_config,
+            workflow_config=sample_workflow_config,
+        )
+        run_info = handler._active_runs[work_item_id]
+        run_id = run_info.run_id
+
+        # Act: Call _advance_workflow_stage directly
+        await handler._advance_workflow_stage(
+            work_item_id=work_item_id,
+            from_stage="In Development",
+            to_stage="Review",
+        )
+
+        # Assert: WorkflowStageAdvanced event should be persisted
+        all_events = event_store.get_all_events_list()
+        workflow_stage_found = False
+        for evt in all_events:
+            if evt.event_type == "WorkflowStageAdvanced":
+                assert evt.aggregate_id == run_id
+                assert evt.payload.get("to_stage") == "Review"
+                workflow_stage_found = True
+                break
+        assert workflow_stage_found, "WorkflowStageAdvanced event not persisted to event store"
+
+    @pytest.mark.asyncio
+    async def test_complete_workflow_run_persists_event_to_event_store(
+        self, handler_with_event_store, sample_workflow_config
+    ):
+        """Verify that _complete_workflow_run persists WorkflowCompleted event."""
+        handler, event_store = handler_with_event_store
+        work_item_id = "item-1"
+        project_id = "proj-1"
+        board_id = "board-1"
+        column_config = sample_workflow_config.get_column_config("In Development")
+
+        # Set up active run
+        await handler._start_workflow_run(
+            work_item_id=work_item_id,
+            project_id=project_id,
+            board_id=board_id,
+            column_config=column_config,
+            workflow_config=sample_workflow_config,
+        )
+        run_info = handler._active_runs[work_item_id]
+        run_id = run_info.run_id
+
+        # Act: Call _complete_workflow_run directly
+        await handler._complete_workflow_run(
+            work_item_id=work_item_id,
+            exit_column="Done",
+        )
+
+        # Assert: WorkflowCompleted event should be persisted
+        all_events = event_store.get_all_events_list()
+        workflow_completed_found = False
+        for evt in all_events:
+            if evt.event_type == "WorkflowCompleted":
+                assert evt.aggregate_id == run_id
+                assert evt.payload.get("exit_column") == "Done"
+                workflow_completed_found = True
+                break
+        assert workflow_completed_found, "WorkflowCompleted event not persisted to event store"
+
+    @pytest.mark.asyncio
+    async def test_fail_workflow_run_persists_event_to_event_store(
+        self, handler_with_event_store, sample_workflow_config
+    ):
+        """Verify that _fail_workflow_run persists WorkflowFailed event."""
+        handler, event_store = handler_with_event_store
+        work_item_id = "item-1"
+        project_id = "proj-1"
+        board_id = "board-1"
+        column_config = sample_workflow_config.get_column_config("In Development")
+        reason = "Agent failed"
+
+        # Set up active run
+        await handler._start_workflow_run(
+            work_item_id=work_item_id,
+            project_id=project_id,
+            board_id=board_id,
+            column_config=column_config,
+            workflow_config=sample_workflow_config,
+        )
+        run_info = handler._active_runs[work_item_id]
+        run_id = run_info.run_id
+
+        # Act: Call _fail_workflow_run directly
+        await handler._fail_workflow_run(
+            work_item_id=work_item_id,
+            reason=reason,
+        )
+
+        # Assert: WorkflowFailed event should be persisted
+        all_events = event_store.get_all_events_list()
+        workflow_failed_found = False
+        for evt in all_events:
+            if evt.event_type == "WorkflowFailed":
+                assert evt.aggregate_id == run_id
+                assert evt.payload.get("reason") == reason
+                workflow_failed_found = True
+                break
+        assert workflow_failed_found, "WorkflowFailed event not persisted to event store"
+
+
+class TestTriggerAgentExecutionFailureAndLockRelease:
+    """Tests for _trigger_agent error handling and lock release behavior.
+
+    These tests verify that when agent execution fails, the pipeline lock
+    is always released to unblock queued items, even if recovery service fails.
+    """
+
+    @pytest.mark.asyncio
+    async def test_agent_execution_failure_releases_lock(
+        self,
+        handler,
+        mock_workflow_config,
+        mock_lock_service,
+        mock_agent_executor,
+        mock_recovery_service,
+        sample_workflow_config,
+    ):
+        """Should release lock when agent execution fails, unblocking pipeline."""
+        # Setup
+        mock_workflow_config.get_board_workflow_template.return_value = sample_workflow_config
+        mock_agent_executor.execute.side_effect = RuntimeError("Agent execution failed")
+        mock_lock_service.release_lock.return_value = LockReleaseResult(
+            released_work_item_id="item-1",
+            next_work_item_id="item-2",
+            queue_length_after_release=1,
+        )
+        mock_recovery_service.handle_agent_execution_failure.return_value = None
+
+        event = create_column_changed_event(
+            work_item_id="item-1",
+            board_id="board-1",
+            project_id="proj-1",
+            to_column="In Development",
+        )
+
+        # Setup active run tracking (handler tracks running work items)
+        handler._active_runs["item-1"] = _WorkflowRunMetadata(
+            run_id="run-1",
+            project_id="proj-1",
+            board_id="board-1",
+            template_id="template-1",
+            started_at=datetime.now(UTC),
+            stage_index=0,
+        )
+
+        # Act - directly call _trigger_agent to test lock release on failure
+        await handler._trigger_agent(
+            work_item_id="item-1",
+            column_config=sample_workflow_config.get_column_config("In Development"),
+            board_id="board-1",
+        )
+
+        # Assert: Lock should be released despite agent execution failure
+        mock_lock_service.release_lock.assert_called_once_with(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+        )
+
+    @pytest.mark.asyncio
+    async def test_agent_execution_failure_invokes_recovery_service(
+        self,
+        handler,
+        mock_workflow_config,
+        mock_lock_service,
+        mock_agent_executor,
+        mock_recovery_service,
+        sample_workflow_config,
+    ):
+        """Should invoke recovery service when agent execution fails."""
+        # Setup
+        mock_workflow_config.get_board_workflow_template.return_value = sample_workflow_config
+        error = RuntimeError("Agent execution failed")
+        mock_agent_executor.execute.side_effect = error
+        mock_lock_service.release_lock.return_value = LockReleaseResult(
+            released_work_item_id="item-1",
+            next_work_item_id="item-2",
+            queue_length_after_release=1,
+        )
+        mock_recovery_service.handle_agent_execution_failure.return_value = None
+
+        # Setup active run tracking
+        handler._active_runs["item-1"] = _WorkflowRunMetadata(
+            run_id="run-1",
+            project_id="proj-1",
+            board_id="board-1",
+            template_id="template-1",
+            started_at=datetime.now(UTC),
+            stage_index=0,
+        )
+
+        # Act - directly call _trigger_agent
+        await handler._trigger_agent(
+            work_item_id="item-1",
+            column_config=sample_workflow_config.get_column_config("In Development"),
+            board_id="board-1",
+        )
+
+        # Assert: Recovery service should be invoked with failure details
+        mock_recovery_service.handle_agent_execution_failure.assert_called_once_with(
+            work_item_id="item-1",
+            board_id="board-1",
+            error=error,
+            project_id="proj-1",
+        )
+
+    @pytest.mark.asyncio
+    async def test_recovery_service_failure_does_not_prevent_lock_release(
+        self,
+        handler,
+        mock_workflow_config,
+        mock_lock_service,
+        mock_agent_executor,
+        mock_recovery_service,
+        sample_workflow_config,
+    ):
+        """Lock release must happen even if recovery service fails (critical).
+
+        This prevents the scenario where recovery service failure causes
+        pipeline deadlock by preventing lock release.
+        """
+        # Setup
+        mock_workflow_config.get_board_workflow_template.return_value = sample_workflow_config
+        exec_error = RuntimeError("Agent execution failed")
+        mock_agent_executor.execute.side_effect = exec_error
+        recovery_error = RuntimeError("Recovery service unavailable")
+        mock_recovery_service.handle_agent_execution_failure.side_effect = recovery_error
+        mock_lock_service.release_lock.return_value = LockReleaseResult(
+            released_work_item_id="item-1",
+            next_work_item_id="item-2",
+            queue_length_after_release=1,
+        )
+
+        # Setup active run tracking
+        handler._active_runs["item-1"] = _WorkflowRunMetadata(
+            run_id="run-1",
+            project_id="proj-1",
+            board_id="board-1",
+            template_id="template-1",
+            started_at=datetime.now(UTC),
+            stage_index=0,
+        )
+
+        # Act - should not raise despite recovery service failure
+        await handler._trigger_agent(
+            work_item_id="item-1",
+            column_config=sample_workflow_config.get_column_config("In Development"),
+            board_id="board-1",
+        )
+
+        # Assert: Lock release must still be called (happens after recovery attempt)
+        mock_lock_service.release_lock.assert_called_once_with(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+        )
+
+    @pytest.mark.asyncio
+    async def test_lock_release_failure_emits_lock_stuck_event(
+        self,
+        handler,
+        mock_workflow_config,
+        mock_lock_service,
+        mock_agent_executor,
+        mock_recovery_service,
+        mock_event_emitter,
+        sample_workflow_config,
+        caplog,
+    ):
+        """When lock release fails, should emit LockStuckEvent for ops alerting."""
+        # Setup
+        caplog.set_level(logging.INFO)
+        mock_workflow_config.get_board_workflow_template.return_value = sample_workflow_config
+        mock_agent_executor.execute.side_effect = RuntimeError("Agent execution failed")
+        lock_error = Exception("Lock service unavailable")
+        mock_lock_service.release_lock.side_effect = lock_error
+        mock_recovery_service.handle_agent_execution_failure.return_value = None
+
+        # Setup active run tracking
+        handler._active_runs["item-1"] = _WorkflowRunMetadata(
+            run_id="run-1",
+            project_id="proj-1",
+            board_id="board-1",
+            template_id="template-1",
+            started_at=datetime.now(UTC),
+            stage_index=0,
+        )
+
+        # Act
+        await handler._trigger_agent(
+            work_item_id="item-1",
+            column_config=sample_workflow_config.get_column_config("In Development"),
+            board_id="board-1",
+        )
+
+        # Assert: Should log critical error about lock release failure
+        assert "Failed to release lock" in caplog.text
+        assert "PIPELINE IS BLOCKED" in caplog.text
+
+        # LockStuckEvent should be emitted
+        mock_event_emitter.emit.assert_called_once()
+        call_args = mock_event_emitter.emit.call_args[0][0]
+        assert call_args.type == "lock.stuck"
+        assert call_args.work_item_id == "item-1"

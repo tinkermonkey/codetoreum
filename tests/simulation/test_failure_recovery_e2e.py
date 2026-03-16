@@ -20,6 +20,7 @@ from codetoreum.infrastructure.simulation.bootstrap import (
 from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
 from codetoreum.ports.output.board_service import MovedByType
 from codetoreum.ports.output.review_cycle_service import ReviewCycleRequest
+from tests.conftest import assert_condition
 from tests.simulation.helpers import wait_for_column
 
 # ============================================================================
@@ -34,7 +35,8 @@ async def e2e_env(
 ):
     """Bootstrap + seed, with fast agent execution delay."""
     adapters = cast("SimulationAdapters", simulation_bootstrap.adapters)
-    adapters.agent_executor._execution_delay = 0.1
+    if adapters.agent_executor is not None:
+        adapters.agent_executor._execution_delay = 0.1
     await simulation_seeder.seed_default_scenario()
     return simulation_bootstrap, simulation_seeder
 
@@ -63,32 +65,28 @@ async def test_agent_failure_emits_workflow_failed_event(
     work_item_id = seeder.created_items.work_items[0]
 
     # Patch the second agent execution (coder) to simulate failure.
-    # _simulate_execution signature: (work_item_id, agent_id, execution_id, started_at, board_id)
-    # When monkeypatched on the instance, self is NOT passed; the call site passes 5 positional args.
-    # We must NOT raise inside the task (that bypasses the completion callback).
-    # Instead, we call the completion callback with success=False to properly persist WorkflowFailed.
-    original_simulate = executor._simulate_execution
+    # We patch _run_execution to simulate failure by invoking the completion callback
+    # with success=False to properly persist WorkflowFailed.
+    original_run = executor._run_execution
     call_count = 0
 
-    async def failing_simulate(
+    async def failing_run(
         work_item_id_arg: str,
         agent_id: str,
-        execution_id: str,
-        started_at: Any,
-        board_id: str,
+        board_id: str = "board-1",
     ) -> None:
         nonlocal call_count
         call_count += 1
         if call_count == 2:
             # Simulate coder failure by invoking completion callback with success=False.
-            # This mirrors what _simulate_execution does in its except block, ensuring
+            # This mirrors what _run_execution does in its except block, ensuring
             # the board_event_handler's _fail_workflow_run() is called and persists WorkflowFailed.
             if executor._completion_callback:
                 await executor._completion_callback(work_item_id_arg, board_id, False)
             return
-        await original_simulate(work_item_id_arg, agent_id, execution_id, started_at, board_id)
+        await original_run(work_item_id_arg, agent_id, board_id)
 
-    monkeypatch.setattr(executor, "_simulate_execution", failing_simulate)
+    monkeypatch.setattr(executor, "_run_execution", failing_run)
 
     # Trigger cascade: Backlog → Ready (pipeline trigger)
     await board.move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)
@@ -97,17 +95,19 @@ async def test_agent_failure_emits_workflow_failed_event(
     reached_in_progress = await wait_for_column(board, work_item_id, "In Progress", timeout=5.0)
     assert reached_in_progress, "Item did not reach 'In Progress'"
 
-    # Poll until WorkflowFailed appears in EventStore (or timeout).
+    # Wait for WorkflowFailed to appear in EventStore.
     # The coder runs asynchronously; after it fails the board_event_handler calls
     # _fail_workflow_run() which persists the WorkflowFailed event.
-    workflow_failed_appeared = False
-    for _ in range(30):  # up to 3 seconds
-        await asyncio.sleep(0.1)
+    async def workflow_failed_recorded():
         all_events_poll = event_store.get_all_events_list()
-        if any(e.event_type == "WorkflowFailed" and e.aggregate_type == "Workflow" for e in all_events_poll):
-            workflow_failed_appeared = True
-            break
-    assert workflow_failed_appeared, "WorkflowFailed event did not appear in EventStore within timeout"
+        return any(e.event_type == "WorkflowFailed" and e.aggregate_type == "Workflow" for e in all_events_poll)
+
+    await assert_condition(
+        workflow_failed_recorded,
+        timeout=5.0,
+        poll_interval=0.05,
+        message="WorkflowFailed event should appear in EventStore after agent failure",
+    )
 
     # Item stays in In Progress (cascade stopped)
     pos = await board.get_item_position(work_item_id)

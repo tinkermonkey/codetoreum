@@ -920,3 +920,42 @@ class WorkflowBranchSelected(DomainEvent):
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
         """Initialize WorkflowBranchSelected event."""
         super().__init__(aggregate_id=aggregate_id, aggregate_type="Workflow", payload=payload, **kwargs)
+
+
+class WorkItemDeadLetterQueuedEvent(DomainEvent):
+    """Emitted when a work item is queued to the dead letter queue.
+
+    The dead letter queue (DLQ) is where work items are placed when they cannot
+    be automatically progressed through the workflow due to failures. Manual
+    intervention or async recovery is required.
+
+    Payload fields:
+        - work_item_id (str): ID of the work item queued to DLQ
+        - board_id (str): ID of the board containing the work item
+        - from_column (str): Current column/state of the work item
+        - to_column (str): Intended next column/state (UNKNOWN if not determinable)
+        - reason (str): Reason for DLQ queueing
+        - failure_details (str): Additional error details
+    """
+
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
+        """Initialize WorkItemDeadLetterQueuedEvent."""
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
+
+
+class LockStuckEvent(DomainEvent):
+    """Emitted when a pipeline lock is stuck due to agent triggering failure.
+
+    The next queued work item has acquired the lock but the agent failed to
+    start. Manual intervention is required to release the lock.
+
+    Payload fields:
+        - project_id (str): ID of the project
+        - board_id (str): ID of the board containing the work item
+        - work_item_id (str): ID of the work item holding the stuck lock
+        - reason (str): Reason why the lock is stuck
+    """
+
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
+        """Initialize LockStuckEvent."""
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)

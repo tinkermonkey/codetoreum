@@ -1,7 +1,7 @@
 """End-to-end test for the ExecutionService execution chain.
 
 Exercises the full fire-and-forget chain when ExecutionServiceAgentExecutor
-is active (Phase 3):
+is active:
 
   human move → event bridge → BoardColumnEventHandler → ExecutionServiceAgentExecutor
      → ExecutionService (LLM path) → WorkspaceRouter (VCS ops) → completion callback
@@ -25,7 +25,12 @@ from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationApplicationBootstrap,
 )
 from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
+from codetoreum.ports.input.execution_query import (
+    ExecutionFilters,
+    ExecutionPaginationParams,
+)
 from codetoreum.ports.output.board_service import MovedByType
+from tests.conftest import assert_condition, wait_for_condition
 from tests.simulation.helpers import wait_for_column
 
 # ============================================================================
@@ -37,12 +42,13 @@ from tests.simulation.helpers import wait_for_column
 async def exec_chain_env(
     simulation_bootstrap: SimulationApplicationBootstrap,
 ):
-    """Bootstrap + enable ExecutionServiceAgentExecutor + seed, with fast delay."""
+    """Bootstrap ExecutionServiceAgentExecutor + seed, with fast delay."""
     adapters = cast("SimulationAdapters", simulation_bootstrap.adapters)
 
-    # Swap to the real execution chain (wires completion callback too)
-    executor = simulation_bootstrap.enable_execution_service_executor()
-    executor._execution_delay = 0.0  # No artificial delay in tests
+    # ExecutionServiceAgentExecutor is the default executor (wired in SimulationApplicationBootstrap)
+    # Set execution delay to 0.0 for fast tests
+    if adapters.agent_executor is not None:
+        adapters.agent_executor._execution_delay = 0.0
 
     # Seed using the agent_repository and work_item_service so domain objects
     # are available to the executor chain
@@ -82,8 +88,13 @@ async def test_execution_chain_llm_path_reaches_done(exec_chain_env):
         f"Current position: {(await board.get_item_position(work_item_id)).column_name}"
     )
 
-    # Allow background cleanup tasks to settle
-    await asyncio.sleep(0.3)
+    # Wait for background cleanup tasks and LLM calls to complete
+    async def llm_has_been_called():
+        return adapters.llm_provider.get_request_count() >= 1
+
+    await assert_condition(
+        llm_has_been_called, timeout=5.0, poll_interval=0.05, message="LLM should have been called via ExecutionService"
+    )
 
     # The LLM should have been called at least once (one call per stage: architect, coder, tester)
     llm_call_count = adapters.llm_provider.get_request_count()
@@ -118,7 +129,15 @@ async def test_execution_chain_emits_vcs_events(exec_chain_env):
     assert reached_done, (
         f"Item did not reach 'Done'. " f"Current position: {(await board.get_item_position(work_item_id)).column_name}"
     )
-    await asyncio.sleep(0.3)
+
+    # Wait for VCS events to be emitted
+    async def vcs_events_emitted():
+        branch_events = event_emitter.get_events_by_type("repository.branch_created")
+        return len(branch_events) >= 1
+
+    await assert_condition(
+        vcs_events_emitted, timeout=5.0, poll_interval=0.05, message="VCS branch creation events should be emitted"
+    )
 
     # Verify VCS events were emitted (branch created for at least one stage)
     branch_events = event_emitter.get_events_by_type("repository.branch_created")
@@ -154,7 +173,21 @@ async def test_execution_chain_workflow_completes(exec_chain_env):
     assert reached_done, (
         f"Item did not reach 'Done'. " f"Current position: {(await board.get_item_position(work_item_id)).column_name}"
     )
-    await asyncio.sleep(0.3)
+
+    # Wait for workflow events to be recorded
+    async def workflow_events_recorded():
+        all_events = event_store.get_all_events_list()
+        workflow_events = [
+            e for e in all_events if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == work_item_id
+        ]
+        return len(workflow_events) > 0
+
+    await assert_condition(
+        workflow_events_recorded,
+        timeout=5.0,
+        poll_interval=0.05,
+        message="Workflow events should be recorded in EventStore",
+    )
 
     # Find workflow events for this work item
     all_events = event_store.get_all_events_list()
@@ -174,3 +207,92 @@ async def test_execution_chain_workflow_completes(exec_chain_env):
     assert "WorkflowCreated" in event_types, f"WorkflowCreated missing; got: {event_types}"
     assert "WorkflowStarted" in event_types, f"WorkflowStarted missing; got: {event_types}"
     assert "WorkflowCompleted" in event_types, f"WorkflowCompleted missing; got: {event_types}"
+
+
+@pytest.mark.asyncio
+async def test_executions_endpoint_visibility(exec_chain_env):
+    """Verify that the GET /api/v2/executions endpoint returns execution data
+    after a simulation cascade (issue #371).
+
+    This test ensures that ExecutionServiceAgentExecutor executions are visible
+    through the REST API by:
+    1. Running a simulation cascade with ExecutionServiceAgentExecutor
+    2. Querying the /api/v2/executions endpoint
+    3. Verifying that execution records are returned with correct data
+    """
+    bootstrap, seeder, adapters = exec_chain_env
+    board = adapters.board
+    work_item_id = seeder.created_items.work_items[0]
+
+    # Human moves item from Backlog → Ready (pipeline trigger)
+    await board.move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)
+
+    # Wait for cascade to reach Done
+    reached_done = await wait_for_column(board, work_item_id, "Done", timeout=30.0)
+    assert reached_done, (
+        f"Item did not reach 'Done' within timeout. "
+        f"Current position: {(await board.get_item_position(work_item_id)).column_name}"
+    )
+
+    # Wait for execution records to be available
+    async def executions_available():
+        execution_query_port = bootstrap.ports.execution_query
+        if execution_query_port is None:
+            return False
+        try:
+            filters = ExecutionFilters(work_item_id=work_item_id)
+            pagination = ExecutionPaginationParams(offset=0, limit=10)
+            result = await execution_query_port.list_executions(filters=filters, pagination=pagination)
+            return len(result.executions) > 0
+        except Exception:
+            return False
+
+    await assert_condition(
+        executions_available,
+        timeout=5.0,
+        poll_interval=0.05,
+        message="Execution records should be available after cascade",
+    )
+
+    # Query the executions endpoint via the execution query port
+    execution_query_port = bootstrap.ports.execution_query
+    assert execution_query_port is not None, "execution_query port not available"
+
+    # List all executions
+    result = await execution_query_port.list_executions()
+
+    # Verify that executions were recorded
+    # The default 3-stage pipeline (architect, coder, tester) should produce 3 execution records
+    assert result.total_count >= 3, (
+        f"Expected at least 3 executions from the 3-stage pipeline, "
+        f"but got {result.total_count} for work_item_id={work_item_id}."
+    )
+
+    # Verify that the execution records contain the expected work item
+    # All executions should be for the same work_item_id but different agents
+    executions_for_work_item = [exe for exe in result.executions if exe.work_item_id == work_item_id]
+    assert len(executions_for_work_item) >= 3, (
+        f"Expected at least 3 executions for work_item_id={work_item_id}, "
+        f"but got {len(executions_for_work_item)}. "
+        f"All executions: {[(e.work_item_id, e.agent_id) for e in result.executions]}"
+    )
+
+    # Verify we have different agents (architect, coder, tester)
+    agent_ids_for_work_item = {exe.agent_id for exe in executions_for_work_item}
+    assert len(agent_ids_for_work_item) >= 3, (
+        f"Expected executions for at least 3 different agents, " f"but got: {agent_ids_for_work_item}"
+    )
+
+    # Verify each execution has the expected fields populated
+    for execution in executions_for_work_item:
+        assert execution.id is not None, "Execution ID should not be None"
+        assert execution.agent_id is not None, "Agent ID should not be None"
+        assert execution.initialized_at is not None, "Initialized timestamp should not be None"
+        assert execution.status is not None, "Status should not be None"
+        assert execution.workflow_id is not None, "Workflow ID should not be None"
+        assert execution.stage_name is not None, "Stage name should not be None"
+
+        # Verify each execution can be retrieved by its unique ID
+        single_execution = await execution_query_port.get_execution(execution.id)
+        assert single_execution.id == execution.id
+        assert single_execution.work_item_id == work_item_id

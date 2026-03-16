@@ -1,8 +1,17 @@
-"""Mock agent executor for simulation testing.
+"""Mock agent executor for isolated unit tests with execution delay simulation.
 
-Simulates agent execution with configurable delay. When execution completes,
-invokes a completion callback that triggers auto-progression to the next
-board column via BoardColumnEventHandler.handle_agent_completion().
+This production-strength mock simulates agent work by sleeping for a configurable
+duration, then invoking a completion callback. It supports the full execution info
+tracking via ExecutionQueryAdapter and is useful for testing board automation behavior
+in isolation.
+
+IMPORTANT: This is a unit-test utility for isolated test scenarios. It is NOT wired
+by SimulationApplicationBootstrap. The bootstrap uses ExecutionServiceAgentExecutor
+directly as the unconditional default. This class is only used when manually
+constructing BoardColumnEventHandler instances in isolated unit tests.
+
+Do not confuse this with the simple MockAgentExecutor in tests/simulation/conftest.py,
+which is for tests that manually construct event handlers with minimal tracking.
 """
 
 import asyncio
@@ -25,12 +34,17 @@ logger = logging.getLogger(__name__)
 
 
 class MockAgentExecutor(IAgentExecutor):
-    """Mock implementation of IAgentExecutor for simulation.
+    """Mock implementation of IAgentExecutor for unit testing only.
 
     Simulates agent work by sleeping for a configurable duration, then
     invoking a completion callback. The execute() method returns immediately
     via asyncio.create_task so the event handler is not blocked waiting
     for agent work to finish.
+
+    WARNING: This class is for isolated unit tests only (e.g., board automation
+    tests that construct their own BoardColumnEventHandler). It is NOT wired
+    by SimulationApplicationBootstrap, which uses ExecutionServiceAgentExecutor
+    directly as the unconditional default.
 
     Attributes:
         _execution_delay: Seconds to simulate agent work

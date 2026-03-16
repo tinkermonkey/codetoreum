@@ -8,6 +8,12 @@ class IAgentExecutor(ABC):
 
     Abstracts the mechanism for executing agents on work items,
     allowing different implementations (in-process, queued, containerized, etc.).
+
+    This port interface focuses purely on domain operations (agent execution).
+    Lifecycle/wiring methods (e.g., callback registration) are implementation-specific
+    and handled outside the port boundary to avoid coupling the port to specific
+    initialization patterns. Adapters may implement initialization-time wiring
+    via non-port methods.
     """
 
     @abstractmethod
