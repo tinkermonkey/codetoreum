@@ -921,6 +921,7 @@ class TestTriggerAgentExecutionFailureAndLockRelease:
             work_item_id="item-1",
             board_id="board-1",
             error=error,
+            project_id="proj-1",
         )
 
     @pytest.mark.asyncio
