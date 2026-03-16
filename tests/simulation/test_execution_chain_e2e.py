@@ -25,6 +25,10 @@ from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationApplicationBootstrap,
 )
 from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
+from codetoreum.ports.input.execution_query import (
+    ExecutionFilters,
+    ExecutionPaginationParams,
+)
 from codetoreum.ports.output.board_service import MovedByType
 from tests.conftest import assert_condition, wait_for_condition
 from tests.simulation.helpers import wait_for_column
@@ -236,8 +240,10 @@ async def test_executions_endpoint_visibility(exec_chain_env):
         if execution_query_port is None:
             return False
         try:
-            executions = await execution_query_port.get_executions(work_item_id=work_item_id, limit=10, offset=0)
-            return len(executions) > 0
+            filters = ExecutionFilters(work_item_id=work_item_id)
+            pagination = ExecutionPaginationParams(offset=0, limit=10)
+            result = await execution_query_port.list_executions(filters=filters, pagination=pagination)
+            return len(result.executions) > 0
         except Exception:
             return False
 
