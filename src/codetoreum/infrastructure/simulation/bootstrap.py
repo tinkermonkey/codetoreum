@@ -277,7 +277,7 @@ class SimulationInfrastructure:
     logger: logging.Logger
     mock_tracer: MockTracer
     causal_link_registry: CausalLinkRegistry
-    failed_event_store: "IFailedEventStore"
+    failed_event_store: IFailedEventStore
 
 
 class SimulationApplicationBootstrap:
@@ -384,10 +384,10 @@ class SimulationApplicationBootstrap:
             logger.info("Phase 5b: Validating causal link consistency...")
             self._validate_causal_links()
 
-            # Start dead letter queue retry processor (Phase 5c)
+            # Start dead letter queue retry processor
             # This enables automatic retry of failed event publishing (issue #371)
             if self.infrastructure and self.infrastructure.failed_event_store:
-                logger.info("Phase 5c: Starting failed event store retry processor...")
+                logger.info("Starting failed event store retry processor...")
                 # Cast to adapter to access infrastructure-specific lifecycle methods
                 dlq_adapter = self.infrastructure.failed_event_store
                 if isinstance(dlq_adapter, DeadLetterQueueFailedEventStoreAdapter):
