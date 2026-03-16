@@ -1,14 +1,34 @@
 """
-Simple Encryption Adapter for Testing and Development
+SimpleEncryptionAdapter — AES-256-GCM encryption adapter for simulation use.
 
-Provides basic AES-256-GCM encryption for sensitive configuration values.
+This adapter performs real AES-256-GCM encryption using the `cryptography` library.
+It is suitable for use in simulation and test environments. It is NOT a no-op.
 
-WARNING: This is a simple implementation suitable for testing and development.
+Do NOT use in production: this adapter generates ephemeral keys and does not
+integrate with a key management service (KMS). For production, replace with an
+adapter backed by AWS KMS, HashiCorp Vault, or equivalent.
+
+Key Features:
+- Real AES-256-GCM authenticated encryption (not a stub or no-op)
+- Multiple encryption keys identified by key_id
+- Ephemeral key generation with random nonces
+- Base64-encoded output format: key_id:nonce:ciphertext
+
+Suitable for:
+- Unit and integration tests
+- Simulation scenarios
+- Development/local environments
+
+NOT suitable for:
+- Production: No KMS integration, ephemeral keys lost on restart
+- Long-term key storage: Keys stored in memory only
+- Distributed systems: No key distribution mechanism
+
 For production use, consider:
+- AWS KMS, Google Cloud KMS, or Azure Key Vault
+- HashiCorp Vault
 - Hardware Security Modules (HSM)
-- Key Management Services (AWS KMS, Google Cloud KMS, Azure Key Vault)
-- Envelope encryption
-- Proper key rotation strategies
+- Envelope encryption with external key management
 """
 
 import base64
