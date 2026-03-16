@@ -213,33 +213,38 @@ async def test_executions_endpoint_visibility(exec_chain_env):
     result = await execution_query_port.list_executions()
 
     # Verify that executions were recorded
-    assert result.total_count > 0, (
-        f"No executions found in the executions endpoint. "
-        f"Expected executions for work_item_id={work_item_id} "
-        f"after cascade to Done."
+    # The default 3-stage pipeline (architect, coder, tester) should produce 3 execution records
+    assert result.total_count >= 3, (
+        f"Expected at least 3 executions from the 3-stage pipeline, "
+        f"but got {result.total_count} for work_item_id={work_item_id}."
     )
 
     # Verify that the execution records contain the expected work item
-    execution_work_item_ids = {exe.work_item_id for exe in result.executions}
-    assert work_item_id in execution_work_item_ids, (
-        f"Expected work_item_id {work_item_id} in execution records, "
-        f"but got: {execution_work_item_ids}"
+    # All executions should be for the same work_item_id but different agents
+    executions_for_work_item = [exe for exe in result.executions if exe.work_item_id == work_item_id]
+    assert len(executions_for_work_item) >= 3, (
+        f"Expected at least 3 executions for work_item_id={work_item_id}, "
+        f"but got {len(executions_for_work_item)}. "
+        f"All executions: {[(e.work_item_id, e.agent_id) for e in result.executions]}"
     )
 
-    # Verify execution record details
-    matching_execution = next(
-        (exe for exe in result.executions if exe.work_item_id == work_item_id),
-        None,
+    # Verify we have different agents (architect, coder, tester)
+    agent_ids_for_work_item = {exe.agent_id for exe in executions_for_work_item}
+    assert len(agent_ids_for_work_item) >= 3, (
+        f"Expected executions for at least 3 different agents, "
+        f"but got: {agent_ids_for_work_item}"
     )
-    assert matching_execution is not None, f"No execution found for work_item_id={work_item_id}"
 
-    # Verify that execution has the expected fields populated
-    assert matching_execution.id is not None
-    assert matching_execution.agent_id is not None
-    assert matching_execution.initialized_at is not None
-    assert matching_execution.status is not None
+    # Verify each execution has the expected fields populated
+    for execution in executions_for_work_item:
+        assert execution.id is not None, "Execution ID should not be None"
+        assert execution.agent_id is not None, "Agent ID should not be None"
+        assert execution.initialized_at is not None, "Initialized timestamp should not be None"
+        assert execution.status is not None, "Status should not be None"
+        assert execution.workflow_id is not None, "Workflow ID should not be None"
+        assert execution.stage_name is not None, "Stage name should not be None"
 
-    # Verify that the execution can also be retrieved by ID
-    single_execution = await execution_query_port.get_execution(matching_execution.id)
-    assert single_execution.id == matching_execution.id
-    assert single_execution.work_item_id == work_item_id
+        # Verify each execution can be retrieved by its unique ID
+        single_execution = await execution_query_port.get_execution(execution.id)
+        assert single_execution.id == execution.id
+        assert single_execution.work_item_id == work_item_id

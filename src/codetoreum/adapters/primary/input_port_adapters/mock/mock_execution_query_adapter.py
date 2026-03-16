@@ -262,14 +262,19 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
 
         # Convert each executor record to ExecutionInfo and add to our storage
         for exec_record in executor_executions:
-            execution_id = exec_record.get("work_item_id", "unknown")
+            # Generate unique ID per execution using work_item_id and agent_id
+            # This ensures multi-stage pipelines (same work_item_id with different agents)
+            # don't collide. E.g., work_item_123-architect, work_item_123-coder, work_item_123-tester
+            work_item_id = exec_record.get("work_item_id", "unknown")
+            agent_id = exec_record.get("agent_id", "unknown")
+            execution_id = f"{work_item_id}-{agent_id}"
 
             # Skip if already processed
             if execution_id in self._executions:
                 continue
 
             # Convert executor record to ExecutionInfo
-            execution_info = self._convert_executor_record_to_execution_info(exec_record)
+            execution_info = self._convert_executor_record_to_execution_info(exec_record, execution_id)
 
             # Add to our storage
             self._executions[execution_id] = execution_info
@@ -278,7 +283,7 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
             if execution_id not in self._history:
                 self._history[execution_id] = []
 
-    def _convert_executor_record_to_execution_info(self, record: dict[str, Any]) -> ExecutionInfo:
+    def _convert_executor_record_to_execution_info(self, record: dict[str, Any], execution_id: str) -> ExecutionInfo:
         """
         Convert an ExecutionServiceAgentExecutor record to ExecutionInfo.
 
@@ -288,12 +293,17 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
                 - agent_id: ID of the agent
                 - board_id: ID of the board
                 - started_at: ISO timestamp of execution start
+                - workflow_id: ID of the workflow
+                - stage_name: Name of the pipeline stage
+            execution_id: Unique execution identifier (typically work_item_id-agent_id)
 
         Returns:
             ExecutionInfo with standard execution details
         """
         work_item_id = record.get("work_item_id", "unknown")
         agent_id = record.get("agent_id", "unknown")
+        workflow_id = record.get("workflow_id", "unknown")
+        stage_name = record.get("stage_name", "unknown")
         started_at_str = record.get("started_at", datetime.now(UTC).isoformat())
 
         # Parse started_at timestamp
@@ -302,15 +312,15 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
         except (ValueError, AttributeError):
             initialized_at = datetime.now(UTC)
 
-        # Create ExecutionInfo with minimal required fields
+        # Create ExecutionInfo with execution data from executor record
         # Status is COMPLETED for now (executor doesn't track detailed status yet)
         return ExecutionInfo(
-            id=work_item_id,  # Use work_item_id as execution ID for now
+            id=execution_id,
             agent_id=agent_id,
             agent_name=f"agent-{agent_id}",
             work_item_id=work_item_id,
-            workflow_id=record.get("workflow_id", "unknown"),
-            stage_name=record.get("stage_name", "unknown"),
+            workflow_id=workflow_id,
+            stage_name=stage_name,
             status=ExecutionStatus.COMPLETED,
             container_name=None,
             container_id=None,

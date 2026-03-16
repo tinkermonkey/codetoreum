@@ -130,12 +130,19 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         resolved_board_id = board_id or self._default_board_id
         now = datetime.now(UTC)
 
+        # Get active run to obtain workflow_id and stage_name
+        run_info = await self._run_registry.get_active_run(work_item_id)
+        workflow_id = run_info.run_id if run_info else "unknown"
+        stage_name = run_info.stage_name if run_info else "unknown"
+
         self._executions.append(
             {
                 "work_item_id": work_item_id,
                 "agent_id": agent_id,
                 "board_id": resolved_board_id,
                 "started_at": now.isoformat(),
+                "workflow_id": workflow_id,
+                "stage_name": stage_name,
             }
         )
 
