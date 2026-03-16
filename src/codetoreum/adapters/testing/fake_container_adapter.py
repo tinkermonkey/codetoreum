@@ -128,6 +128,18 @@ class FakeContainerAdapter(IContainer):
         # Virtual filesystem tracking (container_id -> {file_path -> content})
         self._virtual_filesystems: dict[str, dict[str, str]] = {}
 
+        # Host-side files for copy operations (destination_path -> content)
+        self._host_files: dict[str, str] = {}
+
+        # Pulled images tracking (set of "image:tag" strings)
+        self._pulled_images: set[str] = {
+            "ubuntu:latest",
+            "ubuntu:22.04",
+            "python:3.11",
+            "python:3.10",
+            "alpine:latest",
+        }
+
         # Thread safety
         self._lock = threading.Lock()
 
@@ -460,6 +472,10 @@ class FakeContainerAdapter(IContainer):
                 "finished_at": None,
                 "exit_code": None,
             }
+
+            # Initialize virtual filesystem for this container
+            self._virtual_filesystems[container_id] = {}
+            self._command_history[container_id] = []
 
             return container_id
 
@@ -795,6 +811,9 @@ class FakeContainerAdapter(IContainer):
         """
         Pull a container image.
 
+        Records the pulled image reference in _pulled_images so that
+        subsequent image_exists() calls return True.
+
         Args:
             image: Image name (required)
             tag: Image tag
@@ -806,6 +825,11 @@ class FakeContainerAdapter(IContainer):
         if not image or not image.strip():
             msg = "Image name is required"
             raise ValidationError(msg)
+
+        # Record the pulled image
+        image_ref = f"{image}:{tag}"
+        with self._lock:
+            self._pulled_images.add(image_ref)
 
         # Simulate pull delay
         if self._execution_delay > 0:
@@ -819,14 +843,19 @@ class FakeContainerAdapter(IContainer):
         """
         Check if an image exists locally.
 
+        Returns True only for images that have been pulled (via pull_image())
+        or are pre-seeded in __init__.
+
         Args:
             image: Image name
             tag: Image tag
 
         Returns:
-            Always True for fake adapter
+            True if image has been pulled or is pre-seeded, False otherwise
         """
-        return True
+        image_ref = f"{image}:{tag}"
+        with self._lock:
+            return image_ref in self._pulled_images
 
     async def inspect(self, container_id: str) -> dict[str, Any]:
         """
@@ -896,13 +925,16 @@ class FakeContainerAdapter(IContainer):
         """
         Copy files to a container.
 
+        Reads content from _host_files[source] and writes to
+        _virtual_filesystems[container_id][destination].
+
         Args:
             container_id: Container ID
-            source: Source path
-            destination: Destination path
+            source: Source path (key in _host_files)
+            destination: Destination path (in container's virtual filesystem)
 
         Raises:
-            ResourceNotFoundError: If container does not exist
+            ResourceNotFoundError: If container does not exist or source file not found
             ValidationError: If paths are empty
         """
         if not container_id:
@@ -919,6 +951,17 @@ class FakeContainerAdapter(IContainer):
             if container_id not in self._containers:
                 msg = "Container"
                 raise ResourceNotFoundError(msg, container_id)
+
+            # Check if source file exists in host_files
+            if source not in self._host_files:
+                msg = f"Source file '{source}' not found"
+                raise ResourceNotFoundError(msg, source)
+
+            # Copy content from host_files to container's virtual filesystem
+            content = self._host_files[source]
+            if container_id not in self._virtual_filesystems:
+                self._virtual_filesystems[container_id] = {}
+            self._virtual_filesystems[container_id][destination] = content
 
         # Simulate copy operation
         if self._execution_delay > 0:
@@ -933,13 +976,16 @@ class FakeContainerAdapter(IContainer):
         """
         Copy files from a container.
 
+        Reads content from _virtual_filesystems[container_id][source] and writes
+        to _host_files[destination], making it accessible to the caller.
+
         Args:
             container_id: Container ID
-            source: Source path in container
-            destination: Destination path on host
+            source: Source path in container's virtual filesystem
+            destination: Destination path (key in _host_files)
 
         Raises:
-            ResourceNotFoundError: If container does not exist
+            ResourceNotFoundError: If container does not exist or source file not found
             ValidationError: If paths are empty
         """
         if not container_id:
@@ -956,6 +1002,20 @@ class FakeContainerAdapter(IContainer):
             if container_id not in self._containers:
                 msg = "Container"
                 raise ResourceNotFoundError(msg, container_id)
+
+            # Check if source file exists in container's virtual filesystem
+            if container_id not in self._virtual_filesystems:
+                msg = f"File '{source}' not found in container"
+                raise ResourceNotFoundError(msg, source)
+
+            virtual_fs = self._virtual_filesystems[container_id]
+            if source not in virtual_fs:
+                msg = f"File '{source}' not found in container"
+                raise ResourceNotFoundError(msg, source)
+
+            # Copy content from container's virtual filesystem to host_files
+            content = virtual_fs[source]
+            self._host_files[destination] = content
 
         # Simulate copy operation
         if self._execution_delay > 0:
@@ -1043,6 +1103,46 @@ class FakeContainerAdapter(IContainer):
 
     # Helper methods for testing
 
+    def seed_host_file(self, path: str, content: str) -> None:
+        """
+        Seed a file into the host-side filesystem for use with copy_to_container.
+
+        Args:
+            path: File path (key in _host_files)
+            content: File content
+
+        Raises:
+            ValidationError: If path or content is empty
+        """
+        if not path:
+            msg = "File path cannot be empty"
+            raise ValidationError(msg)
+        if not content:
+            msg = "File content cannot be empty"
+            raise ValidationError(msg)
+
+        with self._lock:
+            self._host_files[path] = content
+
+    def get_host_file(self, path: str) -> str:
+        """
+        Get content of a host-side file (populated by copy_from_container).
+
+        Args:
+            path: File path (key in _host_files)
+
+        Returns:
+            File content
+
+        Raises:
+            ResourceNotFoundError: If file does not exist
+        """
+        with self._lock:
+            if path not in self._host_files:
+                msg = f"Host file '{path}' not found"
+                raise ResourceNotFoundError(msg, path)
+            return self._host_files[path]
+
     def clear(self) -> None:
         """Clear all containers and history."""
         with self._lock:
@@ -1050,6 +1150,8 @@ class FakeContainerAdapter(IContainer):
             self._execution_history.clear()
             self._command_results.clear()
             self._command_history.clear()
+            self._host_files.clear()
+            self._virtual_filesystems.clear()
 
     def get_execution_history(self) -> list[dict[str, Any]]:
         """
