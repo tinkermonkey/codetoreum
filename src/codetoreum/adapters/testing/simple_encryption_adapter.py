@@ -125,6 +125,7 @@ class SimpleEncryptionAdapter(IEncryptionService):
             logger.error(
                 f"Encryption failed: {e}",
                 extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
+                exc_info=True,
             )
             msg = f"Encryption failed: {e}"
             raise EncryptionError(msg) from e
@@ -176,6 +177,7 @@ class SimpleEncryptionAdapter(IEncryptionService):
             logger.error(
                 f"Decryption failed: {e}",
                 extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
+                exc_info=True,
             )
             msg = f"Decryption failed: {e}"
             raise DecryptionError(msg) from e
@@ -215,6 +217,7 @@ class SimpleEncryptionAdapter(IEncryptionService):
             logger.error(
                 f"Key rotation failed: {e}",
                 extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
+                exc_info=True,
             )
             msg = f"Key rotation failed: {e}"
             raise EncryptionError(msg) from e
