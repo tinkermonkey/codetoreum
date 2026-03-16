@@ -379,6 +379,25 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                     )
                 else:
                     exec_result = await self._execution_service.execute_with_llm(execution, context)
+
+                    # For LLM path with successful execution, seed working tree files
+                    # to simulate agent output for VCS testing in simulation
+                    if exec_result and exec_result.success and exec_result.execution.output:
+                        try:
+                            # Seed a simulation file to represent agent changes
+                            # This allows finalize_workspace to detect dirty files and emit commit events
+                            output_file = f"stage-{run_info.stage_name.lower()}-output.txt"
+                            self._vcs.seed_working_tree_file(
+                                repo_path,
+                                output_file,
+                                exec_result.execution.output
+                            )
+                        except Exception as seed_err:
+                            logger.warning(
+                                f"Failed to seed working tree file for '{work_item_id}': {seed_err}",
+                                exc_info=True,
+                                extra={"error_id": "ERR_EXEC_CHAIN_SEED_WORKING_TREE_FAILURE"},
+                            )
             except Exception as exec_err:
                 logger.error(
                     f"ExecutionServiceAgentExecutor: execution call failed for '{work_item_id}': {exec_err}",
