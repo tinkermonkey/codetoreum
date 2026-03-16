@@ -42,6 +42,12 @@ from codetoreum.ports.output.encryption_service import (
 )
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.event_store import IEventStore
+from codetoreum.ports.output.failed_event_store import (
+    FailedEventRecord,
+    FailedEventStoreStats,
+    FailureReason,
+    IFailedEventStore,
+)
 from codetoreum.ports.output.identity_service import (
     BotIdentityConfig,
     IIdentityService,
@@ -147,6 +153,11 @@ __all__ = [
     "IEventEmitter",
     # Event Store
     "IEventStore",
+    # Failed Event Store
+    "IFailedEventStore",
+    "FailedEventRecord",
+    "FailedEventStoreStats",
+    "FailureReason",
     # Identity Service
     "IIdentityService",
     "BotIdentityConfig",

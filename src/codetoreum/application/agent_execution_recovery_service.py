@@ -16,7 +16,11 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from codetoreum.domain.events import WorkflowFailed
-from codetoreum.infrastructure.dead_letter_queue import DeadLetterQueue, DeadLetterQueueStats, FailureReason
+from codetoreum.ports.output.failed_event_store import (
+    FailedEventStoreStats,
+    FailureReason,
+    IFailedEventStore,
+)
 
 if TYPE_CHECKING:
     from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
@@ -45,7 +49,7 @@ class AgentExecutionRecoveryService:
         board_service: IBoardService | None = None,
         event_store: IEventStore | None = None,
         run_registry: IActiveWorkflowRunRegistry | None = None,
-        dead_letter_queue: DeadLetterQueue | None = None,
+        failed_event_store: IFailedEventStore | None = None,
     ) -> None:
         """Initialize recovery service.
 
@@ -53,12 +57,15 @@ class AgentExecutionRecoveryService:
             board_service: Optional board service for querying work items
             event_store: Optional event store for persisting recovery events
             run_registry: Optional registry for failing workflow runs
-            dead_letter_queue: Optional DeadLetterQueue for tracking failed auto-progressions
+            failed_event_store: Optional IFailedEventStore for tracking failed auto-progressions
         """
         self._board_service = board_service
         self._event_store = event_store
         self._run_registry = run_registry
-        self._dead_letter_queue = dead_letter_queue or DeadLetterQueue()
+        if failed_event_store is None:
+            msg = "failed_event_store is required for AgentExecutionRecoveryService"
+            raise ValueError(msg)
+        self._failed_event_store = failed_event_store
 
     async def handle_completion_callback_failure(
         self,
@@ -111,9 +118,9 @@ class AgentExecutionRecoveryService:
                             extra={"error_id": "ERR_AGENT_EXECUTION_POSITION_LOOKUP_FAILURE"},
                         )
 
-                # Queue in DeadLetterQueue with event_data containing workflow context
+                # Queue in failed event store with event_data containing workflow context
                 # Next column is unknown without workflow config; will be determined during recovery
-                event_id = await self._dead_letter_queue.add_failed_event(
+                event_id = await self._failed_event_store.add_failed_event(
                     event_type="auto_progression_failure",
                     event_data={
                         "work_item_id": work_item_id,
@@ -241,24 +248,24 @@ class AgentExecutionRecoveryService:
                 extra={"error_id": "ERR_AGENT_EXECUTION_REGISTRY_FAILURE"},
             )
 
-    def get_dead_letter_queue_stats(self) -> DeadLetterQueueStats:
-        """Get statistics from the dead letter queue.
+    def get_failed_event_store_stats(self) -> FailedEventStoreStats:
+        """Get statistics from the failed event store.
 
         Returns:
-            DeadLetterQueueStats with failure metrics
+            FailedEventStoreStats with failure metrics
         """
-        return self._dead_letter_queue.get_stats()
+        return self._failed_event_store.get_stats()
 
     def get_stuck_work_items(self) -> list[str]:
-        """Get list of work item IDs stuck in dead letter queue.
+        """Get list of work item IDs stuck in failed event store.
 
         Returns:
             List of work item IDs with failed auto-progressions
         """
         stuck_items = []
-        # All failed events in DLQ are auto-progression failures
+        # All failed events in the store are auto-progression failures
         # Extract work item IDs from event data using public API
-        for event in self._dead_letter_queue.list_events():
+        for event in self._failed_event_store.list_events():
             if "work_item_id" in event.event_data:
                 stuck_items.append(event.event_data["work_item_id"])
         return stuck_items

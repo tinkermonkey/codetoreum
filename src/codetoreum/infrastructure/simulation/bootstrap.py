@@ -58,6 +58,9 @@ from codetoreum.adapters.primary.input_port_adapters.mock import (
 from codetoreum.adapters.primary.routers.simulation_ticketing import (
     create_simulation_ticketing_router,
 )
+from codetoreum.adapters.secondary.failed_event_store_adapter import (
+    DeadLetterQueueFailedEventStoreAdapter,
+)
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
 )
@@ -273,7 +276,7 @@ class SimulationInfrastructure:
     logger: logging.Logger
     mock_tracer: MockTracer
     causal_link_registry: CausalLinkRegistry
-    dead_letter_queue: Any  # DeadLetterQueue instance
+    failed_event_store: Any  # IFailedEventStore adapter instance
 
 
 class SimulationApplicationBootstrap:
@@ -382,9 +385,9 @@ class SimulationApplicationBootstrap:
 
             # Start dead letter queue retry processor (Phase 5c)
             # This enables automatic retry of failed event publishing (issue #371)
-            if self.infrastructure and self.infrastructure.dead_letter_queue:
-                logger.info("Phase 5c: Starting dead letter queue retry processor...")
-                await self.infrastructure.dead_letter_queue.start_retry_processor(self._create_dlq_retry_handler())
+            if self.infrastructure and self.infrastructure.failed_event_store:
+                logger.info("Phase 5c: Starting failed event store retry processor...")
+                await self.infrastructure.failed_event_store.start_retry_processor(self._create_dlq_retry_handler())
 
             self._is_setup = True
             logger.info("Simulation bootstrap completed successfully")
@@ -417,8 +420,8 @@ class SimulationApplicationBootstrap:
             logger.info("Tearing down simulation bootstrap...")
 
             # Stop dead letter queue retry processor
-            if self.infrastructure and self.infrastructure.dead_letter_queue:
-                await self.infrastructure.dead_letter_queue.stop_retry_processor()
+            if self.infrastructure and self.infrastructure.failed_event_store:
+                await self.infrastructure.failed_event_store.stop_retry_processor()
 
             # Stop simulation engine
             if self._engine:
@@ -834,10 +837,12 @@ class SimulationApplicationBootstrap:
         causal_link_registry = CausalLinkRegistry()
 
         # Create dead letter queue for capturing failed event publishing
+        # Wrap it with the port adapter to decouple infrastructure from application
         # This is critical for event bridge reliability (issue #371)
         dead_letter_queue = DeadLetterQueue()
+        failed_event_store = DeadLetterQueueFailedEventStoreAdapter(dead_letter_queue)
 
-        logger.info("Created infrastructure components (including CausalLinkRegistry and DeadLetterQueue)")
+        logger.info("Created infrastructure components (including CausalLinkRegistry and IFailedEventStore)")
 
         # Note: Clock is no longer exposed here - it's managed by SimulationEngine
         # The engine is the single point of control for all timing operations
@@ -846,7 +851,7 @@ class SimulationApplicationBootstrap:
             logger=app_logger,
             mock_tracer=mock_tracer,
             causal_link_registry=causal_link_registry,
-            dead_letter_queue=dead_letter_queue,
+            failed_event_store=failed_event_store,
         )
 
     # =========================================================================
@@ -899,7 +904,7 @@ class SimulationApplicationBootstrap:
             board_service=self.adapters.board,
             event_store=self.adapters.event_store,
             run_registry=self.adapters.run_registry,
-            dead_letter_queue=self.infrastructure.dead_letter_queue,
+            failed_event_store=self.infrastructure.failed_event_store,
         )
 
         # Phase 3b: Create ExecutionServiceAgentExecutor and wire into adapters
@@ -1252,7 +1257,7 @@ class SimulationApplicationBootstrap:
 
         event_bus = self.infrastructure.event_bus
         ticket_adapter = self.adapters.ticket_system
-        dead_letter_queue = self.infrastructure.dead_letter_queue
+        failed_event_store = self.infrastructure.failed_event_store
 
         # Map board columns to work item statuses
         _column_to_status = {
@@ -1346,10 +1351,10 @@ class SimulationApplicationBootstrap:
                     extra={"work_item_id": work_item_id, "event_type": "WorkItemColumnChanged"},
                 )
             except Exception as publish_error:
-                # Publishing failed - send to dead letter queue for retry
+                # Publishing failed - send to failed event store for retry
                 # This preserves the event and allows operators to investigate/recover
-                from codetoreum.infrastructure.dead_letter_queue import FailureReason
                 from codetoreum.infrastructure.event_bus import EventBusError
+                from codetoreum.ports.output.failed_event_store import FailureReason
 
                 event_type = domain_event.event_type
 
@@ -1368,7 +1373,7 @@ class SimulationApplicationBootstrap:
                     # Direct transient error (not wrapped)
                     is_transient = True
 
-                await dead_letter_queue.add_failed_event(
+                await failed_event_store.add_failed_event(
                     event_type=event_type,
                     event_data=domain_event.payload,
                     failure_reason=FailureReason.TRANSIENT_ERROR if is_transient else FailureReason.PROCESSING_ERROR,
@@ -1543,9 +1548,9 @@ class SimulationApplicationBootstrap:
                     extra={"board_id": board_id, "event_type": "BoardReconciled"},
                 )
             except Exception as publish_error:
-                # Publishing failed - send to dead letter queue for retry
-                from codetoreum.infrastructure.dead_letter_queue import FailureReason
+                # Publishing failed - send to failed event store for retry
                 from codetoreum.infrastructure.event_bus import EventBusError
+                from codetoreum.ports.output.failed_event_store import FailureReason
 
                 event_type = domain_event.event_type
 
@@ -1564,7 +1569,7 @@ class SimulationApplicationBootstrap:
                     # Direct transient error (not wrapped)
                     is_transient = True
 
-                await dead_letter_queue.add_failed_event(
+                await failed_event_store.add_failed_event(
                     event_type=event_type,
                     event_data=domain_event.payload,
                     failure_reason=FailureReason.TRANSIENT_ERROR if is_transient else FailureReason.PROCESSING_ERROR,
@@ -1576,7 +1581,7 @@ class SimulationApplicationBootstrap:
                 )
 
                 logger.error(
-                    f"Event publishing failed for board {board_id} - queued to dead letter queue: {publish_error}",
+                    f"Event publishing failed for board {board_id} - queued to failed event store: {publish_error}",
                     exc_info=True,
                     extra={
                         "board_id": board_id,
