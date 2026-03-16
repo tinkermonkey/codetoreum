@@ -187,9 +187,10 @@ class AgentExecutionRecoveryService:
 
         When agent execution fails (e.g., before creating task), the lock may
         not be released properly. This method:
-        1. Logs the failure
-        2. Fails the workflow run
-        3. Provides observability for stuck lock detection
+        1. Logs the failure with full context
+        2. Emits LockStuckEvent to signal manual intervention may be required
+        3. Fails the workflow run
+        4. Provides observability for stuck lock detection
 
         Note: Lock release should be handled by the caller before invoking this.
 
@@ -207,6 +208,14 @@ class AgentExecutionRecoveryService:
                 "work_item_id": work_item_id,
                 "board_id": board_id,
             },
+        )
+
+        # Emit LockStuckEvent to signal potential lock stuck condition
+        await self._emit_lock_stuck_event(
+            work_item_id=work_item_id,
+            board_id=board_id,
+            project_id=project_id,
+            reason=f"Agent execution failure: {error}",
         )
 
         # Fail workflow run if available
@@ -319,22 +328,17 @@ class AgentExecutionRecoveryService:
 
         try:
             dlq_event = WorkItemDeadLetterQueuedEvent(
+                type="dlq.work_item_queued",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="agent_execution_recovery_service",
                 work_item_id=work_item_id,
                 board_id=board_id,
                 from_column=from_column,
                 to_column="UNKNOWN",
                 reason=reason,
                 failure_details=failure_details,
-                source="agent_execution_recovery_service",
             )
             await self._event_store.append(work_item_id, [dlq_event])
-            logger.debug(
-                f"Emitted WorkItemDeadLetterQueuedEvent for '{work_item_id}'",
-                extra={
-                    "error_id": "INF_AGENT_EXECUTION_DLQ_EVENT_EMITTED",
-                    "work_item_id": work_item_id,
-                },
-            )
         except Exception as emit_err:
             logger.error(
                 f"Failed to emit WorkItemDeadLetterQueuedEvent for '{work_item_id}': {emit_err}",
@@ -395,20 +399,15 @@ class AgentExecutionRecoveryService:
 
         try:
             stuck_event = LockStuckEvent(
+                type="lock.stuck",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="agent_execution_recovery_service",
                 project_id=project_id,
                 board_id=board_id,
                 work_item_id=work_item_id,
                 reason=reason,
-                source="agent_execution_recovery_service",
             )
             await self._event_store.append(work_item_id, [stuck_event])
-            logger.debug(
-                f"Emitted LockStuckEvent for '{work_item_id}'",
-                extra={
-                    "error_id": "INF_AGENT_EXECUTION_LOCK_STUCK_EVENT_EMITTED",
-                    "work_item_id": work_item_id,
-                },
-            )
         except Exception as emit_err:
             logger.error(
                 f"Failed to emit LockStuckEvent for '{work_item_id}': {emit_err}",

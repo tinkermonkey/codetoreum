@@ -718,6 +718,7 @@ class BoardColumnEventHandler(EventHandler):
                             work_item_id=work_item_id,
                             board_id=board_id,
                             error=e,
+                            project_id=project_id,
                         )
                     except Exception as recovery_err:
                         logger.error(
