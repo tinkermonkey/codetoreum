@@ -363,10 +363,49 @@ class TestInMemoryRepositoryAdapter:
             destination=Path("/tmp/test-repo"),
         )
 
+        # Add file to main
+        adapter.set_file_content(
+            repo_path=Path("/tmp/test-repo"),
+            file_path="file.txt",
+            content="original\n",
+        )
+        await adapter.commit(
+            repo_path=Path("/tmp/test-repo"),
+            message="Add file",
+            author_name="Test",
+            author_email="test@example.com",
+            files=["file.txt"],
+        )
+
+        # Create feature branch
+        await adapter.create_branch(
+            repo_path=Path("/tmp/test-repo"),
+            branch_name=BranchName("feature"),
+        )
+        await adapter.checkout(
+            repo_path=Path("/tmp/test-repo"),
+            branch=BranchName("feature"),
+        )
+
+        # Modify file on feature
+        adapter.set_file_content(
+            repo_path=Path("/tmp/test-repo"),
+            file_path="file.txt",
+            content="modified\n",
+        )
+        await adapter.commit(
+            repo_path=Path("/tmp/test-repo"),
+            message="Modify file",
+            author_name="Test",
+            author_email="test@example.com",
+            files=["file.txt"],
+        )
+
+        # Get diff
         diff = await adapter.diff(
             repo_path=Path("/tmp/test-repo"),
             base="main",
-            target="HEAD",
+            target="feature",
         )
 
         assert isinstance(diff, str)
@@ -791,3 +830,426 @@ class TestInMemoryRepositoryAdapter:
             repo_path=Path("/tmp/test-repo"),
         )
         assert len(history) >= 5
+
+    # ===== NEW TESTS FOR ENHANCED FUNCTIONALITY =====
+
+    async def test_diff_with_file_changes(self, adapter):
+        """Test diff computation with actual file changes."""
+        await adapter.clone(
+            url="https://github.com/test/repo.git",
+            destination=Path("/tmp/test-repo"),
+        )
+
+        # Create a commit with files on main
+        adapter.set_file_content(
+            repo_path=Path("/tmp/test-repo"),
+            file_path="file1.txt",
+            content="line 1\nline 2\nline 3\n",
+        )
+        await adapter.commit(
+            repo_path=Path("/tmp/test-repo"),
+            message="Add file1",
+            author_name="Test",
+            author_email="test@example.com",
+            files=["file1.txt"],
+        )
+
+        # Create feature branch with different content
+        await adapter.create_branch(
+            repo_path=Path("/tmp/test-repo"),
+            branch_name=BranchName("feature"),
+        )
+        await adapter.checkout(
+            repo_path=Path("/tmp/test-repo"),
+            branch=BranchName("feature"),
+        )
+
+        adapter.set_file_content(
+            repo_path=Path("/tmp/test-repo"),
+            file_path="file1.txt",
+            content="line 1\nmodified line 2\nline 3\n",
+        )
+        await adapter.commit(
+            repo_path=Path("/tmp/test-repo"),
+            message="Modify file1",
+            author_name="Test",
+            author_email="test@example.com",
+            files=["file1.txt"],
+        )
+
+        # Get diff between main and feature
+        diff = await adapter.diff(
+            repo_path=Path("/tmp/test-repo"),
+            base="main",
+            target="feature",
+        )
+
+        assert isinstance(diff, str)
+        assert "diff --git" in diff
+        assert "file1.txt" in diff
+        assert "-modified line 2" in diff or "+modified line 2" in diff
+
+    async def test_diff_identical_refs_returns_empty(self, adapter):
+        """Test diff returns empty string when refs are identical."""
+        await adapter.clone(
+            url="https://github.com/test/repo.git",
+            destination=Path("/tmp/test-repo"),
+        )
+
+        adapter.set_file_content(
+            repo_path=Path("/tmp/test-repo"),
+            file_path="file.txt",
+            content="content\n",
+        )
+        await adapter.commit(
+            repo_path=Path("/tmp/test-repo"),
+            message="Add file",
+            author_name="Test",
+            author_email="test@example.com",
+            files=["file.txt"],
+        )
+
+        # Diff same ref to itself should be empty
+        diff = await adapter.diff(
+            repo_path=Path("/tmp/test-repo"),
+            base="main",
+            target="main",
+        )
+
+        assert diff == ""
+
+    async def test_status_with_unstaged_files(self, adapter):
+        """Test status returns unstaged files for modified files not staged."""
+        await adapter.clone(
+            url="https://github.com/test/repo.git",
+            destination=Path("/tmp/test-repo"),
+        )
+
+        # Add file to working tree but don't stage it
+        adapter.set_working_tree_file(
+            repo_path=Path("/tmp/test-repo"),
+            file_path="modified.txt",
+            content="modified content\n",
+        )
+
+        status = await adapter.status(Path("/tmp/test-repo"))
+
+        assert "modified.txt" in status.unstaged_files
+        assert status.is_dirty
+
+    async def test_status_with_untracked_files(self, adapter):
+        """Test status returns untracked files for new files in working tree."""
+        await adapter.clone(
+            url="https://github.com/test/repo.git",
+            destination=Path("/tmp/test-repo"),
+        )
+
+        # Add a new file to working tree that was never committed
+        adapter.set_working_tree_file(
+            repo_path=Path("/tmp/test-repo"),
+            file_path="newfile.txt",
+            content="new content\n",
+        )
+
+        status = await adapter.status(Path("/tmp/test-repo"))
+
+        assert "newfile.txt" in status.untracked_files
+        assert status.is_dirty
+
+    async def test_status_unstaged_cleared_after_staging(self, adapter):
+        """Test status unstaged_files cleared after staging."""
+        await adapter.clone(
+            url="https://github.com/test/repo.git",
+            destination=Path("/tmp/test-repo"),
+        )
+
+        # Add to working tree and stage
+        adapter.set_working_tree_file(
+            repo_path=Path("/tmp/test-repo"),
+            file_path="file.txt",
+            content="content\n",
+        )
+
+        await adapter.stage_files(
+            repo_path=Path("/tmp/test-repo"),
+            files=["file.txt"],
+        )
+
+        status = await adapter.status(Path("/tmp/test-repo"))
+
+        assert "file.txt" not in status.unstaged_files
+        assert "file.txt" in status.staged_files
+        assert status.is_dirty
+
+    async def test_status_all_clean_after_staging_all(self, adapter):
+        """Test status clean when all working tree changes staged and committed."""
+        await adapter.clone(
+            url="https://github.com/test/repo.git",
+            destination=Path("/tmp/test-repo"),
+        )
+
+        # Create initial files and commit them
+        adapter.set_file_content(
+            repo_path=Path("/tmp/test-repo"),
+            file_path="file1.txt",
+            content="content1\n",
+        )
+        adapter.set_file_content(
+            repo_path=Path("/tmp/test-repo"),
+            file_path="file2.txt",
+            content="content2\n",
+        )
+
+        await adapter.commit(
+            repo_path=Path("/tmp/test-repo"),
+            message="Add files",
+            author_name="Test",
+            author_email="test@example.com",
+            files=["file1.txt", "file2.txt"],
+        )
+
+        # Now add to working tree and stage
+        adapter.set_working_tree_file(
+            repo_path=Path("/tmp/test-repo"),
+            file_path="file1.txt",
+            content="content1\n",
+        )
+        adapter.set_working_tree_file(
+            repo_path=Path("/tmp/test-repo"),
+            file_path="file2.txt",
+            content="content2\n",
+        )
+
+        # Stage all files
+        await adapter.stage_files(
+            repo_path=Path("/tmp/test-repo"),
+            files=["file1.txt", "file2.txt"],
+        )
+
+        status = await adapter.status(Path("/tmp/test-repo"))
+
+        assert status.unstaged_files == ()
+        assert status.untracked_files == ()
+
+    async def test_merge_with_conflict(self, adapter):
+        """Test merge detects conflicts when same file modified on both branches."""
+        await adapter.clone(
+            url="https://github.com/test/repo.git",
+            destination=Path("/tmp/test-repo"),
+        )
+
+        # Create initial file on main
+        adapter.set_file_content(
+            repo_path=Path("/tmp/test-repo"),
+            file_path="shared.txt",
+            content="original content\n",
+        )
+        await adapter.commit(
+            repo_path=Path("/tmp/test-repo"),
+            message="Initial commit",
+            author_name="Test",
+            author_email="test@example.com",
+            files=["shared.txt"],
+        )
+
+        # Create feature branch
+        await adapter.create_branch(
+            repo_path=Path("/tmp/test-repo"),
+            branch_name=BranchName("feature"),
+        )
+
+        # Modify on main
+        adapter.set_file_content(
+            repo_path=Path("/tmp/test-repo"),
+            file_path="shared.txt",
+            content="main modification\n",
+        )
+        await adapter.commit(
+            repo_path=Path("/tmp/test-repo"),
+            message="Modify on main",
+            author_name="Test",
+            author_email="test@example.com",
+            files=["shared.txt"],
+        )
+
+        # Modify on feature
+        await adapter.checkout(
+            repo_path=Path("/tmp/test-repo"),
+            branch=BranchName("feature"),
+        )
+        adapter.set_file_content(
+            repo_path=Path("/tmp/test-repo"),
+            file_path="shared.txt",
+            content="feature modification\n",
+        )
+        await adapter.commit(
+            repo_path=Path("/tmp/test-repo"),
+            message="Modify on feature",
+            author_name="Test",
+            author_email="test@example.com",
+            files=["shared.txt"],
+        )
+
+        # Try to merge - should detect conflict
+        await adapter.checkout(
+            repo_path=Path("/tmp/test-repo"),
+            branch=BranchName("main"),
+        )
+
+        result = await adapter.merge(
+            repo_path=Path("/tmp/test-repo"),
+            branch="feature",
+        )
+
+        assert not result.success
+        assert "shared.txt" in result.conflicts
+        assert result.merge_commit is None
+
+    async def test_merge_without_conflict_succeeds(self, adapter):
+        """Test merge succeeds when no conflicting modifications."""
+        await adapter.clone(
+            url="https://github.com/test/repo.git",
+            destination=Path("/tmp/test-repo"),
+        )
+
+        # Create initial file on main
+        adapter.set_file_content(
+            repo_path=Path("/tmp/test-repo"),
+            file_path="main_file.txt",
+            content="main content\n",
+        )
+        await adapter.commit(
+            repo_path=Path("/tmp/test-repo"),
+            message="Initial commit",
+            author_name="Test",
+            author_email="test@example.com",
+            files=["main_file.txt"],
+        )
+
+        # Create feature branch
+        await adapter.create_branch(
+            repo_path=Path("/tmp/test-repo"),
+            branch_name=BranchName("feature"),
+        )
+
+        # Modify main
+        adapter.set_file_content(
+            repo_path=Path("/tmp/test-repo"),
+            file_path="main_file.txt",
+            content="main modified\n",
+        )
+        await adapter.commit(
+            repo_path=Path("/tmp/test-repo"),
+            message="Modify main file",
+            author_name="Test",
+            author_email="test@example.com",
+            files=["main_file.txt"],
+        )
+
+        # Add different file on feature
+        await adapter.checkout(
+            repo_path=Path("/tmp/test-repo"),
+            branch=BranchName("feature"),
+        )
+        adapter.set_file_content(
+            repo_path=Path("/tmp/test-repo"),
+            file_path="feature_file.txt",
+            content="feature content\n",
+        )
+        await adapter.commit(
+            repo_path=Path("/tmp/test-repo"),
+            message="Add feature file",
+            author_name="Test",
+            author_email="test@example.com",
+            files=["feature_file.txt"],
+        )
+
+        # Merge should succeed
+        await adapter.checkout(
+            repo_path=Path("/tmp/test-repo"),
+            branch=BranchName("main"),
+        )
+
+        result = await adapter.merge(
+            repo_path=Path("/tmp/test-repo"),
+            branch="feature",
+        )
+
+        assert result.success
+        assert result.conflicts == ()
+        assert result.merge_commit is not None
+
+    async def test_merge_full_scenario_from_acceptance_criteria(self, adapter):
+        """Test full merge scenario: clone → branch → modify both → merge → conflict."""
+        # Clone repository
+        await adapter.clone(
+            url="https://github.com/test/repo.git",
+            destination=Path("/tmp/test-repo"),
+        )
+
+        # Create initial commit with a file
+        adapter.set_file_content(
+            repo_path=Path("/tmp/test-repo"),
+            file_path="code.py",
+            content="def hello():\n    print('hello')\n",
+        )
+        await adapter.commit(
+            repo_path=Path("/tmp/test-repo"),
+            message="Add hello function",
+            author_name="Alice",
+            author_email="alice@example.com",
+            files=["code.py"],
+        )
+
+        # Create feature branch
+        await adapter.create_branch(
+            repo_path=Path("/tmp/test-repo"),
+            branch_name=BranchName("feature/greeting"),
+        )
+
+        # Modify on main
+        adapter.set_file_content(
+            repo_path=Path("/tmp/test-repo"),
+            file_path="code.py",
+            content="def hello():\n    return 'hello world'\n",
+        )
+        await adapter.commit(
+            repo_path=Path("/tmp/test-repo"),
+            message="Change hello to return value",
+            author_name="Alice",
+            author_email="alice@example.com",
+            files=["code.py"],
+        )
+
+        # Modify on feature branch
+        await adapter.checkout(
+            repo_path=Path("/tmp/test-repo"),
+            branch=BranchName("feature/greeting"),
+        )
+        adapter.set_file_content(
+            repo_path=Path("/tmp/test-repo"),
+            file_path="code.py",
+            content="def hello():\n    print('hi there')\n",
+        )
+        await adapter.commit(
+            repo_path=Path("/tmp/test-repo"),
+            message="Change greeting message",
+            author_name="Bob",
+            author_email="bob@example.com",
+            files=["code.py"],
+        )
+
+        # Attempt merge - should detect conflict
+        await adapter.checkout(
+            repo_path=Path("/tmp/test-repo"),
+            branch=BranchName("main"),
+        )
+
+        result = await adapter.merge(
+            repo_path=Path("/tmp/test-repo"),
+            branch="feature/greeting",
+        )
+
+        assert not result.success
+        assert "code.py" in result.conflicts
+        assert result.merge_commit is None

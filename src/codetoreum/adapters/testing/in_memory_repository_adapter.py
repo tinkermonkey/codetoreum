@@ -1,6 +1,7 @@
 """In-memory repository adapter for testing."""
 
 import asyncio
+import difflib
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
@@ -62,6 +63,9 @@ class InMemoryRepositoryAdapter(IRepository):
 
         # Staging area: repo_id -> list of staged file paths
         self._staged_files: dict[str, list[str]] = {}
+
+        # Working tree: repo_id -> {path -> content}
+        self._working_tree: dict[str, dict[str, str]] = {}
 
         # Thread safety for concurrent test execution
         self._lock = threading.Lock()
@@ -336,6 +340,23 @@ class InMemoryRepositoryAdapter(IRepository):
             # Create new commit
             commit_sha = CommitHash(str(uuid4()))
 
+            # Capture file contents at commit time
+            file_contents = {}
+            repo_path_str = self._repositories[repo_id]["path"]
+            for file_path in changed_files:
+                file_key = (repo_id, file_path)
+                # First try to read from in-memory store
+                if file_key in self._files:
+                    file_contents[file_path] = self._files[file_key]
+                # Fall back to reading from disk if available
+                else:
+                    disk_path = Path(repo_path_str) / file_path
+                    if disk_path.exists():
+                        file_contents[file_path] = disk_path.read_text()
+                    else:
+                        # File doesn't exist - could be a deletion
+                        file_contents[file_path] = ""
+
             self._commits[(repo_id, commit_sha)] = {
                 "sha": commit_sha,
                 "message": message,
@@ -344,6 +365,7 @@ class InMemoryRepositoryAdapter(IRepository):
                 "timestamp": datetime.now(UTC),
                 "parent": parent_commit,
                 "files": changed_files,
+                "file_contents": file_contents,  # Store snapshot at commit time
             }
 
             # Update branch pointer
@@ -505,17 +527,49 @@ class InMemoryRepositoryAdapter(IRepository):
             msg = "Target ref is required"
             raise ValidationError(msg)
 
-        # Return mock diff
-        return """diff --git a/file.txt b/file.txt
-index abc123..def456 100644
---- a/file.txt
-+++ b/file.txt
-@@ -1,3 +1,3 @@
- line 1
--old line 2
-+new line 2
- line 3
-"""
+        repo_id = self._get_repo_id_by_path(repo_path)
+
+        with self._lock:
+            # Resolve refs to commit SHAs
+            base_commit = self._resolve_ref_to_commit(repo_id, base)
+            target_commit = self._resolve_ref_to_commit(repo_id, target)
+
+            # Get files at each commit
+            base_files = self._get_files_at_commit(repo_id, base_commit)
+            target_files = self._get_files_at_commit(repo_id, target_commit)
+
+            # Collect all file paths that differ
+            all_paths = set(base_files.keys()) | set(target_files.keys())
+            diff_output = []
+
+            for file_path in sorted(all_paths):
+                base_content = base_files.get(file_path, "")
+                target_content = target_files.get(file_path, "")
+
+                # Skip if content is identical
+                if base_content == target_content:
+                    continue
+
+                # Add diff --git header
+                diff_output.append(f"diff --git a/{file_path} b/{file_path}\n")
+
+                # Generate unified diff for this file
+                base_lines = base_content.splitlines(keepends=True)
+                target_lines = target_content.splitlines(keepends=True)
+
+                diff_lines = list(
+                    difflib.unified_diff(
+                        base_lines,
+                        target_lines,
+                        fromfile=f"a/{file_path}",
+                        tofile=f"b/{file_path}",
+                    )
+                )
+
+                if diff_lines:
+                    diff_output.extend(diff_lines)
+
+            return "".join(diff_output)
 
     async def status(self, repo_path: Path) -> RepositoryStatus:
         """
@@ -539,14 +593,23 @@ index abc123..def456 100644
 
         with self._lock:
             current_branch = self._repositories[repo_id]["current_branch"]
-            staged_files = self._staged_files.get(repo_id, [])
+            staged = tuple(self._staged_files.get(repo_id, []))
+            working = dict(self._working_tree.get(repo_id, {}))
+            staged_set = set(staged)
+
+            # Unstaged: in working tree, not staged
+            unstaged = tuple(sorted(p for p in working if p not in staged_set))
+
+            # Untracked: in working tree, not in any committed files
+            committed_files = {path for (rid, path) in self._files if rid == repo_id}
+            untracked = tuple(sorted(p for p in working if p not in committed_files))
 
             return RepositoryStatus(
                 current_branch=current_branch,
-                is_dirty=len(staged_files) > 0,
-                staged_files=tuple(staged_files),  # Return as tuple for immutability
-                unstaged_files=(),
-                untracked_files=(),
+                is_dirty=len(staged) > 0 or len(unstaged) > 0,
+                staged_files=staged,  # Return as tuple for immutability
+                unstaged_files=unstaged,
+                untracked_files=untracked,
                 ahead_count=0,
                 behind_count=0,
             )
@@ -620,6 +683,41 @@ index abc123..def456 100644
             current_branch = self._repositories[repo_id]["current_branch"]
             current_commit = self._branches[(repo_id, current_branch)]
             merge_commit = self._branches[(repo_id, branch)]
+
+            # Find common ancestor
+            ancestor = self._find_common_ancestor(repo_id, current_commit, merge_commit)
+
+            # Detect conflicts
+            conflicts = []
+
+            if ancestor:
+                ancestor_files = self._get_files_at_commit(repo_id, ancestor)
+                current_files = self._get_files_at_commit(repo_id, current_commit)
+                branch_files = self._get_files_at_commit(repo_id, merge_commit)
+
+                # Check all files that could have changed
+                all_paths = set(ancestor_files.keys()) | set(current_files.keys()) | set(branch_files.keys())
+
+                for path in all_paths:
+                    ancestor_content = ancestor_files.get(path)
+                    current_content = current_files.get(path)
+                    branch_content = branch_files.get(path)
+
+                    # A conflict exists if the same file was modified on both branches
+                    # relative to the ancestor
+                    current_modified = current_content != ancestor_content
+                    branch_modified = branch_content != ancestor_content
+
+                    if current_modified and branch_modified:
+                        conflicts.append(path)
+
+            # If conflicts exist, return failure
+            if conflicts:
+                return MergeResult(
+                    success=False,
+                    conflicts=tuple(sorted(conflicts)),
+                    merge_commit=None,
+                )
 
             # Create merge commit
             new_commit = CommitHash(str(uuid4()))
@@ -873,6 +971,147 @@ index abc123..def456 100644
 
     # Helper methods
 
+    def _resolve_ref_to_commit(self, repo_id: str, ref: str) -> str:
+        """
+        Resolve a ref (branch name or commit SHA) to a commit SHA.
+
+        Args:
+            repo_id: Repository ID
+            ref: Branch name or commit SHA (HEAD resolves to current branch)
+
+        Returns:
+            Commit SHA
+
+        Raises:
+            ResourceNotFoundError: If ref cannot be resolved
+        """
+        # Handle HEAD - points to current branch
+        if ref == "HEAD":
+            current_branch = self._repositories[repo_id]["current_branch"]
+            return self._branches[(repo_id, current_branch)]
+
+        # Check if it's a branch
+        if (repo_id, ref) in self._branches:
+            return self._branches[(repo_id, ref)]
+
+        # Check if it's a commit SHA
+        if (repo_id, ref) in self._commits:
+            return ref
+
+        msg = "Ref"
+        raise ResourceNotFoundError(msg, ref)
+
+    def _get_files_at_commit(self, repo_id: str, commit_sha: str) -> dict[str, str]:
+        """
+        Get all files and their contents at a specific commit.
+
+        Args:
+            repo_id: Repository ID
+            commit_sha: Commit SHA
+
+        Returns:
+            Dictionary of file paths to content at that commit
+        """
+        # Collect all files that were changed at this commit or any ancestor
+        # We track which files have been seen (in case a file is modified multiple times in history)
+        files_at_commit = {}
+        seen_files = set()
+
+        # Walk backwards from the given commit
+        current_commit = commit_sha
+        visited = set()
+
+        while current_commit and current_commit not in visited:
+            visited.add(current_commit)
+
+            commit_key = (repo_id, current_commit)
+            if commit_key not in self._commits:
+                break
+
+            commit = self._commits[commit_key]
+
+            # Use file_contents snapshot from commit (preferred)
+            # or fall back to files list for backwards compatibility
+            if "file_contents" in commit:
+                for file_path, content in commit["file_contents"].items():
+                    if file_path not in seen_files:
+                        seen_files.add(file_path)
+                        files_at_commit[file_path] = content
+            elif "files" in commit:
+                for file_path in commit["files"]:
+                    if file_path not in seen_files:
+                        seen_files.add(file_path)
+                        file_key = (repo_id, file_path)
+                        if file_key in self._files:
+                            files_at_commit[file_path] = self._files[file_key]
+
+            # Move to parent commit
+            current_commit = commit.get("parent")
+
+        return files_at_commit
+
+    def _find_common_ancestor(self, repo_id: str, commit1: str, commit2: str) -> str | None:
+        """
+        Find the common ancestor of two commits.
+
+        Args:
+            repo_id: Repository ID
+            commit1: First commit SHA
+            commit2: Second commit SHA
+
+        Returns:
+            Common ancestor SHA or None if not found
+        """
+        # Get ancestry chain for commit1
+        ancestors1 = set()
+        current = commit1
+        visited = set()
+
+        while current and current not in visited:
+            visited.add(current)
+            ancestors1.add(current)
+
+            commit_key = (repo_id, current)
+            if commit_key not in self._commits:
+                break
+
+            current = self._commits[commit_key].get("parent")
+
+        # Walk commit2's ancestry looking for first common ancestor
+        current = commit2
+        visited.clear()
+
+        while current and current not in visited:
+            visited.add(current)
+
+            if current in ancestors1:
+                return current
+
+            commit_key = (repo_id, current)
+            if commit_key not in self._commits:
+                break
+
+            current = self._commits[commit_key].get("parent")
+
+        return None
+
+    def set_working_tree_file(self, repo_path: Path, file_path: str, content: str) -> None:
+        """
+        Set a file in the working tree (for testing).
+
+        Args:
+            repo_path: Path to the repository
+            file_path: Path to the file within the repository
+            content: File content to set
+        """
+        repo_id = self._get_repo_id_by_path(repo_path)
+
+        with self._lock:
+            if repo_id not in self._working_tree:
+                self._working_tree[repo_id] = {}
+
+            self._working_tree[repo_id][file_path] = content
+
     def _get_repo_id_by_path(self, repo_path: Path) -> str:
         """
         Get repository ID by path (internal helper).
@@ -923,6 +1162,7 @@ index abc123..def456 100644
             self._branches.clear()
             self._remotes.clear()
             self._staged_files.clear()
+            self._working_tree.clear()
 
     def get_repository_count(self) -> int:
         """
