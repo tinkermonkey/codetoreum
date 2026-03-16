@@ -60,7 +60,9 @@ jobs:
           poetry run pytest tests --tb=short -m "not integration" --cov=src/codetoreum --cov-report=xml
         env:
           REDIS_URL: redis://localhost:6379
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Token scoped by workflow-level permissions (contents:read, actions:read)
+          # 'actions' scope required for tests that query CI status via GitHub API / gh CLI
+          GITHUB_TOKEN: ${{ github.token }}
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
