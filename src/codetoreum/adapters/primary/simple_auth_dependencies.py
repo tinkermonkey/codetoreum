@@ -312,8 +312,7 @@ class SimpleAuthDependencies:
             ):
                 if authenticated:
                     return {"message": "You are authenticated!"}
-                else:
-                    return {"message": "You are not authenticated"}
+                return {"message": "You are not authenticated"}
         """
         try:
             return await self.require_auth(response, codetoreum_token, authorization, token)

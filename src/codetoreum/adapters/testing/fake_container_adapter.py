@@ -837,8 +837,7 @@ class FakeContainerAdapter(IContainer):
         # Get result (delegate to LLM if provider available, otherwise use predefined results)
         if self._llm_provider:
             return await self._get_result_for_command_from_llm(command, container_id)
-        else:
-            return self._get_result_for_command_predefined(command, container_id)
+        return self._get_result_for_command_predefined(command, container_id)
 
     async def list_containers(
         self,
