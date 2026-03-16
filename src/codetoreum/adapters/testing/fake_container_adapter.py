@@ -1,6 +1,7 @@
 """Fake container adapter for testing."""
 
 import asyncio
+import logging
 import re
 import threading
 from collections.abc import Callable, Mapping
@@ -8,6 +9,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
+
+logger = logging.getLogger(__name__)
 
 from codetoreum.domain.events import (
     ContainerExecutionCompletedEvent,
@@ -27,6 +30,7 @@ from codetoreum.ports.output.container import (
 from codetoreum.ports.output.event_emitter import IEventEmitter
 
 if TYPE_CHECKING:
+    from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
     from codetoreum.infrastructure.simulation.proportional_delay_calculator import (
         ProportionalDelayCalculator,
     )
@@ -84,6 +88,7 @@ class FakeContainerAdapter(IContainer):
         event_bus: EventBus | None = None,
         config: "SimulationConfig | None" = None,
         clock: "SimulationClock | None" = None,
+        llm_provider: "MockLLMAdapter | None" = None,
     ):
         """
         Initialize the fake container adapter.
@@ -98,6 +103,7 @@ class FakeContainerAdapter(IContainer):
             event_bus: Optional event bus for event subscriptions
             config: Optional SimulationConfig for fidelity-based timing
             clock: Optional SimulationClock for time manipulation
+            llm_provider: Optional LLM provider for command execution delegation
 
         Raises:
             ValidationError: If parameters are invalid
@@ -118,6 +124,7 @@ class FakeContainerAdapter(IContainer):
         self._event_bus = event_bus
         self._config = config
         self._clock = clock
+        self._llm_provider = llm_provider
 
         # Lazy-load delay calculator to avoid circular import
         self._delay_calculator: ProportionalDelayCalculator | None = None
@@ -233,13 +240,65 @@ class FakeContainerAdapter(IContainer):
 
         return should_fail
 
-    def _get_result_for_command(
+    async def _get_result_for_command_from_llm(
         self,
         command: list[str],
         container_id: str,
     ) -> ContainerResult:
         """
-        Get result for a command.
+        Get result for a command by delegating to LLM provider.
+
+        Constructs a prompt from the command and uses the LLM to generate
+        realistic command output (stdout) and exit code.
+
+        Args:
+            command: Command list
+            container_id: Container ID
+
+        Returns:
+            Container result with LLM-generated output
+        """
+        if not self._llm_provider:
+            return self._get_result_for_command_predefined(command, container_id)
+
+        try:
+            # Create a prompt asking the LLM to simulate command execution
+            command_str = " ".join(command)
+            prompt = (
+                f"Simulate executing the following shell command and provide the output.\n"
+                f"Command: {command_str}\n"
+                f"Provide just the stdout output, no explanation."
+            )
+
+            # Execute via LLM provider
+            result = await self._llm_provider.execute(prompt)
+
+            # Use the LLM response as stdout
+            stdout = result.content if result.content else ""
+
+            return ContainerResult(
+                exit_code=self._default_exit_code,
+                stdout=stdout,
+                stderr="",
+                duration_ms=result.duration_ms,
+                container_id=container_id,
+            )
+        except Exception as e:
+            # If LLM delegation fails, fall back to predefined results
+            logger.warning(
+                "LLM delegation failed for command execution, falling back to predefined results",
+                exc_info=True,
+                extra={"command": " ".join(command), "container_id": container_id},
+            )
+            return self._get_result_for_command_predefined(command, container_id)
+
+    def _get_result_for_command_predefined(
+        self,
+        command: list[str],
+        container_id: str,
+    ) -> ContainerResult:
+        """
+        Get result for a command from predefined patterns.
 
         For HIGH fidelity, may return a failure (exit code 1) based on
         probabilistic logic (~5% failure rate).
@@ -295,6 +354,26 @@ class FakeContainerAdapter(IContainer):
                 duration_ms=int(self._execution_delay * 1000),
                 container_id=container_id,
             )
+
+    def _get_result_for_command(
+        self,
+        command: list[str],
+        container_id: str,
+    ) -> ContainerResult:
+        """
+        Get result for a command (synchronous wrapper).
+
+        This method is deprecated - use _get_result_for_command_predefined for
+        synchronous predefined results, or await the async version for LLM delegation.
+
+        Args:
+            command: Command list
+            container_id: Container ID
+
+        Returns:
+            Container result from predefined patterns
+        """
+        return self._get_result_for_command_predefined(command, container_id)
 
     async def run(
         self,
@@ -354,8 +433,11 @@ class FakeContainerAdapter(IContainer):
                 # Fall back to asyncio.sleep for real-time execution
                 await asyncio.sleep(delay_seconds)
 
-        # Get result
-        result = self._get_result_for_command(command, container_id)
+        # Get result (delegate to LLM if provider available, otherwise use predefined results)
+        if self._llm_provider:
+            result = await self._get_result_for_command_from_llm(command, container_id)
+        else:
+            result = self._get_result_for_command(command, container_id)
 
         # Calculate actual duration
         end_time = datetime.now(UTC)
@@ -551,6 +633,11 @@ class FakeContainerAdapter(IContainer):
                 raise ResourceNotFoundError(msg, container_id)
 
             del self._containers[container_id]
+            # Clean up associated virtual filesystem and command history
+            if container_id in self._virtual_filesystems:
+                del self._virtual_filesystems[container_id]
+            if container_id in self._command_history:
+                del self._command_history[container_id]
 
     async def kill(self, container_id: str, signal: str = "SIGKILL") -> None:
         """
@@ -664,7 +751,13 @@ class FakeContainerAdapter(IContainer):
                             timestamp = datetime.fromisoformat(timestamp_str)
                             if timestamp >= since:
                                 filtered_lines.append(line)
-                    except (ValueError, IndexError):
+                    except (ValueError, IndexError) as e:
+                        # Log parsing error instead of silent failure
+                        logger.warning(
+                            "Failed to parse timestamp in log line",
+                            exc_info=True,
+                            extra={"line": line, "container_id": container_id},
+                        )
                         # If parsing fails, include the line
                         filtered_lines.append(line)
                 # Non-timestamped lines are included if we have recent content
@@ -764,7 +857,11 @@ class FakeContainerAdapter(IContainer):
         if self._execution_delay > 0:
             await asyncio.sleep(self._execution_delay)
 
-        return self._get_result_for_command(command, container_id)
+        # Get result (delegate to LLM if provider available, otherwise use predefined results)
+        if self._llm_provider:
+            return await self._get_result_for_command_from_llm(command, container_id)
+        else:
+            return self._get_result_for_command(command, container_id)
 
     async def list_containers(
         self,
