@@ -24,9 +24,14 @@ class FailureReason(Enum):
     UNKNOWN = "unknown"
 
 
-@dataclass
+@dataclass(frozen=True)
 class FailedEventRecord:
-    """Represents a failed event stored in the failed event store."""
+    """Represents a failed event stored in the failed event store.
+
+    Frozen to prevent accidental mutation after retrieval from the port,
+    ensuring audit-trail integrity. Port-layer dataclasses must be immutable
+    to maintain contract guarantees across the port boundary.
+    """
 
     id: str
     event_type: str
@@ -52,9 +57,14 @@ class FailedEventRecord:
         return True
 
 
-@dataclass
+@dataclass(frozen=True)
 class FailedEventStoreStats:
-    """Statistics for failed event store."""
+    """Statistics for failed event store.
+
+    Frozen to prevent accidental mutation after retrieval from the port,
+    ensuring statistics integrity. Port-layer dataclasses must be immutable
+    to maintain contract guarantees across the port boundary.
+    """
 
     total_failed_events: int
     pending_retries: int

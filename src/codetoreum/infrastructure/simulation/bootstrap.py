@@ -1652,7 +1652,10 @@ class SimulationApplicationBootstrap:
         )
 
         # Wire completion callback on ExecutionServiceAgentExecutor for auto-progression
-        self.adapters.agent_executor.set_completion_handler(handler.handle_agent_completion, "board-1")
+        # This method is not part of the IAgentExecutor port interface (lifecycle concern)
+        # but is provided by concrete implementations for bootstrap initialization.
+        if hasattr(self.adapters.agent_executor, "set_completion_handler"):
+            self.adapters.agent_executor.set_completion_handler(handler.handle_agent_completion, "board-1")
 
         # Store reference to handler for potential future reference
         self._board_event_handler = handler

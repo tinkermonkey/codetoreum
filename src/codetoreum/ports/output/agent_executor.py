@@ -1,8 +1,6 @@
 """Port interface for agent execution."""
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Coroutine
-from typing import Any
 
 
 class IAgentExecutor(ABC):
@@ -10,6 +8,12 @@ class IAgentExecutor(ABC):
 
     Abstracts the mechanism for executing agents on work items,
     allowing different implementations (in-process, queued, containerized, etc.).
+
+    This port interface focuses purely on domain operations (agent execution).
+    Lifecycle/wiring methods (e.g., callback registration) are implementation-specific
+    and handled outside the port boundary to avoid coupling the port to specific
+    initialization patterns. Adapters may implement initialization-time wiring
+    via non-port methods.
     """
 
     @abstractmethod
@@ -23,23 +27,4 @@ class IAgentExecutor(ABC):
 
         Raises:
             Exception: If agent execution fails (logs but doesn't re-raise)
-        """
-
-    @abstractmethod
-    def set_completion_handler(
-        self,
-        callback: Callable[[str, str, bool], Coroutine[Any, Any, None]],
-        default_board_id: str,
-    ) -> None:
-        """Wire completion callback for agent execution.
-
-        Called after the executor is created, when the completion callback becomes available.
-        This avoids circular constructor dependencies between the executor and the event handler.
-
-        Args:
-            callback: Async function(work_item_id, board_id, success) invoked when execution completes
-            default_board_id: Board ID to pass to callback when none is provided to execute()
-
-        Raises:
-            RuntimeError: If called after execution has started
         """
