@@ -16,6 +16,8 @@ from typing import Any
 
 from codetoreum.infrastructure.dead_letter_queue import (
     DeadLetterQueue,
+)
+from codetoreum.infrastructure.dead_letter_queue import (
     FailureReason as DLQFailureReason,
 )
 from codetoreum.ports.output.failed_event_store import (
