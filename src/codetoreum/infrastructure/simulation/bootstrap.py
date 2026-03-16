@@ -118,6 +118,9 @@ from codetoreum.application.review_service import ReviewService
 from codetoreum.application.work_item_service import WorkItemService
 
 # Application Services
+from codetoreum.application.agent_execution_recovery_service import (
+    AgentExecutionRecoveryService,
+)
 from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator, WorkflowState
 from codetoreum.application.workflow_run_query_service import WorkflowRunQueryService
 from codetoreum.application.workspace_router import WorkspaceRouter
@@ -164,6 +167,7 @@ from codetoreum.ports.input.workflow_definition_command import (
 from codetoreum.ports.input.workflow_query import IWorkflowQueryPort
 from codetoreum.ports.input.workflow_run_query import IWorkflowRunQueryPort
 from codetoreum.ports.input.workspace_query import IWorkspaceQueryPort
+from codetoreum.ports.output.agent_executor import IAgentExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -211,7 +215,7 @@ class SimulationAdapters:
     work_item_service: MockWorkItemService  # Work item lookups for execution chain
 
     # Agent executor (assigned in Phase 3, after ExecutionService is created)
-    agent_executor: ExecutionServiceAgentExecutor | None = None
+    agent_executor: IAgentExecutor | None = None
 
 
 @dataclass
@@ -227,6 +231,7 @@ class SimulationServices:
     workspace_router: WorkspaceRouter
     configuration_service: ConfigurationService
     work_item_service: WorkItemService
+    agent_execution_recovery_service: AgentExecutionRecoveryService | None = None
     multi_project_orchestrator: Any | None = None  # MultiProjectOrchestrator
     container_recovery_service: Any | None = None
 
@@ -886,7 +891,18 @@ class SimulationApplicationBootstrap:
             event_store=self.adapters.event_store,
         )
 
-        # Phase 3: Create ExecutionServiceAgentExecutor and wire into adapters
+        # Phase 3a: Create AgentExecutionRecoveryService
+        # This service handles recovery from agent execution failures (completion callback failures,
+        # lock stuck detection, etc.). It's injected into both ExecutionServiceAgentExecutor
+        # (for completion callback failures) and BoardColumnEventHandler (for execution failures).
+        recovery_service = AgentExecutionRecoveryService(
+            board_service=self.adapters.board,
+            event_store=self.adapters.event_store,
+            run_registry=self.adapters.run_registry,
+            dead_letter_queue=self.infrastructure.dead_letter_queue,
+        )
+
+        # Phase 3b: Create ExecutionServiceAgentExecutor and wire into adapters
         # This requires execution_service + workspace_router which are now available
         # ExecutionServiceAgentExecutor is now the sole agent executor
         execution_service_executor = ExecutionServiceAgentExecutor(
@@ -898,6 +914,7 @@ class SimulationApplicationBootstrap:
             run_registry=self.adapters.run_registry,
             branch_tracker=self.adapters.branch_tracker,
             vcs=self.adapters.version_control,
+            recovery_service=recovery_service,
         )
         # Assign to agent_executor (the primary executor for the board handler)
         self.adapters.agent_executor = execution_service_executor
@@ -1033,6 +1050,7 @@ class SimulationApplicationBootstrap:
             workspace_router=workspace_router,
             configuration_service=configuration_service,
             work_item_service=work_item_service,
+            agent_execution_recovery_service=recovery_service,
             multi_project_orchestrator=multi_project_orchestrator,
             container_recovery_service=container_recovery_service,
         )
@@ -1575,10 +1593,10 @@ class SimulationApplicationBootstrap:
     def _register_board_column_handler(self) -> None:
         """Register BoardColumnEventHandler for automated column processing.
 
-        Creates the handler with its 5 dependencies and wires the agent
-        executor's completion callback to the handler's handle_agent_completion
-        method. This closes the loop: column change -> agent execution ->
-        completion callback -> auto-progress to next column.
+        Creates the handler with its 5 dependencies (plus optional recovery_service)
+        and wires the agent executor's completion callback to the handler's
+        handle_agent_completion method. This closes the loop: column change ->
+        agent execution -> completion callback -> auto-progress to next column.
         """
         if not self.adapters or not self.infrastructure:
             logger.warning("Cannot register board column handler: components not ready")
@@ -1589,6 +1607,12 @@ class SimulationApplicationBootstrap:
             logger.warning("Cannot register board column handler: agent_executor not yet initialized")
             return
 
+        # Retrieve the recovery_service that was created in Phase 3a and stored in SimulationServices
+        # The recovery_service is needed for handling agent execution failures in the handler
+        recovery_service = None
+        if self.services:
+            recovery_service = self.services.agent_execution_recovery_service
+
         handler = BoardColumnEventHandler(
             board_service=self.adapters.board,
             lock_service=self.adapters.lock_service,
@@ -1598,6 +1622,7 @@ class SimulationApplicationBootstrap:
             event_bus=self.infrastructure.event_bus,
             run_registry=self.adapters.run_registry,
             event_emitter=self.adapters.event_emitter,
+            recovery_service=recovery_service,
         )
 
         # Wire completion callback on ExecutionServiceAgentExecutor for auto-progression
