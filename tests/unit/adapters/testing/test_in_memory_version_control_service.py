@@ -258,9 +258,7 @@ class TestInMemoryVersionControlServiceBehavior:
         # Verify event was emitted
         all_events = emitter.get_events()
         assert len(all_events) > 0
-        branch_pushed_events = [
-            e for e in all_events if isinstance(e, BranchPushedEvent)
-        ]
+        branch_pushed_events = [e for e in all_events if isinstance(e, BranchPushedEvent)]
         assert len(branch_pushed_events) == 1
 
         event = branch_pushed_events[0]
@@ -285,9 +283,7 @@ class TestInMemoryVersionControlServiceBehavior:
 
         # Find the BranchPushedEvent
         all_events = emitter.get_events()
-        branch_pushed_events = [
-            e for e in all_events if isinstance(e, BranchPushedEvent)
-        ]
+        branch_pushed_events = [e for e in all_events if isinstance(e, BranchPushedEvent)]
         feature_events = [e for e in branch_pushed_events if e.branch_name == "feature/special-feature"]
 
         assert len(feature_events) == 1
@@ -309,9 +305,7 @@ class TestInMemoryVersionControlServiceBehavior:
         await service.push(path, "main")
 
         all_events = emitter.get_events()
-        branch_pushed_events = [
-            e for e in all_events if isinstance(e, BranchPushedEvent)
-        ]
+        branch_pushed_events = [e for e in all_events if isinstance(e, BranchPushedEvent)]
         assert len(branch_pushed_events) == 1
         assert branch_pushed_events[0].repository_id == path
 
