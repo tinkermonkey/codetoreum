@@ -799,8 +799,7 @@ class SimulationApplicationBootstrap:
                 )
                 return
 
-            if retry_event_obj:
-                await event_bus.publish(retry_event_obj)
+            await event_bus.publish(retry_event_obj)
 
         return retry_event
 
