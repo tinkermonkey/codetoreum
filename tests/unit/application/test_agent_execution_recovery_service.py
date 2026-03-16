@@ -191,3 +191,108 @@ class TestAgentExecutionRecoveryService:
         # Assert: Work item should still be queued with 'UNKNOWN' column
         stuck_items = recovery_service.get_stuck_work_items()
         assert work_item_id in stuck_items
+
+    @pytest.mark.asyncio
+    async def test_missing_run_registry_logs_warning(self, recovery_service, caplog):
+        """When run_registry is None, should log warning instead of silently no-op."""
+        # Arrange
+        recovery_service._run_registry = None
+        work_item_id = "wi-1"
+        board_id = "board-1"
+        error = RuntimeError("Completion callback failed")
+
+        # Act
+        await recovery_service.handle_completion_callback_failure(
+            work_item_id=work_item_id,
+            board_id=board_id,
+            success=True,
+            error=error,
+        )
+
+        # Assert: Warning logged about missing run_registry
+        assert any(
+            "run_registry dependency not wired" in record.message
+            and record.levelname == "WARNING"
+            for record in caplog.records
+        )
+        assert any(
+            record.error_id == "ERR_AGENT_EXECUTION_MISSING_RUN_REGISTRY"
+            for record in caplog.records
+        )
+
+    @pytest.mark.asyncio
+    async def test_missing_event_store_logs_warning(self, recovery_service, caplog):
+        """When event_store is None, should log warning instead of silently no-op."""
+        # Arrange
+        recovery_service._event_store = None
+        work_item_id = "wi-1"
+        board_id = "board-1"
+        run_id = "run-1"
+        stage_name = "coding"
+        error = RuntimeError("Completion callback failed")
+
+        run_info = ActiveRunInfo(
+            work_item_id=work_item_id,
+            run_id=run_id,
+            stage_name=stage_name,
+            project_id="proj-1",
+        )
+        recovery_service._run_registry.get_active_run.return_value = run_info
+
+        # Act
+        await recovery_service.handle_completion_callback_failure(
+            work_item_id=work_item_id,
+            board_id=board_id,
+            success=True,
+            error=error,
+        )
+
+        # Assert: Warning logged about missing event_store
+        assert any(
+            "event_store dependency not wired" in record.message
+            and record.levelname == "WARNING"
+            for record in caplog.records
+        )
+        assert any(
+            record.error_id == "ERR_AGENT_EXECUTION_MISSING_EVENT_STORE"
+            for record in caplog.records
+        )
+
+    @pytest.mark.asyncio
+    async def test_missing_event_store_on_agent_execution_failure_logs_warning(
+        self, recovery_service, caplog
+    ):
+        """When event_store is None during agent execution failure, should log warning."""
+        # Arrange
+        recovery_service._event_store = None
+        work_item_id = "wi-1"
+        board_id = "board-1"
+        run_id = "run-1"
+        stage_name = "coding"
+        error = RuntimeError("Agent execution failed")
+
+        run_info = ActiveRunInfo(
+            work_item_id=work_item_id,
+            run_id=run_id,
+            stage_name=stage_name,
+            project_id="proj-1",
+        )
+        recovery_service._run_registry.get_active_run.return_value = run_info
+
+        # Act
+        await recovery_service.handle_agent_execution_failure(
+            work_item_id=work_item_id,
+            board_id=board_id,
+            error=error,
+        )
+
+        # Assert: Warning logged about missing event_store
+        assert any(
+            "event_store dependency not wired" in record.message
+            and record.levelname == "WARNING"
+            for record in caplog.records
+        )
+        assert any(
+            record.error_id == "ERR_AGENT_EXECUTION_MISSING_EVENT_STORE"
+            for record in caplog.records
+        )

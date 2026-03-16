@@ -205,6 +205,14 @@ class AgentExecutionRecoveryService:
             reason: Reason for workflow failure
         """
         if not self._run_registry:
+            logger.warning(
+                f"Cannot fail workflow run for '{work_item_id}': "
+                f"run_registry dependency not wired. Reason: {reason}",
+                extra={
+                    "error_id": "ERR_AGENT_EXECUTION_MISSING_RUN_REGISTRY",
+                    "work_item_id": work_item_id,
+                },
+            )
             return
 
         try:
@@ -222,6 +230,15 @@ class AgentExecutionRecoveryService:
             )
 
             if not self._event_store:
+                logger.warning(
+                    f"Cannot persist WorkflowFailed event for '{work_item_id}' (run {run_info.run_id}): "
+                    f"event_store dependency not wired. Reason: {reason}",
+                    extra={
+                        "error_id": "ERR_AGENT_EXECUTION_MISSING_EVENT_STORE",
+                        "work_item_id": work_item_id,
+                        "run_id": run_info.run_id,
+                    },
+                )
                 return
 
             try:
