@@ -224,7 +224,7 @@ class TestInMemoryVersionControlServiceBehavior:
         # Commit to second repo with same message (should get same SHA)
         sha2 = await service.commit("/workspace/repo2", "Repo 1 commit")
 
-        assert sha1 == sha2  # Same message on same branch should give same SHA
+        assert sha1 != sha2  # Different commits should have different SHAs even with same message
 
         # Operations on one shouldn't affect the other
         await service.checkout("/workspace/repo1", "feature/test")

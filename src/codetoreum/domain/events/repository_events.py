@@ -255,3 +255,73 @@ class BranchCreatedEvent(CodetoreumEvent):
             base_commit=data.get("base_commit", ""),
             project_id=data.get("project_id"),
         )
+
+
+@dataclass(frozen=True)
+class BranchPushedEvent(CodetoreumEvent):
+    """Emitted when a branch is pushed to remote.
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Events represent immutable facts—attempting to modify any field
+    will raise `FrozenInstanceError`. This immutability is essential because
+    events are the permanent record of state changes in the system and must
+    never be altered once created.
+
+    Attributes:
+        type (str): Fixed to "repository.branch_pushed"
+        repository_id (str): ID of the repository
+        branch_name (str): Name of the pushed branch
+        project_id (str): ID of the project containing the repository
+
+    Example:
+        >>> event = BranchPushedEvent(
+        ...     type="repository.branch_pushed",
+        ...     timestamp="2025-01-14T10:30:00+00:00",
+        ...     source="mock",
+        ...     repository_id="repo-1",
+        ...     branch_name="fix/issue-123",
+        ...     project_id="proj-1"
+        ... )
+        >>> event.branch_name = "fix/issue-456"  # ❌ Raises FrozenInstanceError
+    """
+
+    repository_id: str = ""
+    branch_name: str = ""
+    project_id: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.repository_id:
+            msg = "repository_id is required"
+            raise ValueError(msg)
+        if not self.branch_name:
+            msg = "branch_name is required"
+            raise ValueError(msg)
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update(
+            {
+                "repository_id": self.repository_id,
+                "branch_name": self.branch_name,
+                "project_id": self.project_id,
+            }
+        )
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "BranchPushedEvent":
+        """Deserialize from dictionary."""
+        return cls(
+            type=data.get("type", "repository.branch_pushed"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            repository_id=data.get("repository_id", ""),
+            branch_name=data.get("branch_name", ""),
+            project_id=data.get("project_id"),
+        )

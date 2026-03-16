@@ -33,6 +33,8 @@ Method uses adapter's internal state and produces consistent, state-dependent re
 - `MockBoardAdapter.move_item_to_column()` - Updates internal board state
 - `InMemoryEventStore.append()` - Appends to internal event stream
 - `InMemoryTicketAdapter.create_work_item()` - Stores item in internal dict
+- `InMemoryVersionControlService.commit()` - Generates unique SHA, appends to branch history
+- `InMemoryVersionControlService.push()` - Records pushed branch, emits event
 
 **Verification**: Method references `self._<state_variable>` or similar
 
@@ -40,11 +42,11 @@ Method uses adapter's internal state and produces consistent, state-dependent re
 Method returns hardcoded/deterministic values, acceptable for simulation purposes with documented rationale.
 
 **Examples:**
-- `InMemoryVersionControlService.pull()` - No remote state to fetch in single-writer simulation
+- `InMemoryVersionControlService.pull()` - No-op in single-writer in-memory model; always synchronized
 - `InMemoryStorageAdapter.exists()` - Correct behavior for non-existent files
 - Container `image_exists()` - Matches default seeded image set
 
-**Verification**: Hardcoded value acceptable for simulation use case
+**Verification**: Hardcoded value acceptable for simulation use case with documented reason
 
 #### (c) Needs Implementation ⚠️
 Method is missing implementation or raises `NotImplementedError`.
@@ -150,18 +152,43 @@ Sample classification of methods from `IContainer` → `FakeContainerAdapter`:
 
 **Summary**: All 17 methods use internal state (type a). Total coverage: 17/17 ✓
 
+### IVersionControlService (9 methods)
+
+Sample classification of methods from `IVersionControlService` → `InMemoryVersionControlService`:
+
+| Method | Classification | Notes |
+|--------|----------------|-------|
+| `clone_repository()` | (a) Stateful | Updates `self._repositories`, indexes repository by URL and path |
+| `checkout()` | (a) Stateful | Updates current branch in `self._repositories`, creates branches as needed |
+| `commit()` | (a) Stateful | Generates unique SHA using counter, appends to branch history, clears staging area |
+| `push()` | (a) Stateful | Records pushed branch in `self._repositories["pushed_branches"]`, emits BranchPushedEvent |
+| `create_branch()` | (a) Stateful | Creates new branch in `self._repositories`, initializes commit list |
+| `list_branches()` | (a) Stateful | Returns branch set from `self._repositories`, optionally adds remote prefixes |
+| `status()` | (a) Stateful | Returns staged/unstaged files from `self._staged_files` and `self._working_tree` |
+| `get_repository()` | (a) Stateful | Looks up repository in `self._repository_index` by identifier |
+| `pull()` | (b) Hardcoded but Acceptable | Always no-op (type b) - in-memory single-writer model means always current with remote |
+
+**Rationale for `pull()` as type (b)**:
+- **Simulation Context**: InMemoryVersionControlService uses single-writer in-memory semantics
+- **No Remote State**: Simulation has no actual remote repository to synchronize with
+- **Always Current**: Since there's only one writer (the orchestrator), local state is always synchronized
+- **Documented Intent**: Explicit docstring clarifies no-op semantics and simulation context
+- **No State Corruption**: Callers can verify pull completed (no-op is correct behavior for simulation)
+
+**Summary**: 8 methods use internal state (type a), 1 hardcoded with rationale (type b). Total coverage: 9/9 ✓
+
 ### Coverage Pattern
 
-**Type (a) - Fully Stateful** (100% of methods)
+**Type (a) - Fully Stateful** (99.6% of methods: 242/243)
 - Use `self._state_variable` to track internal state
 - Return state-dependent results
-- Examples: database adapters, board state, event store, queue, containers
+- Examples: database adapters, board state, event store, queue, containers, push() with state tracking
 - **Recommended pattern**
 
-**Type (b) - Hardcoded but Acceptable** (0% of methods)
-- Would return hardcoded values justified by simulation context
-- Not present in current implementation
-- **If needed, must have documented rationale**
+**Type (b) - Hardcoded but Acceptable** (0.4% of methods: 1/243)
+- Return hardcoded values justified by simulation context
+- Single example: `InMemoryVersionControlService.pull()` - documented no-op for in-memory single-writer model
+- **Must have documented rationale**
 
 **Type (c) - Unimplemented** (0% of methods)
 - Not found in audit
@@ -196,12 +223,12 @@ Sample classification of methods from `IContainer` → `FakeContainerAdapter`:
 | `INotifier` | 14 | 14 | 0 | 0 | 100% |
 | `IMetrics` | 16 | 16 | 0 | 0 | 100% |
 | `IMessageBroker` | 8 | 8 | 0 | 0 | 100% |
-| `IVersionControlService` | 9 | 9 | 0 | 0 | 100% |
+| `IVersionControlService` | 9 | 8 | 1 | 0 | 100% |
 | `IProjectManagerService` | 5 | 5 | 0 | 0 | 100% |
 | `IEncryptionService` | 3 | 3 | 0 | 0 | 100% |
-| **TOTAL** | **243** | **243** | **0** | **0** | **100%** |
+| **TOTAL** | **243** | **242** | **1** | **0** | **100%** |
 
-**Key Finding**: 100% of methods (243/243) use internal state and are fully stateful. Zero methods are hardcoded or unimplemented.
+**Key Finding**: 100% of methods (243/243) implemented with 242 using internal state (type a) and 1 hardcoded with documented rationale (type b). Zero methods unimplemented.
 
 ## Implementation Notes
 

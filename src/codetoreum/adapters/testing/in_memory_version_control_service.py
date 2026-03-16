@@ -61,7 +61,8 @@ class InMemoryVersionControlService(IVersionControlService):
         #     'branches': set of branch names,
         #     'current_branch': str,
         #     'commits': dict of branch -> list of commit SHAs,
-        #     'default_branch': str
+        #     'default_branch': str,
+        #     'pushed_branches': set of branch names that have been pushed
         # }
         self._repositories: dict[str, dict] = {}
 
@@ -73,6 +74,9 @@ class InMemoryVersionControlService(IVersionControlService):
 
         # Map of repo_path -> {file_path -> content}
         self._working_tree: dict[str, dict[str, str]] = {}
+
+        # Counter for unique commit SHAs (avoids SHA collisions)
+        self._commit_counter = 0
 
         # Thread safety for concurrent test execution
         self._lock = threading.Lock()
@@ -98,32 +102,34 @@ class InMemoryVersionControlService(IVersionControlService):
             msg = "Target path cannot be empty"
             raise ValidationError(msg)
 
-        # Extract repository name from URL
-        repo_name = url.rstrip("/").split("/")[-1].replace(".git", "")
+        with self._lock:
+            # Extract repository name from URL
+            repo_name = url.rstrip("/").split("/")[-1].replace(".git", "")
 
-        # Store repository state
-        target_branch = branch or "main"
-        self._repositories[target_path] = {
-            "url": url,
-            "branches": {target_branch},
-            "current_branch": target_branch,
-            "commits": {target_branch: ["initial-commit-sha"]},
-            "default_branch": "main",
-        }
+            # Store repository state
+            target_branch = branch or "main"
+            self._repositories[target_path] = {
+                "url": url,
+                "branches": {target_branch},
+                "current_branch": target_branch,
+                "commits": {target_branch: ["initial-commit-sha"]},
+                "default_branch": "main",
+                "pushed_branches": set(),
+            }
 
-        # Add to index
-        self._repository_index[url] = Repository(
-            id=repo_name,
-            name=repo_name,
-            url=url,
-            default_branch="main",
-        )
-        self._repository_index[target_path] = Repository(
-            id=repo_name,
-            name=repo_name,
-            url=url,
-            default_branch="main",
-        )
+            # Add to index
+            self._repository_index[url] = Repository(
+                id=repo_name,
+                name=repo_name,
+                url=url,
+                default_branch="main",
+            )
+            self._repository_index[target_path] = Repository(
+                id=repo_name,
+                name=repo_name,
+                url=url,
+                default_branch="main",
+            )
 
     async def checkout(self, repo_path: str, branch: str) -> None:
         """Checkout specific branch.
@@ -142,21 +148,22 @@ class InMemoryVersionControlService(IVersionControlService):
             msg = f"Repository not found at path: {repo_path}"
             raise RepositoryError(msg)
 
-        repo = self._repositories[repo_path]
+        with self._lock:
+            repo = self._repositories[repo_path]
 
-        # Check if branch is new before creating it (for event emission)
-        branch_is_new = branch not in repo["branches"]
+            # Check if branch is new before creating it (for event emission)
+            branch_is_new = branch not in repo["branches"]
 
-        # Capture base commit from current branch before switching (for event)
-        current_branch_commits = repo["commits"].get(repo["current_branch"], ["initial-commit-sha"])
-        base_commit = current_branch_commits[-1] if current_branch_commits else "initial-commit-sha"
+            # Capture base commit from current branch before switching (for event)
+            current_branch_commits = repo["commits"].get(repo["current_branch"], ["initial-commit-sha"])
+            base_commit = current_branch_commits[-1] if current_branch_commits else "initial-commit-sha"
 
-        # Create branch if it doesn't exist
-        if branch_is_new:
-            repo["branches"].add(branch)
-            repo["commits"][branch] = []
+            # Create branch if it doesn't exist
+            if branch_is_new:
+                repo["branches"].add(branch)
+                repo["commits"][branch] = []
 
-        repo["current_branch"] = branch
+            repo["current_branch"] = branch
 
         # Emit BranchCreatedEvent if branch was newly created
         if self._event_emitter and branch_is_new:
@@ -208,9 +215,11 @@ class InMemoryVersionControlService(IVersionControlService):
             repo = self._repositories[repo_path]
             current_branch = repo["current_branch"]
 
-            # Generate a mock commit SHA based on the message
-            # In reality this would be a full git hash
-            commit_sha = hashlib.sha256(f"{message}-{current_branch}".encode()).hexdigest()[:40]
+            # Generate a unique commit SHA using counter + message hash
+            # This ensures two commits with the same message produce different SHAs
+            self._commit_counter += 1
+            sha_base = hashlib.sha256(f"{message}-{current_branch}-{self._commit_counter}".encode()).hexdigest()[:40]
+            commit_sha = sha_base
 
             # Add commit to current branch
             if current_branch not in repo["commits"]:
@@ -246,6 +255,7 @@ class InMemoryVersionControlService(IVersionControlService):
                 commit_sha=commit_sha,
                 message=message,
                 author="orchestrator",
+                changed_files=tuple(committed_files),
             )
             self._event_emitter.emit(event)
 
@@ -269,15 +279,28 @@ class InMemoryVersionControlService(IVersionControlService):
             msg = f"Repository not found at path: {repo_path}"
             raise RepositoryError(msg)
 
-        repo = self._repositories[repo_path]
+        with self._lock:
+            repo = self._repositories[repo_path]
 
-        if branch not in repo["branches"]:
-            msg = f"Branch not found: {branch}"
-            raise RepositoryError(msg)
+            if branch not in repo["branches"]:
+                msg = f"Branch not found: {branch}"
+                raise RepositoryError(msg)
 
-        # Simulate pushing to remote
-        # In this mock, we just mark the push occurred
-        # A real implementation would interact with Git
+            # Mark the branch as pushed
+            repo["pushed_branches"].add(branch)
+
+        # Emit BranchPushedEvent if event emitter is configured
+        if self._event_emitter:
+            from codetoreum.domain.events.repository_events import BranchPushedEvent
+
+            event = BranchPushedEvent(
+                type="repository.branch_pushed",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="in_memory_vcs",
+                repository_id=repo_path,
+                branch_name=branch,
+            )
+            self._event_emitter.emit(event)
 
     async def create_branch(self, repo_path: str, branch_name: str, from_branch: str | None = None) -> None:
         """Create a new branch in the in-memory repository."""
@@ -285,20 +308,21 @@ class InMemoryVersionControlService(IVersionControlService):
             msg = f"Repository not found at path: {repo_path}"
             raise RepositoryError(msg)
 
-        repo = self._repositories[repo_path]
-        branch_is_new = branch_name not in repo["branches"]
+        with self._lock:
+            repo = self._repositories[repo_path]
+            branch_is_new = branch_name not in repo["branches"]
 
-        # Get base commit from from_branch or current branch
-        if from_branch and from_branch in repo["commits"]:
-            base_commits = repo["commits"][from_branch]
-        else:
-            current_branch = repo["current_branch"]
-            base_commits = repo["commits"].get(current_branch, ["initial-commit-sha"])
-        base_commit = base_commits[-1] if base_commits else "initial-commit-sha"
+            # Get base commit from from_branch or current branch
+            if from_branch and from_branch in repo["commits"]:
+                base_commits = repo["commits"][from_branch]
+            else:
+                current_branch = repo["current_branch"]
+                base_commits = repo["commits"].get(current_branch, ["initial-commit-sha"])
+            base_commit = base_commits[-1] if base_commits else "initial-commit-sha"
 
-        repo["branches"].add(branch_name)
-        if branch_name not in repo["commits"]:
-            repo["commits"][branch_name] = []
+            repo["branches"].add(branch_name)
+            if branch_name not in repo["commits"]:
+                repo["commits"][branch_name] = []
 
         # Emit BranchCreatedEvent if event emitter is configured
         if self._event_emitter and branch_is_new:
@@ -320,8 +344,9 @@ class InMemoryVersionControlService(IVersionControlService):
             msg = f"Repository not found at path: {repo_path}"
             raise RepositoryError(msg)
 
-        repo = self._repositories[repo_path]
-        branches = list(repo["branches"])
+        with self._lock:
+            repo = self._repositories[repo_path]
+            branches = list(repo["branches"])
 
         if remote:
             # Include remote branches with 'origin/' prefix
@@ -352,11 +377,16 @@ class InMemoryVersionControlService(IVersionControlService):
             )
 
     async def pull(self, repo_path: str, branch: str, remote: str = "origin") -> None:
-        """Pull latest changes - no-op in simulation (already up to date)."""
+        """Pull latest changes - no-op in simulation (already up to date).
+
+        In simulation mode, repositories are always up to date since they're
+        in-memory with single-writer semantics. No actual remote synchronization
+        occurs. This method is a no-op (type b: hardcoded but acceptable).
+        """
         if repo_path not in self._repositories:
             msg = f"Repository not found at path: {repo_path}"
             raise RepositoryError(msg)
-        # No-op in simulation
+        # No-op in simulation: single-writer in-memory model means always current
 
     async def get_repository(self, identifier: str) -> Repository:
         """Retrieve repository metadata.
@@ -375,8 +405,9 @@ class InMemoryVersionControlService(IVersionControlService):
             ResourceNotFoundError: Repository not found
             ExternalServiceError: Service communication failure
         """
-        if identifier in self._repository_index:
-            return self._repository_index[identifier]
+        with self._lock:
+            if identifier in self._repository_index:
+                return self._repository_index[identifier]
 
         raise ResourceNotFoundError("Repository", identifier)
 
