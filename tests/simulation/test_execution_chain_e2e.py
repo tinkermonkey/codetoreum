@@ -231,8 +231,7 @@ async def test_executions_endpoint_visibility(exec_chain_env):
     # Verify we have different agents (architect, coder, tester)
     agent_ids_for_work_item = {exe.agent_id for exe in executions_for_work_item}
     assert len(agent_ids_for_work_item) >= 3, (
-        f"Expected executions for at least 3 different agents, "
-        f"but got: {agent_ids_for_work_item}"
+        f"Expected executions for at least 3 different agents, " f"but got: {agent_ids_for_work_item}"
     )
 
     # Verify each execution has the expected fields populated
