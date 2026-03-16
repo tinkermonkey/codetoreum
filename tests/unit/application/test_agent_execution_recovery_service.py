@@ -211,14 +211,10 @@ class TestAgentExecutionRecoveryService:
 
         # Assert: Warning logged about missing run_registry
         assert any(
-            "run_registry dependency not wired" in record.message
-            and record.levelname == "WARNING"
+            "run_registry dependency not wired" in record.message and record.levelname == "WARNING"
             for record in caplog.records
         )
-        assert any(
-            record.error_id == "ERR_AGENT_EXECUTION_MISSING_RUN_REGISTRY"
-            for record in caplog.records
-        )
+        assert any(record.error_id == "ERR_AGENT_EXECUTION_MISSING_RUN_REGISTRY" for record in caplog.records)
 
     @pytest.mark.asyncio
     async def test_missing_event_store_logs_warning(self, recovery_service, caplog):
@@ -249,19 +245,13 @@ class TestAgentExecutionRecoveryService:
 
         # Assert: Warning logged about missing event_store
         assert any(
-            "event_store dependency not wired" in record.message
-            and record.levelname == "WARNING"
+            "event_store dependency not wired" in record.message and record.levelname == "WARNING"
             for record in caplog.records
         )
-        assert any(
-            record.error_id == "ERR_AGENT_EXECUTION_MISSING_EVENT_STORE"
-            for record in caplog.records
-        )
+        assert any(record.error_id == "ERR_AGENT_EXECUTION_MISSING_EVENT_STORE" for record in caplog.records)
 
     @pytest.mark.asyncio
-    async def test_missing_event_store_on_agent_execution_failure_logs_warning(
-        self, recovery_service, caplog
-    ):
+    async def test_missing_event_store_on_agent_execution_failure_logs_warning(self, recovery_service, caplog):
         """When event_store is None during agent execution failure, should log warning."""
         # Arrange
         recovery_service._event_store = None
@@ -288,11 +278,7 @@ class TestAgentExecutionRecoveryService:
 
         # Assert: Warning logged about missing event_store
         assert any(
-            "event_store dependency not wired" in record.message
-            and record.levelname == "WARNING"
+            "event_store dependency not wired" in record.message and record.levelname == "WARNING"
             for record in caplog.records
         )
-        assert any(
-            record.error_id == "ERR_AGENT_EXECUTION_MISSING_EVENT_STORE"
-            for record in caplog.records
-        )
+        assert any(record.error_id == "ERR_AGENT_EXECUTION_MISSING_EVENT_STORE" for record in caplog.records)
