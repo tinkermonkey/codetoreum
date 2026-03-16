@@ -186,8 +186,6 @@ async def test_scenario_05_complex_workflow():
     assert result.speed_multiplier >= 10.0
 
 
-
-
 @pytest.mark.simulation
 @pytest.mark.asyncio
 async def test_simulation_with_custom_helpers(simulation_runner):
