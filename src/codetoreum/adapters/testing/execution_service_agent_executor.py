@@ -182,7 +182,9 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         self._pending_tasks.add(task)
         task.add_done_callback(self._task_done_callback)
 
-    async def _run_execution(self, work_item_id: str, agent_id: str, board_id: str) -> None:
+    async def _run_execution(
+        self, work_item_id: str, agent_id: str, board_id: str
+    ) -> None:
         """Drive the full execution chain for a work item.
 
         Args:
@@ -218,7 +220,9 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 return
 
             try:
-                work_item = await self._work_item_service.get_work_item(WorkItemId(work_item_id))
+                work_item = await self._work_item_service.get_work_item(
+                    WorkItemId(work_item_id)
+                )
             except Exception as e:
                 logger.error(
                     f"Failed to load work item '{work_item_id}': {e}",
@@ -229,7 +233,9 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 return
 
             try:
-                project_config = await self._config_store.get_project_config(run_info.project_id)
+                project_config = await self._config_store.get_project_config(
+                    run_info.project_id
+                )
             except Exception as e:
                 logger.error(
                     f"Failed to load project config '{run_info.project_id}': {e}",
@@ -242,7 +248,10 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             # Build ProjectContext from ProjectConfig
             # ProjectConfig has: id, name, github_org, github_repo, tech_stacks, etc.
             # ProjectContext needs: id, name, display_name, repository_url, default_branch, etc.
-            repo_url = f"https://github.com/{project_config.github_org}/{project_config.github_repo}.git"
+            repo_url = (
+                f"https://github.com/{project_config.github_org}/"
+                f"{project_config.github_repo}.git"
+            )
             project_context = ProjectContext(
                 id=project_config.id,
                 name=project_config.name,
@@ -250,17 +259,35 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 repository_url=repo_url,
                 default_branch="main",
                 branch_prefix="feature/",
-                tech_stack=list(project_config.tech_stacks.keys()) if project_config.tech_stacks else [],
+                tech_stack=(
+                    list(project_config.tech_stacks.keys())
+                    if project_config.tech_stacks
+                    else []
+                ),
                 primary_language="python",
-                test_command=project_config.testing.get("command") if project_config.testing else None,
-                test_framework=project_config.testing.get("framework") if project_config.testing else None,
-                has_ci_cd=bool(project_config.testing.get("ci_cd", False)) if project_config.testing else False,
+                test_command=(
+                    project_config.testing.get("command")
+                    if project_config.testing
+                    else None
+                ),
+                test_framework=(
+                    project_config.testing.get("framework")
+                    if project_config.testing
+                    else None
+                ),
+                has_ci_cd=(
+                    bool(project_config.testing.get("ci_cd", False))
+                    if project_config.testing
+                    else False
+                ),
                 default_workflow_template_id="default",
                 custom_workflows={},
                 has_dockerfile=False,
                 dockerfile_path=None,
                 requires_dev_container=False,
-                environment_variables=dict(project_config.environment_variables or {}),
+                environment_variables=dict(
+                    project_config.environment_variables or {}
+                ),
                 secrets=[],
                 mcp_servers=[],
                 metadata={},
@@ -282,7 +309,9 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
 
             # Step 4: Route workspace
             try:
-                workspace = await self._workspace_router.route_workspace(work_item, agent, project_context)
+                workspace = await self._workspace_router.route_workspace(
+                    work_item, agent, project_context
+                )
             except Exception as e:
                 logger.error(
                     f"Workspace routing failed for '{work_item_id}': {e}",
@@ -295,7 +324,9 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             # Step 5: Track branch
             if workspace.branch_name:
                 try:
-                    await self._branch_tracker.set_branch(work_item_id, workspace.branch_name)
+                    await self._branch_tracker.set_branch(
+                        work_item_id, workspace.branch_name
+                    )
                 except Exception as e:
                     logger.error(
                         f"Branch tracker set_branch failed for '{work_item_id}': {e}",
@@ -354,7 +385,9 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 return
 
             # Step 9: Start execution
-            start_result = await self._execution_service.start_execution(execution, context)
+            start_result = await self._execution_service.start_execution(
+                execution, context
+            )
             if not start_result.success:
                 logger.error(
                     f"Failed to start execution for '{work_item_id}': {start_result.error}",
@@ -374,29 +407,40 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                         image="codetoreum-agent:latest",
                         working_dir="/workspace",
                     )
-                    exec_result = await self._execution_service.execute_with_container(
-                        execution, context, container_config
+                    exec_result = (
+                        await self._execution_service.execute_with_container(
+                            execution, context, container_config
+                        )
                     )
                 else:
-                    exec_result = await self._execution_service.execute_with_llm(execution, context)
+                    exec_result = await self._execution_service.execute_with_llm(
+                        execution, context
+                    )
 
                     # For LLM path with successful execution, seed working tree files
                     # to simulate agent output for VCS testing in simulation
-                    if exec_result and exec_result.success and exec_result.execution.output:
+                    if (
+                        exec_result
+                        and exec_result.success
+                        and exec_result.execution.output
+                    ):
                         try:
                             # Seed a simulation file to represent agent changes
-                            # This allows finalize_workspace to detect dirty files and emit commit events
-                            output_file = f"stage-{run_info.stage_name.lower()}-output.txt"
+                            # This allows finalize_workspace to detect dirty files
+                            # and emit commit events
+                            output_file = (
+                                f"stage-{run_info.stage_name.lower()}-output.txt"
+                            )
                             self._vcs.seed_working_tree_file(
-                                repo_path,
-                                output_file,
-                                exec_result.execution.output
+                                repo_path, output_file, exec_result.execution.output
                             )
                         except Exception as seed_err:
                             logger.warning(
                                 f"Failed to seed working tree file for '{work_item_id}': {seed_err}",
                                 exc_info=True,
-                                extra={"error_id": "ERR_EXEC_CHAIN_SEED_WORKING_TREE_FAILURE"},
+                                extra={
+                                    "error_id": "ERR_EXEC_CHAIN_SEED_WORKING_TREE_FAILURE"
+                                },
                             )
             except Exception as exec_err:
                 logger.error(
@@ -405,7 +449,8 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                     extra={"error_id": "ERR_EXEC_CHAIN_EXECUTION_FAILURE"},
                 )
 
-            # Step 11: Finalize workspace (always runs, even on execution failure, to avoid stuck workspace)
+            # Step 11: Finalize workspace (always runs, even on execution failure,
+            # to avoid stuck workspace)
             exec_succeeded = exec_result is not None and exec_result.success
             try:
                 await self._workspace_router.finalize_workspace(
@@ -413,7 +458,11 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                     project_context,
                     {
                         "success": exec_succeeded,
-                        "output": getattr(exec_result.execution, "output", "") if exec_result else "",
+                        "output": (
+                            getattr(exec_result.execution, "output", "")
+                            if exec_result
+                            else ""
+                        ),
                     },
                     repo_path,
                 )
@@ -430,7 +479,9 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             )
 
         except asyncio.CancelledError:
-            logger.info(f"ExecutionServiceAgentExecutor: execution cancelled for '{work_item_id}'")
+            logger.info(
+                f"ExecutionServiceAgentExecutor: execution cancelled for '{work_item_id}'"
+            )
             await self._call_completion(work_item_id, board_id, False)
             raise
         except Exception as e:
@@ -441,7 +492,8 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             )
             success = False
         finally:
-            # Always clean up registry and branch tracker (avoids double-clear and stuck state)
+            # Always clean up registry and branch tracker (avoids double-clear and
+            # stuck state)
             try:
                 await self._run_registry.clear_run(work_item_id)
                 await self._branch_tracker.clear(work_item_id)
@@ -455,7 +507,9 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
 
         await self._call_completion(work_item_id, board_id, success)
 
-    async def _call_completion(self, work_item_id: str, board_id: str, success: bool) -> None:
+    async def _call_completion(
+        self, work_item_id: str, board_id: str, success: bool
+    ) -> None:
         """Invoke completion callback with error handling and recovery.
 
         If the completion callback (auto-progression) fails, the work item is stuck
@@ -481,7 +535,8 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                     exc_info=True,
                     extra={"error_id": "ERR_EXEC_CHAIN_COMPLETION_CALLBACK_FAILURE"},
                 )
-                # Use recovery service to handle the failure (queue for manual recovery, fail workflow)
+                # Use recovery service to handle the failure (queue for manual recovery,
+                # fail workflow)
                 if self._recovery_service:
                     try:
                         await self._recovery_service.handle_completion_callback_failure(
@@ -491,7 +546,8 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                             error=e,
                         )
                     except Exception as recovery_error:
-                        # Recovery service itself failed (e.g., DLQ add failure, fail_workflow failure)
+                        # Recovery service itself failed (e.g., DLQ add failure,
+                        # fail_workflow failure)
                         # Log this failure to prevent silent loss in fire-and-forget task
                         logger.error(
                             f"Recovery service failed for '{work_item_id}' after completion callback failure: {recovery_error}",
