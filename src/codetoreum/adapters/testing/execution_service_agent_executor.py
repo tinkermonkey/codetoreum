@@ -200,6 +200,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             if run_info is None:
                 logger.error(
                     f"No active run found for work item '{work_item_id}'. Cannot execute.",
+                    exc_info=True,
                     extra={"error_id": "ERR_EXEC_CHAIN_NO_ACTIVE_RUN"},
                 )
                 await self._call_completion(work_item_id, board_id, False)
@@ -312,6 +313,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             if not prep_result.success:
                 logger.error(
                     f"Workspace preparation failed for '{work_item_id}': {prep_result.reason}",
+                    exc_info=True,
                     extra={"error_id": "ERR_EXEC_CHAIN_WORKSPACE_PREPARE_FAILURE"},
                 )
                 await self._call_completion(work_item_id, board_id, False)
@@ -358,6 +360,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             if not start_result.success:
                 logger.error(
                     f"Failed to start execution for '{work_item_id}': {start_result.error}",
+                    exc_info=True,
                     extra={"error_id": "ERR_EXEC_CHAIN_EXECUTION_START_FAILURE"},
                 )
                 await self._workspace_router.finalize_workspace(
@@ -379,22 +382,6 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                     )
                 else:
                     exec_result = await self._execution_service.execute_with_llm(execution, context)
-
-                    # For LLM path with successful execution, seed working tree files
-                    # to simulate agent output for VCS testing in simulation
-                    if exec_result and exec_result.success and exec_result.execution.output:
-                        try:
-                            # Seed a simulation file to represent agent changes
-                            # This allows finalize_workspace to detect dirty files
-                            # and emit commit events
-                            output_file = f"stage-{run_info.stage_name.lower()}-output.txt"
-                            self._vcs.seed_working_tree_file(repo_path, output_file, exec_result.execution.output)
-                        except Exception as seed_err:
-                            logger.warning(
-                                f"Failed to seed working tree file for '{work_item_id}': {seed_err}",
-                                exc_info=True,
-                                extra={"error_id": "ERR_EXEC_CHAIN_SEED_WORKING_TREE_FAILURE"},
-                            )
             except Exception as exec_err:
                 logger.error(
                     f"ExecutionServiceAgentExecutor: execution call failed for '{work_item_id}': {exec_err}",
@@ -500,7 +487,9 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                             extra={"error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
                         )
         else:
-            logger.warning(
+            logger.error(
                 f"No completion callback set for ExecutionServiceAgentExecutor. "
-                f"Work item '{work_item_id}' completed but auto-progression will not occur."
+                f"Work item '{work_item_id}' completed with success={success} but auto-progression will not occur. "
+                f"Call set_completion_handler() to wire the callback before executing.",
+                extra={"error_id": "ERR_EXEC_CHAIN_NO_COMPLETION_CALLBACK"},
             )
