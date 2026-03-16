@@ -144,6 +144,14 @@ class InMemoryVersionControlService(IVersionControlService):
             ValidationError: Invalid repo path or branch name
             RepositoryError: Checkout failed (branch doesn't exist, etc.)
         """
+        # Validate inputs before acquiring lock
+        if not repo_path:
+            msg = "Repository path cannot be empty"
+            raise ValidationError(msg)
+        if not branch:
+            msg = "Branch name cannot be empty"
+            raise ValidationError(msg)
+
         with self._lock:
             if repo_path not in self._repositories:
                 msg = f"Repository not found at path: {repo_path}"
@@ -151,33 +159,12 @@ class InMemoryVersionControlService(IVersionControlService):
 
             repo = self._repositories[repo_path]
 
-            # Check if branch is new before creating it (for event emission)
-            branch_is_new = branch not in repo["branches"]
-
-            # Capture base commit from current branch before switching (for event)
-            current_branch_commits = repo["commits"].get(repo["current_branch"], ["initial-commit-sha"])
-            base_commit = current_branch_commits[-1] if current_branch_commits else "initial-commit-sha"
-
-            # Create branch if it doesn't exist
-            if branch_is_new:
-                repo["branches"].add(branch)
-                repo["commits"][branch] = []
+            # Check if branch exists - raise error if it doesn't
+            if branch not in repo["branches"]:
+                msg = f"Branch not found: {branch}"
+                raise RepositoryError(msg)
 
             repo["current_branch"] = branch
-
-        # Emit BranchCreatedEvent if branch was newly created
-        if self._event_emitter and branch_is_new:
-            from codetoreum.domain.events.repository_events import BranchCreatedEvent
-
-            event = BranchCreatedEvent(
-                type="repository.branch_created",
-                timestamp=datetime.now(UTC).isoformat(),
-                source="in_memory_vcs",
-                repository_id=repo_path,
-                branch_name=branch,
-                base_commit=base_commit,
-            )
-            self._event_emitter.emit(event)
 
     async def commit(
         self,
@@ -203,15 +190,18 @@ class InMemoryVersionControlService(IVersionControlService):
             ValidationError: Invalid repo path or message
             RepositoryError: Commit failed (no changes staged, etc.)
         """
-        if repo_path not in self._repositories:
-            msg = f"Repository not found at path: {repo_path}"
-            raise RepositoryError(msg)
-
+        # Validate inputs before acquiring lock
+        if not repo_path:
+            msg = "Repository path cannot be empty"
+            raise ValidationError(msg)
         if not message:
             msg = "Commit message cannot be empty"
             raise ValidationError(msg)
 
         with self._lock:
+            if repo_path not in self._repositories:
+                msg = f"Repository not found at path: {repo_path}"
+                raise RepositoryError(msg)
             repo = self._repositories[repo_path]
             current_branch = repo["current_branch"]
 
@@ -274,6 +264,14 @@ class InMemoryVersionControlService(IVersionControlService):
             ValidationError: Invalid repo path or branch name
             RepositoryError: Push failed (auth, rejected, etc.)
         """
+        # Validate inputs before acquiring lock
+        if not repo_path:
+            msg = "Repository path cannot be empty"
+            raise ValidationError(msg)
+        if not branch:
+            msg = "Branch name cannot be empty"
+            raise ValidationError(msg)
+
         with self._lock:
             if repo_path not in self._repositories:
                 msg = f"Repository not found at path: {repo_path}"
@@ -303,6 +301,14 @@ class InMemoryVersionControlService(IVersionControlService):
 
     async def create_branch(self, repo_path: str, branch_name: str, from_branch: str | None = None) -> None:
         """Create a new branch in the in-memory repository."""
+        # Validate inputs before acquiring lock
+        if not repo_path:
+            msg = "Repository path cannot be empty"
+            raise ValidationError(msg)
+        if not branch_name:
+            msg = "Branch name cannot be empty"
+            raise ValidationError(msg)
+
         with self._lock:
             if repo_path not in self._repositories:
                 msg = f"Repository not found at path: {repo_path}"
@@ -339,6 +345,11 @@ class InMemoryVersionControlService(IVersionControlService):
 
     async def list_branches(self, repo_path: str, remote: bool = False) -> list[str]:
         """List all branches in the in-memory repository."""
+        # Validate inputs before acquiring lock
+        if not repo_path:
+            msg = "Repository path cannot be empty"
+            raise ValidationError(msg)
+
         with self._lock:
             if repo_path not in self._repositories:
                 msg = f"Repository not found at path: {repo_path}"
@@ -359,11 +370,11 @@ class InMemoryVersionControlService(IVersionControlService):
 
         Returns status based on tracked staged and unstaged files.
         """
-        if repo_path not in self._repositories:
-            msg = f"Repository not found at path: {repo_path}"
-            raise RepositoryError(msg)
-
         with self._lock:
+            if repo_path not in self._repositories:
+                msg = f"Repository not found at path: {repo_path}"
+                raise RepositoryError(msg)
+
             staged = tuple(self._staged_files.get(repo_path, []))
             working = set(self._working_tree.get(repo_path, {}).keys())
             staged_set = set(staged)
@@ -382,9 +393,10 @@ class InMemoryVersionControlService(IVersionControlService):
         in-memory with single-writer semantics. No actual remote synchronization
         occurs. This method is a no-op (type b: hardcoded but acceptable).
         """
-        if repo_path not in self._repositories:
-            msg = f"Repository not found at path: {repo_path}"
-            raise RepositoryError(msg)
+        with self._lock:
+            if repo_path not in self._repositories:
+                msg = f"Repository not found at path: {repo_path}"
+                raise RepositoryError(msg)
         # No-op in simulation: single-writer in-memory model means always current
 
     async def get_repository(self, identifier: str) -> Repository:

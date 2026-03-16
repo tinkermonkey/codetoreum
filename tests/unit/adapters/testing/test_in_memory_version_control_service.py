@@ -96,6 +96,70 @@ class TestInMemoryVersionControlServiceExceptions:
         assert exc.resource_type == "Repository"
         assert "nonexistent-repo-id" in exc.resource_id
 
+    @pytest.mark.asyncio
+    async def test_checkout_with_empty_repo_path_raises_validation_error(self):
+        """Checkout with empty repo path should raise ValidationError."""
+        service = InMemoryVersionControlService()
+
+        with pytest.raises(ValidationError):
+            await service.checkout("", "main")
+
+    @pytest.mark.asyncio
+    async def test_checkout_with_empty_branch_raises_validation_error(self):
+        """Checkout with empty branch name should raise ValidationError."""
+        service = InMemoryVersionControlService()
+
+        with pytest.raises(ValidationError):
+            await service.checkout("/workspace/test-repo", "")
+
+    @pytest.mark.asyncio
+    async def test_commit_with_empty_repo_path_raises_validation_error(self):
+        """Commit with empty repo path should raise ValidationError."""
+        service = InMemoryVersionControlService()
+
+        with pytest.raises(ValidationError):
+            await service.commit("", "Test commit")
+
+    @pytest.mark.asyncio
+    async def test_push_with_empty_repo_path_raises_validation_error(self):
+        """Push with empty repo path should raise ValidationError."""
+        service = InMemoryVersionControlService()
+
+        with pytest.raises(ValidationError):
+            await service.push("", "main")
+
+    @pytest.mark.asyncio
+    async def test_push_with_empty_branch_raises_validation_error(self):
+        """Push with empty branch name should raise ValidationError."""
+        service = InMemoryVersionControlService()
+
+        with pytest.raises(ValidationError):
+            await service.push("/workspace/test-repo", "")
+
+    @pytest.mark.asyncio
+    async def test_create_branch_with_empty_repo_path_raises_validation_error(self):
+        """Create branch with empty repo path should raise ValidationError."""
+        service = InMemoryVersionControlService()
+
+        with pytest.raises(ValidationError):
+            await service.create_branch("", "feature/test")
+
+    @pytest.mark.asyncio
+    async def test_create_branch_with_empty_branch_name_raises_validation_error(self):
+        """Create branch with empty branch name should raise ValidationError."""
+        service = InMemoryVersionControlService()
+
+        with pytest.raises(ValidationError):
+            await service.create_branch("/workspace/test-repo", "")
+
+    @pytest.mark.asyncio
+    async def test_list_branches_with_empty_repo_path_raises_validation_error(self):
+        """List branches with empty repo path should raise ValidationError."""
+        service = InMemoryVersionControlService()
+
+        with pytest.raises(ValidationError):
+            await service.list_branches("")
+
 
 class TestInMemoryVersionControlServiceBehavior:
     """Test core behavior and state management."""
@@ -157,16 +221,16 @@ class TestInMemoryVersionControlServiceBehavior:
         # Should not raise
 
     @pytest.mark.asyncio
-    async def test_checkout_creates_new_branch(self):
-        """Checkout should create new branch if it doesn't exist."""
+    async def test_checkout_nonexistent_branch_raises_error(self):
+        """Checkout should raise RepositoryError for nonexistent branches."""
         service = InMemoryVersionControlService()
         path = "/workspace/test-repo"
 
         await service.clone_repository("https://github.com/test/repo.git", path)
-        # Create a new branch via checkout
-        await service.checkout(path, "feature/new-feature")
 
-        # Should not raise
+        # Checkout to nonexistent branch should raise
+        with pytest.raises(RepositoryError):
+            await service.checkout(path, "feature/new-feature")
 
     @pytest.mark.asyncio
     async def test_commit_generates_unique_shas(self):
@@ -327,6 +391,8 @@ class TestInMemoryVersionControlServiceBehavior:
         assert sha1 != sha2  # Different commits should have different SHAs even with same message
 
         # Operations on one shouldn't affect the other
+        # Create branch first, then checkout
+        await service.create_branch("/workspace/repo1", "feature/test")
         await service.checkout("/workspace/repo1", "feature/test")
 
         # Commit to feature branch in repo1
