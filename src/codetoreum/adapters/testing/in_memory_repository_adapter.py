@@ -717,11 +717,11 @@ class InMemoryRepositoryAdapter(IRepository):
                 branch_content = branch_files.get(path)
 
                 # A conflict exists if the same file was modified on both branches
-                # relative to the ancestor
+                # relative to the ancestor, AND the changes are different
                 current_modified = current_content != ancestor_content
                 branch_modified = branch_content != ancestor_content
 
-                if current_modified and branch_modified:
+                if current_modified and branch_modified and current_content != branch_content:
                     conflicts.append(path)
 
             # If conflicts exist, return failure
@@ -796,6 +796,15 @@ class InMemoryRepositoryAdapter(IRepository):
         repo_id = self._get_repo_id_by_path(repo_path)
 
         with self._lock:
+            # If ref is specified, resolve it to a commit and get file content at that commit
+            if ref is not None:
+                commit_sha = self._resolve_ref_to_commit(repo_id, ref)
+                files_at_commit = self._get_files_at_commit(repo_id, commit_sha)
+                if file_path not in files_at_commit:
+                    raise ResourceNotFoundError("File", file_path)
+                return files_at_commit[file_path]
+
+            # If no ref specified, use working tree or fall back to in-memory store
             file_key = (repo_id, file_path)
 
             if file_key not in self._files:
