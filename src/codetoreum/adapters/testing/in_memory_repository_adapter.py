@@ -319,9 +319,11 @@ class InMemoryRepositoryAdapter(IRepository):
 
         repo_id = self._get_repo_id_by_path(repo_path)
 
+        # Capture repository path and determine changed files (locked section only)
         with self._lock:
             current_branch = self._repositories[repo_id]["current_branch"]
             parent_commit = self._branches.get((repo_id, current_branch))
+            repo_path_str = self._repositories[repo_id]["path"]
 
             # Determine which files to commit
             if files is not None:
@@ -337,25 +339,33 @@ class InMemoryRepositoryAdapter(IRepository):
                 if repo_id in self._staged_files:
                     self._staged_files[repo_id].clear()
 
-            # Create new commit
-            commit_sha = CommitHash(str(uuid4()))
-
-            # Capture file contents at commit time
-            file_contents = {}
-            repo_path_str = self._repositories[repo_id]["path"]
+            # Capture file contents from in-memory stores (while locked)
+            file_contents_from_memory = {}
             for file_path in changed_files:
-                file_key = (repo_id, file_path)
-                # First try to read from in-memory store
-                if file_key in self._files:
-                    file_contents[file_path] = self._files[file_key]
-                # Fall back to reading from disk if available
+                # First priority: working tree (files modified via set_working_tree_file)
+                if repo_id in self._working_tree and file_path in self._working_tree[repo_id]:
+                    file_contents_from_memory[file_path] = self._working_tree[repo_id][file_path]
+                # Second priority: in-memory store (files set via set_file_content test helper)
+                elif (repo_id, file_path) in self._files:
+                    file_contents_from_memory[file_path] = self._files[(repo_id, file_path)]
+
+        # Capture file contents at commit time - do disk I/O outside the lock
+        # to avoid blocking concurrent operations. Only read disk for files not in memory.
+        file_contents = dict(file_contents_from_memory)
+        for file_path in changed_files:
+            if file_path not in file_contents:
+                # Fall back to reading from disk (for contract tests that write to disk)
+                # This is done outside the lock to avoid blocking
+                disk_path = Path(repo_path_str) / file_path
+                if disk_path.exists():
+                    file_contents[file_path] = disk_path.read_text()
                 else:
-                    disk_path = Path(repo_path_str) / file_path
-                    if disk_path.exists():
-                        file_contents[file_path] = disk_path.read_text()
-                    else:
-                        # File doesn't exist - could be a deletion
-                        file_contents[file_path] = ""
+                    # File doesn't exist - could be a deletion
+                    file_contents[file_path] = ""
+
+        # Create commit with locked access (atomic operation)
+        with self._lock:
+            commit_sha = CommitHash(str(uuid4()))
 
             self._commits[(repo_id, commit_sha)] = {
                 "sha": commit_sha,
@@ -601,7 +611,12 @@ class InMemoryRepositoryAdapter(IRepository):
             unstaged = tuple(sorted(p for p in working if p not in staged_set))
 
             # Untracked: in working tree, not in any committed files
-            committed_files = {path for (rid, path) in self._files if rid == repo_id}
+            # Use current HEAD to get actual committed files (not just _files test helper data)
+            current_commit = self._branches.get((repo_id, current_branch))
+            if current_commit:
+                committed_files = set(self._get_files_at_commit(repo_id, current_commit).keys())
+            else:
+                committed_files = set()
             untracked = tuple(sorted(p for p in working if p not in committed_files))
 
             return RepositoryStatus(
@@ -687,29 +702,27 @@ class InMemoryRepositoryAdapter(IRepository):
             # Find common ancestor
             ancestor = self._find_common_ancestor(repo_id, current_commit, merge_commit)
 
+            # Compute file trees once - reuse for both conflict detection and merge result
+            ancestor_files = self._get_files_at_commit(repo_id, ancestor) if ancestor else {}
+            current_files = self._get_files_at_commit(repo_id, current_commit)
+            branch_files = self._get_files_at_commit(repo_id, merge_commit)
+
             # Detect conflicts
             conflicts = []
+            all_paths = set(ancestor_files.keys()) | set(current_files.keys()) | set(branch_files.keys())
 
-            if ancestor:
-                ancestor_files = self._get_files_at_commit(repo_id, ancestor)
-                current_files = self._get_files_at_commit(repo_id, current_commit)
-                branch_files = self._get_files_at_commit(repo_id, merge_commit)
+            for path in all_paths:
+                ancestor_content = ancestor_files.get(path)
+                current_content = current_files.get(path)
+                branch_content = branch_files.get(path)
 
-                # Check all files that could have changed
-                all_paths = set(ancestor_files.keys()) | set(current_files.keys()) | set(branch_files.keys())
+                # A conflict exists if the same file was modified on both branches
+                # relative to the ancestor
+                current_modified = current_content != ancestor_content
+                branch_modified = branch_content != ancestor_content
 
-                for path in all_paths:
-                    ancestor_content = ancestor_files.get(path)
-                    current_content = current_files.get(path)
-                    branch_content = branch_files.get(path)
-
-                    # A conflict exists if the same file was modified on both branches
-                    # relative to the ancestor
-                    current_modified = current_content != ancestor_content
-                    branch_modified = branch_content != ancestor_content
-
-                    if current_modified and branch_modified:
-                        conflicts.append(path)
+                if current_modified and branch_modified:
+                    conflicts.append(path)
 
             # If conflicts exist, return failure
             if conflicts:
@@ -721,11 +734,6 @@ class InMemoryRepositoryAdapter(IRepository):
 
             # Create merge commit with combined file snapshot
             new_commit = CommitHash(str(uuid4()))
-
-            # Compute merged file state: union of files from both parents, with current branch taking precedence on conflicts
-            ancestor_files = self._get_files_at_commit(repo_id, ancestor) if ancestor else {}
-            current_files = self._get_files_at_commit(repo_id, current_commit)
-            branch_files = self._get_files_at_commit(repo_id, merge_commit)
 
             # Start with files from current branch
             merged_files = dict(current_files)
