@@ -491,5 +491,6 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 f"No completion callback set for ExecutionServiceAgentExecutor. "
                 f"Work item '{work_item_id}' completed with success={success} but auto-progression will not occur. "
                 f"Call set_completion_handler() to wire the callback before executing.",
+                exc_info=True,
                 extra={"error_id": "ERR_EXEC_CHAIN_NO_COMPLETION_CALLBACK"},
             )
