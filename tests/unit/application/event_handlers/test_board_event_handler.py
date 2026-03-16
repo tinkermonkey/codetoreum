@@ -837,8 +837,8 @@ class TestWorkflowLifecycleEventPersistence:
         mock_event_emitter,
     ):
         """Create handler with event store wired for lifecycle event testing."""
-        from codetoreum.infrastructure.event_bus import EventBus
         from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
+        from codetoreum.infrastructure.event_bus import EventBus
 
         event_store = InMemoryEventStore()
         handler_instance = BoardColumnEventHandler(

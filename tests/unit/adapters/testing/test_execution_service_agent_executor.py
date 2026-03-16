@@ -496,7 +496,6 @@ class TestCancelledErrorHandling:
         fx.run_registry.clear_run.assert_called_once_with(fx.WORK_ITEM_ID)
         fx.branch_tracker.clear.assert_called_once_with(fx.WORK_ITEM_ID)
 
-
     @pytest.mark.asyncio
     async def test_task_done_callback_suppresses_cancelled_error(self):
         """The _task_done_callback suppresses CancelledError and cleans up _pending_tasks.
@@ -509,9 +508,7 @@ class TestCancelledErrorHandling:
         executor = fx.make_executor()
 
         # Create a task that will be cancelled
-        task = asyncio.create_task(
-            executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
-        )
+        task = asyncio.create_task(executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID))
         # Add task to _pending_tasks as execute() does (line 183 in source)
         executor._pending_tasks.add(task)
 
@@ -532,4 +529,3 @@ class TestCancelledErrorHandling:
 
         # Assert: Task was removed from pending set despite cancellation
         assert task not in executor._pending_tasks, "Cancelled task should be removed from _pending_tasks"
-
