@@ -16,6 +16,7 @@ from codetoreum.domain.project_context import ProjectContext
 from codetoreum.domain.services.execution_context_builder import ExecutionContextBuilder
 from codetoreum.domain.types import WorkItemId
 from codetoreum.domain.value_objects import ContainerConfig
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.output.agent_executor import IAgentExecutor
 
 if TYPE_CHECKING:
@@ -111,6 +112,35 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         self._completion_callback = callback
         self._default_board_id = default_board_id
 
+    def _task_done_callback(self, task: asyncio.Task[None]) -> None:
+        """Handle completion of fire-and-forget execution task.
+
+        Called when asyncio.create_task() completes. Surfaces any unhandled
+        exceptions that occurred during _run_execution so they are not
+        silently lost. This follows the bootstrap pattern used in
+        bootstrap.py:1309-1329 for board event bridge tasks.
+
+        Args:
+            task: The completed asyncio.Task
+        """
+        self._pending_tasks.discard(task)
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            # Task was cancelled — normal during shutdown
+            pass
+        except Exception as task_exception:
+            # Unhandled exception in _run_execution (e.g., recovery service failure)
+            # This logs the failure so it's not silently swallowed
+            logger.error(
+                f"Unhandled exception in ExecutionServiceAgentExecutor background task: {task_exception}",
+                exc_info=True,
+                extra={
+                    "error_type": type(task_exception).__name__,
+                    "error_id": ErrorRegistry.ERR_AGENT_EXECUTION_ERROR,
+                },
+            )
+
     @property
     def executions(self) -> list[dict[str, Any]]:
         """Return recorded executions for test assertions."""
@@ -150,7 +180,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
 
         task = asyncio.create_task(self._run_execution(work_item_id, agent_id, resolved_board_id))
         self._pending_tasks.add(task)
-        task.add_done_callback(self._pending_tasks.discard)
+        task.add_done_callback(self._task_done_callback)
 
     async def _run_execution(self, work_item_id: str, agent_id: str, board_id: str) -> None:
         """Drive the full execution chain for a work item.
@@ -415,6 +445,9 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         2. Using AgentExecutionRecoveryService to queue for manual recovery
         3. Failing the workflow run to signal pipeline blockage
 
+        If the recovery service itself fails, the exception is caught and logged
+        to prevent it from propagating unhandled through the fire-and-forget task.
+
         Args:
             work_item_id: Work item that completed
             board_id: Board identifier
@@ -431,12 +464,21 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 )
                 # Use recovery service to handle the failure (queue for manual recovery, fail workflow)
                 if self._recovery_service:
-                    await self._recovery_service.handle_completion_callback_failure(
-                        work_item_id=work_item_id,
-                        board_id=board_id,
-                        success=success,
-                        error=e,
-                    )
+                    try:
+                        await self._recovery_service.handle_completion_callback_failure(
+                            work_item_id=work_item_id,
+                            board_id=board_id,
+                            success=success,
+                            error=e,
+                        )
+                    except Exception as recovery_error:
+                        # Recovery service itself failed (e.g., DLQ add failure, fail_workflow failure)
+                        # Log this failure to prevent silent loss in fire-and-forget task
+                        logger.error(
+                            f"Recovery service failed for '{work_item_id}' after completion callback failure: {recovery_error}",
+                            exc_info=True,
+                            extra={"error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
+                        )
         else:
             logger.warning(
                 f"No completion callback set for ExecutionServiceAgentExecutor. "
