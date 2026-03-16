@@ -282,3 +282,79 @@ class TestAgentExecutionRecoveryService:
             for record in caplog.records
         )
         assert any(record.error_id == "ERR_AGENT_EXECUTION_MISSING_EVENT_STORE" for record in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_completion_callback_failure_with_success_false_skips_dlq(self, recovery_service):
+        """When success=False, DLQ queueing is skipped; only workflow failure occurs.
+
+        This is the critical untested path: when agent execution failed (success=False)
+        and then the completion callback also fails, we should NOT queue to DLQ
+        (since the agent didn't succeed), but we should still fail the workflow run.
+        """
+        # Arrange
+        work_item_id = "wi-1"
+        board_id = "board-1"
+        run_id = "run-1"
+        stage_name = "coding"
+        error = RuntimeError("Completion callback failed")
+
+        run_info = ActiveRunInfo(
+            work_item_id=work_item_id,
+            run_id=run_id,
+            stage_name=stage_name,
+            project_id="proj-1",
+        )
+        recovery_service._run_registry.get_active_run.return_value = run_info
+
+        # Act: Call with success=False (agent execution failed before callback)
+        await recovery_service.handle_completion_callback_failure(
+            work_item_id=work_item_id,
+            board_id=board_id,
+            success=False,  # Critical: execution already failed
+            error=error,
+        )
+
+        # Assert: Work item should NOT be in dead letter queue
+        stuck_items = recovery_service.get_stuck_work_items()
+        assert work_item_id not in stuck_items, "Should not queue to DLQ when success=False"
+
+        # Assert: Workflow should still be failed
+        assert recovery_service._event_store.append.called
+        call_args = recovery_service._event_store.append.call_args
+        events = call_args[0][1]
+        # Should contain WorkflowFailed event only (not DLQ event)
+        assert len(events) == 1
+        assert events[0].payload["work_item_id"] == work_item_id
+
+    @pytest.mark.asyncio
+    async def test_completion_callback_failure_with_success_true_queues_dlq(self, recovery_service):
+        """When success=True, DLQ queueing occurs; agent execution was successful."""
+        # Arrange
+        work_item_id = "wi-1"
+        board_id = "board-1"
+        run_id = "run-1"
+        stage_name = "coding"
+        error = RuntimeError("Auto-progression callback failed")
+
+        run_info = ActiveRunInfo(
+            work_item_id=work_item_id,
+            run_id=run_id,
+            stage_name=stage_name,
+            project_id="proj-1",
+        )
+        recovery_service._run_registry.get_active_run.return_value = run_info
+
+        # Act: Call with success=True (agent execution succeeded but callback failed)
+        await recovery_service.handle_completion_callback_failure(
+            work_item_id=work_item_id,
+            board_id=board_id,
+            success=True,  # Execution succeeded, callback failed
+            error=error,
+        )
+
+        # Assert: Work item SHOULD be in dead letter queue
+        stuck_items = recovery_service.get_stuck_work_items()
+        assert work_item_id in stuck_items, "Should queue to DLQ when success=True"
+
+        # Assert: Workflow should also be failed
+        assert recovery_service._event_store.append.called

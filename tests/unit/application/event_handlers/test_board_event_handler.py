@@ -818,6 +818,202 @@ class TestErrorHandling:
         assert "unexpected event type" in caplog.text
 
 
+class TestWorkflowLifecycleEventPersistence:
+    """Tests for workflow lifecycle event persistence to event store.
+
+    These tests verify that when workflow lifecycle methods are called,
+    they properly persist domain events to the event store for audit trail.
+    This is critical for observability and debugging.
+    """
+
+    @pytest.fixture
+    def handler_with_event_store(
+        self,
+        mock_board_service,
+        mock_lock_service,
+        mock_workflow_config,
+        mock_agent_executor,
+        mock_recovery_service,
+        mock_event_emitter,
+    ):
+        """Create handler with event store wired for lifecycle event testing."""
+        from codetoreum.infrastructure.event_bus import EventBus
+        from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
+
+        event_store = InMemoryEventStore()
+        handler_instance = BoardColumnEventHandler(
+            board_service=mock_board_service,
+            lock_service=mock_lock_service,
+            workflow_config=mock_workflow_config,
+            agent_executor=mock_agent_executor,
+            event_bus=EventBus(),
+            event_store=event_store,  # Pass event_store to constructor
+        )
+        handler_instance.recovery_service = mock_recovery_service
+        handler_instance.event_emitter = mock_event_emitter
+        return handler_instance, event_store
+
+    @pytest.mark.asyncio
+    async def test_start_workflow_run_persists_event_to_event_store(
+        self, handler_with_event_store, sample_workflow_config
+    ):
+        """Verify that _start_workflow_run persists WorkflowCreated and WorkflowStarted events."""
+        handler, event_store = handler_with_event_store
+        work_item_id = "item-1"
+        project_id = "proj-1"
+        board_id = "board-1"
+        column_config = sample_workflow_config.get_column_config("In Development")
+
+        # Act: Call _start_workflow_run directly
+        await handler._start_workflow_run(
+            work_item_id=work_item_id,
+            project_id=project_id,
+            board_id=board_id,
+            column_config=column_config,
+            workflow_config=sample_workflow_config,
+        )
+
+        # Assert: WorkflowCreated and WorkflowStarted events should be persisted to event store
+        all_events = event_store.get_all_events_list()
+        assert len(all_events) > 0
+
+        # Find WorkflowCreated and WorkflowStarted events
+        workflow_created_found = False
+        workflow_started_found = False
+        run_id = None
+        for evt in all_events:
+            if evt.event_type == "WorkflowCreated":
+                assert evt.payload.get("work_item_id") == work_item_id
+                run_id = evt.aggregate_id
+                workflow_created_found = True
+            elif evt.event_type == "WorkflowStarted":
+                if run_id:
+                    assert evt.aggregate_id == run_id
+                workflow_started_found = True
+
+        assert workflow_created_found, "WorkflowCreated event not persisted to event store"
+        assert workflow_started_found, "WorkflowStarted event not persisted to event store"
+
+    @pytest.mark.asyncio
+    async def test_advance_workflow_stage_persists_event_to_event_store(
+        self, handler_with_event_store, sample_workflow_config
+    ):
+        """Verify that _advance_workflow_stage persists WorkflowStageAdvanced event."""
+        handler, event_store = handler_with_event_store
+        work_item_id = "item-1"
+        project_id = "proj-1"
+        board_id = "board-1"
+        column_config = sample_workflow_config.get_column_config("In Development")
+
+        # First, set up active run (simulating prior _start_workflow_run)
+        await handler._start_workflow_run(
+            work_item_id=work_item_id,
+            project_id=project_id,
+            board_id=board_id,
+            column_config=column_config,
+            workflow_config=sample_workflow_config,
+        )
+        run_info = handler._active_runs[work_item_id]
+        run_id = run_info.run_id
+
+        # Act: Call _advance_workflow_stage directly
+        await handler._advance_workflow_stage(
+            work_item_id=work_item_id,
+            from_stage="In Development",
+            to_stage="Review",
+        )
+
+        # Assert: WorkflowStageAdvanced event should be persisted
+        all_events = event_store.get_all_events_list()
+        workflow_stage_found = False
+        for evt in all_events:
+            if evt.event_type == "WorkflowStageAdvanced":
+                assert evt.aggregate_id == run_id
+                assert evt.payload.get("to_stage") == "Review"
+                workflow_stage_found = True
+                break
+        assert workflow_stage_found, "WorkflowStageAdvanced event not persisted to event store"
+
+    @pytest.mark.asyncio
+    async def test_complete_workflow_run_persists_event_to_event_store(
+        self, handler_with_event_store, sample_workflow_config
+    ):
+        """Verify that _complete_workflow_run persists WorkflowCompleted event."""
+        handler, event_store = handler_with_event_store
+        work_item_id = "item-1"
+        project_id = "proj-1"
+        board_id = "board-1"
+        column_config = sample_workflow_config.get_column_config("In Development")
+
+        # Set up active run
+        await handler._start_workflow_run(
+            work_item_id=work_item_id,
+            project_id=project_id,
+            board_id=board_id,
+            column_config=column_config,
+            workflow_config=sample_workflow_config,
+        )
+        run_info = handler._active_runs[work_item_id]
+        run_id = run_info.run_id
+
+        # Act: Call _complete_workflow_run directly
+        await handler._complete_workflow_run(
+            work_item_id=work_item_id,
+            exit_column="Done",
+        )
+
+        # Assert: WorkflowCompleted event should be persisted
+        all_events = event_store.get_all_events_list()
+        workflow_completed_found = False
+        for evt in all_events:
+            if evt.event_type == "WorkflowCompleted":
+                assert evt.aggregate_id == run_id
+                assert evt.payload.get("exit_column") == "Done"
+                workflow_completed_found = True
+                break
+        assert workflow_completed_found, "WorkflowCompleted event not persisted to event store"
+
+    @pytest.mark.asyncio
+    async def test_fail_workflow_run_persists_event_to_event_store(
+        self, handler_with_event_store, sample_workflow_config
+    ):
+        """Verify that _fail_workflow_run persists WorkflowFailed event."""
+        handler, event_store = handler_with_event_store
+        work_item_id = "item-1"
+        project_id = "proj-1"
+        board_id = "board-1"
+        column_config = sample_workflow_config.get_column_config("In Development")
+        reason = "Agent failed"
+
+        # Set up active run
+        await handler._start_workflow_run(
+            work_item_id=work_item_id,
+            project_id=project_id,
+            board_id=board_id,
+            column_config=column_config,
+            workflow_config=sample_workflow_config,
+        )
+        run_info = handler._active_runs[work_item_id]
+        run_id = run_info.run_id
+
+        # Act: Call _fail_workflow_run directly
+        await handler._fail_workflow_run(
+            work_item_id=work_item_id,
+            reason=reason,
+        )
+
+        # Assert: WorkflowFailed event should be persisted
+        all_events = event_store.get_all_events_list()
+        workflow_failed_found = False
+        for evt in all_events:
+            if evt.event_type == "WorkflowFailed":
+                assert evt.aggregate_id == run_id
+                assert evt.payload.get("reason") == reason
+                workflow_failed_found = True
+                break
+        assert workflow_failed_found, "WorkflowFailed event not persisted to event store"
+
+
 class TestTriggerAgentExecutionFailureAndLockRelease:
     """Tests for _trigger_agent error handling and lock release behavior.
 
