@@ -15,9 +15,9 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from codetoreum.domain.events import (
+from codetoreum.domain.events import WorkflowFailed
+from codetoreum.domain.events.legacy_domain_events import (
     LockStuckEvent,
-    WorkflowFailed,
     WorkItemDeadLetterQueuedEvent,
 )
 from codetoreum.ports.output.failed_event_store import (
@@ -317,8 +317,7 @@ class AgentExecutionRecoveryService:
         """
         if not self._event_store:
             logger.warning(
-                f"Cannot emit WorkItemDeadLetterQueuedEvent for '{work_item_id}': "
-                f"event_store dependency not wired",
+                f"Cannot emit WorkItemDeadLetterQueuedEvent for '{work_item_id}': " f"event_store dependency not wired",
                 extra={
                     "error_id": "ERR_AGENT_EXECUTION_MISSING_EVENT_STORE_FOR_DLQ_EVENT",
                     "work_item_id": work_item_id,
@@ -328,15 +327,15 @@ class AgentExecutionRecoveryService:
 
         try:
             dlq_event = WorkItemDeadLetterQueuedEvent(
-                type="dlq.work_item_queued",
-                timestamp=datetime.now(UTC).isoformat(),
-                source="agent_execution_recovery_service",
-                work_item_id=work_item_id,
-                board_id=board_id,
-                from_column=from_column,
-                to_column="UNKNOWN",
-                reason=reason,
-                failure_details=failure_details,
+                aggregate_id=work_item_id,
+                payload={
+                    "work_item_id": work_item_id,
+                    "board_id": board_id,
+                    "from_column": from_column,
+                    "to_column": "UNKNOWN",
+                    "reason": reason,
+                    "failure_details": failure_details,
+                },
             )
             await self._event_store.append(work_item_id, [dlq_event])
         except Exception as emit_err:
@@ -377,8 +376,7 @@ class AgentExecutionRecoveryService:
         # Only emit event if we have required fields
         if not project_id:
             logger.warning(
-                f"Cannot emit LockStuckEvent for '{work_item_id}': "
-                f"project_id not available",
+                f"Cannot emit LockStuckEvent for '{work_item_id}': " f"project_id not available",
                 extra={
                     "error_id": "ERR_AGENT_EXECUTION_MISSING_PROJECT_ID_FOR_LOCK_STUCK_EVENT",
                     "work_item_id": work_item_id,
@@ -388,8 +386,7 @@ class AgentExecutionRecoveryService:
 
         if not self._event_store:
             logger.warning(
-                f"Cannot emit LockStuckEvent for '{work_item_id}': "
-                f"event_store dependency not wired",
+                f"Cannot emit LockStuckEvent for '{work_item_id}': " f"event_store dependency not wired",
                 extra={
                     "error_id": "ERR_AGENT_EXECUTION_MISSING_EVENT_STORE_FOR_LOCK_STUCK_EVENT",
                     "work_item_id": work_item_id,
@@ -399,13 +396,13 @@ class AgentExecutionRecoveryService:
 
         try:
             stuck_event = LockStuckEvent(
-                type="lock.stuck",
-                timestamp=datetime.now(UTC).isoformat(),
-                source="agent_execution_recovery_service",
-                project_id=project_id,
-                board_id=board_id,
-                work_item_id=work_item_id,
-                reason=reason,
+                aggregate_id=work_item_id,
+                payload={
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "work_item_id": work_item_id,
+                    "reason": reason,
+                },
             )
             await self._event_store.append(work_item_id, [stuck_event])
         except Exception as emit_err:
