@@ -34,6 +34,7 @@ For production use, consider:
 import base64
 import logging
 import os
+import threading
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
@@ -66,6 +67,7 @@ class SimpleEncryptionAdapter(IEncryptionService):
         Args:
             default_key: Default 32-byte encryption key. If None, generates a random key.
         """
+        self._lock = threading.Lock()  # Thread safety for concurrent operations
         self._keys: dict[str, bytes] = {}
 
         # Initialize default key
@@ -97,12 +99,13 @@ class SimpleEncryptionAdapter(IEncryptionService):
             if key_id is None:
                 key_id = "default"
 
-            # Get encryption key
-            if key_id not in self._keys:
-                msg = f"Unknown encryption key: {key_id}"
-                raise EncryptionError(msg)
+            with self._lock:
+                # Get encryption key
+                if key_id not in self._keys:
+                    msg = f"Unknown encryption key: {key_id}"
+                    raise EncryptionError(msg)
 
-            key = self._keys[key_id]
+                key = self._keys[key_id]
 
             # Generate random 96-bit nonce
             nonce = os.urandom(12)
@@ -152,12 +155,13 @@ class SimpleEncryptionAdapter(IEncryptionService):
 
             key_id, nonce_b64, ciphertext_b64 = parts
 
-            # Get decryption key
-            if key_id not in self._keys:
-                msg = f"Unknown encryption key: {key_id}"
-                raise DecryptionError(msg)
+            with self._lock:
+                # Get decryption key
+                if key_id not in self._keys:
+                    msg = f"Unknown encryption key: {key_id}"
+                    raise DecryptionError(msg)
 
-            key = self._keys[key_id]
+                key = self._keys[key_id]
 
             # Decode base64
             nonce = base64.b64decode(nonce_b64)
@@ -197,17 +201,18 @@ class SimpleEncryptionAdapter(IEncryptionService):
             EncryptionError: If key rotation fails
         """
         try:
-            if old_key_id not in self._keys:
-                msg = f"Unknown old key: {old_key_id}"
-                raise EncryptionError(msg)
+            with self._lock:
+                if old_key_id not in self._keys:
+                    msg = f"Unknown old key: {old_key_id}"
+                    raise EncryptionError(msg)
 
-            if new_key_id in self._keys:
-                msg = f"New key already exists: {new_key_id}"
-                raise EncryptionError(msg)
+                if new_key_id in self._keys:
+                    msg = f"New key already exists: {new_key_id}"
+                    raise EncryptionError(msg)
 
-            # Generate new key
-            new_key = AESGCM.generate_key(bit_length=256)
-            self._keys[new_key_id] = new_key
+                # Generate new key
+                new_key = AESGCM.generate_key(bit_length=256)
+                self._keys[new_key_id] = new_key
 
             logger.info(f"Rotated encryption key from '{old_key_id}' to '{new_key_id}'")
 
@@ -237,11 +242,13 @@ class SimpleEncryptionAdapter(IEncryptionService):
             msg = "Encryption key must be 32 bytes for AES-256"
             raise ValueError(msg)
 
-        if key_id in self._keys:
-            msg = f"Key already exists: {key_id}"
-            raise ValueError(msg)
+        with self._lock:
+            if key_id in self._keys:
+                msg = f"Key already exists: {key_id}"
+                raise ValueError(msg)
 
-        self._keys[key_id] = key
+            self._keys[key_id] = key
+
         logger.debug(f"Added encryption key '{key_id}'")
 
     def remove_key(self, key_id: str) -> None:
@@ -258,9 +265,11 @@ class SimpleEncryptionAdapter(IEncryptionService):
             msg = "Cannot remove default key"
             raise ValueError(msg)
 
-        if key_id not in self._keys:
-            msg = f"Unknown key: {key_id}"
-            raise ValueError(msg)
+        with self._lock:
+            if key_id not in self._keys:
+                msg = f"Unknown key: {key_id}"
+                raise ValueError(msg)
 
-        del self._keys[key_id]
+            del self._keys[key_id]
+
         logger.debug(f"Removed encryption key '{key_id}'")
