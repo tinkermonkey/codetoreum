@@ -6,6 +6,7 @@ In-memory implementation of IExecutionQueryPort for development and testing.
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from threading import RLock
 from typing import TYPE_CHECKING, Any
@@ -28,6 +29,8 @@ from codetoreum.ports.input.execution_query import (
 
 if TYPE_CHECKING:
     from codetoreum.adapters.testing.execution_service_agent_executor import ExecutionServiceAgentExecutor
+
+logger = logging.getLogger(__name__)
 
 
 class MockExecutionQueryAdapter(IExecutionQueryPort):
@@ -251,7 +254,10 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
 
         The sync is:
         - On-demand: Only called when query methods are invoked
-        - Idempotent: Safe to call multiple times (checks if execution already exists)
+        - Supports re-execution: Uses execution sequence index to distinguish
+          re-execution attempts (repair cycles) from initial execution
+        - Updates existing records: Re-executions update their existing records
+          instead of being silently discarded
         - Lock-safe: Called within the adapter's lock to prevent race conditions
         """
         if not self._agent_executor:
@@ -261,22 +267,23 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
         executor_executions = self._agent_executor.executions
 
         # Convert each executor record to ExecutionInfo and add to our storage
-        for exec_record in executor_executions:
-            # Generate unique ID per execution using work_item_id and agent_id
-            # This ensures multi-stage pipelines (same work_item_id with different agents)
-            # don't collide. E.g., work_item_123-architect, work_item_123-coder, work_item_123-tester
+        # Using enumerate index ensures re-executions (repair cycles) get unique IDs
+        # without colliding with earlier attempts of the same work_item-agent pair
+        for exec_index, exec_record in enumerate(executor_executions):
+            # Generate unique ID per execution using work_item_id, agent_id, and sequence
+            # This handles re-execution (repair cycle) by distinguishing attempts:
+            # - First attempt: work_item_123-agent_architect-0
+            # - Re-execution: work_item_123-agent_architect-1 (different ID, no collision)
+            # Multi-stage pipelines also stay separate:
+            # - work_item_123-agent_architect-0, work_item_123-agent_coder-0, etc.
             work_item_id = exec_record.get("work_item_id", "unknown")
             agent_id = exec_record.get("agent_id", "unknown")
-            execution_id = f"{work_item_id}-{agent_id}"
-
-            # Skip if already processed
-            if execution_id in self._executions:
-                continue
+            execution_id = f"{work_item_id}-{agent_id}-{exec_index}"
 
             # Convert executor record to ExecutionInfo
             execution_info = self._convert_executor_record_to_execution_info(exec_record, execution_id)
 
-            # Add to our storage
+            # Add or update in storage (supports re-execution updates)
             self._executions[execution_id] = execution_info
             if execution_id not in self._logs:
                 self._logs[execution_id] = []
@@ -306,10 +313,15 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
         stage_name = record.get("stage_name", "unknown")
         started_at_str = record.get("started_at", datetime.now(UTC).isoformat())
 
-        # Parse started_at timestamp
+        # Parse started_at timestamp with proper error logging
         try:
             initialized_at = datetime.fromisoformat(started_at_str.replace("Z", "+00:00"))
-        except (ValueError, AttributeError):
+        except (ValueError, AttributeError) as e:
+            logger.warning(
+                f"Failed to parse execution timestamp '{started_at_str}' for work_item='{work_item_id}' "
+                f"agent='{agent_id}': {e}. Using current time as fallback.",
+                exc_info=True,
+            )
             initialized_at = datetime.now(UTC)
 
         # Create ExecutionInfo with execution data from executor record
