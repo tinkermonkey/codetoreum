@@ -266,3 +266,192 @@ class TestInMemoryVersionControlServiceBehavior:
         assert repo.url == url
         assert repo.id == "repo"
         assert repo.default_branch == "main"
+
+
+class TestVersionControlServiceStatus:
+    """Test status() method with derived state from actual repository tracking."""
+
+    @pytest.mark.asyncio
+    async def test_status_freshly_cloned_repo_returns_clean(self):
+        """Fresh clone should return clean status with no staged or unstaged files."""
+        service = InMemoryVersionControlService()
+        path = "/workspace/test-repo"
+
+        await service.clone_repository("https://github.com/test/repo.git", path)
+
+        status = await service.status(path)
+
+        assert status.is_dirty is False
+        assert status.staged_files == ()
+        assert status.unstaged_files == ()
+
+    @pytest.mark.asyncio
+    async def test_status_with_unstaged_file(self):
+        """After seeding a working-tree file, status should show it as unstaged."""
+        service = InMemoryVersionControlService()
+        path = "/workspace/test-repo"
+
+        await service.clone_repository("https://github.com/test/repo.git", path)
+        service.seed_working_tree_file(path, "src/main.py", "print('hello')")
+
+        status = await service.status(path)
+
+        assert status.is_dirty is True
+        assert status.staged_files == ()
+        assert "src/main.py" in status.unstaged_files
+
+    @pytest.mark.asyncio
+    async def test_status_with_staged_files(self):
+        """After staging files, status should show them as staged."""
+        service = InMemoryVersionControlService()
+        path = "/workspace/test-repo"
+
+        await service.clone_repository("https://github.com/test/repo.git", path)
+        service.stage_files(path, ["src/main.py", "README.md"])
+
+        status = await service.status(path)
+
+        assert status.is_dirty is True
+        assert "src/main.py" in status.staged_files
+        assert "README.md" in status.staged_files
+        assert status.unstaged_files == ()
+
+    @pytest.mark.asyncio
+    async def test_status_with_both_staged_and_unstaged_files(self):
+        """Status should properly distinguish between staged and unstaged files."""
+        service = InMemoryVersionControlService()
+        path = "/workspace/test-repo"
+
+        await service.clone_repository("https://github.com/test/repo.git", path)
+        service.seed_working_tree_file(path, "src/main.py", "print('hello')")
+        service.seed_working_tree_file(path, "src/helper.py", "def help(): pass")
+        service.stage_files(path, ["src/main.py"])
+
+        status = await service.status(path)
+
+        assert status.is_dirty is True
+        assert "src/main.py" in status.staged_files
+        assert "src/helper.py" in status.unstaged_files
+        assert "src/helper.py" not in status.staged_files
+        assert "src/main.py" not in status.unstaged_files
+
+    @pytest.mark.asyncio
+    async def test_status_no_wildcard_in_staged_files(self):
+        """Staged files should contain actual filenames, never wildcards."""
+        service = InMemoryVersionControlService()
+        path = "/workspace/test-repo"
+
+        await service.clone_repository("https://github.com/test/repo.git", path)
+        service.stage_files(path, ["file1.txt", "file2.txt"])
+
+        status = await service.status(path)
+
+        # Should never contain the wildcard
+        assert "*" not in status.staged_files
+        assert "file1.txt" in status.staged_files
+        assert "file2.txt" in status.staged_files
+
+    @pytest.mark.asyncio
+    async def test_status_after_commit_clears_staged_files(self):
+        """After commit, staged files should be cleared and status should reflect clean state."""
+        service = InMemoryVersionControlService()
+        path = "/workspace/test-repo"
+
+        await service.clone_repository("https://github.com/test/repo.git", path)
+        service.stage_files(path, ["src/main.py"])
+
+        # Verify staged before commit
+        status_before = await service.status(path)
+        assert status_before.is_dirty is True
+        assert "src/main.py" in status_before.staged_files
+
+        # Commit
+        await service.commit(path, "Add main.py")
+
+        # After commit, staged files should be cleared
+        status_after = await service.status(path)
+        assert status_after.is_dirty is False
+        assert status_after.staged_files == ()
+        assert status_after.unstaged_files == ()
+
+    @pytest.mark.asyncio
+    async def test_status_after_commit_with_unstaged_files(self):
+        """After commit, unstaged files should remain if not staged."""
+        service = InMemoryVersionControlService()
+        path = "/workspace/test-repo"
+
+        await service.clone_repository("https://github.com/test/repo.git", path)
+        service.seed_working_tree_file(path, "src/main.py", "print('hello')")
+        service.seed_working_tree_file(path, "src/helper.py", "def help(): pass")
+        service.stage_files(path, ["src/main.py"])
+
+        # Commit staged file
+        await service.commit(path, "Add main.py")
+
+        # Check status after commit
+        status = await service.status(path)
+
+        # Staged files should be cleared, but unstaged should remain
+        assert status.is_dirty is True
+        assert status.staged_files == ()
+        assert "src/helper.py" in status.unstaged_files
+
+    @pytest.mark.asyncio
+    async def test_status_clone_seed_stage_commit_sequence(self):
+        """Full sequence: clone -> seed file -> stage -> commit -> status clean."""
+        service = InMemoryVersionControlService()
+        path = "/workspace/test-repo"
+
+        # Clone
+        await service.clone_repository("https://github.com/test/repo.git", path)
+        status = await service.status(path)
+        assert status.is_dirty is False
+
+        # Seed a file
+        service.seed_working_tree_file(path, "src/main.py", "print('hello')")
+        status = await service.status(path)
+        assert status.is_dirty is True
+        assert "src/main.py" in status.unstaged_files
+
+        # Stage the file
+        service.stage_files(path, ["src/main.py"])
+        status = await service.status(path)
+        assert status.is_dirty is True
+        assert "src/main.py" in status.staged_files
+        assert "src/main.py" not in status.unstaged_files
+
+        # Commit
+        await service.commit(path, "Add main.py")
+        status = await service.status(path)
+        assert status.is_dirty is False
+        assert status.staged_files == ()
+        assert status.unstaged_files == ()
+
+    @pytest.mark.asyncio
+    async def test_status_multiple_repos_independent(self):
+        """Status for multiple repos should be independent."""
+        service = InMemoryVersionControlService()
+        path1 = "/workspace/repo1"
+        path2 = "/workspace/repo2"
+
+        await service.clone_repository("https://github.com/test/repo1.git", path1)
+        await service.clone_repository("https://github.com/test/repo2.git", path2)
+
+        # Seed file in repo1 only
+        service.seed_working_tree_file(path1, "file.txt", "content")
+
+        # Repo1 should be dirty
+        status1 = await service.status(path1)
+        assert status1.is_dirty is True
+
+        # Repo2 should be clean
+        status2 = await service.status(path2)
+        assert status2.is_dirty is False
+
+    @pytest.mark.asyncio
+    async def test_status_nonexistent_repo_raises_error(self):
+        """Status on nonexistent repo should raise RepositoryError."""
+        service = InMemoryVersionControlService()
+
+        with pytest.raises(RepositoryError):
+            await service.status("/nonexistent/repo")

@@ -8,6 +8,7 @@ git operations. Useful for testing orchestration logic without external dependen
 from __future__ import annotations
 
 import hashlib
+import threading
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -66,6 +67,15 @@ class InMemoryVersionControlService(IVersionControlService):
 
         # Map of (identifier) -> Repository for lookup by ID/URL/path
         self._repository_index: dict[str, Repository] = {}
+
+        # Map of repo_path -> list of staged file paths
+        self._staged_files: dict[str, list[str]] = {}
+
+        # Map of repo_path -> {file_path -> content}
+        self._working_tree: dict[str, dict[str, str]] = {}
+
+        # Thread safety for concurrent test execution
+        self._lock = threading.Lock()
 
         self._event_emitter = event_emitter
 
@@ -205,6 +215,15 @@ class InMemoryVersionControlService(IVersionControlService):
             repo["commits"][current_branch] = []
         repo["commits"][current_branch].append(commit_sha)
 
+        # Clear staged files after successful commit and remove them from working tree
+        with self._lock:
+            staged_files = self._staged_files.get(repo_path, [])
+            if repo_path in self._working_tree:
+                working_tree = self._working_tree[repo_path]
+                for file_path in staged_files:
+                    working_tree.pop(file_path, None)
+            staged_files.clear()
+
         # Emit CommitCreatedEvent if event emitter is configured
         if self._event_emitter:
             from codetoreum.domain.events.repository_events import CommitCreatedEvent
@@ -302,13 +321,25 @@ class InMemoryVersionControlService(IVersionControlService):
         return branches
 
     async def status(self, repo_path: str) -> VCSStatus:
-        """Return repository status - simulation always has changes."""
+        """Return repository status derived from actual repository state.
+
+        Returns status based on tracked staged and unstaged files.
+        """
         if repo_path not in self._repositories:
             msg = f"Repository not found at path: {repo_path}"
             raise RepositoryError(msg)
 
-        # Simulation always treats workspace as having changes (agent produced output)
-        return VCSStatus(is_dirty=True, staged_files=("*",), unstaged_files=())
+        with self._lock:
+            staged = tuple(self._staged_files.get(repo_path, []))
+            working = set(self._working_tree.get(repo_path, {}).keys())
+            staged_set = set(staged)
+            unstaged = tuple(working - staged_set)
+
+            return VCSStatus(
+                is_dirty=len(staged) > 0 or len(unstaged) > 0,
+                staged_files=staged,
+                unstaged_files=unstaged,
+            )
 
     async def pull(self, repo_path: str, branch: str, remote: str = "origin") -> None:
         """Pull latest changes - no-op in simulation (already up to date)."""
@@ -338,3 +369,53 @@ class InMemoryVersionControlService(IVersionControlService):
             return self._repository_index[identifier]
 
         raise ResourceNotFoundError("Repository", identifier)
+
+    # Test helper methods
+
+    def seed_working_tree_file(self, repo_path: str, file_path: str, content: str) -> None:
+        """Seed a file in the working tree for testing.
+
+        This test helper adds a file to the working tree without staging it,
+        simulating an agent having modified a file. The file will appear in
+        unstaged_files when status() is called.
+
+        Args:
+            repo_path: Local repository path
+            file_path: Path to the file within the repository
+            content: File content to seed
+
+        Raises:
+            RepositoryError: Repository not found
+        """
+        if repo_path not in self._repositories:
+            msg = f"Repository not found at path: {repo_path}"
+            raise RepositoryError(msg)
+
+        with self._lock:
+            if repo_path not in self._working_tree:
+                self._working_tree[repo_path] = {}
+            self._working_tree[repo_path][file_path] = content
+
+    def stage_files(self, repo_path: str, files: list[str]) -> None:
+        """Stage files for commit (test helper).
+
+        Adds files to the staging area, making them appear in staged_files
+        when status() is called.
+
+        Args:
+            repo_path: Local repository path
+            files: List of file paths to stage
+
+        Raises:
+            RepositoryError: Repository not found
+        """
+        if repo_path not in self._repositories:
+            msg = f"Repository not found at path: {repo_path}"
+            raise RepositoryError(msg)
+
+        with self._lock:
+            if repo_path not in self._staged_files:
+                self._staged_files[repo_path] = []
+            for file_path in files:
+                if file_path not in self._staged_files[repo_path]:
+                    self._staged_files[repo_path].append(file_path)
