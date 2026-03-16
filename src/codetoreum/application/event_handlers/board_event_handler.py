@@ -797,7 +797,7 @@ class BoardColumnEventHandler(EventHandler):
             success: Whether agent execution succeeded
 
         Raises:
-            Exception: Logs error but doesn't re-raise
+            Exception: Re-raised after logging if auto-progression fails
         """
         if not success:
             logger.warning(f"Agent failed for {work_item_id}, skipping auto-progression")
@@ -841,3 +841,4 @@ class BoardColumnEventHandler(EventHandler):
                     "work_item_id": work_item_id,
                 },
             )
+            raise
