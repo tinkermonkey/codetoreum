@@ -64,6 +64,15 @@ class FakeContainerAdapter(IContainer):
         _max_containers: Maximum number of containers allowed
     """
 
+    # Default images that are always available without explicit pull
+    DEFAULT_SEEDED_IMAGES = {
+        "ubuntu:latest",
+        "ubuntu:22.04",
+        "python:3.11",
+        "python:3.10",
+        "alpine:latest",
+    }
+
     def __init__(
         self,
         default_exit_code: int = 0,
@@ -132,13 +141,7 @@ class FakeContainerAdapter(IContainer):
         self._host_files: dict[str, str] = {}
 
         # Pulled images tracking (set of "image:tag" strings)
-        self._pulled_images: set[str] = {
-            "ubuntu:latest",
-            "ubuntu:22.04",
-            "python:3.11",
-            "python:3.10",
-            "alpine:latest",
-        }
+        self._pulled_images: set[str] = self.DEFAULT_SEEDED_IMAGES.copy()
 
         # Thread safety
         self._lock = threading.Lock()
@@ -1109,16 +1112,13 @@ class FakeContainerAdapter(IContainer):
 
         Args:
             path: File path (key in _host_files)
-            content: File content
+            content: File content (can be empty for legitimately empty files)
 
         Raises:
-            ValidationError: If path or content is empty
+            ValidationError: If path is empty
         """
         if not path:
             msg = "File path cannot be empty"
-            raise ValidationError(msg)
-        if not content:
-            msg = "File content cannot be empty"
             raise ValidationError(msg)
 
         with self._lock:
@@ -1152,6 +1152,8 @@ class FakeContainerAdapter(IContainer):
             self._command_history.clear()
             self._host_files.clear()
             self._virtual_filesystems.clear()
+            # Reset pulled images to pre-seeded set for test isolation
+            self._pulled_images = self.DEFAULT_SEEDED_IMAGES.copy()
 
     def get_execution_history(self) -> list[dict[str, Any]]:
         """

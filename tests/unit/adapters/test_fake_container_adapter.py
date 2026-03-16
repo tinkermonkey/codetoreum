@@ -918,8 +918,9 @@ class TestFakeContainerAdapterCopyOperations:
         with pytest.raises(ValidationError, match="File path cannot be empty"):
             adapter.seed_host_file("", "content")
 
-        with pytest.raises(ValidationError, match="File content cannot be empty"):
-            adapter.seed_host_file("/host/file.txt", "")
+        # Empty content is allowed for legitimately empty files (e.g., __init__.py, .gitkeep)
+        adapter.seed_host_file("/host/file.txt", "")
+        assert adapter.get_host_file("/host/file.txt") == ""
 
     async def test_get_host_file_not_found(self):
         """Test get_host_file fails when file does not exist."""
