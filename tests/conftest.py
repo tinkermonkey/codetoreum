@@ -2,7 +2,7 @@
 
 import asyncio
 import time
-from collections.abc import Awaitable, Callable, Generator
+from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 
 import docker
 import pytest
@@ -15,6 +15,8 @@ from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorag
 from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
 from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
 from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.infrastructure.simulation import SimulationConfig
+from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
 
 
 def is_docker_available() -> bool:
@@ -596,15 +598,13 @@ async def wait_for_polling_cycle(event_list: list, expected_count: int = 1, time
 
 
 @pytest.fixture
-def fast_simulation_config() -> "SimulationConfig":  # type: ignore
+def fast_simulation_config() -> SimulationConfig:
     """
     Provide a fast simulation configuration.
 
     Returns:
         SimulationConfig optimized for speed (100x multiplier)
     """
-    from codetoreum.infrastructure.simulation import SimulationConfig
-
     return SimulationConfig.create_fast_config(
         scenario_name="test_scenario",
         speed_multiplier=100.0,
@@ -613,8 +613,8 @@ def fast_simulation_config() -> "SimulationConfig":  # type: ignore
 
 @pytest.fixture
 async def simulation_bootstrap(
-    fast_simulation_config: "SimulationConfig",
-) -> "AsyncGenerator[SimulationApplicationBootstrap, None]":  # type: ignore
+    fast_simulation_config: SimulationConfig,
+) -> AsyncGenerator[SimulationApplicationBootstrap, None]:
     """
     Provide a fully set up simulation bootstrap.
 
@@ -627,8 +627,6 @@ async def simulation_bootstrap(
     Cleanup:
         Tears down all resources after test
     """
-    from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
-
     bootstrap = SimulationApplicationBootstrap(fast_simulation_config)
     await bootstrap.setup()
     yield bootstrap
@@ -637,8 +635,8 @@ async def simulation_bootstrap(
 
 @pytest.fixture
 async def simulation_seeder(
-    simulation_bootstrap: "SimulationApplicationBootstrap",
-) -> "AsyncGenerator":  # type: ignore
+    simulation_bootstrap: SimulationApplicationBootstrap,
+) -> AsyncGenerator:
     """
     Provide a simulation data seeder for E2E tests.
 

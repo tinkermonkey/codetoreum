@@ -106,7 +106,19 @@ RUN chmod +x /usr/local/bin/agent-entrypoint.sh
 USER orchestrator
 
 # ============================================================================
-# Stage 8: Verification (MANDATORY)
+# Stage 8: Pre-seed gh CLI config to prevent multi-account migration
+# ============================================================================
+# gh CLI v2.40.0+ attempts a one-time config migration for multi-account
+# support. If stale hosts.yml with an expired token exists, the migration
+# fails with "cowardly refusing to continue with multi account migration"
+# and blocks ALL gh commands. Pre-seeding config.yml with version: "1"
+# tells gh the migration is already complete. The entrypoint script also
+# handles this at runtime as a defense-in-depth measure.
+RUN mkdir -p /home/orchestrator/.config/gh && \
+    echo 'version: "1"' > /home/orchestrator/.config/gh/config.yml
+
+# ============================================================================
+# Stage 9: Verification (MANDATORY)
 # ============================================================================
 # Verify all critical CLIs are present (from base image)
 RUN claude --version && \

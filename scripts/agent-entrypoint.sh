@@ -61,6 +61,32 @@ if [ -z "${GIT_AUTHOR_EMAIL:-}" ] && ! git config user.email >/dev/null 2>&1; th
     echo "[agent-entrypoint] WARNING: No git user.email configured (env or gitconfig)" >&2
 fi
 
+# --- Fix gh CLI multi-account migration issue --------------------------------
+# gh CLI v2.40.0+ attempts a one-time migration of its config format to support
+# multiple accounts. If stale hosts.yml exists with an expired/invalid token,
+# the migration fails with "cowardly refusing to continue with multi account
+# migration" and blocks ALL gh commands. Fix: ensure config.yml has version: "1"
+# and remove any stale hosts.yml so the migration is never triggered.
+GH_CONFIG_DIR="${GH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/gh}"
+if [ -d "$GH_CONFIG_DIR" ]; then
+    # Remove stale hosts.yml that could trigger the migration
+    if [ -f "$GH_CONFIG_DIR/hosts.yml" ]; then
+        echo "[agent-entrypoint] Clearing stale gh hosts.yml to prevent multi-account migration error." >&2
+        rm -f "$GH_CONFIG_DIR/hosts.yml"
+    fi
+    # Ensure config.yml has version: "1" to mark migration as complete
+    if [ -f "$GH_CONFIG_DIR/config.yml" ]; then
+        if ! grep -q '^version:' "$GH_CONFIG_DIR/config.yml" 2>/dev/null; then
+            echo 'version: "1"' >> "$GH_CONFIG_DIR/config.yml"
+            echo "[agent-entrypoint] Added version marker to gh config.yml." >&2
+        fi
+    fi
+else
+    # Pre-seed gh config directory with version marker so migration never runs
+    mkdir -p "$GH_CONFIG_DIR"
+    echo 'version: "1"' > "$GH_CONFIG_DIR/config.yml"
+fi
+
 # --- Validate GitHub token permissions --------------------------------------
 # Agents need GITHUB_TOKEN with 'actions' scope (or 'actions:read') to query
 # GitHub Actions API (e.g. gh run list, gh run view) for CI status verification.
