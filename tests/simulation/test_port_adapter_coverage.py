@@ -369,8 +369,6 @@ class PortAdapterCoverageReport:
 
         return coverage
 
-    # (Dead code removed: print_coverage_report was replaced by test_overall_coverage_is_100_percent)
-
 
 # ============================================================================
 # Test Execution Hook
@@ -448,8 +446,8 @@ AUDIT SUMMARY:
 - Total Secondary/Mock Adapters Used: 2 (in adapters/secondary/)
 - Total Port-Adapter Pairs Tested: 30 (including multi-impl ports)
 - Total Abstract Methods Audited: 243
-  - Type (a) Stateful: 232 methods (95%)
-  - Type (b) Hardcoded: 3 methods (5%)
+  - Type (a) Stateful: 243 methods (100%)
+  - Type (b) Hardcoded: 0 methods (0%)
   - Type (c) Unimplemented: 0 methods (0%)
 
 See /documentation/PORT_ADAPTER_COVERAGE_AUDIT.md for complete detailed results.
