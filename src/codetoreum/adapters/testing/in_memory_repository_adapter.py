@@ -719,8 +719,21 @@ class InMemoryRepositoryAdapter(IRepository):
                     merge_commit=None,
                 )
 
-            # Create merge commit
+            # Create merge commit with combined file snapshot
             new_commit = CommitHash(str(uuid4()))
+
+            # Compute merged file state: union of files from both parents, with current branch taking precedence on conflicts
+            ancestor_files = self._get_files_at_commit(repo_id, ancestor) if ancestor else {}
+            current_files = self._get_files_at_commit(repo_id, current_commit)
+            branch_files = self._get_files_at_commit(repo_id, merge_commit)
+
+            # Start with files from current branch
+            merged_files = dict(current_files)
+            # Add/update with files from merge branch that don't conflict
+            for path, content in branch_files.items():
+                if path not in merged_files or merged_files[path] == ancestor_files.get(path):
+                    # File doesn't exist on current branch, or current branch didn't modify it from ancestor
+                    merged_files[path] = content
 
             self._commits[(repo_id, new_commit)] = {
                 "sha": new_commit,
@@ -730,6 +743,8 @@ class InMemoryRepositoryAdapter(IRepository):
                 "timestamp": datetime.now(UTC),
                 "parent": current_commit,
                 "merge_parent": merge_commit,
+                "files": list(merged_files.keys()),
+                "file_contents": merged_files,
             }
 
             # Update current branch

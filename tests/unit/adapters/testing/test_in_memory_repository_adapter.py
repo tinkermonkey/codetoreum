@@ -831,7 +831,7 @@ class TestInMemoryRepositoryAdapter:
         )
         assert len(history) >= 5
 
-    # ===== NEW TESTS FOR ENHANCED FUNCTIONALITY =====
+    # ===== diff, status, and merge fidelity tests =====
 
     async def test_diff_with_file_changes(self, adapter):
         """Test diff computation with actual file changes."""
