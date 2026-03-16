@@ -245,3 +245,101 @@ class QueuePositionChangedEvent(CodetoreumEvent):
             new_position=data.get("new_position", 0),
             project_id=data.get("project_id"),
         )
+
+
+@dataclass(frozen=True)
+class WorkItemDeadLetterQueuedEvent(CodetoreumEvent):
+    """Emitted when a work item is queued to the dead letter queue.
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Events represent immutable facts—attempting to modify any field
+    will raise `FrozenInstanceError`. This immutability is essential because
+    events are the permanent record of state changes in the system and must
+    never be altered once created.
+
+    The dead letter queue (DLQ) is where work items are placed when they cannot
+    be automatically progressed through the workflow due to failures. Manual
+    intervention or async recovery is required.
+
+    Attributes:
+        type (str): Fixed to "dlq.work_item_queued"
+        work_item_id (str): ID of the work item queued to DLQ
+        board_id (str): ID of the board containing the work item
+        from_column (str): Current column/state of the work item
+        to_column (str): Intended next column/state (UNKNOWN if not determinable)
+        reason (str): Reason for DLQ queueing (e.g., auto-progression callback failure)
+        failure_details (str): Additional error details
+
+    Example:
+        >>> event = WorkItemDeadLetterQueuedEvent(
+        ...     type="dlq.work_item_queued",
+        ...     timestamp="2025-01-14T10:30:00+00:00",
+        ...     source="recovery_service",
+        ...     work_item_id="123",
+        ...     board_id="board-1",
+        ...     from_column="in_progress",
+        ...     to_column="review",
+        ...     reason="Auto-progression callback failed",
+        ...     failure_details="ConnectionError: unable to reach board service"
+        ... )
+        >>> event.reason = "other"  # ❌ Raises FrozenInstanceError
+    """
+
+    work_item_id: str = ""
+    board_id: str = ""
+    from_column: str = ""
+    to_column: str = ""
+    reason: str = ""
+    failure_details: str = ""
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.work_item_id:
+            msg = "work_item_id is required"
+            raise ValueError(msg)
+        if not self.board_id:
+            msg = "board_id is required"
+            raise ValueError(msg)
+        if not self.from_column:
+            msg = "from_column is required"
+            raise ValueError(msg)
+        if not self.to_column:
+            msg = "to_column is required"
+            raise ValueError(msg)
+        if not self.reason:
+            msg = "reason is required"
+            raise ValueError(msg)
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update(
+            {
+                "work_item_id": self.work_item_id,
+                "board_id": self.board_id,
+                "from_column": self.from_column,
+                "to_column": self.to_column,
+                "reason": self.reason,
+                "failure_details": self.failure_details,
+            }
+        )
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "WorkItemDeadLetterQueuedEvent":
+        """Deserialize from dictionary."""
+        return cls(
+            type=data.get("type", "dlq.work_item_queued"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            work_item_id=data.get("work_item_id", ""),
+            board_id=data.get("board_id", ""),
+            from_column=data.get("from_column", ""),
+            to_column=data.get("to_column", ""),
+            reason=data.get("reason", ""),
+            failure_details=data.get("failure_details", ""),
+        )
