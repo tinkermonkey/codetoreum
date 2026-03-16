@@ -369,55 +369,7 @@ class PortAdapterCoverageReport:
 
         return coverage
 
-    @staticmethod
-    def print_coverage_report() -> None:
-        """Print a formatted coverage report to stdout."""
-        coverage = PortAdapterCoverageReport.generate_coverage_matrix()
-
-        print("\n" + "=" * 100)
-        print("PORT-TO-ADAPTER COVERAGE AUDIT REPORT")
-        print("=" * 100 + "\n")
-
-        total_pairs = len(coverage)
-        total_methods = sum(c["total_methods"] for c in coverage.values())
-        total_implemented = sum(c["implemented"] for c in coverage.values())
-        total_coverage = (total_implemented / total_methods * 100) if total_methods else 100
-
-        print(f"SUMMARY:")
-        print(f"  Total Port-Adapter Pairs: {total_pairs}")
-        print(f"  Total Abstract Methods: {total_methods}")
-        print(f"  Implemented: {total_implemented}")
-        print(f"  Coverage: {total_coverage:.1f}%\n")
-
-        print(f"DETAILS:")
-        print("-" * 100)
-        print(
-            f"{'Port/Adapter':<50} {'Methods':<15} {'Coverage':<15} {'Status':<15}"
-        )
-        print("-" * 100)
-
-        for pair_name in sorted(coverage.keys()):
-            info = coverage[pair_name]
-            percent = f"{info['coverage_percent']:.1f}%"
-            methods = f"{info['implemented']}/{info['total_methods']}"
-            status = "✓ OK" if info["coverage_percent"] == 100 else "⚠ GAP"
-            print(f"{pair_name:<50} {methods:<15} {percent:<15} {status:<15}")
-
-        print("-" * 100)
-
-        # Report any gaps
-        gaps = {k: v for k, v in coverage.items() if v["coverage_percent"] < 100}
-        if gaps:
-            print(f"\nGAPS REQUIRING ATTENTION ({len(gaps)} pairs):")
-            for pair_name in sorted(gaps.keys()):
-                info = gaps[pair_name]
-                print(f"\n  {pair_name}:")
-                for method in info["unimplemented_methods"]:
-                    print(f"    - {method}")
-        else:
-            print(f"\n✓ NO GAPS: All abstract methods across all port-adapter pairs are implemented!")
-
-        print("\n" + "=" * 100 + "\n")
+    # (Dead code removed: print_coverage_report was replaced by test_overall_coverage_is_100_percent)
 
 
 # ============================================================================
