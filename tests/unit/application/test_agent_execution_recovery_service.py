@@ -9,6 +9,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from codetoreum.adapters.secondary.failed_event_store_adapter import (
+    DeadLetterQueueFailedEventStoreAdapter,
+)
 from codetoreum.application.agent_execution_recovery_service import (
     AgentExecutionRecoveryService,
 )
@@ -32,10 +35,15 @@ class TestAgentExecutionRecoveryService:
         position.position = 1
         board_service.get_item_position.return_value = position
 
+        # Create the required failed_event_store adapter
+        dead_letter_queue = DeadLetterQueue()
+        failed_event_store = DeadLetterQueueFailedEventStoreAdapter(dead_letter_queue)
+
         service = AgentExecutionRecoveryService(
             board_service=board_service,
             event_store=event_store,
             run_registry=run_registry,
+            failed_event_store=failed_event_store,
         )
         service._board_service = board_service
         service._event_store = event_store
@@ -60,12 +68,12 @@ class TestAgentExecutionRecoveryService:
             error=error,
         )
 
-        # Assert: Work item in dead letter queue (via DeadLetterQueue infrastructure)
+        # Assert: Work item in dead letter queue (via failed event store)
         stuck_items = recovery_service.get_stuck_work_items()
         assert work_item_id in stuck_items
 
         # Verify the event data contains expected fields
-        stats = recovery_service.get_dead_letter_queue_stats()
+        stats = recovery_service.get_failed_event_store_stats()
         assert stats.total_failed_events == 1
 
     @pytest.mark.asyncio

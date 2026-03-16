@@ -276,7 +276,7 @@ class SimulationInfrastructure:
     logger: logging.Logger
     mock_tracer: MockTracer
     causal_link_registry: CausalLinkRegistry
-    failed_event_store: Any  # IFailedEventStore adapter instance
+    failed_event_store: DeadLetterQueueFailedEventStoreAdapter
 
 
 class SimulationApplicationBootstrap:

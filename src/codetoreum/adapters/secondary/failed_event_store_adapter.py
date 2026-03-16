@@ -34,14 +34,18 @@ class DeadLetterQueueFailedEventStoreAdapter(IFailedEventStore):
     uses DeadLetterQueue), following hexagonal architecture principles.
     """
 
-    def __init__(self, dead_letter_queue: DeadLetterQueue | None = None) -> None:
+    def __init__(self, dead_letter_queue: DeadLetterQueue) -> None:
         """Initialize the adapter.
 
         Args:
-            dead_letter_queue: Optional existing DeadLetterQueue instance.
-                             If None, a new instance is created.
+            dead_letter_queue: The DeadLetterQueue instance to wrap.
+
+        Raises:
+            ValueError: If dead_letter_queue is None.
         """
-        self._dead_letter_queue = dead_letter_queue or DeadLetterQueue()
+        if dead_letter_queue is None:
+            raise ValueError("dead_letter_queue cannot be None; the caller must instantiate DeadLetterQueue")
+        self._dead_letter_queue = dead_letter_queue
 
     async def add_failed_event(
         self,
