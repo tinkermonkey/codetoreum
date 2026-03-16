@@ -1,13 +1,11 @@
 """Simulation scenario tests."""
 
-from collections.abc import Callable
 from datetime import UTC, timedelta
 
 import pytest
 
 from codetoreum.infrastructure.simulation import (
     SimulationConfig,
-    SimulationResult,
     SimulationRunner,
 )
 
@@ -188,51 +186,6 @@ async def test_scenario_05_complex_workflow():
     assert result.speed_multiplier >= 10.0
 
 
-@pytest.mark.simulation
-@pytest.mark.asyncio
-async def test_all_scenarios_meet_performance_target() -> None:
-    """
-    Meta-test: Verify all scenarios meet the 10-100x performance target.
-
-    Note: scenario_07_repair_cycle is NOT included because it tests the
-    MockRepairCycleAdapter directly, not through SimulationRunner.
-    It has its own test suite in scenarios/scenario_07_repair_cycle.py.
-    """
-    scenarios: list[tuple[str, Callable[[], SimulationConfig], Callable[[SimulationRunner], object]]] = [
-        ("Simple Workflow", create_simple_config, run_simple_scenario),
-        ("Parallel Executions", create_parallel_config, run_parallel_scenario),
-        ("Review Cycle", create_review_config, run_review_scenario),
-        ("Execution Failure", create_failure_config, run_failure_scenario),
-        ("Complex Workflow", create_complex_config, run_complex_scenario),
-    ]
-
-    results: list[tuple[str, SimulationResult]] = []
-
-    for name, create_config_func, run_func in scenarios:
-        config = create_config_func()
-        runner = SimulationRunner(config)
-        result = await runner.run(run_func)
-
-        results.append((name, result))
-
-        print(f"\n{name}:")
-        print(f"  Speed: {result.speed_multiplier:.1f}x")
-        print(f"  Real time: {result.duration_seconds:.2f}s")
-        print(f"  Simulated time: {result.simulated_duration_seconds:.1f}s")
-        print(f"  Events: {result.events_captured}")
-        print(f"  Assertions: {result.assertions_passed}/{result.assertions_passed + result.assertions_failed}")
-
-    # Verify all meet performance target
-    for name, result in results:
-        assert (
-            result.speed_multiplier >= 10.0
-        ), f"{name} failed to meet 10x performance target (achieved {result.speed_multiplier:.1f}x)"
-
-    # Verify all succeeded
-    for name, result in results:
-        assert result.success, f"{name} failed: {result.errors}"
-
-    print("\n✓ All scenarios met performance targets and passed")
 
 
 @pytest.mark.simulation
