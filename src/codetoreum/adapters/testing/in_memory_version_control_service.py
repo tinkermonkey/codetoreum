@@ -187,6 +187,7 @@ class InMemoryVersionControlService(IVersionControlService):
         Args:
             repo_path: Local repository path
             message: Commit message
+            files: Optional list of files to commit explicitly (bypasses staging area)
 
         Returns:
             str: Commit SHA (full hash)
@@ -203,26 +204,35 @@ class InMemoryVersionControlService(IVersionControlService):
             msg = "Commit message cannot be empty"
             raise ValidationError(msg)
 
-        repo = self._repositories[repo_path]
-        current_branch = repo["current_branch"]
-
-        # Generate a mock commit SHA based on the message
-        # In reality this would be a full git hash
-        commit_sha = hashlib.sha256(f"{message}-{current_branch}".encode()).hexdigest()[:40]
-
-        # Add commit to current branch
-        if current_branch not in repo["commits"]:
-            repo["commits"][current_branch] = []
-        repo["commits"][current_branch].append(commit_sha)
-
-        # Clear staged files after successful commit and remove them from working tree
         with self._lock:
-            staged_files = self._staged_files.get(repo_path, [])
-            if repo_path in self._working_tree:
-                working_tree = self._working_tree[repo_path]
-                for file_path in staged_files:
-                    working_tree.pop(file_path, None)
-            staged_files.clear()
+            repo = self._repositories[repo_path]
+            current_branch = repo["current_branch"]
+
+            # Generate a mock commit SHA based on the message
+            # In reality this would be a full git hash
+            commit_sha = hashlib.sha256(f"{message}-{current_branch}".encode()).hexdigest()[:40]
+
+            # Add commit to current branch
+            if current_branch not in repo["commits"]:
+                repo["commits"][current_branch] = []
+            repo["commits"][current_branch].append(commit_sha)
+
+            # Determine which files were committed and handle staging area accordingly
+            if files is not None:
+                # Explicit files provided - commit them directly without modifying staging area
+                # This maintains separation between explicit file commits and staged commits
+                committed_files = list(files)
+            else:
+                # Use staged files if no explicit files provided
+                committed_files = list(self._staged_files.get(repo_path, []))
+
+                # Clear staging area and remove committed files from working tree (only when committing staged files)
+                if repo_path in self._staged_files:
+                    self._staged_files[repo_path].clear()
+                if repo_path in self._working_tree:
+                    working_tree = self._working_tree[repo_path]
+                    for file_path in committed_files:
+                        working_tree.pop(file_path, None)
 
         # Emit CommitCreatedEvent if event emitter is configured
         if self._event_emitter:
