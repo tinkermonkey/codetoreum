@@ -318,11 +318,15 @@ class TestAgentExecutionRecoveryService:
         stuck_items = recovery_service.get_stuck_work_items()
         assert work_item_id not in stuck_items, "Should not queue to DLQ when success=False"
 
-        # Assert: Workflow should still be failed
+        # Assert: Workflow should still be failed via _fail_workflow_run call
+        # This assertion verifies that _fail_workflow_run was called (which emits WorkflowFailed).
+        # The test inspects event_store.append calls to confirm the internal implementation
+        # detail that _fail_workflow_run owns event persistence. This is acceptable because
+        # _fail_workflow_run is a stable internal method and event persistence is its responsibility.
         assert recovery_service._event_store.append.called
         call_args = recovery_service._event_store.append.call_args
         events = call_args[0][1]
-        # Should contain WorkflowFailed event only (not DLQ event)
+        # Should contain WorkflowFailed event only (not DLQ event) because success=False skips DLQ
         assert len(events) == 1
         assert events[0].payload["work_item_id"] == work_item_id
 

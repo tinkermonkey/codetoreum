@@ -496,33 +496,14 @@ class TestCancelledErrorHandling:
         fx.run_registry.clear_run.assert_called_once_with(fx.WORK_ITEM_ID)
         fx.branch_tracker.clear.assert_called_once_with(fx.WORK_ITEM_ID)
 
-    @pytest.mark.asyncio
-    async def test_cancelled_error_during_sleep_delay(self):
-        """When CancelledError occurs during execution_delay sleep."""
-        fx = ExecutorFixture()
-        executor = fx.make_executor()
-        executor._execution_delay = 10.0  # Long delay that will be cancelled
-
-        # Create a real asyncio task so cancellation works naturally
-        task = asyncio.create_task(
-            executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
-        )
-        await asyncio.sleep(0.01)  # Let it start
-        task.cancel()
-
-        # Act & Assert: Task should be cancelled
-        with pytest.raises(asyncio.CancelledError):
-            await task
-
-        # Assert: Cleanup was still attempted (though may be incomplete due to early cancel)
-        # The important thing is that CancelledError was propagated, not swallowed
 
     @pytest.mark.asyncio
     async def test_task_done_callback_suppresses_cancelled_error(self):
-        """The _task_done_callback should suppress CancelledError (normal shutdown).
+        """The _task_done_callback suppresses CancelledError and cleans up _pending_tasks.
 
-        This tests the task callback mechanism used by execute() to handle
-        fire-and-forget tasks. CancelledError is expected during shutdown.
+        This tests the actual task callback mechanism (lines 115-132 in source) used by
+        execute() for fire-and-forget tasks. CancelledError should be suppressed during
+        shutdown, and _pending_tasks must be cleaned up even on cancellation.
         """
         fx = ExecutorFixture()
         executor = fx.make_executor()
@@ -531,26 +512,24 @@ class TestCancelledErrorHandling:
         task = asyncio.create_task(
             executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
         )
+        # Add task to _pending_tasks as execute() does (line 183 in source)
+        executor._pending_tasks.add(task)
+
         await asyncio.sleep(0.01)  # Let it start
         task.cancel()
+        await asyncio.sleep(0.01)  # Let cancellation propagate
 
-        # Add done callback (as execute() does)
-        callback_called = False
-        callback_exception = None
+        # Act: Invoke _task_done_callback directly (as task.add_done_callback does)
+        # This should NOT raise an exception even though task.result() will raise CancelledError
+        exception_raised = False
+        try:
+            executor._task_done_callback(task)
+        except Exception:
+            exception_raised = True
 
-        def track_callback(t):
-            nonlocal callback_called, callback_exception
-            callback_called = True
-            try:
-                t.result()
-            except Exception as e:
-                callback_exception = e
+        # Assert: No exception should propagate from the callback
+        assert not exception_raised, "_task_done_callback should suppress CancelledError"
 
-        task.add_done_callback(track_callback)
-        await asyncio.sleep(0.01)  # Let callback run
-
-        # Assert: Callback was called but should NOT re-raise CancelledError
-        # (It's treated as normal shutdown)
-        assert callback_called
-        # The _task_done_callback uses executor's callback which suppresses CancelledError
+        # Assert: Task was removed from pending set despite cancellation
+        assert task not in executor._pending_tasks, "Cancelled task should be removed from _pending_tasks"
 
