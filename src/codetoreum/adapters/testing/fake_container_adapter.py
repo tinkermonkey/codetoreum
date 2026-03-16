@@ -10,8 +10,6 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-logger = logging.getLogger(__name__)
-
 from codetoreum.domain.events import (
     ContainerExecutionCompletedEvent,
     now_iso,
@@ -36,6 +34,8 @@ if TYPE_CHECKING:
     )
     from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
     from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -258,9 +258,6 @@ class FakeContainerAdapter(IContainer):
         Returns:
             Container result with LLM-generated output
         """
-        if not self._llm_provider:
-            return self._get_result_for_command_predefined(command, container_id)
-
         try:
             # Create a prompt asking the LLM to simulate command execution
             command_str = " ".join(command)
@@ -283,7 +280,7 @@ class FakeContainerAdapter(IContainer):
                 duration_ms=result.duration_ms,
                 container_id=container_id,
             )
-        except Exception as e:
+        except Exception:
             # If LLM delegation fails, fall back to predefined results
             logger.warning(
                 "LLM delegation failed for command execution, falling back to predefined results",
@@ -355,26 +352,6 @@ class FakeContainerAdapter(IContainer):
                 container_id=container_id,
             )
 
-    def _get_result_for_command(
-        self,
-        command: list[str],
-        container_id: str,
-    ) -> ContainerResult:
-        """
-        Get result for a command (synchronous wrapper).
-
-        This method is deprecated - use _get_result_for_command_predefined for
-        synchronous predefined results, or await the async version for LLM delegation.
-
-        Args:
-            command: Command list
-            container_id: Container ID
-
-        Returns:
-            Container result from predefined patterns
-        """
-        return self._get_result_for_command_predefined(command, container_id)
-
     async def run(
         self,
         image: str,
@@ -437,7 +414,7 @@ class FakeContainerAdapter(IContainer):
         if self._llm_provider:
             result = await self._get_result_for_command_from_llm(command, container_id)
         else:
-            result = self._get_result_for_command(command, container_id)
+            result = self._get_result_for_command_predefined(command, container_id)
 
         # Calculate actual duration
         end_time = datetime.now(UTC)
@@ -751,7 +728,7 @@ class FakeContainerAdapter(IContainer):
                             timestamp = datetime.fromisoformat(timestamp_str)
                             if timestamp >= since:
                                 filtered_lines.append(line)
-                    except (ValueError, IndexError) as e:
+                    except (ValueError, IndexError):
                         # Log parsing error instead of silent failure
                         logger.warning(
                             "Failed to parse timestamp in log line",
@@ -861,7 +838,7 @@ class FakeContainerAdapter(IContainer):
         if self._llm_provider:
             return await self._get_result_for_command_from_llm(command, container_id)
         else:
-            return self._get_result_for_command(command, container_id)
+            return self._get_result_for_command_predefined(command, container_id)
 
     async def list_containers(
         self,
