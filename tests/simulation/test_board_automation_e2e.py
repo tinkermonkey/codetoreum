@@ -76,6 +76,26 @@ async def test_item_cascades_from_trigger_to_exit(e2e_env):
         poll_interval=0.05,
     )
 
+    # Wait for the WorkflowCompleted event to be persisted
+    # The exit column handler emits this event asynchronously via the event bus bridge
+    async def workflow_completed():
+        event_store = adapters.event_store
+        all_events = event_store.get_all_events_list()
+        workflow_run_id_events = [
+            e for e in all_events if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == work_item_id
+        ]
+        if not workflow_run_id_events:
+            return False
+        workflow_run_id = workflow_run_id_events[0].aggregate_id
+        workflow_events = [e for e in all_events if e.aggregate_id == workflow_run_id]
+        return any(e.event_type == "WorkflowCompleted" for e in workflow_events)
+
+    await wait_for_condition(
+        workflow_completed,
+        timeout=2.0,
+        poll_interval=0.05,
+    )
+
     # Verify all 3 agents were triggered in order
     executions = adapters.agent_executor.executions
     item_executions = [e for e in executions if e["work_item_id"] == work_item_id]

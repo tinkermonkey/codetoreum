@@ -114,8 +114,10 @@ USER orchestrator
 # and blocks ALL gh commands. Pre-seeding config.yml with version: "1"
 # tells gh the migration is already complete. The entrypoint script also
 # handles this at runtime as a defense-in-depth measure.
+# See: https://github.com/cli/cli/issues/8441
 RUN mkdir -p /home/orchestrator/.config/gh && \
-    echo 'version: "1"' > /home/orchestrator/.config/gh/config.yml
+    printf 'version: "1"\n' > /home/orchestrator/.config/gh/config.yml && \
+    rm -f /home/orchestrator/.config/gh/hosts.yml
 
 # ============================================================================
 # Stage 9: Verification (MANDATORY)
