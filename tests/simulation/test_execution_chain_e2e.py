@@ -89,10 +89,7 @@ async def test_execution_chain_llm_path_reaches_done(exec_chain_env):
         return adapters.llm_provider.get_request_count() >= 1
 
     await assert_condition(
-        llm_has_been_called,
-        timeout=5.0,
-        poll_interval=0.05,
-        message="LLM should have been called via ExecutionService"
+        llm_has_been_called, timeout=5.0, poll_interval=0.05, message="LLM should have been called via ExecutionService"
     )
 
     # The LLM should have been called at least once (one call per stage: architect, coder, tester)
@@ -135,10 +132,7 @@ async def test_execution_chain_emits_vcs_events(exec_chain_env):
         return len(branch_events) >= 1
 
     await assert_condition(
-        vcs_events_emitted,
-        timeout=5.0,
-        poll_interval=0.05,
-        message="VCS branch creation events should be emitted"
+        vcs_events_emitted, timeout=5.0, poll_interval=0.05, message="VCS branch creation events should be emitted"
     )
 
     # Verify VCS events were emitted (branch created for at least one stage)
@@ -188,7 +182,7 @@ async def test_execution_chain_workflow_completes(exec_chain_env):
         workflow_events_recorded,
         timeout=5.0,
         poll_interval=0.05,
-        message="Workflow events should be recorded in EventStore"
+        message="Workflow events should be recorded in EventStore",
     )
 
     # Find workflow events for this work item
@@ -242,11 +236,7 @@ async def test_executions_endpoint_visibility(exec_chain_env):
         if execution_query_port is None:
             return False
         try:
-            executions = await execution_query_port.get_executions(
-                work_item_id=work_item_id,
-                limit=10,
-                offset=0
-            )
+            executions = await execution_query_port.get_executions(work_item_id=work_item_id, limit=10, offset=0)
             return len(executions) > 0
         except Exception:
             return False
@@ -255,7 +245,7 @@ async def test_executions_endpoint_visibility(exec_chain_env):
         executions_available,
         timeout=5.0,
         poll_interval=0.05,
-        message="Execution records should be available after cascade"
+        message="Execution records should be available after cascade",
     )
 
     # Query the executions endpoint via the execution query port

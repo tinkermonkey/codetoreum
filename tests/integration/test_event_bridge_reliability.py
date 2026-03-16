@@ -308,7 +308,7 @@ class TestBridgeIntegration:
             event_published,
             timeout=2.0,
             poll_interval=0.05,
-            message="WorkItemColumnChanged event should be published by board_column_changed_bridge"
+            message="WorkItemColumnChanged event should be published by board_column_changed_bridge",
         )
 
         # Verify event was published by the actual bridge
@@ -324,6 +324,7 @@ class TestBridgeIntegration:
         queues to DLQ with proper error classification.
         """
         from unittest.mock import AsyncMock
+
         from codetoreum.ports.output.board_service import MovedByType
         from tests.conftest import assert_condition
 
@@ -341,6 +342,7 @@ class TestBridgeIntegration:
         original_publish = bootstrap.infrastructure.event_bus.publish
 
         try:
+
             async def failing_publish(event):
                 # Simulate transient error (connection failure) as would happen in production
                 connection_error = ConnectionError("Network unreachable")
@@ -362,7 +364,7 @@ class TestBridgeIntegration:
                 has_failed_event,
                 timeout=2.0,
                 poll_interval=0.05,
-                message="DLQ should capture failed event when event_bus.publish fails"
+                message="DLQ should capture failed event when event_bus.publish fails",
             )
 
             # Verify event was captured in DLQ with correct error classification
@@ -370,18 +372,14 @@ class TestBridgeIntegration:
             assert len(events) >= 1
 
             # Find the WorkItemColumnChanged event
-            work_item_event = next(
-                (e for e in events if e.event_type == "WorkItemColumnChanged"),
-                None
-            )
+            work_item_event = next((e for e in events if e.event_type == "WorkItemColumnChanged"), None)
             assert work_item_event is not None, "WorkItemColumnChanged not found in DLQ"
             assert work_item_event.event_data["work_item_id"] == work_item_id
 
             # Verify error was classified as transient (bridge logic checks for ConnectionError)
-            assert work_item_event.failure_reason.value == "transient_error", (
-                f"Expected transient_error but got {work_item_event.failure_reason.value}"
-            )
+            assert (
+                work_item_event.failure_reason.value == "transient_error"
+            ), f"Expected transient_error but got {work_item_event.failure_reason.value}"
         finally:
             # Restore original publish for cleanup
             bootstrap.infrastructure.event_bus.publish = original_publish
-

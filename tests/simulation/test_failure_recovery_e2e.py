@@ -100,16 +100,13 @@ async def test_agent_failure_emits_workflow_failed_event(
     # _fail_workflow_run() which persists the WorkflowFailed event.
     async def workflow_failed_recorded():
         all_events_poll = event_store.get_all_events_list()
-        return any(
-            e.event_type == "WorkflowFailed" and e.aggregate_type == "Workflow"
-            for e in all_events_poll
-        )
+        return any(e.event_type == "WorkflowFailed" and e.aggregate_type == "Workflow" for e in all_events_poll)
 
     await assert_condition(
         workflow_failed_recorded,
         timeout=5.0,
         poll_interval=0.05,
-        message="WorkflowFailed event should appear in EventStore after agent failure"
+        message="WorkflowFailed event should appear in EventStore after agent failure",
     )
 
     # Item stays in In Progress (cascade stopped)

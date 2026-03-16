@@ -71,10 +71,7 @@ class TestExecutionServiceAgentExecutorInitialization:
 
         recovery_service = AsyncMock()
 
-        executor = ExecutionServiceAgentExecutor(
-            recovery_service=recovery_service,
-            **dependencies
-        )
+        executor = ExecutionServiceAgentExecutor(recovery_service=recovery_service, **dependencies)
 
         assert executor._recovery_service is recovery_service
 
@@ -91,10 +88,7 @@ class TestExecutionServiceAgentExecutorInitialization:
             "vcs": AsyncMock(),
         }
 
-        executor = ExecutionServiceAgentExecutor(
-            execution_delay=0.5,
-            **dependencies
-        )
+        executor = ExecutionServiceAgentExecutor(execution_delay=0.5, **dependencies)
 
         assert executor._execution_delay == 0.5
 
@@ -256,10 +250,7 @@ class TestExecutionServiceAgentExecutorExecution:
             "vcs": AsyncMock(),
         }
 
-        executor = ExecutionServiceAgentExecutor(
-            execution_delay=0.1,
-            **dependencies
-        )
+        executor = ExecutionServiceAgentExecutor(execution_delay=0.1, **dependencies)
         executor.set_completion_handler(AsyncMock(), "board-1")
 
         # Mock to fail early (no active run) to test delay is applied
@@ -385,9 +376,7 @@ class TestExecutionServiceAgentExecutorChainSteps:
         executor._agent_repository.get_by_id.return_value = agent
 
         # Work item load fails
-        executor._work_item_service.get_work_item.side_effect = Exception(
-            "Work item not found"
-        )
+        executor._work_item_service.get_work_item.side_effect = Exception("Work item not found")
 
         await executor._run_execution("item-1", "architect", "board-1")
 
@@ -429,9 +418,7 @@ class TestExecutionServiceAgentExecutorChainSteps:
         executor._work_item_service.get_work_item.return_value = work_item
 
         # Project config load fails
-        executor._config_store.get_project_config.side_effect = Exception(
-            "Config not found"
-        )
+        executor._config_store.get_project_config.side_effect = Exception("Config not found")
 
         await executor._run_execution("item-1", "architect", "board-1")
 

@@ -596,7 +596,7 @@ async def wait_for_polling_cycle(event_list: list, expected_count: int = 1, time
 
 
 @pytest.fixture
-def fast_simulation_config() -> 'SimulationConfig':  # type: ignore
+def fast_simulation_config() -> "SimulationConfig":  # type: ignore
     """
     Provide a fast simulation configuration.
 
@@ -613,8 +613,8 @@ def fast_simulation_config() -> 'SimulationConfig':  # type: ignore
 
 @pytest.fixture
 async def simulation_bootstrap(
-    fast_simulation_config: 'SimulationConfig',
-) -> 'AsyncGenerator[SimulationApplicationBootstrap, None]':  # type: ignore
+    fast_simulation_config: "SimulationConfig",
+) -> "AsyncGenerator[SimulationApplicationBootstrap, None]":  # type: ignore
     """
     Provide a fully set up simulation bootstrap.
 
@@ -637,8 +637,8 @@ async def simulation_bootstrap(
 
 @pytest.fixture
 async def simulation_seeder(
-    simulation_bootstrap: 'SimulationApplicationBootstrap',
-) -> 'AsyncGenerator':  # type: ignore
+    simulation_bootstrap: "SimulationApplicationBootstrap",
+) -> "AsyncGenerator":  # type: ignore
     """
     Provide a simulation data seeder for E2E tests.
 

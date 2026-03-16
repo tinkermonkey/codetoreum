@@ -61,10 +61,7 @@ async def test_full_workflow_event_audit_trail(
         return any(e.event_type == "WorkflowCompleted" for e in all_events if e.aggregate_type == "Workflow")
 
     await assert_condition(
-        workflow_events_ready,
-        timeout=2.0,
-        poll_interval=0.05,
-        message="WorkflowCompleted event should be recorded"
+        workflow_events_ready, timeout=2.0, poll_interval=0.05, message="WorkflowCompleted event should be recorded"
     )
 
     # -------------------------------------------------------------------------
@@ -170,10 +167,7 @@ async def test_event_store_chronological_across_all_streams(
         return len(all_events) > 0
 
     await assert_condition(
-        events_captured,
-        timeout=2.0,
-        poll_interval=0.05,
-        message="EventStore should have events after cascade"
+        events_captured, timeout=2.0, poll_interval=0.05, message="EventStore should have events after cascade"
     )
 
     event_store = adapters.event_store
@@ -235,7 +229,7 @@ async def test_event_emitter_captures_column_change_events(
         events_emitted,
         timeout=2.0,
         poll_interval=0.05,
-        message="CapturingMockEventEmitter should capture events during cascade"
+        message="CapturingMockEventEmitter should capture events during cascade",
     )
 
     # After the cascade, the emitter should have captured events

@@ -80,10 +80,7 @@ async def test_yaml_scenario_seeding_and_cascade(
             return len(item_executions) == 3
 
         await assert_condition(
-            all_agents_executed,
-            timeout=5.0,
-            poll_interval=0.05,
-            message="All agents should be executed and recorded"
+            all_agents_executed, timeout=5.0, poll_interval=0.05, message="All agents should be executed and recorded"
         )
 
         # Verify all 3 agents were triggered in the correct order

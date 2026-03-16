@@ -93,7 +93,7 @@ async def test_both_projects_cascade_to_done(multi_project_env):
         both_workflows_completed,
         timeout=5.0,
         poll_interval=0.05,
-        message="Both workflows should complete with all agents executed"
+        message="Both workflows should complete with all agents executed",
     )
 
     assert alpha_done, (
@@ -138,10 +138,7 @@ async def test_agent_isolation(multi_project_env):
         return len(alpha_executions) >= 3 and len(beta_executions) >= 3
 
     await assert_condition(
-        all_executions_recorded,
-        timeout=5.0,
-        poll_interval=0.05,
-        message="All agent executions should be recorded"
+        all_executions_recorded, timeout=5.0, poll_interval=0.05, message="All agent executions should be recorded"
     )
 
     executions = executor.executions
@@ -211,12 +208,10 @@ async def test_event_store_work_item_ids(multi_project_env):
     async def workflow_events_recorded_for_both():
         all_events = event_store.get_all_events_list()
         alpha_workflow_events = [
-            e for e in all_events
-            if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == alpha_id
+            e for e in all_events if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == alpha_id
         ]
         beta_workflow_events = [
-            e for e in all_events
-            if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == beta_id
+            e for e in all_events if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == beta_id
         ]
         return len(alpha_workflow_events) > 0 and len(beta_workflow_events) > 0
 
@@ -224,7 +219,7 @@ async def test_event_store_work_item_ids(multi_project_env):
         workflow_events_recorded_for_both,
         timeout=5.0,
         poll_interval=0.05,
-        message="Workflow events should be recorded for both projects"
+        message="Workflow events should be recorded for both projects",
     )
 
     all_events = event_store.get_all_events_list()

@@ -73,7 +73,7 @@ async def test_item_cascades_from_trigger_to_exit(e2e_env):
     await wait_for_condition(
         lambda: len([e for e in adapters.agent_executor.executions if e["work_item_id"] == work_item_id]) == 3,
         timeout=2.0,
-        poll_interval=0.05
+        poll_interval=0.05,
     )
 
     # Verify all 3 agents were triggered in order
@@ -155,10 +155,7 @@ async def test_lock_released_after_cascade(e2e_env):
         return queue_state.lock_holder is None
 
     await assert_condition(
-        lock_is_released,
-        timeout=2.0,
-        poll_interval=0.05,
-        message="Lock should be released after cascade"
+        lock_is_released, timeout=2.0, poll_interval=0.05, message="Lock should be released after cascade"
     )
 
 
@@ -213,10 +210,7 @@ async def test_cascade_stops_on_agent_failure(
         return len(item_executions) >= 2
 
     await assert_condition(
-        coder_has_executed,
-        timeout=5.0,
-        poll_interval=0.05,
-        message="Coder should have been executed"
+        coder_has_executed, timeout=5.0, poll_interval=0.05, message="Coder should have been executed"
     )
 
     # Item should still be in "In Progress" (coder failed, no auto-progress)
@@ -239,11 +233,7 @@ async def test_cascade_stops_on_agent_failure(
         final_executions = [e for e in executor.executions if e["work_item_id"] == work_item_id]
         return len(current_executions) == len(final_executions)
 
-    cascade_stable = await wait_for_condition(
-        cascade_has_stopped,
-        timeout=0.5,
-        poll_interval=0.05
-    )
+    cascade_stable = await wait_for_condition(cascade_has_stopped, timeout=0.5, poll_interval=0.05)
     assert cascade_stable, "Cascade should have stopped (executor execution count stabilized)"
 
     # Verify architect executed but cascade stopped after coder failure
@@ -252,6 +242,5 @@ async def test_cascade_stops_on_agent_failure(
     assert "architect" in agent_ids, "Architect should have been triggered"
     assert "coder" in agent_ids, "Coder should have been triggered (and failed)"
     assert "tester" not in agent_ids, (
-        f"Tester should NOT have been triggered after coder failure. "
-        f"Executions: {agent_ids}"
+        f"Tester should NOT have been triggered after coder failure. " f"Executions: {agent_ids}"
     )
