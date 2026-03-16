@@ -31,6 +31,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 # Testing Adapter Imports
 # ============================================================================
 
+# ============================================================================
+# Secondary (Production/Mock) Adapter Imports
+# ============================================================================
+from codetoreum.adapters.secondary.mock_code_review_adapter import MockCodeReviewAdapter
+from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.adapters.testing.capturing_mock_event_emitter import (
     CapturingMockEventEmitter,
 )
@@ -85,16 +90,8 @@ from codetoreum.adapters.testing.simple_encryption_adapter import (
 )
 
 # ============================================================================
-# Secondary (Production/Mock) Adapter Imports
-# ============================================================================
-
-from codetoreum.adapters.secondary.mock_code_review_adapter import MockCodeReviewAdapter
-from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
-
-# ============================================================================
 # Port Interface Imports
 # ============================================================================
-
 from codetoreum.ports.output.active_workflow_run_registry import (
     IActiveWorkflowRunRegistry,
 )
@@ -127,7 +124,6 @@ from codetoreum.ports.output.version_control_service import IVersionControlServi
 from codetoreum.ports.output.work_item_branch_tracker import IWorkItemBranchTracker
 from codetoreum.ports.output.work_item_service import IWorkItemService
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
-
 
 # ============================================================================
 # Helper Functions
@@ -235,9 +231,7 @@ PORT_ADAPTER_MAPPING = [
 
 
 @pytest.mark.parametrize("port_name,port_cls,adapter_cls", PORT_ADAPTER_MAPPING)
-def test_all_abstract_methods_implemented(
-    port_name: str, port_cls: type, adapter_cls: type
-) -> None:
+def test_all_abstract_methods_implemented(port_name: str, port_cls: type, adapter_cls: type) -> None:
     """
     Verify that all abstract methods from a port are implemented in the adapter.
 
@@ -269,15 +263,11 @@ def test_all_abstract_methods_implemented(
         ), f"{adapter_cls.__name__} does not implement {method_name} from {port_name}"
 
         method = getattr(adapter_cls, method_name)
-        assert callable(
-            method
-        ), f"{adapter_cls.__name__}.{method_name} is not callable"
+        assert callable(method), f"{adapter_cls.__name__}.{method_name} is not callable"
 
 
 @pytest.mark.parametrize("port_name,port_cls,adapter_cls", PORT_ADAPTER_MAPPING)
-def test_adapter_instantiation(
-    port_name: str, port_cls: type, adapter_cls: type
-) -> None:
+def test_adapter_instantiation(port_name: str, port_cls: type, adapter_cls: type) -> None:
     """
     Verify that each adapter can be instantiated successfully.
 
@@ -306,10 +296,8 @@ def test_adapter_instantiation(
     try:
         # Attempt to instantiate with no arguments
         instance = adapter_cls()
-        assert instance is not None, f"Instantiation returned None"
-        assert isinstance(
-            instance, adapter_cls
-        ), f"Instance is not of type {adapter_cls.__name__}"
+        assert instance is not None, "Instantiation returned None"
+        assert isinstance(instance, adapter_cls), f"Instance is not of type {adapter_cls.__name__}"
     except TypeError as e:
         pytest.fail(
             f"{adapter_cls.__name__} constructor failed: {e}\n"
@@ -357,11 +345,7 @@ class PortAdapterCoverageReport:
             coverage[key] = {
                 "total_methods": len(abstract_methods),
                 "implemented": implemented,
-                "coverage_percent": (
-                    (implemented / len(abstract_methods) * 100)
-                    if abstract_methods
-                    else 100
-                ),
+                "coverage_percent": ((implemented / len(abstract_methods) * 100) if abstract_methods else 100),
                 "unimplemented_methods": unimplemented,
                 "adapter": adapter_cls.__name__,
                 "port": port_name,
@@ -394,9 +378,7 @@ def test_overall_coverage_is_100_percent() -> None:
 
     # Check individual pairs
     gaps = {k: v for k, v in coverage.items() if v["coverage_percent"] < 100}
-    assert (
-        not gaps
-    ), f"Coverage gaps in {len(gaps)} port-adapter pair(s): {list(gaps.keys())}"
+    assert not gaps, f"Coverage gaps in {len(gaps)} port-adapter pair(s): {list(gaps.keys())}"
 
 
 # ============================================================================
