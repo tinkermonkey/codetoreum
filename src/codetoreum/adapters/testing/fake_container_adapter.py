@@ -735,10 +735,7 @@ class FakeContainerAdapter(IContainer):
                     if end_bracket > 0:
                         content_in_brackets = line[1:end_bracket]
                         # Skip lines with known non-timestamp bracket patterns (e.g., [stderr], [exit N])
-                        is_known_pattern = (
-                            content_in_brackets == "stderr"
-                            or content_in_brackets.startswith("exit ")
-                        )
+                        is_known_pattern = content_in_brackets == "stderr" or content_in_brackets.startswith("exit ")
                         try:
                             timestamp_str = content_in_brackets
                             timestamp = datetime.fromisoformat(timestamp_str)
@@ -755,15 +752,13 @@ class FakeContainerAdapter(IContainer):
                             # Always include the line if we've seen timestamps already
                             if filtered_lines:
                                 filtered_lines.append(line)
-                    else:
-                        # Bracket at position 0 or not found - this is not a timestamp line
-                        # Include it only if we've already included timestamped lines
-                        if filtered_lines:
-                            filtered_lines.append(line)
-                else:
-                    # Non-timestamped lines are included if we have recent content
-                    if filtered_lines:
+                    # Bracket at position 0 or not found - this is not a timestamp line
+                    # Include it only if we've already included timestamped lines
+                    elif filtered_lines:
                         filtered_lines.append(line)
+                # Non-timestamped lines are included if we have recent content
+                elif filtered_lines:
+                    filtered_lines.append(line)
             logs = "\n".join(filtered_lines)
 
         if stream:
