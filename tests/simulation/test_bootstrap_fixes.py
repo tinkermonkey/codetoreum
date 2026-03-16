@@ -7,17 +7,16 @@ Verifies:
 3. DLQ retry handler raises exception for unknown event types instead of silent deletion
 """
 
-import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from codetoreum.infrastructure.simulation.bootstrap import (
-    SimulationApplicationBootstrap,
-)
-from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
-from codetoreum.ports.output.failed_event_store import IFailedEventStore
+import pytest
+
 from codetoreum.adapters.secondary.failed_event_store_adapter import (
     DeadLetterQueueFailedEventStoreAdapter,
 )
+from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
+from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+from codetoreum.ports.output.failed_event_store import IFailedEventStore
 
 
 @pytest.mark.asyncio
