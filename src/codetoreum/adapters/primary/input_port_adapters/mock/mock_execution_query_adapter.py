@@ -4,9 +4,13 @@ Mock Execution Query Adapter
 In-memory implementation of IExecutionQueryPort for development and testing.
 """
 
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from threading import RLock
+from typing import TYPE_CHECKING, Any
 
+from codetoreum.domain.agent_execution import ExecutionStatus
 from codetoreum.domain.exceptions import ExecutionNotFoundError
 from codetoreum.ports.input.execution_query import (
     ExecutionFilters,
@@ -22,16 +26,24 @@ from codetoreum.ports.input.execution_query import (
     SortOrder,
 )
 
+if TYPE_CHECKING:
+    from codetoreum.adapters.testing.execution_service_agent_executor import ExecutionServiceAgentExecutor
+
 
 class MockExecutionQueryAdapter(IExecutionQueryPort):
     """
     Mock implementation of IExecutionQueryPort using in-memory storage.
+
+    Can optionally be wired to an ExecutionServiceAgentExecutor to expose
+    execution records as query results. This enables visibility into the
+    executions endpoint (GET /api/v2/executions) during simulation testing.
     """
 
-    def __init__(self):
+    def __init__(self, agent_executor: ExecutionServiceAgentExecutor | None = None):
         self._executions: dict[str, ExecutionInfo] = {}
         self._logs: dict[str, list[LogEntry]] = {}  # execution_id -> logs
         self._history: dict[str, list[ExecutionHistoryEntry]] = {}  # execution_id -> history
+        self._agent_executor = agent_executor
         self._lock = RLock()
 
     def add_execution(self, execution_info: ExecutionInfo):
@@ -60,6 +72,9 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
     async def get_execution(self, execution_id: str) -> ExecutionInfo:
         """Get execution by ID."""
         with self._lock:
+            # Sync executions from agent executor if available
+            self._sync_from_agent_executor()
+
             if execution_id not in self._executions:
                 msg = f"Execution with ID {execution_id} not found"
                 raise ExecutionNotFoundError(msg)
@@ -72,6 +87,9 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
     ) -> ExecutionListResult:
         """List executions with optional filtering and pagination."""
         with self._lock:
+            # Sync executions from agent executor if available
+            self._sync_from_agent_executor()
+
             # Get all executions
             executions = list(self._executions.values())
 
@@ -155,6 +173,9 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
     async def count_executions(self, filters: ExecutionFilters | None = None) -> int:
         """Count executions matching filters."""
         with self._lock:
+            # Sync executions from agent executor if available
+            self._sync_from_agent_executor()
+
             executions = list(self._executions.values())
 
             if filters:
@@ -218,6 +239,92 @@ class MockExecutionQueryAdapter(IExecutionQueryPort):
             executions.sort(key=lambda e: e.status.value, reverse=reverse)
 
         return executions
+
+    def _sync_from_agent_executor(self) -> None:
+        """
+        Synchronize executions from the agent executor (if available).
+
+        This enables visibility into the executions endpoint by pulling execution
+        records from ExecutionServiceAgentExecutor, which tracks all agent executions
+        performed during simulation. This solves issue #371 where execution data
+        was not visible through the GET /api/v2/executions REST endpoint.
+
+        The sync is:
+        - On-demand: Only called when query methods are invoked
+        - Idempotent: Safe to call multiple times (checks if execution already exists)
+        - Lock-safe: Called within the adapter's lock to prevent race conditions
+        """
+        if not self._agent_executor:
+            return
+
+        # Get the execution records from the agent executor
+        executor_executions = self._agent_executor.executions
+
+        # Convert each executor record to ExecutionInfo and add to our storage
+        for exec_record in executor_executions:
+            execution_id = exec_record.get("work_item_id", "unknown")
+
+            # Skip if already processed
+            if execution_id in self._executions:
+                continue
+
+            # Convert executor record to ExecutionInfo
+            execution_info = self._convert_executor_record_to_execution_info(exec_record)
+
+            # Add to our storage
+            self._executions[execution_id] = execution_info
+            if execution_id not in self._logs:
+                self._logs[execution_id] = []
+            if execution_id not in self._history:
+                self._history[execution_id] = []
+
+    def _convert_executor_record_to_execution_info(self, record: dict[str, Any]) -> ExecutionInfo:
+        """
+        Convert an ExecutionServiceAgentExecutor record to ExecutionInfo.
+
+        Args:
+            record: Execution record from executor with keys:
+                - work_item_id: ID of the work item being executed
+                - agent_id: ID of the agent
+                - board_id: ID of the board
+                - started_at: ISO timestamp of execution start
+
+        Returns:
+            ExecutionInfo with standard execution details
+        """
+        work_item_id = record.get("work_item_id", "unknown")
+        agent_id = record.get("agent_id", "unknown")
+        started_at_str = record.get("started_at", datetime.now(UTC).isoformat())
+
+        # Parse started_at timestamp
+        try:
+            initialized_at = datetime.fromisoformat(started_at_str.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            initialized_at = datetime.now(UTC)
+
+        # Create ExecutionInfo with minimal required fields
+        # Status is COMPLETED for now (executor doesn't track detailed status yet)
+        return ExecutionInfo(
+            id=work_item_id,  # Use work_item_id as execution ID for now
+            agent_id=agent_id,
+            agent_name=f"agent-{agent_id}",
+            work_item_id=work_item_id,
+            workflow_id=record.get("workflow_id", "unknown"),
+            stage_name=record.get("stage_name", "unknown"),
+            status=ExecutionStatus.COMPLETED,
+            container_name=None,
+            container_id=None,
+            output=record.get("output"),
+            error_message=None,
+            error_detail=None,
+            exit_code=None,
+            input_tokens=0,
+            output_tokens=0,
+            duration_seconds=None,
+            initialized_at=initialized_at,
+            started_at=initialized_at,
+            completed_at=datetime.now(UTC),
+        )
 
     def clear(self):
         """Clear all data (useful for testing)."""

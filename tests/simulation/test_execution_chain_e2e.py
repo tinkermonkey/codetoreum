@@ -175,3 +175,71 @@ async def test_execution_chain_workflow_completes(exec_chain_env):
     assert "WorkflowCreated" in event_types, f"WorkflowCreated missing; got: {event_types}"
     assert "WorkflowStarted" in event_types, f"WorkflowStarted missing; got: {event_types}"
     assert "WorkflowCompleted" in event_types, f"WorkflowCompleted missing; got: {event_types}"
+
+
+@pytest.mark.asyncio
+async def test_executions_endpoint_visibility(exec_chain_env):
+    """Verify that the GET /api/v2/executions endpoint returns execution data
+    after a simulation cascade (issue #371).
+
+    This test ensures that ExecutionServiceAgentExecutor executions are visible
+    through the REST API by:
+    1. Running a simulation cascade with ExecutionServiceAgentExecutor
+    2. Querying the /api/v2/executions endpoint
+    3. Verifying that execution records are returned with correct data
+    """
+    bootstrap, seeder, adapters = exec_chain_env
+    board = adapters.board
+    work_item_id = seeder.created_items.work_items[0]
+
+    # Human moves item from Backlog → Ready (pipeline trigger)
+    await board.move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)
+
+    # Wait for cascade to reach Done
+    reached_done = await wait_for_column(board, work_item_id, "Done", timeout=30.0)
+    assert reached_done, (
+        f"Item did not reach 'Done' within timeout. "
+        f"Current position: {(await board.get_item_position(work_item_id)).column_name}"
+    )
+
+    # Allow background cleanup tasks to settle
+    await asyncio.sleep(0.3)
+
+    # Query the executions endpoint via the execution query port
+    execution_query_port = bootstrap.ports.execution_query
+    assert execution_query_port is not None, "execution_query port not available"
+
+    # List all executions
+    result = await execution_query_port.list_executions()
+
+    # Verify that executions were recorded
+    assert result.total_count > 0, (
+        f"No executions found in the executions endpoint. "
+        f"Expected executions for work_item_id={work_item_id} "
+        f"after cascade to Done."
+    )
+
+    # Verify that the execution records contain the expected work item
+    execution_work_item_ids = {exe.work_item_id for exe in result.executions}
+    assert work_item_id in execution_work_item_ids, (
+        f"Expected work_item_id {work_item_id} in execution records, "
+        f"but got: {execution_work_item_ids}"
+    )
+
+    # Verify execution record details
+    matching_execution = next(
+        (exe for exe in result.executions if exe.work_item_id == work_item_id),
+        None,
+    )
+    assert matching_execution is not None, f"No execution found for work_item_id={work_item_id}"
+
+    # Verify that execution has the expected fields populated
+    assert matching_execution.id is not None
+    assert matching_execution.agent_id is not None
+    assert matching_execution.initialized_at is not None
+    assert matching_execution.status is not None
+
+    # Verify that the execution can also be retrieved by ID
+    single_execution = await execution_query_port.get_execution(matching_execution.id)
+    assert single_execution.id == matching_execution.id
+    assert single_execution.work_item_id == work_item_id

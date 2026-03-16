@@ -1061,7 +1061,9 @@ class SimulationApplicationBootstrap:
         agent_command = MockAgentCommandAdapter()
         agent_query = MockAgentQueryAdapter()
         execution_command = MockExecutionCommandAdapter()
-        execution_query = MockExecutionQueryAdapter()
+        execution_query = MockExecutionQueryAdapter(
+            agent_executor=self.adapters.agent_executor,
+        )
         config_query = MockConfigQueryAdapter(
             config_store=self.adapters.config_store,
         )
