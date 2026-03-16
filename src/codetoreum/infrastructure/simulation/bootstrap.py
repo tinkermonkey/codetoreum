@@ -171,6 +171,7 @@ from codetoreum.ports.input.workflow_query import IWorkflowQueryPort
 from codetoreum.ports.input.workflow_run_query import IWorkflowRunQueryPort
 from codetoreum.ports.input.workspace_query import IWorkspaceQueryPort
 from codetoreum.ports.output.agent_executor import IAgentExecutor
+from codetoreum.ports.output.failed_event_store import IFailedEventStore
 
 logger = logging.getLogger(__name__)
 
@@ -276,7 +277,7 @@ class SimulationInfrastructure:
     logger: logging.Logger
     mock_tracer: MockTracer
     causal_link_registry: CausalLinkRegistry
-    failed_event_store: DeadLetterQueueFailedEventStoreAdapter
+    failed_event_store: "IFailedEventStore"
 
 
 class SimulationApplicationBootstrap:
@@ -387,7 +388,10 @@ class SimulationApplicationBootstrap:
             # This enables automatic retry of failed event publishing (issue #371)
             if self.infrastructure and self.infrastructure.failed_event_store:
                 logger.info("Phase 5c: Starting failed event store retry processor...")
-                await self.infrastructure.failed_event_store.start_retry_processor(self._create_dlq_retry_handler())
+                # Cast to adapter to access infrastructure-specific lifecycle methods
+                dlq_adapter = self.infrastructure.failed_event_store
+                if isinstance(dlq_adapter, DeadLetterQueueFailedEventStoreAdapter):
+                    await dlq_adapter.start_retry_processor(self._create_dlq_retry_handler())
 
             self._is_setup = True
             logger.info("Simulation bootstrap completed successfully")
@@ -412,6 +416,11 @@ class SimulationApplicationBootstrap:
         - Stop event bus
         - Clear adapters
         - Reset state
+
+        Raises:
+            Exception: Re-raises any exception encountered during cleanup with full context.
+                     The _is_setup flag is only cleared if all cleanup steps succeed,
+                     ensuring reliable state tracking even on failure.
         """
         if not self._is_setup:
             return
@@ -421,7 +430,9 @@ class SimulationApplicationBootstrap:
 
             # Stop dead letter queue retry processor
             if self.infrastructure and self.infrastructure.failed_event_store:
-                await self.infrastructure.failed_event_store.stop_retry_processor()
+                dlq_adapter = self.infrastructure.failed_event_store
+                if isinstance(dlq_adapter, DeadLetterQueueFailedEventStoreAdapter):
+                    await dlq_adapter.stop_retry_processor()
 
             # Stop simulation engine
             if self._engine:
@@ -454,6 +465,8 @@ class SimulationApplicationBootstrap:
                 extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
                 exc_info=True,
             )
+            # Re-raise to ensure caller (typically test fixture) knows teardown failed
+            raise
 
     # =========================================================================
     # Phase 2: Create Adapters
@@ -789,15 +802,18 @@ class SimulationApplicationBootstrap:
                     payload=event_data,
                 )
             else:
-                # For unknown event types, log and skip (won't be retried again)
-                logger.warning(
-                    f"Unknown event type {event_type} in dead letter queue - skipping retry",
+                # For unknown event types, raise exception to prevent silent deletion
+                # This ensures the DLQ doesn't remove events of unmapped types on first retry.
+                # The retry processor will treat this as a processing failure and retry with backoff.
+                message = f"Unknown event type '{event_type}' in dead letter queue - handler mapping not updated"
+                logger.error(
+                    message,
                     extra={
                         "event_type": event_type,
                         "error_id": ErrorRegistry.ERR_INTERNAL_ERROR,
                     },
                 )
-                return
+                raise ValueError(message)
 
             await event_bus.publish(retry_event_obj)
 
