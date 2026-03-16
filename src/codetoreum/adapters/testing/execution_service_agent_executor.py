@@ -37,8 +37,8 @@ logger = logging.getLogger(__name__)
 class ExecutionServiceAgentExecutor(IAgentExecutor):
     """Wires IAgentExecutor → ExecutionService → LLM/Container/VCS chain.
 
-    This adapter replaces MockAgentExecutor for Phase 3 testing. It drives the
-    full execution chain:
+    This adapter drives the full execution chain when ExecutionServiceAgentExecutor
+    is active. It replaces MockAgentExecutor for end-to-end testing. The chain:
     1.  Looks up active run from registry (set by BoardColumnEventHandler)
     2.  Loads domain objects (Agent, WorkItem, ProjectConfig → ProjectContext)
     3.  Clones repository (synthetic path in simulation)

@@ -1,7 +1,7 @@
 """End-to-end test for the ExecutionService execution chain.
 
 Exercises the full fire-and-forget chain when ExecutionServiceAgentExecutor
-is active (Phase 3):
+is active:
 
   human move → event bridge → BoardColumnEventHandler → ExecutionServiceAgentExecutor
      → ExecutionService (LLM path) → WorkspaceRouter (VCS ops) → completion callback
@@ -40,7 +40,7 @@ async def exec_chain_env(
     """Bootstrap ExecutionServiceAgentExecutor + seed, with fast delay."""
     adapters = cast("SimulationAdapters", simulation_bootstrap.adapters)
 
-    # ExecutionServiceAgentExecutor is the default executor (wired in bootstrap Phase 3)
+    # ExecutionServiceAgentExecutor is the default executor (wired in SimulationApplicationBootstrap)
     # Set execution delay to 0.0 for fast tests
     if adapters.agent_executor is not None:
         adapters.agent_executor._execution_delay = 0.0
