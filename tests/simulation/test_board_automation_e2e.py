@@ -226,12 +226,25 @@ async def test_cascade_stops_on_agent_failure(
         pos.column_name == "In Progress"
     ), f"Expected item to stay in 'In Progress' after coder failure, but found in '{pos.column_name}'"
 
-    # Double-check after a small delay to ensure tester hasn't started
-    await wait_for_condition(
-        lambda: True,  # Just give event loop a chance
-        timeout=0.1,
+    # Verify cascade stopped by polling executor state for stability
+    # Capture executor count after coder executes
+    initial_count = len([e for e in executor.executions if e["work_item_id"] == work_item_id])
+
+    # Poll for 0.5s to confirm cascade stopped (no more agents execute)
+    async def cascade_has_stopped():
+        # Check if execution count has stabilized (no new executions)
+        current_executions = [e for e in executor.executions if e["work_item_id"] == work_item_id]
+        # Wait a bit and check again
+        await asyncio.sleep(0.1)
+        final_executions = [e for e in executor.executions if e["work_item_id"] == work_item_id]
+        return len(current_executions) == len(final_executions)
+
+    cascade_stable = await wait_for_condition(
+        cascade_has_stopped,
+        timeout=0.5,
         poll_interval=0.05
     )
+    assert cascade_stable, "Cascade should have stopped (executor execution count stabilized)"
 
     # Verify architect executed but cascade stopped after coder failure
     item_executions = [e for e in executor.executions if e["work_item_id"] == work_item_id]

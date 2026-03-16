@@ -588,3 +588,81 @@ async def wait_for_polling_cycle(event_list: list, expected_count: int = 1, time
         return len(event_list) >= expected_count
 
     return await wait_for_condition(has_events, timeout=timeout, poll_interval=0.05)
+
+
+# ====================================================================================
+# Simulation Bootstrap Fixtures (Available to all test directories)
+# ====================================================================================
+
+
+@pytest.fixture
+def fast_simulation_config() -> 'SimulationConfig':  # type: ignore
+    """
+    Provide a fast simulation configuration.
+
+    Returns:
+        SimulationConfig optimized for speed (100x multiplier)
+    """
+    from codetoreum.infrastructure.simulation import SimulationConfig
+
+    return SimulationConfig.create_fast_config(
+        scenario_name="test_scenario",
+        speed_multiplier=100.0,
+    )
+
+
+@pytest.fixture
+async def simulation_bootstrap(
+    fast_simulation_config: 'SimulationConfig',
+) -> 'AsyncGenerator[SimulationApplicationBootstrap, None]':  # type: ignore
+    """
+    Provide a fully set up simulation bootstrap.
+
+    Args:
+        fast_simulation_config: Fast simulation configuration fixture
+
+    Yields:
+        SimulationApplicationBootstrap instance with app ready for testing
+
+    Cleanup:
+        Tears down all resources after test
+    """
+    from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
+
+    bootstrap = SimulationApplicationBootstrap(fast_simulation_config)
+    await bootstrap.setup()
+    yield bootstrap
+    await bootstrap.teardown()
+
+
+@pytest.fixture
+async def simulation_seeder(
+    simulation_bootstrap: 'SimulationApplicationBootstrap',
+) -> 'AsyncGenerator':  # type: ignore
+    """
+    Provide a simulation data seeder for E2E tests.
+
+    This seeder populates domain objects (Agent, WorkItem) required for
+    ExecutionServiceAgentExecutor to function properly in end-to-end tests.
+
+    Args:
+        simulation_bootstrap: Bootstrap fixture
+
+    Yields:
+        SimulationDataSeeder instance ready for seeding test data
+
+    Cleanup:
+        Clears seeded data after test
+    """
+    from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
+
+    adapters = simulation_bootstrap.adapters
+    seeder = SimulationDataSeeder(
+        simulation_bootstrap,
+        track_items=True,
+        agent_repository=adapters.agent_repository,
+        work_item_service=adapters.work_item_service,
+    )
+    yield seeder
+    # Cleanup tracked items
+    seeder.created_items.clear()

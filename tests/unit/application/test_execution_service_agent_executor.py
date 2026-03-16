@@ -21,10 +21,9 @@ import pytest
 from codetoreum.adapters.testing.execution_service_agent_executor import (
     ExecutionServiceAgentExecutor,
 )
-from codetoreum.domain.agent import Agent, AgentRole
-from codetoreum.domain.project_config import ProjectConfig
+from codetoreum.domain.agent import Agent
 from codetoreum.domain.work_item import WorkItem
-from codetoreum.ports.output.active_workflow_run_registry import ActiveWorkflowRun
+from codetoreum.ports.output.active_workflow_run_registry import ActiveRunInfo
 
 
 class TestExecutionServiceAgentExecutorInitialization:
@@ -147,7 +146,7 @@ class TestExecutionServiceAgentExecutorExecution:
         executor.set_completion_handler(AsyncMock(), "board-1")
 
         # Record active run
-        run_info = ActiveWorkflowRun(
+        run_info = ActiveRunInfo(
             run_id="run-1",
             work_item_id="item-1",
             project_id="project-1",
@@ -189,7 +188,7 @@ class TestExecutionServiceAgentExecutorExecution:
         executor = ExecutionServiceAgentExecutor(**dependencies)
         executor.set_completion_handler(AsyncMock(), "default-board")
 
-        executor._run_registry.get_active_run.return_value = ActiveWorkflowRun(
+        executor._run_registry.get_active_run.return_value = ActiveRunInfo(
             run_id="run-1",
             work_item_id="item-1",
             project_id="project-1",
@@ -270,7 +269,8 @@ class TestExecutionServiceAgentExecutorExecution:
         await executor.execute("item-1", "architect")
 
         # Wait for task to complete
-        for task in executor._pending_tasks:
+        pending_copy = list(executor._pending_tasks)
+        for task in pending_copy:
             try:
                 await task
             except Exception:
@@ -282,7 +282,8 @@ class TestExecutionServiceAgentExecutorExecution:
         assert elapsed >= 0.1 - 0.05  # Allow 50ms tolerance
 
         # Clean up
-        for task in executor._pending_tasks:
+        pending_copy = list(executor._pending_tasks)
+        for task in pending_copy:
             task.cancel()
         await asyncio.gather(*executor._pending_tasks, return_exceptions=True)
 
@@ -336,7 +337,7 @@ class TestExecutionServiceAgentExecutorChainSteps:
         executor.set_completion_handler(callback, "board-1")
 
         # Setup active run
-        run_info = ActiveWorkflowRun(
+        run_info = ActiveRunInfo(
             run_id="run-1",
             work_item_id="item-1",
             project_id="project-1",
@@ -371,7 +372,7 @@ class TestExecutionServiceAgentExecutorChainSteps:
         executor.set_completion_handler(callback, "board-1")
 
         # Setup active run
-        run_info = ActiveWorkflowRun(
+        run_info = ActiveRunInfo(
             run_id="run-1",
             work_item_id="item-1",
             project_id="project-1",
@@ -412,7 +413,7 @@ class TestExecutionServiceAgentExecutorChainSteps:
         executor.set_completion_handler(callback, "board-1")
 
         # Setup active run
-        run_info = ActiveWorkflowRun(
+        run_info = ActiveRunInfo(
             run_id="run-1",
             work_item_id="item-1",
             project_id="project-1",
@@ -523,7 +524,7 @@ class TestExecutionServiceAgentExecutorMultipleExecutions:
         executor = ExecutionServiceAgentExecutor(**dependencies)
         executor.set_completion_handler(AsyncMock(), "board-1")
 
-        executor._run_registry.get_active_run.return_value = ActiveWorkflowRun(
+        executor._run_registry.get_active_run.return_value = ActiveRunInfo(
             run_id="run-1",
             work_item_id="item-1",
             project_id="project-1",
@@ -563,7 +564,7 @@ class TestExecutionServiceAgentExecutorMultipleExecutions:
         executor = ExecutionServiceAgentExecutor(**dependencies)
         executor.set_completion_handler(AsyncMock(), "board-1")
 
-        executor._run_registry.get_active_run.return_value = ActiveWorkflowRun(
+        executor._run_registry.get_active_run.return_value = ActiveRunInfo(
             run_id="run-1",
             work_item_id="item-1",
             project_id="project-1",
