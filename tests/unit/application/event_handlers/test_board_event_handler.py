@@ -1,12 +1,14 @@
 """Unit tests for BoardColumnEventHandler."""
 
 import logging
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
 
 from codetoreum.application.event_handlers.board_event_handler import (
     BoardColumnEventHandler,
+    _WorkflowRunMetadata,
 )
 from codetoreum.application.pipeline_lock_service import (
     LockAcquisitionResult,
@@ -852,11 +854,14 @@ class TestTriggerAgentExecutionFailureAndLockRelease:
         )
 
         # Setup active run tracking (handler tracks running work items)
-        handler._active_runs["item-1"] = {
-            "run_id": "run-1",
-            "project_id": "proj-1",
-            "stage_name": "Backlog",
-        }
+        handler._active_runs["item-1"] = _WorkflowRunMetadata(
+            run_id="run-1",
+            project_id="proj-1",
+            board_id="board-1",
+            template_id="template-1",
+            started_at=datetime.now(UTC),
+            stage_index=0,
+        )
 
         # Act - directly call _trigger_agent to test lock release on failure
         await handler._trigger_agent(
@@ -895,11 +900,14 @@ class TestTriggerAgentExecutionFailureAndLockRelease:
         mock_recovery_service.handle_agent_execution_failure.return_value = None
 
         # Setup active run tracking
-        handler._active_runs["item-1"] = {
-            "run_id": "run-1",
-            "project_id": "proj-1",
-            "stage_name": "Backlog",
-        }
+        handler._active_runs["item-1"] = _WorkflowRunMetadata(
+            run_id="run-1",
+            project_id="proj-1",
+            board_id="board-1",
+            template_id="template-1",
+            started_at=datetime.now(UTC),
+            stage_index=0,
+        )
 
         # Act - directly call _trigger_agent
         await handler._trigger_agent(
@@ -943,11 +951,14 @@ class TestTriggerAgentExecutionFailureAndLockRelease:
         )
 
         # Setup active run tracking
-        handler._active_runs["item-1"] = {
-            "run_id": "run-1",
-            "project_id": "proj-1",
-            "stage_name": "Backlog",
-        }
+        handler._active_runs["item-1"] = _WorkflowRunMetadata(
+            run_id="run-1",
+            project_id="proj-1",
+            board_id="board-1",
+            template_id="template-1",
+            started_at=datetime.now(UTC),
+            stage_index=0,
+        )
 
         # Act - should not raise despite recovery service failure
         await handler._trigger_agent(
@@ -985,11 +996,14 @@ class TestTriggerAgentExecutionFailureAndLockRelease:
         mock_recovery_service.handle_agent_execution_failure.return_value = None
 
         # Setup active run tracking
-        handler._active_runs["item-1"] = {
-            "run_id": "run-1",
-            "project_id": "proj-1",
-            "stage_name": "Backlog",
-        }
+        handler._active_runs["item-1"] = _WorkflowRunMetadata(
+            run_id="run-1",
+            project_id="proj-1",
+            board_id="board-1",
+            template_id="template-1",
+            started_at=datetime.now(UTC),
+            stage_index=0,
+        )
 
         # Act
         await handler._trigger_agent(

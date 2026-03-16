@@ -7,8 +7,8 @@ Subscribes to workitem.column_changed events and orchestrates:
 """
 
 import logging
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
 from uuid import uuid4
 
 from codetoreum.application.agent_execution_recovery_service import (
@@ -35,7 +35,10 @@ from codetoreum.domain.events import (
 )
 from codetoreum.infrastructure.event_bus import EventBus, EventHandler, event_handler
 from codetoreum.ports.exceptions import ExternalServiceError, ResourceNotFoundError
-from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
+from codetoreum.ports.output.active_workflow_run_registry import (
+    ActiveRunInfo,
+    IActiveWorkflowRunRegistry,
+)
 from codetoreum.ports.output.agent_executor import IAgentExecutor
 from codetoreum.ports.output.board_service import IBoardService, MovedByType
 from codetoreum.ports.output.event_emitter import IEventEmitter
@@ -43,6 +46,26 @@ from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _WorkflowRunMetadata:
+    """Internal metadata for tracking active workflow runs.
+
+    This is distinct from ActiveRunInfo (port-level value object) and stores
+    additional state needed by BoardColumnEventHandler for event sourcing:
+    - Timing information (started_at, stage progression)
+    - Configuration references (board_id, template_id)
+
+    Private dataclass to keep handler implementation details internal.
+    """
+
+    run_id: str
+    project_id: str
+    board_id: str
+    template_id: str
+    started_at: datetime
+    stage_index: int
 
 
 @event_handler("WorkItemColumnChanged")
@@ -116,8 +139,9 @@ class BoardColumnEventHandler(EventHandler):
         self.run_registry = run_registry
         self.event_emitter = event_emitter
         self.recovery_service = recovery_service
-        # Tracks active workflow runs: work_item_id -> run metadata
-        self._active_runs: dict[str, dict[str, Any]] = {}
+        # Tracks active workflow runs: work_item_id -> _WorkflowRunMetadata
+        # Provides compile-time key validation and type safety over untyped dict[str, Any]
+        self._active_runs: dict[str, _WorkflowRunMetadata] = {}
 
     def get_event_types(self) -> list[str]:
         """Get list of event types this handler processes.
@@ -474,14 +498,14 @@ class BoardColumnEventHandler(EventHandler):
         now = datetime.now(UTC)
         stage_count = len([c for c in workflow_config.columns if c.agent_id])
 
-        self._active_runs[work_item_id] = {
-            "run_id": workflow_run_id,
-            "project_id": project_id,
-            "board_id": board_id,
-            "template_id": workflow_config.id,
-            "started_at": now,
-            "stage_index": 0,
-        }
+        self._active_runs[work_item_id] = _WorkflowRunMetadata(
+            run_id=workflow_run_id,
+            project_id=project_id,
+            board_id=board_id,
+            template_id=workflow_config.id,
+            started_at=now,
+            stage_index=0,
+        )
 
         created = WorkflowCreated(
             aggregate_id=workflow_run_id,
@@ -537,13 +561,13 @@ class BoardColumnEventHandler(EventHandler):
             return
 
         run_info = self._active_runs[work_item_id]
-        run_info["stage_index"] += 1
-        workflow_run_id = run_info["run_id"]
+        run_info.stage_index += 1
+        workflow_run_id = run_info.run_id
 
         event = WorkflowStageAdvanced(
             aggregate_id=workflow_run_id,
             payload={
-                "stage_index": run_info["stage_index"],
+                "stage_index": run_info.stage_index,
                 "from_stage": from_stage,
                 "to_stage": to_stage,
             },
@@ -567,9 +591,9 @@ class BoardColumnEventHandler(EventHandler):
             return
 
         run_info = self._active_runs.pop(work_item_id)
-        workflow_run_id = run_info["run_id"]
+        workflow_run_id = run_info.run_id
         now = datetime.now(UTC)
-        duration = (now - run_info["started_at"]).total_seconds()
+        duration = (now - run_info.started_at).total_seconds()
 
         event = WorkflowCompleted(
             aggregate_id=workflow_run_id,
@@ -600,7 +624,7 @@ class BoardColumnEventHandler(EventHandler):
             return
 
         run_info = self._active_runs.pop(work_item_id)
-        workflow_run_id = run_info["run_id"]
+        workflow_run_id = run_info.run_id
         now = datetime.now(UTC)
 
         event = WorkflowFailed(
@@ -656,9 +680,9 @@ class BoardColumnEventHandler(EventHandler):
             try:
                 await self.run_registry.set_active_run(
                     work_item_id=work_item_id,
-                    run_id=run_info["run_id"],
+                    run_id=run_info.run_id,
                     stage_name=column_config.name,
-                    project_id=run_info.get("project_id", ""),
+                    project_id=run_info.project_id,
                 )
             except Exception as e:
                 logger.error(
@@ -685,7 +709,7 @@ class BoardColumnEventHandler(EventHandler):
             # Handle synchronous execution failure (before task creation, lock still held)
             if work_item_id in self._active_runs:
                 run_info = self._active_runs[work_item_id]
-                project_id = run_info.get("project_id", "")
+                project_id = run_info.project_id
 
                 # Use recovery service to fail workflow run (wrapped in try/except to ensure
                 # lock release is not skipped even if recovery service fails)
