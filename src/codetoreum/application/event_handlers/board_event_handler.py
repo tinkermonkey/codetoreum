@@ -36,7 +36,6 @@ from codetoreum.domain.events import (
 from codetoreum.infrastructure.event_bus import EventBus, EventHandler, event_handler
 from codetoreum.ports.exceptions import ExternalServiceError, ResourceNotFoundError
 from codetoreum.ports.output.active_workflow_run_registry import (
-    ActiveRunInfo,
     IActiveWorkflowRunRegistry,
 )
 from codetoreum.ports.output.agent_executor import IAgentExecutor
