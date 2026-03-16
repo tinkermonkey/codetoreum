@@ -144,11 +144,11 @@ class InMemoryVersionControlService(IVersionControlService):
             ValidationError: Invalid repo path or branch name
             RepositoryError: Checkout failed (branch doesn't exist, etc.)
         """
-        if repo_path not in self._repositories:
-            msg = f"Repository not found at path: {repo_path}"
-            raise RepositoryError(msg)
-
         with self._lock:
+            if repo_path not in self._repositories:
+                msg = f"Repository not found at path: {repo_path}"
+                raise RepositoryError(msg)
+
             repo = self._repositories[repo_path]
 
             # Check if branch is new before creating it (for event emission)
@@ -218,8 +218,7 @@ class InMemoryVersionControlService(IVersionControlService):
             # Generate a unique commit SHA using counter + message hash
             # This ensures two commits with the same message produce different SHAs
             self._commit_counter += 1
-            sha_base = hashlib.sha256(f"{message}-{current_branch}-{self._commit_counter}".encode()).hexdigest()[:40]
-            commit_sha = sha_base
+            commit_sha = hashlib.sha256(f"{message}-{current_branch}-{self._commit_counter}".encode()).hexdigest()[:40]
 
             # Add commit to current branch
             if current_branch not in repo["commits"]:
@@ -275,11 +274,11 @@ class InMemoryVersionControlService(IVersionControlService):
             ValidationError: Invalid repo path or branch name
             RepositoryError: Push failed (auth, rejected, etc.)
         """
-        if repo_path not in self._repositories:
-            msg = f"Repository not found at path: {repo_path}"
-            raise RepositoryError(msg)
-
         with self._lock:
+            if repo_path not in self._repositories:
+                msg = f"Repository not found at path: {repo_path}"
+                raise RepositoryError(msg)
+
             repo = self._repositories[repo_path]
 
             if branch not in repo["branches"]:
@@ -304,11 +303,11 @@ class InMemoryVersionControlService(IVersionControlService):
 
     async def create_branch(self, repo_path: str, branch_name: str, from_branch: str | None = None) -> None:
         """Create a new branch in the in-memory repository."""
-        if repo_path not in self._repositories:
-            msg = f"Repository not found at path: {repo_path}"
-            raise RepositoryError(msg)
-
         with self._lock:
+            if repo_path not in self._repositories:
+                msg = f"Repository not found at path: {repo_path}"
+                raise RepositoryError(msg)
+
             repo = self._repositories[repo_path]
             branch_is_new = branch_name not in repo["branches"]
 
@@ -340,11 +339,11 @@ class InMemoryVersionControlService(IVersionControlService):
 
     async def list_branches(self, repo_path: str, remote: bool = False) -> list[str]:
         """List all branches in the in-memory repository."""
-        if repo_path not in self._repositories:
-            msg = f"Repository not found at path: {repo_path}"
-            raise RepositoryError(msg)
-
         with self._lock:
+            if repo_path not in self._repositories:
+                msg = f"Repository not found at path: {repo_path}"
+                raise RepositoryError(msg)
+
             repo = self._repositories[repo_path]
             branches = list(repo["branches"])
 
