@@ -20,6 +20,7 @@ from codetoreum.infrastructure.simulation.bootstrap import (
 from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 from codetoreum.ports.output.board_service import MovedByType
+from tests.conftest import assert_condition
 from tests.simulation.helpers import wait_for_column
 
 # ============================================================================
@@ -80,8 +81,20 @@ async def test_both_projects_cascade_to_done(multi_project_env):
         wait_for_column(board, beta_id, "Done", timeout=15.0),
     )
 
-    # Allow async event handlers (e.g., _complete_workflow_run) to finish
-    await asyncio.sleep(0.5)
+    # Wait for async event handlers (e.g., _complete_workflow_run) to finish
+    async def both_workflows_completed():
+        executor = adapters.agent_executor
+        alpha_execs = [e for e in executor.executions if e["work_item_id"] == alpha_id]
+        beta_execs = [e for e in executor.executions if e["work_item_id"] == beta_id]
+        # Each should have 3 executions (architect, coder, tester)
+        return len(alpha_execs) >= 3 and len(beta_execs) >= 3
+
+    await assert_condition(
+        both_workflows_completed,
+        timeout=5.0,
+        poll_interval=0.05,
+        message="Both workflows should complete with all agents executed"
+    )
 
     assert alpha_done, (
         f"Alpha item did not reach 'Done' within timeout. "
@@ -116,7 +129,20 @@ async def test_agent_isolation(multi_project_env):
         wait_for_column(board, alpha_id, "Done", timeout=15.0),
         wait_for_column(board, beta_id, "Done", timeout=15.0),
     )
-    await asyncio.sleep(0.5)
+
+    # Wait for all executions to be recorded
+    async def all_executions_recorded():
+        alpha_executions = [e for e in executor.executions if e["work_item_id"] == alpha_id]
+        beta_executions = [e for e in executor.executions if e["work_item_id"] == beta_id]
+        # Each should have 3 executions (architect, coder, tester)
+        return len(alpha_executions) >= 3 and len(beta_executions) >= 3
+
+    await assert_condition(
+        all_executions_recorded,
+        timeout=5.0,
+        poll_interval=0.05,
+        message="All agent executions should be recorded"
+    )
 
     executions = executor.executions
 
@@ -180,7 +206,26 @@ async def test_event_store_work_item_ids(multi_project_env):
         wait_for_column(board, alpha_id, "Done", timeout=15.0),
         wait_for_column(board, beta_id, "Done", timeout=15.0),
     )
-    await asyncio.sleep(0.5)
+
+    # Wait for events to be recorded in EventStore
+    async def workflow_events_recorded_for_both():
+        all_events = event_store.get_all_events_list()
+        alpha_workflow_events = [
+            e for e in all_events
+            if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == alpha_id
+        ]
+        beta_workflow_events = [
+            e for e in all_events
+            if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == beta_id
+        ]
+        return len(alpha_workflow_events) > 0 and len(beta_workflow_events) > 0
+
+    await assert_condition(
+        workflow_events_recorded_for_both,
+        timeout=5.0,
+        poll_interval=0.05,
+        message="Workflow events should be recorded for both projects"
+    )
 
     all_events = event_store.get_all_events_list()
 

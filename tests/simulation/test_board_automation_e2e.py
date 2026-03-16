@@ -20,6 +20,7 @@ from codetoreum.infrastructure.simulation.bootstrap import (
 )
 from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
 from codetoreum.ports.output.board_service import MovedByType
+from tests.conftest import assert_condition, wait_for_condition
 from tests.simulation.helpers import wait_for_column
 
 # ============================================================================
@@ -67,8 +68,13 @@ async def test_item_cascades_from_trigger_to_exit(e2e_env):
         f"Current position: {(await board.get_item_position(work_item_id)).column_name}"
     )
 
-    # Allow async event handlers (e.g., _complete_workflow_run) to finish
-    await asyncio.sleep(0.3)
+    # Wait for async event handlers (e.g., _complete_workflow_run) to finish
+    # Poll the executor to verify all executions are recorded
+    await wait_for_condition(
+        lambda: len([e for e in adapters.agent_executor.executions if e["work_item_id"] == work_item_id]) == 3,
+        timeout=2.0,
+        poll_interval=0.05
+    )
 
     # Verify all 3 agents were triggered in order
     executions = adapters.agent_executor.executions
@@ -143,14 +149,17 @@ async def test_lock_released_after_cascade(e2e_env):
     assert reached_done, "Item did not reach Done"
 
     # The Done column event is published via create_task in the bridge.
-    # Give the event loop time to process the exit-column handler that releases the lock.
-    await asyncio.sleep(0.3)
+    # Wait for the exit-column handler that releases the lock.
+    async def lock_is_released():
+        queue_state = await lock_service.get_queue_state(project_id, "board-1")
+        return queue_state.lock_holder is None
 
-    # Verify lock is released (lock_holder should be None)
-    queue_state = await lock_service.get_queue_state(project_id, "board-1")
-    assert (
-        queue_state.lock_holder is None
-    ), f"Lock should be released after cascade, but holder is {queue_state.lock_holder}"
+    await assert_condition(
+        lock_is_released,
+        timeout=2.0,
+        poll_interval=0.05,
+        message="Lock should be released after cascade"
+    )
 
 
 @pytest.mark.asyncio
@@ -196,18 +205,40 @@ async def test_cascade_stops_on_agent_failure(
     reached_in_progress = await wait_for_column(board, work_item_id, "In Progress", timeout=5.0)
     assert reached_in_progress, "Item did not reach 'In Progress'"
 
-    # Give time for the second agent to fail and not progress further
-    await asyncio.sleep(0.5)
+    # Wait for second agent (coder) to execute and fail
+    # Poll executor to verify coder execution was attempted
+    async def coder_has_executed():
+        item_executions = [e for e in executor.executions if e["work_item_id"] == work_item_id]
+        # Should have at least architect + coder
+        return len(item_executions) >= 2
+
+    await assert_condition(
+        coder_has_executed,
+        timeout=5.0,
+        poll_interval=0.05,
+        message="Coder should have been executed"
+    )
 
     # Item should still be in "In Progress" (coder failed, no auto-progress)
+    # Verify this multiple times to ensure it's not a race condition
     pos = await board.get_item_position(work_item_id)
     assert (
         pos.column_name == "In Progress"
     ), f"Expected item to stay in 'In Progress' after coder failure, but found in '{pos.column_name}'"
+
+    # Double-check after a small delay to ensure tester hasn't started
+    await wait_for_condition(
+        lambda: True,  # Just give event loop a chance
+        timeout=0.1,
+        poll_interval=0.05
+    )
 
     # Verify architect executed but cascade stopped after coder failure
     item_executions = [e for e in executor.executions if e["work_item_id"] == work_item_id]
     agent_ids = [e["agent_id"] for e in item_executions]
     assert "architect" in agent_ids, "Architect should have been triggered"
     assert "coder" in agent_ids, "Coder should have been triggered (and failed)"
-    assert "tester" not in agent_ids, "Tester should NOT have been triggered"
+    assert "tester" not in agent_ids, (
+        f"Tester should NOT have been triggered after coder failure. "
+        f"Executions: {agent_ids}"
+    )

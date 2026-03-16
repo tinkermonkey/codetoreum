@@ -26,6 +26,7 @@ from codetoreum.infrastructure.simulation.bootstrap import (
 )
 from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
 from codetoreum.ports.output.board_service import MovedByType
+from tests.conftest import assert_condition, wait_for_condition
 from tests.simulation.helpers import wait_for_column
 
 # ============================================================================
@@ -83,8 +84,16 @@ async def test_execution_chain_llm_path_reaches_done(exec_chain_env):
         f"Current position: {(await board.get_item_position(work_item_id)).column_name}"
     )
 
-    # Allow background cleanup tasks to settle
-    await asyncio.sleep(0.3)
+    # Wait for background cleanup tasks and LLM calls to complete
+    async def llm_has_been_called():
+        return adapters.llm_provider.get_request_count() >= 1
+
+    await assert_condition(
+        llm_has_been_called,
+        timeout=5.0,
+        poll_interval=0.05,
+        message="LLM should have been called via ExecutionService"
+    )
 
     # The LLM should have been called at least once (one call per stage: architect, coder, tester)
     llm_call_count = adapters.llm_provider.get_request_count()
@@ -119,7 +128,18 @@ async def test_execution_chain_emits_vcs_events(exec_chain_env):
     assert reached_done, (
         f"Item did not reach 'Done'. " f"Current position: {(await board.get_item_position(work_item_id)).column_name}"
     )
-    await asyncio.sleep(0.3)
+
+    # Wait for VCS events to be emitted
+    async def vcs_events_emitted():
+        branch_events = event_emitter.get_events_by_type("repository.branch_created")
+        return len(branch_events) >= 1
+
+    await assert_condition(
+        vcs_events_emitted,
+        timeout=5.0,
+        poll_interval=0.05,
+        message="VCS branch creation events should be emitted"
+    )
 
     # Verify VCS events were emitted (branch created for at least one stage)
     branch_events = event_emitter.get_events_by_type("repository.branch_created")
@@ -155,7 +175,21 @@ async def test_execution_chain_workflow_completes(exec_chain_env):
     assert reached_done, (
         f"Item did not reach 'Done'. " f"Current position: {(await board.get_item_position(work_item_id)).column_name}"
     )
-    await asyncio.sleep(0.3)
+
+    # Wait for workflow events to be recorded
+    async def workflow_events_recorded():
+        all_events = event_store.get_all_events_list()
+        workflow_events = [
+            e for e in all_events if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == work_item_id
+        ]
+        return len(workflow_events) > 0
+
+    await assert_condition(
+        workflow_events_recorded,
+        timeout=5.0,
+        poll_interval=0.05,
+        message="Workflow events should be recorded in EventStore"
+    )
 
     # Find workflow events for this work item
     all_events = event_store.get_all_events_list()
@@ -202,8 +236,27 @@ async def test_executions_endpoint_visibility(exec_chain_env):
         f"Current position: {(await board.get_item_position(work_item_id)).column_name}"
     )
 
-    # Allow background cleanup tasks to settle
-    await asyncio.sleep(0.3)
+    # Wait for execution records to be available
+    async def executions_available():
+        execution_query_port = bootstrap.ports.execution_query
+        if execution_query_port is None:
+            return False
+        try:
+            executions = await execution_query_port.get_executions(
+                work_item_id=work_item_id,
+                limit=10,
+                offset=0
+            )
+            return len(executions) > 0
+        except Exception:
+            return False
+
+    await assert_condition(
+        executions_available,
+        timeout=5.0,
+        poll_interval=0.05,
+        message="Execution records should be available after cascade"
+    )
 
     # Query the executions endpoint via the execution query port
     execution_query_port = bootstrap.ports.execution_query

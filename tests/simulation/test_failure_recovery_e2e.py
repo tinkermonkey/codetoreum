@@ -20,6 +20,7 @@ from codetoreum.infrastructure.simulation.bootstrap import (
 from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
 from codetoreum.ports.output.board_service import MovedByType
 from codetoreum.ports.output.review_cycle_service import ReviewCycleRequest
+from tests.conftest import assert_condition
 from tests.simulation.helpers import wait_for_column
 
 # ============================================================================
@@ -94,17 +95,22 @@ async def test_agent_failure_emits_workflow_failed_event(
     reached_in_progress = await wait_for_column(board, work_item_id, "In Progress", timeout=5.0)
     assert reached_in_progress, "Item did not reach 'In Progress'"
 
-    # Poll until WorkflowFailed appears in EventStore (or timeout).
+    # Wait for WorkflowFailed to appear in EventStore.
     # The coder runs asynchronously; after it fails the board_event_handler calls
     # _fail_workflow_run() which persists the WorkflowFailed event.
-    workflow_failed_appeared = False
-    for _ in range(30):  # up to 3 seconds
-        await asyncio.sleep(0.1)
+    async def workflow_failed_recorded():
         all_events_poll = event_store.get_all_events_list()
-        if any(e.event_type == "WorkflowFailed" and e.aggregate_type == "Workflow" for e in all_events_poll):
-            workflow_failed_appeared = True
-            break
-    assert workflow_failed_appeared, "WorkflowFailed event did not appear in EventStore within timeout"
+        return any(
+            e.event_type == "WorkflowFailed" and e.aggregate_type == "Workflow"
+            for e in all_events_poll
+        )
+
+    await assert_condition(
+        workflow_failed_recorded,
+        timeout=5.0,
+        poll_interval=0.05,
+        message="WorkflowFailed event should appear in EventStore after agent failure"
+    )
 
     # Item stays in In Progress (cascade stopped)
     pos = await board.get_item_position(work_item_id)

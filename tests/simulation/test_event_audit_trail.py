@@ -18,6 +18,7 @@ from codetoreum.infrastructure.simulation.bootstrap import (
 )
 from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
 from codetoreum.ports.output.board_service import MovedByType
+from tests.conftest import assert_condition
 from tests.simulation.helpers import wait_for_column
 
 
@@ -52,8 +53,19 @@ async def test_full_workflow_event_audit_trail(
         f"Current position: {(await board.get_item_position(work_item_id)).column_name}"
     )
 
-    # Allow async event handlers (e.g. _complete_workflow_run) to finish
-    await asyncio.sleep(0.3)
+    # Wait for async event handlers (e.g. _complete_workflow_run) to finish
+    async def workflow_events_ready():
+        event_store = adapters.event_store
+        all_events = event_store.get_all_events_list()
+        # Wait for WorkflowCompleted event
+        return any(e.event_type == "WorkflowCompleted" for e in all_events if e.aggregate_type == "Workflow")
+
+    await assert_condition(
+        workflow_events_ready,
+        timeout=2.0,
+        poll_interval=0.05,
+        message="WorkflowCompleted event should be recorded"
+    )
 
     # -------------------------------------------------------------------------
     # Assert EventStore contains the full workflow lifecycle
@@ -150,7 +162,19 @@ async def test_event_store_chronological_across_all_streams(
     await board.move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)
     reached_done = await wait_for_column(board, work_item_id, "Done", timeout=10.0)
     assert reached_done, "Item did not reach Done"
-    await asyncio.sleep(0.3)
+
+    # Wait for event store to capture all events
+    async def events_captured():
+        event_store = adapters.event_store
+        all_events = event_store.get_all_events_list()
+        return len(all_events) > 0
+
+    await assert_condition(
+        events_captured,
+        timeout=2.0,
+        poll_interval=0.05,
+        message="EventStore should have events after cascade"
+    )
 
     event_store = adapters.event_store
     all_events = event_store.get_all_events_list()
@@ -202,7 +226,17 @@ async def test_event_emitter_captures_column_change_events(
     await board.move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)
     reached_done = await wait_for_column(board, work_item_id, "Done", timeout=10.0)
     assert reached_done, "Item did not reach Done"
-    await asyncio.sleep(0.3)
+
+    # Wait for event emitter to capture all events
+    async def events_emitted():
+        return emitter.get_event_count() > 0
+
+    await assert_condition(
+        events_emitted,
+        timeout=2.0,
+        poll_interval=0.05,
+        message="CapturingMockEventEmitter should capture events during cascade"
+    )
 
     # After the cascade, the emitter should have captured events
     emitted_events = emitter.get_events()

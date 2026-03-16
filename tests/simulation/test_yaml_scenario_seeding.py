@@ -20,6 +20,7 @@ from codetoreum.infrastructure.simulation.bootstrap import (
 )
 from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
 from codetoreum.ports.output.board_service import MovedByType
+from tests.conftest import assert_condition
 from tests.simulation.helpers import wait_for_column
 
 # Path to the default scenario YAML relative to this file's location
@@ -71,8 +72,19 @@ async def test_yaml_scenario_seeding_and_cascade(
             f"Current position: {(await board.get_item_position(work_item_id)).column_name}"
         )
 
-        # Allow async handlers to finish
-        await asyncio.sleep(0.3)
+        # Wait for all agents to be triggered and recorded
+        async def all_agents_executed():
+            executions = adapters.agent_executor.executions
+            item_executions = [e for e in executions if e["work_item_id"] == work_item_id]
+            # Should have executed all 3 agents
+            return len(item_executions) == 3
+
+        await assert_condition(
+            all_agents_executed,
+            timeout=5.0,
+            poll_interval=0.05,
+            message="All agents should be executed and recorded"
+        )
 
         # Verify all 3 agents were triggered in the correct order
         executions = adapters.agent_executor.executions
