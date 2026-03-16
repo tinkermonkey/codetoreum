@@ -17,6 +17,7 @@ from codetoreum.domain.events import (
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.exceptions import (
     ContainerError,
+    ContainerNotRunningError,
     ResourceNotFoundError,
     ValidationError,
 )
@@ -599,6 +600,7 @@ class FakeContainerAdapter(IContainer):
 
         Raises:
             ResourceNotFoundError: If container does not exist
+            ContainerError: If container is running and force=False
         """
         if not container_id:
             msg = "Container ID cannot be empty"
@@ -608,6 +610,13 @@ class FakeContainerAdapter(IContainer):
             if container_id not in self._containers:
                 msg = "Container"
                 raise ResourceNotFoundError(msg, container_id)
+
+            container = self._containers[container_id]
+
+            # If force=False, don't allow removal of running containers
+            if not force and container["status"] == "running":
+                msg = f"Cannot remove running container '{container_id}' without force=True"
+                raise ContainerError(msg)
 
             del self._containers[container_id]
             # Clean up associated virtual filesystem and command history
@@ -721,25 +730,40 @@ class FakeContainerAdapter(IContainer):
             for line in lines:
                 # Try to parse timestamp from log line
                 if line.startswith("["):
-                    try:
-                        end_bracket = line.find("]")
-                        if end_bracket > 0:
-                            timestamp_str = line[1:end_bracket]
+                    end_bracket = line.find("]")
+                    # Only attempt parsing if bracket found at position > 0
+                    if end_bracket > 0:
+                        content_in_brackets = line[1:end_bracket]
+                        # Skip lines with known non-timestamp bracket patterns (e.g., [stderr], [exit N])
+                        is_known_pattern = (
+                            content_in_brackets == "stderr"
+                            or content_in_brackets.startswith("exit ")
+                        )
+                        try:
+                            timestamp_str = content_in_brackets
                             timestamp = datetime.fromisoformat(timestamp_str)
                             if timestamp >= since:
                                 filtered_lines.append(line)
-                    except (ValueError, IndexError):
-                        # Log parsing error instead of silent failure
-                        logger.warning(
-                            "Failed to parse timestamp in log line",
-                            exc_info=True,
-                            extra={"line": line, "container_id": container_id},
-                        )
-                        # If parsing fails, include the line
+                        except ValueError:
+                            # Only warn if this is not a known non-timestamp pattern
+                            if not is_known_pattern:
+                                logger.warning(
+                                    "Failed to parse timestamp in log line",
+                                    exc_info=True,
+                                    extra={"line": line, "container_id": container_id},
+                                )
+                            # Always include the line if we've seen timestamps already
+                            if filtered_lines:
+                                filtered_lines.append(line)
+                    else:
+                        # Bracket at position 0 or not found - this is not a timestamp line
+                        # Include it only if we've already included timestamped lines
+                        if filtered_lines:
+                            filtered_lines.append(line)
+                else:
+                    # Non-timestamped lines are included if we have recent content
+                    if filtered_lines:
                         filtered_lines.append(line)
-                # Non-timestamped lines are included if we have recent content
-                elif filtered_lines:
-                    filtered_lines.append(line)
             logs = "\n".join(filtered_lines)
 
         if stream:
@@ -809,7 +833,7 @@ class FakeContainerAdapter(IContainer):
 
         Raises:
             ResourceNotFoundError: If container does not exist
-            ContainerError: If container is not running
+            ContainerNotRunningError: If container is not running
             ValidationError: If command is empty
         """
         if not container_id:
@@ -828,16 +852,55 @@ class FakeContainerAdapter(IContainer):
             container = self._containers[container_id]
             if container["status"] != "running":
                 msg = f"Container '{container_id}' is not running"
-                raise ContainerError(msg)
+                raise ContainerNotRunningError(msg)
 
-        # Simulate execution
-        if self._execution_delay > 0:
-            await asyncio.sleep(self._execution_delay)
+        # Track start time for duration calculation
+        start_time = datetime.now(UTC)
+
+        # Calculate and apply delay based on fidelity level
+        command_str = " ".join(command)
+        delay_seconds = self._calculate_delay_seconds(command_str)
+
+        # Apply delay using clock if available, otherwise use asyncio.sleep
+        if delay_seconds > 0:
+            if self._clock:
+                # Use simulated clock for time manipulation support
+                await self._clock.sleep(delay_seconds)
+            else:
+                # Fall back to asyncio.sleep for real-time execution
+                await asyncio.sleep(delay_seconds)
 
         # Get result (delegate to LLM if provider available, otherwise use predefined results)
         if self._llm_provider:
-            return await self._get_result_for_command_from_llm(command, container_id)
-        return self._get_result_for_command_predefined(command, container_id)
+            result = await self._get_result_for_command_from_llm(command, container_id)
+        else:
+            result = self._get_result_for_command_predefined(command, container_id)
+
+        # Calculate actual duration
+        end_time = datetime.now(UTC)
+        duration_ms = int((end_time - start_time).total_seconds() * 1000)
+
+        # Create CommandExecution record
+        execution = CommandExecution(
+            timestamp=start_time,
+            command=command_str,
+            exit_code=result.exit_code,
+            stdout=result.stdout,
+            stderr=result.stderr,
+            duration_ms=duration_ms,
+        )
+
+        # Record execution in command history
+        # Note: The defensive check for container_id is needed because exec() can be called
+        # on containers created outside the normal run() flow (e.g., in test scenarios where
+        # containers are created by direct state manipulation). The run() method initializes
+        # the history during creation, but we guard here for completeness.
+        with self._lock:
+            if container_id not in self._command_history:
+                self._command_history[container_id] = []
+            self._command_history[container_id].append(execution)
+
+        return result
 
     async def list_containers(
         self,
