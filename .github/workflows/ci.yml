@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main, develop]
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -56,6 +60,7 @@ jobs:
           poetry run pytest tests --tb=short -m "not integration" --cov=src/codetoreum --cov-report=xml
         env:
           REDIS_URL: redis://localhost:6379
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3

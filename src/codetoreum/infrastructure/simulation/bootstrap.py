@@ -97,6 +97,11 @@ from codetoreum.adapters.testing.mock_container_recovery_adapter import (
     MockContainerRecoveryAdapter,
 )
 from codetoreum.adapters.testing.mock_work_item_service import MockWorkItemService
+
+# Application Services
+from codetoreum.application.agent_execution_recovery_service import (
+    AgentExecutionRecoveryService,
+)
 from codetoreum.application.agent_scheduler import (
     AgentScheduler,
     InMemoryTaskQueue,
@@ -116,11 +121,6 @@ from codetoreum.application.multi_project_orchestrator import MultiProjectOrches
 from codetoreum.application.pipeline_manager import PipelineManager
 from codetoreum.application.review_service import ReviewService
 from codetoreum.application.work_item_service import WorkItemService
-
-# Application Services
-from codetoreum.application.agent_execution_recovery_service import (
-    AgentExecutionRecoveryService,
-)
 from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator, WorkflowState
 from codetoreum.application.workflow_run_query_service import WorkflowRunQueryService
 from codetoreum.application.workspace_router import WorkspaceRouter
