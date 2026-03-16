@@ -776,11 +776,16 @@ class SimulationApplicationBootstrap:
 
             # Reconstruct the domain event from the stored data
             # Map event type to actual event class for proper reconstruction
-            from codetoreum.domain.events import WorkItemColumnChanged
+            retry_event_obj = None
 
             if event_type == "WorkItemColumnChanged":
                 retry_event_obj = WorkItemColumnChanged(
                     aggregate_id=event_data.get("work_item_id", ""),
+                    payload=event_data,
+                )
+            elif event_type == "BoardReconciled":
+                retry_event_obj = BoardReconciled(
+                    aggregate_id=event_data.get("board_id", ""),
                     payload=event_data,
                 )
             else:
@@ -794,7 +799,8 @@ class SimulationApplicationBootstrap:
                 )
                 return
 
-            await event_bus.publish(retry_event_obj)
+            if retry_event_obj:
+                await event_bus.publish(retry_event_obj)
 
         return retry_event
 
