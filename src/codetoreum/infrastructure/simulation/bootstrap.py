@@ -140,6 +140,7 @@ from codetoreum.infrastructure.adapters.factory import (
     AdapterFactory,
     AdapterFactoryConfig,
 )
+from codetoreum.infrastructure.audit.stores import InMemoryAuditStore
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 # Infrastructure
@@ -213,6 +214,7 @@ class SimulationAdapters:
     workflow_config: InMemoryWorkflowConfigService
     queue_service: InMemoryQueueService  # Pipeline queue service for board automation
     event_emitter: CapturingMockEventEmitter  # For domain event capture
+    audit_store: InMemoryAuditStore  # For audit query adapter
 
     # Additional adapters (wired in simulation mode)
     version_control: InMemoryVersionControlService  # Version control operations
@@ -228,6 +230,7 @@ class SimulationAdapters:
     branch_tracker: InMemoryWorkItemBranchTracker  # Work item → VCS branch tracking
     work_item_service: MockWorkItemService  # Work item lookups for execution chain
 
+    # Fields with defaults (must come after fields without defaults)
     # Agent executor (assigned in Phase 3, after ExecutionService is created)
     agent_executor: IAgentExecutor | None = None
 
@@ -724,6 +727,9 @@ class SimulationApplicationBootstrap:
         branch_tracker = InMemoryWorkItemBranchTracker()
         work_item_service = MockWorkItemService()
 
+        # Create audit store for audit query adapter
+        audit_store = InMemoryAuditStore()
+
         logger.info("Created 24+ simulation adapters with domain event emission")
 
         return SimulationAdapters(
@@ -745,6 +751,7 @@ class SimulationApplicationBootstrap:
             agent_executor=None,
             queue_service=queue_service,
             event_emitter=event_emitter,
+            audit_store=audit_store,
             version_control=version_control,
             message_broker=message_broker,
             discussion_adapter=discussion_adapter,
