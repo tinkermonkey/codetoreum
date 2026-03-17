@@ -155,7 +155,7 @@ async def test_sla_watchdog_initialization(board_adapter, workflow_config_servic
 async def test_sla_detection_single_item(board_adapter, workflow_config_service, event_emitter, clock, watchdog):
     """Test SLA detection for a single item."""
     # Setup board with item in Code Review column
-    await board_adapter.create_board("proj-1", "board-1", "Test Board", "template-1")
+    board_adapter.create_board("proj-1", "board-1", "Test Board", ["Backlog", "In Progress", "Code Review", "Testing", "Done"])
     board_adapter.add_item_to_column("board-1", "Backlog", "item-1")
 
     # Move item to Code Review
@@ -173,7 +173,7 @@ async def test_sla_detection_single_item(board_adapter, workflow_config_service,
     await watchdog._check_sla_expiry()
 
     # Verify event was emitted
-    events = event_emitter.get_events(ColumnSLAExceededEvent)
+    events = [e for e in event_emitter.get_events() if isinstance(e, ColumnSLAExceededEvent)]
     assert len(events) == 1
     assert events[0].work_item_id == "item-1"
     assert events[0].column_name == "Code Review"
@@ -185,7 +185,7 @@ async def test_sla_detection_single_item(board_adapter, workflow_config_service,
 async def test_sla_deduplication(board_adapter, workflow_config_service, event_emitter, clock, watchdog):
     """Test that SLA event is emitted only once per item per expiry."""
     # Setup board with item in Code Review
-    await board_adapter.create_board("proj-1", "board-1", "Test Board", "template-1")
+    board_adapter.create_board("proj-1", "board-1", "Test Board", ["Backlog", "In Progress", "Code Review", "Testing", "Done"])
     board_adapter.add_item_to_column("board-1", "Backlog", "item-1")
     await board_adapter.move_item_to_column("item-1", "Code Review", MovedByType.ORCHESTRATOR)
 
@@ -194,12 +194,12 @@ async def test_sla_deduplication(board_adapter, workflow_config_service, event_e
 
     # First check - should emit event
     await watchdog._check_sla_expiry()
-    events = event_emitter.get_events(ColumnSLAExceededEvent)
+    events = [e for e in event_emitter.get_events() if isinstance(e, ColumnSLAExceededEvent)]
     assert len(events) == 1
 
     # Second check - should NOT emit another event (deduplication)
     await watchdog._check_sla_expiry()
-    events = event_emitter.get_events(ColumnSLAExceededEvent)
+    events = [e for e in event_emitter.get_events() if isinstance(e, ColumnSLAExceededEvent)]
     assert len(events) == 1  # Still only 1
 
 
@@ -207,7 +207,7 @@ async def test_sla_deduplication(board_adapter, workflow_config_service, event_e
 async def test_sla_multiple_columns(board_adapter, workflow_config_service, event_emitter, clock, watchdog):
     """Test SLA detection across multiple columns with different thresholds."""
     # Setup board
-    await board_adapter.create_board("proj-1", "board-1", "Test Board", "template-1")
+    board_adapter.create_board("proj-1", "board-1", "Test Board", ["Backlog", "In Progress", "Code Review", "Testing", "Done"])
 
     # Add two items: one in Code Review (2hr SLA), one in Testing (4hr SLA)
     board_adapter.add_item_to_column("board-1", "Code Review", "item-1")
@@ -218,7 +218,7 @@ async def test_sla_multiple_columns(board_adapter, workflow_config_service, even
     await watchdog._check_sla_expiry()
 
     # Should emit event for item-1 only
-    events = event_emitter.get_events(ColumnSLAExceededEvent)
+    events = [e for e in event_emitter.get_events() if isinstance(e, ColumnSLAExceededEvent)]
     assert len(events) == 1
     assert events[0].work_item_id == "item-1"
 
@@ -227,7 +227,7 @@ async def test_sla_multiple_columns(board_adapter, workflow_config_service, even
     await watchdog._check_sla_expiry()
 
     # Should now have 2 events (item-1 from before, item-2 new)
-    events = event_emitter.get_events(ColumnSLAExceededEvent)
+    events = [e for e in event_emitter.get_events() if isinstance(e, ColumnSLAExceededEvent)]
     assert len(events) == 2
     item_ids = {e.work_item_id for e in events}
     assert item_ids == {"item-1", "item-2"}
@@ -237,7 +237,7 @@ async def test_sla_multiple_columns(board_adapter, workflow_config_service, even
 async def test_sla_no_sla_column(board_adapter, workflow_config_service, event_emitter, clock, watchdog):
     """Test that items in columns without SLA don't trigger events."""
     # Setup board
-    await board_adapter.create_board("proj-1", "board-1", "Test Board", "template-1")
+    board_adapter.create_board("proj-1", "board-1", "Test Board", ["Backlog", "In Progress", "Code Review", "Testing", "Done"])
 
     # Add item to Backlog (no SLA configured)
     board_adapter.add_item_to_column("board-1", "Backlog", "item-1")
@@ -247,7 +247,7 @@ async def test_sla_no_sla_column(board_adapter, workflow_config_service, event_e
     await watchdog._check_sla_expiry()
 
     # Should emit NO event (no SLA configured for Backlog)
-    events = event_emitter.get_events(ColumnSLAExceededEvent)
+    events = [e for e in event_emitter.get_events() if isinstance(e, ColumnSLAExceededEvent)]
     assert len(events) == 0
 
 
@@ -255,7 +255,7 @@ async def test_sla_no_sla_column(board_adapter, workflow_config_service, event_e
 async def test_sla_item_without_entry_time(board_adapter, workflow_config_service, event_emitter, clock, watchdog):
     """Test that items without entry timestamp are skipped."""
     # Setup board
-    await board_adapter.create_board("proj-1", "board-1", "Test Board", "template-1")
+    board_adapter.create_board("proj-1", "board-1", "Test Board", ["Backlog", "In Progress", "Code Review", "Testing", "Done"])
 
     # Add item to column (will set entry time)
     board_adapter.add_item_to_column("board-1", "Code Review", "item-1")
@@ -268,7 +268,7 @@ async def test_sla_item_without_entry_time(board_adapter, workflow_config_servic
     await watchdog._check_sla_expiry()
 
     # Should emit NO event (missing entry time)
-    events = event_emitter.get_events(ColumnSLAExceededEvent)
+    events = [e for e in event_emitter.get_events() if isinstance(e, ColumnSLAExceededEvent)]
     assert len(events) == 0
 
 
@@ -285,7 +285,7 @@ async def test_sla_error_handling(board_adapter, workflow_config_service, event_
     watchdog._workflow_config_service = BrokenConfigService()
 
     # Setup board and item
-    await board_adapter.create_board("proj-1", "board-1", "Test Board", "template-1")
+    board_adapter.create_board("proj-1", "board-1", "Test Board", ["Backlog", "In Progress", "Code Review", "Testing", "Done"])
     board_adapter.add_item_to_column("board-1", "Code Review", "item-1")
     clock.advance(timedelta(hours=3))
 
@@ -298,7 +298,7 @@ async def test_sla_error_handling(board_adapter, workflow_config_service, event_
     # Watchdog should still be able to run again with fixed config
     watchdog._workflow_config_service = workflow_config_service
     await watchdog._check_sla_expiry()
-    events = event_emitter.get_events(ColumnSLAExceededEvent)
+    events = [e for e in event_emitter.get_events() if isinstance(e, ColumnSLAExceededEvent)]
     assert len(events) == 1
 
 
@@ -306,7 +306,7 @@ async def test_sla_error_handling(board_adapter, workflow_config_service, event_
 async def test_sla_event_fields(board_adapter, workflow_config_service, event_emitter, clock, watchdog):
     """Test that SLA event contains all required fields with correct values."""
     # Setup
-    await board_adapter.create_board("proj-1", "board-1", "Test Board", "template-1")
+    board_adapter.create_board("proj-1", "board-1", "Test Board", ["Backlog", "In Progress", "Code Review", "Testing", "Done"])
     board_adapter.add_item_to_column("board-1", "Code Review", "item-1")
 
     # Record entry time for verification
@@ -319,7 +319,7 @@ async def test_sla_event_fields(board_adapter, workflow_config_service, event_em
     await watchdog._check_sla_expiry()
 
     # Verify event contents
-    events = event_emitter.get_events(ColumnSLAExceededEvent)
+    events = [e for e in event_emitter.get_events() if isinstance(e, ColumnSLAExceededEvent)]
     assert len(events) == 1
 
     event = events[0]
@@ -339,7 +339,7 @@ async def test_sla_event_fields(board_adapter, workflow_config_service, event_em
 async def test_sla_tick_reschedules(board_adapter, workflow_config_service, event_emitter, clock, watchdog):
     """Test that _tick always reschedules itself (fail-safe pattern)."""
     # Setup
-    await board_adapter.create_board("proj-1", "board-1", "Test Board", "template-1")
+    board_adapter.create_board("proj-1", "board-1", "Test Board", ["Backlog", "In Progress", "Code Review", "Testing", "Done"])
 
     # Get initial scheduled callback count
     initial_count = len(clock._scheduled_callbacks)
@@ -364,7 +364,7 @@ async def test_sla_clock_integration(board_adapter, workflow_config_service, eve
     )
 
     # Setup
-    await board_adapter.create_board("proj-1", "board-1", "Test Board", "template-1")
+    board_adapter.create_board("proj-1", "board-1", "Test Board", ["Backlog", "In Progress", "Code Review", "Testing", "Done"])
     board_adapter.add_item_to_column("board-1", "Code Review", "item-1")
 
     # Record wall time
@@ -382,6 +382,6 @@ async def test_sla_clock_integration(board_adapter, workflow_config_service, eve
     assert wall_elapsed < timedelta(seconds=5)  # Should be nearly instant
 
     # But event should show SLA exceeded based on simulated time
-    events = event_emitter.get_events(ColumnSLAExceededEvent)
+    events = [e for e in event_emitter.get_events() if isinstance(e, ColumnSLAExceededEvent)]
     assert len(events) == 1
     assert events[0].elapsed_seconds > 7200  # More than 2 hour SLA

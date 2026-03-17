@@ -289,6 +289,8 @@ class GitHubTicketAdapter(ITicketSystem):
             assigned_at=None,  # GitHub doesn't track this separately
             current_workflow_id=None,
             current_stage=None,
+            current_column=None,
+            entered_column_at=None,
             created_at=created_at,
             updated_at=updated_at,
             completed_at=completed_at,
