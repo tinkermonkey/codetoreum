@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     )
     from codetoreum.application.execution_service import ExecutionService
     from codetoreum.application.workspace_router import WorkspaceRouter
+    from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
     from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
     from codetoreum.ports.output.agent_repository import IAgentRepository
     from codetoreum.ports.output.config_store import IConfigStore
@@ -86,6 +87,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         run_registry: IActiveWorkflowRunRegistry,
         branch_tracker: IWorkItemBranchTracker,
         vcs: IVersionControlService,
+        clock: SimulationClock,
         recovery_service: AgentExecutionRecoveryService | None = None,
         execution_delay: float = 0.0,
     ) -> None:
@@ -100,6 +102,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             run_registry: Tracks active workflow runs per work item
             branch_tracker: Tracks VCS branches per work item
             vcs: Version control service for repository operations
+            clock: SimulationClock for consistent time tracking in simulation
             recovery_service: Service for handling completion callback failures
             execution_delay: Optional delay (seconds) before execution for testing
         """
@@ -111,6 +114,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         self._run_registry = run_registry
         self._branch_tracker = branch_tracker
         self._vcs = vcs
+        self._clock = clock
         self._recovery_service = recovery_service
         self._execution_delay = execution_delay
 
@@ -198,23 +202,17 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             board_id: ID of the board containing the work item
         """
         resolved_board_id = board_id or self._default_board_id
-        now = datetime.now(UTC)
+        # Use clock.now() for consistent time tracking with watchdog timeout checks
+        now = self._clock.now()
 
         # Get active run to obtain workflow_id and stage_name
         run_info = await self._run_registry.get_active_run(work_item_id)
         workflow_id = run_info.run_id if run_info else "unknown"
         stage_name = run_info.stage_name if run_info else "unknown"
 
-        # Load agent to get timeout_seconds for watchdog tracking
+        # Use a default timeout for the watchdog; _run_execution() will load the actual agent
+        # with its configured timeout. This avoids duplicate agent loads on every execution.
         timeout_seconds = 3600  # Default 1 hour
-        try:
-            agent = await self._agent_repository.get_by_id(agent_id)
-            timeout_seconds = agent.timeout_seconds
-        except Exception as e:
-            logger.warning(
-                f"Failed to load agent '{agent_id}' for timeout info: {e}",
-                exc_info=True,
-            )
 
         # Generate execution ID for tracking
         execution_id = f"{work_item_id}-{agent_id}-{now.timestamp()}"

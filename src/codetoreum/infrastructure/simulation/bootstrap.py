@@ -457,6 +457,17 @@ class SimulationApplicationBootstrap:
             if self.adapters and self._engine:
                 try:
                     logger.info("Phase 6c: Registering execution timeout watchdog...")
+                    # Type guard: agent_executor must be ExecutionServiceAgentExecutor, not None
+                    if self.adapters.agent_executor is None:
+                        raise RuntimeError("ExecutionServiceAgentExecutor not initialized in Phase 3")
+                    from codetoreum.adapters.testing.execution_service_agent_executor import (
+                        ExecutionServiceAgentExecutor,
+                    )
+                    if not isinstance(self.adapters.agent_executor, ExecutionServiceAgentExecutor):
+                        raise TypeError(
+                            f"agent_executor must be ExecutionServiceAgentExecutor, "
+                            f"got {type(self.adapters.agent_executor).__name__}"
+                        )
                     self._execution_timeout_watchdog = ExecutionTimeoutWatchdog(
                         executor=self.adapters.agent_executor,
                         event_emitter=self.adapters.event_emitter,
@@ -1021,6 +1032,7 @@ class SimulationApplicationBootstrap:
             run_registry=self.adapters.run_registry,
             branch_tracker=self.adapters.branch_tracker,
             vcs=self.adapters.version_control,
+            clock=self._engine.clock,
             recovery_service=recovery_service,
         )
         # Assign to agent_executor (the primary executor for the board handler)
