@@ -267,10 +267,10 @@ async def test_cascade_stops_on_agent_failure(
 
 
 @pytest.mark.asyncio
-async def test_autonomous_progression_via_api_single_http_call(e2e_env, e2e_client):
+async def test_autonomous_progression_via_api_single_http_call(e2e_env):
     """Verify autonomous progression through all columns to Done via API orchestration.
 
-    This is the acceptance test for Phase 6 that validates:
+    This is the acceptance test for autonomous progression that validates:
     1. API move endpoint code correctly calls board.move_item_to_column() which emits
        WorkItemColumnChangedEvent
     2. The event handler correctly processes the event and triggers agent execution
