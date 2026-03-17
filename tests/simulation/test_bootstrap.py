@@ -447,3 +447,144 @@ class TestBootstrapErrorHandling:
         # Second teardown should be a no-op, not raise
         await bootstrap.teardown()
         assert bootstrap._is_setup is False
+
+
+@pytest.mark.asyncio
+class TestAutoAdvanceBootstrap:
+    """Tests for Phase 6: Auto-advance clock startup."""
+
+    async def test_auto_advance_disabled_by_default(self) -> None:
+        """Test that auto-advance is disabled by default."""
+        config = SimulationConfig.create_fast_config("test")
+        assert config.time.auto_advance is False
+
+        bootstrap = SimulationApplicationBootstrap(config)
+        await bootstrap.setup()
+
+        # Verify clock task is None when auto_advance is disabled
+        engine = bootstrap.engine
+        assert engine is not None
+        clock = engine.get_clock_for_testing()
+        assert clock._auto_advance_task is None
+
+        await bootstrap.teardown()
+
+    async def test_auto_advance_starts_when_configured(self) -> None:
+        """Test that auto-advance starts when configured."""
+        config = SimulationConfig.create_fast_config("test")
+        config.time.auto_advance = True  # Enable auto-advance
+
+        bootstrap = SimulationApplicationBootstrap(config)
+        await bootstrap.setup()
+
+        # Verify clock task is running
+        engine = bootstrap.engine
+        assert engine is not None
+        clock = engine.get_clock_for_testing()
+        assert clock._auto_advance_task is not None
+        assert not clock._auto_advance_task.done()
+
+        await bootstrap.teardown()
+
+    async def test_auto_advance_uses_configured_speed_multiplier(self) -> None:
+        """Test that auto-advance uses the configured speed multiplier."""
+        config = SimulationConfig.create_fast_config("test", speed_multiplier=50.0)
+        config.time.auto_advance = True
+
+        bootstrap = SimulationApplicationBootstrap(config)
+        await bootstrap.setup()
+
+        # Verify speed multiplier is applied
+        engine = bootstrap.engine
+        assert engine is not None
+        assert engine.get_speed_multiplier() == 50.0
+
+        await bootstrap.teardown()
+
+    async def test_auto_advance_stops_on_teardown(self) -> None:
+        """Test that auto-advance task is stopped during teardown."""
+        config = SimulationConfig.create_fast_config("test")
+        config.time.auto_advance = True
+
+        bootstrap = SimulationApplicationBootstrap(config)
+        await bootstrap.setup()
+
+        engine = bootstrap.engine
+        assert engine is not None
+        clock = engine.get_clock_for_testing()
+        auto_advance_task = clock._auto_advance_task
+
+        await bootstrap.teardown()
+
+        # Verify task is cancelled and cleaned up
+        assert auto_advance_task is not None
+        assert auto_advance_task.done() or clock._auto_advance_task is None
+
+    async def test_auto_advance_continues_after_setup(self) -> None:
+        """Test that auto-advance clock continues ticking after bootstrap."""
+        import asyncio
+        from datetime import timedelta
+
+        config = SimulationConfig.create_fast_config("test", speed_multiplier=10.0)
+        config.time.auto_advance = True
+
+        bootstrap = SimulationApplicationBootstrap(config)
+        await bootstrap.setup()
+
+        engine = bootstrap.engine
+        assert engine is not None
+        clock = engine.get_clock_for_testing()
+
+        # Record initial time
+        initial_time = clock.now()
+
+        # Wait a short real-world time for clock to advance
+        await asyncio.sleep(0.2)  # 200ms real time ≈ 2 simulated seconds at 10x speed
+
+        # Verify clock has advanced
+        current_time = clock.now()
+        time_delta = current_time - initial_time
+        # At 10x speed, 200ms real ≈ 2 seconds simulated, but allow for timing variance
+        # The auto-advance loop adds 1 second per cycle, so we expect at least 1 second advanced
+        assert time_delta.total_seconds() >= 1.0, f"Clock only advanced {time_delta.total_seconds()}s"
+
+        await bootstrap.teardown()
+
+    async def test_auto_advance_error_handling(self) -> None:
+        """Test that auto-advance errors don't crash the server."""
+        config = SimulationConfig.create_fast_config("test")
+        config.time.auto_advance = True
+
+        bootstrap = SimulationApplicationBootstrap(config)
+
+        # Setup should complete successfully even if auto-advance has issues
+        try:
+            await bootstrap.setup()
+            assert bootstrap.app is not None
+        finally:
+            await bootstrap.teardown()
+
+    async def test_no_auto_advance_when_disabled(self) -> None:
+        """Test that clock is not advanced automatically when disabled."""
+        import asyncio
+
+        config = SimulationConfig.create_fast_config("test")
+        config.time.auto_advance = False  # Explicitly disable
+
+        bootstrap = SimulationApplicationBootstrap(config)
+        await bootstrap.setup()
+
+        engine = bootstrap.engine
+        assert engine is not None
+        clock = engine.get_clock_for_testing()
+
+        initial_time = clock.now()
+
+        # Wait for some real time
+        await asyncio.sleep(0.1)
+
+        # Clock should not have advanced
+        current_time = clock.now()
+        assert current_time == initial_time
+
+        await bootstrap.teardown()

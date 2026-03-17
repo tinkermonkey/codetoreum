@@ -399,8 +399,26 @@ class SimulationApplicationBootstrap:
             # Phase 6: Start auto-advance if configured
             # This must come after all event handlers are registered so tick-driven events have handlers
             if self.config.time.auto_advance and self._engine:
-                logger.info("Phase 6: Starting auto-advance clock...")
-                await self._engine.start_auto_advance()
+                try:
+                    logger.info(
+                        "Phase 6: Starting auto-advance at %sx speed",
+                        self.config.time.speed_multiplier,
+                    )
+                    await self._engine.start_auto_advance()
+                except RuntimeError as e:
+                    # If auto-advance is already running, log warning and continue
+                    logger.warning(
+                        f"Auto-advance already running or failed to start: {e}",
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"Unexpected error starting auto-advance: {e}",
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                    )
+                    # Continue without auto-advance rather than crashing the server
+                    logger.info("Continuing server startup without auto-advance")
 
             self._is_setup = True
             logger.info("Simulation bootstrap completed successfully")
