@@ -27,7 +27,6 @@ if TYPE_CHECKING:
     )
     from codetoreum.application.execution_service import ExecutionService
     from codetoreum.application.workspace_router import WorkspaceRouter
-    from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
     from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
     from codetoreum.ports.output.agent_repository import IAgentRepository
     from codetoreum.ports.output.config_store import IConfigStore
