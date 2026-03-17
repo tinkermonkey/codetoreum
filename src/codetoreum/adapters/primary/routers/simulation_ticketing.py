@@ -186,6 +186,9 @@ def create_simulation_ticketing_router(
         2. Places it in a temporary "staging" column
         3. Moves it to the target column to trigger WorkItemColumnChangedEvent
            (which triggers orchestration for pipeline trigger columns)
+
+        Raises:
+            HTTPException: If board has no columns, column not found, or move fails
         """
         priority_map = {
             "low": WorkItemPriority.LOW,
@@ -210,11 +213,19 @@ def create_simulation_ticketing_router(
 
         board_position = None
         if request.board_id and request.column:
-            try:
-                board_adapter.current_project = request.project_id
+            board_adapter.current_project = request.project_id
 
+            try:
                 # Get the board to find a staging column (preferably first manual column)
                 board = await board_adapter.get_board(request.project_id, request.board_id)
+
+                # Validate board has columns
+                if not board.columns:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Board {request.board_id} has no columns",
+                    )
+
                 staging_column = board.columns[0].name  # First column is usually manual/staging
 
                 # Place item in staging column first
@@ -222,21 +233,31 @@ def create_simulation_ticketing_router(
 
                 # Move to target column to trigger WorkItemColumnChangedEvent
                 # (This is essential for pipeline trigger columns to invoke orchestration)
+                # Only emit move event if target differs from staging column
                 if staging_column != request.column:
                     await board_adapter.move_item_to_column(
                         work_item.id,
                         request.column,
-                        MovedByType.ORCHESTRATOR  # API injection is system-driven, not human
+                        MovedByType.HUMAN  # Simulates user action in ticketing system
                     )
 
                 board_position = {
                     "board_id": request.board_id,
                     "column": request.column,
                 }
+            except HTTPException:
+                # Re-raise HTTP exceptions as-is
+                raise
             except ValueError as e:
-                logger.warning(f"Failed to place item on board: {e}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Failed to place item on board: {str(e)}",
+                )
             except Exception as e:
-                logger.warning(f"Failed to move item to target column: {e}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to move item to target column: {str(e)}",
+                )
 
         return SimIssueResponse(
             id=work_item.id,
