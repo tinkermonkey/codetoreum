@@ -666,9 +666,7 @@ class SimulationApplicationBootstrap:
         # Create pipeline lock with simulation clock for consistent time tracking
         # This ensures lock timestamps use simulation time (respecting speed multipliers)
         # which aligns with StaleLockWatchdog comparisons against clock.now()
-        lock_service = InMemoryLockService(
-            clock=self._engine.get_clock_for_testing() if self._engine else None
-        )
+        lock_service = InMemoryLockService(clock=self._engine.get_clock_for_testing() if self._engine else None)
         workflow_config = InMemoryWorkflowConfigService()
         # agent_executor will be initialized in Phase 3 as ExecutionServiceAgentExecutor
 
@@ -1161,7 +1159,8 @@ class SimulationApplicationBootstrap:
         )
 
         logger.info(
-            "Created all application services with simulation dependencies (including container recovery and multi-project orchestrator)"
+            "Created all application services with simulation dependencies "
+            "(including container recovery and multi-project orchestrator)"
         )
 
         return SimulationServices(
@@ -1435,7 +1434,8 @@ class SimulationApplicationBootstrap:
                         # Unhandled exception in the bridge handler (e.g., DLQ failure)
                         # This logs the failure so it's not silently swallowed
                         logger.error(
-                            f"Unhandled exception in board column event bridge for {event.work_item_id}: {task_exception}",
+                            f"Unhandled exception in board column event bridge for {event.work_item_id}: "
+                            f"{task_exception}",
                             exc_info=True,
                             extra={
                                 "work_item_id": event.work_item_id,
@@ -1508,7 +1508,8 @@ class SimulationApplicationBootstrap:
                 )
 
                 logger.error(
-                    f"Event publishing failed for work_item {work_item_id} - queued to dead letter queue: {publish_error}",
+                    f"Event publishing failed for work_item {work_item_id} - "
+                    f"queued to dead letter queue: {publish_error}",
                     exc_info=True,
                     extra={
                         "work_item_id": work_item_id,
@@ -1640,7 +1641,8 @@ class SimulationApplicationBootstrap:
                         # Unhandled exception in the bridge handler (e.g., DLQ failure)
                         # This logs the failure so it's not silently swallowed
                         logger.error(
-                            f"Unhandled exception in board reconciliation event bridge for {event.board_id}: {task_exception}",
+                            f"Unhandled exception in board reconciliation event bridge for {event.board_id}: "
+                            f"{task_exception}",
                             exc_info=True,
                             extra={
                                 "board_id": event.board_id,
