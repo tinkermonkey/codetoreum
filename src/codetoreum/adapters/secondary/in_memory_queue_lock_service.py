@@ -493,6 +493,19 @@ class InMemoryLockService(IPipelineLockService):
                     },
                 )
 
+    def get_all_lock_states(self) -> dict[str, PipelineQueueState]:
+        """Return copy of all pipeline queue states for watchdog iteration.
+
+        Thread-safe snapshot of all lock states across all boards.
+        Returns a shallow copy of the state dictionary to allow external
+        iteration without holding the internal lock indefinitely.
+
+        Returns:
+            Dict mapping "project_id:board_id" keys to PipelineQueueState copies
+        """
+        with self._lock:
+            return dict(self._lock_state)
+
     def set_lock_acquired_at(self, project_id: str, board_id: str, timestamp: datetime) -> None:
         """Test helper to manipulate lock timestamp for stale lock testing.
 

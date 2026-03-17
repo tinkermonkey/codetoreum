@@ -153,6 +153,7 @@ from codetoreum.infrastructure.simulation.causal_link_registry import (
 from codetoreum.infrastructure.simulation.mock_tracer import MockTracer
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
+from codetoreum.infrastructure.simulation.watchdogs import StaleLockWatchdog
 from codetoreum.ports.input.agent_command import IAgentCommandPort
 from codetoreum.ports.input.agent_query import IAgentQueryPort
 from codetoreum.ports.input.config_command import IConfigurationCommandPort
@@ -422,6 +423,28 @@ class SimulationApplicationBootstrap:
                     )
                     # Continue without auto-advance rather than crashing the server
                     logger.info("Continuing server startup without auto-advance")
+
+            # Phase 6b: Register stale lock watchdog
+            # Must come after auto-advance starts so it can schedule callbacks with the clock
+            if self.adapters and self._engine:
+                try:
+                    logger.info("Phase 6b: Registering stale lock watchdog...")
+                    stale_lock_watchdog = StaleLockWatchdog(
+                        lock_service=self.adapters.lock_service,
+                        event_emitter=self.adapters.event_emitter,
+                        clock=self._engine.clock,
+                        stale_threshold_seconds=7200,  # 2 hours default
+                    )
+                    stale_lock_watchdog.start()
+                    logger.info("Stale lock watchdog registered and started")
+                except Exception as e:
+                    logger.error(
+                        f"Failed to register stale lock watchdog: {e}",
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                    )
+                    # Continue without watchdog rather than crashing the server
+                    logger.info("Continuing server startup without stale lock watchdog")
 
             self._is_setup = True
             logger.info("Simulation bootstrap completed successfully")
