@@ -214,9 +214,18 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         workflow_id = run_info.run_id if run_info else "unknown"
         stage_name = run_info.stage_name if run_info else "unknown"
 
-        # Use a default timeout for the watchdog; _run_execution() will load the actual agent
-        # with its configured timeout. This avoids duplicate agent loads on every execution.
-        timeout_seconds = 3600  # Default 1 hour
+        # Load agent to get its configured timeout
+        # This ensures the watchdog respects the agent's timeout instead of using a default.
+        timeout_seconds = 3600  # Fallback default (1 hour) if agent load fails
+        try:
+            agent = await self._agent_repository.get_by_id(agent_id)
+            timeout_seconds = agent.timeout_seconds
+        except Exception as e:
+            logger.warning(
+                f"Failed to load agent '{agent_id}' for timeout in execute(): {e}, "
+                f"falling back to {timeout_seconds}s default",
+                exc_info=True,
+            )
 
         # Generate execution ID for tracking
         execution_id = f"{work_item_id}-{agent_id}-{now.timestamp()}"

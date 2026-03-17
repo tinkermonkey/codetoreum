@@ -663,8 +663,12 @@ class SimulationApplicationBootstrap:
         # Create project manager adapter
         project_manager = MockProjectManagerAdapter()
 
-        # Create pipeline lock, workflow config
-        lock_service = InMemoryLockService()
+        # Create pipeline lock with simulation clock for consistent time tracking
+        # This ensures lock timestamps use simulation time (respecting speed multipliers)
+        # which aligns with StaleLockWatchdog comparisons against clock.now()
+        lock_service = InMemoryLockService(
+            clock=self._engine.get_clock_for_testing() if self._engine else None
+        )
         workflow_config = InMemoryWorkflowConfigService()
         # agent_executor will be initialized in Phase 3 as ExecutionServiceAgentExecutor
 
