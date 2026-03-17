@@ -5,6 +5,7 @@ that manages locks on work items and includes test helper methods for
 simulating lock operations via event emission.
 """
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from codetoreum.domain.events.lock_events import LockAcquiredEvent, LockReleasedEvent
@@ -14,6 +15,18 @@ from codetoreum.ports.output.pipeline_lock_service import (
 )
 
 from .mock_event_emitter import MockEventEmitter
+
+
+@dataclass(frozen=True)
+class LockState:
+    """Thread-safe snapshot of a lock's current state.
+
+    Attributes:
+        lock_holder: ID of the entity holding the lock, or None
+        lock_acquired_at: When the lock was acquired, or None
+    """
+    lock_holder: str | None
+    lock_acquired_at: datetime | None
 
 
 class InMemoryPipelineLockService(MockEventEmitter, IPipelineLockService):
@@ -83,6 +96,33 @@ class InMemoryPipelineLockService(MockEventEmitter, IPipelineLockService):
             List[PipelineLock]: All currently held locks
         """
         return list(self._locks.values())
+
+    def get_all_lock_states(self) -> dict[str, LockState]:
+        """Return all pipeline lock states for monitoring and diagnostics.
+
+        Provides immediate thread-safe snapshots of all lock states without
+        async overhead. Used by watchdogs and monitoring tools.
+
+        Returns:
+            dict[str, LockState]: Mapping of lock keys to LockState objects
+                                 Key format: "project_id:board_id"
+                                 Contains lock_holder and lock_acquired_at
+        """
+        lock_states: dict[str, LockState] = {}
+        for key, lock in self._locks.items():
+            # Parse ISO timestamp to datetime for comparison
+            acquired_time = None
+            if lock.lock_acquired_at:
+                try:
+                    acquired_time = datetime.fromisoformat(lock.lock_acquired_at)
+                except (ValueError, TypeError):
+                    acquired_time = None
+
+            lock_states[key] = LockState(
+                lock_holder=lock.locked_by_work_item,
+                lock_acquired_at=acquired_time,
+            )
+        return lock_states
 
     # Command Operations
 

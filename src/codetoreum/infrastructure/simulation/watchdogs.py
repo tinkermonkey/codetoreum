@@ -57,7 +57,8 @@ class StaleLockWatchdog:
     is still emitted but the lock isn't recovered - the next tick will retry
     and re-emit. Once successfully recovered, future ticks skip the lock
     until it's re-acquired (cleared when a new lock.acquired event is
-    observed, handled via infrastructure/event_bus.py subscriptions).
+    observed via the on_lock_acquired() event handler, which must be
+    registered with the event bus in bootstrap.py).
 
     Attributes:
         _lock_service: IPipelineLockService for lock iteration and release
@@ -66,7 +67,7 @@ class StaleLockWatchdog:
         _stale_threshold: Age (timedelta) beyond which locks are stale
         _check_interval: Frequency (timedelta) of stale lock checks
         _recovered_locks: Set of "project_id:board_id" keys already recovered
-        _scheduled_callback: Reference to scheduled callback for stop()
+        _stopped: Flag to prevent future checks
     """
 
     def __init__(
@@ -94,7 +95,6 @@ class StaleLockWatchdog:
         self._check_interval = check_interval
         self._logger = logger
         self._recovered_locks: set[str] = set()
-        self._scheduled_callback: object | None = None
         self._stopped = False
 
     def start(self) -> None:
@@ -121,6 +121,33 @@ class StaleLockWatchdog:
         self._stopped = True
         self._recovered_locks.clear()
         self._logger.info("StaleLockWatchdog stopped")
+
+    def on_lock_acquired(self, event: object) -> None:
+        """Handle lock acquired event to clear deduplication tracking.
+
+        When a lock is newly acquired, remove it from _recovered_locks to allow
+        re-detection if it becomes stale in the future. This resets the
+        deduplication state when a previously-recovered lock is re-acquired.
+
+        Args:
+            event: LockAcquiredEvent (dynamically typed to support event bus)
+        """
+        # Extract key from event attributes
+        try:
+            project_id = getattr(event, "project_id", None)
+            board_id = getattr(event, "board_id", None)
+            if project_id and board_id:
+                key = f"{project_id}:{board_id}"
+                self._recovered_locks.discard(key)
+                self._logger.debug(
+                    "Cleared deduplication tracking for lock %s on new acquisition",
+                    key,
+                )
+        except Exception:
+            self._logger.error(
+                "Failed to process lock acquired event in watchdog",
+                exc_info=True,
+            )
 
     async def _tick(self, scheduled_time: datetime) -> None:
         """Check for stale locks, always reschedule.
@@ -648,18 +675,17 @@ class SLAExpiryWatchdog:
                         )
                         self._event_emitter.emit(sla_event)
 
-        # Clean up detections for items that have moved to a different column
-        # This allows them to be detected again if they exceed SLA in the new column
+        # Clean up detections for items that have moved to a different column.
+        # Unconditionally remove any key in moved_items since it's no longer detected
+        # in the current scan. This prevents memory leak of stale detection keys.
         moved_items = self._detected_items - current_items
         if moved_items:
             for item_key in moved_items:
+                self._detected_items.discard(item_key)
                 work_item_id = item_key[0]
-                # Only remove if the work_item_id+board combo is no longer detected
-                # (i.e., it moved to a column without SLA violation)
-                remaining = [k for k in current_items if k[0] == work_item_id]
-                if not remaining:
-                    self._detected_items.discard(item_key)
-                    self._logger.debug(
-                        "Cleaned up SLA detection for work item %s (moved to different column)",
-                        work_item_id,
-                    )
+                column_name = item_key[3]
+                self._logger.debug(
+                    "Cleaned up SLA detection for work item %s (no longer in column '%s')",
+                    work_item_id,
+                    column_name,
+                )

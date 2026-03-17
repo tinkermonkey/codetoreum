@@ -158,7 +158,7 @@ class IPipelineLockService(IEventEmitter, ABC):
         """
 
     @abstractmethod
-    def get_all_lock_states(self) -> dict:
+    def get_all_lock_states(self) -> dict[str, object]:
         """Return all pipeline lock states for monitoring and diagnostics.
 
         Intended for internal tools (watchdogs, dashboards) that need detailed
@@ -166,9 +166,11 @@ class IPipelineLockService(IEventEmitter, ABC):
         immediate access to current lock state including acquisition times.
 
         Returns:
-            dict: Mapping of lock keys to lock state objects containing:
-                  - lock_holder: Current lock holder ID or None
-                  - lock_acquired_at: Datetime when lock was acquired or None
+            dict[str, object]: Mapping of lock keys to lock state objects
+                              Key format: "project_id:board_id"
+                              Values are LockState objects with:
+                              - lock_holder: Current lock holder ID or None
+                              - lock_acquired_at: Datetime when lock was acquired or None
 
         Note:
             This is a synchronous method for performance-critical monitoring
