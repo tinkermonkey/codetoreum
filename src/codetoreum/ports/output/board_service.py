@@ -117,6 +117,7 @@ class WorkItemPosition:
         # Validate optional SLA tracking field
         if self.entered_column_at is not None:
             from datetime import datetime
+
             if not isinstance(self.entered_column_at, datetime):
                 msg = "entered_column_at must be None or a datetime instance"
                 raise ValueError(msg)

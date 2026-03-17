@@ -457,9 +457,7 @@ class SLAExpiryWatchdog:
         for board in all_boards:
             # Get workflow template for this board to check SLA config
             try:
-                template = await self._workflow_config_service.get_board_workflow_template(
-                    board.id
-                )
+                template = await self._workflow_config_service.get_board_workflow_template(board.id)
             except Exception:
                 self._logger.error(
                     "Failed to retrieve workflow template for board %s",
@@ -473,9 +471,7 @@ class SLAExpiryWatchdog:
 
             # Get all work items on board
             try:
-                items = await self._board_service.get_board_items(
-                    board.project_id, board.id
-                )
+                items = await self._board_service.get_board_items(board.project_id, board.id)
             except Exception:
                 self._logger.error(
                     "Failed to retrieve items for board %s",

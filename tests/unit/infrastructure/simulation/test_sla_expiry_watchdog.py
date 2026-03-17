@@ -9,18 +9,19 @@ Comprehensive test coverage of the SLAExpiryWatchdog including:
 - Edge cases and boundary conditions
 """
 
-import pytest
 from datetime import UTC, datetime, timedelta
 
-from codetoreum.domain.board_workflow_template import BoardWorkflowTemplate, ColumnTemplate, ColumnType
-from codetoreum.domain.events.board_events import ColumnSLAExceededEvent
-from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
-from codetoreum.infrastructure.simulation.watchdogs import SLAExpiryWatchdog
+import pytest
+
 from codetoreum.adapters.testing import (
     CapturingMockEventEmitter,
     InMemoryWorkflowConfigService,
     MockBoardAdapter,
 )
+from codetoreum.domain.board_workflow_template import BoardWorkflowTemplate, ColumnTemplate, ColumnType
+from codetoreum.domain.events.board_events import ColumnSLAExceededEvent
+from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
+from codetoreum.infrastructure.simulation.watchdogs import SLAExpiryWatchdog
 from codetoreum.ports.output.board_service import MovedByType
 
 
@@ -116,9 +117,7 @@ def workflow_config_service() -> InMemoryWorkflowConfigService:
 
 
 @pytest.fixture
-async def watchdog(
-    board_adapter, workflow_config_service, event_emitter, clock
-) -> SLAExpiryWatchdog:
+async def watchdog(board_adapter, workflow_config_service, event_emitter, clock) -> SLAExpiryWatchdog:
     """Create and initialize SLA expiry watchdog."""
     dog = SLAExpiryWatchdog(
         board_service=board_adapter,
@@ -132,9 +131,7 @@ async def watchdog(
 
 
 @pytest.mark.asyncio
-async def test_sla_watchdog_initialization(
-    board_adapter, workflow_config_service, event_emitter, clock
-):
+async def test_sla_watchdog_initialization(board_adapter, workflow_config_service, event_emitter, clock):
     """Test watchdog initialization and startup."""
     dog = SLAExpiryWatchdog(
         board_service=board_adapter,
@@ -155,9 +152,7 @@ async def test_sla_watchdog_initialization(
 
 
 @pytest.mark.asyncio
-async def test_sla_detection_single_item(
-    board_adapter, workflow_config_service, event_emitter, clock, watchdog
-):
+async def test_sla_detection_single_item(board_adapter, workflow_config_service, event_emitter, clock, watchdog):
     """Test SLA detection for a single item."""
     # Setup board with item in Code Review column
     await board_adapter.create_board("proj-1", "board-1", "Test Board", "template-1")
@@ -187,9 +182,7 @@ async def test_sla_detection_single_item(
 
 
 @pytest.mark.asyncio
-async def test_sla_deduplication(
-    board_adapter, workflow_config_service, event_emitter, clock, watchdog
-):
+async def test_sla_deduplication(board_adapter, workflow_config_service, event_emitter, clock, watchdog):
     """Test that SLA event is emitted only once per item per expiry."""
     # Setup board with item in Code Review
     await board_adapter.create_board("proj-1", "board-1", "Test Board", "template-1")
@@ -211,9 +204,7 @@ async def test_sla_deduplication(
 
 
 @pytest.mark.asyncio
-async def test_sla_multiple_columns(
-    board_adapter, workflow_config_service, event_emitter, clock, watchdog
-):
+async def test_sla_multiple_columns(board_adapter, workflow_config_service, event_emitter, clock, watchdog):
     """Test SLA detection across multiple columns with different thresholds."""
     # Setup board
     await board_adapter.create_board("proj-1", "board-1", "Test Board", "template-1")
@@ -243,9 +234,7 @@ async def test_sla_multiple_columns(
 
 
 @pytest.mark.asyncio
-async def test_sla_no_sla_column(
-    board_adapter, workflow_config_service, event_emitter, clock, watchdog
-):
+async def test_sla_no_sla_column(board_adapter, workflow_config_service, event_emitter, clock, watchdog):
     """Test that items in columns without SLA don't trigger events."""
     # Setup board
     await board_adapter.create_board("proj-1", "board-1", "Test Board", "template-1")
@@ -263,9 +252,7 @@ async def test_sla_no_sla_column(
 
 
 @pytest.mark.asyncio
-async def test_sla_item_without_entry_time(
-    board_adapter, workflow_config_service, event_emitter, clock, watchdog
-):
+async def test_sla_item_without_entry_time(board_adapter, workflow_config_service, event_emitter, clock, watchdog):
     """Test that items without entry timestamp are skipped."""
     # Setup board
     await board_adapter.create_board("proj-1", "board-1", "Test Board", "template-1")
@@ -286,10 +273,9 @@ async def test_sla_item_without_entry_time(
 
 
 @pytest.mark.asyncio
-async def test_sla_error_handling(
-    board_adapter, workflow_config_service, event_emitter, clock, watchdog
-):
+async def test_sla_error_handling(board_adapter, workflow_config_service, event_emitter, clock, watchdog):
     """Test watchdog continues on error (fail-safe pattern)."""
+
     # Create a broken workflow config service that raises on get_board_workflow_template
     class BrokenConfigService:
         async def get_board_workflow_template(self, board_id):
@@ -317,9 +303,7 @@ async def test_sla_error_handling(
 
 
 @pytest.mark.asyncio
-async def test_sla_event_fields(
-    board_adapter, workflow_config_service, event_emitter, clock, watchdog
-):
+async def test_sla_event_fields(board_adapter, workflow_config_service, event_emitter, clock, watchdog):
     """Test that SLA event contains all required fields with correct values."""
     # Setup
     await board_adapter.create_board("proj-1", "board-1", "Test Board", "template-1")
@@ -352,9 +336,7 @@ async def test_sla_event_fields(
 
 
 @pytest.mark.asyncio
-async def test_sla_tick_reschedules(
-    board_adapter, workflow_config_service, event_emitter, clock, watchdog
-):
+async def test_sla_tick_reschedules(board_adapter, workflow_config_service, event_emitter, clock, watchdog):
     """Test that _tick always reschedules itself (fail-safe pattern)."""
     # Setup
     await board_adapter.create_board("proj-1", "board-1", "Test Board", "template-1")
@@ -371,9 +353,7 @@ async def test_sla_tick_reschedules(
 
 
 @pytest.mark.asyncio
-async def test_sla_clock_integration(
-    board_adapter, workflow_config_service, event_emitter, clock
-):
+async def test_sla_clock_integration(board_adapter, workflow_config_service, event_emitter, clock):
     """Test that watchdog uses clock.now() exclusively for time comparisons."""
     dog = SLAExpiryWatchdog(
         board_service=board_adapter,
