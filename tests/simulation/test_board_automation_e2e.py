@@ -330,9 +330,11 @@ async def test_autonomous_progression_via_api_single_http_call(e2e_env):
 
     executions = [e for e in executor.executions if e["work_item_id"] == work_item_id]
     agent_ids = [e["agent_id"] for e in executions]
-    assert agent_ids == ["architect", "coder", "tester"], (
-        f"Expected agents [architect, coder, tester] in order, got {agent_ids}"
-    )
+    assert agent_ids == [
+        "architect",
+        "coder",
+        "tester",
+    ], f"Expected agents [architect, coder, tester] in order, got {agent_ids}"
 
     # 3. Verify movement history shows correct progression
     history = board.get_movement_history(work_item_id)
@@ -343,20 +345,18 @@ async def test_autonomous_progression_via_api_single_http_call(e2e_env):
 
     # First move is HUMAN (from API endpoint simulating user action in ticketing system)
     # Subsequent moves are ORCHESTRATOR (from auto-progression handlers)
-    assert history[0].moved_by == MovedByType.HUMAN, (
-        f"First move should be HUMAN (from API endpoint), got {history[0].moved_by}"
-    )
+    assert (
+        history[0].moved_by == MovedByType.HUMAN
+    ), f"First move should be HUMAN (from API endpoint), got {history[0].moved_by}"
     for i, move in enumerate(history[1:], start=1):
         assert move.moved_by == MovedByType.ORCHESTRATOR, (
-            f"Move {i} ({move.from_column}→{move.to_column}) should be ORCHESTRATOR, "
-            f"got {move.moved_by}"
+            f"Move {i} ({move.from_column}→{move.to_column}) should be ORCHESTRATOR, " f"got {move.moved_by}"
         )
 
     # 4. Verify column progression path
     columns_visited = [history[0].from_column] + [m.to_column for m in history]
     assert columns_visited == ["Backlog", "Ready", "In Progress", "Review", "Done"], (
-        f"Expected column path [Backlog, Ready, In Progress, Review, Done], "
-        f"got {columns_visited}"
+        f"Expected column path [Backlog, Ready, In Progress, Review, Done], " f"got {columns_visited}"
     )
 
     # 5. Verify workflow lifecycle events in event store
@@ -382,30 +382,21 @@ async def test_autonomous_progression_via_api_single_http_call(e2e_env):
     workflow_run_id_events = [
         e for e in all_events if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == work_item_id
     ]
-    assert len(workflow_run_id_events) > 0, (
-        "No workflow lifecycle events found for this work item in EventStore"
-    )
+    assert len(workflow_run_id_events) > 0, "No workflow lifecycle events found for this work item in EventStore"
 
     workflow_run_id = workflow_run_id_events[0].aggregate_id
     workflow_events = [e for e in all_events if e.aggregate_id == workflow_run_id]
     event_types = [e.event_type for e in workflow_events]
 
     # Verify critical lifecycle events
-    assert "WorkflowCreated" in event_types, (
-        f"WorkflowCreated event not found. Event types: {event_types}"
-    )
-    assert "WorkflowStarted" in event_types, (
-        f"WorkflowStarted event not found. Event types: {event_types}"
-    )
-    assert "WorkflowCompleted" in event_types, (
-        f"WorkflowCompleted event not found. Event types: {event_types}"
-    )
+    assert "WorkflowCreated" in event_types, f"WorkflowCreated event not found. Event types: {event_types}"
+    assert "WorkflowStarted" in event_types, f"WorkflowStarted event not found. Event types: {event_types}"
+    assert "WorkflowCompleted" in event_types, f"WorkflowCompleted event not found. Event types: {event_types}"
 
     # 6. Verify stage advances (3 stages = 3 advances)
     stage_advances = [e for e in workflow_events if e.event_type == "WorkflowStageAdvanced"]
     assert len(stage_advances) == 3, (
-        f"Expected 3 WorkflowStageAdvanced events (one per agent execution), "
-        f"got {len(stage_advances)}"
+        f"Expected 3 WorkflowStageAdvanced events (one per agent execution), " f"got {len(stage_advances)}"
     )
 
     # 7. Verify the seeded board configuration supports this cascade

@@ -236,9 +236,7 @@ def create_simulation_ticketing_router(
                 # Only emit move event if target differs from staging column
                 if staging_column != request.column:
                     await board_adapter.move_item_to_column(
-                        work_item.id,
-                        request.column,
-                        MovedByType.HUMAN  # Simulates user action in ticketing system
+                        work_item.id, request.column, MovedByType.HUMAN  # Simulates user action in ticketing system
                     )
 
                 board_position = {
@@ -251,12 +249,12 @@ def create_simulation_ticketing_router(
             except ValueError as e:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Failed to place item on board: {str(e)}",
+                    detail=f"Failed to place item on board: {e!s}",
                 )
             except Exception as e:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Failed to move item to target column: {str(e)}",
+                    detail=f"Failed to move item to target column: {e!s}",
                 )
 
         return SimIssueResponse(
