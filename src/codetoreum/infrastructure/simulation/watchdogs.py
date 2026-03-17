@@ -13,11 +13,9 @@ Design Principles:
 
 import logging
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
-from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
-    InMemoryLockService,
-)
+from codetoreum.application.pipeline_lock_service import IPipelineLockService
 from codetoreum.domain.events.board_events import ColumnSLAExceededEvent
 from codetoreum.domain.events.execution_events import ExecutionTimedOutEvent
 from codetoreum.domain.events.lock_events import LockStaleDetectedEvent
@@ -32,6 +30,25 @@ if TYPE_CHECKING:
     )
 
 logger = logging.getLogger(__name__)
+
+
+class _SupportsGetAllLockStates(Protocol):
+    """Protocol for lock services with get_all_lock_states() method.
+
+    This is an implementation-specific method used by StaleLockWatchdog for
+    proactive stale lock detection. Used as a runtime check rather than as
+    a formal port interface constraint.
+
+    Design Note:
+        This protocol enables accessing implementation-specific methods while
+        keeping the primary dependency on the IPipelineLockService interface.
+        The watchdog accepts IPipelineLockService but uses this protocol to
+        safely access the additional method at runtime.
+    """
+
+    def get_all_lock_states(self) -> dict[str, any]:
+        """Get internal lock state dictionary for watchdog scanning."""
+        ...
 
 
 class StaleLockWatchdog:
@@ -51,8 +68,13 @@ class StaleLockWatchdog:
     - Event-driven: Emits LockStaleDetectedEvent for audit trail
     - Force-release: Calls lock_service.release_lock() to clean up
 
+    Architecture:
+    - Depends on IPipelineLockService (port interface) not concrete implementations
+    - Accesses implementation-specific get_all_lock_states() via protocol at runtime
+    - Maintains hexagonal layering by depending on contracts, not implementations
+
     Attributes:
-        _lock_service: InMemoryLockService for lock iteration and release
+        _lock_service: IPipelineLockService for lock iteration and release
         _event_emitter: IEventEmitter for domain event publication
         _clock: SimulationClock for time access and callback scheduling
         _stale_threshold: Age (timedelta) beyond which locks are stale
@@ -61,7 +83,7 @@ class StaleLockWatchdog:
 
     def __init__(
         self,
-        lock_service: InMemoryLockService,
+        lock_service: IPipelineLockService,
         event_emitter: IEventEmitter,
         clock: SimulationClock,
         stale_threshold_seconds: int = 7200,
@@ -70,7 +92,7 @@ class StaleLockWatchdog:
         """Initialize stale lock watchdog.
 
         Args:
-            lock_service: InMemoryLockService instance for lock access
+            lock_service: IPipelineLockService instance for lock access
             event_emitter: IEventEmitter for domain event publication
             clock: SimulationClock for time and callback scheduling
             stale_threshold_seconds: Age in seconds before lock is considered stale
@@ -139,7 +161,16 @@ class StaleLockWatchdog:
             Any exception from event emission or lock release (caught and logged by _tick())
         """
         now = self._clock.now()
-        all_states = self._lock_service.get_all_lock_states()
+
+        # Access implementation-specific get_all_lock_states() method via protocol
+        # This is safe in simulation environments where InMemoryLockService provides it
+        if not hasattr(self._lock_service, "get_all_lock_states"):
+            self._logger.warning(
+                "Lock service does not support get_all_lock_states() - cannot perform stale lock detection"
+            )
+            return
+
+        all_states = self._lock_service.get_all_lock_states()  # type: ignore
 
         for key, state in all_states.items():
             # Only check locks that are currently held
