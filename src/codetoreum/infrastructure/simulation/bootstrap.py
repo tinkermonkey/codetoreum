@@ -438,7 +438,7 @@ class SimulationApplicationBootstrap:
                     self._stale_lock_watchdog = StaleLockWatchdog(
                         lock_service=self.adapters.lock_service,
                         event_emitter=self.adapters.event_emitter,
-                        clock=self._engine.clock,
+                        clock=self._engine.get_clock_for_testing(),
                         stale_threshold_seconds=7200,  # 2 hours default
                     )
                     self._stale_lock_watchdog.start()
@@ -472,7 +472,7 @@ class SimulationApplicationBootstrap:
                     self._execution_timeout_watchdog = ExecutionTimeoutWatchdog(
                         executor=self.adapters.agent_executor,
                         event_emitter=self.adapters.event_emitter,
-                        clock=self._engine.clock,
+                        clock=self._engine.get_clock_for_testing(),
                         check_interval=timedelta(seconds=30),  # Check every 30 simulated seconds
                     )
                     self._execution_timeout_watchdog.start()
@@ -1033,7 +1033,7 @@ class SimulationApplicationBootstrap:
             run_registry=self.adapters.run_registry,
             branch_tracker=self.adapters.branch_tracker,
             vcs=self.adapters.version_control,
-            clock=self._engine.clock,
+            clock=self._engine.get_clock_for_testing(),
             recovery_service=recovery_service,
         )
         # Assign to agent_executor (the primary executor for the board handler)
