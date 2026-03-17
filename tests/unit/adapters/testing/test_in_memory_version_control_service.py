@@ -96,6 +96,70 @@ class TestInMemoryVersionControlServiceExceptions:
         assert exc.resource_type == "Repository"
         assert "nonexistent-repo-id" in exc.resource_id
 
+    @pytest.mark.asyncio
+    async def test_checkout_with_empty_repo_path_raises_validation_error(self):
+        """Checkout with empty repo path should raise ValidationError."""
+        service = InMemoryVersionControlService()
+
+        with pytest.raises(ValidationError):
+            await service.checkout("", "main")
+
+    @pytest.mark.asyncio
+    async def test_checkout_with_empty_branch_raises_validation_error(self):
+        """Checkout with empty branch name should raise ValidationError."""
+        service = InMemoryVersionControlService()
+
+        with pytest.raises(ValidationError):
+            await service.checkout("/workspace/test-repo", "")
+
+    @pytest.mark.asyncio
+    async def test_commit_with_empty_repo_path_raises_validation_error(self):
+        """Commit with empty repo path should raise ValidationError."""
+        service = InMemoryVersionControlService()
+
+        with pytest.raises(ValidationError):
+            await service.commit("", "Test commit")
+
+    @pytest.mark.asyncio
+    async def test_push_with_empty_repo_path_raises_validation_error(self):
+        """Push with empty repo path should raise ValidationError."""
+        service = InMemoryVersionControlService()
+
+        with pytest.raises(ValidationError):
+            await service.push("", "main")
+
+    @pytest.mark.asyncio
+    async def test_push_with_empty_branch_raises_validation_error(self):
+        """Push with empty branch name should raise ValidationError."""
+        service = InMemoryVersionControlService()
+
+        with pytest.raises(ValidationError):
+            await service.push("/workspace/test-repo", "")
+
+    @pytest.mark.asyncio
+    async def test_create_branch_with_empty_repo_path_raises_validation_error(self):
+        """Create branch with empty repo path should raise ValidationError."""
+        service = InMemoryVersionControlService()
+
+        with pytest.raises(ValidationError):
+            await service.create_branch("", "feature/test")
+
+    @pytest.mark.asyncio
+    async def test_create_branch_with_empty_branch_name_raises_validation_error(self):
+        """Create branch with empty branch name should raise ValidationError."""
+        service = InMemoryVersionControlService()
+
+        with pytest.raises(ValidationError):
+            await service.create_branch("/workspace/test-repo", "")
+
+    @pytest.mark.asyncio
+    async def test_list_branches_with_empty_repo_path_raises_validation_error(self):
+        """List branches with empty repo path should raise ValidationError."""
+        service = InMemoryVersionControlService()
+
+        with pytest.raises(ValidationError):
+            await service.list_branches("")
+
 
 class TestInMemoryVersionControlServiceBehavior:
     """Test core behavior and state management."""
@@ -157,16 +221,16 @@ class TestInMemoryVersionControlServiceBehavior:
         # Should not raise
 
     @pytest.mark.asyncio
-    async def test_checkout_creates_new_branch(self):
-        """Checkout should create new branch if it doesn't exist."""
+    async def test_checkout_nonexistent_branch_raises_error(self):
+        """Checkout should raise RepositoryError for nonexistent branches."""
         service = InMemoryVersionControlService()
         path = "/workspace/test-repo"
 
         await service.clone_repository("https://github.com/test/repo.git", path)
-        # Create a new branch via checkout
-        await service.checkout(path, "feature/new-feature")
 
-        # Should not raise
+        # Checkout to nonexistent branch should raise
+        with pytest.raises(RepositoryError):
+            await service.checkout(path, "feature/new-feature")
 
     @pytest.mark.asyncio
     async def test_commit_generates_unique_shas(self):
@@ -210,6 +274,106 @@ class TestInMemoryVersionControlServiceBehavior:
         await service.push(path, "main")
 
     @pytest.mark.asyncio
+    async def test_push_records_branch_in_pushed_branches_state(self):
+        """Push should record the branch in the internal pushed_branches set."""
+        service = InMemoryVersionControlService()
+        path = "/workspace/test-repo"
+
+        await service.clone_repository("https://github.com/test/repo.git", path)
+        await service.push(path, "main")
+
+        # Verify state was recorded (access internal state for verification)
+        repo = service._repositories[path]
+        assert "main" in repo["pushed_branches"]
+
+    @pytest.mark.asyncio
+    async def test_push_multiple_branches_records_all(self):
+        """Push should record multiple pushed branches."""
+        service = InMemoryVersionControlService()
+        path = "/workspace/test-repo"
+
+        await service.clone_repository("https://github.com/test/repo.git", path)
+
+        # Create and push multiple branches
+        await service.create_branch(path, "feature/test")
+        await service.push(path, "main")
+        await service.push(path, "feature/test")
+
+        # Verify state was recorded for all branches
+        repo = service._repositories[path]
+        assert "main" in repo["pushed_branches"]
+        assert "feature/test" in repo["pushed_branches"]
+
+    @pytest.mark.asyncio
+    async def test_push_emits_branch_pushed_event(self):
+        """Push should emit BranchPushedEvent when event emitter is configured."""
+        from codetoreum.adapters.testing.capturing_mock_event_emitter import (
+            CapturingMockEventEmitter,
+        )
+        from codetoreum.domain.events import BranchPushedEvent
+
+        emitter = CapturingMockEventEmitter()
+        service = InMemoryVersionControlService(event_emitter=emitter)
+        path = "/workspace/test-repo"
+
+        await service.clone_repository("https://github.com/test/repo.git", path)
+        await service.push(path, "main")
+
+        # Verify event was emitted
+        all_events = emitter.get_events()
+        assert len(all_events) > 0
+        branch_pushed_events = [e for e in all_events if isinstance(e, BranchPushedEvent)]
+        assert len(branch_pushed_events) == 1
+
+        event = branch_pushed_events[0]
+        assert event.repository_id == path
+        assert event.branch_name == "main"
+
+    @pytest.mark.asyncio
+    async def test_push_event_contains_correct_branch_name(self):
+        """BranchPushedEvent should contain the correct branch name."""
+        from codetoreum.adapters.testing.capturing_mock_event_emitter import (
+            CapturingMockEventEmitter,
+        )
+        from codetoreum.domain.events import BranchPushedEvent
+
+        emitter = CapturingMockEventEmitter()
+        service = InMemoryVersionControlService(event_emitter=emitter)
+        path = "/workspace/test-repo"
+
+        await service.clone_repository("https://github.com/test/repo.git", path)
+        await service.create_branch(path, "feature/special-feature")
+        await service.push(path, "feature/special-feature")
+
+        # Find the BranchPushedEvent
+        all_events = emitter.get_events()
+        branch_pushed_events = [e for e in all_events if isinstance(e, BranchPushedEvent)]
+        feature_events = [e for e in branch_pushed_events if e.branch_name == "feature/special-feature"]
+
+        assert len(feature_events) == 1
+        assert feature_events[0].branch_name == "feature/special-feature"
+
+    @pytest.mark.asyncio
+    async def test_push_event_contains_repository_id(self):
+        """BranchPushedEvent should contain the correct repository_id."""
+        from codetoreum.adapters.testing.capturing_mock_event_emitter import (
+            CapturingMockEventEmitter,
+        )
+        from codetoreum.domain.events import BranchPushedEvent
+
+        emitter = CapturingMockEventEmitter()
+        service = InMemoryVersionControlService(event_emitter=emitter)
+        path = "/workspace/test-repo"
+
+        await service.clone_repository("https://github.com/test/repo.git", path)
+        await service.push(path, "main")
+
+        all_events = emitter.get_events()
+        branch_pushed_events = [e for e in all_events if isinstance(e, BranchPushedEvent)]
+        assert len(branch_pushed_events) == 1
+        assert branch_pushed_events[0].repository_id == path
+
+    @pytest.mark.asyncio
     async def test_multiple_repositories_independent_state(self):
         """Multiple repositories should maintain independent state."""
         service = InMemoryVersionControlService()
@@ -224,9 +388,11 @@ class TestInMemoryVersionControlServiceBehavior:
         # Commit to second repo with same message (should get same SHA)
         sha2 = await service.commit("/workspace/repo2", "Repo 1 commit")
 
-        assert sha1 == sha2  # Same message on same branch should give same SHA
+        assert sha1 != sha2  # Different commits should have different SHAs even with same message
 
         # Operations on one shouldn't affect the other
+        # Create branch first, then checkout
+        await service.create_branch("/workspace/repo1", "feature/test")
         await service.checkout("/workspace/repo1", "feature/test")
 
         # Commit to feature branch in repo1
@@ -266,3 +432,192 @@ class TestInMemoryVersionControlServiceBehavior:
         assert repo.url == url
         assert repo.id == "repo"
         assert repo.default_branch == "main"
+
+
+class TestVersionControlServiceStatus:
+    """Test status() method with derived state from actual repository tracking."""
+
+    @pytest.mark.asyncio
+    async def test_status_freshly_cloned_repo_returns_clean(self):
+        """Fresh clone should return clean status with no staged or unstaged files."""
+        service = InMemoryVersionControlService()
+        path = "/workspace/test-repo"
+
+        await service.clone_repository("https://github.com/test/repo.git", path)
+
+        status = await service.status(path)
+
+        assert status.is_dirty is False
+        assert status.staged_files == ()
+        assert status.unstaged_files == ()
+
+    @pytest.mark.asyncio
+    async def test_status_with_unstaged_file(self):
+        """After seeding a working-tree file, status should show it as unstaged."""
+        service = InMemoryVersionControlService()
+        path = "/workspace/test-repo"
+
+        await service.clone_repository("https://github.com/test/repo.git", path)
+        service.seed_working_tree_file(path, "src/main.py", "print('hello')")
+
+        status = await service.status(path)
+
+        assert status.is_dirty is True
+        assert status.staged_files == ()
+        assert "src/main.py" in status.unstaged_files
+
+    @pytest.mark.asyncio
+    async def test_status_with_staged_files(self):
+        """After staging files, status should show them as staged."""
+        service = InMemoryVersionControlService()
+        path = "/workspace/test-repo"
+
+        await service.clone_repository("https://github.com/test/repo.git", path)
+        service.stage_files(path, ["src/main.py", "README.md"])
+
+        status = await service.status(path)
+
+        assert status.is_dirty is True
+        assert "src/main.py" in status.staged_files
+        assert "README.md" in status.staged_files
+        assert status.unstaged_files == ()
+
+    @pytest.mark.asyncio
+    async def test_status_with_both_staged_and_unstaged_files(self):
+        """Status should properly distinguish between staged and unstaged files."""
+        service = InMemoryVersionControlService()
+        path = "/workspace/test-repo"
+
+        await service.clone_repository("https://github.com/test/repo.git", path)
+        service.seed_working_tree_file(path, "src/main.py", "print('hello')")
+        service.seed_working_tree_file(path, "src/helper.py", "def help(): pass")
+        service.stage_files(path, ["src/main.py"])
+
+        status = await service.status(path)
+
+        assert status.is_dirty is True
+        assert "src/main.py" in status.staged_files
+        assert "src/helper.py" in status.unstaged_files
+        assert "src/helper.py" not in status.staged_files
+        assert "src/main.py" not in status.unstaged_files
+
+    @pytest.mark.asyncio
+    async def test_status_no_wildcard_in_staged_files(self):
+        """Staged files should contain actual filenames, never wildcards."""
+        service = InMemoryVersionControlService()
+        path = "/workspace/test-repo"
+
+        await service.clone_repository("https://github.com/test/repo.git", path)
+        service.stage_files(path, ["file1.txt", "file2.txt"])
+
+        status = await service.status(path)
+
+        # Should never contain the wildcard
+        assert "*" not in status.staged_files
+        assert "file1.txt" in status.staged_files
+        assert "file2.txt" in status.staged_files
+
+    @pytest.mark.asyncio
+    async def test_status_after_commit_clears_staged_files(self):
+        """After commit, staged files should be cleared and status should reflect clean state."""
+        service = InMemoryVersionControlService()
+        path = "/workspace/test-repo"
+
+        await service.clone_repository("https://github.com/test/repo.git", path)
+        service.stage_files(path, ["src/main.py"])
+
+        # Verify staged before commit
+        status_before = await service.status(path)
+        assert status_before.is_dirty is True
+        assert "src/main.py" in status_before.staged_files
+
+        # Commit
+        await service.commit(path, "Add main.py")
+
+        # After commit, staged files should be cleared
+        status_after = await service.status(path)
+        assert status_after.is_dirty is False
+        assert status_after.staged_files == ()
+        assert status_after.unstaged_files == ()
+
+    @pytest.mark.asyncio
+    async def test_status_after_commit_with_unstaged_files(self):
+        """After commit, unstaged files should remain if not staged."""
+        service = InMemoryVersionControlService()
+        path = "/workspace/test-repo"
+
+        await service.clone_repository("https://github.com/test/repo.git", path)
+        service.seed_working_tree_file(path, "src/main.py", "print('hello')")
+        service.seed_working_tree_file(path, "src/helper.py", "def help(): pass")
+        service.stage_files(path, ["src/main.py"])
+
+        # Commit staged file
+        await service.commit(path, "Add main.py")
+
+        # Check status after commit
+        status = await service.status(path)
+
+        # Staged files should be cleared, but unstaged should remain
+        assert status.is_dirty is True
+        assert status.staged_files == ()
+        assert "src/helper.py" in status.unstaged_files
+
+    @pytest.mark.asyncio
+    async def test_status_clone_seed_stage_commit_sequence(self):
+        """Full sequence: clone -> seed file -> stage -> commit -> status clean."""
+        service = InMemoryVersionControlService()
+        path = "/workspace/test-repo"
+
+        # Clone
+        await service.clone_repository("https://github.com/test/repo.git", path)
+        status = await service.status(path)
+        assert status.is_dirty is False
+
+        # Seed a file
+        service.seed_working_tree_file(path, "src/main.py", "print('hello')")
+        status = await service.status(path)
+        assert status.is_dirty is True
+        assert "src/main.py" in status.unstaged_files
+
+        # Stage the file
+        service.stage_files(path, ["src/main.py"])
+        status = await service.status(path)
+        assert status.is_dirty is True
+        assert "src/main.py" in status.staged_files
+        assert "src/main.py" not in status.unstaged_files
+
+        # Commit
+        await service.commit(path, "Add main.py")
+        status = await service.status(path)
+        assert status.is_dirty is False
+        assert status.staged_files == ()
+        assert status.unstaged_files == ()
+
+    @pytest.mark.asyncio
+    async def test_status_multiple_repos_independent(self):
+        """Status for multiple repos should be independent."""
+        service = InMemoryVersionControlService()
+        path1 = "/workspace/repo1"
+        path2 = "/workspace/repo2"
+
+        await service.clone_repository("https://github.com/test/repo1.git", path1)
+        await service.clone_repository("https://github.com/test/repo2.git", path2)
+
+        # Seed file in repo1 only
+        service.seed_working_tree_file(path1, "file.txt", "content")
+
+        # Repo1 should be dirty
+        status1 = await service.status(path1)
+        assert status1.is_dirty is True
+
+        # Repo2 should be clean
+        status2 = await service.status(path2)
+        assert status2.is_dirty is False
+
+    @pytest.mark.asyncio
+    async def test_status_nonexistent_repo_raises_error(self):
+        """Status on nonexistent repo should raise RepositoryError."""
+        service = InMemoryVersionControlService()
+
+        with pytest.raises(RepositoryError):
+            await service.status("/nonexistent/repo")

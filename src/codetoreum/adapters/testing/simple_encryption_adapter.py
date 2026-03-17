@@ -1,19 +1,40 @@
 """
-Simple Encryption Adapter for Testing and Development
+SimpleEncryptionAdapter — AES-256-GCM encryption adapter for simulation use.
 
-Provides basic AES-256-GCM encryption for sensitive configuration values.
+This adapter performs real AES-256-GCM encryption using the `cryptography` library.
+It is suitable for use in simulation and test environments. It is NOT a no-op.
 
-WARNING: This is a simple implementation suitable for testing and development.
+Do NOT use in production: this adapter generates ephemeral keys and does not
+integrate with a key management service (KMS). For production, replace with an
+adapter backed by AWS KMS, HashiCorp Vault, or equivalent.
+
+Key Features:
+- Real AES-256-GCM authenticated encryption (not a stub or no-op)
+- Multiple encryption keys identified by key_id
+- Ephemeral key generation with random nonces
+- Base64-encoded output format: key_id:nonce:ciphertext
+
+Suitable for:
+- Unit and integration tests
+- Simulation scenarios
+- Development/local environments
+
+NOT suitable for:
+- Production: No KMS integration, ephemeral keys lost on restart
+- Long-term key storage: Keys stored in memory only
+- Distributed systems: No key distribution mechanism
+
 For production use, consider:
+- AWS KMS, Google Cloud KMS, or Azure Key Vault
+- HashiCorp Vault
 - Hardware Security Modules (HSM)
-- Key Management Services (AWS KMS, Google Cloud KMS, Azure Key Vault)
-- Envelope encryption
-- Proper key rotation strategies
+- Envelope encryption with external key management
 """
 
 import base64
 import logging
 import os
+import threading
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
@@ -46,6 +67,7 @@ class SimpleEncryptionAdapter(IEncryptionService):
         Args:
             default_key: Default 32-byte encryption key. If None, generates a random key.
         """
+        self._lock = threading.Lock()  # Thread safety for concurrent operations
         self._keys: dict[str, bytes] = {}
 
         # Initialize default key
@@ -77,12 +99,13 @@ class SimpleEncryptionAdapter(IEncryptionService):
             if key_id is None:
                 key_id = "default"
 
-            # Get encryption key
-            if key_id not in self._keys:
-                msg = f"Unknown encryption key: {key_id}"
-                raise EncryptionError(msg)
+            with self._lock:
+                # Get encryption key
+                if key_id not in self._keys:
+                    msg = f"Unknown encryption key: {key_id}"
+                    raise EncryptionError(msg)
 
-            key = self._keys[key_id]
+                key = self._keys[key_id]
 
             # Generate random 96-bit nonce
             nonce = os.urandom(12)
@@ -105,6 +128,7 @@ class SimpleEncryptionAdapter(IEncryptionService):
             logger.error(
                 f"Encryption failed: {e}",
                 extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
+                exc_info=True,
             )
             msg = f"Encryption failed: {e}"
             raise EncryptionError(msg) from e
@@ -131,12 +155,13 @@ class SimpleEncryptionAdapter(IEncryptionService):
 
             key_id, nonce_b64, ciphertext_b64 = parts
 
-            # Get decryption key
-            if key_id not in self._keys:
-                msg = f"Unknown encryption key: {key_id}"
-                raise DecryptionError(msg)
+            with self._lock:
+                # Get decryption key
+                if key_id not in self._keys:
+                    msg = f"Unknown encryption key: {key_id}"
+                    raise DecryptionError(msg)
 
-            key = self._keys[key_id]
+                key = self._keys[key_id]
 
             # Decode base64
             nonce = base64.b64decode(nonce_b64)
@@ -156,6 +181,7 @@ class SimpleEncryptionAdapter(IEncryptionService):
             logger.error(
                 f"Decryption failed: {e}",
                 extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
+                exc_info=True,
             )
             msg = f"Decryption failed: {e}"
             raise DecryptionError(msg) from e
@@ -175,17 +201,18 @@ class SimpleEncryptionAdapter(IEncryptionService):
             EncryptionError: If key rotation fails
         """
         try:
-            if old_key_id not in self._keys:
-                msg = f"Unknown old key: {old_key_id}"
-                raise EncryptionError(msg)
+            with self._lock:
+                if old_key_id not in self._keys:
+                    msg = f"Unknown old key: {old_key_id}"
+                    raise EncryptionError(msg)
 
-            if new_key_id in self._keys:
-                msg = f"New key already exists: {new_key_id}"
-                raise EncryptionError(msg)
+                if new_key_id in self._keys:
+                    msg = f"New key already exists: {new_key_id}"
+                    raise EncryptionError(msg)
 
-            # Generate new key
-            new_key = AESGCM.generate_key(bit_length=256)
-            self._keys[new_key_id] = new_key
+                # Generate new key
+                new_key = AESGCM.generate_key(bit_length=256)
+                self._keys[new_key_id] = new_key
 
             logger.info(f"Rotated encryption key from '{old_key_id}' to '{new_key_id}'")
 
@@ -195,6 +222,7 @@ class SimpleEncryptionAdapter(IEncryptionService):
             logger.error(
                 f"Key rotation failed: {e}",
                 extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
+                exc_info=True,
             )
             msg = f"Key rotation failed: {e}"
             raise EncryptionError(msg) from e
@@ -214,11 +242,13 @@ class SimpleEncryptionAdapter(IEncryptionService):
             msg = "Encryption key must be 32 bytes for AES-256"
             raise ValueError(msg)
 
-        if key_id in self._keys:
-            msg = f"Key already exists: {key_id}"
-            raise ValueError(msg)
+        with self._lock:
+            if key_id in self._keys:
+                msg = f"Key already exists: {key_id}"
+                raise ValueError(msg)
 
-        self._keys[key_id] = key
+            self._keys[key_id] = key
+
         logger.debug(f"Added encryption key '{key_id}'")
 
     def remove_key(self, key_id: str) -> None:
@@ -235,9 +265,11 @@ class SimpleEncryptionAdapter(IEncryptionService):
             msg = "Cannot remove default key"
             raise ValueError(msg)
 
-        if key_id not in self._keys:
-            msg = f"Unknown key: {key_id}"
-            raise ValueError(msg)
+        with self._lock:
+            if key_id not in self._keys:
+                msg = f"Unknown key: {key_id}"
+                raise ValueError(msg)
 
-        del self._keys[key_id]
+            del self._keys[key_id]
+
         logger.debug(f"Removed encryption key '{key_id}'")

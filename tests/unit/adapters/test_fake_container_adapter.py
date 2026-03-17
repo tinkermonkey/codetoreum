@@ -712,3 +712,442 @@ class TestFakeContainerAdapterEventEmission:
         # Event should still be emitted even with delay
         assert mock_event_emitter.emit.called
         assert result.exit_code == 0
+
+
+@pytest.mark.asyncio
+class TestFakeContainerAdapterCopyOperations:
+    """Test suite for FakeContainerAdapter copy operations and file handling."""
+
+    async def test_copy_to_container_writes_to_virtual_filesystem(self):
+        """Test copy_to_container writes source content to container virtual filesystem."""
+        adapter = FakeContainerAdapter()
+
+        # Create a container
+        container_id = await adapter.create(image="python:3.11")
+
+        # Seed a host file
+        adapter.seed_host_file("/host/source.txt", "Hello from host")
+
+        # Copy from host to container
+        await adapter.copy_to_container(
+            container_id=container_id,
+            source="/host/source.txt",
+            destination="/container/dest.txt",
+        )
+
+        # Verify content was written to virtual filesystem
+        content = await adapter.get_file_content(container_id, "/container/dest.txt")
+        assert content == b"Hello from host"
+
+    async def test_copy_from_container_reads_from_virtual_filesystem(self):
+        """Test copy_from_container reads from container virtual filesystem to host files."""
+        adapter = FakeContainerAdapter()
+
+        # Create a container and write output file
+        container_id = await adapter.create(image="python:3.11")
+        adapter.write_output_file(container_id, "/container/output.txt", "Container output")
+
+        # Copy from container to host
+        await adapter.copy_from_container(
+            container_id=container_id,
+            source="/container/output.txt",
+            destination="/host/result.txt",
+        )
+
+        # Verify content was written to host_files
+        content = adapter.get_host_file("/host/result.txt")
+        assert content == "Container output"
+
+    async def test_round_trip_copy_to_exec_copy_from(self):
+        """Test full round-trip: copy_to -> get_file_content -> copy_from."""
+        adapter = FakeContainerAdapter()
+
+        # Create container
+        container_id = await adapter.create(image="python:3.11")
+
+        # 1. Seed host file and copy to container
+        adapter.seed_host_file("/host/input.txt", "Input data")
+        await adapter.copy_to_container(
+            container_id=container_id,
+            source="/host/input.txt",
+            destination="/container/input.txt",
+        )
+
+        # 2. Verify we can read the copied file
+        content = await adapter.get_file_content(container_id, "/container/input.txt")
+        assert content == b"Input data"
+
+        # 3. Simulate processing by writing output
+        processed = content.decode("utf-8").upper()
+        adapter.write_output_file(container_id, "/container/output.txt", processed)
+
+        # 4. Copy output back to host
+        await adapter.copy_from_container(
+            container_id=container_id,
+            source="/container/output.txt",
+            destination="/host/output.txt",
+        )
+
+        # 5. Verify final result
+        final = adapter.get_host_file("/host/output.txt")
+        assert final == "INPUT DATA"
+
+    async def test_copy_to_container_validation_empty_container_id(self):
+        """Test copy_to_container validates container_id."""
+        adapter = FakeContainerAdapter()
+
+        with pytest.raises(ValidationError, match="Container ID cannot be empty"):
+            await adapter.copy_to_container(
+                container_id="",
+                source="/host/file.txt",
+                destination="/container/file.txt",
+            )
+
+    async def test_copy_to_container_validation_empty_source(self):
+        """Test copy_to_container validates source path."""
+        adapter = FakeContainerAdapter()
+        container_id = await adapter.create(image="python:3.11")
+
+        with pytest.raises(ValidationError, match="Source path cannot be empty"):
+            await adapter.copy_to_container(
+                container_id=container_id,
+                source="",
+                destination="/container/file.txt",
+            )
+
+    async def test_copy_to_container_validation_empty_destination(self):
+        """Test copy_to_container validates destination path."""
+        adapter = FakeContainerAdapter()
+        container_id = await adapter.create(image="python:3.11")
+        adapter.seed_host_file("/host/file.txt", "content")
+
+        with pytest.raises(ValidationError, match="Destination path cannot be empty"):
+            await adapter.copy_to_container(
+                container_id=container_id,
+                source="/host/file.txt",
+                destination="",
+            )
+
+    async def test_copy_to_container_missing_container(self):
+        """Test copy_to_container fails when container does not exist."""
+        adapter = FakeContainerAdapter()
+        adapter.seed_host_file("/host/file.txt", "content")
+
+        with pytest.raises(ResourceNotFoundError):
+            await adapter.copy_to_container(
+                container_id="nonexistent",
+                source="/host/file.txt",
+                destination="/container/file.txt",
+            )
+
+    async def test_copy_to_container_missing_source_file(self):
+        """Test copy_to_container fails when source file does not exist."""
+        adapter = FakeContainerAdapter()
+        container_id = await adapter.create(image="python:3.11")
+
+        with pytest.raises(ResourceNotFoundError, match="Source file"):
+            await adapter.copy_to_container(
+                container_id=container_id,
+                source="/nonexistent/file.txt",
+                destination="/container/file.txt",
+            )
+
+    async def test_copy_from_container_validation_empty_container_id(self):
+        """Test copy_from_container validates container_id."""
+        adapter = FakeContainerAdapter()
+
+        with pytest.raises(ValidationError, match="Container ID cannot be empty"):
+            await adapter.copy_from_container(
+                container_id="",
+                source="/container/file.txt",
+                destination="/host/file.txt",
+            )
+
+    async def test_copy_from_container_validation_empty_source(self):
+        """Test copy_from_container validates source path."""
+        adapter = FakeContainerAdapter()
+        container_id = await adapter.create(image="python:3.11")
+
+        with pytest.raises(ValidationError, match="Source path cannot be empty"):
+            await adapter.copy_from_container(
+                container_id=container_id,
+                source="",
+                destination="/host/file.txt",
+            )
+
+    async def test_copy_from_container_validation_empty_destination(self):
+        """Test copy_from_container validates destination path."""
+        adapter = FakeContainerAdapter()
+        container_id = await adapter.create(image="python:3.11")
+        adapter.write_output_file(container_id, "/container/file.txt", "content")
+
+        with pytest.raises(ValidationError, match="Destination path cannot be empty"):
+            await adapter.copy_from_container(
+                container_id=container_id,
+                source="/container/file.txt",
+                destination="",
+            )
+
+    async def test_copy_from_container_missing_container(self):
+        """Test copy_from_container fails when container does not exist."""
+        adapter = FakeContainerAdapter()
+
+        with pytest.raises(ResourceNotFoundError):
+            await adapter.copy_from_container(
+                container_id="nonexistent",
+                source="/container/file.txt",
+                destination="/host/file.txt",
+            )
+
+    async def test_copy_from_container_missing_source_file(self):
+        """Test copy_from_container fails when source file does not exist."""
+        adapter = FakeContainerAdapter()
+        container_id = await adapter.create(image="python:3.11")
+
+        with pytest.raises(ResourceNotFoundError, match="File.*not found"):
+            await adapter.copy_from_container(
+                container_id=container_id,
+                source="/nonexistent/file.txt",
+                destination="/host/file.txt",
+            )
+
+    async def test_seed_host_file_validation(self):
+        """Test seed_host_file validates inputs."""
+        adapter = FakeContainerAdapter()
+
+        with pytest.raises(ValidationError, match="File path cannot be empty"):
+            adapter.seed_host_file("", "content")
+
+        # Empty content is allowed for legitimately empty files (e.g., __init__.py, .gitkeep)
+        adapter.seed_host_file("/host/file.txt", "")
+        assert adapter.get_host_file("/host/file.txt") == ""
+
+    async def test_get_host_file_not_found(self):
+        """Test get_host_file fails when file does not exist."""
+        adapter = FakeContainerAdapter()
+
+        with pytest.raises(ResourceNotFoundError, match="Host file"):
+            adapter.get_host_file("/nonexistent/file.txt")
+
+    async def test_multiple_files_copied_to_container(self):
+        """Test copying multiple files to the same container."""
+        adapter = FakeContainerAdapter()
+        container_id = await adapter.create(image="python:3.11")
+
+        # Seed and copy multiple files
+        files = {
+            "/host/file1.txt": "Content 1",
+            "/host/file2.txt": "Content 2",
+            "/host/file3.py": "def hello(): pass",
+        }
+
+        for source, content in files.items():
+            adapter.seed_host_file(source, content)
+            dest = source.replace("/host/", "/container/")
+            await adapter.copy_to_container(
+                container_id=container_id,
+                source=source,
+                destination=dest,
+            )
+
+        # Verify all files were copied
+        for source, expected in files.items():
+            dest = source.replace("/host/", "/container/")
+            content = await adapter.get_file_content(container_id, dest)
+            assert content == expected.encode("utf-8")
+
+    async def test_multiple_files_copied_from_container(self):
+        """Test copying multiple files from container to host."""
+        adapter = FakeContainerAdapter()
+        container_id = await adapter.create(image="python:3.11")
+
+        # Write multiple output files
+        files = {
+            "/container/output1.txt": "Output 1",
+            "/container/output2.txt": "Output 2",
+            "/container/result.json": '{"status": "ok"}',
+        }
+
+        for dest, content in files.items():
+            adapter.write_output_file(container_id, dest, content)
+
+        # Copy all files to host
+        for source, expected in files.items():
+            host_dest = source.replace("/container/", "/host/")
+            await adapter.copy_from_container(
+                container_id=container_id,
+                source=source,
+                destination=host_dest,
+            )
+
+        # Verify all files are accessible via host
+        for source, expected in files.items():
+            host_path = source.replace("/container/", "/host/")
+            content = adapter.get_host_file(host_path)
+            assert content == expected
+
+    async def test_copy_overwrites_existing_file_in_container(self):
+        """Test that copying to an existing destination overwrites it."""
+        adapter = FakeContainerAdapter()
+        container_id = await adapter.create(image="python:3.11")
+
+        # Write initial file
+        adapter.seed_host_file("/host/file.txt", "Initial content")
+        await adapter.copy_to_container(
+            container_id=container_id,
+            source="/host/file.txt",
+            destination="/container/file.txt",
+        )
+
+        # Verify initial content
+        content = await adapter.get_file_content(container_id, "/container/file.txt")
+        assert content == b"Initial content"
+
+        # Update and copy again
+        adapter.seed_host_file("/host/file.txt", "Updated content")
+        await adapter.copy_to_container(
+            container_id=container_id,
+            source="/host/file.txt",
+            destination="/container/file.txt",
+        )
+
+        # Verify updated content
+        content = await adapter.get_file_content(container_id, "/container/file.txt")
+        assert content == b"Updated content"
+
+
+@pytest.mark.asyncio
+class TestFakeContainerAdapterImageTracking:
+    """Test suite for FakeContainerAdapter image tracking and image_exists."""
+
+    async def test_image_exists_returns_false_for_unpulled_image(self):
+        """Test image_exists returns False for images that haven't been pulled."""
+        adapter = FakeContainerAdapter()
+
+        exists = await adapter.image_exists("myimage", tag="v1.0.0")
+        assert exists is False
+
+    async def test_image_exists_returns_true_for_pulled_image(self):
+        """Test image_exists returns True after pull_image."""
+        adapter = FakeContainerAdapter()
+
+        # Initially should not exist
+        exists = await adapter.image_exists("myimage", tag="v1.0.0")
+        assert exists is False
+
+        # Pull the image
+        await adapter.pull_image("myimage", tag="v1.0.0")
+
+        # Now should exist
+        exists = await adapter.image_exists("myimage", tag="v1.0.0")
+        assert exists is True
+
+    async def test_image_exists_with_default_tag(self):
+        """Test image_exists uses 'latest' as default tag."""
+        adapter = FakeContainerAdapter()
+
+        # Pull with explicit "latest" tag
+        await adapter.pull_image("python", tag="latest")
+
+        # Should exist when queried with default tag
+        exists = await adapter.image_exists("python")
+        assert exists is True
+
+        # Should also exist when queried with explicit "latest" tag
+        exists = await adapter.image_exists("python", tag="latest")
+        assert exists is True
+
+    async def test_image_exists_distinguishes_tags(self):
+        """Test image_exists distinguishes between different tags of same image."""
+        adapter = FakeContainerAdapter()
+
+        # Pull specific version
+        await adapter.pull_image("myimage", tag="v1.0")
+
+        # This version should exist
+        exists = await adapter.image_exists("myimage", tag="v1.0")
+        assert exists is True
+
+        # Different version should not exist
+        exists = await adapter.image_exists("myimage", tag="v2.0")
+        assert exists is False
+
+        # Latest should not exist (different tag)
+        exists = await adapter.image_exists("myimage", tag="latest")
+        assert exists is False
+
+    async def test_pre_seeded_images_exist(self):
+        """Test that pre-seeded images return True without pull_image."""
+        adapter = FakeContainerAdapter()
+
+        # These are pre-seeded in __init__
+        pre_seeded = [
+            ("ubuntu", "latest"),
+            ("ubuntu", "22.04"),
+            ("python", "3.11"),
+            ("python", "3.10"),
+            ("alpine", "latest"),
+        ]
+
+        for image, tag in pre_seeded:
+            exists = await adapter.image_exists(image, tag=tag)
+            assert exists is True, f"Pre-seeded image {image}:{tag} should exist"
+
+    async def test_pull_image_multiple_images(self):
+        """Test pulling multiple different images."""
+        adapter = FakeContainerAdapter()
+
+        images_to_pull = [
+            ("redis", "latest"),
+            ("postgres", "15"),
+            ("nginx", "1.24"),
+        ]
+
+        # Pull all images
+        for image, tag in images_to_pull:
+            await adapter.pull_image(image, tag=tag)
+
+        # Verify all exist
+        for image, tag in images_to_pull:
+            exists = await adapter.image_exists(image, tag=tag)
+            assert exists is True
+
+    async def test_pull_same_image_multiple_times(self):
+        """Test pulling the same image multiple times (should be idempotent)."""
+        adapter = FakeContainerAdapter()
+
+        # Pull same image twice
+        await adapter.pull_image("myimage", tag="v1.0")
+        await adapter.pull_image("myimage", tag="v1.0")
+
+        # Should still exist and image_exists should return True
+        exists = await adapter.image_exists("myimage", tag="v1.0")
+        assert exists is True
+
+    async def test_pull_image_validation(self):
+        """Test pull_image validates image name."""
+        adapter = FakeContainerAdapter()
+
+        with pytest.raises(ValidationError, match="Image name is required"):
+            await adapter.pull_image("", tag="latest")
+
+        with pytest.raises(ValidationError, match="Image name is required"):
+            await adapter.pull_image("   ", tag="latest")
+
+    async def test_image_exists_different_images_independent(self):
+        """Test that different images have independent existence state."""
+        adapter = FakeContainerAdapter()
+
+        # Pull image1
+        await adapter.pull_image("image1", tag="latest")
+
+        # image1 should exist, image2 should not
+        assert await adapter.image_exists("image1", tag="latest") is True
+        assert await adapter.image_exists("image2", tag="latest") is False
+
+        # Pull image2
+        await adapter.pull_image("image2", tag="latest")
+
+        # Both should exist now
+        assert await adapter.image_exists("image1", tag="latest") is True
+        assert await adapter.image_exists("image2", tag="latest") is True

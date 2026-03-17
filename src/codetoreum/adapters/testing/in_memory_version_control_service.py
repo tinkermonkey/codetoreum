@@ -8,6 +8,7 @@ git operations. Useful for testing orchestration logic without external dependen
 from __future__ import annotations
 
 import hashlib
+import threading
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -60,12 +61,25 @@ class InMemoryVersionControlService(IVersionControlService):
         #     'branches': set of branch names,
         #     'current_branch': str,
         #     'commits': dict of branch -> list of commit SHAs,
-        #     'default_branch': str
+        #     'default_branch': str,
+        #     'pushed_branches': set of branch names that have been pushed
         # }
         self._repositories: dict[str, dict] = {}
 
         # Map of (identifier) -> Repository for lookup by ID/URL/path
         self._repository_index: dict[str, Repository] = {}
+
+        # Map of repo_path -> list of staged file paths
+        self._staged_files: dict[str, list[str]] = {}
+
+        # Map of repo_path -> {file_path -> content}
+        self._working_tree: dict[str, dict[str, str]] = {}
+
+        # Counter for unique commit SHAs (avoids SHA collisions)
+        self._commit_counter = 0
+
+        # Thread safety for concurrent test execution
+        self._lock = threading.Lock()
 
         self._event_emitter = event_emitter
 
@@ -88,32 +102,34 @@ class InMemoryVersionControlService(IVersionControlService):
             msg = "Target path cannot be empty"
             raise ValidationError(msg)
 
-        # Extract repository name from URL
-        repo_name = url.rstrip("/").split("/")[-1].replace(".git", "")
+        with self._lock:
+            # Extract repository name from URL
+            repo_name = url.rstrip("/").split("/")[-1].replace(".git", "")
 
-        # Store repository state
-        target_branch = branch or "main"
-        self._repositories[target_path] = {
-            "url": url,
-            "branches": {target_branch},
-            "current_branch": target_branch,
-            "commits": {target_branch: ["initial-commit-sha"]},
-            "default_branch": "main",
-        }
+            # Store repository state
+            target_branch = branch or "main"
+            self._repositories[target_path] = {
+                "url": url,
+                "branches": {target_branch},
+                "current_branch": target_branch,
+                "commits": {target_branch: ["initial-commit-sha"]},
+                "default_branch": "main",
+                "pushed_branches": set(),
+            }
 
-        # Add to index
-        self._repository_index[url] = Repository(
-            id=repo_name,
-            name=repo_name,
-            url=url,
-            default_branch="main",
-        )
-        self._repository_index[target_path] = Repository(
-            id=repo_name,
-            name=repo_name,
-            url=url,
-            default_branch="main",
-        )
+            # Add to index
+            self._repository_index[url] = Repository(
+                id=repo_name,
+                name=repo_name,
+                url=url,
+                default_branch="main",
+            )
+            self._repository_index[target_path] = Repository(
+                id=repo_name,
+                name=repo_name,
+                url=url,
+                default_branch="main",
+            )
 
     async def checkout(self, repo_path: str, branch: str) -> None:
         """Checkout specific branch.
@@ -128,39 +144,27 @@ class InMemoryVersionControlService(IVersionControlService):
             ValidationError: Invalid repo path or branch name
             RepositoryError: Checkout failed (branch doesn't exist, etc.)
         """
-        if repo_path not in self._repositories:
-            msg = f"Repository not found at path: {repo_path}"
-            raise RepositoryError(msg)
+        # Validate inputs before acquiring lock
+        if not repo_path:
+            msg = "Repository path cannot be empty"
+            raise ValidationError(msg)
+        if not branch:
+            msg = "Branch name cannot be empty"
+            raise ValidationError(msg)
 
-        repo = self._repositories[repo_path]
+        with self._lock:
+            if repo_path not in self._repositories:
+                msg = f"Repository not found at path: {repo_path}"
+                raise RepositoryError(msg)
 
-        # Check if branch is new before creating it (for event emission)
-        branch_is_new = branch not in repo["branches"]
+            repo = self._repositories[repo_path]
 
-        # Capture base commit from current branch before switching (for event)
-        current_branch_commits = repo["commits"].get(repo["current_branch"], ["initial-commit-sha"])
-        base_commit = current_branch_commits[-1] if current_branch_commits else "initial-commit-sha"
+            # Check if branch exists - raise error if it doesn't
+            if branch not in repo["branches"]:
+                msg = f"Branch not found: {branch}"
+                raise RepositoryError(msg)
 
-        # Create branch if it doesn't exist
-        if branch_is_new:
-            repo["branches"].add(branch)
-            repo["commits"][branch] = []
-
-        repo["current_branch"] = branch
-
-        # Emit BranchCreatedEvent if branch was newly created
-        if self._event_emitter and branch_is_new:
-            from codetoreum.domain.events.repository_events import BranchCreatedEvent
-
-            event = BranchCreatedEvent(
-                type="repository.branch_created",
-                timestamp=datetime.now(UTC).isoformat(),
-                source="in_memory_vcs",
-                repository_id=repo_path,
-                branch_name=branch,
-                base_commit=base_commit,
-            )
-            self._event_emitter.emit(event)
+            repo["current_branch"] = branch
 
     async def commit(
         self,
@@ -177,6 +181,7 @@ class InMemoryVersionControlService(IVersionControlService):
         Args:
             repo_path: Local repository path
             message: Commit message
+            files: Optional list of files to commit explicitly (bypasses staging area)
 
         Returns:
             str: Commit SHA (full hash)
@@ -185,25 +190,47 @@ class InMemoryVersionControlService(IVersionControlService):
             ValidationError: Invalid repo path or message
             RepositoryError: Commit failed (no changes staged, etc.)
         """
-        if repo_path not in self._repositories:
-            msg = f"Repository not found at path: {repo_path}"
-            raise RepositoryError(msg)
-
+        # Validate inputs before acquiring lock
+        if not repo_path:
+            msg = "Repository path cannot be empty"
+            raise ValidationError(msg)
         if not message:
             msg = "Commit message cannot be empty"
             raise ValidationError(msg)
 
-        repo = self._repositories[repo_path]
-        current_branch = repo["current_branch"]
+        with self._lock:
+            if repo_path not in self._repositories:
+                msg = f"Repository not found at path: {repo_path}"
+                raise RepositoryError(msg)
+            repo = self._repositories[repo_path]
+            current_branch = repo["current_branch"]
 
-        # Generate a mock commit SHA based on the message
-        # In reality this would be a full git hash
-        commit_sha = hashlib.sha256(f"{message}-{current_branch}".encode()).hexdigest()[:40]
+            # Generate a unique commit SHA using counter + message hash
+            # This ensures two commits with the same message produce different SHAs
+            self._commit_counter += 1
+            commit_sha = hashlib.sha256(f"{message}-{current_branch}-{self._commit_counter}".encode()).hexdigest()[:40]
 
-        # Add commit to current branch
-        if current_branch not in repo["commits"]:
-            repo["commits"][current_branch] = []
-        repo["commits"][current_branch].append(commit_sha)
+            # Add commit to current branch
+            if current_branch not in repo["commits"]:
+                repo["commits"][current_branch] = []
+            repo["commits"][current_branch].append(commit_sha)
+
+            # Determine which files were committed and handle staging area accordingly
+            if files is not None:
+                # Explicit files provided - commit them directly without modifying staging area
+                # This maintains separation between explicit file commits and staged commits
+                committed_files = list(files)
+            else:
+                # Use staged files if no explicit files provided
+                committed_files = list(self._staged_files.get(repo_path, []))
+
+                # Clear staging area and remove committed files from working tree (only when committing staged files)
+                if repo_path in self._staged_files:
+                    self._staged_files[repo_path].clear()
+                if repo_path in self._working_tree:
+                    working_tree = self._working_tree[repo_path]
+                    for file_path in committed_files:
+                        working_tree.pop(file_path, None)
 
         # Emit CommitCreatedEvent if event emitter is configured
         if self._event_emitter:
@@ -217,6 +244,7 @@ class InMemoryVersionControlService(IVersionControlService):
                 commit_sha=commit_sha,
                 message=message,
                 author="orchestrator",
+                changed_files=tuple(committed_files),
             )
             self._event_emitter.emit(event)
 
@@ -236,40 +264,70 @@ class InMemoryVersionControlService(IVersionControlService):
             ValidationError: Invalid repo path or branch name
             RepositoryError: Push failed (auth, rejected, etc.)
         """
-        if repo_path not in self._repositories:
-            msg = f"Repository not found at path: {repo_path}"
-            raise RepositoryError(msg)
+        # Validate inputs before acquiring lock
+        if not repo_path:
+            msg = "Repository path cannot be empty"
+            raise ValidationError(msg)
+        if not branch:
+            msg = "Branch name cannot be empty"
+            raise ValidationError(msg)
 
-        repo = self._repositories[repo_path]
+        with self._lock:
+            if repo_path not in self._repositories:
+                msg = f"Repository not found at path: {repo_path}"
+                raise RepositoryError(msg)
 
-        if branch not in repo["branches"]:
-            msg = f"Branch not found: {branch}"
-            raise RepositoryError(msg)
+            repo = self._repositories[repo_path]
 
-        # Simulate pushing to remote
-        # In this mock, we just mark the push occurred
-        # A real implementation would interact with Git
+            if branch not in repo["branches"]:
+                msg = f"Branch not found: {branch}"
+                raise RepositoryError(msg)
+
+            # Mark the branch as pushed
+            repo["pushed_branches"].add(branch)
+
+        # Emit BranchPushedEvent if event emitter is configured
+        if self._event_emitter:
+            from codetoreum.domain.events.repository_events import BranchPushedEvent
+
+            event = BranchPushedEvent(
+                type="repository.branch_pushed",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="in_memory_vcs",
+                repository_id=repo_path,
+                branch_name=branch,
+            )
+            self._event_emitter.emit(event)
 
     async def create_branch(self, repo_path: str, branch_name: str, from_branch: str | None = None) -> None:
         """Create a new branch in the in-memory repository."""
-        if repo_path not in self._repositories:
-            msg = f"Repository not found at path: {repo_path}"
-            raise RepositoryError(msg)
+        # Validate inputs before acquiring lock
+        if not repo_path:
+            msg = "Repository path cannot be empty"
+            raise ValidationError(msg)
+        if not branch_name:
+            msg = "Branch name cannot be empty"
+            raise ValidationError(msg)
 
-        repo = self._repositories[repo_path]
-        branch_is_new = branch_name not in repo["branches"]
+        with self._lock:
+            if repo_path not in self._repositories:
+                msg = f"Repository not found at path: {repo_path}"
+                raise RepositoryError(msg)
 
-        # Get base commit from from_branch or current branch
-        if from_branch and from_branch in repo["commits"]:
-            base_commits = repo["commits"][from_branch]
-        else:
-            current_branch = repo["current_branch"]
-            base_commits = repo["commits"].get(current_branch, ["initial-commit-sha"])
-        base_commit = base_commits[-1] if base_commits else "initial-commit-sha"
+            repo = self._repositories[repo_path]
+            branch_is_new = branch_name not in repo["branches"]
 
-        repo["branches"].add(branch_name)
-        if branch_name not in repo["commits"]:
-            repo["commits"][branch_name] = []
+            # Get base commit from from_branch or current branch
+            if from_branch and from_branch in repo["commits"]:
+                base_commits = repo["commits"][from_branch]
+            else:
+                current_branch = repo["current_branch"]
+                base_commits = repo["commits"].get(current_branch, ["initial-commit-sha"])
+            base_commit = base_commits[-1] if base_commits else "initial-commit-sha"
+
+            repo["branches"].add(branch_name)
+            if branch_name not in repo["commits"]:
+                repo["commits"][branch_name] = []
 
         # Emit BranchCreatedEvent if event emitter is configured
         if self._event_emitter and branch_is_new:
@@ -287,12 +345,18 @@ class InMemoryVersionControlService(IVersionControlService):
 
     async def list_branches(self, repo_path: str, remote: bool = False) -> list[str]:
         """List all branches in the in-memory repository."""
-        if repo_path not in self._repositories:
-            msg = f"Repository not found at path: {repo_path}"
-            raise RepositoryError(msg)
+        # Validate inputs before acquiring lock
+        if not repo_path:
+            msg = "Repository path cannot be empty"
+            raise ValidationError(msg)
 
-        repo = self._repositories[repo_path]
-        branches = list(repo["branches"])
+        with self._lock:
+            if repo_path not in self._repositories:
+                msg = f"Repository not found at path: {repo_path}"
+                raise RepositoryError(msg)
+
+            repo = self._repositories[repo_path]
+            branches = list(repo["branches"])
 
         if remote:
             # Include remote branches with 'origin/' prefix
@@ -302,20 +366,38 @@ class InMemoryVersionControlService(IVersionControlService):
         return branches
 
     async def status(self, repo_path: str) -> VCSStatus:
-        """Return repository status - simulation always has changes."""
-        if repo_path not in self._repositories:
-            msg = f"Repository not found at path: {repo_path}"
-            raise RepositoryError(msg)
+        """Return repository status derived from actual repository state.
 
-        # Simulation always treats workspace as having changes (agent produced output)
-        return VCSStatus(is_dirty=True, staged_files=("*",), unstaged_files=())
+        Returns status based on tracked staged and unstaged files.
+        """
+        with self._lock:
+            if repo_path not in self._repositories:
+                msg = f"Repository not found at path: {repo_path}"
+                raise RepositoryError(msg)
+
+            staged = tuple(self._staged_files.get(repo_path, []))
+            working = set(self._working_tree.get(repo_path, {}).keys())
+            staged_set = set(staged)
+            unstaged = tuple(working - staged_set)
+
+            return VCSStatus(
+                is_dirty=len(staged) > 0 or len(unstaged) > 0,
+                staged_files=staged,
+                unstaged_files=unstaged,
+            )
 
     async def pull(self, repo_path: str, branch: str, remote: str = "origin") -> None:
-        """Pull latest changes - no-op in simulation (already up to date)."""
-        if repo_path not in self._repositories:
-            msg = f"Repository not found at path: {repo_path}"
-            raise RepositoryError(msg)
-        # No-op in simulation
+        """Pull latest changes - no-op in simulation (already up to date).
+
+        In simulation mode, repositories are always up to date since they're
+        in-memory with single-writer semantics. No actual remote synchronization
+        occurs. This method is a no-op (type b: hardcoded but acceptable).
+        """
+        with self._lock:
+            if repo_path not in self._repositories:
+                msg = f"Repository not found at path: {repo_path}"
+                raise RepositoryError(msg)
+        # No-op in simulation: single-writer in-memory model means always current
 
     async def get_repository(self, identifier: str) -> Repository:
         """Retrieve repository metadata.
@@ -334,7 +416,58 @@ class InMemoryVersionControlService(IVersionControlService):
             ResourceNotFoundError: Repository not found
             ExternalServiceError: Service communication failure
         """
-        if identifier in self._repository_index:
-            return self._repository_index[identifier]
+        with self._lock:
+            if identifier in self._repository_index:
+                return self._repository_index[identifier]
 
         raise ResourceNotFoundError("Repository", identifier)
+
+    # Test helper methods
+
+    def seed_working_tree_file(self, repo_path: str, file_path: str, content: str) -> None:
+        """Seed a file in the working tree for testing.
+
+        This test helper adds a file to the working tree without staging it,
+        simulating an agent having modified a file. The file will appear in
+        unstaged_files when status() is called.
+
+        Args:
+            repo_path: Local repository path
+            file_path: Path to the file within the repository
+            content: File content to seed
+
+        Raises:
+            RepositoryError: Repository not found
+        """
+        if repo_path not in self._repositories:
+            msg = f"Repository not found at path: {repo_path}"
+            raise RepositoryError(msg)
+
+        with self._lock:
+            if repo_path not in self._working_tree:
+                self._working_tree[repo_path] = {}
+            self._working_tree[repo_path][file_path] = content
+
+    def stage_files(self, repo_path: str, files: list[str]) -> None:
+        """Stage files for commit (test helper).
+
+        Adds files to the staging area, making them appear in staged_files
+        when status() is called.
+
+        Args:
+            repo_path: Local repository path
+            files: List of file paths to stage
+
+        Raises:
+            RepositoryError: Repository not found
+        """
+        if repo_path not in self._repositories:
+            msg = f"Repository not found at path: {repo_path}"
+            raise RepositoryError(msg)
+
+        with self._lock:
+            if repo_path not in self._staged_files:
+                self._staged_files[repo_path] = []
+            for file_path in files:
+                if file_path not in self._staged_files[repo_path]:
+                    self._staged_files[repo_path].append(file_path)

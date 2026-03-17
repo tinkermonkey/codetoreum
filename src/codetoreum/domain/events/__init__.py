@@ -171,6 +171,7 @@ from .repair_cycle_events import (
 # Repository events
 from .repository_events import (
     BranchCreatedEvent,
+    BranchPushedEvent,
     CommitCreatedEvent,
     FilesStagedEvent,
 )
@@ -348,6 +349,7 @@ __all__ = [
     # Repository events
     "CommitCreatedEvent",
     "BranchCreatedEvent",
+    "BranchPushedEvent",
     "FilesStagedEvent",
     # Storage events
     "ArtifactUploadedEvent",

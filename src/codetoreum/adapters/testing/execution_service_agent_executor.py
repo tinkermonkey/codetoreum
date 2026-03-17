@@ -242,7 +242,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             # Build ProjectContext from ProjectConfig
             # ProjectConfig has: id, name, github_org, github_repo, tech_stacks, etc.
             # ProjectContext needs: id, name, display_name, repository_url, default_branch, etc.
-            repo_url = f"https://github.com/{project_config.github_org}/{project_config.github_repo}.git"
+            repo_url = f"https://github.com/{project_config.github_org}/" f"{project_config.github_repo}.git"
             project_context = ProjectContext(
                 id=project_config.id,
                 name=project_config.name,
@@ -250,11 +250,11 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 repository_url=repo_url,
                 default_branch="main",
                 branch_prefix="feature/",
-                tech_stack=list(project_config.tech_stacks.keys()) if project_config.tech_stacks else [],
+                tech_stack=(list(project_config.tech_stacks.keys()) if project_config.tech_stacks else []),
                 primary_language="python",
-                test_command=project_config.testing.get("command") if project_config.testing else None,
-                test_framework=project_config.testing.get("framework") if project_config.testing else None,
-                has_ci_cd=bool(project_config.testing.get("ci_cd", False)) if project_config.testing else False,
+                test_command=(project_config.testing.get("command") if project_config.testing else None),
+                test_framework=(project_config.testing.get("framework") if project_config.testing else None),
+                has_ci_cd=(bool(project_config.testing.get("ci_cd", False)) if project_config.testing else False),
                 default_workflow_template_id="default",
                 custom_workflows={},
                 has_dockerfile=False,
@@ -386,7 +386,8 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                     extra={"error_id": "ERR_EXEC_CHAIN_EXECUTION_FAILURE"},
                 )
 
-            # Step 11: Finalize workspace (always runs, even on execution failure, to avoid stuck workspace)
+            # Step 11: Finalize workspace (always runs, even on execution failure,
+            # to avoid stuck workspace)
             exec_succeeded = exec_result is not None and exec_result.success
             try:
                 await self._workspace_router.finalize_workspace(
@@ -394,7 +395,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                     project_context,
                     {
                         "success": exec_succeeded,
-                        "output": getattr(exec_result.execution, "output", "") if exec_result else "",
+                        "output": (getattr(exec_result.execution, "output", "") if exec_result else ""),
                     },
                     repo_path,
                 )
@@ -422,7 +423,8 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             )
             success = False
         finally:
-            # Always clean up registry and branch tracker (avoids double-clear and stuck state)
+            # Always clean up registry and branch tracker (avoids double-clear and
+            # stuck state)
             try:
                 await self._run_registry.clear_run(work_item_id)
                 await self._branch_tracker.clear(work_item_id)
@@ -462,7 +464,8 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                     exc_info=True,
                     extra={"error_id": "ERR_EXEC_CHAIN_COMPLETION_CALLBACK_FAILURE"},
                 )
-                # Use recovery service to handle the failure (queue for manual recovery, fail workflow)
+                # Use recovery service to handle the failure (queue for manual recovery,
+                # fail workflow)
                 if self._recovery_service:
                     try:
                         await self._recovery_service.handle_completion_callback_failure(
@@ -472,7 +475,8 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                             error=e,
                         )
                     except Exception as recovery_error:
-                        # Recovery service itself failed (e.g., DLQ add failure, fail_workflow failure)
+                        # Recovery service itself failed (e.g., DLQ add failure,
+                        # fail_workflow failure)
                         # Log this failure to prevent silent loss in fire-and-forget task
                         logger.error(
                             f"Recovery service failed for '{work_item_id}' after completion callback failure: {recovery_error}",
@@ -480,7 +484,9 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                             extra={"error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
                         )
         else:
-            logger.warning(
+            logger.error(
                 f"No completion callback set for ExecutionServiceAgentExecutor. "
-                f"Work item '{work_item_id}' completed but auto-progression will not occur."
+                f"Work item '{work_item_id}' completed with success={success} but auto-progression will not occur. "
+                f"Call set_completion_handler() to wire the callback before executing.",
+                extra={"error_id": "ERR_EXEC_CHAIN_NO_COMPLETION_CALLBACK"},
             )
