@@ -466,6 +466,8 @@ class PipelineManager:
                 assigned_at=datetime.now(UTC),
                 current_workflow_id=workflow_id or stage.workflow_id,
                 current_stage=stage.name,
+                current_column=None,
+                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,

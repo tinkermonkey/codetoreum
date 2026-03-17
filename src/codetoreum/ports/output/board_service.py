@@ -10,6 +10,7 @@ abstractions over GitHub Projects v2, Trello, JIRA boards, etc.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 
 from .event_emitter import IEventEmitter
@@ -93,7 +94,7 @@ class WorkItemPosition:
     work_item_id: str
     column_name: str
     position: int
-    entered_column_at: "datetime | None" = None  # type: ignore[assignment]
+    entered_column_at: datetime | None = None
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
