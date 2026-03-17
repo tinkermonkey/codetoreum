@@ -174,6 +174,7 @@ async def bootstrap_application(
     scenario: str,
     scenario_file: Path | None,
     speed_multiplier: float,
+    auto_advance: bool,
 ) -> SimulationApplicationBootstrap:
     """
     Bootstrap the application in simulation mode.
@@ -182,6 +183,7 @@ async def bootstrap_application(
         scenario: Scenario name
         scenario_file: Optional custom scenario file path
         speed_multiplier: Time speed multiplier
+        auto_advance: Whether to automatically advance simulation clock
 
     Returns:
         Configured SimulationApplicationBootstrap instance
@@ -215,7 +217,11 @@ async def bootstrap_application(
         msg = f"Failed to load configuration: {e}"
         raise RuntimeError(msg)
 
+    # Wire auto-advance flag into config (CLI override takes precedence)
+    sim_config.time.auto_advance = auto_advance
+
     console.print(f"[dim]Speed multiplier: {sim_config.time.speed_multiplier}x[/dim]")
+    console.print(f"[dim]Auto-advance: {'enabled' if auto_advance else 'disabled'}[/dim]")
 
     console.print("\n[bold cyan]Bootstrapping Application[/bold cyan]")
 
@@ -312,6 +318,7 @@ def display_startup_info(
     scenario: str,
     scenario_file: Path | None,
     speed_multiplier: float,
+    auto_advance: bool,
     debug: bool,
     seeded_data: dict,
 ) -> None:
@@ -324,6 +331,7 @@ def display_startup_info(
         scenario: Scenario name
         scenario_file: Optional custom scenario file
         speed_multiplier: Time speed multiplier
+        auto_advance: Whether auto-advance is enabled
         debug: Debug mode enabled
         seeded_data: Seeded data counts
     """
@@ -338,6 +346,7 @@ def display_startup_info(
     table.add_row("Port", str(port))
     table.add_row("Scenario", scenario if not scenario_file else str(scenario_file))
     table.add_row("Speed Multiplier", f"{speed_multiplier}x")
+    table.add_row("Auto-advance", "Enabled" if auto_advance else "Disabled")
     table.add_row("Debug Mode", "Enabled" if debug else "Disabled")
     table.add_row("Executor", "[green]ExecutionServiceAgentExecutor[/green]")
 
@@ -422,6 +431,7 @@ async def main_async(
     scenario: str,
     scenario_file: Path | None,
     speed_multiplier: float,
+    auto_advance: bool,
     no_seed: bool,
     debug: bool,
 ) -> None:
@@ -434,6 +444,7 @@ async def main_async(
         scenario: Scenario name
         scenario_file: Optional custom scenario file
         speed_multiplier: Time speed multiplier
+        auto_advance: Whether to automatically advance simulation clock
         no_seed: Skip seeding if True
         debug: Debug mode enabled
     """
@@ -453,7 +464,7 @@ async def main_async(
 
     try:
         # Bootstrap application
-        bootstrap = await bootstrap_application(scenario, scenario_file, speed_multiplier)
+        bootstrap = await bootstrap_application(scenario, scenario_file, speed_multiplier, auto_advance)
 
         if shutdown_requested:
             return
@@ -465,7 +476,7 @@ async def main_async(
             return
 
         # Display startup info
-        display_startup_info(host, port, scenario, scenario_file, speed_multiplier, debug, seeded_data)
+        display_startup_info(host, port, scenario, scenario_file, speed_multiplier, auto_advance, debug, seeded_data)
 
         # Run server (blocking)
         await run_server(bootstrap, host, port, debug)
@@ -539,6 +550,11 @@ async def main_async(
     show_default=True,
 )
 @click.option(
+    "--auto-advance/--no-auto-advance",
+    default=True,
+    help="Automatically advance simulation clock in background (default: enabled)",
+)
+@click.option(
     "--no-seed",
     is_flag=True,
     help="Skip seeding test data (start with empty state)",
@@ -554,6 +570,7 @@ def main(
     scenario: str,
     scenario_file: Path | None,
     speed_multiplier: float,
+    auto_advance: bool,
     no_seed: bool,
     debug: bool,
 ) -> None:
@@ -576,6 +593,9 @@ def main(
 
         # Start with 10x time acceleration
         python -m codetoreum.cli.simulation_server --speed-multiplier 10.0
+
+        # Start with auto-advance disabled (manual clock control)
+        python -m codetoreum.cli.simulation_server --no-auto-advance
 
         # Start without seeding data
         python -m codetoreum.cli.simulation_server --no-seed
@@ -600,7 +620,7 @@ def main(
 
     # Run async main
     try:
-        asyncio.run(main_async(host, port, scenario, scenario_file, speed_multiplier, no_seed, debug))
+        asyncio.run(main_async(host, port, scenario, scenario_file, speed_multiplier, auto_advance, no_seed, debug))
     except KeyboardInterrupt:
         console.print("\n[yellow]Server stopped by user[/yellow]")
     except Exception as e:

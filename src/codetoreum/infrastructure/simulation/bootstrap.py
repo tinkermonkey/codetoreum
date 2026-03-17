@@ -290,6 +290,7 @@ class SimulationApplicationBootstrap:
     3. All application services
     4. All input/output ports
     5. FastAPI application
+    6. Conditionally auto-advance simulation clock (if configured via TimeConfig.auto_advance)
 
     Usage:
         bootstrap = SimulationApplicationBootstrap(config)
@@ -335,8 +336,10 @@ class SimulationApplicationBootstrap:
         - Phase 3: Create services (11 application services with dependencies)
         - Phase 4: Create ports (16 input port implementations)
         - Phase 5: Create FastAPI app (wire all ports to API endpoints, register handlers)
+        - Phase 6: Conditionally start auto-advance clock (if configured)
 
         Infrastructure is created before adapters to enable causal linking via event bus subscriptions.
+        Auto-advance is started after all event handlers are registered to ensure tick-driven events have handlers.
 
         Returns:
             Fully configured FastAPI application
@@ -392,6 +395,12 @@ class SimulationApplicationBootstrap:
                 dlq_adapter = self.infrastructure.failed_event_store
                 if isinstance(dlq_adapter, DeadLetterQueueFailedEventStoreAdapter):
                     await dlq_adapter.start_retry_processor(self._create_dlq_retry_handler())
+
+            # Phase 6: Start auto-advance if configured
+            # This must come after all event handlers are registered so tick-driven events have handlers
+            if self.config.time.auto_advance and self._engine:
+                logger.info("Phase 6: Starting auto-advance clock...")
+                await self._engine.start_auto_advance()
 
             self._is_setup = True
             logger.info("Simulation bootstrap completed successfully")

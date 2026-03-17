@@ -40,6 +40,7 @@ class TestSimulationServerCLI:
             scenario="default",
             scenario_file=None,
             speed_multiplier=10.0,
+            auto_advance=False,
         )
         yield bootstrap
         await bootstrap.teardown()
@@ -75,6 +76,7 @@ class TestSimulationServerCLI:
             scenario="default",
             scenario_file=None,
             speed_multiplier=10.0,
+            auto_advance=False,
         )
         elapsed = time.time() - start_time
 
@@ -138,6 +140,7 @@ work_items:
             scenario="default",  # Ignored when scenario_file is provided
             scenario_file=scenario_file,
             speed_multiplier=100.0,  # Should override file's 5.0
+            auto_advance=False,
         )
 
         try:
@@ -157,6 +160,7 @@ work_items:
             scenario="default",
             scenario_file=None,
             speed_multiplier=10.0,
+            auto_advance=False,
         )
 
         try:
@@ -187,6 +191,7 @@ work_items:
             scenario="default",
             scenario_file=None,
             speed_multiplier=10.0,
+            auto_advance=False,
         )
 
         try:
@@ -275,6 +280,7 @@ work_items:
             scenario="default",
             scenario_file=None,
             speed_multiplier=10.0,
+            auto_advance=False,
         )
 
         # Verify setup
@@ -318,6 +324,7 @@ work_items:
             scenario="stress_test",
             scenario_file=None,
             speed_multiplier=100.0,
+            auto_advance=False,
         )
 
         try:
@@ -342,6 +349,7 @@ work_items:
                 scenario="default",
                 scenario_file=None,
                 speed_multiplier=speed,
+                auto_advance=False,
             )
 
             try:
@@ -393,6 +401,7 @@ class TestSimulationServerPerformance:
             scenario="default",
             scenario_file=None,
             speed_multiplier=100.0,
+            auto_advance=False,
         )
 
         # Seed data
@@ -419,6 +428,7 @@ class TestSimulationServerPerformance:
             scenario="stress_test",  # Should have 100 work items
             scenario_file=None,
             speed_multiplier=100.0,
+            auto_advance=False,
         )
 
         try:
@@ -557,6 +567,7 @@ class TestErrorHandling:
                 scenario="default",
                 scenario_file=yaml_file,
                 speed_multiplier=1.0,
+                auto_advance=False,
             )
 
     @pytest.mark.asyncio
@@ -566,6 +577,7 @@ class TestErrorHandling:
             scenario="default",
             scenario_file=None,
             speed_multiplier=10.0,
+            auto_advance=False,
         )
 
         try:
