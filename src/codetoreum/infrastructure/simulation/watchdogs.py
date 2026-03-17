@@ -13,7 +13,7 @@ Design Principles:
 
 import logging
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from codetoreum.domain.events.board_events import ColumnSLAExceededEvent
 from codetoreum.domain.events.execution_events import ExecutionTimedOutEvent
