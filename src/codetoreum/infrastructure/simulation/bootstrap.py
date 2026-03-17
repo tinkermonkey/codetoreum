@@ -27,6 +27,7 @@ dependency injection.
 import asyncio
 import logging
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any
 
 from fastapi import FastAPI
@@ -153,7 +154,10 @@ from codetoreum.infrastructure.simulation.causal_link_registry import (
 from codetoreum.infrastructure.simulation.mock_tracer import MockTracer
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
-from codetoreum.infrastructure.simulation.watchdogs import StaleLockWatchdog
+from codetoreum.infrastructure.simulation.watchdogs import (
+    ExecutionTimeoutWatchdog,
+    StaleLockWatchdog,
+)
 from codetoreum.ports.input.agent_command import IAgentCommandPort
 from codetoreum.ports.input.agent_query import IAgentQueryPort
 from codetoreum.ports.input.config_command import IConfigurationCommandPort
@@ -328,6 +332,8 @@ class SimulationApplicationBootstrap:
         self._adapter_factory: AdapterFactory | None = None
         self._engine: SimulationEngine | None = None
         self._board_event_handler: BoardColumnEventHandler | None = None
+        self._stale_lock_watchdog: StaleLockWatchdog | None = None
+        self._execution_timeout_watchdog: ExecutionTimeoutWatchdog | None = None
 
     async def setup(self) -> FastAPI:
         """
@@ -445,6 +451,28 @@ class SimulationApplicationBootstrap:
                     )
                     # Continue without watchdog rather than crashing the server
                     logger.info("Continuing server startup without stale lock watchdog")
+
+            # Phase 6c: Register execution timeout watchdog
+            # Must come after auto-advance starts and ExecutionServiceAgentExecutor is initialized
+            if self.adapters and self._engine:
+                try:
+                    logger.info("Phase 6c: Registering execution timeout watchdog...")
+                    self._execution_timeout_watchdog = ExecutionTimeoutWatchdog(
+                        executor=self.adapters.agent_executor,
+                        event_emitter=self.adapters.event_emitter,
+                        clock=self._engine.clock,
+                        check_interval=timedelta(seconds=30),  # Check every 30 simulated seconds
+                    )
+                    self._execution_timeout_watchdog.start()
+                    logger.info("Execution timeout watchdog registered and started")
+                except Exception as e:
+                    logger.error(
+                        f"Failed to register execution timeout watchdog: {e}",
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                    )
+                    # Continue without watchdog rather than crashing the server
+                    logger.info("Continuing server startup without execution timeout watchdog")
 
             self._is_setup = True
             logger.info("Simulation bootstrap completed successfully")

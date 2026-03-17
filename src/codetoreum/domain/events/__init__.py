@@ -30,6 +30,11 @@ from .container_events import (
     ContainerExecutionCompletedEvent,
 )
 
+# Execution events
+from .execution_events import (
+    ExecutionTimedOutEvent,
+)
+
 # Container recovery events
 from .container_recovery_events import (
     ContainerKilledEvent,
@@ -331,6 +336,8 @@ __all__ = [
     "ReviewCycleApprovedEvent",
     # Container execution events
     "ContainerExecutionCompletedEvent",
+    # Execution events
+    "ExecutionTimedOutEvent",
     # Container recovery events
     "ContainerRecoveredEvent",
     "ContainerKilledEvent",
