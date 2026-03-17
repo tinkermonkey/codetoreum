@@ -597,6 +597,22 @@ class ResilientBoardServiceDecorator(IBoardService):
             rate_limit_cost=1,
         )
 
+    async def get_all_boards(self) -> list[ProjectBoard]:
+        """Get all boards with resilience."""
+        return await self._execute_resilient(
+            operation=lambda: self._wrapped.get_all_boards(),
+            operation_name="get_all_boards",
+            rate_limit_cost=1,
+        )
+
+    async def get_board_items(self, project_id: str, board_id: str) -> list[WorkItemPosition]:
+        """Get board items with resilience."""
+        return await self._execute_resilient(
+            operation=lambda: self._wrapped.get_board_items(project_id, board_id),
+            operation_name="get_board_items",
+            rate_limit_cost=1,
+        )
+
     # Command Operations
 
     async def move_item_to_column(self, work_item_id: str, target_column: str, moved_by: MovedByType):
