@@ -13,15 +13,15 @@ Design Principles:
 
 import logging
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any
 
-from codetoreum.application.pipeline_lock_service import IPipelineLockService
 from codetoreum.domain.events.board_events import ColumnSLAExceededEvent
 from codetoreum.domain.events.execution_events import ExecutionTimedOutEvent
 from codetoreum.domain.events.lock_events import LockStaleDetectedEvent
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.output.board_service import IBoardService
 from codetoreum.ports.output.event_emitter import IEventEmitter
+from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 if TYPE_CHECKING:
@@ -30,25 +30,6 @@ if TYPE_CHECKING:
     )
 
 logger = logging.getLogger(__name__)
-
-
-class _SupportsGetAllLockStates(Protocol):
-    """Protocol for lock services with get_all_lock_states() method.
-
-    This is an implementation-specific method used by StaleLockWatchdog for
-    proactive stale lock detection. Used as a runtime check rather than as
-    a formal port interface constraint.
-
-    Design Note:
-        This protocol enables accessing implementation-specific methods while
-        keeping the primary dependency on the IPipelineLockService interface.
-        The watchdog accepts IPipelineLockService but uses this protocol to
-        safely access the additional method at runtime.
-    """
-
-    def get_all_lock_states(self) -> dict[str, any]:
-        """Get internal lock state dictionary for watchdog scanning."""
-        ...
 
 
 class StaleLockWatchdog:
@@ -69,9 +50,21 @@ class StaleLockWatchdog:
     - Force-release: Calls lock_service.release_lock() to clean up
 
     Architecture:
-    - Depends on IPipelineLockService (port interface) not concrete implementations
-    - Accesses implementation-specific get_all_lock_states() via protocol at runtime
+    - Depends on IPipelineLockService port interface, not concrete implementations
+    - Accesses implementation-specific get_all_lock_states() via runtime duck typing
     - Maintains hexagonal layering by depending on contracts, not implementations
+    - Uses hasattr() for graceful degradation if method unavailable
+
+    Type Signature Note:
+    The watchdog accepts IPipelineLockService from ports/output/, which is the proper
+    hexagonal architecture pattern. However, InMemoryLockService in testing implements
+    the application-layer IQueuedPipelineLockService (with different method signatures).
+    This works at runtime because:
+    1. release_lock(project_id, board_id, work_item_id) signature is compatible
+    2. Return value of release_lock() is never used, so type difference is safe
+    3. get_all_lock_states() exists only on InMemoryLockService (via duck typing)
+    The architectural dependency is correct (port interface) despite the runtime
+    type mismatch between port and application-layer implementations.
 
     Attributes:
         _lock_service: IPipelineLockService for lock iteration and release
@@ -162,8 +155,9 @@ class StaleLockWatchdog:
         """
         now = self._clock.now()
 
-        # Access implementation-specific get_all_lock_states() method via protocol
-        # This is safe in simulation environments where InMemoryLockService provides it
+        # Access implementation-specific get_all_lock_states() method via duck typing.
+        # This method exists only on InMemoryLockService (for simulation/testing).
+        # For graceful degradation, check at runtime if available.
         if not hasattr(self._lock_service, "get_all_lock_states"):
             self._logger.warning(
                 "Lock service does not support get_all_lock_states() - cannot perform stale lock detection"
