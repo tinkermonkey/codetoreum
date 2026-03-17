@@ -9,7 +9,7 @@ Tests the endpoints:
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime
 from httpx import AsyncClient
 
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap

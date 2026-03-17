@@ -15,8 +15,7 @@ This router is ONLY mounted in SimulationApplicationBootstrap, never in producti
 """
 
 import logging
-from datetime import datetime
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
@@ -103,11 +102,10 @@ def create_simulation_clock_router(engine: SimulationEngine) -> APIRouter:
         Returns:
             Current time, speed multiplier, and auto-advance status
         """
-        clock = engine.get_clock_for_testing()
         return ClockStateResponse(
-            current_time=clock.now(),
-            speed_multiplier=clock.get_speed_multiplier(),
-            auto_advance_active=clock._running,
+            current_time=engine.now(),
+            speed_multiplier=engine.get_speed_multiplier(),
+            auto_advance_active=engine.is_auto_advancing(),
         )
 
     # =====================================================================
@@ -134,18 +132,16 @@ def create_simulation_clock_router(engine: SimulationEngine) -> APIRouter:
         Raises:
             HTTPException(409): If auto-advance is currently active
         """
-        clock = engine.get_clock_for_testing()
-
         # Race condition prevention: reject manual advance while auto-advance is running
-        if clock._running:
+        if engine.is_auto_advancing():
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Cannot manually advance while auto-advance is active. Call /pause first.",
             )
 
-        previous_time = clock.now()
+        previous_time = engine.now()
         await engine.advance(timedelta(seconds=request.seconds))
-        current_time = clock.now()
+        current_time = engine.now()
 
         logger.debug(
             f"Advanced clock by {request.seconds} seconds",
@@ -174,16 +170,16 @@ def create_simulation_clock_router(engine: SimulationEngine) -> APIRouter:
             Status and current time
         """
         await engine.stop_auto_advance()
-        clock = engine.get_clock_for_testing()
+        current_time = engine.now()
 
         logger.info(
             "Paused simulation clock auto-advance",
-            extra={"current_time": clock.now().isoformat()},
+            extra={"current_time": current_time.isoformat()},
         )
 
         return PauseClockResponse(
             status="paused",
-            current_time=clock.now(),
+            current_time=current_time,
         )
 
     # =====================================================================
@@ -202,19 +198,19 @@ def create_simulation_clock_router(engine: SimulationEngine) -> APIRouter:
             Status and current time
         """
         await engine.start_auto_advance()
-        clock = engine.get_clock_for_testing()
+        current_time = engine.now()
 
         logger.info(
             "Resumed simulation clock auto-advance",
             extra={
-                "current_time": clock.now().isoformat(),
-                "speed_multiplier": clock.get_speed_multiplier(),
+                "current_time": current_time.isoformat(),
+                "speed_multiplier": engine.get_speed_multiplier(),
             },
         )
 
         return ResumeClockResponse(
             status="running",
-            current_time=clock.now(),
+            current_time=current_time,
         )
 
     return router
