@@ -161,6 +161,9 @@ from codetoreum.infrastructure.simulation.watchdogs import (
 )
 from codetoreum.ports.input.agent_command import IAgentCommandPort
 from codetoreum.ports.input.agent_query import IAgentQueryPort
+
+# Ports
+from codetoreum.ports.input.audit_query import IAuditQueryPort
 from codetoreum.ports.input.config_command import IConfigurationCommandPort
 from codetoreum.ports.input.config_query import IConfigurationQueryPort
 from codetoreum.ports.input.execution_command import IExecutionCommandPort
@@ -170,9 +173,6 @@ from codetoreum.ports.input.orchestration_command import IOrchestrationCommandPo
 from codetoreum.ports.input.task_query import ITaskQueryPort
 from codetoreum.ports.input.work_item_command import IWorkItemCommandPort
 from codetoreum.ports.input.work_item_query import IWorkItemQueryPort
-
-# Ports
-from codetoreum.ports.input.audit_query import IAuditQueryPort
 from codetoreum.ports.input.workflow_command import IWorkflowCommandPort
 from codetoreum.ports.input.workflow_definition_command import (
     IWorkflowDefinitionCommandPort,

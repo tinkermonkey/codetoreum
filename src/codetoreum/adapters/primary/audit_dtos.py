@@ -300,9 +300,13 @@ class AuditEventResponse(BaseModel):
     resourceId: str = Field(..., description="ID of the resource", serialization_alias="resourceId")
     action: str = Field(..., description="Action performed (create, update, delete, etc.)")
     userId: str = Field(..., description="User or system ID performing the action", serialization_alias="userId")
-    correlationId: str | None = Field(None, description="Request correlation ID for tracing", serialization_alias="correlationId")
+    correlationId: str | None = Field(
+        None, description="Request correlation ID for tracing", serialization_alias="correlationId"
+    )
     success: bool = Field(..., description="Whether the action succeeded")
-    errorMessage: str | None = Field(None, description="Error message if action failed", serialization_alias="errorMessage")
+    errorMessage: str | None = Field(
+        None, description="Error message if action failed", serialization_alias="errorMessage"
+    )
     metadata: dict[str, Any] = Field(default_factory=dict, description="Additional event metadata")
 
     model_config = ConfigDict(
@@ -332,7 +336,9 @@ class AuditEventsListResponse(BaseModel):
     """List of audit events with pagination."""
 
     events: list[AuditEventResponse] = Field(..., description="List of audit events")
-    totalEventCount: int = Field(..., description="Total number of matching events", serialization_alias="totalEventCount")
+    totalEventCount: int = Field(
+        ..., description="Total number of matching events", serialization_alias="totalEventCount"
+    )
     offset: int = Field(..., description="Pagination offset")
     limit: int = Field(..., description="Pagination limit")
     hasNext: bool = Field(..., description="Whether more events are available", serialization_alias="hasNext")

@@ -10,7 +10,6 @@ from fastapi.testclient import TestClient
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 
-
 # ============================================================================
 # Fixtures
 # ============================================================================
@@ -91,9 +90,7 @@ async def test_audit_events_endpoint_filtering(bootstrap):
     client = TestClient(bootstrap.app)
 
     # Query with filters
-    response = client.get(
-        "/api/v2/audit/events?eventType=agent_created&resourceType=agent&action=create"
-    )
+    response = client.get("/api/v2/audit/events?eventType=agent_created&resourceType=agent&action=create")
 
     assert response.status_code == 200
     data = response.json()
