@@ -34,6 +34,7 @@ from codetoreum.ports.exceptions import (
 from codetoreum.ports.output.board_service import (
     BoardColumn,
     BoardConfig,
+    ColumnMovementResult,
     IBoardService,
     MovedByType,
     ProjectBoard,
@@ -345,13 +346,18 @@ class GitHubBoardAdapter(IBoardService):
 
     # Command Operations
 
-    async def move_item_to_column(self, work_item_id: str, target_column: str, moved_by: MovedByType):
+    async def move_item_to_column(
+        self, work_item_id: str, target_column: str, moved_by: MovedByType
+    ) -> ColumnMovementResult:
         """Move work item to target column.
 
         Args:
             work_item_id: Item to move
             target_column: Target column name
             moved_by: Type of entity that initiated the move
+
+        Returns:
+            ColumnMovementResult: Details of the movement operation
 
         Raises:
             ResourceNotFoundError: Work item or column doesn't exist
@@ -433,11 +439,14 @@ class GitHubBoardAdapter(IBoardService):
         except ExternalServiceError:
             raise
 
+        # Create timestamp for result
+        timestamp = datetime.now(UTC).isoformat()
+
         # Emit event
         self.emit(
             WorkItemColumnChangedEvent(
                 type="workitem.column_changed",
-                timestamp=datetime.now(UTC).isoformat(),
+                timestamp=timestamp,
                 source="github",
                 work_item_id=work_item_id,
                 project_id=self._current_project_id,
@@ -447,6 +456,72 @@ class GitHubBoardAdapter(IBoardService):
                 moved_by=moved_by.value,
             )
         )
+
+        # Return movement result
+        return ColumnMovementResult(
+            work_item_id=work_item_id,
+            from_column=from_column,
+            to_column=target_column,
+            moved_by=moved_by,
+            timestamp=timestamp,
+        )
+
+    async def get_all_boards(self) -> list[ProjectBoard]:
+        """Get all boards across all projects.
+
+        Returns all boards managed by this service, including structure and items.
+        Used for cross-board queries like SLA monitoring.
+
+        Returns:
+            List[ProjectBoard]: All boards with columns and items
+
+        Raises:
+            ExternalServiceError: Service communication failure
+        """
+        # For GitHub, we would need to query all projects the bot has access to
+        # This is a complex operation that requires iterating through organizations
+        # and projects. For now, return empty list as this is not directly supported
+        # by the current GitHub adapter configuration.
+        # In a real implementation, this would:
+        # 1. List all projects accessible to the authenticated user
+        # 2. For each project, call get_board()
+        # 3. Return all boards
+        return []
+
+    async def get_board_items(self, project_id: str, board_id: str) -> list[WorkItemPosition]:
+        """Get all work items on a board with their column positions and entry times.
+
+        Returns all items across all columns on the specified board,
+        including their current column, position, and entry timestamp.
+
+        Args:
+            project_id: Project containing the board
+            board_id: Board to query
+
+        Returns:
+            List[WorkItemPosition]: All items with column, position, and entry time
+
+        Raises:
+            ResourceNotFoundError: Board doesn't exist
+            ExternalServiceError: Service communication failure
+        """
+        # Get the full board structure
+        board = await self.get_board(project_id, board_id)
+
+        # Flatten all items across all columns into a single list
+        items: list[WorkItemPosition] = []
+        for column in board.columns:
+            for position, work_item_id in enumerate(column.work_item_ids):
+                items.append(
+                    WorkItemPosition(
+                        work_item_id=work_item_id,
+                        column_name=column.name,
+                        position=position,
+                        entered_column_at=None,  # GitHub API doesn't provide entry timestamps
+                    )
+                )
+
+        return items
 
     async def reconcile_board(self, board_id: str, config: BoardConfig) -> ReconciliationResult:
         """Reconcile board structure with expected configuration.
