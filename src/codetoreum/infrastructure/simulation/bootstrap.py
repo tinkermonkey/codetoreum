@@ -225,7 +225,7 @@ class BootstrapDegradedModeState:
     def get_summary(self) -> str:
         """Get human-readable summary of failures."""
         if not self.is_degraded:
-            return "Bootstrap completed successfully (no degraded mode)"
+            return "Bootstrap completed successfully"
 
         lines = ["Bootstrap running in degraded mode:"]
         for phase, error in self.failed_phases.items():
