@@ -54,9 +54,12 @@ from codetoreum.adapters.primary.input_port_adapters.mock import (
     MockWorkspaceQueryAdapter,
 )
 
-# Import simulation ticketing router
+# Import simulation routers
 from codetoreum.adapters.primary.routers.simulation_ticketing import (
     create_simulation_ticketing_router,
+)
+from codetoreum.adapters.primary.routers.simulation_clock import (
+    create_simulation_clock_router,
 )
 from codetoreum.adapters.secondary.failed_event_store_adapter import (
     DeadLetterQueueFailedEventStoreAdapter,
@@ -1243,6 +1246,10 @@ class SimulationApplicationBootstrap:
         # Mount simulation-only ticketing router (never in production create_app)
         sim_router = create_simulation_ticketing_router(self.adapters.ticket_system, self.adapters.board)
         app.include_router(sim_router)
+
+        # Mount simulation-only clock control router (never in production create_app)
+        clock_router = create_simulation_clock_router(self._engine)
+        app.include_router(clock_router)
 
         logger.info("Created FastAPI application with all ports wired")
 
