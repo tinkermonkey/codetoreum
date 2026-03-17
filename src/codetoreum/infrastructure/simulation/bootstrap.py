@@ -273,7 +273,7 @@ class SimulationPorts:
     config_query: IConfigurationQueryPort
     metrics_query: IMetricsQueryPort
     workspace_query: IWorkspaceQueryPort
-    audit_query: "IAuditQueryPort"
+    audit_query: IAuditQueryPort
 
 
 @dataclass

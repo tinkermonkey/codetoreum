@@ -75,16 +75,14 @@ async def test_audit_events_endpoint_pagination(bootstrap):
 
 @pytest.mark.asyncio
 async def test_audit_events_endpoint_max_limit(bootstrap):
-    """Test audit events endpoint respects max limit."""
+    """Test audit events endpoint rejects exceeding max limit."""
     client = TestClient(bootstrap.app)
 
-    # Try to exceed max limit
+    # Try to exceed max limit (200)
     response = client.get("/api/v2/audit/events?limit=999")
 
-    # Should still succeed but limit to max (200)
-    assert response.status_code == 200
-    data = response.json()
-    assert data["limit"] <= 200
+    # Should reject with validation error
+    assert response.status_code == 422
 
 
 @pytest.mark.asyncio
