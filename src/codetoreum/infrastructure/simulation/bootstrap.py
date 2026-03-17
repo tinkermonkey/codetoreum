@@ -429,13 +429,13 @@ class SimulationApplicationBootstrap:
             if self.adapters and self._engine:
                 try:
                     logger.info("Phase 6b: Registering stale lock watchdog...")
-                    stale_lock_watchdog = StaleLockWatchdog(
+                    self._stale_lock_watchdog = StaleLockWatchdog(
                         lock_service=self.adapters.lock_service,
                         event_emitter=self.adapters.event_emitter,
                         clock=self._engine.clock,
                         stale_threshold_seconds=7200,  # 2 hours default
                     )
-                    stale_lock_watchdog.start()
+                    self._stale_lock_watchdog.start()
                     logger.info("Stale lock watchdog registered and started")
                 except Exception as e:
                     logger.error(

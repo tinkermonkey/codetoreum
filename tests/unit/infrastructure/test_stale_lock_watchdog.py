@@ -238,8 +238,7 @@ class TestTickAndRescheduling:
 
         # Assert: Should have scheduled the next tick
         callbacks_after = len(simulation_clock.get_scheduled_callbacks())
-        # We had 0 before, now should have 1 for next tick
-        assert callbacks_after >= callbacks_before
+        assert callbacks_after == callbacks_before + 1
 
     @pytest.mark.asyncio
     async def test_tick_reschedules_on_error(self, watchdog, simulation_clock, mock_event_emitter):
@@ -254,7 +253,7 @@ class TestTickAndRescheduling:
 
         # Assert: Should still have scheduled the next tick
         callbacks_after = len(simulation_clock.get_scheduled_callbacks())
-        assert callbacks_after >= callbacks_before
+        assert callbacks_after == callbacks_before + 1
 
     @pytest.mark.asyncio
     async def test_error_logged_with_exc_info(self, lock_service, watchdog, mock_event_emitter, caplog):
@@ -273,7 +272,7 @@ class TestTickAndRescheduling:
         mock_event_emitter.emit.side_effect = Exception("Test error")
 
         # Act: Should not raise despite the error
-        await watchdog._tick(datetime.now(UTC))
+        await watchdog._tick(watchdog._clock.now())
 
         # Assert: Error should be logged
         assert "StaleLockWatchdog check failed" in caplog.text

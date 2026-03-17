@@ -12,7 +12,7 @@ Design Principles:
 """
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
