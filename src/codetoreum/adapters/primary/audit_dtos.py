@@ -1,12 +1,13 @@
 """
 Audit Response Data Transfer Objects (DTOs)
 
-DTOs for workflow run audit REST API endpoints. These provide comprehensive
-audit information with sequence validation and stage grouping.
+DTOs for audit REST API endpoints. Provides:
+- Workflow run audit information with sequence validation and stage grouping
+- System-wide audit event logging with pagination and filtering
 """
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -279,6 +280,89 @@ class WorkflowRunAuditResponse(BaseModel):
                 "offset": 0,
                 "limit": 100,
                 "hasNext": False,
+            }
+        },
+    )
+
+
+# ============================================================================
+# System Audit Event Models
+# ============================================================================
+
+
+class AuditEventResponse(BaseModel):
+    """Single audit event response."""
+
+    id: str = Field(..., description="Unique audit event ID")
+    timestamp: datetime = Field(..., description="When the event occurred")
+    eventType: str = Field(..., description="Type of audit event", serialization_alias="eventType")
+    resourceType: str = Field(..., description="Type of resource being audited", serialization_alias="resourceType")
+    resourceId: str = Field(..., description="ID of the resource", serialization_alias="resourceId")
+    action: str = Field(..., description="Action performed (create, update, delete, etc.)")
+    userId: str = Field(..., description="User or system ID performing the action", serialization_alias="userId")
+    correlationId: str | None = Field(None, description="Request correlation ID for tracing", serialization_alias="correlationId")
+    success: bool = Field(..., description="Whether the action succeeded")
+    errorMessage: str | None = Field(None, description="Error message if action failed", serialization_alias="errorMessage")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional event metadata")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_schema_extra={
+            "example": {
+                "id": "audit-evt-123",
+                "timestamp": "2026-02-20T10:15:00Z",
+                "eventType": "agent_created",
+                "resourceType": "agent",
+                "resourceId": "agent-456",
+                "action": "create",
+                "userId": "user-789",
+                "correlationId": "req-abc123",
+                "success": True,
+                "errorMessage": None,
+                "metadata": {
+                    "agent_name": "developer_agent",
+                    "capabilities": ["code_generation", "testing"],
+                },
+            }
+        },
+    )
+
+
+class AuditEventsListResponse(BaseModel):
+    """List of audit events with pagination."""
+
+    events: list[AuditEventResponse] = Field(..., description="List of audit events")
+    totalEventCount: int = Field(..., description="Total number of matching events", serialization_alias="totalEventCount")
+    offset: int = Field(..., description="Pagination offset")
+    limit: int = Field(..., description="Pagination limit")
+    hasNext: bool = Field(..., description="Whether more events are available", serialization_alias="hasNext")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_schema_extra={
+            "example": {
+                "events": [
+                    {
+                        "id": "audit-evt-123",
+                        "timestamp": "2026-02-20T10:15:00Z",
+                        "eventType": "agent_created",
+                        "resourceType": "agent",
+                        "resourceId": "agent-456",
+                        "action": "create",
+                        "userId": "user-789",
+                        "correlationId": "req-abc123",
+                        "success": True,
+                        "errorMessage": None,
+                        "metadata": {
+                            "agent_name": "developer_agent",
+                            "capabilities": ["code_generation", "testing"],
+                        },
+                    }
+                ],
+                "totalEventCount": 42,
+                "offset": 0,
+                "limit": 20,
+                "hasNext": True,
             }
         },
     )

@@ -172,6 +172,7 @@ from codetoreum.ports.input.work_item_command import IWorkItemCommandPort
 from codetoreum.ports.input.work_item_query import IWorkItemQueryPort
 
 # Ports
+from codetoreum.ports.input.audit_query import IAuditQueryPort
 from codetoreum.ports.input.workflow_command import IWorkflowCommandPort
 from codetoreum.ports.input.workflow_definition_command import (
     IWorkflowDefinitionCommandPort,
@@ -272,6 +273,7 @@ class SimulationPorts:
     config_query: IConfigurationQueryPort
     metrics_query: IMetricsQueryPort
     workspace_query: IWorkspaceQueryPort
+    audit_query: "IAuditQueryPort"
 
 
 @dataclass
@@ -1253,6 +1255,11 @@ class SimulationApplicationBootstrap:
         config_command = MockConfigCommandAdapter()
         task_query = MockTaskQueryAdapter()
 
+        # Create audit query adapter using the audit store
+        from codetoreum.adapters.primary.audit_query_adapter import AuditQueryAdapter
+
+        audit_query = AuditQueryAdapter(audit_store=self.adapters.audit_store)
+
         logger.info("Created all port implementations")
 
         return SimulationPorts(
@@ -1272,6 +1279,7 @@ class SimulationApplicationBootstrap:
             config_query=config_query,
             metrics_query=metrics_query,
             workspace_query=workspace_query,
+            audit_query=audit_query,
         )
 
     # =========================================================================
@@ -1330,6 +1338,7 @@ class SimulationApplicationBootstrap:
             event_bus=self.infrastructure.event_bus,
             config_service=config_service_interface,
             logger=logger_interface,
+            audit_query_port=self.ports.audit_query,
             disable_auth=True,  # ADR-003: Disable authentication in simulation
             cors_origins=["*"],  # Allow all origins in simulation mode (auth is disabled)
             container_recovery_service=self.services.container_recovery_service,
