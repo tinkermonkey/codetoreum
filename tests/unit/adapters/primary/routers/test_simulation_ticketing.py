@@ -149,10 +149,7 @@ class TestStagingColumnDetection:
         """
         # Create board with AUTOMATED column at position 0
         adapter = MockBoardAdapter()
-        adapter.create_board(
-            "proj-2", "board-2", "Test Board v2",
-            ["Planning", "Staging", "Ready", "Done"]
-        )
+        adapter.create_board("proj-2", "board-2", "Test Board v2", ["Planning", "Staging", "Ready", "Done"])
         adapter.current_project = "proj-2"
 
         # Register workflow template where column 0 is AUTOMATED/pipeline-trigger
@@ -290,10 +287,7 @@ class TestStagingColumnDetection:
         """
         # Create board
         adapter = MockBoardAdapter()
-        adapter.create_board(
-            "proj-4", "board-4", "All Automated Board",
-            ["Automated1", "Automated2", "Automated3"]
-        )
+        adapter.create_board("proj-4", "board-4", "All Automated Board", ["Automated1", "Automated2", "Automated3"])
         adapter.current_project = "proj-4"
 
         # Register workflow template with NO MANUAL columns
@@ -362,9 +356,7 @@ class TestStagingColumnDetection:
             for record in caplog.records
             if record.levelname == "WARNING"
         )
-        assert warning_found, (
-            "Expected warning to be logged when no MANUAL columns found in template"
-        )
+        assert warning_found, "Expected warning to be logged when no MANUAL columns found in template"
 
 
 class TestCreateIssue:

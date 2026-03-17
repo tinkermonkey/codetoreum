@@ -215,10 +215,7 @@ def create_simulation_ticketing_router(
         if workflow_template:
             # Find first MANUAL column (proper staging column)
             # MANUAL columns have no agent and don't trigger pipeline lock
-            staging_columns = [
-                col for col in workflow_template.columns
-                if col.type == ColumnType.MANUAL
-            ]
+            staging_columns = [col for col in workflow_template.columns if col.type == ColumnType.MANUAL]
             if staging_columns:
                 # Return first MANUAL column by position
                 staging_col = min(staging_columns, key=lambda c: c.position)
