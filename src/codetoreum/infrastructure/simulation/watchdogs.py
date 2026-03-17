@@ -18,10 +18,13 @@ from typing import TYPE_CHECKING
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
 )
+from codetoreum.domain.events.board_events import ColumnSLAExceededEvent
 from codetoreum.domain.events.execution_events import ExecutionTimedOutEvent
 from codetoreum.domain.events.lock_events import LockStaleDetectedEvent
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
+from codetoreum.ports.output.board_service import IBoardService
 from codetoreum.ports.output.event_emitter import IEventEmitter
+from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 if TYPE_CHECKING:
     from codetoreum.adapters.testing.execution_service_agent_executor import (
@@ -327,3 +330,204 @@ class ExecutionTimeoutWatchdog:
                         exec_info.execution_id,
                         exc_info=True,
                     )
+
+
+class SLAExpiryWatchdog:
+    """Proactively detects work items that exceed their column's SLA threshold.
+
+    On each clock tick interval, scans all work items on all boards and checks
+    if any have remained in their current column longer than the column's configured
+    SLA threshold. For items exceeding SLA:
+    1. Emits ColumnSLAExceededEvent for audit trail
+    2. Records the detection to prevent duplicate events
+
+    This watchdog enables SLA-driven monitoring and escalation workflows. Once
+    detected, the system can decide on escalation actions (notify, reassign, etc.)
+    based on the ColumnSLAExceededEvent.
+
+    Design:
+    - Clock-driven: Calls clock.schedule_callback() to self-reschedule
+    - Time-aware: Uses clock.now() exclusively for comparisons
+    - Fail-safe: Errors logged but don't stop future checks
+    - Event-driven: Emits ColumnSLAExceededEvent for audit trail
+    - Deduplication: Tracks detected items to emit once per SLA expiry
+
+    Attributes:
+        _board_service: IBoardService for work item and column querying
+        _workflow_config_service: IWorkflowConfigService for SLA configuration
+        _event_emitter: IEventEmitter for domain event publication
+        _clock: SimulationClock for time access and callback scheduling
+        _check_interval: Frequency (timedelta) of SLA checks
+        _detected_items: Set of (work_item_id, project_id, board_id) tuples
+                        tracking which items have already been reported
+    """
+
+    def __init__(
+        self,
+        board_service: IBoardService,
+        workflow_config_service: IWorkflowConfigService,
+        event_emitter: IEventEmitter,
+        clock: SimulationClock,
+        check_interval: timedelta = timedelta(seconds=60),
+    ):
+        """Initialize SLA expiry watchdog.
+
+        Args:
+            board_service: IBoardService for work item queries
+            workflow_config_service: IWorkflowConfigService for SLA config
+            event_emitter: IEventEmitter for domain event publication
+            clock: SimulationClock for time and callback scheduling
+            check_interval: Frequency of checks (default 60 seconds simulated time)
+        """
+        self._board_service = board_service
+        self._workflow_config_service = workflow_config_service
+        self._event_emitter = event_emitter
+        self._clock = clock
+        self._check_interval = check_interval
+        self._logger = logger
+        # Track (work_item_id, project_id, board_id) to detect SLA expiry once
+        self._detected_items: set[tuple[str, str, str]] = set()
+
+    def start(self) -> None:
+        """Schedule first watchdog check.
+
+        Registers a callback with the clock to run _tick() after _check_interval.
+        This callback will reschedule itself, creating a continuous background check.
+
+        Call this after the simulation engine and adapters are initialized.
+        """
+        self._clock.schedule_callback(self._tick, after_delta=self._check_interval)
+        self._logger.info(
+            "SLAExpiryWatchdog started: checking every %s simulated seconds",
+            self._check_interval.total_seconds(),
+        )
+
+    async def _tick(self, scheduled_time: datetime) -> None:
+        """Check for SLA-exceeded work items, always reschedule.
+
+        This is the main watchdog loop callback. It:
+        1. Calls _check_sla_expiry() to scan items and emit events
+        2. Logs any errors with exc_info=True
+        3. Always reschedules itself (even on error) via clock.schedule_callback()
+
+        The always-reschedule pattern ensures that a single error doesn't stop
+        the watchdog from future checks. This is critical for production-like robustness.
+
+        Args:
+            scheduled_time: The time when this callback was triggered (provided by clock)
+        """
+        try:
+            await self._check_sla_expiry()
+        except Exception:
+            self._logger.error(
+                "SLAExpiryWatchdog check failed, will retry next interval",
+                exc_info=True,
+            )
+        finally:
+            # Always reschedule, even on error - fail-safe pattern
+            self._clock.schedule_callback(self._tick, after_delta=self._check_interval)
+
+    async def _check_sla_expiry(self) -> None:
+        """Scan all work items and emit events for those exceeding SLA.
+
+        Retrieves all boards and work items, checks each item's time in column
+        against the column's SLA configuration, and for items exceeding threshold:
+        1. Emits ColumnSLAExceededEvent with timestamp and SLA details
+        2. Records detection to prevent duplicate event emission
+        3. Logs the SLA expiry at warning level
+
+        Uses clock.now() exclusively for time comparisons, ensuring the watchdog
+        pauses when auto-advance pauses and works with simulated time.
+
+        Raises:
+            Any exception from board service or event emission (caught and logged by _tick())
+        """
+        now = self._clock.now()
+
+        # Get all boards from board service
+        try:
+            all_boards = await self._board_service.get_all_boards()
+        except Exception:
+            self._logger.error(
+                "Failed to retrieve boards for SLA checking",
+                exc_info=True,
+            )
+            return
+
+        for board in all_boards:
+            # Get workflow template for this board to check SLA config
+            try:
+                template = await self._workflow_config_service.get_template(
+                    board.workflow_template_id
+                )
+            except Exception:
+                self._logger.error(
+                    "Failed to retrieve workflow template %s",
+                    board.workflow_template_id,
+                    exc_info=True,
+                )
+                continue
+
+            if not template:
+                continue
+
+            # Get all work items on board
+            try:
+                items = await self._board_service.get_board_items(
+                    board.project_id, board.id
+                )
+            except Exception:
+                self._logger.error(
+                    "Failed to retrieve items for board %s",
+                    board.id,
+                    exc_info=True,
+                )
+                continue
+
+            # Check each item's time in column against SLA
+            for item in items:
+                if not item.current_column or not item.entered_column_at:
+                    # Item not yet placed in column or no entry time
+                    continue
+
+                # Get column configuration
+                column_config = template.get_column_config(item.current_column)
+                if not column_config or not column_config.sla_seconds:
+                    # Column has no SLA configured
+                    continue
+
+                # Check if item exceeds SLA
+                elapsed = now - item.entered_column_at
+                elapsed_seconds = int(elapsed.total_seconds())
+                sla_seconds = column_config.sla_seconds
+
+                if elapsed_seconds > sla_seconds:
+                    # Item has exceeded SLA threshold
+                    detection_key = (item.id, board.project_id, board.id)
+
+                    # Emit only once per item per SLA expiry
+                    if detection_key not in self._detected_items:
+                        self._detected_items.add(detection_key)
+
+                        self._logger.warning(
+                            "SLA exceeded: work item %s in column '%s' (elapsed: %ds, threshold: %ds)",
+                            item.id,
+                            item.current_column,
+                            elapsed_seconds,
+                            sla_seconds,
+                        )
+
+                        # Emit domain event for audit trail
+                        sla_event = ColumnSLAExceededEvent(
+                            type="column.sla_exceeded",
+                            timestamp=now.isoformat(),
+                            source="sla_expiry_watchdog",
+                            work_item_id=item.id,
+                            project_id=board.project_id,
+                            board_id=board.id,
+                            column_name=item.current_column,
+                            elapsed_seconds=elapsed_seconds,
+                            sla_threshold_seconds=sla_seconds,
+                            entered_at=item.entered_column_at.isoformat(),
+                        )
+                        self._event_emitter.emit(sla_event)

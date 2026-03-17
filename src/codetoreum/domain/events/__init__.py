@@ -21,6 +21,7 @@ from .adapter_events import (
 # Board events
 from .board_events import (
     BoardReconciledEvent,
+    ColumnSLAExceededEvent,
     WorkItemColumnChangedEvent,
     WorkItemPositionChangedEvent,
 )
@@ -290,6 +291,7 @@ __all__ = [
     "WorkItemColumnChangedEvent",
     "WorkItemPositionChangedEvent",
     "BoardReconciledEvent",
+    "ColumnSLAExceededEvent",
     # Discussion events
     "Comment",
     "CommentContext",

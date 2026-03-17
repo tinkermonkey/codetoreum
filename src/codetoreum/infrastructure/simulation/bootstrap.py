@@ -156,6 +156,7 @@ from codetoreum.infrastructure.simulation.simulation_config import SimulationCon
 from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
 from codetoreum.infrastructure.simulation.watchdogs import (
     ExecutionTimeoutWatchdog,
+    SLAExpiryWatchdog,
     StaleLockWatchdog,
 )
 from codetoreum.ports.input.agent_command import IAgentCommandPort
@@ -334,6 +335,7 @@ class SimulationApplicationBootstrap:
         self._board_event_handler: BoardColumnEventHandler | None = None
         self._stale_lock_watchdog: StaleLockWatchdog | None = None
         self._execution_timeout_watchdog: ExecutionTimeoutWatchdog | None = None
+        self._sla_expiry_watchdog: SLAExpiryWatchdog | None = None
 
     async def setup(self) -> FastAPI:
         """
@@ -485,6 +487,29 @@ class SimulationApplicationBootstrap:
                     )
                     # Continue without watchdog rather than crashing the server
                     logger.info("Continuing server startup without execution timeout watchdog")
+
+            # Phase 6d: Register SLA expiry watchdog
+            # Must come after auto-advance starts and all adapters are initialized
+            if self.adapters and self._engine:
+                try:
+                    logger.info("Phase 6d: Registering SLA expiry watchdog...")
+                    self._sla_expiry_watchdog = SLAExpiryWatchdog(
+                        board_service=self.adapters.board,
+                        workflow_config_service=self.adapters.workflow_config,
+                        event_emitter=self.adapters.event_emitter,
+                        clock=self._engine.get_clock_for_testing(),
+                        check_interval=timedelta(seconds=60),  # Check every 60 simulated seconds
+                    )
+                    self._sla_expiry_watchdog.start()
+                    logger.info("SLA expiry watchdog registered and started")
+                except Exception as e:
+                    logger.error(
+                        f"Failed to register SLA expiry watchdog: {e}",
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                    )
+                    # Continue without watchdog rather than crashing the server
+                    logger.info("Continuing server startup without SLA expiry watchdog")
 
             self._is_setup = True
             logger.info("Simulation bootstrap completed successfully")

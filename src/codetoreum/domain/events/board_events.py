@@ -308,3 +308,114 @@ class BoardReconciledEvent(CodetoreumEvent):
             columns_removed=tuple(columns_removed) if columns_removed else (),
             items_moved=data.get("items_moved", 0),
         )
+
+
+@dataclass(frozen=True)
+class ColumnSLAExceededEvent(CodetoreumEvent):
+    """Emitted when a work item exceeds its column's SLA threshold.
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Events represent immutable facts—attempting to modify any field
+    will raise `FrozenInstanceError`. This immutability is essential because
+    events are the permanent record of state changes in the system and must
+    never be altered once created.
+
+    This event is emitted by the SLAExpiryWatchdog when a work item has remained
+    in a column longer than the configured SLA threshold for that column.
+
+    Attributes:
+        type (str): Fixed to "column.sla_exceeded"
+        work_item_id (str): ID of the work item that exceeded SLA
+        project_id (str): ID of the project containing the board
+        board_id (str): ID of the board where the item is located
+        column_name (str): Name of the column where SLA was exceeded
+        elapsed_seconds (int): Time (in seconds) the item has spent in column
+        sla_threshold_seconds (int): SLA threshold (in seconds) for the column
+        entered_at (str): ISO format timestamp when item entered the column
+
+    Example:
+        >>> event = ColumnSLAExceededEvent(
+        ...     type="column.sla_exceeded",
+        ...     timestamp="2025-01-14T12:30:00+00:00",
+        ...     source="simulation",
+        ...     work_item_id="123",
+        ...     project_id="proj-1",
+        ...     board_id="board-1",
+        ...     column_name="Code Review",
+        ...     elapsed_seconds=7200,
+        ...     sla_threshold_seconds=3600,
+        ...     entered_at="2025-01-14T10:30:00+00:00"
+        ... )
+        >>> event.elapsed_seconds = 5400  # ❌ Raises FrozenInstanceError
+    """
+
+    work_item_id: str = ""
+    project_id: str = ""
+    board_id: str = ""
+    column_name: str = ""
+    elapsed_seconds: int = 0
+    sla_threshold_seconds: int = 0
+    entered_at: str = ""
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.work_item_id:
+            msg = "work_item_id is required"
+            raise ValueError(msg)
+        if not self.project_id:
+            msg = "project_id is required"
+            raise ValueError(msg)
+        if not self.board_id:
+            msg = "board_id is required"
+            raise ValueError(msg)
+        if not self.column_name:
+            msg = "column_name is required"
+            raise ValueError(msg)
+        if self.elapsed_seconds <= 0:
+            msg = "elapsed_seconds must be positive"
+            raise ValueError(msg)
+        if self.sla_threshold_seconds <= 0:
+            msg = "sla_threshold_seconds must be positive"
+            raise ValueError(msg)
+        if self.elapsed_seconds <= self.sla_threshold_seconds:
+            msg = "elapsed_seconds must exceed sla_threshold_seconds"
+            raise ValueError(msg)
+        if not self.entered_at:
+            msg = "entered_at is required"
+            raise ValueError(msg)
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update(
+            {
+                "work_item_id": self.work_item_id,
+                "project_id": self.project_id,
+                "board_id": self.board_id,
+                "column_name": self.column_name,
+                "elapsed_seconds": self.elapsed_seconds,
+                "sla_threshold_seconds": self.sla_threshold_seconds,
+                "entered_at": self.entered_at,
+            }
+        )
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ColumnSLAExceededEvent":
+        """Deserialize from dictionary."""
+        return cls(
+            type=data.get("type", "column.sla_exceeded"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            work_item_id=data.get("work_item_id", ""),
+            project_id=data.get("project_id", ""),
+            board_id=data.get("board_id", ""),
+            column_name=data.get("column_name", ""),
+            elapsed_seconds=data.get("elapsed_seconds", 0),
+            sla_threshold_seconds=data.get("sla_threshold_seconds", 0),
+            entered_at=data.get("entered_at", ""),
+        )
