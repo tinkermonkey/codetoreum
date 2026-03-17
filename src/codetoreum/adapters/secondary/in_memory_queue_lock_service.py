@@ -527,13 +527,21 @@ class InMemoryLockService(IPipelineLockService):
             result = {}
             for key, state in self._lock_state.items():
                 # Deep copy each PipelineQueueState to prevent watchdog from reading
-                # shared mutable state outside the lock
+                # shared mutable state outside the lock. This includes deep copying
+                # QueueEntry objects since board_position is mutable for reordering.
                 result[key] = PipelineQueueState(
                     board_id=state.board_id,
                     project_id=state.project_id,
                     lock_holder=state.lock_holder,
                     lock_acquired_at=state.lock_acquired_at,
-                    queue=list(state.queue),
+                    queue=[
+                        QueueEntry(
+                            work_item_id=e.work_item_id,
+                            board_position=e.board_position,
+                            enqueued_at=e.enqueued_at,
+                        )
+                        for e in state.queue
+                    ],
                 )
             return result
 
