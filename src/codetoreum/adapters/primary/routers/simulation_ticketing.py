@@ -179,7 +179,14 @@ def create_simulation_ticketing_router(
 
     @router.post("/issues", response_model=SimIssueResponse, status_code=status.HTTP_201_CREATED)
     async def create_issue(request: SimCreateIssueRequest):
-        """Create a new issue and optionally place it on a board."""
+        """Create a new issue and optionally place it on a board.
+
+        If board_id and column are provided:
+        1. Creates the work item
+        2. Places it in a temporary "staging" column
+        3. Moves it to the target column to trigger WorkItemColumnChangedEvent
+           (which triggers orchestration for pipeline trigger columns)
+        """
         priority_map = {
             "low": WorkItemPriority.LOW,
             "medium": WorkItemPriority.MEDIUM,
@@ -205,13 +212,31 @@ def create_simulation_ticketing_router(
         if request.board_id and request.column:
             try:
                 board_adapter.current_project = request.project_id
-                board_adapter.add_item_to_column(request.board_id, request.column, work_item.id)
+
+                # Get the board to find a staging column (preferably first manual column)
+                board = await board_adapter.get_board(request.project_id, request.board_id)
+                staging_column = board.columns[0].name  # First column is usually manual/staging
+
+                # Place item in staging column first
+                board_adapter.add_item_to_column(request.board_id, staging_column, work_item.id)
+
+                # Move to target column to trigger WorkItemColumnChangedEvent
+                # (This is essential for pipeline trigger columns to invoke orchestration)
+                if staging_column != request.column:
+                    await board_adapter.move_item_to_column(
+                        work_item.id,
+                        request.column,
+                        MovedByType.ORCHESTRATOR  # API injection is system-driven, not human
+                    )
+
                 board_position = {
                     "board_id": request.board_id,
                     "column": request.column,
                 }
             except ValueError as e:
                 logger.warning(f"Failed to place item on board: {e}")
+            except Exception as e:
+                logger.warning(f"Failed to move item to target column: {e}")
 
         return SimIssueResponse(
             id=work_item.id,
