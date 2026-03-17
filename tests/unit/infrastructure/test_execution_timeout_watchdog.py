@@ -128,7 +128,9 @@ class TestTimeoutDetection:
             pass
 
     @pytest.mark.asyncio
-    async def test_does_not_detect_active_execution(self, mock_executor, watchdog, mock_event_emitter, simulation_clock):
+    async def test_does_not_detect_active_execution(
+        self, mock_executor, watchdog, mock_event_emitter, simulation_clock
+    ):
         """Should not detect an execution within its timeout."""
         # Arrange: Create a fresh execution
         now = simulation_clock.now()
@@ -303,7 +305,9 @@ class TestTickAndRescheduling:
         assert callbacks_after == callbacks_before + 1
 
     @pytest.mark.asyncio
-    async def test_error_logged_with_exc_info(self, mock_executor, watchdog, mock_event_emitter, caplog, simulation_clock):
+    async def test_error_logged_with_exc_info(
+        self, mock_executor, watchdog, mock_event_emitter, caplog, simulation_clock
+    ):
         """Should log errors with exc_info=True and continue."""
         # Arrange: Create a timed-out execution so emit will be called and fail
         now = simulation_clock.now()
@@ -337,7 +341,9 @@ class TestEventEmission:
     """Test domain event emission."""
 
     @pytest.mark.asyncio
-    async def test_timeout_event_has_correct_fields(self, mock_executor, watchdog, mock_event_emitter, simulation_clock):
+    async def test_timeout_event_has_correct_fields(
+        self, mock_executor, watchdog, mock_event_emitter, simulation_clock
+    ):
         """Should emit ExecutionTimedOutEvent with all required fields."""
         # Arrange
         now = simulation_clock.now()
@@ -406,8 +412,10 @@ class TestEndToEndWatchdogFlow:
         """Test ActiveExecutionInfo dataclass construction."""
         # Arrange
         now = datetime.now(UTC)
+
         async def dummy():
             await asyncio.sleep(0)
+
         task = asyncio.create_task(dummy())
 
         # Act

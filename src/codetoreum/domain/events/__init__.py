@@ -30,11 +30,6 @@ from .container_events import (
     ContainerExecutionCompletedEvent,
 )
 
-# Execution events
-from .execution_events import (
-    ExecutionTimedOutEvent,
-)
-
 # Container recovery events
 from .container_recovery_events import (
     ContainerKilledEvent,
@@ -49,6 +44,11 @@ from .discussion_events import (
     CommentContext,
     CommentNeedsResponseEvent,
     CommentPostedEvent,
+)
+
+# Execution events
+from .execution_events import (
+    ExecutionTimedOutEvent,
 )
 
 # Legacy domain events (static imports for mypy compatibility)

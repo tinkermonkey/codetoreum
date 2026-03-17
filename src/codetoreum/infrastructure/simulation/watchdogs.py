@@ -18,8 +18,8 @@ from typing import TYPE_CHECKING
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
 )
-from codetoreum.domain.events.lock_events import LockStaleDetectedEvent
 from codetoreum.domain.events.execution_events import ExecutionTimedOutEvent
+from codetoreum.domain.events.lock_events import LockStaleDetectedEvent
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.output.event_emitter import IEventEmitter
 

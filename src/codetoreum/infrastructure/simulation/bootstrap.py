@@ -463,6 +463,7 @@ class SimulationApplicationBootstrap:
                     from codetoreum.adapters.testing.execution_service_agent_executor import (
                         ExecutionServiceAgentExecutor,
                     )
+
                     if not isinstance(self.adapters.agent_executor, ExecutionServiceAgentExecutor):
                         raise TypeError(
                             f"agent_executor must be ExecutionServiceAgentExecutor, "
