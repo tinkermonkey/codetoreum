@@ -53,13 +53,13 @@ from codetoreum.adapters.primary.input_port_adapters.mock import (
     MockWorkItemQueryAdapter,
     MockWorkspaceQueryAdapter,
 )
+from codetoreum.adapters.primary.routers.simulation_clock import (
+    create_simulation_clock_router,
+)
 
 # Import simulation routers
 from codetoreum.adapters.primary.routers.simulation_ticketing import (
     create_simulation_ticketing_router,
-)
-from codetoreum.adapters.primary.routers.simulation_clock import (
-    create_simulation_clock_router,
 )
 from codetoreum.adapters.secondary.failed_event_store_adapter import (
     DeadLetterQueueFailedEventStoreAdapter,

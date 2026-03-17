@@ -8,8 +8,9 @@ Tests the endpoints:
 - POST /api/v2/sim/clock/resume: Resume automatic advancement
 """
 
-import pytest
 from datetime import datetime
+
+import pytest
 from httpx import AsyncClient
 
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
@@ -267,25 +268,25 @@ class TestSimulationClockRouter:
         """Verify that simulation clock router is NOT mounted in production create_app."""
         from codetoreum.adapters.primary.fastapi_app import create_app
         from codetoreum.adapters.primary.input_port_adapters.mock import (
-            MockWorkflowCommandAdapter,
-            MockTaskQueryAdapter,
-            MockConfigCommandAdapter,
-            MockConfigQueryAdapter,
-            MockMetricsQueryAdapter,
-            MockWorkspaceQueryAdapter,
-            MockWorkItemCommandAdapter,
-            MockWorkItemQueryAdapter,
-            MockWorkflowQueryAdapter,
             MockAgentCommandAdapter,
             MockAgentQueryAdapter,
+            MockConfigCommandAdapter,
+            MockConfigQueryAdapter,
             MockExecutionCommandAdapter,
             MockExecutionQueryAdapter,
-            MockWorkflowDefinitionCommandAdapter,
-            MockOrchestrationCommandAdapter,
             MockLoggerAdapter,
+            MockMetricsQueryAdapter,
+            MockOrchestrationCommandAdapter,
+            MockTaskQueryAdapter,
+            MockWorkflowCommandAdapter,
+            MockWorkflowDefinitionCommandAdapter,
+            MockWorkflowQueryAdapter,
+            MockWorkItemCommandAdapter,
+            MockWorkItemQueryAdapter,
+            MockWorkspaceQueryAdapter,
         )
-        from codetoreum.infrastructure.event_bus import EventBus
         from codetoreum.adapters.testing import InMemoryEventStore
+        from codetoreum.infrastructure.event_bus import EventBus
 
         # Create production app with mock ports
         event_bus = EventBus()
