@@ -157,6 +157,25 @@ class IPipelineLockService(IEventEmitter, ABC):
             ExternalServiceError: Service communication failure
         """
 
+    @abstractmethod
+    def get_all_lock_states(self) -> dict:
+        """Return all pipeline lock states for monitoring and diagnostics.
+
+        Intended for internal tools (watchdogs, dashboards) that need detailed
+        lock state without waiting for async operations. This method provides
+        immediate access to current lock state including acquisition times.
+
+        Returns:
+            dict: Mapping of lock keys to lock state objects containing:
+                  - lock_holder: Current lock holder ID or None
+                  - lock_acquired_at: Datetime when lock was acquired or None
+
+        Note:
+            This is a synchronous method for performance-critical monitoring
+            operations (e.g., stale lock detection in watchdogs). The returned
+            dict should contain thread-safe snapshots of lock states.
+        """
+
     # Command Operations
 
     @abstractmethod

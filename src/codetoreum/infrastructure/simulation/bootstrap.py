@@ -650,6 +650,7 @@ class SimulationApplicationBootstrap:
         Clean up all resources.
 
         Performs cleanup in reverse order:
+        - Stop all three watchdogs (prevent accessing cleaned-up resources)
         - Stop dead letter queue retry processor
         - Stop clock auto-advance (if running)
         - Stop event bus
@@ -666,6 +667,21 @@ class SimulationApplicationBootstrap:
 
         try:
             logger.info("Tearing down simulation bootstrap...")
+
+            # Stop all watchdogs before cleaning up adapters/infrastructure
+            # This prevents scheduled callbacks from firing during teardown and
+            # attempting to access None references (adapters, lock_service, etc.)
+            if self._stale_lock_watchdog:
+                self._stale_lock_watchdog.stop()
+                logger.debug("Stale lock watchdog stopped")
+
+            if self._execution_timeout_watchdog:
+                self._execution_timeout_watchdog.stop()
+                logger.debug("Execution timeout watchdog stopped")
+
+            if self._sla_expiry_watchdog:
+                self._sla_expiry_watchdog.stop()
+                logger.debug("SLA expiry watchdog stopped")
 
             # Stop dead letter queue retry processor
             if self.infrastructure and self.infrastructure.failed_event_store:
@@ -694,6 +710,9 @@ class SimulationApplicationBootstrap:
             self.adapters = None
             self._adapter_factory = None
             self._engine = None
+            self._stale_lock_watchdog = None
+            self._execution_timeout_watchdog = None
+            self._sla_expiry_watchdog = None
 
             self._is_setup = False
             logger.info("Simulation bootstrap teardown complete")

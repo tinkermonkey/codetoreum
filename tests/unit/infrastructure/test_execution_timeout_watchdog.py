@@ -336,8 +336,9 @@ class TestTickAndRescheduling:
         # Act: Should not raise despite the error
         await watchdog._tick(simulation_clock.now())
 
-        # Assert: Error should be logged
-        assert "ExecutionTimeoutWatchdog check failed" in caplog.text
+        # Assert: Error should be logged at per-item level (not at watchdog level)
+        # because we now have per-item error handling that doesn't block other items
+        assert "Failed to emit timeout event for execution exec-1" in caplog.text
         # Verify error was logged with exc_info
         assert "Traceback" in caplog.text  # Indicates exc_info was captured
 

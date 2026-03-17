@@ -48,23 +48,16 @@ class StaleLockWatchdog:
     - Fail-safe: Errors logged but don't stop future checks
     - Event-driven: Emits LockStaleDetectedEvent for audit trail
     - Force-release: Calls lock_service.release_lock() to clean up
+    - Deduplication: Tracks detected stale locks to emit events once per recovery
 
-    Architecture:
-    - Depends on IPipelineLockService port interface, not concrete implementations
-    - Accesses implementation-specific get_all_lock_states() via runtime duck typing
-    - Maintains hexagonal layering by depending on contracts, not implementations
-    - Uses hasattr() for graceful degradation if method unavailable
-
-    Type Signature Note:
-    The watchdog accepts IPipelineLockService from ports/output/, which is the proper
-    hexagonal architecture pattern. However, InMemoryLockService in testing implements
-    the application-layer IQueuedPipelineLockService (with different method signatures).
-    This works at runtime because:
-    1. release_lock(project_id, board_id, work_item_id) signature is compatible
-    2. Return value of release_lock() is never used, so type difference is safe
-    3. get_all_lock_states() exists only on InMemoryLockService (via duck typing)
-    The architectural dependency is correct (port interface) despite the runtime
-    type mismatch between port and application-layer implementations.
+    Deduplication Design:
+    Prevents duplicate LockStaleDetectedEvent emissions for the same lock.
+    When a lock is detected as stale and recovered, it's marked in
+    _recovered_locks. If release_lock() fails (transient error), the event
+    is still emitted but the lock isn't recovered - the next tick will retry
+    and re-emit. Once successfully recovered, future ticks skip the lock
+    until it's re-acquired (cleared when a new lock.acquired event is
+    observed, handled via infrastructure/event_bus.py subscriptions).
 
     Attributes:
         _lock_service: IPipelineLockService for lock iteration and release
@@ -72,6 +65,8 @@ class StaleLockWatchdog:
         _clock: SimulationClock for time access and callback scheduling
         _stale_threshold: Age (timedelta) beyond which locks are stale
         _check_interval: Frequency (timedelta) of stale lock checks
+        _recovered_locks: Set of "project_id:board_id" keys already recovered
+        _scheduled_callback: Reference to scheduled callback for stop()
     """
 
     def __init__(
@@ -98,6 +93,9 @@ class StaleLockWatchdog:
         self._stale_threshold = timedelta(seconds=stale_threshold_seconds)
         self._check_interval = check_interval
         self._logger = logger
+        self._recovered_locks: set[str] = set()
+        self._scheduled_callback: object | None = None
+        self._stopped = False
 
     def start(self) -> None:
         """Schedule first watchdog check.
@@ -107,19 +105,31 @@ class StaleLockWatchdog:
 
         Call this after the simulation engine and adapters are initialized.
         """
+        self._stopped = False
         self._clock.schedule_callback(self._tick, after_delta=self._check_interval)
         self._logger.info(
             "StaleLockWatchdog started: checking every %s simulated seconds",
             self._check_interval.total_seconds(),
         )
 
+    def stop(self) -> None:
+        """Stop the watchdog.
+
+        Sets a flag to prevent future checks. The scheduled callback will
+        still fire, but will return early if the stop flag is set.
+        """
+        self._stopped = True
+        self._recovered_locks.clear()
+        self._logger.info("StaleLockWatchdog stopped")
+
     async def _tick(self, scheduled_time: datetime) -> None:
         """Check for stale locks, always reschedule.
 
         This is the main watchdog loop callback. It:
-        1. Calls _check_stale_locks() to scan and release stale locks
-        2. Logs any errors with exc_info=True
-        3. Always reschedules itself (even on error) via clock.schedule_callback()
+        1. Checks if watchdog has been stopped (early return if so)
+        2. Calls _check_stale_locks() to scan and release stale locks
+        3. Logs any errors with exc_info=True
+        4. Always reschedules itself (even on error) via clock.schedule_callback()
 
         The always-reschedule pattern ensures that a single error doesn't stop
         the watchdog from future checks. This is critical for production-like robustness.
@@ -127,6 +137,9 @@ class StaleLockWatchdog:
         Args:
             scheduled_time: The time when this callback was triggered (provided by clock)
         """
+        if self._stopped:
+            return
+
         try:
             await self._check_stale_locks()
         except Exception:
@@ -135,8 +148,9 @@ class StaleLockWatchdog:
                 exc_info=True,
             )
         finally:
-            # Always reschedule, even on error - fail-safe pattern
-            self._clock.schedule_callback(self._tick, after_delta=self._check_interval)
+            # Always reschedule if not stopped
+            if not self._stopped:
+                self._clock.schedule_callback(self._tick, after_delta=self._check_interval)
 
     async def _check_stale_locks(self) -> None:
         """Scan all locks and force-release any that are stale.
@@ -145,32 +159,34 @@ class StaleLockWatchdog:
         against the stale threshold, and for stale ones:
         1. Emits LockStaleDetectedEvent with timestamp for audit trail
         2. Force-releases the lock via lock_service.release_lock()
-        3. Logs the stale lock at warning level
+        3. Tracks detection to avoid duplicate event emission
+        4. Logs the stale lock at warning level
 
         Uses clock.now() exclusively for time comparisons, ensuring the watchdog
         pauses when auto-advance pauses and works with simulated time.
+
+        Deduplication: If emit() succeeds but release_lock() fails (transient error),
+        the event was emitted but the lock wasn't recovered. The lock will be
+        detected again on the next tick and will re-emit. Once successfully released,
+        the key is added to _recovered_locks and future ticks skip it.
 
         Raises:
             Any exception from event emission or lock release (caught and logged by _tick())
         """
         now = self._clock.now()
 
-        # Access implementation-specific get_all_lock_states() method via duck typing.
-        # This method exists only on InMemoryLockService (for simulation/testing).
-        # For graceful degradation, check at runtime if available.
-        if not hasattr(self._lock_service, "get_all_lock_states"):
-            self._logger.warning(
-                "Lock service does not support get_all_lock_states() - cannot perform stale lock detection"
-            )
-            return
-
-        all_states = self._lock_service.get_all_lock_states()  # type: ignore
+        # Get all lock states from the port interface method
+        all_states = self._lock_service.get_all_lock_states()
 
         for key, state in all_states.items():
             # Only check locks that are currently held
             if state.lock_holder and state.lock_acquired_at:
                 age = now - state.lock_acquired_at
                 if age > self._stale_threshold:
+                    # Skip if already recovered
+                    if key in self._recovered_locks:
+                        continue
+
                     # Parse composite key to get project_id and board_id
                     project_id, board_id = key.split(":", 1)
 
@@ -200,6 +216,8 @@ class StaleLockWatchdog:
                             board_id,
                             state.lock_holder,
                         )
+                        # Mark as recovered only after successful release
+                        self._recovered_locks.add(key)
                         self._logger.info(
                             "Stale lock force-released: %s (was held for %s)",
                             key,
@@ -228,14 +246,22 @@ class ExecutionTimeoutWatchdog:
     - Clock-driven: Calls clock.schedule_callback() to self-reschedule
     - Time-aware: Uses clock.now() exclusively for comparisons
     - Fail-safe: Errors logged but don't stop future checks
+    - Per-item error handling: Each execution processed independently
     - Event-driven: Emits ExecutionTimedOutEvent for audit trail
     - Cancellation: Calls task.cancel() to stop stuck execution
+
+    Per-Item Error Handling:
+    If event emission fails for one execution, the exception is logged and
+    that execution is skipped, but subsequent executions continue to be
+    processed and cancelled. This prevents a single emit() failure from
+    preventing cancellation of all remaining timed-out executions.
 
     Attributes:
         _executor: ExecutionServiceAgentExecutor to scan active executions
         _event_emitter: IEventEmitter for domain event publication
         _clock: SimulationClock for time access and callback scheduling
         _check_interval: Frequency (timedelta) of timeout checks
+        _stopped: Flag to stop the watchdog
     """
 
     def __init__(
@@ -258,6 +284,7 @@ class ExecutionTimeoutWatchdog:
         self._clock = clock
         self._check_interval = check_interval
         self._logger = logger
+        self._stopped = False
 
     def start(self) -> None:
         """Schedule first watchdog check.
@@ -267,19 +294,30 @@ class ExecutionTimeoutWatchdog:
 
         Call this after the simulation engine and adapters are initialized.
         """
+        self._stopped = False
         self._clock.schedule_callback(self._tick, after_delta=self._check_interval)
         self._logger.info(
             "ExecutionTimeoutWatchdog started: checking every %s simulated seconds",
             self._check_interval.total_seconds(),
         )
 
+    def stop(self) -> None:
+        """Stop the watchdog.
+
+        Sets a flag to prevent future checks. The scheduled callback will
+        still fire, but will return early if the stop flag is set.
+        """
+        self._stopped = True
+        self._logger.info("ExecutionTimeoutWatchdog stopped")
+
     async def _tick(self, scheduled_time: datetime) -> None:
         """Check for timed-out executions, always reschedule.
 
         This is the main watchdog loop callback. It:
-        1. Calls _check_timeouts() to scan and cancel timed-out executions
-        2. Logs any errors with exc_info=True
-        3. Always reschedules itself (even on error) via clock.schedule_callback()
+        1. Checks if watchdog has been stopped (early return if so)
+        2. Calls _check_timeouts() to scan and cancel timed-out executions
+        3. Logs any errors with exc_info=True
+        4. Always reschedules itself (even on error) via clock.schedule_callback()
 
         The always-reschedule pattern ensures that a single error doesn't stop
         the watchdog from future checks. This is critical for production-like robustness.
@@ -287,6 +325,9 @@ class ExecutionTimeoutWatchdog:
         Args:
             scheduled_time: The time when this callback was triggered (provided by clock)
         """
+        if self._stopped:
+            return
+
         try:
             await self._check_timeouts()
         except Exception:
@@ -295,8 +336,9 @@ class ExecutionTimeoutWatchdog:
                 exc_info=True,
             )
         finally:
-            # Always reschedule, even on error - fail-safe pattern
-            self._clock.schedule_callback(self._tick, after_delta=self._check_interval)
+            # Always reschedule if not stopped
+            if not self._stopped:
+                self._clock.schedule_callback(self._tick, after_delta=self._check_interval)
 
     async def _check_timeouts(self) -> None:
         """Scan all active executions and cancel any that are timed out.
@@ -307,11 +349,15 @@ class ExecutionTimeoutWatchdog:
         2. Cancels the task via task.cancel()
         3. Logs the timeout at warning level
 
+        Per-item error handling: Each execution is processed independently.
+        If event emission fails for one execution, that execution is logged and
+        skipped, but cancellation and subsequent executions continue.
+
         Uses clock.now() exclusively for time comparisons, ensuring the watchdog
         pauses when auto-advance pauses and works with simulated time.
 
         Raises:
-            Any exception from event emission or task cancellation (caught and logged by _tick())
+            Never directly raised - all per-item exceptions are caught and logged
         """
         now = self._clock.now()
         active_executions = self._executor.get_active_executions()
@@ -330,18 +376,26 @@ class ExecutionTimeoutWatchdog:
                 )
 
                 # Emit domain event with timeout details for audit trail
-                timeout_event = ExecutionTimedOutEvent(
-                    type="execution.timed_out",
-                    timestamp=now.isoformat(),
-                    source="execution_timeout_watchdog",
-                    execution_id=exec_info.execution_id,
-                    work_item_id=exec_info.work_item_id,
-                    timeout_seconds=exec_info.timeout_seconds,
-                    started_at=exec_info.started_at.isoformat(),
-                )
-                self._event_emitter.emit(timeout_event)
+                # Wrapped in try/except to not block subsequent executions
+                try:
+                    timeout_event = ExecutionTimedOutEvent(
+                        type="execution.timed_out",
+                        timestamp=now.isoformat(),
+                        source="execution_timeout_watchdog",
+                        execution_id=exec_info.execution_id,
+                        work_item_id=exec_info.work_item_id,
+                        timeout_seconds=exec_info.timeout_seconds,
+                        started_at=exec_info.started_at.isoformat(),
+                    )
+                    self._event_emitter.emit(timeout_event)
+                except Exception:
+                    self._logger.error(
+                        "Failed to emit timeout event for execution %s",
+                        exec_info.execution_id,
+                        exc_info=True,
+                    )
 
-                # Cancel the stuck task
+                # Cancel the stuck task (separate try/except)
                 try:
                     exec_info.task.cancel()
                     self._logger.info(
@@ -375,7 +429,15 @@ class SLAExpiryWatchdog:
     - Time-aware: Uses clock.now() exclusively for comparisons
     - Fail-safe: Errors logged but don't stop future checks
     - Event-driven: Emits ColumnSLAExceededEvent for audit trail
-    - Deduplication: Tracks detected items to emit once per SLA expiry
+    - Deduplication: Tracks detected items to emit once per SLA expiry per column
+    - Cleanup: Automatically removes items from detection when they leave column
+
+    Deduplication Design:
+    The detection key includes work_item_id, project_id, board_id, AND column_name.
+    This ensures that if a work item exceeds SLA in one column, then moves to
+    another column and exceeds SLA there, both violations are reported (different
+    keys). Once an item leaves a column (column_name changes), it's automatically
+    removed from _detected_items during the next scan.
 
     Attributes:
         _board_service: IBoardService for work item and column querying
@@ -383,8 +445,9 @@ class SLAExpiryWatchdog:
         _event_emitter: IEventEmitter for domain event publication
         _clock: SimulationClock for time access and callback scheduling
         _check_interval: Frequency (timedelta) of SLA checks
-        _detected_items: Set of (work_item_id, project_id, board_id) tuples
-                        tracking which items have already been reported
+        _detected_items: Set of (work_item_id, project_id, board_id, column_name) tuples
+                        tracking which items have already been reported per column
+        _stopped: Flag to stop the watchdog
     """
 
     def __init__(
@@ -410,8 +473,9 @@ class SLAExpiryWatchdog:
         self._clock = clock
         self._check_interval = check_interval
         self._logger = logger
-        # Track (work_item_id, project_id, board_id) to detect SLA expiry once
-        self._detected_items: set[tuple[str, str, str]] = set()
+        # Track (work_item_id, project_id, board_id, column_name) to detect SLA expiry once per column
+        self._detected_items: set[tuple[str, str, str, str]] = set()
+        self._stopped = False
 
     def start(self) -> None:
         """Schedule first watchdog check.
@@ -421,19 +485,32 @@ class SLAExpiryWatchdog:
 
         Call this after the simulation engine and adapters are initialized.
         """
+        self._stopped = False
         self._clock.schedule_callback(self._tick, after_delta=self._check_interval)
         self._logger.info(
             "SLAExpiryWatchdog started: checking every %s simulated seconds",
             self._check_interval.total_seconds(),
         )
 
+    def stop(self) -> None:
+        """Stop the watchdog.
+
+        Sets a flag to prevent future checks. The scheduled callback will
+        still fire, but will return early if the stop flag is set.
+        Clears all detected items to reset tracking on next start.
+        """
+        self._stopped = True
+        self._detected_items.clear()
+        self._logger.info("SLAExpiryWatchdog stopped")
+
     async def _tick(self, scheduled_time: datetime) -> None:
         """Check for SLA-exceeded work items, always reschedule.
 
         This is the main watchdog loop callback. It:
-        1. Calls _check_sla_expiry() to scan items and emit events
-        2. Logs any errors with exc_info=True
-        3. Always reschedules itself (even on error) via clock.schedule_callback()
+        1. Checks if watchdog has been stopped (early return if so)
+        2. Calls _check_sla_expiry() to scan items and emit events
+        3. Logs any errors with exc_info=True
+        4. Always reschedules itself (even on error) via clock.schedule_callback()
 
         The always-reschedule pattern ensures that a single error doesn't stop
         the watchdog from future checks. This is critical for production-like robustness.
@@ -441,6 +518,9 @@ class SLAExpiryWatchdog:
         Args:
             scheduled_time: The time when this callback was triggered (provided by clock)
         """
+        if self._stopped:
+            return
+
         try:
             await self._check_sla_expiry()
         except Exception:
@@ -449,8 +529,9 @@ class SLAExpiryWatchdog:
                 exc_info=True,
             )
         finally:
-            # Always reschedule, even on error - fail-safe pattern
-            self._clock.schedule_callback(self._tick, after_delta=self._check_interval)
+            # Always reschedule if not stopped
+            if not self._stopped:
+                self._clock.schedule_callback(self._tick, after_delta=self._check_interval)
 
     async def _check_sla_expiry(self) -> None:
         """Scan all work items and emit events for those exceeding SLA.
@@ -458,8 +539,18 @@ class SLAExpiryWatchdog:
         Retrieves all boards and work items, checks each item's time in column
         against the column's SLA configuration, and for items exceeding threshold:
         1. Emits ColumnSLAExceededEvent with timestamp and SLA details
-        2. Records detection to prevent duplicate event emission
+        2. Records detection to prevent duplicate event emission per column
         3. Logs the SLA expiry at warning level
+        4. Cleans up detections for items that have moved to different columns
+
+        Deduplication Key (work_item_id, project_id, board_id, column_name):
+        Includes column_name to distinguish SLA violations in different columns.
+        If a work item exceeds SLA in "In Progress" then moves to "Review" and
+        exceeds SLA there, both violations are reported (different keys).
+
+        Cleanup: Items that have moved to a different column are automatically
+        removed from _detected_items, allowing re-detection if they exceed SLA
+        in the new column.
 
         Uses clock.now() exclusively for time comparisons, ensuring the watchdog
         pauses when auto-advance pauses and works with simulated time.
@@ -478,6 +569,9 @@ class SLAExpiryWatchdog:
                 exc_info=True,
             )
             return
+
+        # Track all currently-detected items on this scan pass to identify moved items
+        current_items: set[tuple[str, str, str, str]] = set()
 
         for board in all_boards:
             # Get workflow template for this board to check SLA config
@@ -524,9 +618,10 @@ class SLAExpiryWatchdog:
 
                 if elapsed_seconds > sla_seconds:
                     # Item has exceeded SLA threshold
-                    detection_key = (item.work_item_id, board.project_id, board.id)
+                    detection_key = (item.work_item_id, board.project_id, board.id, item.column_name)
+                    current_items.add(detection_key)
 
-                    # Emit only once per item per SLA expiry
+                    # Emit only once per item per column per SLA expiry
                     if detection_key not in self._detected_items:
                         self._detected_items.add(detection_key)
 
@@ -552,3 +647,19 @@ class SLAExpiryWatchdog:
                             entered_at=item.entered_column_at.isoformat(),
                         )
                         self._event_emitter.emit(sla_event)
+
+        # Clean up detections for items that have moved to a different column
+        # This allows them to be detected again if they exceed SLA in the new column
+        moved_items = self._detected_items - current_items
+        if moved_items:
+            for item_key in moved_items:
+                work_item_id = item_key[0]
+                # Only remove if the work_item_id+board combo is no longer detected
+                # (i.e., it moved to a column without SLA violation)
+                remaining = [k for k in current_items if k[0] == work_item_id]
+                if not remaining:
+                    self._detected_items.discard(item_key)
+                    self._logger.debug(
+                        "Cleaned up SLA detection for work item %s (moved to different column)",
+                        work_item_id,
+                    )
