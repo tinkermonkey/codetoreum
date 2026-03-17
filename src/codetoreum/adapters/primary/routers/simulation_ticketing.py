@@ -16,9 +16,11 @@ from pydantic import BaseModel, Field
 
 from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
+from codetoreum.domain.board_workflow_template import ColumnType
 from codetoreum.domain.work_item import WorkItemPriority
 from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.ports.output.board_service import MovedByType
+from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +155,7 @@ class SimBoardHistoryResponse(BaseModel):
 def create_simulation_ticketing_router(
     ticket_adapter: InMemoryTicketAdapter,
     board_adapter: MockBoardAdapter,
+    workflow_config_service: IWorkflowConfigService,
 ) -> APIRouter:
     """
     Create the simulation ticketing router.
@@ -164,6 +167,7 @@ def create_simulation_ticketing_router(
     Args:
         ticket_adapter: In-memory ticket system adapter
         board_adapter: Mock board adapter
+        workflow_config_service: Workflow configuration service for finding proper staging columns
 
     Returns:
         Configured APIRouter for simulation ticketing
@@ -172,6 +176,65 @@ def create_simulation_ticketing_router(
         prefix="/api/v2/simulation/ticketing",
         tags=["simulation-ticketing"],
     )
+
+    # =====================================================================
+    # Helper Functions
+    # =====================================================================
+
+    async def _find_staging_column(project_id: str, board_id: str, board: Any) -> str:
+        """
+        Find the appropriate staging column for a board.
+
+        Staging columns are MANUAL columns (type=MANUAL) used as entry points
+        for newly created work items. In a properly configured board workflow:
+        - First column is typically the staging column (e.g., "Backlog")
+        - It should be MANUAL type (no agent trigger)
+        - It should NOT be a pipeline_trigger_column (avoid unintended lock acquisition)
+
+        If workflow template is available, uses it to validate and find the column.
+        Falls back to first column if workflow template is not found.
+
+        Args:
+            project_id: Project ID containing the board
+            board_id: Board ID to find staging column for
+            board: ProjectBoard object containing column information
+
+        Returns:
+            Name of the staging column
+
+        Raises:
+            ValueError: If board has no columns
+        """
+        if not board.columns:
+            msg = f"Board {board_id} has no columns"
+            raise ValueError(msg)
+
+        # Try to get workflow template for the board to validate column properties
+        workflow_template = await workflow_config_service.get_board_workflow_template(board_id)
+
+        if workflow_template:
+            # Find first MANUAL column (proper staging column)
+            # MANUAL columns have no agent and don't trigger pipeline lock
+            staging_columns = [
+                col for col in workflow_template.columns
+                if col.type == ColumnType.MANUAL
+            ]
+            if staging_columns:
+                # Return first MANUAL column by position
+                staging_col = min(staging_columns, key=lambda c: c.position)
+                return staging_col.name
+
+            # If no MANUAL column found, log warning and fall back to first column
+            logger.warning(
+                "No MANUAL columns found in workflow template for board %s. "
+                "Using first column as staging column. This may trigger unintended automation.",
+                board_id,
+                extra={"board_id": board_id, "project_id": project_id},
+            )
+
+        # Fallback: use first column if no workflow template available or if no MANUAL columns
+        # First column is usually the staging/entry point (e.g., "Backlog")
+        return board.columns[0].name
 
     # =====================================================================
     # Issue Endpoints
@@ -216,17 +279,12 @@ def create_simulation_ticketing_router(
             board_adapter.current_project = request.project_id
 
             try:
-                # Get the board to find a staging column (preferably first manual column)
+                # Get the board to validate it has columns
                 board = await board_adapter.get_board(request.project_id, request.board_id)
 
-                # Validate board has columns
-                if not board.columns:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Board {request.board_id} has no columns",
-                    )
-
-                staging_column = board.columns[0].name  # First column is usually manual/staging
+                # Find the appropriate staging column (preferably a MANUAL column that won't trigger automation)
+                # This validates that the board has columns and finds the best staging column
+                staging_column = await _find_staging_column(request.project_id, request.board_id, board)
 
                 # Place item in staging column first
                 board_adapter.add_item_to_column(request.board_id, staging_column, work_item.id)

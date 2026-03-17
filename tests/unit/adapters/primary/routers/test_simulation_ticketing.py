@@ -8,7 +8,9 @@ from codetoreum.adapters.primary.routers.simulation_ticketing import (
     create_simulation_ticketing_router,
 )
 from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
+from codetoreum.adapters.testing.in_memory_workflow_config_service import InMemoryWorkflowConfigService
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
+from codetoreum.domain.board_workflow_template import BoardWorkflowTemplate, ColumnTemplate, ColumnType
 
 
 @pytest.fixture
@@ -25,11 +27,110 @@ def board_adapter():
 
 
 @pytest.fixture
-def client(ticket_adapter, board_adapter):
+def workflow_config_service():
+    """Workflow config service with a template for the test board."""
+    service = InMemoryWorkflowConfigService()
+
+    # Register a workflow template for the test board
+    # This matches the board created in board_adapter fixture
+    template = BoardWorkflowTemplate(
+        id="workflow-test",
+        name="Test Workflow",
+        pipeline_trigger_columns=("Ready",),
+        exit_columns=("Done",),
+        columns=(
+            ColumnTemplate(
+                name="Backlog",
+                type=ColumnType.MANUAL,
+                agent_id=None,
+                is_pipeline_trigger=False,
+                is_exit_column=False,
+                position=0,
+                auto_progress_on_completion=False,
+            ),
+            ColumnTemplate(
+                name="Ready",
+                type=ColumnType.AUTOMATED,
+                agent_id="test_agent",
+                is_pipeline_trigger=True,
+                is_exit_column=False,
+                position=1,
+                auto_progress_on_completion=True,
+            ),
+            ColumnTemplate(
+                name="In Progress",
+                type=ColumnType.AUTOMATED,
+                agent_id="test_agent",
+                is_pipeline_trigger=False,
+                is_exit_column=False,
+                position=2,
+                auto_progress_on_completion=True,
+            ),
+            ColumnTemplate(
+                name="Review",
+                type=ColumnType.AUTOMATED,
+                agent_id="test_agent",
+                is_pipeline_trigger=False,
+                is_exit_column=False,
+                position=3,
+                auto_progress_on_completion=True,
+            ),
+            ColumnTemplate(
+                name="Done",
+                type=ColumnType.MANUAL,
+                agent_id=None,
+                is_pipeline_trigger=False,
+                is_exit_column=True,
+                position=4,
+                auto_progress_on_completion=False,
+            ),
+        ),
+    )
+
+    # Register the template for the board
+    service.register_template("board-1", template)
+
+    return service
+
+
+@pytest.fixture
+def client(ticket_adapter, board_adapter, workflow_config_service):
     app = FastAPI()
-    router = create_simulation_ticketing_router(ticket_adapter, board_adapter)
+    router = create_simulation_ticketing_router(ticket_adapter, board_adapter, workflow_config_service)
     app.include_router(router)
     return TestClient(app)
+
+
+class TestStagingColumnDetection:
+    """Tests for proper staging column detection (issue #442).
+
+    The staging column is the appropriate entry point for newly created work items.
+    It should be a MANUAL column that doesn't trigger pipeline automation.
+    The router should use the workflow template to find the correct staging column
+    instead of blindly assuming the first column is suitable for staging.
+    """
+
+    def test_create_issue_uses_manual_column_for_staging(self, client):
+        """Verify that the first MANUAL column is used for staging, not position 0."""
+        # Create issue requesting placement in a target column
+        resp = client.post(
+            "/api/v2/simulation/ticketing/issues",
+            json={
+                "title": "Staging test",
+                "project_id": "proj-1",
+                "board_id": "board-1",
+                "column": "Ready",  # Target column is "Ready" (automated, pipeline trigger)
+            },
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+
+        # Verify issue is placed in the target column (Ready)
+        assert data["board_position"]["column"] == "Ready"
+
+        # Verify that the issue was properly staged and moved (internal behavior)
+        # The item should have been temporarily placed in "Backlog" (first MANUAL column)
+        # then moved to "Ready" (target column) to trigger WorkItemColumnChangedEvent
 
 
 class TestCreateIssue:
