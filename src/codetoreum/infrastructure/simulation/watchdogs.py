@@ -163,7 +163,7 @@ class StaleLockWatchdog:
                         work_item_id=state.lock_holder,
                         lock_acquired_at=state.lock_acquired_at.isoformat(),
                     )
-                    await self._event_emitter.emit(stale_event)
+                    self._event_emitter.emit(stale_event)
 
                     # Force-release the stale lock
                     try:
@@ -311,7 +311,7 @@ class ExecutionTimeoutWatchdog:
                     timeout_seconds=exec_info.timeout_seconds,
                     started_at=exec_info.started_at.isoformat(),
                 )
-                await self._event_emitter.emit(timeout_event)
+                self._event_emitter.emit(timeout_event)
 
                 # Cancel the stuck task
                 try:

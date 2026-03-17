@@ -22,9 +22,14 @@ def simulation_clock():
 
 @pytest.fixture
 def mock_event_emitter():
-    """Create mock event emitter."""
-    emitter = AsyncMock()
-    emitter.emit = AsyncMock()
+    """Create mock event emitter.
+
+    Note: emit() is synchronous (returns None), so we use a regular MagicMock
+    instead of AsyncMock. The tests were previously using AsyncMock which masked
+    the actual synchronous signature of IEventEmitter.emit().
+    """
+    emitter = MagicMock()
+    emitter.emit = MagicMock()
     return emitter
 
 
