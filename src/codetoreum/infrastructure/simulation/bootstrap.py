@@ -26,8 +26,9 @@ dependency injection.
 
 import asyncio
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
+from enum import Enum
 from typing import Any
 
 from fastapi import FastAPI
@@ -187,6 +188,51 @@ from codetoreum.ports.output.failed_event_store import IFailedEventStore
 logger = logging.getLogger(__name__)
 
 
+class BootstrapPhase(Enum):
+    """Bootstrap phases that can fail in degraded mode."""
+
+    AUTO_ADVANCE = "auto_advance"
+    STALE_LOCK_WATCHDOG = "stale_lock_watchdog"
+    EXECUTION_TIMEOUT_WATCHDOG = "execution_timeout_watchdog"
+    SLA_EXPIRY_WATCHDOG = "sla_expiry_watchdog"
+
+
+@dataclass
+class BootstrapDegradedModeState:
+    """Tracks which bootstrap phases failed and why.
+
+    When critical phases fail (e.g., watchdogs), the bootstrap continues but
+    marks these failures so callers can detect degraded mode and decide whether
+    to proceed or fail.
+    """
+
+    failed_phases: dict[BootstrapPhase, str] = field(default_factory=dict)
+
+    def mark_failed(self, phase: BootstrapPhase, error: str) -> None:
+        """Mark a phase as failed with the error message."""
+        self.failed_phases[phase] = error
+
+    @property
+    def is_degraded(self) -> bool:
+        """True if any phases failed."""
+        return bool(self.failed_phases)
+
+    @property
+    def failed_phase_names(self) -> list[str]:
+        """List of failed phase names."""
+        return [phase.value for phase in self.failed_phases.keys()]
+
+    def get_summary(self) -> str:
+        """Get human-readable summary of failures."""
+        if not self.is_degraded:
+            return "Bootstrap completed successfully (no degraded mode)"
+
+        lines = ["Bootstrap running in degraded mode:"]
+        for phase, error in self.failed_phases.items():
+            lines.append(f"  - {phase.value}: {error}")
+        return "\n".join(lines)
+
+
 @dataclass
 class SimulationAdapters:
     """Container for all simulation adapters.
@@ -335,12 +381,39 @@ class SimulationApplicationBootstrap:
 
         # Internal state
         self._is_setup = False
+        self._degraded_mode = BootstrapDegradedModeState()
         self._adapter_factory: AdapterFactory | None = None
         self._engine: SimulationEngine | None = None
         self._board_event_handler: BoardColumnEventHandler | None = None
         self._stale_lock_watchdog: StaleLockWatchdog | None = None
         self._execution_timeout_watchdog: ExecutionTimeoutWatchdog | None = None
         self._sla_expiry_watchdog: SLAExpiryWatchdog | None = None
+
+    @property
+    def is_degraded(self) -> bool:
+        """
+        Check if bootstrap is running in degraded mode.
+
+        Degraded mode occurs when critical phases fail (watchdogs, auto-advance, etc.)
+        but the bootstrap continues to allow testing/debugging.
+
+        Callers MUST check this property after setup() completes successfully
+        to determine if the system is operating with reduced functionality.
+
+        Returns:
+            True if any critical phase failed; False if setup is fully healthy.
+        """
+        return self._degraded_mode.is_degraded
+
+    @property
+    def degraded_mode_state(self) -> BootstrapDegradedModeState:
+        """
+        Get detailed degraded mode state.
+
+        Returns the full state including which phases failed and why.
+        Only relevant if is_degraded is True.
+        """
+        return self._degraded_mode
 
     async def setup(self) -> FastAPI:
         """
@@ -354,15 +427,25 @@ class SimulationApplicationBootstrap:
         - Phase 4: Create ports (16 input port implementations)
         - Phase 5: Create FastAPI app (wire all ports to API endpoints, register handlers)
         - Phase 6: Conditionally start auto-advance clock (if configured)
+        - Phase 6b: Register stale lock watchdog (deadlock prevention)
+        - Phase 6c: Register execution timeout watchdog (runaway agent prevention)
+        - Phase 6d: Register SLA expiry watchdog (compliance enforcement)
 
         Infrastructure is created before adapters to enable causal linking via event bus subscriptions.
-        Auto-advance is started after all event handlers are registered to ensure tick-driven events have handlers.
+        Auto-advance and watchdogs are started after all event handlers are registered to ensure
+        tick-driven events have handlers.
+
+        **DEGRADED MODE**: If phases 6/6b/6c/6d fail, the bootstrap continues to allow testing
+        and debugging, but logs errors and marks components as degraded. Callers MUST check the
+        `is_degraded` property after setup() returns successfully to determine if critical
+        functionality is missing.
 
         Returns:
-            Fully configured FastAPI application
+            Fully configured FastAPI application (check `is_degraded` property for health status)
 
         Raises:
-            RuntimeError: If already set up or if setup fails
+            RuntimeError: If already set up or if core phases 0-5 fail (degraded mode is only
+                        for phases 6+)
         """
         if self._is_setup:
             message = "Bootstrap already set up"
@@ -423,19 +506,24 @@ class SimulationApplicationBootstrap:
                     )
                     await self._engine.start_auto_advance()
                 except RuntimeError as e:
-                    # If auto-advance is already running, log warning and continue
+                    # If auto-advance is already running, log warning and continue in degraded mode
+                    error_msg = f"Auto-advance already running or failed to start: {e}"
                     logger.warning(
-                        f"Auto-advance already running or failed to start: {e}",
+                        error_msg,
                         extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
                     )
+                    self._degraded_mode.mark_failed(BootstrapPhase.AUTO_ADVANCE, str(e))
                 except Exception as e:
+                    # Mark as degraded and log with full context
+                    error_msg = f"Unexpected error starting auto-advance: {e}"
                     logger.error(
-                        f"Unexpected error starting auto-advance: {e}",
+                        error_msg,
                         exc_info=True,
                         extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
                     )
+                    self._degraded_mode.mark_failed(BootstrapPhase.AUTO_ADVANCE, str(e))
                     # Continue without auto-advance rather than crashing the server
-                    logger.info("Continuing server startup without auto-advance")
+                    logger.info("Continuing server startup in degraded mode without auto-advance")
 
             # Phase 6b: Register stale lock watchdog
             # Must come after auto-advance starts so it can schedule callbacks with the clock
@@ -451,13 +539,19 @@ class SimulationApplicationBootstrap:
                     self._stale_lock_watchdog.start()
                     logger.info("Stale lock watchdog registered and started")
                 except Exception as e:
+                    # Mark as degraded - stale lock detection is critical for deadlock prevention
+                    error_msg = f"Failed to register stale lock watchdog: {e}"
                     logger.error(
-                        f"Failed to register stale lock watchdog: {e}",
+                        error_msg,
                         exc_info=True,
                         extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
                     )
+                    self._degraded_mode.mark_failed(BootstrapPhase.STALE_LOCK_WATCHDOG, str(e))
                     # Continue without watchdog rather than crashing the server
-                    logger.info("Continuing server startup without stale lock watchdog")
+                    logger.warning(
+                        "Continuing server startup in degraded mode without stale lock watchdog. "
+                        "Pipeline may deadlock if locks become stale."
+                    )
 
             # Phase 6c: Register execution timeout watchdog
             # Must come after auto-advance starts and ExecutionServiceAgentExecutor is initialized
@@ -485,13 +579,19 @@ class SimulationApplicationBootstrap:
                     self._execution_timeout_watchdog.start()
                     logger.info("Execution timeout watchdog registered and started")
                 except Exception as e:
+                    # Mark as degraded - execution timeout detection is critical for runaway prevention
+                    error_msg = f"Failed to register execution timeout watchdog: {e}"
                     logger.error(
-                        f"Failed to register execution timeout watchdog: {e}",
+                        error_msg,
                         exc_info=True,
                         extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
                     )
+                    self._degraded_mode.mark_failed(BootstrapPhase.EXECUTION_TIMEOUT_WATCHDOG, str(e))
                     # Continue without watchdog rather than crashing the server
-                    logger.info("Continuing server startup without execution timeout watchdog")
+                    logger.warning(
+                        "Continuing server startup in degraded mode without execution timeout watchdog. "
+                        "Agents may run indefinitely if they hang."
+                    )
 
             # Phase 6d: Register SLA expiry watchdog
             # Must come after auto-advance starts and all adapters are initialized
@@ -508,16 +608,32 @@ class SimulationApplicationBootstrap:
                     self._sla_expiry_watchdog.start()
                     logger.info("SLA expiry watchdog registered and started")
                 except Exception as e:
+                    # Mark as degraded - SLA enforcement is critical for compliance
+                    error_msg = f"Failed to register SLA expiry watchdog: {e}"
                     logger.error(
-                        f"Failed to register SLA expiry watchdog: {e}",
+                        error_msg,
                         exc_info=True,
                         extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
                     )
+                    self._degraded_mode.mark_failed(BootstrapPhase.SLA_EXPIRY_WATCHDOG, str(e))
                     # Continue without watchdog rather than crashing the server
-                    logger.info("Continuing server startup without SLA expiry watchdog")
+                    logger.warning(
+                        "Continuing server startup in degraded mode without SLA expiry watchdog. "
+                        "SLA violations will not be detected."
+                    )
 
             self._is_setup = True
-            logger.info("Simulation bootstrap completed successfully")
+
+            # Log degraded mode status before returning
+            if self.is_degraded:
+                logger.warning(self._degraded_mode.get_summary())
+                logger.warning(
+                    "Bootstrap completed in DEGRADED MODE with %d critical failures. "
+                    "Check is_degraded property and degraded_mode_state for details.",
+                    len(self._degraded_mode.failed_phases),
+                )
+            else:
+                logger.info("Simulation bootstrap completed successfully (fully healthy)")
 
             return self.app
 
