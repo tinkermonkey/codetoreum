@@ -87,14 +87,12 @@ class WorkItemPosition:
         work_item_id: Unique identifier of the work item
         column_name: Name of the column containing the item
         position: Position within the column (0 = top/first)
-        current_column: Current column name (for SLA tracking)
         entered_column_at: Timestamp when item entered current column (for SLA tracking)
     """
 
     work_item_id: str
     column_name: str
     position: int
-    current_column: str | None = None
     entered_column_at: "datetime | None" = None  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
@@ -116,13 +114,7 @@ class WorkItemPosition:
             msg = "position must be a non-negative integer"
             raise ValueError(msg)
 
-        # Validate optional SLA tracking fields
-        if self.current_column is not None and (
-            not isinstance(self.current_column, str) or not self.current_column
-        ):
-            msg = "current_column must be None or a non-empty string"
-            raise ValueError(msg)
-
+        # Validate optional SLA tracking field
         if self.entered_column_at is not None:
             from datetime import datetime
             if not isinstance(self.entered_column_at, datetime):

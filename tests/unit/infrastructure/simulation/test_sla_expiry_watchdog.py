@@ -37,9 +37,9 @@ def event_emitter() -> CapturingMockEventEmitter:
 
 
 @pytest.fixture
-def board_adapter(event_emitter) -> MockBoardAdapter:
+def board_adapter(event_emitter, clock) -> MockBoardAdapter:
     """Create a mock board adapter for testing."""
-    adapter = MockBoardAdapter(event_emitter)
+    adapter = MockBoardAdapter(event_emitter, clock)
     adapter.current_project = "proj-1"
     return adapter
 
@@ -109,7 +109,7 @@ def workflow_config_service() -> InMemoryWorkflowConfigService:
         ),
     )
 
-    service.save_template(template)
+    service.register_template("board-1", template)
     return service
 
 

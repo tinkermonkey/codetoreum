@@ -457,13 +457,13 @@ class SLAExpiryWatchdog:
         for board in all_boards:
             # Get workflow template for this board to check SLA config
             try:
-                template = await self._workflow_config_service.get_template(
-                    board.workflow_template_id
+                template = await self._workflow_config_service.get_board_workflow_template(
+                    board.id
                 )
             except Exception:
                 self._logger.error(
-                    "Failed to retrieve workflow template %s",
-                    board.workflow_template_id,
+                    "Failed to retrieve workflow template for board %s",
+                    board.id,
                     exc_info=True,
                 )
                 continue
@@ -486,12 +486,12 @@ class SLAExpiryWatchdog:
 
             # Check each item's time in column against SLA
             for item in items:
-                if not item.current_column or not item.entered_column_at:
+                if not item.column_name or not item.entered_column_at:
                     # Item not yet placed in column or no entry time
                     continue
 
                 # Get column configuration
-                column_config = template.get_column_config(item.current_column)
+                column_config = template.get_column_config(item.column_name)
                 if not column_config or not column_config.sla_seconds:
                     # Column has no SLA configured
                     continue
@@ -503,7 +503,7 @@ class SLAExpiryWatchdog:
 
                 if elapsed_seconds > sla_seconds:
                     # Item has exceeded SLA threshold
-                    detection_key = (item.id, board.project_id, board.id)
+                    detection_key = (item.work_item_id, board.project_id, board.id)
 
                     # Emit only once per item per SLA expiry
                     if detection_key not in self._detected_items:
@@ -511,8 +511,8 @@ class SLAExpiryWatchdog:
 
                         self._logger.warning(
                             "SLA exceeded: work item %s in column '%s' (elapsed: %ds, threshold: %ds)",
-                            item.id,
-                            item.current_column,
+                            item.work_item_id,
+                            item.column_name,
                             elapsed_seconds,
                             sla_seconds,
                         )
@@ -522,10 +522,10 @@ class SLAExpiryWatchdog:
                             type="column.sla_exceeded",
                             timestamp=now.isoformat(),
                             source="sla_expiry_watchdog",
-                            work_item_id=item.id,
+                            work_item_id=item.work_item_id,
                             project_id=board.project_id,
                             board_id=board.id,
-                            column_name=item.current_column,
+                            column_name=item.column_name,
                             elapsed_seconds=elapsed_seconds,
                             sla_threshold_seconds=sla_seconds,
                             entered_at=item.entered_column_at.isoformat(),

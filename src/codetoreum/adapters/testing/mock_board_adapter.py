@@ -92,11 +92,15 @@ class MockBoardAdapter(IBoardService):
         assert history[0].moved_by == MovedByType.HUMAN
     """
 
-    def __init__(self, event_emitter: IEventEmitter | None = None) -> None:
+    def __init__(
+        self, event_emitter: IEventEmitter | None = None, clock: "SimulationClock | None" = None
+    ) -> None:
         """Initialize the board adapter.
 
         Args:
             event_emitter: Optional IEventEmitter for emitting domain events
+            clock: Optional SimulationClock for deterministic time in tests
+                   If provided, timestamps use simulation clock; otherwise uses wall clock
         """
         self._boards: dict[str, ProjectBoard] = {}  # key: "project_id:board_id"
         self._item_positions: dict[str, tuple[str, str, int]] = {}  # item_id -> (board_id, column_name, position)
@@ -107,6 +111,7 @@ class MockBoardAdapter(IBoardService):
         self._lock = threading.Lock()  # Thread safety for concurrent operations
         self._event_listeners: dict[str, list] = {}  # Event type -> list of handlers
         self._event_emitter = event_emitter
+        self._clock = clock
         self.current_project: str | None = None
         self.current_board: str | None = None
 
@@ -235,7 +240,13 @@ class MockBoardAdapter(IBoardService):
                 msg = "Work item"
                 raise ResourceNotFoundError(msg, work_item_id)
             _, column_name, position = self._item_positions[work_item_id]
-            return WorkItemPosition(work_item_id=work_item_id, column_name=column_name, position=position)
+            entered_at = self._item_column_entries.get(work_item_id)
+            return WorkItemPosition(
+                work_item_id=work_item_id,
+                column_name=column_name,
+                position=position,
+                entered_column_at=entered_at,
+            )
 
     # ===== Command Operations =====
 
@@ -769,7 +780,6 @@ class MockBoardAdapter(IBoardService):
                             work_item_id=work_item_id,
                             column_name=column.name,
                             position=position,
-                            current_column=column.name,
                             entered_column_at=entered_at,
                         )
                     )
@@ -778,12 +788,18 @@ class MockBoardAdapter(IBoardService):
 
     # ===== Helper Methods =====
 
-    @staticmethod
-    def _get_iso_timestamp() -> str:
+    def _get_iso_timestamp(self) -> str:
         """Get current time as ISO 8601 timestamp."""
+        if self._clock:
+            return self._clock.now().isoformat()
         return datetime.now(UTC).isoformat()
 
-    @staticmethod
-    def _get_utc_datetime() -> datetime:
-        """Get current time as UTC datetime."""
+    def _get_utc_datetime(self) -> datetime:
+        """Get current time as UTC datetime.
+
+        Uses simulation clock if available (for deterministic testing),
+        otherwise uses wall clock time.
+        """
+        if self._clock:
+            return self._clock.now()
         return datetime.now(UTC)
