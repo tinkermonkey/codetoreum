@@ -8,10 +8,10 @@ import pytest
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
 )
-from codetoreum.infrastructure.simulation.watchdogs import StaleLockWatchdog
-from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
-from codetoreum.domain.events.lock_events import LockStaleDetectedEvent
 from codetoreum.application.pipeline_lock_service import LockStatus
+from codetoreum.domain.events.lock_events import LockStaleDetectedEvent
+from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
+from codetoreum.infrastructure.simulation.watchdogs import StaleLockWatchdog
 
 
 @pytest.fixture
