@@ -27,7 +27,9 @@ from codetoreum.ports.output.board_service import MovedByType
 @pytest.fixture
 def clock() -> SimulationClock:
     """Create a test simulation clock."""
-    return SimulationClock(start_time=datetime(2025, 1, 14, 10, 0, 0, tzinfo=UTC))
+    clock = SimulationClock()
+    clock.start_at(datetime(2025, 1, 14, 10, 0, 0, tzinfo=UTC))
+    return clock
 
 
 @pytest.fixture
@@ -288,9 +290,9 @@ async def test_sla_error_handling(
     board_adapter, workflow_config_service, event_emitter, clock, watchdog
 ):
     """Test watchdog continues on error (fail-safe pattern)."""
-    # Create a broken workflow config service that raises on get_template
+    # Create a broken workflow config service that raises on get_board_workflow_template
     class BrokenConfigService:
-        async def get_template(self, template_id):
+        async def get_board_workflow_template(self, board_id):
             raise RuntimeError("Service error")
 
     # Replace workflow config in watchdog
