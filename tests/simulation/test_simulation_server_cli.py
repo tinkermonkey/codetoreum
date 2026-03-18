@@ -45,12 +45,6 @@ class TestSimulationServerCLI:
         yield bootstrap
         await bootstrap.teardown()
 
-    @pytest.fixture
-    def test_client(self, bootstrap):
-        """Create a TestClient for the bootstrapped app with proper cleanup."""
-        with TestClient(bootstrap.app) as client:
-            yield client
-
     def test_get_scenario_file_path_default(self):
         """Test getting built-in scenario file path."""
         scenario_file = get_scenario_file_path("default")
