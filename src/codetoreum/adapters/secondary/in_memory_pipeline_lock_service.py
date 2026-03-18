@@ -25,6 +25,7 @@ class LockState:
         lock_holder: ID of the entity holding the lock, or None
         lock_acquired_at: When the lock was acquired, or None
     """
+
     lock_holder: str | None
     lock_acquired_at: datetime | None
 
