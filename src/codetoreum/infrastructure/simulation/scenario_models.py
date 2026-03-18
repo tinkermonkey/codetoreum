@@ -109,6 +109,11 @@ class ScenarioBoardModel(BaseModel):
     board_id: str = Field(..., description="Board ID")
     board_name: str = Field(..., description="Board display name")
     columns: list[str] = Field(..., description="Column names in order", min_length=1)
+    sla_seconds_by_column: dict[str, int] = Field(
+        default_factory=dict,
+        description="Optional SLA thresholds in seconds for each column name. "
+        "If not specified, automated columns default to 3600 seconds (1 hour).",
+    )
 
 
 class ScenarioBoardItemPlacementModel(BaseModel):

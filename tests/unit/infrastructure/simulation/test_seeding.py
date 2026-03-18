@@ -414,6 +414,86 @@ projects: []
         assert isinstance(created, CreatedItems)
         assert len(created.projects) == 1
 
+    # =========================================================================
+    # Workflow Template Tests
+    # =========================================================================
+
+    @pytest.mark.asyncio
+    async def test_register_workflow_template_with_default_sla(self, seeder):
+        """Test registering workflow template with default SLA values."""
+        await seeder.create_project("test-project")
+
+        seeder.register_workflow_template(
+            board_id="board-1",
+            column_names=["Backlog", "Ready", "In Progress", "Review", "Done"],
+            agent_types=["architect", "coder", "tester"],
+        )
+
+        # Retrieve template to verify SLA values
+        template = seeder.bootstrap.adapters.workflow_config._templates.get("board-1")
+        assert template is not None
+
+        # Verify automated columns have default 3600 second SLA
+        for col in template.columns:
+            if col.type.value == "automated":
+                assert col.sla_seconds == 3600, f"Column {col.name} should have 3600s SLA"
+
+    @pytest.mark.asyncio
+    async def test_register_workflow_template_with_custom_sla(self, seeder):
+        """Test registering workflow template with custom SLA values."""
+        await seeder.create_project("test-project")
+
+        custom_sla = {
+            "Ready": 1800,  # 30 minutes
+            "In Progress": 7200,  # 2 hours
+            "Review": 1200,  # 20 minutes
+        }
+
+        seeder.register_workflow_template(
+            board_id="board-1",
+            column_names=["Backlog", "Ready", "In Progress", "Review", "Done"],
+            agent_types=["architect", "coder", "tester"],
+            sla_seconds_by_column=custom_sla,
+        )
+
+        # Retrieve template to verify SLA values
+        template = seeder.bootstrap.adapters.workflow_config._templates.get("board-1")
+        assert template is not None
+
+        # Verify columns have correct SLA values
+        column_dict = {col.name: col for col in template.columns}
+        assert column_dict["Ready"].sla_seconds == 1800
+        assert column_dict["In Progress"].sla_seconds == 7200
+        assert column_dict["Review"].sla_seconds == 1200
+
+    @pytest.mark.asyncio
+    async def test_register_workflow_template_mixed_sla(self, seeder):
+        """Test SLA values can be mixed (custom and default)."""
+        await seeder.create_project("test-project")
+
+        # Only specify SLA for some columns
+        partial_sla = {"Ready": 2400}  # 40 minutes
+
+        seeder.register_workflow_template(
+            board_id="board-1",
+            column_names=["Backlog", "Ready", "In Progress", "Review", "Done"],
+            agent_types=["architect", "coder", "tester"],
+            sla_seconds_by_column=partial_sla,
+        )
+
+        # Retrieve template to verify SLA values
+        template = seeder.bootstrap.adapters.workflow_config._templates.get("board-1")
+        assert template is not None
+
+        # Verify columns have correct SLA values
+        column_dict = {col.name: col for col in template.columns}
+        assert column_dict["Ready"].sla_seconds == 2400
+        # In Progress should have default SLA (3600)
+        assert column_dict["In Progress"].sla_seconds == 3600
+        # Manual columns (Backlog, Done) should have None
+        assert column_dict["Backlog"].sla_seconds is None
+        assert column_dict["Done"].sla_seconds is None
+
 
 class TestCreatedItems:
     """Test cases for CreatedItems tracking."""
