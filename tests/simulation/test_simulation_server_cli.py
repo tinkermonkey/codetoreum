@@ -245,24 +245,35 @@ work_items:
 
             response = client.post("/api/v2/work-items", json=work_item_data)
 
-            # Endpoint should succeed or return 404 if not implemented
-            # Must not return 422 (unprocessable entity)
-            assert response.status_code in [200, 201, 404], \
-                f"Expected 200/201/404, got {response.status_code}: {response.text}"
+            # Endpoint is fully implemented in bootstrap - expect 201
+            assert response.status_code == 201, \
+                f"Expected 201 Created, got {response.status_code}: {response.text}"
+            # Verify response contains created work item
+            data = response.json()
+            assert "id" in data, "Response should contain work item ID"
+            assert data["title"] == work_item_data["title"], "Response should contain created title"
+            assert data["project_id"] == work_item_data["project_id"], "Response should contain project_id"
 
     @pytest.mark.asyncio
     async def test_websocket_connection(self, bootstrap):
         """Test WebSocket connection (if available)."""
+        from starlette.testclient import WebSocketDenialResponse
+        from starlette.websockets import WebSocketDisconnect
+
         with TestClient(bootstrap.app) as client:
             # Test WebSocket connection - expect 404 if not implemented
             try:
                 with client.websocket_connect("/ws") as websocket:
                     # Connection successful
                     assert websocket is not None
-            except Exception as e:
-                # WebSocket endpoint not implemented is acceptable
-                # But we must verify it's 404, not a different error
-                assert "404" in str(e) or "WebSocket" in type(e).__name__
+            except WebSocketDenialResponse as e:
+                # WebSocket endpoint not implemented returns 404 denial
+                assert e.status_code == 404, \
+                    f"Expected WebSocket denial with 404, got {e.status_code}"
+            except WebSocketDisconnect:
+                # WebSocket endpoint not implemented raises disconnect
+                # This is acceptable - it means the route doesn't exist
+                pass
 
     @pytest.mark.asyncio
     async def test_api_docs_available(self, bootstrap):

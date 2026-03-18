@@ -520,13 +520,11 @@ class TestAutoAdvanceBootstrap:
         assert auto_advance_task is not None
         assert auto_advance_task.done() or clock._auto_advance_task is None
 
-    async def test_auto_advance_continues_after_setup(self) -> None:
-        """Test that auto-advance clock continues ticking after bootstrap."""
-        import asyncio
+    async def test_engine_advance_deterministic(self) -> None:
+        """Test that engine.advance() deterministically advances simulation clock."""
         from datetime import timedelta
 
         config = SimulationConfig.create_fast_config("test", speed_multiplier=10.0)
-        config.time.auto_advance = True
 
         bootstrap = SimulationApplicationBootstrap(config)
         await bootstrap.setup()
@@ -538,11 +536,11 @@ class TestAutoAdvanceBootstrap:
         # Record initial time
         initial_time = clock.now()
 
-        # Directly advance the clock by 2 seconds using engine (deterministic, not wall-clock dependent)
-        # This tests that clock advancement works, independent of auto-advance task
+        # Directly advance the clock by 2 seconds using engine
+        # This verifies deterministic, non-wall-clock-dependent clock advancement
         await engine.advance(timedelta(seconds=2))
 
-        # Verify clock has advanced deterministically
+        # Verify clock has advanced exactly as requested
         current_time = clock.now()
         time_delta = current_time - initial_time
         assert time_delta == timedelta(seconds=2), \
