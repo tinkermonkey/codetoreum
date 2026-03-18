@@ -13,14 +13,6 @@ import threading
 from dataclasses import dataclass
 from typing import Any, TypeVar
 
-# Import production adapters
-from codetoreum.adapters.secondary import (
-    ClaudeCodeAdapter,
-    DockerContainerAdapter,
-    GitHubTicketAdapter,
-    GitRepositoryAdapter,
-)
-
 # Import testing adapters
 from codetoreum.adapters.testing import (
     CapturingMockEventEmitter,
@@ -57,7 +49,6 @@ from codetoreum.adapters.testing import (
 from codetoreum.adapters.secondary import (
     CachedConfigStore,
     ClaudeCodeAdapter,
-    ConfigurableIdentityService,
     DockerContainerAdapter,
     ElasticsearchConfigStorage,
     GitHubBoardAdapter,
@@ -117,6 +108,7 @@ try:
     )
 except ImportError:
     ProductionRepairCycleAdapter = None  # type: ignore
+from codetoreum.infrastructure.adapters.registry_base import AdapterCredentialRequirement
 from codetoreum.infrastructure.adapters.registries import (
     ActiveWorkflowRunRegistryRegistry,
     AgentExecutorRegistry,
@@ -158,11 +150,36 @@ from codetoreum.infrastructure.resilience import (
     ResilienceFactory,
     ServiceResilienceConfig,
 )
+from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
+from codetoreum.ports.output.agent_executor import IAgentExecutor
+from codetoreum.ports.output.agent_repository import IAgentRepository
+from codetoreum.ports.output.board_service import IBoardService
+from codetoreum.ports.output.code_review_service import ICodeReviewService
+from codetoreum.ports.output.config_store import IConfigStore
 from codetoreum.ports.output.container import IContainer
+from codetoreum.ports.output.container_recovery import IAgentContainerRecoveryService
+from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
+from codetoreum.ports.output.encryption_service import IEncryptionService
+from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.event_store import IEventStore
+from codetoreum.ports.output.identity_service import IIdentityService
 from codetoreum.ports.output.llm_provider import ILLMProvider
+from codetoreum.ports.output.message_broker import IMessageBroker
+from codetoreum.ports.output.metrics import IMetrics
+from codetoreum.ports.output.notifier import INotifier
+from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
+from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
+from codetoreum.ports.output.project_manager_service import IProjectManagerService
+from codetoreum.ports.output.repair_cycle_checkpoint_store import IRepairCycleCheckpointStore
+from codetoreum.ports.output.repair_cycle_service import IRepairCycle
 from codetoreum.ports.output.repository import IRepository
+from codetoreum.ports.output.review_cycle_service import IReviewCycle
+from codetoreum.ports.output.storage import IStorage
 from codetoreum.ports.output.ticket_system import ITicketSystem
+from codetoreum.ports.output.version_control_service import IVersionControlService
+from codetoreum.ports.output.work_item_branch_tracker import IWorkItemBranchTracker
+from codetoreum.ports.output.work_item_service import IWorkItemService
+from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 logger = logging.getLogger(__name__)
 
@@ -252,6 +269,10 @@ class AdapterFactory:
             description="GitHub Issues and Projects integration",
             version="1.0.0",
             tags=["production", "github", "issues"],
+            config_schema=AdapterCredentialRequirement(
+                env_vars=("GITHUB_TOKEN", "GITHUB_ORG"),
+                description="GitHub personal access token with repo scope",
+            ),
             set_as_default=True,
         )
         self._ticket_system_registry.register(
@@ -260,6 +281,10 @@ class AdapterFactory:
             description="In-memory ticket system for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
         )
 
         # LLM Provider Adapters
@@ -269,6 +294,10 @@ class AdapterFactory:
             description="Claude Code CLI integration",
             version="1.0.0",
             tags=["production", "claude", "anthropic"],
+            config_schema=AdapterCredentialRequirement(
+                env_vars=("CLAUDE_CODE_TOKEN",),
+                description="Claude Code authentication token",
+            ),
             set_as_default=True,
         )
         self._llm_provider_registry.register(
@@ -277,6 +306,10 @@ class AdapterFactory:
             description="Mock LLM provider for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
         )
 
         # Container Adapters
@@ -286,6 +319,10 @@ class AdapterFactory:
             description="Docker container runtime",
             version="1.0.0",
             tags=["production", "docker"],
+            config_schema=AdapterCredentialRequirement(
+                env_vars=("DOCKER_HOST",),
+                description="Docker daemon connection string",
+            ),
             set_as_default=True,
         )
         self._container_registry.register(
@@ -294,6 +331,10 @@ class AdapterFactory:
             description="Fake container adapter for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
         )
 
         # Repository Adapters
@@ -303,6 +344,10 @@ class AdapterFactory:
             description="Git repository operations",
             version="1.0.0",
             tags=["production", "git"],
+            config_schema=AdapterCredentialRequirement(
+                env_vars=("GIT_USER", "GIT_EMAIL"),
+                description="Git user credentials for commits",
+            ),
             set_as_default=True,
         )
         self._repository_registry.register(
@@ -311,6 +356,10 @@ class AdapterFactory:
             description="In-memory repository for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
         )
 
         # Event Store Adapters
@@ -320,6 +369,10 @@ class AdapterFactory:
             description="In-memory event store",
             version="1.0.0",
             tags=["testing", "simulation", "production"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
             set_as_default=True,
         )
 
@@ -330,6 +383,10 @@ class AdapterFactory:
             description="In-memory storage for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
             set_as_default=True,
         )
 
@@ -340,6 +397,10 @@ class AdapterFactory:
             description="Mock board adapter for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
             set_as_default=True,
         )
         self._board_service_registry.register(
@@ -348,6 +409,10 @@ class AdapterFactory:
             description="GitHub Projects board adapter",
             version="1.0.0",
             tags=["production", "github"],
+            config_schema=AdapterCredentialRequirement(
+                env_vars=("GITHUB_TOKEN", "GITHUB_ORG"),
+                description="GitHub personal access token with repo scope",
+            ),
         )
 
         # Code Review Service Adapters
@@ -357,6 +422,10 @@ class AdapterFactory:
             description="GitHub code review adapter",
             version="1.0.0",
             tags=["production", "github"],
+            config_schema=AdapterCredentialRequirement(
+                env_vars=("GITHUB_TOKEN", "GITHUB_ORG"),
+                description="GitHub personal access token with repo scope",
+            ),
             set_as_default=True,
         )
         if MockCodeReviewAdapter:
@@ -366,6 +435,10 @@ class AdapterFactory:
                 description="Mock code review adapter for testing",
                 version="1.0.0",
                 tags=["testing", "simulation", "mock"],
+                config_schema=AdapterCredentialRequirement(
+                    simulation_only=True,
+                    description="Simulation-only adapter, no credentials required",
+                ),
             )
 
         # Discussion Adapter
@@ -375,6 +448,10 @@ class AdapterFactory:
             description="Mock discussion adapter for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
             set_as_default=True,
         )
         if GitHubDiscussionAdapter:
@@ -384,6 +461,10 @@ class AdapterFactory:
                 description="GitHub discussion adapter",
                 version="1.0.0",
                 tags=["production", "github"],
+                config_schema=AdapterCredentialRequirement(
+                    env_vars=("GITHUB_TOKEN", "GITHUB_ORG"),
+                    description="GitHub personal access token with repo scope",
+                ),
             )
 
         # Version Control Service Adapters
@@ -393,6 +474,10 @@ class AdapterFactory:
             description="In-memory version control for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
             set_as_default=True,
         )
 
@@ -403,6 +488,10 @@ class AdapterFactory:
             description="In-memory metrics adapter for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
             set_as_default=True,
         )
         if PrometheusMetricsAdapter:
@@ -412,6 +501,10 @@ class AdapterFactory:
                 description="Prometheus metrics adapter",
                 version="1.0.0",
                 tags=["production", "prometheus"],
+                config_schema=AdapterCredentialRequirement(
+                    env_vars=("PROMETHEUS_URL",),
+                    description="Prometheus server URL",
+                ),
             )
 
         # Notifier Adapters
@@ -421,6 +514,10 @@ class AdapterFactory:
             description="Mock notifier for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
             set_as_default=True,
         )
 
@@ -431,6 +528,10 @@ class AdapterFactory:
             description="In-memory message broker for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
             set_as_default=True,
         )
         if RedisPubSubAdapter:
@@ -440,6 +541,10 @@ class AdapterFactory:
                 description="Redis Pub/Sub message broker",
                 version="1.0.0",
                 tags=["production", "redis"],
+                config_schema=AdapterCredentialRequirement(
+                    env_vars=("REDIS_URL",),
+                    description="Redis connection string",
+                ),
             )
 
         # Config Store Adapters
@@ -449,6 +554,10 @@ class AdapterFactory:
             description="In-memory config store for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
             set_as_default=True,
         )
         self._config_store_registry.register(
@@ -457,6 +566,10 @@ class AdapterFactory:
             description="Cached config store",
             version="1.0.0",
             tags=["production", "cache"],
+            config_schema=AdapterCredentialRequirement(
+                config_keys=("database_url", "cache_ttl"),
+                description="Database configuration for config storage",
+            ),
         )
         if ElasticsearchConfigStorage:
             self._config_store_registry.register(
@@ -465,6 +578,10 @@ class AdapterFactory:
                 description="Elasticsearch configuration storage",
                 version="1.0.0",
                 tags=["production", "elasticsearch"],
+                config_schema=AdapterCredentialRequirement(
+                    env_vars=("ELASTICSEARCH_URL",),
+                    description="Elasticsearch cluster URL",
+                ),
             )
 
         # Repair Cycle Adapters
@@ -474,6 +591,10 @@ class AdapterFactory:
             description="Mock repair cycle for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
             set_as_default=True,
         )
         if ProductionRepairCycleAdapter:
@@ -492,6 +613,10 @@ class AdapterFactory:
             description="Mock review cycle for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
             set_as_default=True,
         )
 
@@ -502,6 +627,10 @@ class AdapterFactory:
             description="Mock container recovery for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
             set_as_default=True,
         )
         if DockerContainerRecoveryAdapter:
@@ -520,6 +649,10 @@ class AdapterFactory:
             description="Simple encryption adapter for testing",
             version="1.0.0",
             tags=["simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
             set_as_default=True,
         )
 
@@ -530,6 +663,10 @@ class AdapterFactory:
             description="In-memory pipeline lock service",
             version="1.0.0",
             tags=["testing", "simulation", "mock", "production"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
             set_as_default=True,
         )
 
@@ -540,6 +677,10 @@ class AdapterFactory:
             description="In-memory queue service for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
             set_as_default=True,
         )
 
@@ -550,6 +691,10 @@ class AdapterFactory:
             description="Mock project manager for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
             set_as_default=True,
         )
 
@@ -560,6 +705,10 @@ class AdapterFactory:
             description="In-memory workflow config service for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
             set_as_default=True,
         )
 
@@ -570,6 +719,10 @@ class AdapterFactory:
             description="Mock event emitter for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
             set_as_default=True,
         )
         self._event_emitter_registry.register(
@@ -578,6 +731,10 @@ class AdapterFactory:
             description="Capturing mock event emitter for assertions",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
         )
 
         # Identity Service Adapters
@@ -587,6 +744,10 @@ class AdapterFactory:
             description="Configurable identity service for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock", "production"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
             set_as_default=True,
         )
 
@@ -597,6 +758,10 @@ class AdapterFactory:
             description="Mock agent executor for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
             set_as_default=True,
         )
 
@@ -607,6 +772,10 @@ class AdapterFactory:
             description="In-memory agent repository for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
             set_as_default=True,
         )
 
@@ -617,6 +786,10 @@ class AdapterFactory:
             description="In-memory work item branch tracker for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
             set_as_default=True,
         )
 
@@ -627,6 +800,10 @@ class AdapterFactory:
             description="Mock work item service for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
             set_as_default=True,
         )
 
@@ -637,6 +814,10 @@ class AdapterFactory:
             description="In-memory checkpoint store for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
             set_as_default=True,
         )
 
@@ -647,6 +828,10 @@ class AdapterFactory:
             description="In-memory active workflow run registry for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
             set_as_default=True,
         )
 
@@ -1147,7 +1332,7 @@ class AdapterFactory:
 
         return adapter
 
-    def create_storage(self, adapter_name: str | None = None, **kwargs):
+    def create_storage(self, adapter_name: str | None = None, **kwargs) -> IStorage:
         """Create a storage adapter instance."""
         adapter_name = adapter_name or self._storage_registry.get_default_name()
         if not adapter_name:
@@ -1155,7 +1340,7 @@ class AdapterFactory:
         logger.info(f"Creating storage adapter: {adapter_name}")
         return self._storage_registry.create_instance(adapter_name, **kwargs)
 
-    def create_board_service(self, adapter_name: str | None = None, **kwargs):
+    def create_board_service(self, adapter_name: str | None = None, **kwargs) -> IBoardService:
         """Create a board service adapter instance."""
         adapter_name = adapter_name or self._board_service_registry.get_default_name()
         if not adapter_name:
@@ -1163,7 +1348,7 @@ class AdapterFactory:
         logger.info(f"Creating board service adapter: {adapter_name}")
         return self._board_service_registry.create_instance(adapter_name, **kwargs)
 
-    def create_code_review_service(self, adapter_name: str | None = None, **kwargs):
+    def create_code_review_service(self, adapter_name: str | None = None, **kwargs) -> ICodeReviewService:
         """Create a code review service adapter instance."""
         adapter_name = adapter_name or self._code_review_registry.get_default_name()
         if not adapter_name:
@@ -1171,7 +1356,7 @@ class AdapterFactory:
         logger.info(f"Creating code review service adapter: {adapter_name}")
         return self._code_review_registry.create_instance(adapter_name, **kwargs)
 
-    def create_discussion_adapter(self, adapter_name: str | None = None, **kwargs):
+    def create_discussion_adapter(self, adapter_name: str | None = None, **kwargs) -> IDiscussionAdapter:
         """Create a discussion adapter instance."""
         adapter_name = adapter_name or self._discussion_adapter_registry.get_default_name()
         if not adapter_name:
@@ -1179,7 +1364,7 @@ class AdapterFactory:
         logger.info(f"Creating discussion adapter: {adapter_name}")
         return self._discussion_adapter_registry.create_instance(adapter_name, **kwargs)
 
-    def create_version_control_service(self, adapter_name: str | None = None, **kwargs):
+    def create_version_control_service(self, adapter_name: str | None = None, **kwargs) -> IVersionControlService:
         """Create a version control service adapter instance."""
         adapter_name = adapter_name or self._version_control_registry.get_default_name()
         if not adapter_name:
@@ -1187,7 +1372,7 @@ class AdapterFactory:
         logger.info(f"Creating version control service adapter: {adapter_name}")
         return self._version_control_registry.create_instance(adapter_name, **kwargs)
 
-    def create_metrics(self, adapter_name: str | None = None, **kwargs):
+    def create_metrics(self, adapter_name: str | None = None, **kwargs) -> IMetrics:
         """Create a metrics adapter instance."""
         adapter_name = adapter_name or self._metrics_registry.get_default_name()
         if not adapter_name:
@@ -1195,7 +1380,7 @@ class AdapterFactory:
         logger.info(f"Creating metrics adapter: {adapter_name}")
         return self._metrics_registry.create_instance(adapter_name, **kwargs)
 
-    def create_notifier(self, adapter_name: str | None = None, **kwargs):
+    def create_notifier(self, adapter_name: str | None = None, **kwargs) -> INotifier:
         """Create a notifier adapter instance."""
         adapter_name = adapter_name or self._notifier_registry.get_default_name()
         if not adapter_name:
@@ -1203,7 +1388,7 @@ class AdapterFactory:
         logger.info(f"Creating notifier adapter: {adapter_name}")
         return self._notifier_registry.create_instance(adapter_name, **kwargs)
 
-    def create_message_broker(self, adapter_name: str | None = None, **kwargs):
+    def create_message_broker(self, adapter_name: str | None = None, **kwargs) -> IMessageBroker:
         """Create a message broker adapter instance."""
         adapter_name = adapter_name or self._message_broker_registry.get_default_name()
         if not adapter_name:
@@ -1211,7 +1396,7 @@ class AdapterFactory:
         logger.info(f"Creating message broker adapter: {adapter_name}")
         return self._message_broker_registry.create_instance(adapter_name, **kwargs)
 
-    def create_config_store(self, adapter_name: str | None = None, **kwargs):
+    def create_config_store(self, adapter_name: str | None = None, **kwargs) -> IConfigStore:
         """Create a config store adapter instance."""
         adapter_name = adapter_name or self._config_store_registry.get_default_name()
         if not adapter_name:
@@ -1219,7 +1404,7 @@ class AdapterFactory:
         logger.info(f"Creating config store adapter: {adapter_name}")
         return self._config_store_registry.create_instance(adapter_name, **kwargs)
 
-    def create_repair_cycle(self, adapter_name: str | None = None, **kwargs):
+    def create_repair_cycle(self, adapter_name: str | None = None, **kwargs) -> IRepairCycle:
         """Create a repair cycle adapter instance."""
         adapter_name = adapter_name or self._repair_cycle_registry.get_default_name()
         if not adapter_name:
@@ -1227,7 +1412,7 @@ class AdapterFactory:
         logger.info(f"Creating repair cycle adapter: {adapter_name}")
         return self._repair_cycle_registry.create_instance(adapter_name, **kwargs)
 
-    def create_review_cycle_service(self, adapter_name: str | None = None, **kwargs):
+    def create_review_cycle_service(self, adapter_name: str | None = None, **kwargs) -> IReviewCycle:
         """Create a review cycle service adapter instance."""
         adapter_name = adapter_name or self._review_cycle_registry.get_default_name()
         if not adapter_name:
@@ -1235,7 +1420,7 @@ class AdapterFactory:
         logger.info(f"Creating review cycle service adapter: {adapter_name}")
         return self._review_cycle_registry.create_instance(adapter_name, **kwargs)
 
-    def create_container_recovery(self, adapter_name: str | None = None, **kwargs):
+    def create_container_recovery(self, adapter_name: str | None = None, **kwargs) -> IAgentContainerRecoveryService:
         """Create a container recovery adapter instance."""
         adapter_name = adapter_name or self._container_recovery_registry.get_default_name()
         if not adapter_name:
@@ -1243,7 +1428,7 @@ class AdapterFactory:
         logger.info(f"Creating container recovery adapter: {adapter_name}")
         return self._container_recovery_registry.create_instance(adapter_name, **kwargs)
 
-    def create_encryption_service(self, adapter_name: str | None = None, **kwargs):
+    def create_encryption_service(self, adapter_name: str | None = None, **kwargs) -> IEncryptionService:
         """Create an encryption service adapter instance."""
         adapter_name = adapter_name or self._encryption_registry.get_default_name()
         if not adapter_name:
@@ -1251,7 +1436,7 @@ class AdapterFactory:
         logger.info(f"Creating encryption service adapter: {adapter_name}")
         return self._encryption_registry.create_instance(adapter_name, **kwargs)
 
-    def create_pipeline_lock_service(self, adapter_name: str | None = None, **kwargs):
+    def create_pipeline_lock_service(self, adapter_name: str | None = None, **kwargs) -> IPipelineLockService:
         """Create a pipeline lock service adapter instance."""
         adapter_name = adapter_name or self._pipeline_lock_registry.get_default_name()
         if not adapter_name:
@@ -1259,7 +1444,7 @@ class AdapterFactory:
         logger.info(f"Creating pipeline lock service adapter: {adapter_name}")
         return self._pipeline_lock_registry.create_instance(adapter_name, **kwargs)
 
-    def create_pipeline_queue_service(self, adapter_name: str | None = None, **kwargs):
+    def create_pipeline_queue_service(self, adapter_name: str | None = None, **kwargs) -> IPipelineQueueService:
         """Create a pipeline queue service adapter instance."""
         adapter_name = adapter_name or self._pipeline_queue_registry.get_default_name()
         if not adapter_name:
@@ -1267,7 +1452,7 @@ class AdapterFactory:
         logger.info(f"Creating pipeline queue service adapter: {adapter_name}")
         return self._pipeline_queue_registry.create_instance(adapter_name, **kwargs)
 
-    def create_project_manager_service(self, adapter_name: str | None = None, **kwargs):
+    def create_project_manager_service(self, adapter_name: str | None = None, **kwargs) -> IProjectManagerService:
         """Create a project manager service adapter instance."""
         adapter_name = adapter_name or self._project_manager_registry.get_default_name()
         if not adapter_name:
@@ -1275,7 +1460,7 @@ class AdapterFactory:
         logger.info(f"Creating project manager service adapter: {adapter_name}")
         return self._project_manager_registry.create_instance(adapter_name, **kwargs)
 
-    def create_workflow_config_service(self, adapter_name: str | None = None, **kwargs):
+    def create_workflow_config_service(self, adapter_name: str | None = None, **kwargs) -> IWorkflowConfigService:
         """Create a workflow config service adapter instance."""
         adapter_name = adapter_name or self._workflow_config_registry.get_default_name()
         if not adapter_name:
@@ -1283,7 +1468,7 @@ class AdapterFactory:
         logger.info(f"Creating workflow config service adapter: {adapter_name}")
         return self._workflow_config_registry.create_instance(adapter_name, **kwargs)
 
-    def create_event_emitter(self, adapter_name: str | None = None, **kwargs):
+    def create_event_emitter(self, adapter_name: str | None = None, **kwargs) -> IEventEmitter:
         """Create an event emitter adapter instance."""
         adapter_name = adapter_name or self._event_emitter_registry.get_default_name()
         if not adapter_name:
@@ -1291,7 +1476,7 @@ class AdapterFactory:
         logger.info(f"Creating event emitter adapter: {adapter_name}")
         return self._event_emitter_registry.create_instance(adapter_name, **kwargs)
 
-    def create_identity_service(self, adapter_name: str | None = None, **kwargs):
+    def create_identity_service(self, adapter_name: str | None = None, **kwargs) -> IIdentityService:
         """Create an identity service adapter instance."""
         adapter_name = adapter_name or self._identity_service_registry.get_default_name()
         if not adapter_name:
@@ -1299,7 +1484,7 @@ class AdapterFactory:
         logger.info(f"Creating identity service adapter: {adapter_name}")
         return self._identity_service_registry.create_instance(adapter_name, **kwargs)
 
-    def create_agent_executor(self, adapter_name: str | None = None, **kwargs):
+    def create_agent_executor(self, adapter_name: str | None = None, **kwargs) -> IAgentExecutor:
         """Create an agent executor adapter instance."""
         adapter_name = adapter_name or self._agent_executor_registry.get_default_name()
         if not adapter_name:
@@ -1307,7 +1492,7 @@ class AdapterFactory:
         logger.info(f"Creating agent executor adapter: {adapter_name}")
         return self._agent_executor_registry.create_instance(adapter_name, **kwargs)
 
-    def create_agent_repository(self, adapter_name: str | None = None, **kwargs):
+    def create_agent_repository(self, adapter_name: str | None = None, **kwargs) -> IAgentRepository:
         """Create an agent repository adapter instance."""
         adapter_name = adapter_name or self._agent_repository_registry.get_default_name()
         if not adapter_name:
@@ -1315,7 +1500,7 @@ class AdapterFactory:
         logger.info(f"Creating agent repository adapter: {adapter_name}")
         return self._agent_repository_registry.create_instance(adapter_name, **kwargs)
 
-    def create_work_item_branch_tracker(self, adapter_name: str | None = None, **kwargs):
+    def create_work_item_branch_tracker(self, adapter_name: str | None = None, **kwargs) -> IWorkItemBranchTracker:
         """Create a work item branch tracker adapter instance."""
         adapter_name = adapter_name or self._work_item_branch_tracker_registry.get_default_name()
         if not adapter_name:
@@ -1323,7 +1508,7 @@ class AdapterFactory:
         logger.info(f"Creating work item branch tracker adapter: {adapter_name}")
         return self._work_item_branch_tracker_registry.create_instance(adapter_name, **kwargs)
 
-    def create_work_item_service(self, adapter_name: str | None = None, **kwargs):
+    def create_work_item_service(self, adapter_name: str | None = None, **kwargs) -> IWorkItemService:
         """Create a work item service adapter instance."""
         adapter_name = adapter_name or self._work_item_service_registry.get_default_name()
         if not adapter_name:
@@ -1331,7 +1516,7 @@ class AdapterFactory:
         logger.info(f"Creating work item service adapter: {adapter_name}")
         return self._work_item_service_registry.create_instance(adapter_name, **kwargs)
 
-    def create_repair_cycle_checkpoint_store(self, adapter_name: str | None = None, **kwargs):
+    def create_repair_cycle_checkpoint_store(self, adapter_name: str | None = None, **kwargs) -> IRepairCycleCheckpointStore:
         """Create a repair cycle checkpoint store adapter instance."""
         adapter_name = adapter_name or self._repair_cycle_checkpoint_registry.get_default_name()
         if not adapter_name:
@@ -1339,7 +1524,7 @@ class AdapterFactory:
         logger.info(f"Creating repair cycle checkpoint store adapter: {adapter_name}")
         return self._repair_cycle_checkpoint_registry.create_instance(adapter_name, **kwargs)
 
-    def create_active_workflow_run_registry(self, adapter_name: str | None = None, **kwargs):
+    def create_active_workflow_run_registry(self, adapter_name: str | None = None, **kwargs) -> IActiveWorkflowRunRegistry:
         """Create an active workflow run registry adapter instance."""
         adapter_name = adapter_name or self._active_workflow_run_registry_registry.get_default_name()
         if not adapter_name:

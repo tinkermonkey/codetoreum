@@ -1,7 +1,7 @@
 """
-Unit tests for new adapter registries added in Phase 2.
+Unit tests for typed adapter registries.
 
-Tests the 12+ new typed registry classes covering all adapter slots,
+Tests registry classes covering all adapter slots,
 including interface compliance validation and adapter registration.
 """
 

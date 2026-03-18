@@ -46,7 +46,7 @@ class AdapterMetadata:
     version: str
     tags: list[str]
     registered_at: datetime
-    config_schema: dict[str, Any] | None = None
+    config_schema: dict[str, Any] | AdapterCredentialRequirement | None = None
 
     def matches_tags(self, tags: list[str]) -> bool:
         """Check if adapter has all specified tags."""
@@ -89,7 +89,7 @@ class AdapterRegistry(ABC, Generic[T]):
         description: str = "",
         version: str = "1.0.0",
         tags: list[str] | None = None,
-        config_schema: dict[str, Any] | None = None,
+        config_schema: dict[str, Any] | AdapterCredentialRequirement | None = None,
         factory: Callable[..., T] | None = None,
         set_as_default: bool = False,
     ) -> None:
@@ -102,7 +102,7 @@ class AdapterRegistry(ABC, Generic[T]):
             description: Human-readable description
             version: Semantic version string
             tags: Optional list of tags (e.g., ["production", "github"])
-            config_schema: Optional JSON schema for adapter configuration
+            config_schema: Optional JSON schema or credential requirements for adapter
             factory: Optional factory function for creating instances
             set_as_default: Whether to set this as the default adapter
 
