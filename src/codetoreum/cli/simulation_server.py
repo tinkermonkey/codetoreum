@@ -513,6 +513,7 @@ async def main_async(
                 console.print(f"[red]Error during cleanup: {e}[/red]")
                 logger.error(
                     f"Error during cleanup: {e}",
+                    exc_info=True,
                     extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
                 )
 
