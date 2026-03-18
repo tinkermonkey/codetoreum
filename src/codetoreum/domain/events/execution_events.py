@@ -82,15 +82,20 @@ class ExecutionTimedOutEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "ExecutionTimedOutEvent":
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary.
+
+        Raises:
+            KeyError: If required fields (execution_id, work_item_id,
+                     timeout_seconds, started_at) are missing.
+        """
         return cls(
             type=data.get("type", "execution.timed_out"),
             timestamp=data.get("timestamp", ""),
             source=data.get("source", "execution_timeout_watchdog"),
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
-            execution_id=data.get("execution_id", ""),
-            work_item_id=data.get("work_item_id", ""),
-            timeout_seconds=data.get("timeout_seconds", 0),
-            started_at=data.get("started_at", ""),
+            execution_id=data["execution_id"],
+            work_item_id=data["work_item_id"],
+            timeout_seconds=data["timeout_seconds"],
+            started_at=data["started_at"],
         )

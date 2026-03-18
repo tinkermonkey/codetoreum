@@ -80,16 +80,20 @@ class WorkItemCreatedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "WorkItemCreatedEvent":
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary.
+
+        Raises:
+            KeyError: If required fields (work_item_id, project_id, title) are missing.
+        """
         return cls(
             type=data.get("type", "workitem.created"),
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
-            work_item_id=data.get("work_item_id", ""),
-            project_id=data.get("project_id", ""),
-            title=data.get("title", ""),
+            work_item_id=data["work_item_id"],
+            project_id=data["project_id"],
+            title=data["title"],
             initial_column=data.get("initial_column"),
         )
 
@@ -156,14 +160,18 @@ class WorkItemUpdatedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "WorkItemUpdatedEvent":
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary.
+
+        Raises:
+            KeyError: If required fields (work_item_id, project_id) are missing.
+        """
         return cls(
             type=data.get("type", "workitem.updated"),
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
-            work_item_id=data.get("work_item_id", ""),
-            project_id=data.get("project_id", ""),
+            work_item_id=data["work_item_id"],
+            project_id=data["project_id"],
             changes=data.get("changes", {}),
         )

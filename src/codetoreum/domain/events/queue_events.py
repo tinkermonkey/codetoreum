@@ -232,17 +232,22 @@ class QueuePositionChangedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "QueuePositionChangedEvent":
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary.
+
+        Raises:
+            KeyError: If required fields (queue_name, item_id, old_position,
+                     new_position) are missing.
+        """
         return cls(
             type=data.get("type", "queue.position_changed"),
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
-            queue_name=data.get("queue_name", ""),
-            item_id=data.get("item_id", ""),
-            old_position=data.get("old_position", 0),
-            new_position=data.get("new_position", 0),
+            queue_name=data["queue_name"],
+            item_id=data["item_id"],
+            old_position=data["old_position"],
+            new_position=data["new_position"],
             project_id=data.get("project_id"),
         )
 

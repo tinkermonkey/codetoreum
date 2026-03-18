@@ -97,19 +97,24 @@ class ReviewCycleStartedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "ReviewCycleStartedEvent":
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary.
+
+        Raises:
+            KeyError: If required fields (review_cycle_id, work_item_id, project_id,
+                     maker_agent, reviewer_agent, max_iterations) are missing.
+        """
         return cls(
             type=data.get("type", "review_cycle.started"),
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
-            review_cycle_id=data.get("review_cycle_id", ""),
-            work_item_id=data.get("work_item_id", ""),
-            project_id=data.get("project_id", ""),
-            maker_agent=data.get("maker_agent", ""),
-            reviewer_agent=data.get("reviewer_agent", ""),
-            max_iterations=data.get("max_iterations", 0),
+            review_cycle_id=data["review_cycle_id"],
+            work_item_id=data["work_item_id"],
+            project_id=data["project_id"],
+            maker_agent=data["maker_agent"],
+            reviewer_agent=data["reviewer_agent"],
+            max_iterations=data["max_iterations"],
         )
 
 
@@ -184,17 +189,22 @@ class ReviewCycleIterationCompletedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "ReviewCycleIterationCompletedEvent":
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary.
+
+        Raises:
+            KeyError: If required fields (review_cycle_id, work_item_id,
+                     iteration, status) are missing.
+        """
         return cls(
             type=data.get("type", "review_cycle.iteration_completed"),
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
-            review_cycle_id=data.get("review_cycle_id", ""),
-            work_item_id=data.get("work_item_id", ""),
-            iteration=data.get("iteration", 0),
-            status=data.get("status", ""),
+            review_cycle_id=data["review_cycle_id"],
+            work_item_id=data["work_item_id"],
+            iteration=data["iteration"],
+            status=data["status"],
             blocking_count=data.get("blocking_count", 0),
         )
 
@@ -255,16 +265,21 @@ class ReviewCycleMakerRevisionEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "ReviewCycleMakerRevisionEvent":
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary.
+
+        Raises:
+            KeyError: If required fields (review_cycle_id, work_item_id,
+                     iteration) are missing.
+        """
         return cls(
             type=data.get("type", "review_cycle.maker_revision"),
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
-            review_cycle_id=data.get("review_cycle_id", ""),
-            work_item_id=data.get("work_item_id", ""),
-            iteration=data.get("iteration", 0),
+            review_cycle_id=data["review_cycle_id"],
+            work_item_id=data["work_item_id"],
+            iteration=data["iteration"],
         )
 
 
@@ -339,18 +354,23 @@ class ReviewCycleEscalatedToHumanEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "ReviewCycleEscalatedToHumanEvent":
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary.
+
+        Raises:
+            KeyError: If required fields (review_cycle_id, work_item_id,
+                     iteration, escalation_reason) are missing.
+        """
         return cls(
             type=data.get("type", "review_cycle.escalated_to_human"),
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
-            review_cycle_id=data.get("review_cycle_id", ""),
-            work_item_id=data.get("work_item_id", ""),
-            iteration=data.get("iteration", 0),
+            review_cycle_id=data["review_cycle_id"],
+            work_item_id=data["work_item_id"],
+            iteration=data["iteration"],
             blocking_count=data.get("blocking_count", 0),
-            escalation_reason=data.get("escalation_reason", ""),
+            escalation_reason=data["escalation_reason"],
         )
 
 
@@ -410,16 +430,21 @@ class ReviewCycleHumanFeedbackReceivedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "ReviewCycleHumanFeedbackReceivedEvent":
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary.
+
+        Raises:
+            KeyError: If required fields (review_cycle_id, work_item_id,
+                     feedback) are missing.
+        """
         return cls(
             type=data.get("type", "review_cycle.human_feedback_received"),
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
-            review_cycle_id=data.get("review_cycle_id", ""),
-            work_item_id=data.get("work_item_id", ""),
-            feedback=data.get("feedback", ""),
+            review_cycle_id=data["review_cycle_id"],
+            work_item_id=data["work_item_id"],
+            feedback=data["feedback"],
         )
 
 
@@ -479,16 +504,21 @@ class ReviewCycleMaxIterationsReachedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "ReviewCycleMaxIterationsReachedEvent":
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary.
+
+        Raises:
+            KeyError: If required fields (review_cycle_id, work_item_id,
+                     max_iterations) are missing.
+        """
         return cls(
             type=data.get("type", "review_cycle.max_iterations_reached"),
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
-            review_cycle_id=data.get("review_cycle_id", ""),
-            work_item_id=data.get("work_item_id", ""),
-            max_iterations=data.get("max_iterations", 0),
+            review_cycle_id=data["review_cycle_id"],
+            work_item_id=data["work_item_id"],
+            max_iterations=data["max_iterations"],
         )
 
 
@@ -548,14 +578,19 @@ class ReviewCycleApprovedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "ReviewCycleApprovedEvent":
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary.
+
+        Raises:
+            KeyError: If required fields (review_cycle_id, work_item_id,
+                     total_iterations) are missing.
+        """
         return cls(
             type=data.get("type", "review_cycle.approved"),
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
-            review_cycle_id=data.get("review_cycle_id", ""),
-            work_item_id=data.get("work_item_id", ""),
-            total_iterations=data.get("total_iterations", 0),
+            review_cycle_id=data["review_cycle_id"],
+            work_item_id=data["work_item_id"],
+            total_iterations=data["total_iterations"],
         )

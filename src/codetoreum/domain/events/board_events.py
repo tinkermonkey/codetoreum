@@ -98,18 +98,23 @@ class WorkItemColumnChangedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "WorkItemColumnChangedEvent":
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary.
+
+        Raises:
+            KeyError: If required fields (work_item_id, project_id, board_id,
+                     from_column, to_column) are missing.
+        """
         return cls(
             type=data.get("type", "workitem.column_changed"),
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
-            work_item_id=data.get("work_item_id", ""),
-            project_id=data.get("project_id", ""),
-            board_id=data.get("board_id", ""),
-            from_column=data.get("from_column", ""),
-            to_column=data.get("to_column", ""),
+            work_item_id=data["work_item_id"],
+            project_id=data["project_id"],
+            board_id=data["board_id"],
+            from_column=data["from_column"],
+            to_column=data["to_column"],
             moved_by=data.get("moved_by", "unknown"),
         )
 
@@ -203,7 +208,11 @@ class WorkItemPositionChangedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "WorkItemPositionChangedEvent":
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary.
+
+        Raises:
+            KeyError: If required fields (old_position, new_position) are missing.
+        """
         return cls(
             type=data.get("type", "workitem.position_changed"),
             timestamp=data.get("timestamp", ""),
@@ -214,8 +223,8 @@ class WorkItemPositionChangedEvent(CodetoreumEvent):
             project_id=data.get("project_id", ""),
             board_id=data.get("board_id", ""),
             column_name=data.get("column_name", ""),
-            old_position=data.get("old_position", 0),
-            new_position=data.get("new_position", 0),
+            old_position=data["old_position"],
+            new_position=data["new_position"],
         )
 
 
@@ -404,7 +413,12 @@ class ColumnSLAExceededEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "ColumnSLAExceededEvent":
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary.
+
+        Raises:
+            KeyError: If required fields (elapsed_seconds, sla_threshold_seconds,
+                     entered_at) are missing.
+        """
         return cls(
             type=data.get("type", "column.sla_exceeded"),
             timestamp=data.get("timestamp", ""),
@@ -415,7 +429,7 @@ class ColumnSLAExceededEvent(CodetoreumEvent):
             project_id=data.get("project_id", ""),
             board_id=data.get("board_id", ""),
             column_name=data.get("column_name", ""),
-            elapsed_seconds=data.get("elapsed_seconds", 0),
-            sla_threshold_seconds=data.get("sla_threshold_seconds", 0),
-            entered_at=data.get("entered_at", ""),
+            elapsed_seconds=data["elapsed_seconds"],
+            sla_threshold_seconds=data["sla_threshold_seconds"],
+            entered_at=data["entered_at"],
         )
