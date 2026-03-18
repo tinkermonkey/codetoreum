@@ -12,7 +12,7 @@ Tests cover:
 import logging
 import os
 import pytest
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock, patch
 
 from codetoreum.infrastructure.adapters.factory import AdapterFactory, AdapterFactoryConfig
 from codetoreum.infrastructure.adapters.registry_base import AdapterCredentialRequirement
@@ -226,27 +226,22 @@ class TestAdapterResolver:
     def test_resolve_all_basic(self, factory, dependencies, adapter_config):
         """Test resolving all adapters with default simulation config."""
         resolver = AdapterResolver(adapter_config, factory, dependencies)
-        # Patch to handle MockDiscussionAdapter's identity_service requirement
-        with patch.object(factory, 'create_discussion_adapter') as mock_create:
-            mock_create.return_value = Mock()
-            result = resolver.resolve_all()
+        result = resolver.resolve_all()
 
-            # Should return 26 adapters
-            assert len(result) == 26
+        # Should return 26 adapters
+        assert len(result) == 26
 
-            # All values should be adapter instances (not None)
-            for slot_name, adapter in result.items():
-                assert adapter is not None, f"{slot_name} adapter is None"
+        # All values should be adapter instances (not None)
+        for slot_name, adapter in result.items():
+            assert adapter is not None, f"{slot_name} adapter is None"
 
     def test_resolve_all_populates_resolved_dict(self, factory, dependencies, adapter_config):
         """Test that resolve_all populates the internal _resolved dict."""
         resolver = AdapterResolver(adapter_config, factory, dependencies)
-        with patch.object(factory, 'create_discussion_adapter') as mock_create:
-            mock_create.return_value = Mock()
-            result = resolver.resolve_all()
+        result = resolver.resolve_all()
 
-            assert resolver._resolved == result
-            assert len(resolver._resolved) == 26
+        assert resolver._resolved == result
+        assert len(resolver._resolved) == 26
 
     def test_resolve_all_respects_dependency_order(
         self, factory, dependencies, adapter_config
@@ -277,18 +272,16 @@ class TestAdapterResolver:
         resolver.resolve_llm = track_llm
         resolver.resolve_review_cycle = track_review_cycle
 
-        with patch.object(factory, 'create_discussion_adapter') as mock_create:
-            mock_create.return_value = Mock()
-            result = resolver.resolve_all()
+        result = resolver.resolve_all()
 
-            # event_store should be resolved before review_cycle
-            event_store_idx = call_order.index("event_store")
-            review_cycle_idx = call_order.index("review_cycle")
-            assert event_store_idx < review_cycle_idx
+        # event_store should be resolved before review_cycle
+        event_store_idx = call_order.index("event_store")
+        review_cycle_idx = call_order.index("review_cycle")
+        assert event_store_idx < review_cycle_idx
 
-            # llm should be resolved before review_cycle (since review_cycle depends on llm)
-            llm_idx = call_order.index("llm")
-            assert llm_idx < review_cycle_idx
+        # llm should be resolved before review_cycle (since review_cycle depends on llm)
+        llm_idx = call_order.index("llm")
+        assert llm_idx < review_cycle_idx
 
     def test_review_cycle_mock_uses_engine(self, factory, dependencies, adapter_config):
         """Test that mock review_cycle uses SimulationEngine."""
@@ -302,15 +295,13 @@ class TestAdapterResolver:
         resolver._deps.engine.create_review_cycle_adapter.return_value = mock_review_cycle
 
         # Resolve everything to populate _resolved with llm
-        with patch.object(factory, 'create_discussion_adapter') as mock_create:
-            mock_create.return_value = Mock()
-            result = resolver.resolve_all()
+        result = resolver.resolve_all()
 
-            # Engine should have been called to create review cycle
-            resolver._deps.engine.create_review_cycle_adapter.assert_called_once()
+        # Engine should have been called to create review cycle
+        resolver._deps.engine.create_review_cycle_adapter.assert_called_once()
 
-            # The returned review_cycle should be from the engine
-            assert result["review_cycle"] is mock_review_cycle
+        # The returned review_cycle should be from the engine
+        assert result["review_cycle"] is mock_review_cycle
 
     def test_repair_cycle_mock_uses_engine(self, factory, dependencies, adapter_config):
         """Test that mock repair_cycle uses SimulationEngine."""
@@ -324,15 +315,13 @@ class TestAdapterResolver:
         resolver._deps.engine.create_repair_cycle_adapter.return_value = mock_repair_cycle
 
         # Resolve everything to populate _resolved with container and checkpoint_store
-        with patch.object(factory, 'create_discussion_adapter') as mock_create:
-            mock_create.return_value = Mock()
-            result = resolver.resolve_all()
+        result = resolver.resolve_all()
 
-            # Engine should have been called to create repair cycle
-            resolver._deps.engine.create_repair_cycle_adapter.assert_called_once()
+        # Engine should have been called to create repair cycle
+        resolver._deps.engine.create_repair_cycle_adapter.assert_called_once()
 
-            # The returned repair_cycle should be from the engine
-            assert result["repair_cycle"] is mock_repair_cycle
+        # The returned repair_cycle should be from the engine
+        assert result["repair_cycle"] is mock_repair_cycle
 
     def test_resolve_review_cycle_passes_llm_to_engine(
         self, factory, dependencies, adapter_config
@@ -382,41 +371,39 @@ class TestAdapterResolver:
     def test_all_26_adapter_slots_resolved(self, factory, dependencies, adapter_config):
         """Test that all 26 adapter slots are successfully resolved."""
         resolver = AdapterResolver(adapter_config, factory, dependencies)
-        with patch.object(factory, 'create_discussion_adapter') as mock_create:
-            mock_create.return_value = Mock()
-            result = resolver.resolve_all()
+        result = resolver.resolve_all()
 
-            expected_slots = {
-                "board",
-                "ticket",
-                "llm",
-                "version_control",
-                "container",
-                "event_store",
-                "metrics",
-                "storage",
-                "config_store",
-                "notifier",
-                "encryption",
-                "discussion_adapter",
-                "review_cycle",
-                "repair_cycle",
-                "project_manager",
-                "lock_service",
-                "workflow_config",
-                "queue_service",
-                "event_emitter",
-                "message_broker",
-                "identity_service",
-                "checkpoint_store",
-                "agent_repository",
-                "run_registry",
-                "branch_tracker",
-                "work_item_service",
-            }
+        expected_slots = {
+            "board",
+            "ticket",
+            "llm",
+            "version_control",
+            "container",
+            "event_store",
+            "metrics",
+            "storage",
+            "config_store",
+            "notifier",
+            "encryption",
+            "discussion_adapter",
+            "review_cycle",
+            "repair_cycle",
+            "project_manager",
+            "lock_service",
+            "workflow_config",
+            "queue_service",
+            "event_emitter",
+            "message_broker",
+            "identity_service",
+            "checkpoint_store",
+            "agent_repository",
+            "run_registry",
+            "branch_tracker",
+            "work_item_service",
+        }
 
-            assert len(expected_slots) == 26
-            assert set(result.keys()) == expected_slots
+        assert len(expected_slots) == 26
+        assert set(result.keys()) == expected_slots
 
     def test_get_registry_method_exists_on_factory(self, factory):
         """Test that AdapterFactory has get_registry method."""
@@ -476,10 +463,8 @@ class TestAdapterResolverIntegration:
         dependencies.engine.create_repair_cycle_adapter.return_value = Mock()
 
         resolver = AdapterResolver(AdapterSelectionConfig(), factory, dependencies)
-        with patch.object(factory, 'create_discussion_adapter') as mock_create:
-            mock_create.return_value = Mock()
-            result = resolver.resolve_all()
+        result = resolver.resolve_all()
 
-            # All adapters should be created successfully
-            assert len(result) == 26
-            assert all(adapter is not None for adapter in result.values())
+        # All adapters should be created successfully
+        assert len(result) == 26
+        assert all(adapter is not None for adapter in result.values())

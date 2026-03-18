@@ -158,9 +158,15 @@ class AdapterResolver:
             if not req or not isinstance(req, AdapterCredentialRequirement):
                 continue
 
-            # Skip validation of simulation-only flag - it just indicates whether the adapter
-            # is only available in simulation, not whether it's a valid choice.
-            # If the adapter is registered, it's a valid choice regardless of the flag.
+            # Check for simulation-only adapters used with non-simulation names
+            # A simulation-only adapter should only be used with known simulation names
+            if req.simulation_only:
+                simulation_names = ("in_memory", "mock", "fake", "capturing", "simple", "configurable")
+                if impl_name not in simulation_names:
+                    errors.append(
+                        f"{field_name}: '{impl_name}' is simulation-only, no real adapter exists"
+                    )
+                    continue
 
             # Check required environment variables
             for env_var in req.env_vars:
@@ -233,7 +239,12 @@ class AdapterResolver:
 
     def resolve_discussion_adapter(self) -> IDiscussionAdapter:
         """Resolve discussion adapter."""
-        return self._factory.create_discussion_adapter(adapter_name=self._config.discussion_adapter)
+        # MockDiscussionAdapter requires identity_service dependency
+        identity_service = self._resolved.get("identity_service")
+        return self._factory.create_discussion_adapter(
+            adapter_name=self._config.discussion_adapter,
+            identity_service=identity_service,
+        )
 
     def resolve_lock_service(self) -> IPipelineLockService:
         """Resolve pipeline lock service adapter."""

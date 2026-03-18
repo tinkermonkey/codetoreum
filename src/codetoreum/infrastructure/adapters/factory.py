@@ -1027,6 +1027,7 @@ class AdapterFactory:
             "run_registry": self._active_workflow_run_registry_registry,
             "branch_tracker": self._work_item_branch_tracker_registry,
             "work_item_service": self._work_item_service_registry,
+            "repository": self._repository_registry,
         }
 
         if slot_name not in registry_map:
