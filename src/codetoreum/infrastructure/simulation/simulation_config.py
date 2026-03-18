@@ -9,6 +9,55 @@ from typing import Any
 import yaml
 
 
+@dataclass(frozen=True)
+class AdapterSelectionConfig:
+    """Per-adapter implementation selector. Values are registry keys.
+
+    Each field represents an adapter slot and can be set to a registry key
+    (e.g., "in_memory", "mock", "github", "docker", etc.) to select which
+    implementation to use for that adapter in the simulation.
+
+    All fields default to simulation variant names for fully deterministic testing.
+    """
+
+    board: str = "in_memory"
+    ticket: str = "in_memory"
+    llm: str = "mock"
+    version_control: str = "in_memory"
+    container: str = "fake"
+    event_store: str = "in_memory"
+    metrics: str = "in_memory"
+    storage: str = "in_memory"
+    config_store: str = "in_memory"
+    notifier: str = "mock"
+    encryption: str = "in_memory"
+    discussion_adapter: str = "mock"
+    review_cycle: str = "mock"
+    repair_cycle: str = "mock"
+    project_manager: str = "in_memory"
+    lock_service: str = "in_memory"
+    workflow_config: str = "in_memory"
+    queue_service: str = "in_memory"
+    event_emitter: str = "mock"
+    message_broker: str = "in_memory"
+    identity_service: str = "in_memory"
+    checkpoint_store: str = "in_memory"
+    agent_repository: str = "in_memory"
+    run_registry: str = "in_memory"
+    branch_tracker: str = "in_memory"
+    work_item_service: str = "in_memory"
+
+    def __post_init__(self) -> None:
+        """Validate that all adapter selections are non-empty strings."""
+        for field_name in self.__dataclass_fields__:
+            value = getattr(self, field_name)
+            if not value or not isinstance(value, str):
+                raise ValueError(
+                    f"AdapterSelectionConfig.{field_name} must be a non-empty string, "
+                    f"got {value!r}"
+                )
+
+
 class FidelityLevel(Enum):
     """Fidelity levels for simulation testing.
 
@@ -142,6 +191,9 @@ class SimulationConfig:
     # Scenario identification
     scenario_name: str
     scenario_description: str = ""
+
+    # Adapter selection configuration
+    adapters: AdapterSelectionConfig = field(default_factory=AdapterSelectionConfig)
 
     # Time configuration
     time: TimeConfig = field(default_factory=TimeConfig)
@@ -411,6 +463,10 @@ class SimulationConfig:
         return {
             "scenario_name": self.scenario_name,
             "scenario_description": self.scenario_description,
+            "adapters": {
+                field_name: getattr(self.adapters, field_name)
+                for field_name in self.adapters.__dataclass_fields__
+            },
             "time": {
                 "speed_multiplier": self.time.speed_multiplier,
                 "start_time": self.time.start_time.isoformat() if self.time.start_time else None,
@@ -459,6 +515,16 @@ class SimulationConfig:
         Returns:
             SimulationConfig instance
         """
+        # Parse adapter selection config
+        adapters_raw = data.get("adapters", {})
+        # Only include keys that are actual fields in AdapterSelectionConfig
+        adapters_kwargs = {
+            k: v
+            for k, v in adapters_raw.items()
+            if k in AdapterSelectionConfig.__dataclass_fields__
+        }
+        adapters = AdapterSelectionConfig(**adapters_kwargs)
+
         time_data = data.get("time", {})
         start_time = None
         if time_data.get("start_time"):
@@ -507,6 +573,7 @@ class SimulationConfig:
         return cls(
             scenario_name=data["scenario_name"],
             scenario_description=data.get("scenario_description", ""),
+            adapters=adapters,
             time=time_config,
             agents=agents,
             container=container,
@@ -564,6 +631,7 @@ class SimulationConfig:
         config_dict = {
             "scenario_name": scenario_name,
             "scenario_description": data.get("description", ""),
+            "adapters": data.get("adapters", {}),
             "time": {
                 "speed_multiplier": data.get("speed_multiplier", 10.0),
                 "auto_advance": data.get("auto_advance", False),
