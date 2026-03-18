@@ -375,7 +375,9 @@ async def test_cached_store_agent_config(cached_config_store, sample_agent_confi
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_cached_store_delete_invalidates_cache(cached_config_store, redis_cache, sample_project_config, es_client):
+async def test_cached_store_delete_invalidates_cache(
+    cached_config_store, redis_cache, sample_project_config, es_client
+):
     """Test that delete operation invalidates cache."""
     # Save project
     await cached_config_store.save_project_config(sample_project_config)
