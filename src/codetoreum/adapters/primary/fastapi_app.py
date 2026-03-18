@@ -71,6 +71,7 @@ from codetoreum.infrastructure.observability.config import ObservabilityConfig
 from codetoreum.infrastructure.observability.otel_setup import setup_opentelemetry
 from codetoreum.ports.input.agent_command import IAgentCommandPort
 from codetoreum.ports.input.agent_query import IAgentQueryPort
+from codetoreum.ports.input.audit_query import IAuditQueryPort
 from codetoreum.ports.input.config_command import IConfigurationCommandPort
 from codetoreum.ports.input.config_query import IConfigurationQueryPort
 from codetoreum.ports.input.execution_command import IExecutionCommandPort
@@ -238,7 +239,7 @@ def create_app(
     event_bus: IEventBus,
     config_service: IConfigurationService,
     logger: ILogger,
-    audit_query_port: Any | None = None,
+    audit_query_port: IAuditQueryPort | None = None,
     auth_secret_key: str | None = None,
     disable_auth: bool = False,
     cors_origins: list | None = None,

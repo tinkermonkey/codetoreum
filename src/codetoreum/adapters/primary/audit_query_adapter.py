@@ -5,18 +5,18 @@ Provides implementation of the audit query port using the audit store backend.
 """
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
-from codetoreum.infrastructure.audit.interfaces import (
-    AuditQueryFilters,
-    IAuditStore,
-)
 from codetoreum.ports.input.audit_query import (
     AuditEventFilters,
     AuditEventInfo,
     AuditEventPaginationParams,
     AuditEventQueryResult,
     IAuditQueryPort,
+)
+from codetoreum.infrastructure.audit.interfaces import (
+    AuditQueryFilters,
+    IAuditStore,
 )
 
 logger = logging.getLogger(__name__)
@@ -93,7 +93,7 @@ class AuditQueryAdapter(IAuditQueryPort):
         for event_dict in event_dicts:
             event_info = AuditEventInfo(
                 id=event_dict.get("id", ""),
-                timestamp=event_dict.get("timestamp", datetime.now()),
+                timestamp=event_dict.get("timestamp", datetime.now(UTC)),
                 event_type=event_dict.get("event_type", ""),
                 resource_type=event_dict.get("resource_type", ""),
                 resource_id=event_dict.get("resource_id", ""),

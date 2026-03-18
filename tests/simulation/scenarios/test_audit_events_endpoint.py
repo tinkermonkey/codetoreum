@@ -5,6 +5,7 @@ Tests the audit events API endpoint for querying system-wide audit logs.
 """
 
 import pytest
+from datetime import UTC, datetime
 from fastapi.testclient import TestClient
 
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
@@ -23,6 +24,67 @@ async def bootstrap():
     await bootstrap.setup()
     yield bootstrap
     await bootstrap.teardown()
+
+
+async def _seed_audit_events(bootstrap):
+    """Seed the audit store with test data."""
+    audit_store = bootstrap.adapters.audit_store
+
+    # Create test events with various combinations
+    base_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+
+    # Event 1: agent_created (successful)
+    await audit_store.store_event(
+        timestamp=base_time,
+        event_type="agent_created",
+        resource_type="agent",
+        resource_id="agent-001",
+        action="create",
+        user_id="system",
+        correlation_id="corr-001",
+        metadata={"name": "TestAgent"},
+        success=True,
+    )
+
+    # Event 2: agent_updated (successful)
+    await audit_store.store_event(
+        timestamp=base_time.replace(minute=1),
+        event_type="agent_updated",
+        resource_type="agent",
+        resource_id="agent-001",
+        action="update",
+        user_id="system",
+        correlation_id="corr-002",
+        metadata={"field": "description"},
+        success=True,
+    )
+
+    # Event 3: workflow_created (successful)
+    await audit_store.store_event(
+        timestamp=base_time.replace(minute=2),
+        event_type="workflow_created",
+        resource_type="workflow",
+        resource_id="workflow-001",
+        action="create",
+        user_id="system",
+        correlation_id="corr-003",
+        metadata={"name": "TestWorkflow"},
+        success=True,
+    )
+
+    # Event 4: agent_deleted (failed)
+    await audit_store.store_event(
+        timestamp=base_time.replace(minute=3),
+        event_type="agent_deleted",
+        resource_type="agent",
+        resource_id="agent-002",
+        action="delete",
+        user_id="user123",
+        correlation_id="corr-004",
+        metadata={},
+        success=False,
+        error_message="Agent in use",
+    )
 
 
 # ============================================================================
@@ -87,6 +149,8 @@ async def test_audit_events_endpoint_max_limit(bootstrap):
 @pytest.mark.asyncio
 async def test_audit_events_endpoint_filtering(bootstrap):
     """Test audit events endpoint filtering."""
+    # Seed test data
+    await _seed_audit_events(bootstrap)
     client = TestClient(bootstrap.app)
 
     # Query with filters
@@ -95,7 +159,10 @@ async def test_audit_events_endpoint_filtering(bootstrap):
     assert response.status_code == 200
     data = response.json()
 
-    # All returned events should match the filters (if any exist)
+    # Should return at least one matching event
+    assert len(data["events"]) > 0
+
+    # All returned events should match the filters
     for event in data["events"]:
         assert event["eventType"] == "agent_created"
         assert event["resourceType"] == "agent"
@@ -105,12 +172,17 @@ async def test_audit_events_endpoint_filtering(bootstrap):
 @pytest.mark.asyncio
 async def test_audit_events_endpoint_response_format(bootstrap):
     """Test audit events endpoint response format."""
+    # Seed test data
+    await _seed_audit_events(bootstrap)
     client = TestClient(bootstrap.app)
 
     response = client.get("/api/v2/audit/events")
 
     assert response.status_code == 200
     data = response.json()
+
+    # Should return at least one event
+    assert len(data["events"]) > 0
 
     # Verify event response format
     for event in data["events"]:
@@ -138,6 +210,8 @@ async def test_audit_events_endpoint_response_format(bootstrap):
 @pytest.mark.asyncio
 async def test_audit_events_endpoint_success_filter(bootstrap):
     """Test audit events endpoint success status filter."""
+    # Seed test data
+    await _seed_audit_events(bootstrap)
     client = TestClient(bootstrap.app)
 
     # Query only successful events
@@ -145,6 +219,9 @@ async def test_audit_events_endpoint_success_filter(bootstrap):
 
     assert response.status_code == 200
     data = response.json()
+
+    # Should return at least one successful event
+    assert len(data["events"]) > 0
 
     # All returned events should have success=true
     for event in data["events"]:
@@ -154,6 +231,8 @@ async def test_audit_events_endpoint_success_filter(bootstrap):
 @pytest.mark.asyncio
 async def test_audit_events_endpoint_user_filter(bootstrap):
     """Test audit events endpoint user ID filter."""
+    # Seed test data
+    await _seed_audit_events(bootstrap)
     client = TestClient(bootstrap.app)
 
     # Query by user ID
@@ -162,11 +241,12 @@ async def test_audit_events_endpoint_user_filter(bootstrap):
     assert response.status_code == 200
     data = response.json()
 
+    # Should return at least one event for "system" user
+    assert len(data["events"]) > 0
+
     # All returned events should have matching userId
     for event in data["events"]:
-        if data["totalEventCount"] > 0:
-            # If there are events, verify they match
-            assert event["userId"] == "system"
+        assert event["userId"] == "system"
 
 
 @pytest.mark.asyncio
