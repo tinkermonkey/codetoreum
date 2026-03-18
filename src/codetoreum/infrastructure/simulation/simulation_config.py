@@ -51,7 +51,7 @@ class AdapterSelectionConfig:
         """Validate that all adapter selections are non-empty strings."""
         for field_name in self.__dataclass_fields__:
             value = getattr(self, field_name)
-            if not value or not isinstance(value, str):
+            if not isinstance(value, str) or not value.strip():
                 raise ValueError(
                     f"AdapterSelectionConfig.{field_name} must be a non-empty string, "
                     f"got {value!r}"

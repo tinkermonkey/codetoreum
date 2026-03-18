@@ -122,6 +122,15 @@ class TestAdapterSelectionConfig:
         with pytest.raises(ValueError, match="must be a non-empty string"):
             AdapterSelectionConfig(board=123)  # type: ignore
 
+    def test_validation_fails_for_whitespace_only_string(self) -> None:
+        """Test that whitespace-only string value raises ValueError."""
+        with pytest.raises(ValueError, match="must be a non-empty string"):
+            AdapterSelectionConfig(board="   ")
+        with pytest.raises(ValueError, match="must be a non-empty string"):
+            AdapterSelectionConfig(ticket="\t\n")
+        with pytest.raises(ValueError, match="must be a non-empty string"):
+            AdapterSelectionConfig(llm="  \t  ")
+
 
 class TestFidelityLevel:
     """Test suite for FidelityLevel enum."""
