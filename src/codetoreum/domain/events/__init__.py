@@ -132,7 +132,7 @@ from .legacy_domain_events import (
 from .lock_events import (
     LockAcquiredEvent,
     LockReleasedEvent,
-    LockStaleDetectedEvent,
+    StaleLockDetectedEvent,
     LockStuckEvent,
     PipelineLockAcquiredEvent,
     PipelineLockReleasedEvent,
@@ -305,7 +305,7 @@ __all__ = [
     # Pipeline lock events
     "LockAcquiredEvent",
     "LockReleasedEvent",
-    "LockStaleDetectedEvent",
+    "StaleLockDetectedEvent",
     "LockStuckEvent",
     "PipelineLockAcquiredEvent",
     "PipelineLockReleasedEvent",

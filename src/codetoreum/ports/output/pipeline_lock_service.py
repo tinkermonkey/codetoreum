@@ -83,7 +83,7 @@ class IPipelineLockService(IEventEmitter, ABC):
                            When lock is successfully acquired
         - 'lock.released' → LockReleasedEvent
                            When lock is released
-        - 'lock.stale_detected' → LockStaleDetectedEvent
+        - 'lock.stale_detected' → StaleLockDetectedEvent
                                  When a lock hasn't been updated in too long
 
     Lock Lifecycle:

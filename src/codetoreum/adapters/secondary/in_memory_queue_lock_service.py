@@ -21,7 +21,7 @@ from codetoreum.application.pipeline_lock_service import (
     QueueEntry,
 )
 from codetoreum.domain.events.lock_events import (
-    LockStaleDetectedEvent,
+    StaleLockDetectedEvent,
     PipelineLockAcquiredEvent,
     PipelineLockReleasedEvent,
     WorkItemQueuedEvent,
@@ -141,7 +141,7 @@ class InMemoryLockService(IPipelineLockService):
 
                     # Emit stale detected event
                     if self._event_bus:
-                        stale_event = LockStaleDetectedEvent(
+                        stale_event = StaleLockDetectedEvent(
                             type="lock.stale_detected",
                             timestamp=now.isoformat(),
                             source="in_memory_lock_service",

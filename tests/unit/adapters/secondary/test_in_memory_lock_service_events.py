@@ -10,7 +10,7 @@ from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
 )
 from codetoreum.application.pipeline_lock_service import LockStatus
 from codetoreum.domain.events.lock_events import (
-    LockStaleDetectedEvent,
+    StaleLockDetectedEvent,
     PipelineLockAcquiredEvent,
     PipelineLockReleasedEvent,
     WorkItemQueuedEvent,
@@ -414,7 +414,7 @@ class TestStaleLockDetection:
 
         # First event should be stale detected
         stale_event = mock_event_bus.publish.call_args_list[0][0][0]
-        assert isinstance(stale_event, LockStaleDetectedEvent)
+        assert isinstance(stale_event, StaleLockDetectedEvent)
         assert stale_event.project_id == "proj-1"
         assert stale_event.board_id == "board-1"
         assert stale_event.work_item_id == "item-1"  # Original stale lock holder
@@ -460,7 +460,7 @@ class TestStaleLockDetection:
     async def test_stale_lock_detected_event_contains_lock_acquired_at(
         self, lock_service_with_short_threshold, mock_event_bus
     ):
-        """LockStaleDetectedEvent should contain lock_acquired_at timestamp."""
+        """StaleLockDetectedEvent should contain lock_acquired_at timestamp."""
         # Acquire lock
         await lock_service_with_short_threshold.try_acquire_lock(
             project_id="proj-1",
@@ -488,7 +488,7 @@ class TestStaleLockDetection:
 
         # Check stale detected event
         stale_event = mock_event_bus.publish.call_args_list[0][0][0]
-        assert isinstance(stale_event, LockStaleDetectedEvent)
+        assert isinstance(stale_event, StaleLockDetectedEvent)
         assert stale_event.lock_acquired_at == "2025-01-01T12:00:00+00:00"
 
     @pytest.mark.asyncio

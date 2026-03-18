@@ -175,7 +175,7 @@ class LockReleasedEvent(CodetoreumEvent):
 
 
 @dataclass(frozen=True)
-class LockStaleDetectedEvent(CodetoreumEvent):
+class StaleLockDetectedEvent(CodetoreumEvent):
     """Emitted when a stale lock is detected.
 
     **Immutability**: This is an immutable event (frozen dataclass). All fields
@@ -193,7 +193,7 @@ class LockStaleDetectedEvent(CodetoreumEvent):
         lock_acquired_at (str): ISO 8601 timestamp when the lock was originally acquired
 
     Example:
-        >>> event = LockStaleDetectedEvent(
+        >>> event = StaleLockDetectedEvent(
         ...     type="lock.stale_detected",
         ...     timestamp="2025-01-14T10:30:00+00:00",
         ...     source="github",
@@ -240,7 +240,7 @@ class LockStaleDetectedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "LockStaleDetectedEvent":
+    def from_dict(cls, data: dict) -> "StaleLockDetectedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "lock.stale_detected"),

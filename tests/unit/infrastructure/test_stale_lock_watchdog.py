@@ -9,7 +9,7 @@ from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
 )
 from codetoreum.application.pipeline_lock_service import LockStatus
-from codetoreum.domain.events.lock_events import LockStaleDetectedEvent
+from codetoreum.domain.events.lock_events import StaleLockDetectedEvent
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.infrastructure.simulation.watchdogs import StaleLockWatchdog
 
@@ -112,7 +112,7 @@ class TestStaleDetection:
         # Assert: Event should be emitted
         mock_event_emitter.emit.assert_called_once()
         event = mock_event_emitter.emit.call_args[0][0]
-        assert isinstance(event, LockStaleDetectedEvent)
+        assert isinstance(event, StaleLockDetectedEvent)
         assert event.work_item_id == "item-1"
         assert event.project_id == "proj-1"
         assert event.board_id == "board-1"
@@ -189,7 +189,7 @@ class TestStaleDetection:
         # Assert: Two events should be emitted
         assert mock_event_emitter.emit.call_count == 2
         events = [call[0][0] for call in mock_event_emitter.emit.call_args_list]
-        assert all(isinstance(e, LockStaleDetectedEvent) for e in events)
+        assert all(isinstance(e, StaleLockDetectedEvent) for e in events)
 
     @pytest.mark.asyncio
     async def test_ignores_no_locks(self, watchdog, mock_event_emitter):
@@ -290,7 +290,7 @@ class TestEventEmission:
 
     @pytest.mark.asyncio
     async def test_stale_event_has_correct_fields(self, lock_service, watchdog, mock_event_emitter):
-        """Should emit LockStaleDetectedEvent with all required fields."""
+        """Should emit StaleLockDetectedEvent with all required fields."""
         # Arrange: Acquire lock and make it stale
         await lock_service.try_acquire_lock(
             project_id="proj-123",

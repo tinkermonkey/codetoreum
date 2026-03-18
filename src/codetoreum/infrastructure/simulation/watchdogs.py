@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 
 from codetoreum.domain.events.board_events import ColumnSLAExceededEvent
 from codetoreum.domain.events.execution_events import ExecutionTimedOutEvent
-from codetoreum.domain.events.lock_events import LockStaleDetectedEvent
+from codetoreum.domain.events.lock_events import StaleLockDetectedEvent
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.output.board_service import IBoardService
 from codetoreum.ports.output.event_emitter import IEventEmitter
@@ -36,7 +36,7 @@ class StaleLockWatchdog:
     """Proactively detects and force-releases stale pipeline locks.
 
     On each clock tick interval, scans all held pipeline locks and emits
-    LockStaleDetectedEvent for locks older than the stale threshold.
+    StaleLockDetectedEvent for locks older than the stale threshold.
     Automatically force-releases stale locks via the lock service.
 
     This extends the existing reactive stale lock detection (which only fires
@@ -46,12 +46,12 @@ class StaleLockWatchdog:
     - Clock-driven: Calls clock.schedule_callback() to self-reschedule
     - Time-aware: Uses clock.now() exclusively for comparisons
     - Fail-safe: Errors logged but don't stop future checks
-    - Event-driven: Emits LockStaleDetectedEvent for audit trail
+    - Event-driven: Emits StaleLockDetectedEvent for audit trail
     - Force-release: Calls lock_service.release_lock() to clean up
     - Deduplication: Tracks detected stale locks to emit events once per recovery
 
     Deduplication Design:
-    Prevents duplicate LockStaleDetectedEvent emissions for the same lock.
+    Prevents duplicate StaleLockDetectedEvent emissions for the same lock.
     When a lock is detected as stale and recovered, it's marked in
     _recovered_locks. If release_lock() fails (transient error), the event
     is still emitted but the lock isn't recovered - the next tick will retry
@@ -184,7 +184,7 @@ class StaleLockWatchdog:
 
         Gets all current lock states from the lock service, checks each held lock's age
         against the stale threshold, and for stale ones:
-        1. Emits LockStaleDetectedEvent with timestamp for audit trail
+        1. Emits StaleLockDetectedEvent with timestamp for audit trail
         2. Force-releases the lock via lock_service.release_lock()
         3. Tracks detection to avoid duplicate event emission
         4. Logs the stale lock at warning level
@@ -225,7 +225,7 @@ class StaleLockWatchdog:
                     )
 
                     # Emit domain event with lock acquisition time for audit trail
-                    stale_event = LockStaleDetectedEvent(
+                    stale_event = StaleLockDetectedEvent(
                         type="lock.stale_detected",
                         timestamp=now.isoformat(),
                         source="stale_lock_watchdog",
