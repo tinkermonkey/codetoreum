@@ -52,10 +52,7 @@ class AdapterSelectionConfig:
         for field_name in self.__dataclass_fields__:
             value = getattr(self, field_name)
             if not isinstance(value, str) or not value.strip():
-                raise ValueError(
-                    f"AdapterSelectionConfig.{field_name} must be a non-empty string, "
-                    f"got {value!r}"
-                )
+                raise ValueError(f"AdapterSelectionConfig.{field_name} must be a non-empty string, " f"got {value!r}")
 
 
 class FidelityLevel(Enum):
@@ -464,8 +461,7 @@ class SimulationConfig:
             "scenario_name": self.scenario_name,
             "scenario_description": self.scenario_description,
             "adapters": {
-                field_name: getattr(self.adapters, field_name)
-                for field_name in self.adapters.__dataclass_fields__
+                field_name: getattr(self.adapters, field_name) for field_name in self.adapters.__dataclass_fields__
             },
             "time": {
                 "speed_multiplier": self.time.speed_multiplier,
@@ -518,11 +514,7 @@ class SimulationConfig:
         # Parse adapter selection config
         adapters_raw = data.get("adapters", {})
         # Only include keys that are actual fields in AdapterSelectionConfig
-        adapters_kwargs = {
-            k: v
-            for k, v in adapters_raw.items()
-            if k in AdapterSelectionConfig.__dataclass_fields__
-        }
+        adapters_kwargs = {k: v for k, v in adapters_raw.items() if k in AdapterSelectionConfig.__dataclass_fields__}
         adapters = AdapterSelectionConfig(**adapters_kwargs)
 
         time_data = data.get("time", {})
