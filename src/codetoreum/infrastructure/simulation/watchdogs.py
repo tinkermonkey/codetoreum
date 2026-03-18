@@ -689,3 +689,239 @@ class SLAExpiryWatchdog:
                     work_item_id,
                     column_name,
                 )
+
+
+class ColumnProgressionWatchdog:
+    """Proactively triggers progression of work items through board columns via clock ticks.
+
+    On each clock tick interval, scans all work items on all boards and checks
+    if any items in agent columns have completed their agent execution and are
+    ready to progress to the next column. For ready items:
+    1. Moves the item to the next column via board.move_item_to_column()
+    2. Logs the progression at info level
+    3. Lets the normal BoardColumnEventHandler cascade handle the rest
+
+    This provides a clock-driven alternative/supplement to HTTP-triggered progression,
+    ensuring that even if an HTTP call is missed or delayed, pending items will
+    eventually progress through the workflow via periodic background checks.
+
+    Design:
+    - Clock-driven: Calls clock.schedule_callback() to self-reschedule
+    - Time-aware: Uses clock.now() exclusively for comparisons
+    - Fail-safe: Errors logged but don't stop future checks
+    - Integration: Works with existing BoardColumnEventHandler auto-progression
+    - Deduplication: Tracks recently-progressed items to prevent duplicate moves
+
+    Attributes:
+        _board_service: IBoardService for work item and column operations
+        _workflow_config_service: IWorkflowConfigService for column configuration
+        _clock: SimulationClock for time access and callback scheduling
+        _check_interval: Frequency (timedelta) of progression checks
+        _recently_progressed: Set of (work_item_id, board_id) tuples processed recently
+        _dedup_window: Time window (timedelta) for deduplication tracking
+        _stopped: Flag to stop the watchdog
+    """
+
+    def __init__(
+        self,
+        board_service: IBoardService,
+        workflow_config_service: IWorkflowConfigService,
+        clock: SimulationClock,
+        check_interval: timedelta = timedelta(seconds=30),
+        dedup_window: timedelta = timedelta(seconds=5),
+    ):
+        """Initialize column progression watchdog.
+
+        Args:
+            board_service: IBoardService for work item queries and movements
+            workflow_config_service: IWorkflowConfigService for column configuration
+            clock: SimulationClock for time and callback scheduling
+            check_interval: Frequency of checks (default 30 seconds simulated time)
+            dedup_window: Time window for deduplication to prevent duplicate moves (default 5 seconds)
+        """
+        self._board_service = board_service
+        self._workflow_config_service = workflow_config_service
+        self._clock = clock
+        self._check_interval = check_interval
+        self._dedup_window = dedup_window
+        self._logger = logger
+        # Track (work_item_id, board_id, progression_timestamp) for deduplication
+        self._recently_progressed: dict[tuple[str, str], datetime] = {}
+        self._stopped = False
+
+    def start(self) -> None:
+        """Schedule first watchdog check.
+
+        Registers a callback with the clock to run _tick() after _check_interval.
+        This callback will reschedule itself, creating a continuous background check.
+
+        Call this after the simulation engine and adapters are initialized.
+        """
+        self._stopped = False
+        self._clock.schedule_callback(self._tick, after_delta=self._check_interval)
+        self._logger.info(
+            "ColumnProgressionWatchdog started: checking every %s simulated seconds",
+            self._check_interval.total_seconds(),
+        )
+
+    def stop(self) -> None:
+        """Stop the watchdog.
+
+        Sets a flag to prevent future checks. The scheduled callback will
+        still fire, but will return early if the stop flag is set.
+        """
+        self._stopped = True
+        self._recently_progressed.clear()
+        self._logger.info("ColumnProgressionWatchdog stopped")
+
+    async def _tick(self, scheduled_time: datetime) -> None:
+        """Check for items ready to progress, always reschedule.
+
+        This is the main watchdog loop callback. It:
+        1. Checks if watchdog has been stopped (early return if so)
+        2. Calls _check_and_progress_items() to scan and advance ready items
+        3. Logs any errors with exc_info=True
+        4. Always reschedules itself (even on error) via clock.schedule_callback()
+
+        The always-reschedule pattern ensures that a single error doesn't stop
+        the watchdog from future checks. This is critical for production-like robustness.
+
+        Args:
+            scheduled_time: The time when this callback was triggered (provided by clock)
+        """
+        if self._stopped:
+            return
+
+        try:
+            await self._check_and_progress_items()
+        except Exception:
+            self._logger.error(
+                "ColumnProgressionWatchdog check failed, will retry next interval",
+                exc_info=True,
+            )
+        finally:
+            # Clean up stale deduplication entries
+            now = self._clock.now()
+            expired_keys = [
+                key
+                for key, timestamp in self._recently_progressed.items()
+                if now - timestamp > self._dedup_window
+            ]
+            for key in expired_keys:
+                del self._recently_progressed[key]
+
+            # Always reschedule if not stopped
+            if not self._stopped:
+                self._clock.schedule_callback(self._tick, after_delta=self._check_interval)
+
+    async def _check_and_progress_items(self) -> None:
+        """Scan all work items and progress those ready to advance.
+
+        Gets all boards and work items, checks each item's column for:
+        1. Whether it's an agent column (has agent_id)
+        2. Whether it has auto_progress_on_completion enabled
+        3. Whether the item was recently progressed (deduplication)
+
+        For items meeting criteria, moves to the next column via
+        board.move_item_to_column() with MovedByType.ORCHESTRATOR.
+        The normal BoardColumnEventHandler will take over from there.
+
+        This enables the autonomous progression cascade to be driven by
+        clock ticks rather than solely by HTTP calls. Combined with
+        the completion callback chain, this provides two pathways
+        for progression: HTTP-triggered and clock-driven.
+
+        Uses clock.now() exclusively for time comparisons, ensuring the watchdog
+        pauses when auto-advance pauses and works with simulated time.
+
+        Raises:
+            Any exception from board service or workflow config (caught and logged by _tick())
+        """
+        now = self._clock.now()
+
+        # Get all boards from board service
+        try:
+            all_boards = await self._board_service.get_all_boards()
+        except Exception:
+            self._logger.error(
+                "Failed to retrieve boards for progression checking",
+                exc_info=True,
+            )
+            return
+
+        for board in all_boards:
+            # Get workflow template for this board
+            try:
+                template = await self._workflow_config_service.get_board_workflow_template(board.id)
+            except Exception:
+                self._logger.error(
+                    "Failed to retrieve workflow template for board %s",
+                    board.id,
+                    exc_info=True,
+                )
+                continue
+
+            if not template:
+                continue
+
+            # Get all work items on board
+            try:
+                items = await self._board_service.get_board_items(board.project_id, board.id)
+            except Exception:
+                self._logger.error(
+                    "Failed to retrieve items for board %s",
+                    board.id,
+                    exc_info=True,
+                )
+                continue
+
+            # Check each item for progression readiness
+            for item in items:
+                if not item.column_name:
+                    continue
+
+                # Get current column configuration
+                column_config = template.get_column_config(item.column_name)
+                if not column_config:
+                    continue
+
+                # Only progress items in agent columns with auto-progression enabled
+                if not column_config.agent_id or not column_config.auto_progress_on_completion:
+                    continue
+
+                # Skip if recently progressed (deduplication)
+                dedup_key = (item.work_item_id, board.id)
+                if dedup_key in self._recently_progressed:
+                    continue
+
+                # Get next column to verify it exists
+                next_column = template.get_next_column(item.column_name)
+                if not next_column:
+                    # Already at exit column, no progression needed
+                    continue
+
+                # Trigger progression via board movement
+                try:
+                    self._logger.info(
+                        "ColumnProgressionWatchdog: progressing item %s from '%s' to '%s' (clock-driven)",
+                        item.work_item_id,
+                        item.column_name,
+                        next_column.name,
+                    )
+
+                    await self._board_service.move_item_to_column(
+                        work_item_id=item.work_item_id,
+                        target_column=next_column.name,
+                        moved_by=MovedByType.ORCHESTRATOR,
+                    )
+
+                    # Mark as recently progressed to prevent duplicate moves
+                    self._recently_progressed[dedup_key] = now
+
+                except Exception:
+                    self._logger.error(
+                        "Failed to progress item %s from column '%s'",
+                        item.work_item_id,
+                        item.column_name,
+                        exc_info=True,
+                    )

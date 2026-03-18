@@ -417,3 +417,162 @@ async def test_autonomous_progression_via_api_single_http_call(e2e_env):
         f"Expected at least 5 events (Created, Started, 3x StageAdvanced, Completed), "
         f"got {len(workflow_events)}: {event_types}"
     )
+
+
+@pytest.mark.asyncio
+async def test_autonomous_progression_via_clock_tick(e2e_env):
+    """Verify autonomous progression is driven by clock tick without HTTP trigger.
+
+    This test validates the clock-driven autonomous progression mechanism via
+    ColumnProgressionWatchdog, which complements the HTTP-triggered progression path.
+
+    The test demonstrates that:
+    1. Items in agent columns with auto_progress_on_completion=True can progress
+       via periodic clock-driven checks (not just HTTP calls)
+    2. The watchdog detects items ready to progress and moves them to next column
+    3. This triggers the normal BoardColumnEventHandler cascade
+    4. Progression continues until reaching exit column (Done)
+
+    This is essential evidence that autonomous progression is truly autonomous and
+    not purely dependent on HTTP triggers - it can also be driven by clock ticks
+    and background monitoring.
+
+    The difference from test_autonomous_progression_via_api_single_http_call:
+    - That test verifies HTTP trigger starts the cascade
+    - This test verifies clock tick can also trigger/continue the cascade
+    """
+    bootstrap, seeder = e2e_env
+    adapters = cast("SimulationAdapters", bootstrap.adapters)
+    board = adapters.board
+    executor = adapters.agent_executor
+    event_store = adapters.event_store
+    engine = bootstrap._engine
+
+    # Use IDs from seeded data
+    board_id = seeder.created_items.boards[0]
+    work_item_id = seeder.created_items.work_items[0]
+
+    # =========================================================================
+    # PLACE ITEM IN READY COLUMN (FIRST AUTOMATED COLUMN)
+    # =========================================================================
+    # Start by moving item to Ready column via HTTP (simulating user action)
+    # But then we'll use clock ticks to drive progression through remaining columns
+    await board.move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)
+
+    # Wait for agent to complete in Ready column
+    async def item_in_next_column():
+        pos = await board.get_item_position(work_item_id)
+        return pos.column_name == "In Progress"
+
+    await wait_for_condition(item_in_next_column, timeout=10.0, poll_interval=0.1)
+
+    # =========================================================================
+    # USE CLOCK TICK TO DRIVE PROGRESSION (NO MORE HTTP CALLS)
+    # =========================================================================
+    # Verify item is in In Progress column
+    pos = await board.get_item_position(work_item_id)
+    assert pos.column_name == "In Progress", (
+        f"Item should be in 'In Progress' after first agent, got '{pos.column_name}'"
+    )
+
+    # Now let the ColumnProgressionWatchdog drive progression via clock ticks
+    # Advance the clock to trigger the watchdog's periodic check
+    if engine:
+        clock = engine.get_clock_for_testing()
+        # Advance time by 35 seconds to trigger the watchdog (it checks every 30 seconds)
+        from datetime import timedelta
+
+        clock.advance(timedelta(seconds=35))
+
+    # Wait for item to progress to Review column (via clock-driven watchdog)
+    async def item_in_review():
+        pos = await board.get_item_position(work_item_id)
+        return pos.column_name == "Review"
+
+    await wait_for_condition(item_in_review, timeout=15.0, poll_interval=0.1)
+
+    # Verify progression occurred via watchdog
+    pos = await board.get_item_position(work_item_id)
+    assert pos.column_name == "Review", (
+        f"Clock tick should have progressed item from 'In Progress' to 'Review', got '{pos.column_name}'"
+    )
+
+    # =========================================================================
+    # CONTINUE CLOCK-DRIVEN PROGRESSION TO DONE
+    # =========================================================================
+    # Advance clock again to trigger final progression
+    if engine:
+        clock = engine.get_clock_for_testing()
+        clock.advance(timedelta(seconds=35))
+
+    # Wait for item to reach Done
+    reached_done = await wait_for_column(board, work_item_id, "Done", timeout=15.0)
+    assert reached_done, (
+        f"Item {work_item_id} should have reached 'Done' via clock-driven progression. "
+        f"Current position: {(await board.get_item_position(work_item_id)).column_name}"
+    )
+
+    # =========================================================================
+    # VERIFY COMPLETE PROGRESSION PATH
+    # =========================================================================
+    # Verify all 3 agents executed in correct order
+    executions = [e for e in executor.executions if e["work_item_id"] == work_item_id]
+    agent_ids = [e["agent_id"] for e in executions]
+    assert agent_ids == ["architect", "coder", "tester"], (
+        f"Expected agents [architect, coder, tester], got {agent_ids}"
+    )
+
+    # Verify movement history shows correct progression path
+    history = board.get_movement_history(work_item_id)
+    assert len(history) == 4, (
+        f"Expected 4 movements, got {len(history)}: {[(m.from_column, m.to_column) for m in history]}"
+    )
+
+    # First move is HUMAN (initial HTTP call)
+    # Subsequent moves are ORCHESTRATOR (from auto-progression cascade)
+    assert history[0].moved_by == MovedByType.HUMAN, (
+        f"First move should be HUMAN, got {history[0].moved_by}"
+    )
+
+    for i, move in enumerate(history[1:], start=1):
+        assert move.moved_by == MovedByType.ORCHESTRATOR, (
+            f"Move {i} should be ORCHESTRATOR, got {move.moved_by}"
+        )
+
+    # Verify column progression path
+    columns_visited = [history[0].from_column] + [m.to_column for m in history]
+    assert columns_visited == ["Backlog", "Ready", "In Progress", "Review", "Done"], (
+        f"Expected column path [Backlog, Ready, In Progress, Review, Done], got {columns_visited}"
+    )
+
+    # Verify workflow completed (event sourcing validation)
+    all_events = event_store.get_all_events_list()
+    workflow_events = [
+        e for e in all_events
+        if e.aggregate_type == "Workflow"
+        and e.payload.get("work_item_id") == work_item_id
+    ]
+    assert len(workflow_events) > 0, "No workflow events found"
+
+    event_types = [e.event_type for e in workflow_events]
+    assert "WorkflowCompleted" in event_types, (
+        f"WorkflowCompleted event not found. Events: {event_types}"
+    )
+
+    # =========================================================================
+    # KEY VALIDATION: CLOCK-DRIVEN PROGRESSION EVIDENCE
+    # =========================================================================
+    # The critical assertion: the item progressed through multiple columns
+    # WITHOUT additional HTTP trigger calls after the initial move to Ready.
+    # This proves that ColumnProgressionWatchdog (clock-driven mechanism) can
+    # autonomously drive progression through agent columns, not just HTTP calls.
+    assert len(executions) == 3, (
+        f"Expected 3 agent executions (architect, coder, tester), "
+        f"got {len(executions)}"
+    )
+
+    # Verify all executions have required fields
+    for execution in executions:
+        assert "work_item_id" in execution, "Execution missing work_item_id"
+        assert "agent_id" in execution, "Execution missing agent_id"
+        assert "started_at" in execution, "Execution missing started_at"

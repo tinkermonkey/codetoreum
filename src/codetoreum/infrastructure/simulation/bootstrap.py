@@ -157,6 +157,7 @@ from codetoreum.infrastructure.simulation.mock_tracer import MockTracer
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
 from codetoreum.infrastructure.simulation.watchdogs import (
+    ColumnProgressionWatchdog,
     ExecutionTimeoutWatchdog,
     SLAExpiryWatchdog,
     StaleLockWatchdog,
@@ -195,6 +196,7 @@ class BootstrapPhase(Enum):
     STALE_LOCK_WATCHDOG = "stale_lock_watchdog"
     EXECUTION_TIMEOUT_WATCHDOG = "execution_timeout_watchdog"
     SLA_EXPIRY_WATCHDOG = "sla_expiry_watchdog"
+    COLUMN_PROGRESSION_WATCHDOG = "column_progression_watchdog"
 
 
 @dataclass
@@ -388,6 +390,7 @@ class SimulationApplicationBootstrap:
         self._stale_lock_watchdog: StaleLockWatchdog | None = None
         self._execution_timeout_watchdog: ExecutionTimeoutWatchdog | None = None
         self._sla_expiry_watchdog: SLAExpiryWatchdog | None = None
+        self._column_progression_watchdog: ColumnProgressionWatchdog | None = None
 
     @property
     def is_degraded(self) -> bool:
@@ -631,6 +634,36 @@ class SimulationApplicationBootstrap:
                         "SLA violations will not be detected."
                     )
 
+            # Phase 6e: Register column progression watchdog
+            # Must come after auto-advance starts and all adapters are initialized
+            # Provides clock-driven autonomous progression as alternative to HTTP-triggered moves
+            if self.adapters and self._engine:
+                try:
+                    logger.info("Phase 6e: Registering column progression watchdog...")
+                    self._column_progression_watchdog = ColumnProgressionWatchdog(
+                        board_service=self.adapters.board,
+                        workflow_config_service=self.adapters.workflow_config,
+                        clock=self._engine.get_clock_for_testing(),
+                        check_interval=timedelta(seconds=30),  # Check every 30 simulated seconds
+                        dedup_window=timedelta(seconds=5),  # Dedup window for recent progressions
+                    )
+                    self._column_progression_watchdog.start()
+                    logger.info("Column progression watchdog registered and started")
+                except Exception as e:
+                    # Mark as degraded - column progression is essential for autonomous workflows
+                    error_msg = f"Failed to register column progression watchdog: {e}"
+                    logger.error(
+                        error_msg,
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                    )
+                    self._degraded_mode.mark_failed(BootstrapPhase.COLUMN_PROGRESSION_WATCHDOG, str(e))
+                    # Continue without watchdog - progression will work via HTTP calls only
+                    logger.warning(
+                        "Continuing server startup in degraded mode without column progression watchdog. "
+                        "Clock-driven progression will not work, but HTTP-triggered progression should work."
+                    )
+
             self._is_setup = True
 
             # Log degraded mode status before returning
@@ -691,6 +724,10 @@ class SimulationApplicationBootstrap:
             if self._sla_expiry_watchdog:
                 self._sla_expiry_watchdog.stop()
                 logger.debug("SLA expiry watchdog stopped")
+
+            if self._column_progression_watchdog:
+                self._column_progression_watchdog.stop()
+                logger.debug("Column progression watchdog stopped")
 
             # Stop dead letter queue retry processor
             if self.infrastructure and self.infrastructure.failed_event_store:
