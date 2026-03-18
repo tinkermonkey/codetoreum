@@ -18,7 +18,6 @@ from codetoreum.domain.services.execution_context_builder import ExecutionContex
 from codetoreum.domain.types import WorkItemId
 from codetoreum.domain.value_objects import ContainerConfig
 from codetoreum.infrastructure.error_ids import ErrorRegistry
-from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.output.agent_executor import IAgentExecutor
 
 if TYPE_CHECKING:
@@ -27,6 +26,7 @@ if TYPE_CHECKING:
     )
     from codetoreum.application.execution_service import ExecutionService
     from codetoreum.application.workspace_router import WorkspaceRouter
+    from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
     from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
     from codetoreum.ports.output.agent_repository import IAgentRepository
     from codetoreum.ports.output.config_store import IConfigStore
@@ -87,8 +87,8 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         run_registry: IActiveWorkflowRunRegistry,
         branch_tracker: IWorkItemBranchTracker,
         vcs: IVersionControlService,
-        clock: SimulationClock | None = None,
-        recovery_service: AgentExecutionRecoveryService | None = None,
+        clock: "SimulationClock | None" = None,
+        recovery_service: "AgentExecutionRecoveryService | None" = None,
         execution_delay: float = 0.0,
     ) -> None:
         """Initialize ExecutionServiceAgentExecutor.
@@ -117,7 +117,8 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         self._vcs = vcs
         # Create default clock if not provided (for backward compatibility with tests)
         if clock is None:
-            clock = SimulationClock()
+            from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock as SC
+            clock = SC()
         self._clock = clock
         self._recovery_service = recovery_service
         self._execution_delay = execution_delay
