@@ -49,10 +49,6 @@ class IPipelineLockService(EventEmitter, Protocol):
     (try_acquire_lock, release_lock) are not used by event bus wiring.
     """
 
-    # Note: The on() method for event emission is inherited from EventEmitter.
-    # The actual lock acquisition/release methods are not used by event bus wiring.
-    ...
-
 
 class ICodeReviewService(EventEmitter, Protocol):
     """Protocol for code review service implementations."""

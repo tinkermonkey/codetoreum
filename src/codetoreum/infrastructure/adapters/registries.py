@@ -8,6 +8,7 @@ board services, code review services, and more.
 
 import inspect
 
+from codetoreum.application.pipeline_lock_service import IQueuedPipelineLockService
 from codetoreum.infrastructure.adapters.registry_base import AdapterRegistry
 from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
 from codetoreum.ports.output.agent_executor import IAgentExecutor
@@ -26,7 +27,6 @@ from codetoreum.ports.output.llm_provider import ILLMProvider
 from codetoreum.ports.output.message_broker import IMessageBroker
 from codetoreum.ports.output.metrics import IMetrics
 from codetoreum.ports.output.notifier import INotifier
-from codetoreum.application.pipeline_lock_service import IQueuedPipelineLockService
 from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
 from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
