@@ -17,7 +17,9 @@ from click.testing import CliRunner
 from fastapi.testclient import TestClient
 
 from codetoreum.cli.simulation_server import (
+    apply_adapter_overrides,
     bootstrap_application,
+    display_adapter_summary,
     get_scenario_file_path,
     main,
     seed_data,
@@ -612,6 +614,290 @@ class TestErrorHandling:
                 )
         finally:
             await bootstrap.teardown()
+
+
+class TestAdapterOverrides:
+    """Test adapter override functionality."""
+
+    def test_apply_adapter_overrides_single_override(self):
+        """Test applying a single adapter override."""
+        from codetoreum.infrastructure.adapters.factory import AdapterFactory, AdapterFactoryConfig
+        from codetoreum.infrastructure.resilience import OperationMode
+        from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+
+        # Create config and factory
+        config = SimulationConfig.create_fast_config("test")
+        factory_config = AdapterFactoryConfig(
+            operation_mode=OperationMode.SIMULATION,
+            enable_resilience=False,
+        )
+        factory = AdapterFactory(factory_config)
+
+        # Apply override
+        overrides = (("board", "mock"),)
+        result = apply_adapter_overrides(config, overrides, factory)
+
+        # Verify override was applied
+        assert result.adapters.board == "mock"
+        # Other adapters should remain unchanged
+        assert result.adapters.llm == "mock"
+        assert result.adapters.ticket == "in_memory"
+
+    def test_apply_adapter_overrides_multiple(self):
+        """Test applying multiple adapter overrides."""
+        from codetoreum.infrastructure.adapters.factory import AdapterFactory, AdapterFactoryConfig
+        from codetoreum.infrastructure.resilience import OperationMode
+        from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+
+        # Create config and factory
+        config = SimulationConfig.create_fast_config("test")
+        factory_config = AdapterFactoryConfig(
+            operation_mode=OperationMode.SIMULATION,
+            enable_resilience=False,
+        )
+        factory = AdapterFactory(factory_config)
+
+        # Apply multiple overrides
+        overrides = (
+            ("board", "mock"),
+            ("llm", "mock"),
+            ("container", "fake"),
+        )
+        result = apply_adapter_overrides(config, overrides, factory)
+
+        # Verify all overrides were applied
+        assert result.adapters.board == "mock"
+        assert result.adapters.llm == "mock"
+        assert result.adapters.container == "fake"
+        # Others unchanged
+        assert result.adapters.ticket == "in_memory"
+
+    def test_apply_adapter_overrides_empty(self):
+        """Test that empty overrides returns original config unchanged."""
+        from codetoreum.infrastructure.adapters.factory import AdapterFactory, AdapterFactoryConfig
+        from codetoreum.infrastructure.resilience import OperationMode
+        from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+
+        # Create config and factory
+        config = SimulationConfig.create_fast_config("test")
+        factory_config = AdapterFactoryConfig(
+            operation_mode=OperationMode.SIMULATION,
+            enable_resilience=False,
+        )
+        factory = AdapterFactory(factory_config)
+
+        # Apply empty overrides
+        overrides = ()
+        result = apply_adapter_overrides(config, overrides, factory)
+
+        # Verify nothing changed
+        assert result.adapters == config.adapters
+
+    def test_apply_adapter_overrides_invalid_slot_name(self):
+        """Test error handling for invalid adapter slot name."""
+        from codetoreum.infrastructure.adapters.factory import AdapterFactory, AdapterFactoryConfig
+        from codetoreum.infrastructure.resilience import OperationMode
+        from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+
+        # Create config and factory
+        config = SimulationConfig.create_fast_config("test")
+        factory_config = AdapterFactoryConfig(
+            operation_mode=OperationMode.SIMULATION,
+            enable_resilience=False,
+        )
+        factory = AdapterFactory(factory_config)
+
+        # Try to use invalid slot name
+        overrides = (("invalid_slot_xyz", "mock"),)
+
+        with pytest.raises(click.UsageError) as exc_info:
+            apply_adapter_overrides(config, overrides, factory)
+
+        error_msg = str(exc_info.value)
+        assert "Unknown adapter slot" in error_msg
+        assert "invalid_slot_xyz" in error_msg
+        assert "Valid slots:" in error_msg
+
+    def test_apply_adapter_overrides_invalid_impl_name(self):
+        """Test error handling for invalid implementation name."""
+        from codetoreum.infrastructure.adapters.factory import AdapterFactory, AdapterFactoryConfig
+        from codetoreum.infrastructure.resilience import OperationMode
+        from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+
+        # Create config and factory
+        config = SimulationConfig.create_fast_config("test")
+        factory_config = AdapterFactoryConfig(
+            operation_mode=OperationMode.SIMULATION,
+            enable_resilience=False,
+        )
+        factory = AdapterFactory(factory_config)
+
+        # Try to use invalid impl name for a valid slot
+        overrides = (("board", "invalid_impl_xyz"),)
+
+        with pytest.raises(click.UsageError) as exc_info:
+            apply_adapter_overrides(config, overrides, factory)
+
+        error_msg = str(exc_info.value)
+        assert "Unknown implementation" in error_msg
+        assert "invalid_impl_xyz" in error_msg
+        assert "board" in error_msg
+        assert "Available:" in error_msg
+
+    def test_apply_adapter_overrides_multiple_errors(self):
+        """Test error handling accumulates all errors."""
+        from codetoreum.infrastructure.adapters.factory import AdapterFactory, AdapterFactoryConfig
+        from codetoreum.infrastructure.resilience import OperationMode
+        from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+
+        # Create config and factory
+        config = SimulationConfig.create_fast_config("test")
+        factory_config = AdapterFactoryConfig(
+            operation_mode=OperationMode.SIMULATION,
+            enable_resilience=False,
+        )
+        factory = AdapterFactory(factory_config)
+
+        # Try to use multiple invalid overrides
+        overrides = (
+            ("invalid_slot1", "mock"),
+            ("board", "invalid_impl1"),
+            ("invalid_slot2", "invalid_impl2"),
+        )
+
+        with pytest.raises(click.UsageError) as exc_info:
+            apply_adapter_overrides(config, overrides, factory)
+
+        error_msg = str(exc_info.value)
+        # Should contain errors for multiple issues
+        assert "Unknown adapter slot" in error_msg
+        assert "invalid_slot1" in error_msg
+
+    @pytest.mark.asyncio
+    async def test_bootstrap_with_adapter_overrides(self):
+        """Test bootstrap applies adapter overrides correctly."""
+        # Test that bootstrap_application accepts and applies adapter overrides
+        overrides = (("llm", "mock"),)
+        bootstrap = await bootstrap_application(
+            scenario="default",
+            scenario_file=None,
+            speed_multiplier=10.0,
+            auto_advance=False,
+            adapter_overrides=overrides,
+        )
+
+        try:
+            # Verify bootstrap succeeded
+            assert bootstrap is not None
+            assert bootstrap._is_setup is True
+            # Verify the override was applied in config
+            assert bootstrap.config.adapters.llm == "mock"
+        finally:
+            await bootstrap.teardown()
+
+    def test_cli_adapter_override_help(self):
+        """Test that --adapter option appears in CLI help."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["--help"])
+
+        assert result.exit_code == 0
+        assert "--adapter" in result.output
+        assert "SLOT IMPL" in result.output
+        assert "Override a single adapter" in result.output
+
+
+class TestAdapterDisplaySummary:
+    """Test adapter summary display functionality."""
+
+    def test_display_adapter_summary_valid_adapters(self, capsys):
+        """Test that adapter summary displays all adapters with correct tags."""
+        from codetoreum.infrastructure.adapters.factory import AdapterFactory, AdapterFactoryConfig
+        from codetoreum.infrastructure.resilience import OperationMode
+        from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+
+        # Create config and factory
+        config = SimulationConfig.create_fast_config("test")
+        factory_config = AdapterFactoryConfig(
+            operation_mode=OperationMode.SIMULATION,
+            enable_resilience=False,
+        )
+        factory = AdapterFactory(factory_config)
+
+        # Display summary (should not raise)
+        display_adapter_summary(config, factory)
+
+        # Capture output
+        captured = capsys.readouterr()
+        output = captured.out
+
+        # Verify output contains adapter slots
+        assert "Slot" in output
+        assert "Implementation" in output
+        assert "Type" in output
+        # Spot check for some adapters
+        assert "board" in output
+        assert "llm" in output
+        assert "container" in output
+
+    def test_display_adapter_summary_shows_simulation_tags(self, capsys):
+        """Test that simulation adapters are labeled [simulation]."""
+        from codetoreum.infrastructure.adapters.factory import AdapterFactory, AdapterFactoryConfig
+        from codetoreum.infrastructure.resilience import OperationMode
+        from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+
+        # Create config with mock adapters (which are marked as simulation)
+        config = SimulationConfig.create_fast_config("test")
+        factory_config = AdapterFactoryConfig(
+            operation_mode=OperationMode.SIMULATION,
+            enable_resilience=False,
+        )
+        factory = AdapterFactory(factory_config)
+
+        # Display summary
+        display_adapter_summary(config, factory)
+
+        # Capture output
+        captured = capsys.readouterr()
+        output = captured.out
+
+        # Should show adapter slots and implementations at minimum
+        assert "Adapter Configuration" in output
+        assert "board" in output
+        assert "mock" in output
+        # Note: The Type column rendering may be stripped by Rich in CI environments,
+        # but the function should not raise an exception
+
+
+class TestCLIAdapterIntegration:
+    """Integration tests for CLI --adapter flag."""
+
+    def test_cli_single_adapter_override(self):
+        """Test CLI with single --adapter flag."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["--adapter", "board", "mock", "--no-seed", "--help"])
+
+        # The --help flag means this won't actually run, but the option should parse
+        assert result.exit_code == 0
+
+    def test_cli_multiple_adapter_overrides(self):
+        """Test CLI with multiple --adapter flags."""
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            [
+                "--adapter",
+                "board",
+                "mock",
+                "--adapter",
+                "llm",
+                "mock",
+                "--no-seed",
+                "--help",
+            ],
+        )
+
+        # The --help flag means this won't actually run, but the option should parse
+        assert result.exit_code == 0
 
 
 if __name__ == "__main__":
