@@ -42,15 +42,16 @@ class IDiscussionAdapter(EventEmitter, Protocol):
 
 
 class IPipelineLockService(EventEmitter, Protocol):
-    """Protocol for pipeline lock service implementations."""
+    """Protocol for pipeline lock service implementations.
 
-    async def try_acquire_lock(self, project_id: str, board_id: str, work_item_id: str) -> tuple[bool, str]:
-        """Try to acquire a pipeline lock for a work item."""
-        ...
+    This protocol is used for event bus wiring purposes and only requires
+    the EventEmitter interface (on() method). The actual lock service methods
+    (try_acquire_lock, release_lock) are not used by event bus wiring.
+    """
 
-    async def release_lock(self, project_id: str, board_id: str, work_item_id: str) -> None:
-        """Release a pipeline lock for a work item."""
-        ...
+    # Note: The on() method for event emission is inherited from EventEmitter.
+    # The actual lock acquisition/release methods are not used by event bus wiring.
+    ...
 
 
 class ICodeReviewService(EventEmitter, Protocol):

@@ -25,8 +25,8 @@ from codetoreum.adapters.secondary import (
     GitRepositoryAdapter,
     MockEventEmitter,
 )
-from codetoreum.adapters.secondary.in_memory_pipeline_lock_service import (
-    InMemoryPipelineLockService,
+from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
+    InMemoryLockService,
 )
 
 # Import testing adapters
@@ -661,8 +661,8 @@ class AdapterFactory:
         # Pipeline Lock Service Adapters
         self._pipeline_lock_registry.register(
             name="in_memory",
-            adapter_type=InMemoryPipelineLockService,
-            description="In-memory pipeline lock service",
+            adapter_type=InMemoryLockService,
+            description="In-memory pipeline lock service with position-based queue ordering",
             version="1.0.0",
             tags=["testing", "simulation", "mock", "production"],
             config_schema=AdapterCredentialRequirement(

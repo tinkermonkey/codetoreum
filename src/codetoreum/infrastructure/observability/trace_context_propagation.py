@@ -236,7 +236,8 @@ class TraceContextPropagator:
             if trace_data:
                 TraceContextPropagator.activate_trace_context(trace_data)
         """
-        if not event.metadata:
+        # CodetoreumEvent (adapter events) don't have metadata; only DomainEvent does
+        if not hasattr(event, "metadata") or not event.metadata:
             return None
 
         traceparent = event.metadata.get(TraceContextPropagator.TRACE_CONTEXT_KEY)

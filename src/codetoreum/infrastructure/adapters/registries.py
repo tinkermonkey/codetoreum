@@ -26,6 +26,7 @@ from codetoreum.ports.output.llm_provider import ILLMProvider
 from codetoreum.ports.output.message_broker import IMessageBroker
 from codetoreum.ports.output.metrics import IMetrics
 from codetoreum.ports.output.notifier import INotifier
+from codetoreum.application.pipeline_lock_service import IQueuedPipelineLockService
 from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
 from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
@@ -369,15 +370,24 @@ class EncryptionRegistry(AdapterRegistry[IEncryptionService]):
 
 
 class PipelineLockServiceRegistry(AdapterRegistry[IPipelineLockService]):
-    """Registry for IPipelineLockService adapter implementations."""
+    """Registry for IPipelineLockService adapter implementations.
+
+    This registry accepts adapters that implement either:
+    - IPipelineLockService (port interface, 3-parameter lock methods)
+    - IQueuedPipelineLockService (application interface, 4-parameter lock methods with position-based queue)
+    """
 
     def __init__(self):
         """Initialize the pipeline lock service registry."""
         super().__init__(IPipelineLockService)
 
     def _is_valid_adapter(self, adapter_type: type[IPipelineLockService]) -> bool:
-        """Validate that an adapter implements IPipelineLockService."""
-        return _validate_adapter_implements_interface(adapter_type, self._port_interface)
+        """Validate that an adapter implements IPipelineLockService or IQueuedPipelineLockService."""
+        # Check if implements port interface
+        if _validate_adapter_implements_interface(adapter_type, self._port_interface):
+            return True
+        # Also accept adapters that implement IQueuedPipelineLockService (application interface)
+        return _validate_adapter_implements_interface(adapter_type, IQueuedPipelineLockService)
 
 
 class PipelineQueueServiceRegistry(AdapterRegistry[IPipelineQueueService]):
