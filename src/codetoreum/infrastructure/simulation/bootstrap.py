@@ -537,6 +537,15 @@ class SimulationApplicationBootstrap:
                         stale_threshold_seconds=7200,  # 2 hours default
                     )
                     self._stale_lock_watchdog.start()
+
+                    # Wire the on_lock_acquired event handler to clear deduplication tracking
+                    # when locks are newly acquired after being recovered
+                    if self.infrastructure and self.infrastructure.event_bus:
+                        self.infrastructure.event_bus.subscribe(
+                            "lock.acquired",
+                            self._stale_lock_watchdog.on_lock_acquired,
+                        )
+
                     logger.info("Stale lock watchdog registered and started")
                 except Exception as e:
                     # Mark as degraded - stale lock detection is critical for deadlock prevention
