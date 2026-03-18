@@ -87,7 +87,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         run_registry: IActiveWorkflowRunRegistry,
         branch_tracker: IWorkItemBranchTracker,
         vcs: IVersionControlService,
-        clock: "SimulationClock | None" = None,
+        clock: "SimulationClock",
         recovery_service: "AgentExecutionRecoveryService | None" = None,
         execution_delay: float = 0.0,
     ) -> None:
@@ -103,7 +103,6 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             branch_tracker: Tracks VCS branches per work item
             vcs: Version control service for repository operations
             clock: SimulationClock for consistent time tracking in simulation
-                (if None, creates a default SimulationClock instance)
             recovery_service: Service for handling completion callback failures
             execution_delay: Optional delay (seconds) before execution for testing
         """
@@ -115,10 +114,6 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         self._run_registry = run_registry
         self._branch_tracker = branch_tracker
         self._vcs = vcs
-        # Create default clock if not provided (for backward compatibility with tests)
-        if clock is None:
-            from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
-            clock = SimulationClock()
         self._clock = clock
         self._recovery_service = recovery_service
         self._execution_delay = execution_delay

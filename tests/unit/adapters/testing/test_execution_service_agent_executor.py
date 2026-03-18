@@ -14,6 +14,7 @@ import pytest
 from codetoreum.adapters.testing.execution_service_agent_executor import (
     ExecutionServiceAgentExecutor,
 )
+from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.output.active_workflow_run_registry import ActiveRunInfo
 
 # ---------------------------------------------------------------------------
@@ -38,6 +39,7 @@ class ExecutorFixture:
         self.branch_tracker = AsyncMock()
         self.execution_service = AsyncMock()
         self.completion_callback = AsyncMock()
+        self.clock = SimulationClock()
 
         # Happy-path defaults ---
         self.run_info = ActiveRunInfo(
@@ -105,6 +107,7 @@ class ExecutorFixture:
             run_registry=self.run_registry,
             branch_tracker=self.branch_tracker,
             vcs=self.vcs,
+            clock=self.clock,
             recovery_service=recovery_service,
         )
         executor.set_completion_handler(self.completion_callback, self.BOARD_ID)
@@ -423,6 +426,7 @@ class TestCompletionCallbackFailureRecovery:
             run_registry=fx.run_registry,
             branch_tracker=fx.branch_tracker,
             vcs=fx.vcs,
+            clock=fx.clock,
             recovery_service=recovery_service,
         )
         executor.set_completion_handler(fx.completion_callback, fx.BOARD_ID)
@@ -452,6 +456,7 @@ class TestCompletionCallbackFailureRecovery:
             run_registry=fx.run_registry,
             branch_tracker=fx.branch_tracker,
             vcs=fx.vcs,
+            clock=fx.clock,
             recovery_service=None,  # No recovery service
         )
         executor.set_completion_handler(fx.completion_callback, fx.BOARD_ID)

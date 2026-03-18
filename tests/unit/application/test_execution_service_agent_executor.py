@@ -23,6 +23,7 @@ from codetoreum.adapters.testing.execution_service_agent_executor import (
 )
 from codetoreum.domain.agent import Agent
 from codetoreum.domain.work_item import WorkItem
+from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.output.active_workflow_run_registry import ActiveRunInfo
 
 
@@ -39,6 +40,7 @@ class TestExecutionServiceAgentExecutorInitialization:
         run_registry = AsyncMock()
         branch_tracker = AsyncMock()
         vcs = AsyncMock()
+        clock = SimulationClock()
 
         executor = ExecutionServiceAgentExecutor(
             execution_service=execution_service,
@@ -49,6 +51,7 @@ class TestExecutionServiceAgentExecutorInitialization:
             run_registry=run_registry,
             branch_tracker=branch_tracker,
             vcs=vcs,
+            clock=clock,
         )
 
         assert executor is not None
@@ -67,6 +70,7 @@ class TestExecutionServiceAgentExecutorInitialization:
             "run_registry": AsyncMock(),
             "branch_tracker": AsyncMock(),
             "vcs": AsyncMock(),
+            "clock": SimulationClock(),
         }
 
         recovery_service = AsyncMock()
@@ -86,6 +90,7 @@ class TestExecutionServiceAgentExecutorInitialization:
             "run_registry": AsyncMock(),
             "branch_tracker": AsyncMock(),
             "vcs": AsyncMock(),
+            "clock": SimulationClock(),
         }
 
         executor = ExecutionServiceAgentExecutor(execution_delay=0.5, **dependencies)
@@ -103,6 +108,7 @@ class TestExecutionServiceAgentExecutorInitialization:
             "run_registry": AsyncMock(),
             "branch_tracker": AsyncMock(),
             "vcs": AsyncMock(),
+            "clock": SimulationClock(),
         }
 
         executor = ExecutionServiceAgentExecutor(**dependencies)
@@ -134,6 +140,7 @@ class TestExecutionServiceAgentExecutorExecution:
             "run_registry": AsyncMock(),
             "branch_tracker": AsyncMock(),
             "vcs": AsyncMock(),
+            "clock": SimulationClock(),
         }
 
         executor = ExecutionServiceAgentExecutor(**dependencies)
@@ -177,6 +184,7 @@ class TestExecutionServiceAgentExecutorExecution:
             "run_registry": AsyncMock(),
             "branch_tracker": AsyncMock(),
             "vcs": AsyncMock(),
+            "clock": SimulationClock(),
         }
 
         executor = ExecutionServiceAgentExecutor(**dependencies)
@@ -214,6 +222,7 @@ class TestExecutionServiceAgentExecutorExecution:
             "run_registry": AsyncMock(),
             "branch_tracker": AsyncMock(),
             "vcs": AsyncMock(),
+            "clock": SimulationClock(),
         }
 
         executor = ExecutionServiceAgentExecutor(**dependencies)
@@ -248,6 +257,7 @@ class TestExecutionServiceAgentExecutorExecution:
             "run_registry": AsyncMock(),
             "branch_tracker": AsyncMock(),
             "vcs": AsyncMock(),
+            "clock": SimulationClock(),
         }
 
         executor = ExecutionServiceAgentExecutor(execution_delay=0.1, **dependencies)
@@ -294,6 +304,7 @@ class TestExecutionServiceAgentExecutorChainSteps:
             "run_registry": AsyncMock(),
             "branch_tracker": AsyncMock(),
             "vcs": AsyncMock(),
+            "clock": SimulationClock(),
         }
 
         executor = ExecutionServiceAgentExecutor(**dependencies)
@@ -321,6 +332,7 @@ class TestExecutionServiceAgentExecutorChainSteps:
             "run_registry": AsyncMock(),
             "branch_tracker": AsyncMock(),
             "vcs": AsyncMock(),
+            "clock": SimulationClock(),
         }
 
         executor = ExecutionServiceAgentExecutor(**dependencies)
@@ -356,6 +368,7 @@ class TestExecutionServiceAgentExecutorChainSteps:
             "run_registry": AsyncMock(),
             "branch_tracker": AsyncMock(),
             "vcs": AsyncMock(),
+            "clock": SimulationClock(),
         }
 
         executor = ExecutionServiceAgentExecutor(**dependencies)
@@ -395,6 +408,7 @@ class TestExecutionServiceAgentExecutorChainSteps:
             "run_registry": AsyncMock(),
             "branch_tracker": AsyncMock(),
             "vcs": AsyncMock(),
+            "clock": SimulationClock(),
         }
 
         executor = ExecutionServiceAgentExecutor(**dependencies)
@@ -441,6 +455,7 @@ class TestExecutionServiceAgentExecutorCompletion:
             "run_registry": AsyncMock(),
             "branch_tracker": AsyncMock(),
             "vcs": AsyncMock(),
+            "clock": SimulationClock(),
         }
 
         executor = ExecutionServiceAgentExecutor(**dependencies)
@@ -463,6 +478,7 @@ class TestExecutionServiceAgentExecutorCompletion:
             "run_registry": AsyncMock(),
             "branch_tracker": AsyncMock(),
             "vcs": AsyncMock(),
+            "clock": SimulationClock(),
         }
 
         executor = ExecutionServiceAgentExecutor(**dependencies)
@@ -506,6 +522,7 @@ class TestExecutionServiceAgentExecutorMultipleExecutions:
             "run_registry": AsyncMock(),
             "branch_tracker": AsyncMock(),
             "vcs": AsyncMock(),
+            "clock": SimulationClock(),
         }
 
         executor = ExecutionServiceAgentExecutor(**dependencies)
@@ -546,6 +563,7 @@ class TestExecutionServiceAgentExecutorMultipleExecutions:
             "run_registry": AsyncMock(),
             "branch_tracker": AsyncMock(),
             "vcs": AsyncMock(),
+            "clock": SimulationClock(),
         }
 
         executor = ExecutionServiceAgentExecutor(**dependencies)
