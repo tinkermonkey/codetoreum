@@ -1,6 +1,7 @@
 """GitHub Issues adapter for ITicketSystem interface."""
 
 import asyncio
+import logging
 import re
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -21,6 +22,8 @@ from codetoreum.ports.exceptions import (
     WorkItemNotFoundError,
 )
 from codetoreum.ports.output.ticket_system import ITicketSystem
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -756,7 +759,7 @@ class GitHubTicketAdapter(ITicketSystem):
         """
         try:
             await self.close()
-        except Exception as e:
+        except Exception:
             # Log cleanup errors but don't suppress exceptions
-            logger.exception("Error during cleanup in GitHubTicketAdapter.__aexit__", exc_info=True)
+            logger.exception("Error during cleanup in GitHubTicketAdapter.__aexit__")
         return False  # Don't suppress exceptions
