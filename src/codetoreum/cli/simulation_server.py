@@ -273,7 +273,7 @@ async def bootstrap_application(
     speed_multiplier: float,
     auto_advance: bool,
     adapter_overrides: tuple[tuple[str, str], ...] | None = None,
-) -> SimulationApplicationBootstrap:
+) -> tuple[SimulationApplicationBootstrap, AdapterFactory]:
     """
     Bootstrap the application in simulation mode.
 
@@ -285,7 +285,7 @@ async def bootstrap_application(
         adapter_overrides: Optional tuple of (slot, impl) adapter overrides from CLI
 
     Returns:
-        Configured SimulationApplicationBootstrap instance
+        Tuple of (configured SimulationApplicationBootstrap instance, AdapterFactory instance)
 
     Raises:
         click.FileError: If scenario file cannot be read
@@ -323,15 +323,17 @@ async def bootstrap_application(
     console.print(f"[dim]Speed multiplier: {sim_config.time.speed_multiplier}x[/dim]")
     console.print(f"[dim]Auto-advance: {'enabled' if auto_advance else 'disabled'}[/dim]")
 
+    # Create factory for adapter overrides and display
+    factory_config = AdapterFactoryConfig(
+        operation_mode=OperationMode.SIMULATION,
+        enable_resilience=False,
+    )
+    factory = AdapterFactory(factory_config)
+
     # Apply adapter overrides if provided
     if adapter_overrides:
         console.print("[dim]Applying adapter overrides...[/dim]")
         try:
-            factory_config = AdapterFactoryConfig(
-                operation_mode=OperationMode.SIMULATION,
-                enable_resilience=False,
-            )
-            factory = AdapterFactory(factory_config)
             sim_config = apply_adapter_overrides(sim_config, adapter_overrides, factory)
             console.print(f"[dim]Applied {len(adapter_overrides)} adapter override(s)[/dim]")
         except click.UsageError:
@@ -352,7 +354,7 @@ async def bootstrap_application(
 
     console.print("[green]✓ Application bootstrapped successfully[/green]")
 
-    return bootstrap
+    return bootstrap, factory
 
 
 async def seed_data(
@@ -590,8 +592,8 @@ async def main_async(
     signal.signal(signal.SIGTERM, shutdown_handler_sync)
 
     try:
-        # Bootstrap application
-        bootstrap = await bootstrap_application(
+        # Bootstrap application (returns both bootstrap and factory instances)
+        bootstrap, factory = await bootstrap_application(
             scenario, scenario_file, speed_multiplier, auto_advance, adapter_overrides
         )
 
@@ -603,13 +605,6 @@ async def main_async(
 
         if shutdown_requested:
             return
-
-        # Create factory and config for adapter display
-        factory_config = AdapterFactoryConfig(
-            operation_mode=OperationMode.SIMULATION,
-            enable_resilience=False,
-        )
-        factory = AdapterFactory(factory_config)
 
         # Display startup info with adapter configuration
         display_startup_info(

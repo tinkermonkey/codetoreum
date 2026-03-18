@@ -38,7 +38,7 @@ class TestSimulationServerCLI:
     @pytest.fixture
     async def bootstrap(self) -> AsyncGenerator[SimulationApplicationBootstrap, None]:
         """Create and setup a bootstrap instance for testing."""
-        bootstrap = await bootstrap_application(
+        bootstrap, _ = await bootstrap_application(
             scenario="default",
             scenario_file=None,
             speed_multiplier=10.0,
@@ -68,7 +68,7 @@ class TestSimulationServerCLI:
     async def test_bootstrap_application(self):
         """Test application bootstrap process."""
         start_time = time.time()
-        bootstrap = await bootstrap_application(
+        bootstrap, _ = await bootstrap_application(
             scenario="default",
             scenario_file=None,
             speed_multiplier=10.0,
@@ -132,7 +132,7 @@ work_items:
         scenario_file = tmp_path / "custom.yaml"
         scenario_file.write_text(scenario_content)
 
-        bootstrap = await bootstrap_application(
+        bootstrap, _ = await bootstrap_application(
             scenario="default",  # Ignored when scenario_file is provided
             scenario_file=scenario_file,
             speed_multiplier=100.0,  # Should override file's 5.0
@@ -152,7 +152,7 @@ work_items:
     @pytest.mark.asyncio
     async def test_seed_data_default_scenario(self):
         """Test data seeding with default scenario."""
-        bootstrap = await bootstrap_application(
+        bootstrap, _ = await bootstrap_application(
             scenario="default",
             scenario_file=None,
             speed_multiplier=10.0,
@@ -183,7 +183,7 @@ work_items:
     @pytest.mark.asyncio
     async def test_seed_data_no_seed_flag(self):
         """Test that --no-seed flag skips data seeding."""
-        bootstrap = await bootstrap_application(
+        bootstrap, _ = await bootstrap_application(
             scenario="default",
             scenario_file=None,
             speed_multiplier=10.0,
@@ -296,7 +296,7 @@ work_items:
     @pytest.mark.asyncio
     async def test_graceful_shutdown(self):
         """Test graceful shutdown and cleanup."""
-        bootstrap = await bootstrap_application(
+        bootstrap, _ = await bootstrap_application(
             scenario="default",
             scenario_file=None,
             speed_multiplier=10.0,
@@ -344,7 +344,7 @@ work_items:
     @pytest.mark.asyncio
     async def test_scenario_stress_test(self):
         """Test loading stress test scenario."""
-        bootstrap = await bootstrap_application(
+        bootstrap, _ = await bootstrap_application(
             scenario="stress_test",
             scenario_file=None,
             speed_multiplier=100.0,
@@ -369,7 +369,7 @@ work_items:
     async def test_different_speed_multipliers(self):
         """Test different speed multiplier configurations."""
         for speed in [1.0, 10.0, 100.0]:
-            bootstrap = await bootstrap_application(
+            bootstrap, _ = await bootstrap_application(
                 scenario="default",
                 scenario_file=None,
                 speed_multiplier=speed,
@@ -421,7 +421,7 @@ class TestSimulationServerPerformance:
         start_time = time.time()
 
         # Bootstrap
-        bootstrap = await bootstrap_application(
+        bootstrap, _ = await bootstrap_application(
             scenario="default",
             scenario_file=None,
             speed_multiplier=100.0,
@@ -448,7 +448,7 @@ class TestSimulationServerPerformance:
     @pytest.mark.asyncio
     async def test_seed_100_work_items(self):
         """Test seeding 100 work items in under 500ms."""
-        bootstrap = await bootstrap_application(
+        bootstrap, _ = await bootstrap_application(
             scenario="stress_test",  # Should have 100 work items
             scenario_file=None,
             speed_multiplier=100.0,
@@ -597,7 +597,7 @@ class TestErrorHandling:
     @pytest.mark.asyncio
     async def test_seed_data_nonexistent_scenario(self):
         """Test seeding with nonexistent scenario name."""
-        bootstrap = await bootstrap_application(
+        bootstrap, _ = await bootstrap_application(
             scenario="default",
             scenario_file=None,
             speed_multiplier=10.0,
@@ -778,7 +778,7 @@ class TestAdapterOverrides:
         """Test bootstrap applies adapter overrides correctly."""
         # Test that bootstrap_application accepts and applies adapter overrides
         overrides = (("llm", "mock"),)
-        bootstrap = await bootstrap_application(
+        bootstrap, _ = await bootstrap_application(
             scenario="default",
             scenario_file=None,
             speed_multiplier=10.0,
@@ -869,35 +869,51 @@ class TestAdapterDisplaySummary:
 
 
 class TestCLIAdapterIntegration:
-    """Integration tests for CLI --adapter flag."""
+    """CLI error path tests for --adapter flag validation."""
 
-    def test_cli_single_adapter_override(self):
-        """Test CLI with single --adapter flag."""
+    def test_cli_invalid_adapter_slot(self):
+        """Test CLI with invalid adapter slot name produces error."""
         runner = CliRunner()
-        result = runner.invoke(main, ["--adapter", "board", "mock", "--no-seed", "--help"])
+        result = runner.invoke(
+            main,
+            [
+                "--adapter",
+                "invalid_slot_name",
+                "mock",
+                "--no-seed",
+            ],
+        )
 
-        # The --help flag means this won't actually run, but the option should parse
-        assert result.exit_code == 0
+        # Should fail with non-zero exit code
+        assert result.exit_code != 0
+        # Error message should mention the invalid slot
+        assert "Unknown adapter slot" in result.output or "invalid_slot_name" in result.output
 
-    def test_cli_multiple_adapter_overrides(self):
-        """Test CLI with multiple --adapter flags."""
+    def test_cli_invalid_adapter_impl(self):
+        """Test CLI with invalid adapter implementation produces error."""
         runner = CliRunner()
         result = runner.invoke(
             main,
             [
                 "--adapter",
                 "board",
-                "mock",
-                "--adapter",
-                "llm",
-                "mock",
+                "invalid_impl_name",
                 "--no-seed",
-                "--help",
             ],
         )
 
-        # The --help flag means this won't actually run, but the option should parse
+        # Should fail with non-zero exit code
+        assert result.exit_code != 0
+        # Error message should mention the invalid implementation
+        assert "Unknown implementation" in result.output or "invalid_impl_name" in result.output
+
+    def test_cli_adapter_option_parsing(self):
+        """Test CLI parser accepts --adapter option with valid syntax."""
+        runner = CliRunner()
+        # Test that --help with --adapter parses successfully (option exists and accepts tuple)
+        result = runner.invoke(main, ["--adapter", "board", "mock", "--help"])
         assert result.exit_code == 0
+        assert "--adapter" in result.output
 
 
 if __name__ == "__main__":
