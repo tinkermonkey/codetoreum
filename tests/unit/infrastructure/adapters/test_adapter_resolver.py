@@ -181,6 +181,40 @@ class TestAdapterResolver:
         assert "nonexistent1" in error_msg or "ticket" in error_msg
         assert "nonexistent2" in error_msg or "llm" in error_msg
 
+    def test_validate_credentials_simulation_only_adapter_with_real_name(self, factory, dependencies):
+        """Test that simulation-only adapters cannot be configured with non-simulation names."""
+        # Register a simulation-only adapter under a real-sounding name in the test factory
+        registry = factory.get_registry("metrics")
+        from codetoreum.infrastructure.adapters.registry_base import AdapterMetadata
+        from datetime import datetime
+
+        # Add a fake adapter with simulation_only=True
+        registry._adapters["fake_real_name"] = Mock()
+        registry._metadata["fake_real_name"] = AdapterMetadata(
+            name="fake_real_name",
+            adapter_type=Mock,
+            description="Test adapter",
+            version="1.0.0",
+            tags=[],
+            registered_at=datetime.now(),
+            config_schema=AdapterCredentialRequirement(
+                env_vars=[],
+                config_keys=[],
+                simulation_only=True
+            )
+        )
+
+        # Configure to use this simulation-only adapter with non-simulation name
+        config = AdapterSelectionConfig(metrics="fake_real_name")
+        resolver = AdapterResolver(config, factory, dependencies)
+
+        with pytest.raises(AdapterConfigurationError) as exc_info:
+            resolver.validate_credentials()
+
+        error_msg = str(exc_info.value)
+        assert "simulation-only" in error_msg.lower()
+        assert "fake_real_name" in error_msg
+
     def test_resolve_event_store(self, factory, dependencies, adapter_config):
         """Test resolving event store adapter."""
         resolver = AdapterResolver(adapter_config, factory, dependencies)

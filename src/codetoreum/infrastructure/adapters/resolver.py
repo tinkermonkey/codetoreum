@@ -55,13 +55,19 @@ class AdapterDependencies:
 
     These dependencies are available after Phase 1 bootstrap and are passed to adapters
     that require them for cross-adapter communication or infrastructure access.
+
+    Note: Currently only `engine` and `config` are actively used in `resolve_review_cycle()`
+    and `resolve_repair_cycle()`. The `event_bus`, `event_emitter`, and `logger` fields
+    are available for adapters to use in future versions when their constructors are updated
+    to accept these parameters. They provide infrastructure access for cross-cutting concerns
+    like event emission and structured logging.
     """
 
-    event_bus: Any  # IEventBus
-    event_emitter: IEventEmitter  # CapturingMockEventEmitter in simulation
-    logger: logging.Logger
-    engine: "SimulationEngine"  # For clock injection in time-aware adapters
-    config: "SimulationConfig"
+    event_bus: Any  # IEventBus - Available for future adapter initialization
+    event_emitter: IEventEmitter  # CapturingMockEventEmitter in simulation - Available for future adapter initialization
+    logger: logging.Logger  # Available for future adapter initialization
+    engine: "SimulationEngine"  # For clock injection in time-aware adapters (actively used)
+    config: "SimulationConfig"  # Actively used for metadata/config lookups
 
 
 class AdapterConfigurationError(Exception):
