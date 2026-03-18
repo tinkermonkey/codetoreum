@@ -471,9 +471,9 @@ async def test_autonomous_progression_via_clock_tick(e2e_env):
     # =========================================================================
     # Verify item is in In Progress column
     pos = await board.get_item_position(work_item_id)
-    assert pos.column_name == "In Progress", (
-        f"Item should be in 'In Progress' after first agent, got '{pos.column_name}'"
-    )
+    assert (
+        pos.column_name == "In Progress"
+    ), f"Item should be in 'In Progress' after first agent, got '{pos.column_name}'"
 
     # Now let the ColumnProgressionWatchdog drive progression via clock ticks
     # Advance the clock to trigger the watchdog's periodic check
@@ -493,9 +493,9 @@ async def test_autonomous_progression_via_clock_tick(e2e_env):
 
     # Verify progression occurred via watchdog
     pos = await board.get_item_position(work_item_id)
-    assert pos.column_name == "Review", (
-        f"Clock tick should have progressed item from 'In Progress' to 'Review', got '{pos.column_name}'"
-    )
+    assert (
+        pos.column_name == "Review"
+    ), f"Clock tick should have progressed item from 'In Progress' to 'Review', got '{pos.column_name}'"
 
     # =========================================================================
     # CONTINUE CLOCK-DRIVEN PROGRESSION TO DONE
@@ -518,46 +518,40 @@ async def test_autonomous_progression_via_clock_tick(e2e_env):
     # Verify all 3 agents executed in correct order
     executions = [e for e in executor.executions if e["work_item_id"] == work_item_id]
     agent_ids = [e["agent_id"] for e in executions]
-    assert agent_ids == ["architect", "coder", "tester"], (
-        f"Expected agents [architect, coder, tester], got {agent_ids}"
-    )
+    assert agent_ids == ["architect", "coder", "tester"], f"Expected agents [architect, coder, tester], got {agent_ids}"
 
     # Verify movement history shows correct progression path
     history = board.get_movement_history(work_item_id)
-    assert len(history) == 4, (
-        f"Expected 4 movements, got {len(history)}: {[(m.from_column, m.to_column) for m in history]}"
-    )
+    assert (
+        len(history) == 4
+    ), f"Expected 4 movements, got {len(history)}: {[(m.from_column, m.to_column) for m in history]}"
 
     # First move is HUMAN (initial HTTP call)
     # Subsequent moves are ORCHESTRATOR (from auto-progression cascade)
-    assert history[0].moved_by == MovedByType.HUMAN, (
-        f"First move should be HUMAN, got {history[0].moved_by}"
-    )
+    assert history[0].moved_by == MovedByType.HUMAN, f"First move should be HUMAN, got {history[0].moved_by}"
 
     for i, move in enumerate(history[1:], start=1):
-        assert move.moved_by == MovedByType.ORCHESTRATOR, (
-            f"Move {i} should be ORCHESTRATOR, got {move.moved_by}"
-        )
+        assert move.moved_by == MovedByType.ORCHESTRATOR, f"Move {i} should be ORCHESTRATOR, got {move.moved_by}"
 
     # Verify column progression path
     columns_visited = [history[0].from_column] + [m.to_column for m in history]
-    assert columns_visited == ["Backlog", "Ready", "In Progress", "Review", "Done"], (
-        f"Expected column path [Backlog, Ready, In Progress, Review, Done], got {columns_visited}"
-    )
+    assert columns_visited == [
+        "Backlog",
+        "Ready",
+        "In Progress",
+        "Review",
+        "Done",
+    ], f"Expected column path [Backlog, Ready, In Progress, Review, Done], got {columns_visited}"
 
     # Verify workflow completed (event sourcing validation)
     all_events = event_store.get_all_events_list()
     workflow_events = [
-        e for e in all_events
-        if e.aggregate_type == "Workflow"
-        and e.payload.get("work_item_id") == work_item_id
+        e for e in all_events if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == work_item_id
     ]
     assert len(workflow_events) > 0, "No workflow events found"
 
     event_types = [e.event_type for e in workflow_events]
-    assert "WorkflowCompleted" in event_types, (
-        f"WorkflowCompleted event not found. Events: {event_types}"
-    )
+    assert "WorkflowCompleted" in event_types, f"WorkflowCompleted event not found. Events: {event_types}"
 
     # =========================================================================
     # KEY VALIDATION: CLOCK-DRIVEN PROGRESSION EVIDENCE
@@ -566,10 +560,7 @@ async def test_autonomous_progression_via_clock_tick(e2e_env):
     # WITHOUT additional HTTP trigger calls after the initial move to Ready.
     # This proves that ColumnProgressionWatchdog (clock-driven mechanism) can
     # autonomously drive progression through agent columns, not just HTTP calls.
-    assert len(executions) == 3, (
-        f"Expected 3 agent executions (architect, coder, tester), "
-        f"got {len(executions)}"
-    )
+    assert len(executions) == 3, f"Expected 3 agent executions (architect, coder, tester), " f"got {len(executions)}"
 
     # Verify all executions have required fields
     for execution in executions:

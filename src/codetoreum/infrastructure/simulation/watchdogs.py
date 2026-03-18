@@ -803,9 +803,7 @@ class ColumnProgressionWatchdog:
             # Clean up stale deduplication entries
             now = self._clock.now()
             expired_keys = [
-                key
-                for key, timestamp in self._recently_progressed.items()
-                if now - timestamp > self._dedup_window
+                key for key, timestamp in self._recently_progressed.items() if now - timestamp > self._dedup_window
             ]
             for key in expired_keys:
                 del self._recently_progressed[key]
