@@ -623,8 +623,6 @@ class TestMockCodeReviewAdapter:
         assert status.state.value == "stopped"
 
 
-
-
 class TestConfigurableIdentityService:
     """Tests for ConfigurableIdentityService."""
 
