@@ -91,6 +91,7 @@ async def test_execution_chain_llm_path_reaches_done(exec_chain_env):
 
     # Wait for background cleanup tasks and LLM calls to complete
     llm_mock = adapters.llm_as_mock()
+
     async def llm_has_been_called():
         return llm_mock.get_request_count() >= 1
 
@@ -151,7 +152,8 @@ async def test_execution_chain_emits_vcs_events(exec_chain_env):
     # Wait for cascade to complete
     reached_done = await wait_for_column(board_mock, work_item_id, "Done", timeout=30.0)
     assert reached_done, (
-        f"Item did not reach 'Done'. " f"Current position: {(await board_mock.get_item_position(work_item_id)).column_name}"
+        f"Item did not reach 'Done'. "
+        f"Current position: {(await board_mock.get_item_position(work_item_id)).column_name}"
     )
 
     # Wait for VCS events to be emitted
@@ -211,7 +213,8 @@ async def test_execution_chain_workflow_completes(exec_chain_env):
     # Wait for cascade to complete
     reached_done = await wait_for_column(board_mock, work_item_id, "Done", timeout=30.0)
     assert reached_done, (
-        f"Item did not reach 'Done'. " f"Current position: {(await board_mock.get_item_position(work_item_id)).column_name}"
+        f"Item did not reach 'Done'. "
+        f"Current position: {(await board_mock.get_item_position(work_item_id)).column_name}"
     )
 
     # Wait for workflow events to be recorded

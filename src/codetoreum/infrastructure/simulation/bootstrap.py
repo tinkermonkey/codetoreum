@@ -92,7 +92,6 @@ from codetoreum.adapters.testing import (
     MockBoardAdapter,
     MockDiscussionAdapter,
     MockLLMAdapter,
-    MockNotifierAdapter,
     MockProjectManagerAdapter,
     MockReviewCycleAdapter,
     SimpleEncryptionAdapter,
@@ -339,7 +338,7 @@ class SimulationAdapters:
         if not isinstance(self.ticket_system, InMemoryTicketAdapter):
             msg = f"ticket_system is {type(self.ticket_system).__name__}, not InMemoryTicketAdapter"
             raise TypeError(msg)
-        return cast(InMemoryTicketAdapter, self.ticket_system)
+        return cast("InMemoryTicketAdapter", self.ticket_system)
 
     def llm_as_mock(self) -> MockLLMAdapter:
         """Get LLM provider as MockLLMAdapter.
@@ -349,7 +348,7 @@ class SimulationAdapters:
         if not isinstance(self.llm_provider, MockLLMAdapter):
             msg = f"llm_provider is {type(self.llm_provider).__name__}, not MockLLMAdapter"
             raise TypeError(msg)
-        return cast(MockLLMAdapter, self.llm_provider)
+        return cast("MockLLMAdapter", self.llm_provider)
 
     def container_as_fake(self) -> FakeContainerAdapter:
         """Get container as FakeContainerAdapter.
@@ -359,7 +358,7 @@ class SimulationAdapters:
         if not isinstance(self.container, FakeContainerAdapter):
             msg = f"container is {type(self.container).__name__}, not FakeContainerAdapter"
             raise TypeError(msg)
-        return cast(FakeContainerAdapter, self.container)
+        return cast("FakeContainerAdapter", self.container)
 
     def repository_as_memory(self) -> InMemoryRepositoryAdapter:
         """Get repository as InMemoryRepositoryAdapter.
@@ -369,7 +368,7 @@ class SimulationAdapters:
         if not isinstance(self.repository, InMemoryRepositoryAdapter):
             msg = f"repository is {type(self.repository).__name__}, not InMemoryRepositoryAdapter"
             raise TypeError(msg)
-        return cast(InMemoryRepositoryAdapter, self.repository)
+        return cast("InMemoryRepositoryAdapter", self.repository)
 
     def board_as_mock(self) -> MockBoardAdapter:
         """Get board as MockBoardAdapter.
@@ -379,7 +378,7 @@ class SimulationAdapters:
         if not isinstance(self.board, MockBoardAdapter):
             msg = f"board is {type(self.board).__name__}, not MockBoardAdapter"
             raise TypeError(msg)
-        return cast(MockBoardAdapter, self.board)
+        return cast("MockBoardAdapter", self.board)
 
     def repair_cycle_as_mock(self) -> "MockRepairCycleAdapter":
         """Get repair cycle as MockRepairCycleAdapter.
@@ -390,6 +389,7 @@ class SimulationAdapters:
             from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
                 MockRepairCycleAdapter,
             )
+
             if not isinstance(self.repair_cycle, MockRepairCycleAdapter):
                 msg = f"repair_cycle is {type(self.repair_cycle).__name__}, not MockRepairCycleAdapter"
                 raise TypeError(msg)
@@ -406,7 +406,7 @@ class SimulationAdapters:
         if not isinstance(self.project_manager, MockProjectManagerAdapter):
             msg = f"project_manager is {type(self.project_manager).__name__}, not MockProjectManagerAdapter"
             raise TypeError(msg)
-        return cast(MockProjectManagerAdapter, self.project_manager)
+        return cast("MockProjectManagerAdapter", self.project_manager)
 
     def lock_service_as_memory(self) -> InMemoryLockService:
         """Get lock service as InMemoryLockService.
@@ -416,7 +416,7 @@ class SimulationAdapters:
         if not isinstance(self.lock_service, InMemoryLockService):
             msg = f"lock_service is {type(self.lock_service).__name__}, not InMemoryLockService"
             raise TypeError(msg)
-        return cast(InMemoryLockService, self.lock_service)
+        return cast("InMemoryLockService", self.lock_service)
 
     def workflow_config_as_memory(self) -> InMemoryWorkflowConfigService:
         """Get workflow config as InMemoryWorkflowConfigService.
@@ -426,7 +426,7 @@ class SimulationAdapters:
         if not isinstance(self.workflow_config, InMemoryWorkflowConfigService):
             msg = f"workflow_config is {type(self.workflow_config).__name__}, not InMemoryWorkflowConfigService"
             raise TypeError(msg)
-        return cast(InMemoryWorkflowConfigService, self.workflow_config)
+        return cast("InMemoryWorkflowConfigService", self.workflow_config)
 
     def queue_service_as_memory(self) -> InMemoryQueueService:
         """Get queue service as InMemoryQueueService.
@@ -436,7 +436,7 @@ class SimulationAdapters:
         if not isinstance(self.queue_service, InMemoryQueueService):
             msg = f"queue_service is {type(self.queue_service).__name__}, not InMemoryQueueService"
             raise TypeError(msg)
-        return cast(InMemoryQueueService, self.queue_service)
+        return cast("InMemoryQueueService", self.queue_service)
 
     def event_emitter_as_capturing(self) -> CapturingMockEventEmitter:
         """Get event emitter as CapturingMockEventEmitter.
@@ -446,7 +446,7 @@ class SimulationAdapters:
         if not isinstance(self.event_emitter, CapturingMockEventEmitter):
             msg = f"event_emitter is {type(self.event_emitter).__name__}, not CapturingMockEventEmitter"
             raise TypeError(msg)
-        return cast(CapturingMockEventEmitter, self.event_emitter)
+        return cast("CapturingMockEventEmitter", self.event_emitter)
 
     def version_control_as_memory(self) -> InMemoryVersionControlService:
         """Get version control as InMemoryVersionControlService.
@@ -456,7 +456,7 @@ class SimulationAdapters:
         if not isinstance(self.version_control, InMemoryVersionControlService):
             msg = f"version_control is {type(self.version_control).__name__}, not InMemoryVersionControlService"
             raise TypeError(msg)
-        return cast(InMemoryVersionControlService, self.version_control)
+        return cast("InMemoryVersionControlService", self.version_control)
 
     def message_broker_as_memory(self) -> InMemoryMessageBroker:
         """Get message broker as InMemoryMessageBroker.
@@ -466,7 +466,7 @@ class SimulationAdapters:
         if not isinstance(self.message_broker, InMemoryMessageBroker):
             msg = f"message_broker is {type(self.message_broker).__name__}, not InMemoryMessageBroker"
             raise TypeError(msg)
-        return cast(InMemoryMessageBroker, self.message_broker)
+        return cast("InMemoryMessageBroker", self.message_broker)
 
     def discussion_adapter_as_mock(self) -> MockDiscussionAdapter:
         """Get discussion adapter as MockDiscussionAdapter.
@@ -476,7 +476,7 @@ class SimulationAdapters:
         if not isinstance(self.discussion_adapter, MockDiscussionAdapter):
             msg = f"discussion_adapter is {type(self.discussion_adapter).__name__}, not MockDiscussionAdapter"
             raise TypeError(msg)
-        return cast(MockDiscussionAdapter, self.discussion_adapter)
+        return cast("MockDiscussionAdapter", self.discussion_adapter)
 
     def review_cycle_as_mock(self) -> MockReviewCycleAdapter:
         """Get review cycle as MockReviewCycleAdapter.
@@ -486,7 +486,7 @@ class SimulationAdapters:
         if not isinstance(self.review_cycle, MockReviewCycleAdapter):
             msg = f"review_cycle is {type(self.review_cycle).__name__}, not MockReviewCycleAdapter"
             raise TypeError(msg)
-        return cast(MockReviewCycleAdapter, self.review_cycle)
+        return cast("MockReviewCycleAdapter", self.review_cycle)
 
     def identity_service_as_configurable(self) -> ConfigurableIdentityService:
         """Get identity service as ConfigurableIdentityService.
@@ -496,7 +496,7 @@ class SimulationAdapters:
         if not isinstance(self.identity_service, ConfigurableIdentityService):
             msg = f"identity_service is {type(self.identity_service).__name__}, not ConfigurableIdentityService"
             raise TypeError(msg)
-        return cast(ConfigurableIdentityService, self.identity_service)
+        return cast("ConfigurableIdentityService", self.identity_service)
 
     def checkpoint_store_as_memory(self) -> InMemoryCheckpointStore:
         """Get checkpoint store as InMemoryCheckpointStore.
@@ -506,7 +506,7 @@ class SimulationAdapters:
         if not isinstance(self.checkpoint_store, InMemoryCheckpointStore):
             msg = f"checkpoint_store is {type(self.checkpoint_store).__name__}, not InMemoryCheckpointStore"
             raise TypeError(msg)
-        return cast(InMemoryCheckpointStore, self.checkpoint_store)
+        return cast("InMemoryCheckpointStore", self.checkpoint_store)
 
     def agent_repository_as_memory(self) -> InMemoryAgentRepository:
         """Get agent repository as InMemoryAgentRepository.
@@ -516,7 +516,7 @@ class SimulationAdapters:
         if not isinstance(self.agent_repository, InMemoryAgentRepository):
             msg = f"agent_repository is {type(self.agent_repository).__name__}, not InMemoryAgentRepository"
             raise TypeError(msg)
-        return cast(InMemoryAgentRepository, self.agent_repository)
+        return cast("InMemoryAgentRepository", self.agent_repository)
 
     def run_registry_as_memory(self) -> InMemoryActiveWorkflowRunRegistry:
         """Get run registry as InMemoryActiveWorkflowRunRegistry.
@@ -526,7 +526,7 @@ class SimulationAdapters:
         if not isinstance(self.run_registry, InMemoryActiveWorkflowRunRegistry):
             msg = f"run_registry is {type(self.run_registry).__name__}, not InMemoryActiveWorkflowRunRegistry"
             raise TypeError(msg)
-        return cast(InMemoryActiveWorkflowRunRegistry, self.run_registry)
+        return cast("InMemoryActiveWorkflowRunRegistry", self.run_registry)
 
     def branch_tracker_as_memory(self) -> InMemoryWorkItemBranchTracker:
         """Get branch tracker as InMemoryWorkItemBranchTracker.
@@ -536,7 +536,7 @@ class SimulationAdapters:
         if not isinstance(self.branch_tracker, InMemoryWorkItemBranchTracker):
             msg = f"branch_tracker is {type(self.branch_tracker).__name__}, not InMemoryWorkItemBranchTracker"
             raise TypeError(msg)
-        return cast(InMemoryWorkItemBranchTracker, self.branch_tracker)
+        return cast("InMemoryWorkItemBranchTracker", self.branch_tracker)
 
     def work_item_service_as_mock(self) -> MockWorkItemService:
         """Get work item service as MockWorkItemService.
@@ -546,7 +546,7 @@ class SimulationAdapters:
         if not isinstance(self.work_item_service, MockWorkItemService):
             msg = f"work_item_service is {type(self.work_item_service).__name__}, not MockWorkItemService"
             raise TypeError(msg)
-        return cast(MockWorkItemService, self.work_item_service)
+        return cast("MockWorkItemService", self.work_item_service)
 
     def storage_as_memory(self) -> InMemoryStorageAdapter:
         """Get storage as InMemoryStorageAdapter.
@@ -556,7 +556,7 @@ class SimulationAdapters:
         if not isinstance(self.storage, InMemoryStorageAdapter):
             msg = f"storage is {type(self.storage).__name__}, not InMemoryStorageAdapter"
             raise TypeError(msg)
-        return cast(InMemoryStorageAdapter, self.storage)
+        return cast("InMemoryStorageAdapter", self.storage)
 
     def event_store_as_memory(self) -> InMemoryEventStore:
         """Get event store as InMemoryEventStore.
@@ -566,7 +566,7 @@ class SimulationAdapters:
         if not isinstance(self.event_store, InMemoryEventStore):
             msg = f"event_store is {type(self.event_store).__name__}, not InMemoryEventStore"
             raise TypeError(msg)
-        return cast(InMemoryEventStore, self.event_store)
+        return cast("InMemoryEventStore", self.event_store)
 
     def config_store_as_memory(self) -> InMemoryConfigStore:
         """Get config store as InMemoryConfigStore.
@@ -576,7 +576,7 @@ class SimulationAdapters:
         if not isinstance(self.config_store, InMemoryConfigStore):
             msg = f"config_store is {type(self.config_store).__name__}, not InMemoryConfigStore"
             raise TypeError(msg)
-        return cast(InMemoryConfigStore, self.config_store)
+        return cast("InMemoryConfigStore", self.config_store)
 
     def encryption_as_simple(self) -> SimpleEncryptionAdapter:
         """Get encryption as SimpleEncryptionAdapter.
@@ -586,7 +586,7 @@ class SimulationAdapters:
         if not isinstance(self.encryption, SimpleEncryptionAdapter):
             msg = f"encryption is {type(self.encryption).__name__}, not SimpleEncryptionAdapter"
             raise TypeError(msg)
-        return cast(SimpleEncryptionAdapter, self.encryption)
+        return cast("SimpleEncryptionAdapter", self.encryption)
 
     def metrics_as_memory(self) -> InMemoryMetricsAdapter:
         """Get metrics as InMemoryMetricsAdapter.
@@ -596,7 +596,7 @@ class SimulationAdapters:
         if not isinstance(self.metrics, InMemoryMetricsAdapter):
             msg = f"metrics is {type(self.metrics).__name__}, not InMemoryMetricsAdapter"
             raise TypeError(msg)
-        return cast(InMemoryMetricsAdapter, self.metrics)
+        return cast("InMemoryMetricsAdapter", self.metrics)
 
 
 @dataclass
@@ -1153,7 +1153,7 @@ class SimulationApplicationBootstrap:
         # where needed (e.g., pre-configuring default project for tests)
 
         # Post-process project manager: pre-configure default test project
-        project_manager = cast(IProjectManagerService, resolved["project_manager"])
+        project_manager = cast("IProjectManagerService", resolved["project_manager"])
         if isinstance(project_manager, MockProjectManagerAdapter):
             project_manager.add_project(
                 "default_project",
@@ -1166,19 +1166,19 @@ class SimulationApplicationBootstrap:
             )
 
         # Post-process message broker: initialize async
-        message_broker = cast(IMessageBroker, resolved["message_broker"])
+        message_broker = cast("IMessageBroker", resolved["message_broker"])
         if isinstance(message_broker, InMemoryMessageBroker):
             await message_broker.initialize()
 
         # Post-process identity service: set bot username
-        identity_service = cast(IIdentityService, resolved["identity_service"])
+        identity_service = cast("IIdentityService", resolved["identity_service"])
         if isinstance(identity_service, ConfigurableIdentityService):
             identity_service.set_bot_username("codetoreum-bot")
 
         # Post-process storage adapter: inject container for file retrieval
         # (storage depends on container, so we inject it after resolution)
-        storage = cast(IStorage, resolved["storage"])
-        container = cast(IContainer, resolved["container"])
+        storage = cast("IStorage", resolved["storage"])
+        container = cast("IContainer", resolved["container"])
         if isinstance(storage, InMemoryStorageAdapter):
             storage.container = container
 
@@ -1191,34 +1191,34 @@ class SimulationApplicationBootstrap:
         logger.info("Created 28 simulation adapters via AdapterResolver")
 
         return SimulationAdapters(
-            ticket_system=cast(ITicketSystem, resolved["ticket"]),
-            llm_provider=cast(ILLMProvider, resolved["llm"]),
+            ticket_system=cast("ITicketSystem", resolved["ticket"]),
+            llm_provider=cast("ILLMProvider", resolved["llm"]),
             container=container,
             repository=repository,
-            event_store=cast(IEventStore, resolved["event_store"]),
-            metrics=cast(IMetrics, resolved["metrics"]),
+            event_store=cast("IEventStore", resolved["event_store"]),
+            metrics=cast("IMetrics", resolved["metrics"]),
             storage=storage,
-            config_store=cast(IConfigStore, resolved["config_store"]),
-            notifier=cast(INotifier, resolved["notifier"]),
-            encryption=cast(IEncryptionService, resolved["encryption"]),
-            board=cast(IBoardService, resolved["board"]),
-            repair_cycle=cast(IRepairCycle, resolved["repair_cycle"]),
+            config_store=cast("IConfigStore", resolved["config_store"]),
+            notifier=cast("INotifier", resolved["notifier"]),
+            encryption=cast("IEncryptionService", resolved["encryption"]),
+            board=cast("IBoardService", resolved["board"]),
+            repair_cycle=cast("IRepairCycle", resolved["repair_cycle"]),
             project_manager=project_manager,
-            lock_service=cast(IPipelineLockService, resolved["lock_service"]),
-            workflow_config=cast(IWorkflowConfigService, resolved["workflow_config"]),
-            queue_service=cast(IPipelineQueueService, resolved["queue_service"]),
-            event_emitter=cast(IEventEmitter, deps.event_emitter),
+            lock_service=cast("IPipelineLockService", resolved["lock_service"]),
+            workflow_config=cast("IWorkflowConfigService", resolved["workflow_config"]),
+            queue_service=cast("IPipelineQueueService", resolved["queue_service"]),
+            event_emitter=cast("IEventEmitter", deps.event_emitter),
             audit_store=audit_store,
-            version_control=cast(IVersionControlService, resolved["version_control"]),
+            version_control=cast("IVersionControlService", resolved["version_control"]),
             message_broker=message_broker,
-            discussion_adapter=cast(IDiscussionAdapter, resolved["discussion_adapter"]),
-            review_cycle=cast(IReviewCycle, resolved["review_cycle"]),
+            discussion_adapter=cast("IDiscussionAdapter", resolved["discussion_adapter"]),
+            review_cycle=cast("IReviewCycle", resolved["review_cycle"]),
             identity_service=identity_service,
-            checkpoint_store=cast(IRepairCycleCheckpointStore, resolved["checkpoint_store"]),
-            agent_repository=cast(IAgentRepository, resolved["agent_repository"]),
-            run_registry=cast(IActiveWorkflowRunRegistry, resolved["run_registry"]),
-            branch_tracker=cast(IWorkItemBranchTracker, resolved["branch_tracker"]),
-            work_item_service=cast(IWorkItemService, resolved["work_item_service"]),
+            checkpoint_store=cast("IRepairCycleCheckpointStore", resolved["checkpoint_store"]),
+            agent_repository=cast("IAgentRepository", resolved["agent_repository"]),
+            run_registry=cast("IActiveWorkflowRunRegistry", resolved["run_registry"]),
+            branch_tracker=cast("IWorkItemBranchTracker", resolved["branch_tracker"]),
+            work_item_service=cast("IWorkItemService", resolved["work_item_service"]),
             agent_executor=None,  # Assigned in Phase 3
         )
 
