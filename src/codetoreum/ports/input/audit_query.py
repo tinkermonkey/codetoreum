@@ -8,6 +8,7 @@ including filtering, pagination, and retrieval of system-wide audit logs.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
+from types import MappingProxyType
 from typing import Any
 
 
@@ -45,7 +46,7 @@ class AuditEventInfo:
     action: str
     user_id: str
     correlation_id: str | None
-    metadata: dict[str, Any]
+    metadata: MappingProxyType
     success: bool
     error_message: str | None
 
@@ -54,7 +55,7 @@ class AuditEventInfo:
 class AuditEventQueryResult:
     """Result of audit event query"""
 
-    events: list[AuditEventInfo]
+    events: tuple[AuditEventInfo, ...]
     total_count: int
     offset: int
     limit: int

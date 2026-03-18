@@ -6,6 +6,7 @@ Provides implementation of the audit query port using the audit store backend.
 
 import logging
 from datetime import UTC, datetime
+from types import MappingProxyType
 
 from codetoreum.infrastructure.audit.interfaces import (
     AuditQueryFilters,
@@ -91,23 +92,34 @@ class AuditQueryAdapter(IAuditQueryPort):
         # Convert to result format
         events = []
         for event_dict in event_dicts:
+            # Timestamp is required - must be present in event data to maintain audit integrity
+            timestamp = event_dict.get("timestamp")
+            if timestamp is None:
+                logger.error(
+                    "Audit event missing required timestamp field",
+                    extra={"event_id": event_dict.get("id")},
+                )
+                raise ValueError(
+                    f"Audit event {event_dict.get('id')} missing required timestamp"
+                )
+
             event_info = AuditEventInfo(
                 id=event_dict.get("id", ""),
-                timestamp=event_dict.get("timestamp", datetime.now(UTC)),
+                timestamp=timestamp,
                 event_type=event_dict.get("event_type", ""),
                 resource_type=event_dict.get("resource_type", ""),
                 resource_id=event_dict.get("resource_id", ""),
                 action=event_dict.get("action", ""),
                 user_id=event_dict.get("user_id", ""),
                 correlation_id=event_dict.get("correlation_id"),
-                metadata=event_dict.get("metadata", {}),
+                metadata=MappingProxyType(event_dict.get("metadata", {})),
                 success=event_dict.get("success", True),
                 error_message=event_dict.get("error_message"),
             )
             events.append(event_info)
 
         return AuditEventQueryResult(
-            events=events,
+            events=tuple(events),
             total_count=total_count,
             offset=pagination.offset,
             limit=pagination.limit,
