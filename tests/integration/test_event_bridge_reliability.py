@@ -298,7 +298,7 @@ class TestBridgeIntegration:
         bootstrap.infrastructure.event_bus.register_handler(CaptureHandler())
 
         # Trigger bridge by moving item (exercises actual board_column_changed_bridge)
-        await adapters.board.move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)
+        await adapters.board_as_mock().move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)
 
         # Wait for event to be published through the bridge
         async def event_published():
@@ -353,7 +353,7 @@ class TestBridgeIntegration:
             bootstrap.infrastructure.event_bus.publish = AsyncMock(side_effect=failing_publish)
 
             # Move item to trigger bridge (exercises actual error handling in bridge)
-            await adapters.board.move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)
+            await adapters.board_as_mock().move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)
 
             # Wait for DLQ to capture the failed event
             async def has_failed_event():

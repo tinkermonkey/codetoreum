@@ -307,7 +307,7 @@ class TestScenario06SDLCPipelineWithRepair:
             assert bootstrap.services is not None
 
             # Verify the clock is shared between repair cycle and engine
-            assert bootstrap.adapters.repair_cycle._clock == bootstrap.engine.get_clock_for_testing()
+            assert bootstrap.adapters.repair_cycle_as_mock()._clock == bootstrap.engine.get_clock_for_testing()
 
             logger = __import__("logging").getLogger(__name__)
             logger.info("Bootstrap integration test passed")
