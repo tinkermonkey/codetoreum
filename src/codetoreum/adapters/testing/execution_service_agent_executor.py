@@ -117,8 +117,8 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         self._vcs = vcs
         # Create default clock if not provided (for backward compatibility with tests)
         if clock is None:
-            from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock as SC
-            clock = SC()
+            from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
+            clock = SimulationClock()
         self._clock = clock
         self._recovery_service = recovery_service
         self._execution_delay = execution_delay
