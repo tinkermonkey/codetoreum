@@ -987,6 +987,53 @@ class AdapterFactory:
         """Get the active workflow run registry."""
         return self._active_workflow_run_registry_registry
 
+    def get_registry(self, slot_name: str) -> Any:
+        """
+        Get the registry for a given adapter slot name.
+
+        Args:
+            slot_name: Name of the adapter slot (e.g., "board", "ticket", "llm")
+
+        Returns:
+            The AdapterRegistry for the specified slot
+
+        Raises:
+            KeyError: If slot_name is not recognized
+        """
+        registry_map = {
+            "board": self._board_service_registry,
+            "ticket": self._ticket_system_registry,
+            "llm": self._llm_provider_registry,
+            "version_control": self._version_control_registry,
+            "container": self._container_registry,
+            "event_store": self._event_store_registry,
+            "metrics": self._metrics_registry,
+            "storage": self._storage_registry,
+            "config_store": self._config_store_registry,
+            "notifier": self._notifier_registry,
+            "encryption": self._encryption_registry,
+            "discussion_adapter": self._discussion_adapter_registry,
+            "review_cycle": self._review_cycle_registry,
+            "repair_cycle": self._repair_cycle_registry,
+            "project_manager": self._project_manager_registry,
+            "lock_service": self._pipeline_lock_registry,
+            "workflow_config": self._workflow_config_registry,
+            "queue_service": self._pipeline_queue_registry,
+            "event_emitter": self._event_emitter_registry,
+            "message_broker": self._message_broker_registry,
+            "identity_service": self._identity_service_registry,
+            "checkpoint_store": self._repair_cycle_checkpoint_registry,
+            "agent_repository": self._agent_repository_registry,
+            "run_registry": self._active_workflow_run_registry_registry,
+            "branch_tracker": self._work_item_branch_tracker_registry,
+            "work_item_service": self._work_item_service_registry,
+        }
+
+        if slot_name not in registry_map:
+            raise KeyError(f"Unknown adapter slot: '{slot_name}'")
+
+        return registry_map[slot_name]
+
     # Dependency injection methods
 
     def register_dependency(self, name: str, instance: Any) -> None:
