@@ -179,7 +179,7 @@ class RepairCycleTestExecutionStartedEvent(CodetoreumEvent):
                 DeprecationWarning,
                 stacklevel=2,
             )
-        workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id")
+        workflow_run_id = str(data.get("workflow_run_id") or data.get("pipeline_run_id") or "")
         return cls(
             type=data.get("type", "repair_cycle.test_execution_started"),
             timestamp=data.get("timestamp", ""),
@@ -303,7 +303,7 @@ class RepairCycleTestExecutionCompletedEvent(CodetoreumEvent):
                 DeprecationWarning,
                 stacklevel=2,
             )
-        workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id")
+        workflow_run_id = str(data.get("workflow_run_id") or data.get("pipeline_run_id") or "")
         return cls(
             type=data.get("type", "repair_cycle.test_execution_completed"),
             timestamp=data.get("timestamp", ""),
@@ -400,7 +400,7 @@ class RepairCycleFixCycleStartedEvent(CodetoreumEvent):
                 DeprecationWarning,
                 stacklevel=2,
             )
-        workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id")
+        workflow_run_id = str(data.get("workflow_run_id") or data.get("pipeline_run_id") or "")
         return cls(
             type=data.get("type", "repair_cycle.fix_cycle_started"),
             timestamp=data.get("timestamp", ""),
@@ -482,7 +482,7 @@ class RepairCycleFileFixStartedEvent(CodetoreumEvent):
                 DeprecationWarning,
                 stacklevel=2,
             )
-        workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id")
+        workflow_run_id = str(data.get("workflow_run_id") or data.get("pipeline_run_id") or "")
         return cls(
             type=data.get("type", "repair_cycle.file_fix_started"),
             timestamp=data.get("timestamp", ""),
@@ -565,7 +565,7 @@ class RepairCycleFileFixCompletedEvent(CodetoreumEvent):
                 DeprecationWarning,
                 stacklevel=2,
             )
-        workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id")
+        workflow_run_id = str(data.get("workflow_run_id") or data.get("pipeline_run_id") or "")
         return cls(
             type=data.get("type", "repair_cycle.file_fix_completed"),
             timestamp=data.get("timestamp", ""),
@@ -656,7 +656,7 @@ class RepairCycleWarningReviewStartedEvent(CodetoreumEvent):
                 DeprecationWarning,
                 stacklevel=2,
             )
-        workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id")
+        workflow_run_id = str(data.get("workflow_run_id") or data.get("pipeline_run_id") or "")
         return cls(
             type=data.get("type", "repair_cycle.warning_review_started"),
             timestamp=data.get("timestamp", ""),
@@ -740,7 +740,7 @@ class RepairCycleWarningReviewCompletedEvent(CodetoreumEvent):
                 DeprecationWarning,
                 stacklevel=2,
             )
-        workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id")
+        workflow_run_id = str(data.get("workflow_run_id") or data.get("pipeline_run_id") or "")
         return cls(
             type=data.get("type", "repair_cycle.warning_review_completed"),
             timestamp=data.get("timestamp", ""),
@@ -845,7 +845,7 @@ class RepairCycleTestCycleCompletedEvent(CodetoreumEvent):
                 DeprecationWarning,
                 stacklevel=2,
             )
-        workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id")
+        workflow_run_id = str(data.get("workflow_run_id") or data.get("pipeline_run_id") or "")
         return cls(
             type=data.get("type", "repair_cycle.test_cycle_completed"),
             timestamp=data.get("timestamp", ""),
@@ -1002,7 +1002,7 @@ class RepairCycleResumedEvent(CodetoreumEvent):
                 DeprecationWarning,
                 stacklevel=2,
             )
-        workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id")
+        workflow_run_id = str(data.get("workflow_run_id") or data.get("pipeline_run_id") or "")
 
         # Deserialize test_type enum
         test_type_str = data.get("test_type", "UNIT")
