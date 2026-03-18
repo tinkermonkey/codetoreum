@@ -387,7 +387,6 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             if not prep_result.success:
                 logger.error(
                     f"Workspace preparation failed for '{work_item_id}': {prep_result.reason}",
-                    exc_info=True,
                     extra={"error_id": "ERR_EXEC_CHAIN_WORKSPACE_PREPARE_FAILURE"},
                 )
                 await self._call_completion(work_item_id, board_id, False)
@@ -434,7 +433,6 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             if not start_result.success:
                 logger.error(
                     f"Failed to start execution for '{work_item_id}': {start_result.error}",
-                    exc_info=True,
                     extra={"error_id": "ERR_EXEC_CHAIN_EXECUTION_START_FAILURE"},
                 )
                 await self._workspace_router.finalize_workspace(
