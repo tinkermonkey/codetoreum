@@ -87,8 +87,8 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         run_registry: IActiveWorkflowRunRegistry,
         branch_tracker: IWorkItemBranchTracker,
         vcs: IVersionControlService,
-        clock: "SimulationClock",
-        recovery_service: "AgentExecutionRecoveryService | None" = None,
+        clock: SimulationClock,
+        recovery_service: AgentExecutionRecoveryService | None = None,
         execution_delay: float = 0.0,
     ) -> None:
         """Initialize ExecutionServiceAgentExecutor.
