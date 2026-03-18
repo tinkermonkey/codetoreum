@@ -730,6 +730,21 @@ class MockBoardAdapter(IBoardService):
         with self._lock:
             return [m for m in self._movement_log if m.work_item_id == work_item_id]
 
+    def get_all_movements(self) -> list[MovementEvent]:
+        """Test helper: Get complete movement audit trail for board.
+
+        Returns all movements on the board in chronological order.
+
+        Returns:
+            List[MovementEvent]: All movements in chronological order
+
+        Example:
+            all_movements = adapter.get_all_movements()
+            assert len(all_movements) >= 1
+        """
+        with self._lock:
+            return list(self._movement_log)
+
     def clear_movement_log(self) -> None:
         """Test helper: Clear movement history for cleanup.
 

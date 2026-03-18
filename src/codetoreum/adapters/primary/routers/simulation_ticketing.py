@@ -515,7 +515,7 @@ def create_simulation_ticketing_router(
                 moved_by=m.moved_by.value,
                 timestamp=m.timestamp.isoformat(),
             )
-            for m in board_adapter._movement_log
+            for m in board_adapter.get_all_movements()
         ]
 
         return SimBoardHistoryResponse(
