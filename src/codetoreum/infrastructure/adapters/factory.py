@@ -23,18 +23,131 @@ from codetoreum.adapters.secondary import (
 
 # Import testing adapters
 from codetoreum.adapters.testing import (
+    CapturingMockEventEmitter,
+    ConfigurableIdentityService,
     FakeContainerAdapter,
+    InMemoryActiveWorkflowRunRegistry,
+    InMemoryAgentRepository,
+    InMemoryCheckpointStore,
+    InMemoryConfigStore,
     InMemoryEventStore,
+    InMemoryMessageBroker,
+    InMemoryMetricsAdapter,
+    InMemoryQueueService,
     InMemoryRepositoryAdapter,
+    InMemoryStorageAdapter,
     InMemoryTicketAdapter,
+    InMemoryVersionControlService,
+    InMemoryWorkflowConfigService,
+    InMemoryWorkItemBranchTracker,
+    MockAgentExecutor,
+    MockBoardAdapter,
+    MockContainerRecoveryAdapter,
+    MockDiscussionAdapter,
     MockLLMAdapter,
+    MockNotifierAdapter,
+    MockProjectManagerAdapter,
+    MockRepairCycleAdapter,
+    MockReviewCycleAdapter,
+    MockWorkItemService,
+    SimpleEncryptionAdapter,
 )
+
+# Import production adapters
+from codetoreum.adapters.secondary import (
+    CachedConfigStore,
+    ClaudeCodeAdapter,
+    ConfigurableIdentityService,
+    DockerContainerAdapter,
+    ElasticsearchConfigStorage,
+    GitHubBoardAdapter,
+    GitHubCodeReviewAdapter,
+    GitHubTicketAdapter,
+    GitRepositoryAdapter,
+    InMemoryPipelineLockService,
+    MockEventEmitter,
+)
+
+# Import optional secondary adapter types
+try:
+    from codetoreum.adapters.secondary.mock_code_review_adapter import (
+        MockCodeReviewAdapter,
+    )
+except ImportError:
+    MockCodeReviewAdapter = None  # type: ignore
+
+try:
+    from codetoreum.adapters.secondary.prometheus_metrics_adapter import (
+        PrometheusMetricsAdapter,
+    )
+except ImportError:
+    PrometheusMetricsAdapter = None  # type: ignore
+
+try:
+    from codetoreum.adapters.secondary.redis_pubsub_adapter import (
+        RedisPubSubAdapter,
+    )
+except ImportError:
+    RedisPubSubAdapter = None  # type: ignore
+
+try:
+    from codetoreum.adapters.secondary.github_discussion_adapter import (
+        GitHubDiscussionAdapter,
+    )
+except ImportError:
+    GitHubDiscussionAdapter = None  # type: ignore
+
+try:
+    from codetoreum.adapters.secondary.elasticsearch_event_store import (
+        ElasticsearchEventStore,
+    )
+except ImportError:
+    ElasticsearchEventStore = None  # type: ignore
+
+try:
+    from codetoreum.adapters.secondary.docker_container_recovery_adapter import (
+        DockerContainerRecoveryAdapter,
+    )
+except ImportError:
+    DockerContainerRecoveryAdapter = None  # type: ignore
+
+try:
+    from codetoreum.adapters.secondary.production_repair_cycle_adapter import (
+        ProductionRepairCycleAdapter,
+    )
+except ImportError:
+    ProductionRepairCycleAdapter = None  # type: ignore
 from codetoreum.infrastructure.adapters.registries import (
+    ActiveWorkflowRunRegistryRegistry,
+    AgentExecutorRegistry,
+    AgentRepositoryRegistry,
+    BoardServiceRegistry,
+    CodeReviewServiceRegistry,
+    ConfigStoreRegistry,
+    ContainerRecoveryRegistry,
     ContainerRegistry,
+    DiscussionAdapterRegistry,
+    EncryptionRegistry,
+    EventEmitterRegistry,
     EventStoreRegistry,
+    IdentityServiceRegistry,
     LLMProviderRegistry,
+    MessageBrokerRegistry,
+    MetricsAdapterRegistry,
+    NotifierRegistry,
+    PipelineLockServiceRegistry,
+    PipelineQueueServiceRegistry,
+    ProjectManagerServiceRegistry,
+    RepairCycleCheckpointStoreRegistry,
+    RepairCycleRegistry,
     RepositoryRegistry,
+    ReviewCycleServiceRegistry,
+    StorageRegistry,
     TicketSystemRegistry,
+    VersionControlServiceRegistry,
+    WorkItemBranchTrackerRegistry,
+    WorkItemServiceRegistry,
+    WorkflowConfigServiceRegistry,
 )
 from codetoreum.infrastructure.resilience import (
     CLAUDE_RESILIENCE_CONFIG,
@@ -98,6 +211,31 @@ class AdapterFactory:
         self._container_registry = ContainerRegistry()
         self._repository_registry = RepositoryRegistry()
         self._event_store_registry = EventStoreRegistry()
+        self._storage_registry = StorageRegistry()
+        self._board_service_registry = BoardServiceRegistry()
+        self._code_review_registry = CodeReviewServiceRegistry()
+        self._discussion_adapter_registry = DiscussionAdapterRegistry()
+        self._version_control_registry = VersionControlServiceRegistry()
+        self._metrics_registry = MetricsAdapterRegistry()
+        self._notifier_registry = NotifierRegistry()
+        self._message_broker_registry = MessageBrokerRegistry()
+        self._config_store_registry = ConfigStoreRegistry()
+        self._repair_cycle_registry = RepairCycleRegistry()
+        self._review_cycle_registry = ReviewCycleServiceRegistry()
+        self._container_recovery_registry = ContainerRecoveryRegistry()
+        self._encryption_registry = EncryptionRegistry()
+        self._pipeline_lock_registry = PipelineLockServiceRegistry()
+        self._pipeline_queue_registry = PipelineQueueServiceRegistry()
+        self._project_manager_registry = ProjectManagerServiceRegistry()
+        self._workflow_config_registry = WorkflowConfigServiceRegistry()
+        self._event_emitter_registry = EventEmitterRegistry()
+        self._identity_service_registry = IdentityServiceRegistry()
+        self._agent_executor_registry = AgentExecutorRegistry()
+        self._agent_repository_registry = AgentRepositoryRegistry()
+        self._work_item_branch_tracker_registry = WorkItemBranchTrackerRegistry()
+        self._work_item_service_registry = WorkItemServiceRegistry()
+        self._repair_cycle_checkpoint_registry = RepairCycleCheckpointStoreRegistry()
+        self._active_workflow_run_registry_registry = ActiveWorkflowRunRegistryRegistry()
 
         # Dependency injection container
         self._dependencies: dict[str, Any] = {}
@@ -185,6 +323,333 @@ class AdapterFactory:
             set_as_default=True,
         )
 
+        # Storage Adapters
+        self._storage_registry.register(
+            name="in_memory",
+            adapter_type=InMemoryStorageAdapter,
+            description="In-memory storage for testing",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock"],
+            set_as_default=True,
+        )
+
+        # Board Service Adapters
+        self._board_service_registry.register(
+            name="mock",
+            adapter_type=MockBoardAdapter,
+            description="Mock board adapter for testing",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock"],
+            set_as_default=True,
+        )
+        self._board_service_registry.register(
+            name="github",
+            adapter_type=GitHubBoardAdapter,
+            description="GitHub Projects board adapter",
+            version="1.0.0",
+            tags=["production", "github"],
+        )
+
+        # Code Review Service Adapters
+        self._code_review_registry.register(
+            name="github",
+            adapter_type=GitHubCodeReviewAdapter,
+            description="GitHub code review adapter",
+            version="1.0.0",
+            tags=["production", "github"],
+            set_as_default=True,
+        )
+        if MockCodeReviewAdapter:
+            self._code_review_registry.register(
+                name="mock",
+                adapter_type=MockCodeReviewAdapter,
+                description="Mock code review adapter for testing",
+                version="1.0.0",
+                tags=["testing", "simulation", "mock"],
+            )
+
+        # Discussion Adapter
+        self._discussion_adapter_registry.register(
+            name="mock",
+            adapter_type=MockDiscussionAdapter,
+            description="Mock discussion adapter for testing",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock"],
+            set_as_default=True,
+        )
+        if GitHubDiscussionAdapter:
+            self._discussion_adapter_registry.register(
+                name="github",
+                adapter_type=GitHubDiscussionAdapter,
+                description="GitHub discussion adapter",
+                version="1.0.0",
+                tags=["production", "github"],
+            )
+
+        # Version Control Service Adapters
+        self._version_control_registry.register(
+            name="in_memory",
+            adapter_type=InMemoryVersionControlService,
+            description="In-memory version control for testing",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock"],
+            set_as_default=True,
+        )
+
+        # Metrics Adapters
+        self._metrics_registry.register(
+            name="in_memory",
+            adapter_type=InMemoryMetricsAdapter,
+            description="In-memory metrics adapter for testing",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock"],
+            set_as_default=True,
+        )
+        if PrometheusMetricsAdapter:
+            self._metrics_registry.register(
+                name="prometheus",
+                adapter_type=PrometheusMetricsAdapter,
+                description="Prometheus metrics adapter",
+                version="1.0.0",
+                tags=["production", "prometheus"],
+            )
+
+        # Notifier Adapters
+        self._notifier_registry.register(
+            name="mock",
+            adapter_type=MockNotifierAdapter,
+            description="Mock notifier for testing",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock"],
+            set_as_default=True,
+        )
+
+        # Message Broker Adapters
+        self._message_broker_registry.register(
+            name="in_memory",
+            adapter_type=InMemoryMessageBroker,
+            description="In-memory message broker for testing",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock"],
+            set_as_default=True,
+        )
+        if RedisPubSubAdapter:
+            self._message_broker_registry.register(
+                name="redis",
+                adapter_type=RedisPubSubAdapter,
+                description="Redis Pub/Sub message broker",
+                version="1.0.0",
+                tags=["production", "redis"],
+            )
+
+        # Config Store Adapters
+        self._config_store_registry.register(
+            name="in_memory",
+            adapter_type=InMemoryConfigStore,
+            description="In-memory config store for testing",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock"],
+            set_as_default=True,
+        )
+        self._config_store_registry.register(
+            name="cached",
+            adapter_type=CachedConfigStore,
+            description="Cached config store",
+            version="1.0.0",
+            tags=["production", "cache"],
+        )
+        if ElasticsearchConfigStorage:
+            self._config_store_registry.register(
+                name="elasticsearch",
+                adapter_type=ElasticsearchConfigStorage,
+                description="Elasticsearch configuration storage",
+                version="1.0.0",
+                tags=["production", "elasticsearch"],
+            )
+
+        # Repair Cycle Adapters
+        self._repair_cycle_registry.register(
+            name="mock",
+            adapter_type=MockRepairCycleAdapter,
+            description="Mock repair cycle for testing",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock"],
+            set_as_default=True,
+        )
+        if ProductionRepairCycleAdapter:
+            self._repair_cycle_registry.register(
+                name="production",
+                adapter_type=ProductionRepairCycleAdapter,
+                description="Production repair cycle adapter",
+                version="1.0.0",
+                tags=["production"],
+            )
+
+        # Review Cycle Service Adapters
+        self._review_cycle_registry.register(
+            name="mock",
+            adapter_type=MockReviewCycleAdapter,
+            description="Mock review cycle for testing",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock"],
+            set_as_default=True,
+        )
+
+        # Container Recovery Adapters
+        self._container_recovery_registry.register(
+            name="mock",
+            adapter_type=MockContainerRecoveryAdapter,
+            description="Mock container recovery for testing",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock"],
+            set_as_default=True,
+        )
+        if DockerContainerRecoveryAdapter:
+            self._container_recovery_registry.register(
+                name="docker",
+                adapter_type=DockerContainerRecoveryAdapter,
+                description="Docker container recovery adapter",
+                version="1.0.0",
+                tags=["production", "docker"],
+            )
+
+        # Encryption Service Adapters
+        self._encryption_registry.register(
+            name="simple",
+            adapter_type=SimpleEncryptionAdapter,
+            description="Simple encryption adapter for testing",
+            version="1.0.0",
+            tags=["simulation", "mock"],
+            set_as_default=True,
+        )
+
+        # Pipeline Lock Service Adapters
+        self._pipeline_lock_registry.register(
+            name="in_memory",
+            adapter_type=InMemoryPipelineLockService,
+            description="In-memory pipeline lock service",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock", "production"],
+            set_as_default=True,
+        )
+
+        # Pipeline Queue Service Adapters
+        self._pipeline_queue_registry.register(
+            name="in_memory",
+            adapter_type=InMemoryQueueService,
+            description="In-memory queue service for testing",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock"],
+            set_as_default=True,
+        )
+
+        # Project Manager Service Adapters
+        self._project_manager_registry.register(
+            name="mock",
+            adapter_type=MockProjectManagerAdapter,
+            description="Mock project manager for testing",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock"],
+            set_as_default=True,
+        )
+
+        # Workflow Config Service Adapters
+        self._workflow_config_registry.register(
+            name="in_memory",
+            adapter_type=InMemoryWorkflowConfigService,
+            description="In-memory workflow config service for testing",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock"],
+            set_as_default=True,
+        )
+
+        # Event Emitter Adapters
+        self._event_emitter_registry.register(
+            name="mock",
+            adapter_type=MockEventEmitter,
+            description="Mock event emitter for testing",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock"],
+            set_as_default=True,
+        )
+        self._event_emitter_registry.register(
+            name="capturing",
+            adapter_type=CapturingMockEventEmitter,
+            description="Capturing mock event emitter for assertions",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock"],
+        )
+
+        # Identity Service Adapters
+        self._identity_service_registry.register(
+            name="configurable",
+            adapter_type=ConfigurableIdentityService,
+            description="Configurable identity service for testing",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock", "production"],
+            set_as_default=True,
+        )
+
+        # Agent Executor Adapters
+        self._agent_executor_registry.register(
+            name="mock",
+            adapter_type=MockAgentExecutor,
+            description="Mock agent executor for testing",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock"],
+            set_as_default=True,
+        )
+
+        # Agent Repository Adapters
+        self._agent_repository_registry.register(
+            name="in_memory",
+            adapter_type=InMemoryAgentRepository,
+            description="In-memory agent repository for testing",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock"],
+            set_as_default=True,
+        )
+
+        # Work Item Branch Tracker Adapters
+        self._work_item_branch_tracker_registry.register(
+            name="in_memory",
+            adapter_type=InMemoryWorkItemBranchTracker,
+            description="In-memory work item branch tracker for testing",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock"],
+            set_as_default=True,
+        )
+
+        # Work Item Service Adapters
+        self._work_item_service_registry.register(
+            name="mock",
+            adapter_type=MockWorkItemService,
+            description="Mock work item service for testing",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock"],
+            set_as_default=True,
+        )
+
+        # Repair Cycle Checkpoint Store Adapters
+        self._repair_cycle_checkpoint_registry.register(
+            name="in_memory",
+            adapter_type=InMemoryCheckpointStore,
+            description="In-memory checkpoint store for testing",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock"],
+            set_as_default=True,
+        )
+
+        # Active Workflow Run Registry Adapters
+        self._active_workflow_run_registry_registry.register(
+            name="in_memory",
+            adapter_type=InMemoryActiveWorkflowRunRegistry,
+            description="In-memory active workflow run registry for testing",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock"],
+            set_as_default=True,
+        )
+
     # Registry access methods
 
     @property
@@ -211,6 +676,131 @@ class AdapterFactory:
     def event_store_registry(self) -> EventStoreRegistry:
         """Get the event store registry."""
         return self._event_store_registry
+
+    @property
+    def storage_registry(self) -> StorageRegistry:
+        """Get the storage registry."""
+        return self._storage_registry
+
+    @property
+    def board_service_registry(self) -> BoardServiceRegistry:
+        """Get the board service registry."""
+        return self._board_service_registry
+
+    @property
+    def code_review_registry(self) -> CodeReviewServiceRegistry:
+        """Get the code review service registry."""
+        return self._code_review_registry
+
+    @property
+    def discussion_adapter_registry(self) -> DiscussionAdapterRegistry:
+        """Get the discussion adapter registry."""
+        return self._discussion_adapter_registry
+
+    @property
+    def version_control_registry(self) -> VersionControlServiceRegistry:
+        """Get the version control service registry."""
+        return self._version_control_registry
+
+    @property
+    def metrics_registry(self) -> MetricsAdapterRegistry:
+        """Get the metrics adapter registry."""
+        return self._metrics_registry
+
+    @property
+    def notifier_registry(self) -> NotifierRegistry:
+        """Get the notifier registry."""
+        return self._notifier_registry
+
+    @property
+    def message_broker_registry(self) -> MessageBrokerRegistry:
+        """Get the message broker registry."""
+        return self._message_broker_registry
+
+    @property
+    def config_store_registry(self) -> ConfigStoreRegistry:
+        """Get the config store registry."""
+        return self._config_store_registry
+
+    @property
+    def repair_cycle_registry(self) -> RepairCycleRegistry:
+        """Get the repair cycle registry."""
+        return self._repair_cycle_registry
+
+    @property
+    def review_cycle_registry(self) -> ReviewCycleServiceRegistry:
+        """Get the review cycle service registry."""
+        return self._review_cycle_registry
+
+    @property
+    def container_recovery_registry(self) -> ContainerRecoveryRegistry:
+        """Get the container recovery registry."""
+        return self._container_recovery_registry
+
+    @property
+    def encryption_registry(self) -> EncryptionRegistry:
+        """Get the encryption service registry."""
+        return self._encryption_registry
+
+    @property
+    def pipeline_lock_registry(self) -> PipelineLockServiceRegistry:
+        """Get the pipeline lock service registry."""
+        return self._pipeline_lock_registry
+
+    @property
+    def pipeline_queue_registry(self) -> PipelineQueueServiceRegistry:
+        """Get the pipeline queue service registry."""
+        return self._pipeline_queue_registry
+
+    @property
+    def project_manager_registry(self) -> ProjectManagerServiceRegistry:
+        """Get the project manager service registry."""
+        return self._project_manager_registry
+
+    @property
+    def workflow_config_registry(self) -> WorkflowConfigServiceRegistry:
+        """Get the workflow config service registry."""
+        return self._workflow_config_registry
+
+    @property
+    def event_emitter_registry(self) -> EventEmitterRegistry:
+        """Get the event emitter registry."""
+        return self._event_emitter_registry
+
+    @property
+    def identity_service_registry(self) -> IdentityServiceRegistry:
+        """Get the identity service registry."""
+        return self._identity_service_registry
+
+    @property
+    def agent_executor_registry(self) -> AgentExecutorRegistry:
+        """Get the agent executor registry."""
+        return self._agent_executor_registry
+
+    @property
+    def agent_repository_registry(self) -> AgentRepositoryRegistry:
+        """Get the agent repository registry."""
+        return self._agent_repository_registry
+
+    @property
+    def work_item_branch_tracker_registry(self) -> WorkItemBranchTrackerRegistry:
+        """Get the work item branch tracker registry."""
+        return self._work_item_branch_tracker_registry
+
+    @property
+    def work_item_service_registry(self) -> WorkItemServiceRegistry:
+        """Get the work item service registry."""
+        return self._work_item_service_registry
+
+    @property
+    def repair_cycle_checkpoint_registry(self) -> RepairCycleCheckpointStoreRegistry:
+        """Get the repair cycle checkpoint store registry."""
+        return self._repair_cycle_checkpoint_registry
+
+    @property
+    def active_workflow_run_registry_registry(self) -> ActiveWorkflowRunRegistryRegistry:
+        """Get the active workflow run registry."""
+        return self._active_workflow_run_registry_registry
 
     # Dependency injection methods
 
@@ -556,6 +1146,206 @@ class AdapterFactory:
         adapter = self._event_store_registry.create_instance(adapter_name, **kwargs)
 
         return adapter
+
+    def create_storage(self, adapter_name: str | None = None, **kwargs):
+        """Create a storage adapter instance."""
+        adapter_name = adapter_name or self._storage_registry.get_default_name()
+        if not adapter_name:
+            raise ValueError("No default storage adapter configured")
+        logger.info(f"Creating storage adapter: {adapter_name}")
+        return self._storage_registry.create_instance(adapter_name, **kwargs)
+
+    def create_board_service(self, adapter_name: str | None = None, **kwargs):
+        """Create a board service adapter instance."""
+        adapter_name = adapter_name or self._board_service_registry.get_default_name()
+        if not adapter_name:
+            raise ValueError("No default board service adapter configured")
+        logger.info(f"Creating board service adapter: {adapter_name}")
+        return self._board_service_registry.create_instance(adapter_name, **kwargs)
+
+    def create_code_review_service(self, adapter_name: str | None = None, **kwargs):
+        """Create a code review service adapter instance."""
+        adapter_name = adapter_name or self._code_review_registry.get_default_name()
+        if not adapter_name:
+            raise ValueError("No default code review service adapter configured")
+        logger.info(f"Creating code review service adapter: {adapter_name}")
+        return self._code_review_registry.create_instance(adapter_name, **kwargs)
+
+    def create_discussion_adapter(self, adapter_name: str | None = None, **kwargs):
+        """Create a discussion adapter instance."""
+        adapter_name = adapter_name or self._discussion_adapter_registry.get_default_name()
+        if not adapter_name:
+            raise ValueError("No default discussion adapter configured")
+        logger.info(f"Creating discussion adapter: {adapter_name}")
+        return self._discussion_adapter_registry.create_instance(adapter_name, **kwargs)
+
+    def create_version_control_service(self, adapter_name: str | None = None, **kwargs):
+        """Create a version control service adapter instance."""
+        adapter_name = adapter_name or self._version_control_registry.get_default_name()
+        if not adapter_name:
+            raise ValueError("No default version control service adapter configured")
+        logger.info(f"Creating version control service adapter: {adapter_name}")
+        return self._version_control_registry.create_instance(adapter_name, **kwargs)
+
+    def create_metrics(self, adapter_name: str | None = None, **kwargs):
+        """Create a metrics adapter instance."""
+        adapter_name = adapter_name or self._metrics_registry.get_default_name()
+        if not adapter_name:
+            raise ValueError("No default metrics adapter configured")
+        logger.info(f"Creating metrics adapter: {adapter_name}")
+        return self._metrics_registry.create_instance(adapter_name, **kwargs)
+
+    def create_notifier(self, adapter_name: str | None = None, **kwargs):
+        """Create a notifier adapter instance."""
+        adapter_name = adapter_name or self._notifier_registry.get_default_name()
+        if not adapter_name:
+            raise ValueError("No default notifier adapter configured")
+        logger.info(f"Creating notifier adapter: {adapter_name}")
+        return self._notifier_registry.create_instance(adapter_name, **kwargs)
+
+    def create_message_broker(self, adapter_name: str | None = None, **kwargs):
+        """Create a message broker adapter instance."""
+        adapter_name = adapter_name or self._message_broker_registry.get_default_name()
+        if not adapter_name:
+            raise ValueError("No default message broker adapter configured")
+        logger.info(f"Creating message broker adapter: {adapter_name}")
+        return self._message_broker_registry.create_instance(adapter_name, **kwargs)
+
+    def create_config_store(self, adapter_name: str | None = None, **kwargs):
+        """Create a config store adapter instance."""
+        adapter_name = adapter_name or self._config_store_registry.get_default_name()
+        if not adapter_name:
+            raise ValueError("No default config store adapter configured")
+        logger.info(f"Creating config store adapter: {adapter_name}")
+        return self._config_store_registry.create_instance(adapter_name, **kwargs)
+
+    def create_repair_cycle(self, adapter_name: str | None = None, **kwargs):
+        """Create a repair cycle adapter instance."""
+        adapter_name = adapter_name or self._repair_cycle_registry.get_default_name()
+        if not adapter_name:
+            raise ValueError("No default repair cycle adapter configured")
+        logger.info(f"Creating repair cycle adapter: {adapter_name}")
+        return self._repair_cycle_registry.create_instance(adapter_name, **kwargs)
+
+    def create_review_cycle_service(self, adapter_name: str | None = None, **kwargs):
+        """Create a review cycle service adapter instance."""
+        adapter_name = adapter_name or self._review_cycle_registry.get_default_name()
+        if not adapter_name:
+            raise ValueError("No default review cycle service adapter configured")
+        logger.info(f"Creating review cycle service adapter: {adapter_name}")
+        return self._review_cycle_registry.create_instance(adapter_name, **kwargs)
+
+    def create_container_recovery(self, adapter_name: str | None = None, **kwargs):
+        """Create a container recovery adapter instance."""
+        adapter_name = adapter_name or self._container_recovery_registry.get_default_name()
+        if not adapter_name:
+            raise ValueError("No default container recovery adapter configured")
+        logger.info(f"Creating container recovery adapter: {adapter_name}")
+        return self._container_recovery_registry.create_instance(adapter_name, **kwargs)
+
+    def create_encryption_service(self, adapter_name: str | None = None, **kwargs):
+        """Create an encryption service adapter instance."""
+        adapter_name = adapter_name or self._encryption_registry.get_default_name()
+        if not adapter_name:
+            raise ValueError("No default encryption service adapter configured")
+        logger.info(f"Creating encryption service adapter: {adapter_name}")
+        return self._encryption_registry.create_instance(adapter_name, **kwargs)
+
+    def create_pipeline_lock_service(self, adapter_name: str | None = None, **kwargs):
+        """Create a pipeline lock service adapter instance."""
+        adapter_name = adapter_name or self._pipeline_lock_registry.get_default_name()
+        if not adapter_name:
+            raise ValueError("No default pipeline lock service adapter configured")
+        logger.info(f"Creating pipeline lock service adapter: {adapter_name}")
+        return self._pipeline_lock_registry.create_instance(adapter_name, **kwargs)
+
+    def create_pipeline_queue_service(self, adapter_name: str | None = None, **kwargs):
+        """Create a pipeline queue service adapter instance."""
+        adapter_name = adapter_name or self._pipeline_queue_registry.get_default_name()
+        if not adapter_name:
+            raise ValueError("No default pipeline queue service adapter configured")
+        logger.info(f"Creating pipeline queue service adapter: {adapter_name}")
+        return self._pipeline_queue_registry.create_instance(adapter_name, **kwargs)
+
+    def create_project_manager_service(self, adapter_name: str | None = None, **kwargs):
+        """Create a project manager service adapter instance."""
+        adapter_name = adapter_name or self._project_manager_registry.get_default_name()
+        if not adapter_name:
+            raise ValueError("No default project manager service adapter configured")
+        logger.info(f"Creating project manager service adapter: {adapter_name}")
+        return self._project_manager_registry.create_instance(adapter_name, **kwargs)
+
+    def create_workflow_config_service(self, adapter_name: str | None = None, **kwargs):
+        """Create a workflow config service adapter instance."""
+        adapter_name = adapter_name or self._workflow_config_registry.get_default_name()
+        if not adapter_name:
+            raise ValueError("No default workflow config service adapter configured")
+        logger.info(f"Creating workflow config service adapter: {adapter_name}")
+        return self._workflow_config_registry.create_instance(adapter_name, **kwargs)
+
+    def create_event_emitter(self, adapter_name: str | None = None, **kwargs):
+        """Create an event emitter adapter instance."""
+        adapter_name = adapter_name or self._event_emitter_registry.get_default_name()
+        if not adapter_name:
+            raise ValueError("No default event emitter adapter configured")
+        logger.info(f"Creating event emitter adapter: {adapter_name}")
+        return self._event_emitter_registry.create_instance(adapter_name, **kwargs)
+
+    def create_identity_service(self, adapter_name: str | None = None, **kwargs):
+        """Create an identity service adapter instance."""
+        adapter_name = adapter_name or self._identity_service_registry.get_default_name()
+        if not adapter_name:
+            raise ValueError("No default identity service adapter configured")
+        logger.info(f"Creating identity service adapter: {adapter_name}")
+        return self._identity_service_registry.create_instance(adapter_name, **kwargs)
+
+    def create_agent_executor(self, adapter_name: str | None = None, **kwargs):
+        """Create an agent executor adapter instance."""
+        adapter_name = adapter_name or self._agent_executor_registry.get_default_name()
+        if not adapter_name:
+            raise ValueError("No default agent executor adapter configured")
+        logger.info(f"Creating agent executor adapter: {adapter_name}")
+        return self._agent_executor_registry.create_instance(adapter_name, **kwargs)
+
+    def create_agent_repository(self, adapter_name: str | None = None, **kwargs):
+        """Create an agent repository adapter instance."""
+        adapter_name = adapter_name or self._agent_repository_registry.get_default_name()
+        if not adapter_name:
+            raise ValueError("No default agent repository adapter configured")
+        logger.info(f"Creating agent repository adapter: {adapter_name}")
+        return self._agent_repository_registry.create_instance(adapter_name, **kwargs)
+
+    def create_work_item_branch_tracker(self, adapter_name: str | None = None, **kwargs):
+        """Create a work item branch tracker adapter instance."""
+        adapter_name = adapter_name or self._work_item_branch_tracker_registry.get_default_name()
+        if not adapter_name:
+            raise ValueError("No default work item branch tracker adapter configured")
+        logger.info(f"Creating work item branch tracker adapter: {adapter_name}")
+        return self._work_item_branch_tracker_registry.create_instance(adapter_name, **kwargs)
+
+    def create_work_item_service(self, adapter_name: str | None = None, **kwargs):
+        """Create a work item service adapter instance."""
+        adapter_name = adapter_name or self._work_item_service_registry.get_default_name()
+        if not adapter_name:
+            raise ValueError("No default work item service adapter configured")
+        logger.info(f"Creating work item service adapter: {adapter_name}")
+        return self._work_item_service_registry.create_instance(adapter_name, **kwargs)
+
+    def create_repair_cycle_checkpoint_store(self, adapter_name: str | None = None, **kwargs):
+        """Create a repair cycle checkpoint store adapter instance."""
+        adapter_name = adapter_name or self._repair_cycle_checkpoint_registry.get_default_name()
+        if not adapter_name:
+            raise ValueError("No default repair cycle checkpoint store adapter configured")
+        logger.info(f"Creating repair cycle checkpoint store adapter: {adapter_name}")
+        return self._repair_cycle_checkpoint_registry.create_instance(adapter_name, **kwargs)
+
+    def create_active_workflow_run_registry(self, adapter_name: str | None = None, **kwargs):
+        """Create an active workflow run registry adapter instance."""
+        adapter_name = adapter_name or self._active_workflow_run_registry_registry.get_default_name()
+        if not adapter_name:
+            raise ValueError("No default active workflow run registry adapter configured")
+        logger.info(f"Creating active workflow run registry adapter: {adapter_name}")
+        return self._active_workflow_run_registry_registry.create_instance(adapter_name, **kwargs)
 
     def _get_resilience_config(
         self, service_type: str, default_config: ServiceResilienceConfig

@@ -15,6 +15,27 @@ from typing import Any, Generic, TypeVar
 T = TypeVar("T")  # Port interface type
 
 
+@dataclass(frozen=True)
+class AdapterCredentialRequirement:
+    """Declares credential requirements for an adapter implementation.
+
+    Used to specify required environment variables, configuration keys, and
+    operational constraints (e.g., simulation-only adapters).
+    """
+
+    env_vars: tuple[str, ...] = ()
+    """Required environment variable names (e.g., 'GITHUB_TOKEN')."""
+
+    config_keys: tuple[str, ...] = ()
+    """Required configuration file keys."""
+
+    description: str = ""
+    """Human-readable description of credentials needed."""
+
+    simulation_only: bool = False
+    """True if this adapter only exists for simulation (no production version)."""
+
+
 @dataclass
 class AdapterMetadata:
     """Metadata about a registered adapter."""
