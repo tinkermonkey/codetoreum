@@ -201,9 +201,8 @@ async def test_execution_chain_workflow_completes(exec_chain_env):
     """
     bootstrap, seeder, adapters = exec_chain_env
     board_mock = adapters.board_as_mock()
-    # Note: event_store is typed as IEventStore interface
-    # We'll check if it has the get_all_events_list method via duck typing
-    event_store = adapters.event_store
+    # Use accessor helper to get the concrete InMemoryEventStore type
+    event_store = adapters.event_store_as_memory()
     work_item_id = seeder.created_items.work_items[0]
 
     # Human trigger
@@ -218,7 +217,7 @@ async def test_execution_chain_workflow_completes(exec_chain_env):
     # Wait for workflow events to be recorded
     async def workflow_events_recorded():
         # For simulation, event_store is InMemoryEventStore which has get_all_events_list()
-        all_events = event_store.get_all_events_list() if hasattr(event_store, 'get_all_events_list') else []
+        all_events = event_store.get_all_events_list()
         workflow_events = [
             e for e in all_events if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == work_item_id
         ]

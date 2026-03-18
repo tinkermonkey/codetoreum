@@ -381,7 +381,7 @@ class SimulationAdapters:
             raise TypeError(msg)
         return cast(MockBoardAdapter, self.board)
 
-    def repair_cycle_as_mock(self) -> Any:
+    def repair_cycle_as_mock(self) -> "MockRepairCycleAdapter":
         """Get repair cycle as MockRepairCycleAdapter.
 
         Raises TypeError if repair_cycle is not MockRepairCycleAdapter.
@@ -393,7 +393,7 @@ class SimulationAdapters:
             if not isinstance(self.repair_cycle, MockRepairCycleAdapter):
                 msg = f"repair_cycle is {type(self.repair_cycle).__name__}, not MockRepairCycleAdapter"
                 raise TypeError(msg)
-            return cast(Any, self.repair_cycle)
+            return cast("MockRepairCycleAdapter", self.repair_cycle)
         except ImportError as e:
             msg = f"Failed to import MockRepairCycleAdapter: {e}"
             raise TypeError(msg) from e
@@ -547,6 +547,56 @@ class SimulationAdapters:
             msg = f"work_item_service is {type(self.work_item_service).__name__}, not MockWorkItemService"
             raise TypeError(msg)
         return cast(MockWorkItemService, self.work_item_service)
+
+    def storage_as_memory(self) -> InMemoryStorageAdapter:
+        """Get storage as InMemoryStorageAdapter.
+
+        Raises TypeError if storage is not InMemoryStorageAdapter.
+        """
+        if not isinstance(self.storage, InMemoryStorageAdapter):
+            msg = f"storage is {type(self.storage).__name__}, not InMemoryStorageAdapter"
+            raise TypeError(msg)
+        return cast(InMemoryStorageAdapter, self.storage)
+
+    def event_store_as_memory(self) -> InMemoryEventStore:
+        """Get event store as InMemoryEventStore.
+
+        Raises TypeError if event_store is not InMemoryEventStore.
+        """
+        if not isinstance(self.event_store, InMemoryEventStore):
+            msg = f"event_store is {type(self.event_store).__name__}, not InMemoryEventStore"
+            raise TypeError(msg)
+        return cast(InMemoryEventStore, self.event_store)
+
+    def config_store_as_memory(self) -> InMemoryConfigStore:
+        """Get config store as InMemoryConfigStore.
+
+        Raises TypeError if config_store is not InMemoryConfigStore.
+        """
+        if not isinstance(self.config_store, InMemoryConfigStore):
+            msg = f"config_store is {type(self.config_store).__name__}, not InMemoryConfigStore"
+            raise TypeError(msg)
+        return cast(InMemoryConfigStore, self.config_store)
+
+    def encryption_as_simple(self) -> SimpleEncryptionAdapter:
+        """Get encryption as SimpleEncryptionAdapter.
+
+        Raises TypeError if encryption is not SimpleEncryptionAdapter.
+        """
+        if not isinstance(self.encryption, SimpleEncryptionAdapter):
+            msg = f"encryption is {type(self.encryption).__name__}, not SimpleEncryptionAdapter"
+            raise TypeError(msg)
+        return cast(SimpleEncryptionAdapter, self.encryption)
+
+    def metrics_as_memory(self) -> InMemoryMetricsAdapter:
+        """Get metrics as InMemoryMetricsAdapter.
+
+        Raises TypeError if metrics is not InMemoryMetricsAdapter.
+        """
+        if not isinstance(self.metrics, InMemoryMetricsAdapter):
+            msg = f"metrics is {type(self.metrics).__name__}, not InMemoryMetricsAdapter"
+            raise TypeError(msg)
+        return cast(InMemoryMetricsAdapter, self.metrics)
 
 
 @dataclass
@@ -1132,13 +1182,19 @@ class SimulationApplicationBootstrap:
         if isinstance(storage, InMemoryStorageAdapter):
             storage.container = container
 
+        # Create repository adapter (not provided by resolver)
+        repository = InMemoryRepositoryAdapter(event_emitter=deps.event_emitter)
+
+        # Create audit store (not provided by resolver)
+        audit_store = InMemoryAuditStore()
+
         logger.info("Created 28 simulation adapters via AdapterResolver")
 
         return SimulationAdapters(
             ticket_system=cast(ITicketSystem, resolved["ticket"]),
             llm_provider=cast(ILLMProvider, resolved["llm"]),
             container=container,
-            repository=cast(Any, resolved["version_control"]),  # Using version_control as repository placeholder
+            repository=repository,
             event_store=cast(IEventStore, resolved["event_store"]),
             metrics=cast(IMetrics, resolved["metrics"]),
             storage=storage,
@@ -1152,7 +1208,7 @@ class SimulationApplicationBootstrap:
             workflow_config=cast(IWorkflowConfigService, resolved["workflow_config"]),
             queue_service=cast(IPipelineQueueService, resolved["queue_service"]),
             event_emitter=cast(IEventEmitter, deps.event_emitter),
-            audit_store=cast(Any, resolved.get("audit_store")),
+            audit_store=audit_store,
             version_control=cast(IVersionControlService, resolved["version_control"]),
             message_broker=message_broker,
             discussion_adapter=cast(IDiscussionAdapter, resolved["discussion_adapter"]),
