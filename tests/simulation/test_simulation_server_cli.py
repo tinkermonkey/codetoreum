@@ -246,8 +246,7 @@ work_items:
             response = client.post("/api/v2/work-items", json=work_item_data)
 
             # Endpoint is fully implemented in bootstrap - expect 201
-            assert response.status_code == 201, \
-                f"Expected 201 Created, got {response.status_code}: {response.text}"
+            assert response.status_code == 201, f"Expected 201 Created, got {response.status_code}: {response.text}"
             # Verify response contains created work item
             data = response.json()
             assert "id" in data, "Response should contain work item ID"
@@ -268,8 +267,7 @@ work_items:
                     assert websocket is not None
             except WebSocketDenialResponse as e:
                 # WebSocket endpoint not implemented returns 404 denial
-                assert e.status_code == 404, \
-                    f"Expected WebSocket denial with 404, got {e.status_code}"
+                assert e.status_code == 404, f"Expected WebSocket denial with 404, got {e.status_code}"
             except WebSocketDisconnect:
                 # WebSocket endpoint not implemented raises disconnect
                 # This is acceptable - it means the route doesn't exist
@@ -283,8 +281,10 @@ work_items:
             response = client.get("/openapi.json")
             # In simulation mode, docs may be disabled (404 is acceptable)
             # But we should not get 500 or other server errors
-            assert response.status_code in [200, 404], \
-                f"OpenAPI endpoint should return 200 or 404, got {response.status_code}"
+            assert response.status_code in [
+                200,
+                404,
+            ], f"OpenAPI endpoint should return 200 or 404, got {response.status_code}"
             if response.status_code == 200:
                 data = response.json()
                 assert "openapi" in data
@@ -292,8 +292,10 @@ work_items:
             # Swagger UI endpoint
             response = client.get("/docs")
             # In simulation mode, docs may be disabled (404 is acceptable)
-            assert response.status_code in [200, 404], \
-                f"Swagger endpoint should return 200 or 404, got {response.status_code}"
+            assert response.status_code in [
+                200,
+                404,
+            ], f"Swagger endpoint should return 200 or 404, got {response.status_code}"
 
     @pytest.mark.asyncio
     async def test_graceful_shutdown(self):
@@ -337,8 +339,9 @@ work_items:
 
             # All requests should succeed (health endpoint must be reliable)
             for i, response in enumerate(responses):
-                assert response.status_code == 200, \
-                    f"Request {i} failed with status {response.status_code}: {response.text}"
+                assert (
+                    response.status_code == 200
+                ), f"Request {i} failed with status {response.status_code}: {response.text}"
                 data = response.json()
                 assert data["status"] == "healthy"
 

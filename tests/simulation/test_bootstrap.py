@@ -543,8 +543,9 @@ class TestAutoAdvanceBootstrap:
         # Verify clock has advanced exactly as requested
         current_time = clock.now()
         time_delta = current_time - initial_time
-        assert time_delta == timedelta(seconds=2), \
-            f"Clock advancement failed: expected 2 seconds, got {time_delta.total_seconds()}s"
+        assert time_delta == timedelta(
+            seconds=2
+        ), f"Clock advancement failed: expected 2 seconds, got {time_delta.total_seconds()}s"
 
         await bootstrap.teardown()
 
