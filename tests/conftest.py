@@ -335,6 +335,9 @@ def _cleanup_dead_letter_queues() -> Generator[None, None, None]:
     This is particularly important because the _retry_loop runs in an infinite
     loop (while self._running), and if not stopped before the event loop
     closes, it can cause timeouts and prevent tests from completing.
+
+    Uses a registry-based approach instead of gc.get_objects() to avoid
+    O(n) scans that cause exponential slowdown with hundreds of tests.
     """
     yield
 
@@ -343,21 +346,19 @@ def _cleanup_dead_letter_queues() -> Generator[None, None, None]:
         loop = asyncio.get_event_loop()
         if loop and not loop.is_closed():
             # Import here to avoid circular imports
-            import gc
+            from codetoreum.infrastructure.dead_letter_queue import get_active_dead_letter_queues
 
-            from codetoreum.infrastructure.dead_letter_queue import DeadLetterQueue
-
-            # Find all DeadLetterQueue instances that might be running
-            for obj in gc.get_objects():
-                if isinstance(obj, DeadLetterQueue) and obj._running:
-                    # Stop the retry processor
-                    try:
-                        loop.run_until_complete(obj.stop_retry_processor())
-                    except Exception:
-                        # If loop is already closed, set flag directly
-                        obj._running = False
-                        if obj._retry_task:
-                            obj._retry_task.cancel()
+            # Get all running DeadLetterQueue instances from the registry
+            # This is O(1) instead of O(n) where n = total objects in memory
+            for dlq in get_active_dead_letter_queues():
+                # Stop the retry processor
+                try:
+                    loop.run_until_complete(dlq.stop_retry_processor())
+                except Exception:
+                    # If loop is already closed, set flag directly
+                    dlq._running = False
+                    if dlq._retry_task:
+                        dlq._retry_task.cancel()
     except Exception:
         # Ignore any errors during cleanup
         pass

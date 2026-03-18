@@ -24,7 +24,7 @@ class TestAdapterSelectionConfig:
     def test_create_default_config(self) -> None:
         """Test creating adapter selection config with all defaults."""
         config = AdapterSelectionConfig()
-        assert config.board == "in_memory"
+        assert config.board == "mock"
         assert config.ticket == "in_memory"
         assert config.llm == "mock"
         assert config.version_control == "in_memory"
@@ -34,22 +34,22 @@ class TestAdapterSelectionConfig:
         assert config.storage == "in_memory"
         assert config.config_store == "in_memory"
         assert config.notifier == "mock"
-        assert config.encryption == "in_memory"
+        assert config.encryption == "simple"
         assert config.discussion_adapter == "mock"
         assert config.review_cycle == "mock"
         assert config.repair_cycle == "mock"
-        assert config.project_manager == "in_memory"
+        assert config.project_manager == "mock"
         assert config.lock_service == "in_memory"
         assert config.workflow_config == "in_memory"
         assert config.queue_service == "in_memory"
         assert config.event_emitter == "mock"
         assert config.message_broker == "in_memory"
-        assert config.identity_service == "in_memory"
+        assert config.identity_service == "configurable"
         assert config.checkpoint_store == "in_memory"
         assert config.agent_repository == "in_memory"
         assert config.run_registry == "in_memory"
         assert config.branch_tracker == "in_memory"
-        assert config.work_item_service == "in_memory"
+        assert config.work_item_service == "mock"
 
     def test_all_26_adapter_slots_present(self) -> None:
         """Test that all 26 adapter slots are defined."""
@@ -545,7 +545,7 @@ class TestAdapterSelectionConfigIntegration:
         """Test that SimulationConfig includes default AdapterSelectionConfig."""
         config = SimulationConfig(scenario_name="test")
         assert isinstance(config.adapters, AdapterSelectionConfig)
-        assert config.adapters.board == "in_memory"
+        assert config.adapters.board == "mock"
         assert config.adapters.llm == "mock"
         assert config.adapters.container == "fake"
 
@@ -590,7 +590,7 @@ class TestAdapterSelectionConfigIntegration:
         data = {"scenario_name": "test"}
         config = SimulationConfig.from_dict(data)
 
-        assert config.adapters.board == "in_memory"
+        assert config.adapters.board == "mock"
         assert config.adapters.llm == "mock"
         assert config.adapters.container == "fake"
 
@@ -674,7 +674,7 @@ speed_multiplier: 15.0
         try:
             config = SimulationConfig.from_yaml(temp_path)
             # All adapters should use defaults
-            assert config.adapters.board == "in_memory"
+            assert config.adapters.board == "mock"
             assert config.adapters.llm == "mock"
             assert config.adapters.container == "fake"
             assert config.adapters.ticket == "in_memory"
@@ -711,20 +711,20 @@ adapters:
     def test_create_fast_config_has_default_adapters(self) -> None:
         """Test that create_fast_config factory method has default adapters."""
         config = SimulationConfig.create_fast_config("test_scenario")
-        assert config.adapters.board == "in_memory"
+        assert config.adapters.board == "mock"
         assert config.adapters.llm == "mock"
         assert config.adapters.container == "fake"
 
     def test_create_realistic_config_has_default_adapters(self) -> None:
         """Test that create_realistic_config factory method has default adapters."""
         config = SimulationConfig.create_realistic_config("test_scenario")
-        assert config.adapters.board == "in_memory"
+        assert config.adapters.board == "mock"
         assert config.adapters.llm == "mock"
         assert config.adapters.container == "fake"
 
     def test_create_high_fidelity_config_has_default_adapters(self) -> None:
         """Test that create_high_fidelity_config factory method has default adapters."""
         config = SimulationConfig.create_high_fidelity_config("test_scenario")
-        assert config.adapters.board == "in_memory"
+        assert config.adapters.board == "mock"
         assert config.adapters.llm == "mock"
         assert config.adapters.container == "fake"

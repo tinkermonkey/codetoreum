@@ -5,6 +5,8 @@ Handles failed events with retry logic and persistent storage.
 
 import asyncio
 import logging
+import threading
+import weakref
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -15,6 +17,65 @@ from uuid import uuid4
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 logger = logging.getLogger(__name__)
+
+
+class DeadLetterQueueRegistry:
+    """Thread-safe registry of active DeadLetterQueue instances.
+
+    This replaces expensive gc.get_objects() scans with a lightweight
+    registry that tracks instances as they're created and destroyed.
+    """
+
+    def __init__(self) -> None:
+        """Initialize the registry."""
+        self._instances: set[weakref.ref] = set()
+        self._lock = threading.Lock()
+
+    def register(self, instance: "DeadLetterQueue") -> None:
+        """Register a DeadLetterQueue instance.
+
+        Args:
+            instance: The DeadLetterQueue instance to register
+        """
+        with self._lock:
+            # Use weakref so instances can be garbage collected
+            self._instances.add(weakref.ref(instance, self._on_finalize))
+
+    def _on_finalize(self, ref: weakref.ref) -> None:
+        """Called when a weakref is finalized (instance deleted).
+
+        Args:
+            ref: The weakref that was finalized
+        """
+        with self._lock:
+            self._instances.discard(ref)
+
+    def get_all_running(self) -> list["DeadLetterQueue"]:
+        """Get all active DeadLetterQueue instances that are currently running.
+
+        Returns:
+            List of running DeadLetterQueue instances (alive references only)
+        """
+        with self._lock:
+            # Remove dead references and collect live instances
+            live_refs = set()
+            running_instances = []
+
+            for ref in list(self._instances):
+                instance = ref()
+                if instance is not None:
+                    live_refs.add(ref)
+                    if instance._running:
+                        running_instances.append(instance)
+
+            # Clean up dead references
+            self._instances = live_refs
+
+            return running_instances
+
+
+# Global registry instance
+_dlq_registry = DeadLetterQueueRegistry()
 
 
 class FailureReason(Enum):
@@ -154,6 +215,9 @@ class DeadLetterQueue:
         self._retry_task: asyncio.Task | None = None
         self._running = False
         self._retry_handler: Callable | None = None
+
+        # Register this instance in the global registry
+        _dlq_registry.register(self)
 
     async def add_failed_event(
         self,
@@ -449,3 +513,15 @@ class DeadLetterQueue:
             del self._storage[event_id]
 
         return len(old_events)
+
+
+def get_active_dead_letter_queues() -> list[DeadLetterQueue]:
+    """Get all active DeadLetterQueue instances that are currently running.
+
+    This is used by test fixtures to clean up running retry processors
+    without expensive gc.get_objects() scans.
+
+    Returns:
+        List of running DeadLetterQueue instances
+    """
+    return _dlq_registry.get_all_running()
