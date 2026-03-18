@@ -9,7 +9,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from types import MappingProxyType
-from typing import Any
 
 
 @dataclass(frozen=True)
@@ -46,7 +45,7 @@ class AuditEventInfo:
     action: str
     user_id: str
     correlation_id: str | None
-    metadata: MappingProxyType
+    metadata: MappingProxyType[str, object]
     success: bool
     error_message: str | None
 

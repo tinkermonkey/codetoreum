@@ -5,7 +5,6 @@ Provides implementation of the audit query port using the audit store backend.
 """
 
 import logging
-from datetime import UTC, datetime
 from types import MappingProxyType
 
 from codetoreum.infrastructure.audit.interfaces import (
@@ -99,8 +98,8 @@ class AuditQueryAdapter(IAuditQueryPort):
                     "Audit event missing required timestamp field",
                     extra={"event_id": event_dict.get("id")},
                 )
-                raise ValueError(
-                    f"Audit event {event_dict.get('id')} missing required timestamp"
+                raise RuntimeError(
+                    f"Audit data integrity error: event {event_dict.get('id')} missing required timestamp"
                 )
 
             event_info = AuditEventInfo(
