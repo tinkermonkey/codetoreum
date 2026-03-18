@@ -119,11 +119,11 @@ def validate_yaml_file(file_path: Path) -> None:
             count_depth_and_nodes(yaml_content)
 
     except yaml.YAMLError as e:
-        raise click.FileError(str(file_path), f"Invalid YAML: {e}")
+        raise click.FileError(str(file_path), f"Invalid YAML: {e}") from e
     except ValueError as e:
-        raise click.FileError(str(file_path), str(e))
+        raise click.FileError(str(file_path), str(e)) from e
     except Exception as e:
-        raise click.FileError(str(file_path), f"Error reading file: {e}")
+        raise click.FileError(str(file_path), f"Error reading file: {e}") from e
 
 
 def setup_logging(debug: bool = False) -> None:
@@ -212,10 +212,10 @@ async def bootstrap_application(
             )
     except PermissionError as e:
         msg = f"Permission denied: {e}"
-        raise click.FileError(str(scenario_file), msg)
+        raise click.FileError(str(scenario_file), msg) from e
     except Exception as e:
         msg = f"Failed to load configuration: {e}"
-        raise RuntimeError(msg)
+        raise RuntimeError(msg) from e
 
     # Wire auto-advance flag into config (CLI override takes precedence)
     sim_config.time.auto_advance = auto_advance
@@ -231,7 +231,7 @@ async def bootstrap_application(
         await bootstrap.setup()
     except Exception as e:
         msg = f"Bootstrap failed: {e}"
-        raise RuntimeError(msg)
+        raise RuntimeError(msg) from e
 
     console.print("[green]✓ Application bootstrapped successfully[/green]")
 
@@ -287,10 +287,10 @@ async def seed_data(
             await seeder.seed_from_yaml(file_path)
     except PermissionError as e:
         msg = f"Permission denied: {e}"
-        raise click.FileError(str(scenario_file or scenario), msg)
+        raise click.FileError(str(scenario_file or scenario), msg) from e
     except Exception as e:
         msg = f"Seeding failed: {e}"
-        raise RuntimeError(msg)
+        raise RuntimeError(msg) from e
 
     # Get seeded data counts
     created = seeder.get_created_items()
@@ -415,14 +415,14 @@ async def run_server(
     except OSError as e:
         if "Address already in use" in str(e) or e.errno == 98:
             msg = f"Port {port} is already in use. Try a different port with --port"
-            raise OSError(msg)
+            raise OSError(msg) from e
         if "Permission denied" in str(e) or e.errno == 13:
             msg = f"Permission denied to bind to port {port}. Try a port > 1024 or run with elevated privileges"
-            raise OSError(msg)
+            raise OSError(msg) from e
         raise
     except Exception as e:
         msg = f"Server failed to start: {e}"
-        raise RuntimeError(msg)
+        raise RuntimeError(msg) from e
 
 
 async def main_async(

@@ -756,7 +756,7 @@ class GitHubTicketAdapter(ITicketSystem):
         """
         try:
             await self.close()
-        except Exception:
-            # Suppress cleanup errors to avoid masking original exception
-            pass
+        except Exception as e:
+            # Log cleanup errors but don't suppress exceptions
+            logger.exception("Error during cleanup in GitHubTicketAdapter.__aexit__", exc_info=True)
         return False  # Don't suppress exceptions
