@@ -7,6 +7,14 @@ including interface compliance validation and adapter registration.
 
 import pytest
 
+from codetoreum.adapters.secondary import (
+    CachedConfigStore,
+    GitHubBoardAdapter,
+    GitHubCodeReviewAdapter,
+    GitHubTicketAdapter,
+    GitRepositoryAdapter,
+    MockEventEmitter,
+)
 from codetoreum.adapters.testing import (
     CapturingMockEventEmitter,
     ConfigurableIdentityService,
@@ -31,14 +39,6 @@ from codetoreum.adapters.testing import (
     MockReviewCycleAdapter,
     MockWorkItemService,
     SimpleEncryptionAdapter,
-)
-from codetoreum.adapters.secondary import (
-    CachedConfigStore,
-    GitHubBoardAdapter,
-    GitHubCodeReviewAdapter,
-    GitHubTicketAdapter,
-    GitRepositoryAdapter,
-    MockEventEmitter,
 )
 
 # Import optional secondary adapters
@@ -129,20 +129,14 @@ class TestAdapterCredentialRequirement:
 
     def test_credential_requirement_with_env_vars(self):
         """Test credential requirement with environment variables."""
-        req = AdapterCredentialRequirement(
-            env_vars=("GITHUB_TOKEN", "GITHUB_ORG"),
-            description="GitHub authentication"
-        )
+        req = AdapterCredentialRequirement(env_vars=("GITHUB_TOKEN", "GITHUB_ORG"), description="GitHub authentication")
         assert req.env_vars == ("GITHUB_TOKEN", "GITHUB_ORG")
         assert req.description == "GitHub authentication"
         assert req.simulation_only is False
 
     def test_credential_requirement_simulation_only(self):
         """Test marking adapter as simulation-only."""
-        req = AdapterCredentialRequirement(
-            description="Simulation-only adapter",
-            simulation_only=True
-        )
+        req = AdapterCredentialRequirement(description="Simulation-only adapter", simulation_only=True)
         assert req.simulation_only is True
 
     def test_credential_requirement_immutable(self):

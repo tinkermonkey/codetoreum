@@ -13,6 +13,20 @@ import threading
 from dataclasses import dataclass
 from typing import Any, TypeVar
 
+# Import production adapters
+from codetoreum.adapters.secondary import (
+    CachedConfigStore,
+    ClaudeCodeAdapter,
+    DockerContainerAdapter,
+    ElasticsearchConfigStorage,
+    GitHubBoardAdapter,
+    GitHubCodeReviewAdapter,
+    GitHubTicketAdapter,
+    GitRepositoryAdapter,
+    InMemoryPipelineLockService,
+    MockEventEmitter,
+)
+
 # Import testing adapters
 from codetoreum.adapters.testing import (
     CapturingMockEventEmitter,
@@ -43,20 +57,6 @@ from codetoreum.adapters.testing import (
     MockReviewCycleAdapter,
     MockWorkItemService,
     SimpleEncryptionAdapter,
-)
-
-# Import production adapters
-from codetoreum.adapters.secondary import (
-    CachedConfigStore,
-    ClaudeCodeAdapter,
-    DockerContainerAdapter,
-    ElasticsearchConfigStorage,
-    GitHubBoardAdapter,
-    GitHubCodeReviewAdapter,
-    GitHubTicketAdapter,
-    GitRepositoryAdapter,
-    InMemoryPipelineLockService,
-    MockEventEmitter,
 )
 
 # Import optional secondary adapter types
@@ -108,7 +108,6 @@ try:
     )
 except ImportError:
     ProductionRepairCycleAdapter = None  # type: ignore
-from codetoreum.infrastructure.adapters.registry_base import AdapterCredentialRequirement
 from codetoreum.infrastructure.adapters.registries import (
     ActiveWorkflowRunRegistryRegistry,
     AgentExecutorRegistry,
@@ -137,10 +136,11 @@ from codetoreum.infrastructure.adapters.registries import (
     StorageRegistry,
     TicketSystemRegistry,
     VersionControlServiceRegistry,
+    WorkflowConfigServiceRegistry,
     WorkItemBranchTrackerRegistry,
     WorkItemServiceRegistry,
-    WorkflowConfigServiceRegistry,
 )
+from codetoreum.infrastructure.adapters.registry_base import AdapterCredentialRequirement
 from codetoreum.infrastructure.resilience import (
     CLAUDE_RESILIENCE_CONFIG,
     CONTAINER_RESILIENCE_CONFIG,
@@ -1516,7 +1516,9 @@ class AdapterFactory:
         logger.info(f"Creating work item service adapter: {adapter_name}")
         return self._work_item_service_registry.create_instance(adapter_name, **kwargs)
 
-    def create_repair_cycle_checkpoint_store(self, adapter_name: str | None = None, **kwargs) -> IRepairCycleCheckpointStore:
+    def create_repair_cycle_checkpoint_store(
+        self, adapter_name: str | None = None, **kwargs
+    ) -> IRepairCycleCheckpointStore:
         """Create a repair cycle checkpoint store adapter instance."""
         adapter_name = adapter_name or self._repair_cycle_checkpoint_registry.get_default_name()
         if not adapter_name:
@@ -1524,7 +1526,9 @@ class AdapterFactory:
         logger.info(f"Creating repair cycle checkpoint store adapter: {adapter_name}")
         return self._repair_cycle_checkpoint_registry.create_instance(adapter_name, **kwargs)
 
-    def create_active_workflow_run_registry(self, adapter_name: str | None = None, **kwargs) -> IActiveWorkflowRunRegistry:
+    def create_active_workflow_run_registry(
+        self, adapter_name: str | None = None, **kwargs
+    ) -> IActiveWorkflowRunRegistry:
         """Create an active workflow run registry adapter instance."""
         adapter_name = adapter_name or self._active_workflow_run_registry_registry.get_default_name()
         if not adapter_name:
