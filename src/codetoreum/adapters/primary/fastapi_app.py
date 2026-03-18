@@ -46,6 +46,7 @@ from codetoreum.adapters.primary.github_webhook_adapter import (
 )
 from codetoreum.adapters.primary.rest_api_adapter import RestAPIAdapter
 from codetoreum.adapters.primary.routers.agents import create_agents_router
+from codetoreum.adapters.primary.routers.audit import create_audit_router
 from codetoreum.adapters.primary.routers.config import create_config_router
 from codetoreum.adapters.primary.routers.events import create_events_router
 from codetoreum.adapters.primary.routers.executions import create_executions_router
@@ -70,6 +71,7 @@ from codetoreum.infrastructure.observability.config import ObservabilityConfig
 from codetoreum.infrastructure.observability.otel_setup import setup_opentelemetry
 from codetoreum.ports.input.agent_command import IAgentCommandPort
 from codetoreum.ports.input.agent_query import IAgentQueryPort
+from codetoreum.ports.input.audit_query import IAuditQueryPort
 from codetoreum.ports.input.config_command import IConfigurationCommandPort
 from codetoreum.ports.input.config_query import IConfigurationQueryPort
 from codetoreum.ports.input.execution_command import IExecutionCommandPort
@@ -237,6 +239,7 @@ def create_app(
     event_bus: IEventBus,
     config_service: IConfigurationService,
     logger: ILogger,
+    audit_query_port: IAuditQueryPort | None = None,
     auth_secret_key: str | None = None,
     disable_auth: bool = False,
     cors_origins: list | None = None,
@@ -266,6 +269,7 @@ def create_app(
         event_bus: Event bus for publishing events
         config_service: Configuration service
         logger: Logger instance
+        audit_query_port: Optional port for querying audit events
         auth_secret_key: Optional secret key for JWT signing. If not provided, one will be generated.
         disable_auth: If True, authentication is disabled (for development/testing only)
         cors_origins: List of allowed CORS origins
@@ -546,6 +550,14 @@ def create_app(
         auth_deps=auth_deps,
     )
     app.include_router(workspace_router)
+
+    # Include Audit router (if audit_query_port is provided)
+    if audit_query_port is not None:
+        audit_router = create_audit_router(
+            query_port=audit_query_port,
+            auth_deps=auth_deps,
+        )
+        app.include_router(audit_router)
 
     # ========================================================================
     # WebSocket Endpoints
@@ -1109,6 +1121,8 @@ def create_development_app() -> FastAPI:
                 assigned_at=None,
                 current_workflow_id=None,
                 current_stage=None,
+                current_column=None,
+                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,
@@ -1131,6 +1145,8 @@ def create_development_app() -> FastAPI:
                 assigned_at=datetime.now(UTC),
                 current_workflow_id=None,
                 current_stage=None,
+                current_column=None,
+                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,
@@ -1160,6 +1176,8 @@ def create_development_app() -> FastAPI:
                 assigned_at=datetime.now(UTC),
                 current_workflow_id=None,
                 current_stage=None,
+                current_column=None,
+                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,
@@ -1182,6 +1200,8 @@ def create_development_app() -> FastAPI:
                 assigned_at=datetime.now(UTC),
                 current_workflow_id=None,
                 current_stage=None,
+                current_column=None,
+                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,
@@ -1204,6 +1224,8 @@ def create_development_app() -> FastAPI:
                 assigned_at=datetime.now(UTC),
                 current_workflow_id=None,
                 current_stage=None,
+                current_column=None,
+                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,
@@ -1226,6 +1248,8 @@ def create_development_app() -> FastAPI:
                 assigned_at=datetime.now(UTC),
                 current_workflow_id=command.workflow_id,
                 current_stage=None,
+                current_column=None,
+                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,
@@ -1248,6 +1272,8 @@ def create_development_app() -> FastAPI:
                 assigned_at=datetime.now(UTC),
                 current_workflow_id="wf-123",
                 current_stage=command.stage,
+                current_column=None,
+                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,
@@ -1273,6 +1299,8 @@ def create_development_app() -> FastAPI:
                 assigned_at=datetime.now(UTC),
                 current_workflow_id="wf-123",
                 current_stage="development",
+                current_column=None,
+                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,
@@ -1295,6 +1323,8 @@ def create_development_app() -> FastAPI:
                 assigned_at=datetime.now(UTC),
                 current_workflow_id="wf-123",
                 current_stage="development",
+                current_column=None,
+                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,

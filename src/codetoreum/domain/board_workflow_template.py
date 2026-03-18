@@ -28,6 +28,9 @@ class ColumnTemplate:
         position: Column order (0 = leftmost/first)
         auto_progress_on_completion: If True, automatically move to next column
                                      after agent completion
+        sla_seconds: Optional SLA threshold in seconds. If set, work items in this
+                     column exceeding this duration will trigger SLA expiry events.
+                     None means no SLA enforcement for this column.
     """
 
     name: str
@@ -37,6 +40,7 @@ class ColumnTemplate:
     is_exit_column: bool
     position: int
     auto_progress_on_completion: bool
+    sla_seconds: int | None = None
 
     def __post_init__(self) -> None:
         """Validate column template invariants."""
@@ -65,6 +69,11 @@ class ColumnTemplate:
                 f"auto_progress_on_completion only valid for automated columns, "
                 f"column '{self.name}' is {self.type.value}"
             )
+            raise ValueError(msg)
+
+        # Validate SLA threshold
+        if self.sla_seconds is not None and self.sla_seconds <= 0:
+            msg = f"SLA threshold must be positive, got {self.sla_seconds} seconds"
             raise ValueError(msg)
 
 

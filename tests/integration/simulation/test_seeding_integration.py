@@ -356,3 +356,129 @@ work_items:
 
         with pytest.raises(ValidationError, match="validation failed"):
             await seeder.seed_from_yaml(invalid_yaml)
+
+    # =========================================================================
+    # SLA Configuration Integration Tests
+    # =========================================================================
+
+    @pytest.mark.asyncio
+    async def test_workflow_template_has_default_sla_values(self, seeder):
+        """Test that registered workflow templates have default SLA values."""
+        await seeder.create_project("sla-test-project")
+
+        # Register template with default SLA (should be 3600 for automated columns)
+        seeder.register_workflow_template(
+            board_id="sla-test-board",
+            column_names=["Backlog", "Ready", "In Progress", "Review", "Done"],
+            agent_types=["architect", "coder", "tester"],
+        )
+
+        # Retrieve template and verify SLA values
+        template = seeder.bootstrap.adapters.workflow_config._templates.get("sla-test-board")
+        assert template is not None, "Template should be registered"
+
+        # Verify automated columns have default 3600 second SLA
+        for col in template.columns:
+            if col.type.value == "automated":
+                assert col.sla_seconds == 3600, f"Automated column {col.name} should have 3600s SLA"
+
+        # Verify manual columns have no SLA
+        for col in template.columns:
+            if col.type.value == "manual":
+                assert col.sla_seconds is None, f"Manual column {col.name} should have no SLA"
+
+    @pytest.mark.asyncio
+    async def test_workflow_template_has_custom_sla_values(self, seeder):
+        """Test that custom SLA values are properly configured."""
+        await seeder.create_project("custom-sla-project")
+
+        custom_sla = {
+            "Ready": 1800,  # 30 minutes
+            "In Progress": 5400,  # 1.5 hours
+            "Review": 2700,  # 45 minutes
+        }
+
+        seeder.register_workflow_template(
+            board_id="custom-sla-board",
+            column_names=["Backlog", "Ready", "In Progress", "Review", "Done"],
+            agent_types=["architect", "coder", "tester"],
+            sla_seconds_by_column=custom_sla,
+        )
+
+        # Retrieve template and verify custom SLA values
+        template = seeder.bootstrap.adapters.workflow_config._templates.get("custom-sla-board")
+        assert template is not None
+
+        column_dict = {col.name: col for col in template.columns}
+        assert column_dict["Ready"].sla_seconds == 1800
+        assert column_dict["In Progress"].sla_seconds == 5400
+        assert column_dict["Review"].sla_seconds == 2700
+
+    @pytest.mark.asyncio
+    async def test_yaml_scenario_with_sla_configuration(self, seeder, tmp_path):
+        """Test YAML scenarios can include SLA configuration."""
+        # Create YAML with SLA values for columns
+        yaml_with_sla = tmp_path / "sla_scenario.yaml"
+        yaml_with_sla.write_text("""
+name: "SLA Test Scenario"
+version: "1.0"
+speed_multiplier: 100.0
+
+projects:
+  - name: "sla-project"
+    description: "Project for SLA testing"
+
+workflows:
+  - name: "sla-workflow"
+    description: "Workflow with SLA thresholds"
+    stages:
+      - name: "analyze"
+        agent_type: "analyzer"
+        order: 1
+      - name: "implement"
+        agent_type: "implementer"
+        order: 2
+      - name: "review"
+        agent_type: "reviewer"
+        order: 3
+
+agents:
+  - name: "analyzer"
+    agent_type: "analyzer"
+    capabilities: ["code_review"]
+  - name: "implementer"
+    agent_type: "implementer"
+    capabilities: ["code_generation"]
+  - name: "reviewer"
+    agent_type: "reviewer"
+    capabilities: ["code_review"]
+
+work_items:
+  - title: "Feature"
+    priority: "medium"
+    status: "new"
+
+boards:
+  - board_id: "sla-board"
+    board_name: "SLA Board"
+    columns: ["Backlog", "Analysis", "Implementation", "Review", "Done"]
+    sla_seconds_by_column:
+      Analysis: 1800
+      Implementation: 7200
+      Review: 3600
+""")
+
+        await seeder.seed_from_yaml(yaml_with_sla)
+
+        # Verify scenario loaded
+        assert len(seeder.created_items.projects) >= 1
+        assert len(seeder.created_items.work_items) >= 1
+
+        # Verify SLA configuration from template
+        template = seeder.bootstrap.adapters.workflow_config._templates.get("sla-board")
+        assert template is not None, "Template should be registered"
+
+        column_dict = {col.name: col for col in template.columns}
+        assert column_dict["Analysis"].sla_seconds == 1800
+        assert column_dict["Implementation"].sla_seconds == 7200
+        assert column_dict["Review"].sla_seconds == 3600

@@ -40,6 +40,7 @@ class TestSimulationServerCLI:
             scenario="default",
             scenario_file=None,
             speed_multiplier=10.0,
+            auto_advance=False,
         )
         yield bootstrap
         await bootstrap.teardown()
@@ -75,6 +76,7 @@ class TestSimulationServerCLI:
             scenario="default",
             scenario_file=None,
             speed_multiplier=10.0,
+            auto_advance=False,
         )
         elapsed = time.time() - start_time
 
@@ -138,6 +140,7 @@ work_items:
             scenario="default",  # Ignored when scenario_file is provided
             scenario_file=scenario_file,
             speed_multiplier=100.0,  # Should override file's 5.0
+            auto_advance=False,
         )
 
         try:
@@ -157,6 +160,7 @@ work_items:
             scenario="default",
             scenario_file=None,
             speed_multiplier=10.0,
+            auto_advance=False,
         )
 
         try:
@@ -187,6 +191,7 @@ work_items:
             scenario="default",
             scenario_file=None,
             speed_multiplier=10.0,
+            auto_advance=False,
         )
 
         try:
@@ -208,13 +213,15 @@ work_items:
 
     @pytest.mark.asyncio
     async def test_http_health_check(self, bootstrap):
-        """Test HTTP health check endpoint (if available)."""
+        """Test HTTP health check endpoint."""
         with TestClient(bootstrap.app) as client:
-            response = client.get("/api/health")
+            response = client.get("/api/v2/health")
 
-            # Endpoint may or may not be implemented in FastAPI app
-            # Just verify we get a valid response
-            assert response.status_code in [200, 404, 405]
+            # Health check should be available in simulation bootstrap
+            assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+            data = response.json()
+            assert data["status"] == "healthy"
+            assert data["service"] == "codetoreum-api"
 
     @pytest.mark.asyncio
     async def test_http_create_work_item(self, bootstrap):
@@ -228,45 +235,67 @@ work_items:
         )
 
         with TestClient(bootstrap.app) as client:
-            # Create work item
+            # Create work item with all required fields
             work_item_data = {
+                "project_id": "test-project",  # Required field
                 "title": "Test Work Item",
                 "description": "Test description",
                 "labels": ["test"],
             }
 
-            response = client.post("/api/work-items", json=work_item_data)
+            response = client.post("/api/v2/work-items", json=work_item_data)
 
-            # Note: Actual response depends on the mock adapter implementation
-            # This test verifies the endpoint is accessible
-            assert response.status_code in [200, 201, 404, 422]  # Depending on implementation
+            # Endpoint is fully implemented in bootstrap - expect 201
+            assert response.status_code == 201, f"Expected 201 Created, got {response.status_code}: {response.text}"
+            # Verify response contains created work item
+            data = response.json()
+            assert "id" in data, "Response should contain work item ID"
+            assert data["title"] == work_item_data["title"], "Response should contain created title"
+            assert data["project_id"] == work_item_data["project_id"], "Response should contain project_id"
 
     @pytest.mark.asyncio
     async def test_websocket_connection(self, bootstrap):
         """Test WebSocket connection (if available)."""
+        from starlette.testclient import WebSocketDenialResponse
+        from starlette.websockets import WebSocketDisconnect
+
         with TestClient(bootstrap.app) as client:
-            # Test WebSocket connection - may or may not be implemented
+            # Test WebSocket connection - expect 404 if not implemented
             try:
                 with client.websocket_connect("/ws") as websocket:
                     # Connection successful
                     assert websocket is not None
-            except Exception:
-                # WebSocket endpoint may not be implemented or may reject connection
-                # This is acceptable for simulation mode
+            except WebSocketDenialResponse as e:
+                # WebSocket endpoint not implemented returns 404 denial
+                assert e.status_code == 404, f"Expected WebSocket denial with 404, got {e.status_code}"
+            except WebSocketDisconnect:
+                # WebSocket endpoint not implemented raises disconnect
+                # This is acceptable - it means the route doesn't exist
                 pass
 
     @pytest.mark.asyncio
     async def test_api_docs_available(self, bootstrap):
-        """Test that API documentation is available."""
+        """Test that API documentation endpoints handle requests properly."""
         with TestClient(bootstrap.app) as client:
-            # OpenAPI schema - should be available on FastAPI apps
+            # OpenAPI schema endpoint
             response = client.get("/openapi.json")
-            # May be at different path or disabled
-            assert response.status_code in [200, 404]
+            # In simulation mode, docs may be disabled (404 is acceptable)
+            # But we should not get 500 or other server errors
+            assert response.status_code in [
+                200,
+                404,
+            ], f"OpenAPI endpoint should return 200 or 404, got {response.status_code}"
+            if response.status_code == 200:
+                data = response.json()
+                assert "openapi" in data
 
-            # Swagger UI - may be available
+            # Swagger UI endpoint
             response = client.get("/docs")
-            assert response.status_code in [200, 404]
+            # In simulation mode, docs may be disabled (404 is acceptable)
+            assert response.status_code in [
+                200,
+                404,
+            ], f"Swagger endpoint should return 200 or 404, got {response.status_code}"
 
     @pytest.mark.asyncio
     async def test_graceful_shutdown(self):
@@ -275,6 +304,7 @@ work_items:
             scenario="default",
             scenario_file=None,
             speed_multiplier=10.0,
+            auto_advance=False,
         )
 
         # Verify setup
@@ -301,15 +331,19 @@ work_items:
         )
 
         with TestClient(bootstrap.app) as client:
-            # Make multiple requests to root endpoint (should always exist)
+            # Make multiple requests to health endpoint (should always exist)
             responses = []
             for _ in range(10):
-                response = client.get("/")
+                response = client.get("/api/v2/health")
                 responses.append(response)
 
-            # All requests should get a response (success or not found)
-            for response in responses:
-                assert response.status_code in [200, 404, 307]  # OK, Not Found, or Redirect
+            # All requests should succeed (health endpoint must be reliable)
+            for i, response in enumerate(responses):
+                assert (
+                    response.status_code == 200
+                ), f"Request {i} failed with status {response.status_code}: {response.text}"
+                data = response.json()
+                assert data["status"] == "healthy"
 
     @pytest.mark.asyncio
     async def test_scenario_stress_test(self):
@@ -318,6 +352,7 @@ work_items:
             scenario="stress_test",
             scenario_file=None,
             speed_multiplier=100.0,
+            auto_advance=False,
         )
 
         try:
@@ -342,6 +377,7 @@ work_items:
                 scenario="default",
                 scenario_file=None,
                 speed_multiplier=speed,
+                auto_advance=False,
             )
 
             try:
@@ -393,6 +429,7 @@ class TestSimulationServerPerformance:
             scenario="default",
             scenario_file=None,
             speed_multiplier=100.0,
+            auto_advance=False,
         )
 
         # Seed data
@@ -419,6 +456,7 @@ class TestSimulationServerPerformance:
             scenario="stress_test",  # Should have 100 work items
             scenario_file=None,
             speed_multiplier=100.0,
+            auto_advance=False,
         )
 
         try:
@@ -557,6 +595,7 @@ class TestErrorHandling:
                 scenario="default",
                 scenario_file=yaml_file,
                 speed_multiplier=1.0,
+                auto_advance=False,
             )
 
     @pytest.mark.asyncio
@@ -566,6 +605,7 @@ class TestErrorHandling:
             scenario="default",
             scenario_file=None,
             speed_multiplier=10.0,
+            auto_advance=False,
         )
 
         try:

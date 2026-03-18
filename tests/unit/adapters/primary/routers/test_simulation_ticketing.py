@@ -8,7 +8,9 @@ from codetoreum.adapters.primary.routers.simulation_ticketing import (
     create_simulation_ticketing_router,
 )
 from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
+from codetoreum.adapters.testing.in_memory_workflow_config_service import InMemoryWorkflowConfigService
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
+from codetoreum.domain.board_workflow_template import BoardWorkflowTemplate, ColumnTemplate, ColumnType
 
 
 @pytest.fixture
@@ -25,11 +27,336 @@ def board_adapter():
 
 
 @pytest.fixture
-def client(ticket_adapter, board_adapter):
+def workflow_config_service():
+    """Workflow config service with a template for the test board."""
+    service = InMemoryWorkflowConfigService()
+
+    # Register a workflow template for the test board
+    # This matches the board created in board_adapter fixture
+    template = BoardWorkflowTemplate(
+        id="workflow-test",
+        name="Test Workflow",
+        pipeline_trigger_columns=("Ready",),
+        exit_columns=("Done",),
+        columns=(
+            ColumnTemplate(
+                name="Backlog",
+                type=ColumnType.MANUAL,
+                agent_id=None,
+                is_pipeline_trigger=False,
+                is_exit_column=False,
+                position=0,
+                auto_progress_on_completion=False,
+            ),
+            ColumnTemplate(
+                name="Ready",
+                type=ColumnType.AUTOMATED,
+                agent_id="test_agent",
+                is_pipeline_trigger=True,
+                is_exit_column=False,
+                position=1,
+                auto_progress_on_completion=True,
+            ),
+            ColumnTemplate(
+                name="In Progress",
+                type=ColumnType.AUTOMATED,
+                agent_id="test_agent",
+                is_pipeline_trigger=False,
+                is_exit_column=False,
+                position=2,
+                auto_progress_on_completion=True,
+            ),
+            ColumnTemplate(
+                name="Review",
+                type=ColumnType.AUTOMATED,
+                agent_id="test_agent",
+                is_pipeline_trigger=False,
+                is_exit_column=False,
+                position=3,
+                auto_progress_on_completion=True,
+            ),
+            ColumnTemplate(
+                name="Done",
+                type=ColumnType.MANUAL,
+                agent_id=None,
+                is_pipeline_trigger=False,
+                is_exit_column=True,
+                position=4,
+                auto_progress_on_completion=False,
+            ),
+        ),
+    )
+
+    # Register the template for the board
+    service.register_template("board-1", template)
+
+    return service
+
+
+@pytest.fixture
+def client(ticket_adapter, board_adapter, workflow_config_service):
     app = FastAPI()
-    router = create_simulation_ticketing_router(ticket_adapter, board_adapter)
+    router = create_simulation_ticketing_router(ticket_adapter, board_adapter, workflow_config_service)
     app.include_router(router)
     return TestClient(app)
+
+
+class TestStagingColumnDetection:
+    """Tests for proper staging column detection (issue #442).
+
+    The staging column is the appropriate entry point for newly created work items.
+    It should be a MANUAL column that doesn't trigger pipeline automation.
+    The router should use the workflow template to find the correct staging column
+    instead of blindly assuming the first column is suitable for staging.
+    """
+
+    def test_create_issue_uses_manual_column_for_staging(self, client):
+        """Verify that the first MANUAL column is used for staging, not position 0."""
+        # Create issue requesting placement in a target column
+        resp = client.post(
+            "/api/v2/simulation/ticketing/issues",
+            json={
+                "title": "Staging test",
+                "project_id": "proj-1",
+                "board_id": "board-1",
+                "column": "Ready",  # Target column is "Ready" (automated, pipeline trigger)
+            },
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+
+        # Verify issue is placed in the target column (Ready)
+        assert data["board_position"]["column"] == "Ready"
+
+        # Verify that the issue was properly staged and moved (internal behavior)
+        # The item should have been temporarily placed in "Backlog" (first MANUAL column)
+        # then moved to "Ready" (target column) to trigger WorkItemColumnChangedEvent
+
+    def test_staging_column_when_first_column_is_automated(self):
+        """Test the key scenario from issue #442: column 0 is AUTOMATED/pipeline-trigger.
+
+        This tests the exact bug scenario: when the first column position is an
+        AUTOMATED pipeline-trigger column, the item should NOT be placed there.
+        Instead, it should be staged in the first MANUAL column (at a later position).
+
+        Setup:
+        - Column 0: "Planning" (AUTOMATED, pipeline trigger)
+        - Column 1: "Staging" (MANUAL)
+        - Column 2: "Ready" (AUTOMATED)
+        - Column 3: "Done" (MANUAL, exit column)
+
+        Expected: New item is staged in "Staging" (col 1), not "Planning" (col 0).
+        """
+        # Create board with AUTOMATED column at position 0
+        adapter = MockBoardAdapter()
+        adapter.create_board("proj-2", "board-2", "Test Board v2", ["Planning", "Staging", "Ready", "Done"])
+        adapter.current_project = "proj-2"
+
+        # Register workflow template where column 0 is AUTOMATED/pipeline-trigger
+        service = InMemoryWorkflowConfigService()
+        template = BoardWorkflowTemplate(
+            id="workflow-test-v2",
+            name="Test Workflow v2",
+            pipeline_trigger_columns=("Planning",),
+            exit_columns=("Done",),
+            columns=(
+                ColumnTemplate(
+                    name="Planning",  # Position 0, but AUTOMATED/trigger
+                    type=ColumnType.AUTOMATED,
+                    agent_id="planner_agent",
+                    is_pipeline_trigger=True,
+                    is_exit_column=False,
+                    position=0,
+                    auto_progress_on_completion=False,
+                ),
+                ColumnTemplate(
+                    name="Staging",  # Position 1, MANUAL (proper staging column)
+                    type=ColumnType.MANUAL,
+                    agent_id=None,
+                    is_pipeline_trigger=False,
+                    is_exit_column=False,
+                    position=1,
+                    auto_progress_on_completion=False,
+                ),
+                ColumnTemplate(
+                    name="Ready",
+                    type=ColumnType.AUTOMATED,
+                    agent_id="executor_agent",
+                    is_pipeline_trigger=False,
+                    is_exit_column=False,
+                    position=2,
+                    auto_progress_on_completion=True,
+                ),
+                ColumnTemplate(
+                    name="Done",
+                    type=ColumnType.MANUAL,
+                    agent_id=None,
+                    is_pipeline_trigger=False,
+                    is_exit_column=True,
+                    position=3,
+                    auto_progress_on_completion=False,
+                ),
+            ),
+        )
+        service.register_template("board-2", template)
+
+        # Create test client with this board/template
+        app = FastAPI()
+        router = create_simulation_ticketing_router(InMemoryTicketAdapter(), adapter, service)
+        app.include_router(router)
+        client = TestClient(app)
+
+        # Create issue with board placement
+        resp = client.post(
+            "/api/v2/simulation/ticketing/issues",
+            json={
+                "title": "Test staging with automated column 0",
+                "project_id": "proj-2",
+                "board_id": "board-2",
+                "column": "Ready",  # Request placement in "Ready"
+            },
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+
+        # Verify issue ends up in the target column
+        assert data["board_position"]["column"] == "Ready"
+        issue_id = data["id"]
+
+        # Verify the item's history shows it was staged in "Staging" (position 1),
+        # NOT in "Planning" (position 0). This proves the fix works.
+        history_resp = client.get("/api/v2/simulation/ticketing/board/board-2/history")
+        assert history_resp.status_code == 200
+        history = history_resp.json()
+
+        # Expect at least 2 moves: Staging -> Ready
+        # (The initial placement in Staging doesn't create a move event)
+        movements = history["movements"]
+        assert len(movements) >= 1, "Expected at least one movement in history"
+
+        # First move should be from Staging to Ready (never from Planning)
+        first_move = movements[0]
+        assert first_move["from_column"] == "Staging", (
+            f"Expected staging in 'Staging' column, but first move was from "
+            f"'{first_move['from_column']}'. This indicates the old bug (staging in column 0) "
+            f"is still present."
+        )
+        assert first_move["to_column"] == "Ready"
+
+    def test_staging_fallback_when_no_workflow_template(self):
+        """Test fallback to first column when no workflow template is registered.
+
+        When a board doesn't have a registered workflow template, the router should
+        fall back to using the first column as the staging column and not error.
+        """
+        # Create board without registering a workflow template
+        adapter = MockBoardAdapter()
+        adapter.create_board("proj-3", "board-3", "Untracked Board", ["Input", "Work", "Output"])
+        adapter.current_project = "proj-3"
+
+        # Service with NO template registered for this board
+        service = InMemoryWorkflowConfigService()
+
+        app = FastAPI()
+        router = create_simulation_ticketing_router(InMemoryTicketAdapter(), adapter, service)
+        app.include_router(router)
+        client = TestClient(app)
+
+        # Create issue with board placement
+        # Should succeed and use first column ("Input") as fallback
+        resp = client.post(
+            "/api/v2/simulation/ticketing/issues",
+            json={
+                "title": "Test fallback without template",
+                "project_id": "proj-3",
+                "board_id": "board-3",
+                "column": "Work",
+            },
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["board_position"]["column"] == "Work"
+        assert data["board_position"]["board_id"] == "board-3"
+
+    def test_staging_warning_when_no_manual_columns(self, caplog):
+        """Test warning is logged when workflow has no MANUAL columns.
+
+        When a workflow template exists but has no MANUAL columns, the router
+        should log a warning and fall back to the first column. This scenario
+        is unlikely but should be handled gracefully.
+        """
+        # Create board
+        adapter = MockBoardAdapter()
+        adapter.create_board("proj-4", "board-4", "All Automated Board", ["Automated1", "Automated2", "Automated3"])
+        adapter.current_project = "proj-4"
+
+        # Register workflow template with NO MANUAL columns
+        service = InMemoryWorkflowConfigService()
+        template = BoardWorkflowTemplate(
+            id="workflow-automated",
+            name="All Automated Workflow",
+            pipeline_trigger_columns=("Automated1",),
+            exit_columns=("Automated3",),
+            columns=(
+                ColumnTemplate(
+                    name="Automated1",
+                    type=ColumnType.AUTOMATED,
+                    agent_id="agent1",
+                    is_pipeline_trigger=True,
+                    is_exit_column=False,
+                    position=0,
+                    auto_progress_on_completion=False,
+                ),
+                ColumnTemplate(
+                    name="Automated2",
+                    type=ColumnType.AUTOMATED,
+                    agent_id="agent2",
+                    is_pipeline_trigger=False,
+                    is_exit_column=False,
+                    position=1,
+                    auto_progress_on_completion=True,
+                ),
+                ColumnTemplate(
+                    name="Automated3",
+                    type=ColumnType.AUTOMATED,
+                    agent_id="agent3",
+                    is_pipeline_trigger=False,
+                    is_exit_column=True,
+                    position=2,
+                    auto_progress_on_completion=True,
+                ),
+            ),
+        )
+        service.register_template("board-4", template)
+
+        app = FastAPI()
+        router = create_simulation_ticketing_router(InMemoryTicketAdapter(), adapter, service)
+        app.include_router(router)
+        client = TestClient(app)
+
+        # Create issue with board placement
+        with caplog.at_level("WARNING"):
+            resp = client.post(
+                "/api/v2/simulation/ticketing/issues",
+                json={
+                    "title": "Test no manual columns",
+                    "project_id": "proj-4",
+                    "board_id": "board-4",
+                    "column": "Automated2",
+                },
+            )
+
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["board_position"]["column"] == "Automated2"
+
+        # Verify warning was logged about no MANUAL columns
+        warning_found = any(
+            "No MANUAL columns found in workflow template" in record.message
+            for record in caplog.records
+            if record.levelname == "WARNING"
+        )
+        assert warning_found, "Expected warning to be logged when no MANUAL columns found in template"
 
 
 class TestCreateIssue:

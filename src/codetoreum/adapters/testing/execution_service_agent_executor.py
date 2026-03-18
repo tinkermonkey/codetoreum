@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable, Coroutine
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -25,6 +26,7 @@ if TYPE_CHECKING:
     )
     from codetoreum.application.execution_service import ExecutionService
     from codetoreum.application.workspace_router import WorkspaceRouter
+    from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
     from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
     from codetoreum.ports.output.agent_repository import IAgentRepository
     from codetoreum.ports.output.config_store import IConfigStore
@@ -33,6 +35,28 @@ if TYPE_CHECKING:
     from codetoreum.ports.output.work_item_service import IWorkItemService
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ActiveExecutionInfo:
+    """Metadata about an in-progress agent execution.
+
+    Exposed by ExecutionServiceAgentExecutor.get_active_executions() for use by
+    the ExecutionTimeoutWatchdog to detect and cancel timed-out executions.
+
+    Attributes:
+        execution_id: Unique ID for this execution
+        work_item_id: Work item being processed
+        started_at: When execution started (UTC)
+        timeout_seconds: Timeout threshold (from Agent.timeout_seconds)
+        task: The running asyncio.Task for cancellation
+    """
+
+    execution_id: str
+    work_item_id: str
+    started_at: datetime
+    timeout_seconds: int
+    task: asyncio.Task
 
 
 class ExecutionServiceAgentExecutor(IAgentExecutor):
@@ -63,6 +87,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         run_registry: IActiveWorkflowRunRegistry,
         branch_tracker: IWorkItemBranchTracker,
         vcs: IVersionControlService,
+        clock: SimulationClock,
         recovery_service: AgentExecutionRecoveryService | None = None,
         execution_delay: float = 0.0,
     ) -> None:
@@ -77,6 +102,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             run_registry: Tracks active workflow runs per work item
             branch_tracker: Tracks VCS branches per work item
             vcs: Version control service for repository operations
+            clock: SimulationClock for consistent time tracking in simulation
             recovery_service: Service for handling completion callback failures
             execution_delay: Optional delay (seconds) before execution for testing
         """
@@ -88,6 +114,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         self._run_registry = run_registry
         self._branch_tracker = branch_tracker
         self._vcs = vcs
+        self._clock = clock
         self._recovery_service = recovery_service
         self._execution_delay = execution_delay
 
@@ -95,6 +122,8 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         self._default_board_id = "board-1"
         self._executions: list[dict[str, Any]] = []
         self._pending_tasks: set[asyncio.Task] = set()
+        # Track active executions: task -> ActiveExecutionInfo mapping
+        self._active_executions: dict[asyncio.Task, ActiveExecutionInfo] = {}
 
     def set_completion_handler(
         self,
@@ -120,14 +149,17 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         silently lost. This follows the bootstrap pattern used in
         bootstrap.py:1309-1329 for board event bridge tasks.
 
+        Also cleans up execution tracking to avoid memory leaks.
+
         Args:
             task: The completed asyncio.Task
         """
         self._pending_tasks.discard(task)
+        self._active_executions.pop(task, None)  # Clean up execution tracking
         try:
             task.result()
         except asyncio.CancelledError:
-            # Task was cancelled — normal during shutdown
+            # Task was cancelled — normal during shutdown or by watchdog
             pass
         except Exception as task_exception:
             # Unhandled exception in _run_execution (e.g., recovery service failure)
@@ -146,6 +178,18 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         """Return recorded executions for test assertions."""
         return list(self._executions)
 
+    def get_active_executions(self) -> list[ActiveExecutionInfo]:
+        """Return snapshot of all in-progress executions for watchdog use.
+
+        This provides read-only access to active execution metadata without exposing
+        the internal task tracking dict. Used by ExecutionTimeoutWatchdog to detect
+        and cancel timed-out executions.
+
+        Returns:
+            List of ActiveExecutionInfo objects for each in-progress execution
+        """
+        return list(self._active_executions.values())
+
     async def execute(self, work_item_id: str, agent_id: str, board_id: str | None = None) -> None:
         """Execute an agent on a work item (fire-and-forget).
 
@@ -158,12 +202,29 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             board_id: ID of the board containing the work item
         """
         resolved_board_id = board_id or self._default_board_id
-        now = datetime.now(UTC)
+        # Use clock.now() for consistent time tracking with watchdog timeout checks
+        now = self._clock.now()
 
         # Get active run to obtain workflow_id and stage_name
         run_info = await self._run_registry.get_active_run(work_item_id)
         workflow_id = run_info.run_id if run_info else "unknown"
         stage_name = run_info.stage_name if run_info else "unknown"
+
+        # Load agent to get its configured timeout
+        # This ensures the watchdog respects the agent's timeout instead of using a default.
+        timeout_seconds = 3600  # Fallback default (1 hour) if agent load fails
+        try:
+            agent = await self._agent_repository.get_by_id(agent_id)
+            timeout_seconds = agent.timeout_seconds
+        except Exception as e:
+            logger.warning(
+                f"Failed to load agent '{agent_id}' for timeout in execute(): {e}, "
+                f"falling back to {timeout_seconds}s default",
+                exc_info=True,
+            )
+
+        # Generate execution ID for tracking
+        execution_id = f"{work_item_id}-{agent_id}-{now.timestamp()}"
 
         self._executions.append(
             {
@@ -180,6 +241,16 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
 
         task = asyncio.create_task(self._run_execution(work_item_id, agent_id, resolved_board_id))
         self._pending_tasks.add(task)
+
+        # Track active execution for timeout watchdog
+        self._active_executions[task] = ActiveExecutionInfo(
+            execution_id=execution_id,
+            work_item_id=work_item_id,
+            started_at=now,
+            timeout_seconds=timeout_seconds,
+            task=task,
+        )
+
         task.add_done_callback(self._task_done_callback)
 
     async def _run_execution(self, work_item_id: str, agent_id: str, board_id: str) -> None:

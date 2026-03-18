@@ -49,6 +49,8 @@ class MockWorkItemCommandAdapter(IWorkItemCommandPort):
                 labels=command.labels or [],
                 current_workflow_id=None,
                 current_stage=None,
+                current_column=None,
+                entered_column_at=None,
                 external_id=command.external_id,
                 external_url=command.external_url,
                 created_at=now,

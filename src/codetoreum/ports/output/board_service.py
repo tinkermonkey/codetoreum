@@ -10,6 +10,7 @@ abstractions over GitHub Projects v2, Trello, JIRA boards, etc.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 
 from .event_emitter import IEventEmitter
@@ -87,11 +88,13 @@ class WorkItemPosition:
         work_item_id: Unique identifier of the work item
         column_name: Name of the column containing the item
         position: Position within the column (0 = top/first)
+        entered_column_at: Timestamp when item entered current column (for SLA tracking)
     """
 
     work_item_id: str
     column_name: str
     position: int
+    entered_column_at: datetime | None = None
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
@@ -111,6 +114,14 @@ class WorkItemPosition:
         if not isinstance(self.position, int) or self.position < 0:
             msg = "position must be a non-negative integer"
             raise ValueError(msg)
+
+        # Validate optional SLA tracking field
+        if self.entered_column_at is not None:
+            from datetime import datetime
+
+            if not isinstance(self.entered_column_at, datetime):
+                msg = "entered_column_at must be None or a datetime instance"
+                raise ValueError(msg)
 
 
 @dataclass(frozen=True)
@@ -494,4 +505,37 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
 
         Events:
             Emits 'board.reconciled' event with changes made
+        """
+
+    @abstractmethod
+    async def get_all_boards(self) -> list[ProjectBoard]:
+        """Get all boards across all projects.
+
+        Returns all boards managed by this service, including structure and items.
+        Used for cross-board queries like SLA monitoring.
+
+        Returns:
+            List[ProjectBoard]: All boards with columns and items
+
+        Raises:
+            ExternalServiceError: Service communication failure
+        """
+
+    @abstractmethod
+    async def get_board_items(self, project_id: str, board_id: str) -> list[WorkItemPosition]:
+        """Get all work items on a board with their column positions and entry times.
+
+        Returns all items across all columns on the specified board,
+        including their current column, position, and entry timestamp.
+
+        Args:
+            project_id: Project containing the board
+            board_id: Board to query
+
+        Returns:
+            List[WorkItemPosition]: All items with column, position, and entry time
+
+        Raises:
+            ResourceNotFoundError: Board doesn't exist
+            ExternalServiceError: Service communication failure
         """

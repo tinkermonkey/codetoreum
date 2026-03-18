@@ -119,11 +119,11 @@ def validate_yaml_file(file_path: Path) -> None:
             count_depth_and_nodes(yaml_content)
 
     except yaml.YAMLError as e:
-        raise click.FileError(str(file_path), f"Invalid YAML: {e}")
+        raise click.FileError(str(file_path), f"Invalid YAML: {e}") from e
     except ValueError as e:
-        raise click.FileError(str(file_path), str(e))
+        raise click.FileError(str(file_path), str(e)) from e
     except Exception as e:
-        raise click.FileError(str(file_path), f"Error reading file: {e}")
+        raise click.FileError(str(file_path), f"Error reading file: {e}") from e
 
 
 def setup_logging(debug: bool = False) -> None:
@@ -174,6 +174,7 @@ async def bootstrap_application(
     scenario: str,
     scenario_file: Path | None,
     speed_multiplier: float,
+    auto_advance: bool,
 ) -> SimulationApplicationBootstrap:
     """
     Bootstrap the application in simulation mode.
@@ -182,6 +183,7 @@ async def bootstrap_application(
         scenario: Scenario name
         scenario_file: Optional custom scenario file path
         speed_multiplier: Time speed multiplier
+        auto_advance: Whether to automatically advance simulation clock
 
     Returns:
         Configured SimulationApplicationBootstrap instance
@@ -210,12 +212,16 @@ async def bootstrap_application(
             )
     except PermissionError as e:
         msg = f"Permission denied: {e}"
-        raise click.FileError(str(scenario_file), msg)
+        raise click.FileError(str(scenario_file), msg) from e
     except Exception as e:
         msg = f"Failed to load configuration: {e}"
-        raise RuntimeError(msg)
+        raise RuntimeError(msg) from e
+
+    # Wire auto-advance flag into config (CLI override takes precedence)
+    sim_config.time.auto_advance = auto_advance
 
     console.print(f"[dim]Speed multiplier: {sim_config.time.speed_multiplier}x[/dim]")
+    console.print(f"[dim]Auto-advance: {'enabled' if auto_advance else 'disabled'}[/dim]")
 
     console.print("\n[bold cyan]Bootstrapping Application[/bold cyan]")
 
@@ -225,7 +231,7 @@ async def bootstrap_application(
         await bootstrap.setup()
     except Exception as e:
         msg = f"Bootstrap failed: {e}"
-        raise RuntimeError(msg)
+        raise RuntimeError(msg) from e
 
     console.print("[green]✓ Application bootstrapped successfully[/green]")
 
@@ -281,10 +287,10 @@ async def seed_data(
             await seeder.seed_from_yaml(file_path)
     except PermissionError as e:
         msg = f"Permission denied: {e}"
-        raise click.FileError(str(scenario_file or scenario), msg)
+        raise click.FileError(str(scenario_file or scenario), msg) from e
     except Exception as e:
         msg = f"Seeding failed: {e}"
-        raise RuntimeError(msg)
+        raise RuntimeError(msg) from e
 
     # Get seeded data counts
     created = seeder.get_created_items()
@@ -312,6 +318,7 @@ def display_startup_info(
     scenario: str,
     scenario_file: Path | None,
     speed_multiplier: float,
+    auto_advance: bool,
     debug: bool,
     seeded_data: dict,
 ) -> None:
@@ -324,6 +331,7 @@ def display_startup_info(
         scenario: Scenario name
         scenario_file: Optional custom scenario file
         speed_multiplier: Time speed multiplier
+        auto_advance: Whether auto-advance is enabled
         debug: Debug mode enabled
         seeded_data: Seeded data counts
     """
@@ -338,6 +346,7 @@ def display_startup_info(
     table.add_row("Port", str(port))
     table.add_row("Scenario", scenario if not scenario_file else str(scenario_file))
     table.add_row("Speed Multiplier", f"{speed_multiplier}x")
+    table.add_row("Auto-advance", "Enabled" if auto_advance else "Disabled")
     table.add_row("Debug Mode", "Enabled" if debug else "Disabled")
     table.add_row("Executor", "[green]ExecutionServiceAgentExecutor[/green]")
 
@@ -406,14 +415,14 @@ async def run_server(
     except OSError as e:
         if "Address already in use" in str(e) or e.errno == 98:
             msg = f"Port {port} is already in use. Try a different port with --port"
-            raise OSError(msg)
+            raise OSError(msg) from e
         if "Permission denied" in str(e) or e.errno == 13:
             msg = f"Permission denied to bind to port {port}. Try a port > 1024 or run with elevated privileges"
-            raise OSError(msg)
+            raise OSError(msg) from e
         raise
     except Exception as e:
         msg = f"Server failed to start: {e}"
-        raise RuntimeError(msg)
+        raise RuntimeError(msg) from e
 
 
 async def main_async(
@@ -422,6 +431,7 @@ async def main_async(
     scenario: str,
     scenario_file: Path | None,
     speed_multiplier: float,
+    auto_advance: bool,
     no_seed: bool,
     debug: bool,
 ) -> None:
@@ -434,6 +444,7 @@ async def main_async(
         scenario: Scenario name
         scenario_file: Optional custom scenario file
         speed_multiplier: Time speed multiplier
+        auto_advance: Whether to automatically advance simulation clock
         no_seed: Skip seeding if True
         debug: Debug mode enabled
     """
@@ -453,7 +464,7 @@ async def main_async(
 
     try:
         # Bootstrap application
-        bootstrap = await bootstrap_application(scenario, scenario_file, speed_multiplier)
+        bootstrap = await bootstrap_application(scenario, scenario_file, speed_multiplier, auto_advance)
 
         if shutdown_requested:
             return
@@ -465,7 +476,7 @@ async def main_async(
             return
 
         # Display startup info
-        display_startup_info(host, port, scenario, scenario_file, speed_multiplier, debug, seeded_data)
+        display_startup_info(host, port, scenario, scenario_file, speed_multiplier, auto_advance, debug, seeded_data)
 
         # Run server (blocking)
         await run_server(bootstrap, host, port, debug)
@@ -502,6 +513,7 @@ async def main_async(
                 console.print(f"[red]Error during cleanup: {e}[/red]")
                 logger.error(
                     f"Error during cleanup: {e}",
+                    exc_info=True,
                     extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
                 )
 
@@ -539,6 +551,11 @@ async def main_async(
     show_default=True,
 )
 @click.option(
+    "--auto-advance/--no-auto-advance",
+    default=True,
+    help="Automatically advance simulation clock in background (default: enabled)",
+)
+@click.option(
     "--no-seed",
     is_flag=True,
     help="Skip seeding test data (start with empty state)",
@@ -554,6 +571,7 @@ def main(
     scenario: str,
     scenario_file: Path | None,
     speed_multiplier: float,
+    auto_advance: bool,
     no_seed: bool,
     debug: bool,
 ) -> None:
@@ -576,6 +594,9 @@ def main(
 
         # Start with 10x time acceleration
         python -m codetoreum.cli.simulation_server --speed-multiplier 10.0
+
+        # Start with auto-advance disabled (manual clock control)
+        python -m codetoreum.cli.simulation_server --no-auto-advance
 
         # Start without seeding data
         python -m codetoreum.cli.simulation_server --no-seed
@@ -600,7 +621,7 @@ def main(
 
     # Run async main
     try:
-        asyncio.run(main_async(host, port, scenario, scenario_file, speed_multiplier, no_seed, debug))
+        asyncio.run(main_async(host, port, scenario, scenario_file, speed_multiplier, auto_advance, no_seed, debug))
     except KeyboardInterrupt:
         console.print("\n[yellow]Server stopped by user[/yellow]")
     except Exception as e:

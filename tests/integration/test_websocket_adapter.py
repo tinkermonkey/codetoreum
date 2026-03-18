@@ -27,6 +27,7 @@ def client():
 class TestWebSocketConnection:
     """Tests for WebSocket connection management"""
 
+    @pytest.mark.timeout(5)
     def test_websocket_connect(self, client):
         """Test WebSocket connection establishment"""
         with client.websocket_connect("/ws/events") as websocket:
@@ -36,6 +37,7 @@ class TestWebSocketConnection:
             assert "client_id" in data
             assert "message" in data
 
+    @pytest.mark.timeout(5)
     def test_websocket_ping_pong(self, client):
         """Test WebSocket ping/pong keepalive"""
         with client.websocket_connect("/ws/events") as websocket:
@@ -53,6 +55,7 @@ class TestWebSocketConnection:
 class TestWebSocketSubscriptions:
     """Tests for WebSocket event subscriptions"""
 
+    @pytest.mark.timeout(5)
     def test_subscribe_to_all_events(self, client):
         """Test subscribing to all events"""
         with client.websocket_connect("/ws/events") as websocket:
@@ -67,6 +70,7 @@ class TestWebSocketSubscriptions:
             assert data["type"] == "subscribed"
             assert data["subscription_type"] == "all_events"
 
+    @pytest.mark.timeout(5)
     def test_subscribe_to_workflow_events(self, client):
         """Test subscribing to workflow events"""
         with client.websocket_connect("/ws/events") as websocket:
@@ -88,6 +92,7 @@ class TestWebSocketSubscriptions:
             assert data["subscription_type"] == "workflow_events"
             assert data["filters"]["workflow_run_id"] == "test-workflow-123"
 
+    @pytest.mark.timeout(5)
     def test_subscribe_to_execution_events(self, client):
         """Test subscribing to execution events"""
         with client.websocket_connect("/ws/events") as websocket:
@@ -109,6 +114,7 @@ class TestWebSocketSubscriptions:
             assert data["subscription_type"] == "execution_events"
             assert data["filters"]["execution_id"] == "test-execution-123"
 
+    @pytest.mark.timeout(5)
     def test_subscribe_with_project_filter(self, client):
         """Test subscribing with project name filter"""
         with client.websocket_connect("/ws/events") as websocket:
@@ -129,6 +135,7 @@ class TestWebSocketSubscriptions:
             assert data["type"] == "subscribed"
             assert data["filters"]["project_name"] == "test-project"
 
+    @pytest.mark.timeout(5)
     def test_subscribe_with_event_types_filter(self, client):
         """Test subscribing with event types filter"""
         with client.websocket_connect("/ws/events") as websocket:
@@ -152,6 +159,7 @@ class TestWebSocketSubscriptions:
                 "WorkflowCompleted",
             ]
 
+    @pytest.mark.timeout(5)
     def test_unsubscribe(self, client):
         """Test unsubscribing from events"""
         with client.websocket_connect("/ws/events") as websocket:

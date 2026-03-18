@@ -26,7 +26,9 @@ dependency injection.
 
 import asyncio
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import timedelta
+from enum import Enum
 from typing import Any
 
 from fastapi import FastAPI
@@ -53,8 +55,11 @@ from codetoreum.adapters.primary.input_port_adapters.mock import (
     MockWorkItemQueryAdapter,
     MockWorkspaceQueryAdapter,
 )
+from codetoreum.adapters.primary.routers.simulation_clock import (
+    create_simulation_clock_router,
+)
 
-# Import simulation ticketing router
+# Import simulation routers
 from codetoreum.adapters.primary.routers.simulation_ticketing import (
     create_simulation_ticketing_router,
 )
@@ -136,6 +141,7 @@ from codetoreum.infrastructure.adapters.factory import (
     AdapterFactory,
     AdapterFactoryConfig,
 )
+from codetoreum.infrastructure.audit.stores import InMemoryAuditStore
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 
 # Infrastructure
@@ -150,8 +156,17 @@ from codetoreum.infrastructure.simulation.causal_link_registry import (
 from codetoreum.infrastructure.simulation.mock_tracer import MockTracer
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
+from codetoreum.infrastructure.simulation.watchdogs import (
+    ColumnProgressionWatchdog,
+    ExecutionTimeoutWatchdog,
+    SLAExpiryWatchdog,
+    StaleLockWatchdog,
+)
 from codetoreum.ports.input.agent_command import IAgentCommandPort
 from codetoreum.ports.input.agent_query import IAgentQueryPort
+
+# Ports
+from codetoreum.ports.input.audit_query import IAuditQueryPort
 from codetoreum.ports.input.config_command import IConfigurationCommandPort
 from codetoreum.ports.input.config_query import IConfigurationQueryPort
 from codetoreum.ports.input.execution_command import IExecutionCommandPort
@@ -161,8 +176,6 @@ from codetoreum.ports.input.orchestration_command import IOrchestrationCommandPo
 from codetoreum.ports.input.task_query import ITaskQueryPort
 from codetoreum.ports.input.work_item_command import IWorkItemCommandPort
 from codetoreum.ports.input.work_item_query import IWorkItemQueryPort
-
-# Ports
 from codetoreum.ports.input.workflow_command import IWorkflowCommandPort
 from codetoreum.ports.input.workflow_definition_command import (
     IWorkflowDefinitionCommandPort,
@@ -174,6 +187,52 @@ from codetoreum.ports.output.agent_executor import IAgentExecutor
 from codetoreum.ports.output.failed_event_store import IFailedEventStore
 
 logger = logging.getLogger(__name__)
+
+
+class BootstrapPhase(Enum):
+    """Bootstrap phases that can fail in degraded mode."""
+
+    AUTO_ADVANCE = "auto_advance"
+    STALE_LOCK_WATCHDOG = "stale_lock_watchdog"
+    EXECUTION_TIMEOUT_WATCHDOG = "execution_timeout_watchdog"
+    SLA_EXPIRY_WATCHDOG = "sla_expiry_watchdog"
+    COLUMN_PROGRESSION_WATCHDOG = "column_progression_watchdog"
+
+
+@dataclass
+class BootstrapDegradedModeState:
+    """Tracks which bootstrap phases failed and why.
+
+    When critical phases fail (e.g., watchdogs), the bootstrap continues but
+    marks these failures so callers can detect degraded mode and decide whether
+    to proceed or fail.
+    """
+
+    failed_phases: dict[BootstrapPhase, str] = field(default_factory=dict)
+
+    def mark_failed(self, phase: BootstrapPhase, error: str) -> None:
+        """Mark a phase as failed with the error message."""
+        self.failed_phases[phase] = error
+
+    @property
+    def is_degraded(self) -> bool:
+        """True if any phases failed."""
+        return bool(self.failed_phases)
+
+    @property
+    def failed_phase_names(self) -> list[str]:
+        """List of failed phase names."""
+        return [phase.value for phase in self.failed_phases.keys()]
+
+    def get_summary(self) -> str:
+        """Get human-readable summary of failures."""
+        if not self.is_degraded:
+            return "Bootstrap completed successfully"
+
+        lines = ["Bootstrap running in degraded mode:"]
+        for phase, error in self.failed_phases.items():
+            lines.append(f"  - {phase.value}: {error}")
+        return "\n".join(lines)
 
 
 @dataclass
@@ -203,6 +262,7 @@ class SimulationAdapters:
     workflow_config: InMemoryWorkflowConfigService
     queue_service: InMemoryQueueService  # Pipeline queue service for board automation
     event_emitter: CapturingMockEventEmitter  # For domain event capture
+    audit_store: InMemoryAuditStore  # For audit query adapter
 
     # Additional adapters (wired in simulation mode)
     version_control: InMemoryVersionControlService  # Version control operations
@@ -218,6 +278,7 @@ class SimulationAdapters:
     branch_tracker: InMemoryWorkItemBranchTracker  # Work item → VCS branch tracking
     work_item_service: MockWorkItemService  # Work item lookups for execution chain
 
+    # Fields with defaults (must come after fields without defaults)
     # Agent executor (assigned in Phase 3, after ExecutionService is created)
     agent_executor: IAgentExecutor | None = None
 
@@ -263,6 +324,7 @@ class SimulationPorts:
     config_query: IConfigurationQueryPort
     metrics_query: IMetricsQueryPort
     workspace_query: IWorkspaceQueryPort
+    audit_query: IAuditQueryPort
 
 
 @dataclass
@@ -290,6 +352,7 @@ class SimulationApplicationBootstrap:
     3. All application services
     4. All input/output ports
     5. FastAPI application
+    6. Conditionally auto-advance simulation clock (if configured via TimeConfig.auto_advance)
 
     Usage:
         bootstrap = SimulationApplicationBootstrap(config)
@@ -320,9 +383,40 @@ class SimulationApplicationBootstrap:
 
         # Internal state
         self._is_setup = False
+        self._degraded_mode = BootstrapDegradedModeState()
         self._adapter_factory: AdapterFactory | None = None
         self._engine: SimulationEngine | None = None
         self._board_event_handler: BoardColumnEventHandler | None = None
+        self._stale_lock_watchdog: StaleLockWatchdog | None = None
+        self._execution_timeout_watchdog: ExecutionTimeoutWatchdog | None = None
+        self._sla_expiry_watchdog: SLAExpiryWatchdog | None = None
+        self._column_progression_watchdog: ColumnProgressionWatchdog | None = None
+
+    @property
+    def is_degraded(self) -> bool:
+        """
+        Check if bootstrap is running in degraded mode.
+
+        Degraded mode occurs when critical phases fail (watchdogs, auto-advance, etc.)
+        but the bootstrap continues to allow testing/debugging.
+
+        Callers MUST check this property after setup() completes successfully
+        to determine if the system is operating with reduced functionality.
+
+        Returns:
+            True if any critical phase failed; False if setup is fully healthy.
+        """
+        return self._degraded_mode.is_degraded
+
+    @property
+    def degraded_mode_state(self) -> BootstrapDegradedModeState:
+        """
+        Get detailed degraded mode state.
+
+        Returns the full state including which phases failed and why.
+        Only relevant if is_degraded is True.
+        """
+        return self._degraded_mode
 
     async def setup(self) -> FastAPI:
         """
@@ -335,14 +429,26 @@ class SimulationApplicationBootstrap:
         - Phase 3: Create services (11 application services with dependencies)
         - Phase 4: Create ports (16 input port implementations)
         - Phase 5: Create FastAPI app (wire all ports to API endpoints, register handlers)
+        - Phase 6: Conditionally start auto-advance clock (if configured)
+        - Phase 6b: Register stale lock watchdog (deadlock prevention)
+        - Phase 6c: Register execution timeout watchdog (runaway agent prevention)
+        - Phase 6d: Register SLA expiry watchdog (compliance enforcement)
 
         Infrastructure is created before adapters to enable causal linking via event bus subscriptions.
+        Auto-advance and watchdogs are started after all event handlers are registered to ensure
+        tick-driven events have handlers.
+
+        **DEGRADED MODE**: If phases 6/6b/6c/6d fail, the bootstrap continues to allow testing
+        and debugging, but logs errors and marks components as degraded. Callers MUST check the
+        `is_degraded` property after setup() returns successfully to determine if critical
+        functionality is missing.
 
         Returns:
-            Fully configured FastAPI application
+            Fully configured FastAPI application (check `is_degraded` property for health status)
 
         Raises:
-            RuntimeError: If already set up or if setup fails
+            RuntimeError: If already set up or if core phases 0-5 fail (degraded mode is only
+                        for phases 6+)
         """
         if self._is_setup:
             message = "Bootstrap already set up"
@@ -393,8 +499,183 @@ class SimulationApplicationBootstrap:
                 if isinstance(dlq_adapter, DeadLetterQueueFailedEventStoreAdapter):
                     await dlq_adapter.start_retry_processor(self._create_dlq_retry_handler())
 
+            # Phase 6: Start auto-advance if configured
+            # This must come after all event handlers are registered so tick-driven events have handlers
+            if self.config.time.auto_advance and self._engine:
+                try:
+                    logger.info(
+                        "Phase 6: Starting auto-advance at %sx speed",
+                        self.config.time.speed_multiplier,
+                    )
+                    await self._engine.start_auto_advance()
+                except RuntimeError as e:
+                    # If auto-advance is already running, log warning and continue in degraded mode
+                    error_msg = f"Auto-advance already running or failed to start: {e}"
+                    logger.warning(
+                        error_msg,
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                    )
+                    self._degraded_mode.mark_failed(BootstrapPhase.AUTO_ADVANCE, str(e))
+                except Exception as e:
+                    # Mark as degraded and log with full context
+                    error_msg = f"Unexpected error starting auto-advance: {e}"
+                    logger.error(
+                        error_msg,
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                    )
+                    self._degraded_mode.mark_failed(BootstrapPhase.AUTO_ADVANCE, str(e))
+                    # Continue without auto-advance rather than crashing the server
+                    logger.info("Continuing server startup in degraded mode without auto-advance")
+
+            # Phase 6b: Register stale lock watchdog
+            # Must come after auto-advance starts so it can schedule callbacks with the clock
+            if self.adapters and self._engine:
+                try:
+                    logger.info("Phase 6b: Registering stale lock watchdog...")
+                    self._stale_lock_watchdog = StaleLockWatchdog(
+                        lock_service=self.adapters.lock_service,
+                        event_emitter=self.adapters.event_emitter,
+                        clock=self._engine.get_clock_for_testing(),
+                        stale_threshold_seconds=7200,  # 2 hours default
+                    )
+                    self._stale_lock_watchdog.start()
+
+                    # Wire the on_lock_acquired event handler to clear deduplication tracking
+                    # when locks are newly acquired after being recovered
+                    if self.infrastructure and self.infrastructure.event_bus:
+                        self.infrastructure.event_bus.subscribe(
+                            "lock.acquired",
+                            self._stale_lock_watchdog.on_lock_acquired,
+                        )
+
+                    logger.info("Stale lock watchdog registered and started")
+                except Exception as e:
+                    # Mark as degraded - stale lock detection is critical for deadlock prevention
+                    error_msg = f"Failed to register stale lock watchdog: {e}"
+                    logger.error(
+                        error_msg,
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                    )
+                    self._degraded_mode.mark_failed(BootstrapPhase.STALE_LOCK_WATCHDOG, str(e))
+                    # Continue without watchdog rather than crashing the server
+                    logger.warning(
+                        "Continuing server startup in degraded mode without stale lock watchdog. "
+                        "Pipeline may deadlock if locks become stale."
+                    )
+
+            # Phase 6c: Register execution timeout watchdog
+            # Must come after auto-advance starts and ExecutionServiceAgentExecutor is initialized
+            if self.adapters and self._engine:
+                try:
+                    logger.info("Phase 6c: Registering execution timeout watchdog...")
+                    # Type guard: agent_executor must be ExecutionServiceAgentExecutor, not None
+                    if self.adapters.agent_executor is None:
+                        raise RuntimeError("ExecutionServiceAgentExecutor not initialized in Phase 3")
+                    from codetoreum.adapters.testing.execution_service_agent_executor import (
+                        ExecutionServiceAgentExecutor,
+                    )
+
+                    if not isinstance(self.adapters.agent_executor, ExecutionServiceAgentExecutor):
+                        raise TypeError(
+                            f"agent_executor must be ExecutionServiceAgentExecutor, "
+                            f"got {type(self.adapters.agent_executor).__name__}"
+                        )
+                    self._execution_timeout_watchdog = ExecutionTimeoutWatchdog(
+                        executor=self.adapters.agent_executor,
+                        event_emitter=self.adapters.event_emitter,
+                        clock=self._engine.get_clock_for_testing(),
+                        check_interval=timedelta(seconds=30),  # Check every 30 simulated seconds
+                    )
+                    self._execution_timeout_watchdog.start()
+                    logger.info("Execution timeout watchdog registered and started")
+                except Exception as e:
+                    # Mark as degraded - execution timeout detection is critical for runaway prevention
+                    error_msg = f"Failed to register execution timeout watchdog: {e}"
+                    logger.error(
+                        error_msg,
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                    )
+                    self._degraded_mode.mark_failed(BootstrapPhase.EXECUTION_TIMEOUT_WATCHDOG, str(e))
+                    # Continue without watchdog rather than crashing the server
+                    logger.warning(
+                        "Continuing server startup in degraded mode without execution timeout watchdog. "
+                        "Agents may run indefinitely if they hang."
+                    )
+
+            # Phase 6d: Register SLA expiry watchdog
+            # Must come after auto-advance starts and all adapters are initialized
+            if self.adapters and self._engine:
+                try:
+                    logger.info("Phase 6d: Registering SLA expiry watchdog...")
+                    self._sla_expiry_watchdog = SLAExpiryWatchdog(
+                        board_service=self.adapters.board,
+                        workflow_config_service=self.adapters.workflow_config,
+                        event_emitter=self.adapters.event_emitter,
+                        clock=self._engine.get_clock_for_testing(),
+                        check_interval=timedelta(seconds=60),  # Check every 60 simulated seconds
+                    )
+                    self._sla_expiry_watchdog.start()
+                    logger.info("SLA expiry watchdog registered and started")
+                except Exception as e:
+                    # Mark as degraded - SLA enforcement is critical for compliance
+                    error_msg = f"Failed to register SLA expiry watchdog: {e}"
+                    logger.error(
+                        error_msg,
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                    )
+                    self._degraded_mode.mark_failed(BootstrapPhase.SLA_EXPIRY_WATCHDOG, str(e))
+                    # Continue without watchdog rather than crashing the server
+                    logger.warning(
+                        "Continuing server startup in degraded mode without SLA expiry watchdog. "
+                        "SLA violations will not be detected."
+                    )
+
+            # Phase 6e: Register column progression watchdog
+            # Must come after auto-advance starts and all adapters are initialized
+            # Provides clock-driven autonomous progression as alternative to HTTP-triggered moves
+            if self.adapters and self._engine:
+                try:
+                    logger.info("Phase 6e: Registering column progression watchdog...")
+                    self._column_progression_watchdog = ColumnProgressionWatchdog(
+                        board_service=self.adapters.board,
+                        workflow_config_service=self.adapters.workflow_config,
+                        clock=self._engine.get_clock_for_testing(),
+                        check_interval=timedelta(seconds=30),  # Check every 30 simulated seconds
+                        dedup_window=timedelta(seconds=5),  # Dedup window for recent progressions
+                    )
+                    self._column_progression_watchdog.start()
+                    logger.info("Column progression watchdog registered and started")
+                except Exception as e:
+                    # Mark as degraded - column progression is essential for autonomous workflows
+                    error_msg = f"Failed to register column progression watchdog: {e}"
+                    logger.error(
+                        error_msg,
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                    )
+                    self._degraded_mode.mark_failed(BootstrapPhase.COLUMN_PROGRESSION_WATCHDOG, str(e))
+                    # Continue without watchdog - progression will work via HTTP calls only
+                    logger.warning(
+                        "Continuing server startup in degraded mode without column progression watchdog. "
+                        "Clock-driven progression will not work, but HTTP-triggered progression should work."
+                    )
+
             self._is_setup = True
-            logger.info("Simulation bootstrap completed successfully")
+
+            # Log degraded mode status before returning
+            if self.is_degraded:
+                logger.warning(self._degraded_mode.get_summary())
+                logger.warning(
+                    "Bootstrap completed in DEGRADED MODE with %d critical failures. "
+                    "Check is_degraded property and degraded_mode_state for details.",
+                    len(self._degraded_mode.failed_phases),
+                )
+            else:
+                logger.info("Simulation bootstrap completed successfully (fully healthy)")
 
             return self.app
 
@@ -411,6 +692,7 @@ class SimulationApplicationBootstrap:
         Clean up all resources.
 
         Performs cleanup in reverse order:
+        - Stop all three watchdogs (prevent accessing cleaned-up resources)
         - Stop dead letter queue retry processor
         - Stop clock auto-advance (if running)
         - Stop event bus
@@ -427,6 +709,25 @@ class SimulationApplicationBootstrap:
 
         try:
             logger.info("Tearing down simulation bootstrap...")
+
+            # Stop all watchdogs before cleaning up adapters/infrastructure
+            # This prevents scheduled callbacks from firing during teardown and
+            # attempting to access None references (adapters, lock_service, etc.)
+            if self._stale_lock_watchdog:
+                self._stale_lock_watchdog.stop()
+                logger.debug("Stale lock watchdog stopped")
+
+            if self._execution_timeout_watchdog:
+                self._execution_timeout_watchdog.stop()
+                logger.debug("Execution timeout watchdog stopped")
+
+            if self._sla_expiry_watchdog:
+                self._sla_expiry_watchdog.stop()
+                logger.debug("SLA expiry watchdog stopped")
+
+            if self._column_progression_watchdog:
+                self._column_progression_watchdog.stop()
+                logger.debug("Column progression watchdog stopped")
 
             # Stop dead letter queue retry processor
             if self.infrastructure and self.infrastructure.failed_event_store:
@@ -455,6 +756,9 @@ class SimulationApplicationBootstrap:
             self.adapters = None
             self._adapter_factory = None
             self._engine = None
+            self._stale_lock_watchdog = None
+            self._execution_timeout_watchdog = None
+            self._sla_expiry_watchdog = None
 
             self._is_setup = False
             logger.info("Simulation bootstrap teardown complete")
@@ -570,8 +874,10 @@ class SimulationApplicationBootstrap:
         # Create project manager adapter
         project_manager = MockProjectManagerAdapter()
 
-        # Create pipeline lock, workflow config
-        lock_service = InMemoryLockService()
+        # Create pipeline lock with simulation clock for consistent time tracking
+        # This ensures lock timestamps use simulation time (respecting speed multipliers)
+        # which aligns with StaleLockWatchdog comparisons against clock.now()
+        lock_service = InMemoryLockService(clock=self._engine.get_clock_for_testing() if self._engine else None)
         workflow_config = InMemoryWorkflowConfigService()
         # agent_executor will be initialized in Phase 3 as ExecutionServiceAgentExecutor
 
@@ -602,6 +908,9 @@ class SimulationApplicationBootstrap:
         branch_tracker = InMemoryWorkItemBranchTracker()
         work_item_service = MockWorkItemService()
 
+        # Create audit store for audit query adapter
+        audit_store = InMemoryAuditStore()
+
         logger.info("Created 24+ simulation adapters with domain event emission")
 
         return SimulationAdapters(
@@ -623,6 +932,7 @@ class SimulationApplicationBootstrap:
             agent_executor=None,
             queue_service=queue_service,
             event_emitter=event_emitter,
+            audit_store=audit_store,
             version_control=version_control,
             message_broker=message_broker,
             discussion_adapter=discussion_adapter,
@@ -940,6 +1250,7 @@ class SimulationApplicationBootstrap:
             run_registry=self.adapters.run_registry,
             branch_tracker=self.adapters.branch_tracker,
             vcs=self.adapters.version_control,
+            clock=self._engine.get_clock_for_testing(),
             recovery_service=recovery_service,
         )
         # Assign to agent_executor (the primary executor for the board handler)
@@ -1063,7 +1374,8 @@ class SimulationApplicationBootstrap:
         )
 
         logger.info(
-            "Created all application services with simulation dependencies (including container recovery and multi-project orchestrator)"
+            "Created all application services with simulation dependencies "
+            "(including container recovery and multi-project orchestrator)"
         )
 
         return SimulationServices(
@@ -1131,6 +1443,11 @@ class SimulationApplicationBootstrap:
         config_command = MockConfigCommandAdapter()
         task_query = MockTaskQueryAdapter()
 
+        # Create audit query adapter using the audit store
+        from codetoreum.adapters.primary.audit_query_adapter import AuditQueryAdapter
+
+        audit_query = AuditQueryAdapter(audit_store=self.adapters.audit_store)
+
         logger.info("Created all port implementations")
 
         return SimulationPorts(
@@ -1150,6 +1467,7 @@ class SimulationApplicationBootstrap:
             config_query=config_query,
             metrics_query=metrics_query,
             workspace_query=workspace_query,
+            audit_query=audit_query,
         )
 
     # =========================================================================
@@ -1208,14 +1526,22 @@ class SimulationApplicationBootstrap:
             event_bus=self.infrastructure.event_bus,
             config_service=config_service_interface,
             logger=logger_interface,
+            audit_query_port=self.ports.audit_query,
             disable_auth=True,  # ADR-003: Disable authentication in simulation
             cors_origins=["*"],  # Allow all origins in simulation mode (auth is disabled)
             container_recovery_service=self.services.container_recovery_service,
         )
 
         # Mount simulation-only ticketing router (never in production create_app)
-        sim_router = create_simulation_ticketing_router(self.adapters.ticket_system, self.adapters.board)
+        # Pass workflow_config_service to enable proper staging column detection (issue #442)
+        sim_router = create_simulation_ticketing_router(
+            self.adapters.ticket_system, self.adapters.board, self.adapters.workflow_config
+        )
         app.include_router(sim_router)
+
+        # Mount simulation-only clock control router (never in production create_app)
+        clock_router = create_simulation_clock_router(self._engine)
+        app.include_router(clock_router)
 
         logger.info("Created FastAPI application with all ports wired")
 
@@ -1333,7 +1659,8 @@ class SimulationApplicationBootstrap:
                         # Unhandled exception in the bridge handler (e.g., DLQ failure)
                         # This logs the failure so it's not silently swallowed
                         logger.error(
-                            f"Unhandled exception in board column event bridge for {event.work_item_id}: {task_exception}",
+                            f"Unhandled exception in board column event bridge for {event.work_item_id}: "
+                            f"{task_exception}",
                             exc_info=True,
                             extra={
                                 "work_item_id": event.work_item_id,
@@ -1406,7 +1733,8 @@ class SimulationApplicationBootstrap:
                 )
 
                 logger.error(
-                    f"Event publishing failed for work_item {work_item_id} - queued to dead letter queue: {publish_error}",
+                    f"Event publishing failed for work_item {work_item_id} - "
+                    f"queued to dead letter queue: {publish_error}",
                     exc_info=True,
                     extra={
                         "work_item_id": work_item_id,
@@ -1538,7 +1866,8 @@ class SimulationApplicationBootstrap:
                         # Unhandled exception in the bridge handler (e.g., DLQ failure)
                         # This logs the failure so it's not silently swallowed
                         logger.error(
-                            f"Unhandled exception in board reconciliation event bridge for {event.board_id}: {task_exception}",
+                            f"Unhandled exception in board reconciliation event bridge for {event.board_id}: "
+                            f"{task_exception}",
                             exc_info=True,
                             extra={
                                 "board_id": event.board_id,

@@ -5,8 +5,8 @@ import pytest
 from codetoreum.domain.events import (
     LockAcquiredEvent,
     LockReleasedEvent,
-    LockStaleDetectedEvent,
     LockStuckEvent,
+    StaleLockDetectedEvent,
     now_iso,
 )
 
@@ -244,13 +244,13 @@ class TestLockReleasedEvent:
         assert restored.next_in_queue == original.next_in_queue
 
 
-class TestLockStaleDetectedEvent:
-    """Test LockStaleDetectedEvent."""
+class TestStaleLockDetectedEvent:
+    """Test StaleLockDetectedEvent."""
 
     def test_create_valid_event(self):
         """Test creating a valid stale lock detected event."""
         acquired_at = now_iso()
-        event = LockStaleDetectedEvent(
+        event = StaleLockDetectedEvent(
             type="lock.stale_detected",
             timestamp=now_iso(),
             source="github",
@@ -266,7 +266,7 @@ class TestLockStaleDetectedEvent:
     def test_missing_lock_acquired_at(self):
         """Test that lock_acquired_at is required."""
         with pytest.raises(ValueError, match="lock_acquired_at"):
-            LockStaleDetectedEvent(
+            StaleLockDetectedEvent(
                 type="lock.stale_detected",
                 timestamp=now_iso(),
                 source="github",
@@ -279,7 +279,7 @@ class TestLockStaleDetectedEvent:
     def test_stale_lock_serialization(self):
         """Test stale lock detected event serialization."""
         acquired_at = now_iso()
-        event = LockStaleDetectedEvent(
+        event = StaleLockDetectedEvent(
             type="lock.stale_detected",
             timestamp=now_iso(),
             source="github",
@@ -299,7 +299,7 @@ class TestLockStaleDetectedEvent:
         """Test stale lock detected event roundtrip."""
         timestamp = now_iso()
         acquired_at = "2024-01-08T10:00:00+00:00"
-        original = LockStaleDetectedEvent(
+        original = StaleLockDetectedEvent(
             type="lock.stale_detected",
             timestamp=timestamp,
             source="jira",
@@ -310,7 +310,7 @@ class TestLockStaleDetectedEvent:
         )
 
         d = original.to_dict()
-        restored = LockStaleDetectedEvent.from_dict(d)
+        restored = StaleLockDetectedEvent.from_dict(d)
 
         assert restored.work_item_id == original.work_item_id
         assert restored.lock_acquired_at == original.lock_acquired_at
@@ -430,13 +430,13 @@ class TestLockReleasedEventImmutability:
             event.next_in_queue = "125"  # type: ignore
 
 
-class TestLockStaleDetectedEventImmutability:
-    """Test immutability of LockStaleDetectedEvent (frozen dataclass)."""
+class TestStaleLockDetectedEventImmutability:
+    """Test immutability of StaleLockDetectedEvent (frozen dataclass)."""
 
     def test_lock_stale_detected_event_is_frozen(self):
-        """Test that LockStaleDetectedEvent is immutable (frozen dataclass)."""
+        """Test that StaleLockDetectedEvent is immutable (frozen dataclass)."""
         acquired_at = now_iso()
-        event = LockStaleDetectedEvent(
+        event = StaleLockDetectedEvent(
             type="lock.stale_detected",
             timestamp=now_iso(),
             source="github",
@@ -450,7 +450,7 @@ class TestLockStaleDetectedEventImmutability:
         assert event.work_item_id == "123"
         assert event.lock_acquired_at == acquired_at
 
-        # LockStaleDetectedEvent is a frozen dataclass, so attempting to modify
+        # StaleLockDetectedEvent is a frozen dataclass, so attempting to modify
         # should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
             event.work_item_id = "456"  # type: ignore
@@ -461,7 +461,7 @@ class TestLockStaleDetectedEventImmutability:
     def test_lock_stale_detected_event_lock_acquired_at_immutable(self):
         """Test that lock_acquired_at field is immutable."""
         acquired_at = "2024-01-08T10:00:00+00:00"
-        event = LockStaleDetectedEvent(
+        event = StaleLockDetectedEvent(
             type="lock.stale_detected",
             timestamp=now_iso(),
             source="github",

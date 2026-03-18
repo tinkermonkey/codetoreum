@@ -21,6 +21,7 @@ from .adapter_events import (
 # Board events
 from .board_events import (
     BoardReconciledEvent,
+    ColumnSLAExceededEvent,
     WorkItemColumnChangedEvent,
     WorkItemPositionChangedEvent,
 )
@@ -44,6 +45,11 @@ from .discussion_events import (
     CommentContext,
     CommentNeedsResponseEvent,
     CommentPostedEvent,
+)
+
+# Execution events
+from .execution_events import (
+    ExecutionTimedOutEvent,
 )
 
 # Legacy domain events (static imports for mypy compatibility)
@@ -126,10 +132,10 @@ from .legacy_domain_events import (
 from .lock_events import (
     LockAcquiredEvent,
     LockReleasedEvent,
-    LockStaleDetectedEvent,
     LockStuckEvent,
     PipelineLockAcquiredEvent,
     PipelineLockReleasedEvent,
+    StaleLockDetectedEvent,
     WorkItemQueuedEvent,
 )
 
@@ -285,6 +291,7 @@ __all__ = [
     "WorkItemColumnChangedEvent",
     "WorkItemPositionChangedEvent",
     "BoardReconciledEvent",
+    "ColumnSLAExceededEvent",
     # Discussion events
     "Comment",
     "CommentContext",
@@ -298,7 +305,7 @@ __all__ = [
     # Pipeline lock events
     "LockAcquiredEvent",
     "LockReleasedEvent",
-    "LockStaleDetectedEvent",
+    "StaleLockDetectedEvent",
     "LockStuckEvent",
     "PipelineLockAcquiredEvent",
     "PipelineLockReleasedEvent",
@@ -331,6 +338,8 @@ __all__ = [
     "ReviewCycleApprovedEvent",
     # Container execution events
     "ContainerExecutionCompletedEvent",
+    # Execution events
+    "ExecutionTimedOutEvent",
     # Container recovery events
     "ContainerRecoveredEvent",
     "ContainerKilledEvent",

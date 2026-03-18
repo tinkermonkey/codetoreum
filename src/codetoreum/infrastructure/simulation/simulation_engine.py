@@ -225,6 +225,15 @@ class SimulationEngine:
         """Get current speed multiplier."""
         return self._clock.get_speed_multiplier()
 
+    def is_auto_advancing(self) -> bool:
+        """
+        Check if automatic clock advancement is currently active.
+
+        Returns:
+            True if auto-advance is running, False otherwise
+        """
+        return self._clock.is_auto_advancing()
+
     async def start_auto_advance(self) -> None:
         """Start automatic clock advancement."""
         await self._clock.start_auto_advance()

@@ -175,7 +175,7 @@ class LockReleasedEvent(CodetoreumEvent):
 
 
 @dataclass(frozen=True)
-class LockStaleDetectedEvent(CodetoreumEvent):
+class StaleLockDetectedEvent(CodetoreumEvent):
     """Emitted when a stale lock is detected.
 
     **Immutability**: This is an immutable event (frozen dataclass). All fields
@@ -193,7 +193,7 @@ class LockStaleDetectedEvent(CodetoreumEvent):
         lock_acquired_at (str): ISO 8601 timestamp when the lock was originally acquired
 
     Example:
-        >>> event = LockStaleDetectedEvent(
+        >>> event = StaleLockDetectedEvent(
         ...     type="lock.stale_detected",
         ...     timestamp="2025-01-14T10:30:00+00:00",
         ...     source="github",
@@ -240,7 +240,7 @@ class LockStaleDetectedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "LockStaleDetectedEvent":
+    def from_dict(cls, data: dict) -> "StaleLockDetectedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "lock.stale_detected"),
@@ -486,17 +486,22 @@ class LockStuckEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "LockStuckEvent":
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary.
+
+        Raises:
+            KeyError: If required fields (project_id, board_id, work_item_id,
+                     reason) are missing.
+        """
         return cls(
             type=data.get("type", "lock.stuck"),
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
-            project_id=data.get("project_id", ""),
-            board_id=data.get("board_id", ""),
-            work_item_id=data.get("work_item_id", ""),
-            reason=data.get("reason", ""),
+            project_id=data["project_id"],
+            board_id=data["board_id"],
+            work_item_id=data["work_item_id"],
+            reason=data["reason"],
         )
 
 

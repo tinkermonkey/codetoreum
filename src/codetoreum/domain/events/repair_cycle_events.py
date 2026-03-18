@@ -163,7 +163,12 @@ class RepairCycleTestExecutionStartedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "RepairCycleTestExecutionStartedEvent":
-        """Deserialize from dictionary with backward compatibility."""
+        """Deserialize from dictionary with backward compatibility.
+
+        Raises:
+            KeyError: If required fields (test_type_index, test_cycle_iteration,
+                     max_test_cycle_iterations, timeout, workflow_run_id) are missing.
+        """
         test_type = (
             RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
         )
@@ -174,7 +179,7 @@ class RepairCycleTestExecutionStartedEvent(CodetoreumEvent):
                 DeprecationWarning,
                 stacklevel=2,
             )
-        workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
+        workflow_run_id = str(data.get("workflow_run_id") or data.get("pipeline_run_id") or "")
         return cls(
             type=data.get("type", "repair_cycle.test_execution_started"),
             timestamp=data.get("timestamp", ""),
@@ -182,10 +187,10 @@ class RepairCycleTestExecutionStartedEvent(CodetoreumEvent):
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
             test_type=test_type,
-            test_type_index=data.get("test_type_index", 0),
-            test_cycle_iteration=data.get("test_cycle_iteration", 0),
-            max_test_cycle_iterations=data.get("max_test_cycle_iterations", 0),
-            timeout=data.get("timeout", 0),
+            test_type_index=data["test_type_index"],
+            test_cycle_iteration=data["test_cycle_iteration"],
+            max_test_cycle_iterations=data["max_test_cycle_iterations"],
+            timeout=data["timeout"],
             workflow_run_id=workflow_run_id,
         )
 
@@ -274,7 +279,12 @@ class RepairCycleTestExecutionCompletedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "RepairCycleTestExecutionCompletedEvent":
-        """Deserialize from dictionary with backward compatibility."""
+        """Deserialize from dictionary with backward compatibility.
+
+        Raises:
+            KeyError: If required fields (test_type_index, test_cycle_iteration,
+                     failed, workflow_run_id) are missing.
+        """
         test_type = (
             RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
         )
@@ -293,7 +303,7 @@ class RepairCycleTestExecutionCompletedEvent(CodetoreumEvent):
                 DeprecationWarning,
                 stacklevel=2,
             )
-        workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
+        workflow_run_id = str(data.get("workflow_run_id") or data.get("pipeline_run_id") or "")
         return cls(
             type=data.get("type", "repair_cycle.test_execution_completed"),
             timestamp=data.get("timestamp", ""),
@@ -301,10 +311,10 @@ class RepairCycleTestExecutionCompletedEvent(CodetoreumEvent):
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
             test_type=test_type,
-            test_type_index=data.get("test_type_index", 0),
-            test_cycle_iteration=data.get("test_cycle_iteration", 0),
+            test_type_index=data["test_type_index"],
+            test_cycle_iteration=data["test_cycle_iteration"],
             passed=data.get("passed", 0),
-            failed=data.get("failed", 0),
+            failed=data["failed"],
             warnings=data.get("warnings", 0),
             has_failures=data.get("has_failures", False),
             failures=failures,
@@ -374,7 +384,12 @@ class RepairCycleFixCycleStartedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "RepairCycleFixCycleStartedEvent":
-        """Deserialize from dictionary with backward compatibility."""
+        """Deserialize from dictionary with backward compatibility.
+
+        Raises:
+            KeyError: If required fields (test_type_index, test_cycle_iteration,
+                     file_count, total_failures, workflow_run_id) are missing.
+        """
         test_type = (
             RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
         )
@@ -385,7 +400,7 @@ class RepairCycleFixCycleStartedEvent(CodetoreumEvent):
                 DeprecationWarning,
                 stacklevel=2,
             )
-        workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
+        workflow_run_id = str(data.get("workflow_run_id") or data.get("pipeline_run_id") or "")
         return cls(
             type=data.get("type", "repair_cycle.fix_cycle_started"),
             timestamp=data.get("timestamp", ""),
@@ -393,10 +408,10 @@ class RepairCycleFixCycleStartedEvent(CodetoreumEvent):
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
             test_type=test_type,
-            test_type_index=data.get("test_type_index", 0),
-            test_cycle_iteration=data.get("test_cycle_iteration", 0),
-            file_count=data.get("file_count", 0),
-            total_failures=data.get("total_failures", 0),
+            test_type_index=data["test_type_index"],
+            test_cycle_iteration=data["test_cycle_iteration"],
+            file_count=data["file_count"],
+            total_failures=data["total_failures"],
             workflow_run_id=workflow_run_id,
         )
 
@@ -451,7 +466,12 @@ class RepairCycleFileFixStartedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "RepairCycleFileFixStartedEvent":
-        """Deserialize from dictionary with backward compatibility."""
+        """Deserialize from dictionary with backward compatibility.
+
+        Raises:
+            KeyError: If required fields (test_file, failure_count,
+                     workflow_run_id) are missing.
+        """
         test_type = (
             RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
         )
@@ -462,15 +482,15 @@ class RepairCycleFileFixStartedEvent(CodetoreumEvent):
                 DeprecationWarning,
                 stacklevel=2,
             )
-        workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
+        workflow_run_id = str(data.get("workflow_run_id") or data.get("pipeline_run_id") or "")
         return cls(
             type=data.get("type", "repair_cycle.file_fix_started"),
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
-            test_file=data.get("test_file", ""),
-            failure_count=data.get("failure_count", 0),
+            test_file=data["test_file"],
+            failure_count=data["failure_count"],
             test_type=test_type,
             workflow_run_id=workflow_run_id,
         )
@@ -529,7 +549,12 @@ class RepairCycleFileFixCompletedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "RepairCycleFileFixCompletedEvent":
-        """Deserialize from dictionary with backward compatibility."""
+        """Deserialize from dictionary with backward compatibility.
+
+        Raises:
+            KeyError: If required fields (test_file, failure_count,
+                     workflow_run_id) are missing.
+        """
         test_type = (
             RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
         )
@@ -540,15 +565,15 @@ class RepairCycleFileFixCompletedEvent(CodetoreumEvent):
                 DeprecationWarning,
                 stacklevel=2,
             )
-        workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
+        workflow_run_id = str(data.get("workflow_run_id") or data.get("pipeline_run_id") or "")
         return cls(
             type=data.get("type", "repair_cycle.file_fix_completed"),
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
-            test_file=data.get("test_file", ""),
-            failure_count=data.get("failure_count", 0),
+            test_file=data["test_file"],
+            failure_count=data["failure_count"],
             test_type=test_type,
             success=data.get("success", False),
             workflow_run_id=workflow_run_id,
@@ -608,7 +633,12 @@ class RepairCycleWarningReviewStartedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "RepairCycleWarningReviewStartedEvent":
-        """Deserialize from dictionary with backward compatibility."""
+        """Deserialize from dictionary with backward compatibility.
+
+        Raises:
+            KeyError: If required fields (source_file, warning_count,
+                     workflow_run_id) are missing.
+        """
         test_type = (
             RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
         )
@@ -626,15 +656,15 @@ class RepairCycleWarningReviewStartedEvent(CodetoreumEvent):
                 DeprecationWarning,
                 stacklevel=2,
             )
-        workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
+        workflow_run_id = str(data.get("workflow_run_id") or data.get("pipeline_run_id") or "")
         return cls(
             type=data.get("type", "repair_cycle.warning_review_started"),
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
-            source_file=data.get("source_file", ""),
-            warning_count=data.get("warning_count", 0),
+            source_file=data["source_file"],
+            warning_count=data["warning_count"],
             test_type=test_type,
             warnings=warnings_list,
             workflow_run_id=workflow_run_id,
@@ -694,7 +724,12 @@ class RepairCycleWarningReviewCompletedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "RepairCycleWarningReviewCompletedEvent":
-        """Deserialize from dictionary with backward compatibility."""
+        """Deserialize from dictionary with backward compatibility.
+
+        Raises:
+            KeyError: If required fields (source_file, warning_count,
+                     workflow_run_id) are missing.
+        """
         test_type = (
             RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
         )
@@ -705,15 +740,15 @@ class RepairCycleWarningReviewCompletedEvent(CodetoreumEvent):
                 DeprecationWarning,
                 stacklevel=2,
             )
-        workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
+        workflow_run_id = str(data.get("workflow_run_id") or data.get("pipeline_run_id") or "")
         return cls(
             type=data.get("type", "repair_cycle.warning_review_completed"),
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
-            source_file=data.get("source_file", ""),
-            warning_count=data.get("warning_count", 0),
+            source_file=data["source_file"],
+            warning_count=data["warning_count"],
             test_type=test_type,
             success=data.get("success", False),
             workflow_run_id=workflow_run_id,
@@ -794,7 +829,12 @@ class RepairCycleTestCycleCompletedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "RepairCycleTestCycleCompletedEvent":
-        """Deserialize from dictionary with backward compatibility."""
+        """Deserialize from dictionary with backward compatibility.
+
+        Raises:
+            KeyError: If required fields (test_type_index, test_cycle_iterations,
+                     workflow_run_id) are missing.
+        """
         test_type = (
             RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
         )
@@ -805,7 +845,7 @@ class RepairCycleTestCycleCompletedEvent(CodetoreumEvent):
                 DeprecationWarning,
                 stacklevel=2,
             )
-        workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
+        workflow_run_id = str(data.get("workflow_run_id") or data.get("pipeline_run_id") or "")
         return cls(
             type=data.get("type", "repair_cycle.test_cycle_completed"),
             timestamp=data.get("timestamp", ""),
@@ -813,9 +853,9 @@ class RepairCycleTestCycleCompletedEvent(CodetoreumEvent):
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
             test_type=test_type,
-            test_type_index=data.get("test_type_index", 0),
+            test_type_index=data["test_type_index"],
             passed=data.get("passed", False),
-            test_cycle_iterations=data.get("test_cycle_iterations", 0),
+            test_cycle_iterations=data["test_cycle_iterations"],
             files_fixed=data.get("files_fixed", 0),
             warnings_reviewed=data.get("warnings_reviewed", 0),
             error=data.get("error"),
@@ -950,7 +990,11 @@ class RepairCycleResumedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "RepairCycleResumedEvent":
-        """Deserialize from dictionary with backward compatibility."""
+        """Deserialize from dictionary with backward compatibility.
+
+        Raises:
+            KeyError: If required fields (workflow_run_id, iteration) are missing.
+        """
         # Backward compatibility: Support both old and new field names
         if "pipeline_run_id" in data and "workflow_run_id" not in data:
             warnings.warn(
@@ -958,7 +1002,7 @@ class RepairCycleResumedEvent(CodetoreumEvent):
                 DeprecationWarning,
                 stacklevel=2,
             )
-        workflow_run_id = data.get("workflow_run_id") or data.get("pipeline_run_id", "")
+        workflow_run_id = str(data.get("workflow_run_id") or data.get("pipeline_run_id") or "")
 
         # Deserialize test_type enum
         test_type_str = data.get("test_type", "UNIT")
@@ -972,7 +1016,7 @@ class RepairCycleResumedEvent(CodetoreumEvent):
             event_id=data.get("event_id") or str(uuid4()),
             workflow_run_id=workflow_run_id,
             test_type=test_type,
-            iteration=data.get("iteration", 0),
+            iteration=data["iteration"],
             elapsed_time=data.get("elapsed_time", 0.0),
             agent_calls_so_far=data.get("agent_calls_so_far", 0),
         )

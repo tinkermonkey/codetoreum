@@ -10,6 +10,7 @@ Thread-safe via internal locking mechanism.
 import logging
 import threading
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from codetoreum.application.pipeline_lock_service import (
     IPipelineLockService,
@@ -20,13 +21,16 @@ from codetoreum.application.pipeline_lock_service import (
     QueueEntry,
 )
 from codetoreum.domain.events.lock_events import (
-    LockStaleDetectedEvent,
     PipelineLockAcquiredEvent,
     PipelineLockReleasedEvent,
+    StaleLockDetectedEvent,
     WorkItemQueuedEvent,
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus
+
+if TYPE_CHECKING:
+    from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 
 logger = logging.getLogger(__name__)
 
@@ -45,18 +49,27 @@ class InMemoryLockService(IPipelineLockService):
         _event_bus: Optional event bus for emitting domain events
     """
 
-    def __init__(self, event_bus: EventBus | None = None, stale_threshold_seconds: int = 7200) -> None:
+    def __init__(
+        self,
+        event_bus: EventBus | None = None,
+        stale_threshold_seconds: int = 7200,
+        clock: "SimulationClock | None" = None,
+    ) -> None:
         """Initialize empty lock service.
 
         Args:
             event_bus: Optional event bus for emitting lock lifecycle events
             stale_threshold_seconds: Threshold in seconds for detecting stale locks
                                    (default 7200 = 2 hours)
+            clock: Optional SimulationClock for time access. If None, uses datetime.now(UTC).
+                   Using a clock ensures consistency with watchdog time comparisons in
+                   simulation environments with speed multipliers.
         """
         self._lock_state: dict[str, PipelineQueueState] = {}
         self._lock = threading.Lock()
         self._event_bus = event_bus
         self._stale_threshold_seconds = stale_threshold_seconds
+        self._clock = clock
 
     async def try_acquire_lock(
         self, project_id: str, board_id: str, work_item_id: str, board_position: int
@@ -93,6 +106,9 @@ class InMemoryLockService(IPipelineLockService):
             msg = "board_position cannot be negative"
             raise ValueError(msg)
 
+        # Get current time from clock (simulation or wall-clock)
+        now = self._clock.now() if self._clock else datetime.now(UTC)
+
         with self._lock:
             board_key = f"{project_id}:{board_id}"
 
@@ -118,16 +134,16 @@ class InMemoryLockService(IPipelineLockService):
 
             # Check for stale lock (older than threshold)
             if state.lock_holder is not None and state.lock_acquired_at is not None:
-                lock_age_seconds = (datetime.now(UTC) - state.lock_acquired_at).total_seconds()
+                lock_age_seconds = (now - state.lock_acquired_at).total_seconds()
                 if lock_age_seconds > self._stale_threshold_seconds:
                     # Stale lock detected - force release
                     stale_work_item_id = state.lock_holder
 
                     # Emit stale detected event
                     if self._event_bus:
-                        stale_event = LockStaleDetectedEvent(
+                        stale_event = StaleLockDetectedEvent(
                             type="lock.stale_detected",
-                            timestamp=datetime.now(UTC).isoformat(),
+                            timestamp=now.isoformat(),
                             source="in_memory_lock_service",
                             project_id=project_id,
                             board_id=board_id,
@@ -152,13 +168,13 @@ class InMemoryLockService(IPipelineLockService):
 
                     # Force release stale lock and acquire for requester
                     state.lock_holder = work_item_id
-                    state.lock_acquired_at = datetime.now(UTC)
+                    state.lock_acquired_at = now
 
                     # Emit lock acquired event with stale_recovery method
                     if self._event_bus:
                         event = PipelineLockAcquiredEvent(
                             type="pipeline.lock_acquired",
-                            timestamp=datetime.now(UTC).isoformat(),
+                            timestamp=now.isoformat(),
                             source="in_memory_lock_service",
                             project_id=project_id,
                             work_item_id=work_item_id,
@@ -190,13 +206,13 @@ class InMemoryLockService(IPipelineLockService):
             # Try to acquire lock
             if state.lock_holder is None:
                 state.lock_holder = work_item_id
-                state.lock_acquired_at = datetime.now(UTC)
+                state.lock_acquired_at = now
 
                 # Emit lock acquired event
                 if self._event_bus:
                     event = PipelineLockAcquiredEvent(
                         type="pipeline.lock_acquired",
-                        timestamp=datetime.now(UTC).isoformat(),
+                        timestamp=now.isoformat(),
                         source="in_memory_lock_service",
                         project_id=project_id,
                         work_item_id=work_item_id,
@@ -240,7 +256,7 @@ class InMemoryLockService(IPipelineLockService):
             queue_entry = QueueEntry(
                 work_item_id=work_item_id,
                 board_position=board_position,
-                enqueued_at=datetime.now(UTC),
+                enqueued_at=now,
             )
             state.queue.append(queue_entry)
 
@@ -254,7 +270,7 @@ class InMemoryLockService(IPipelineLockService):
             if self._event_bus:
                 event = WorkItemQueuedEvent(
                     type="workitem.queued",
-                    timestamp=datetime.now(UTC).isoformat(),
+                    timestamp=now.isoformat(),
                     source="in_memory_lock_service",
                     work_item_id=work_item_id,
                     board_id=board_id,
@@ -313,6 +329,9 @@ class InMemoryLockService(IPipelineLockService):
             msg = "work_item_id cannot be empty"
             raise ValueError(msg)
 
+        # Get current time from clock (simulation or wall-clock)
+        now = self._clock.now() if self._clock else datetime.now(UTC)
+
         with self._lock:
             board_key = f"{project_id}:{board_id}"
             state = self._lock_state.get(board_key)
@@ -329,13 +348,13 @@ class InMemoryLockService(IPipelineLockService):
                 next_entry = state.queue.pop(0)
                 next_item_id = next_entry.work_item_id
                 state.lock_holder = next_item_id
-                state.lock_acquired_at = datetime.now(UTC)
+                state.lock_acquired_at = now
 
             # Emit lock released event
             if self._event_bus:
                 release_event = PipelineLockReleasedEvent(
                     type="pipeline.lock_released",
-                    timestamp=datetime.now(UTC).isoformat(),
+                    timestamp=now.isoformat(),
                     source="in_memory_lock_service",
                     project_id=project_id,
                     work_item_id=work_item_id,
@@ -363,7 +382,7 @@ class InMemoryLockService(IPipelineLockService):
                 if next_item_id:
                     acquire_event = PipelineLockAcquiredEvent(
                         type="pipeline.lock_acquired",
-                        timestamp=datetime.now(UTC).isoformat(),
+                        timestamp=now.isoformat(),
                         source="in_memory_lock_service",
                         project_id=project_id,
                         work_item_id=next_item_id,
@@ -492,6 +511,39 @@ class InMemoryLockService(IPipelineLockService):
                         "new_order": new_order,
                     },
                 )
+
+    def get_all_lock_states(self) -> dict[str, PipelineQueueState]:
+        """Return copy of all pipeline queue states for watchdog iteration.
+
+        Thread-safe snapshot of all lock states across all boards.
+        Returns deep copies of PipelineQueueState objects to ensure that
+        reads outside the lock (e.g., by watchdog) cannot observe concurrent
+        mutations of lock_holder or lock_acquired_at.
+
+        Returns:
+            Dict mapping "project_id:board_id" keys to PipelineQueueState deep copies
+        """
+        with self._lock:
+            result = {}
+            for key, state in self._lock_state.items():
+                # Deep copy each PipelineQueueState to prevent watchdog from reading
+                # shared mutable state outside the lock. This includes deep copying
+                # QueueEntry objects since board_position is mutable for reordering.
+                result[key] = PipelineQueueState(
+                    board_id=state.board_id,
+                    project_id=state.project_id,
+                    lock_holder=state.lock_holder,
+                    lock_acquired_at=state.lock_acquired_at,
+                    queue=[
+                        QueueEntry(
+                            work_item_id=e.work_item_id,
+                            board_position=e.board_position,
+                            enqueued_at=e.enqueued_at,
+                        )
+                        for e in state.queue
+                    ],
+                )
+            return result
 
     def set_lock_acquired_at(self, project_id: str, board_id: str, timestamp: datetime) -> None:
         """Test helper to manipulate lock timestamp for stale lock testing.

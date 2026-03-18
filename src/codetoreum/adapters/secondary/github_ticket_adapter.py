@@ -1,6 +1,7 @@
 """GitHub Issues adapter for ITicketSystem interface."""
 
 import asyncio
+import logging
 import re
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -21,6 +22,8 @@ from codetoreum.ports.exceptions import (
     WorkItemNotFoundError,
 )
 from codetoreum.ports.output.ticket_system import ITicketSystem
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -289,6 +292,8 @@ class GitHubTicketAdapter(ITicketSystem):
             assigned_at=None,  # GitHub doesn't track this separately
             current_workflow_id=None,
             current_stage=None,
+            current_column=None,
+            entered_column_at=None,
             created_at=created_at,
             updated_at=updated_at,
             completed_at=completed_at,
@@ -755,6 +760,6 @@ class GitHubTicketAdapter(ITicketSystem):
         try:
             await self.close()
         except Exception:
-            # Suppress cleanup errors to avoid masking original exception
-            pass
+            # Log cleanup errors but don't suppress exceptions
+            logger.exception("Error during cleanup in GitHubTicketAdapter.__aexit__")
         return False  # Don't suppress exceptions

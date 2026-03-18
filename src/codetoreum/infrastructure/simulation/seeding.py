@@ -506,6 +506,7 @@ class SimulationDataSeeder:
         board_id: str,
         column_names: list[str],
         agent_types: list[str],
+        sla_seconds_by_column: dict[str, int] | None = None,
     ) -> "SimulationDataSeeder":
         """Build and register a BoardWorkflowTemplate for board automation.
 
@@ -519,12 +520,18 @@ class SimulationDataSeeder:
             board_id: Board to register template for
             column_names: Ordered column names from the board
             agent_types: Agent type IDs from workflow stages (ordered)
+            sla_seconds_by_column: Optional dict mapping column names to SLA thresholds in seconds.
+                If not provided, automated columns get default 3600 seconds (1 hour).
 
         Returns:
             Self for chaining
         """
         columns: list[ColumnTemplate] = []
         agent_index = 0
+        sla_config = sla_seconds_by_column or {}
+
+        # Default SLA threshold for automated columns (1 hour)
+        default_sla_seconds = 3600
 
         for pos, col_name in enumerate(column_names):
             is_first = pos == 0
@@ -534,6 +541,8 @@ class SimulationDataSeeder:
             if is_middle and agent_index < len(agent_types):
                 agent_id = agent_types[agent_index]
                 is_trigger = agent_index == 0  # First automated column
+                # Use provided SLA or default for automated columns
+                sla_seconds = sla_config.get(col_name, default_sla_seconds)
                 columns.append(
                     ColumnTemplate(
                         name=col_name,
@@ -543,10 +552,13 @@ class SimulationDataSeeder:
                         is_exit_column=False,
                         position=pos,
                         auto_progress_on_completion=True,
+                        sla_seconds=sla_seconds,
                     )
                 )
                 agent_index += 1
             else:
+                # Manual columns use provided SLA if specified, otherwise None
+                sla_seconds = sla_config.get(col_name)
                 columns.append(
                     ColumnTemplate(
                         name=col_name,
@@ -556,6 +568,7 @@ class SimulationDataSeeder:
                         is_exit_column=is_last,
                         position=pos,
                         auto_progress_on_completion=False,
+                        sla_seconds=sla_seconds,
                     )
                 )
 
@@ -574,7 +587,7 @@ class SimulationDataSeeder:
         self.bootstrap.adapters.workflow_config.register_template(board_id, template)
         logger.info(
             f"Registered workflow template for board {board_id}: "
-            f"{[c.name + ('*' if c.agent_id else '') for c in columns]}"
+            f"{[c.name + ('*' if c.agent_id else '') + (f'[SLA:{c.sla_seconds}s]' if c.sla_seconds else '') for c in columns]}"
         )
         return self
 
@@ -1211,10 +1224,12 @@ class SimulationDataSeeder:
                 column_names=board_model.columns,
             )
             if agent_types:
+                # Extract SLA configuration from board model (always exists as Pydantic field)
                 self.register_workflow_template(
                     board_id=board_model.board_id,
                     column_names=board_model.columns,
                     agent_types=agent_types,
+                    sla_seconds_by_column=board_model.sla_seconds_by_column,
                 )
 
         # Seed board placements (match work items by title prefix)

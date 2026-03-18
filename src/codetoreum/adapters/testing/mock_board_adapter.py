@@ -92,20 +92,24 @@ class MockBoardAdapter(IBoardService):
         assert history[0].moved_by == MovedByType.HUMAN
     """
 
-    def __init__(self, event_emitter: IEventEmitter | None = None) -> None:
+    def __init__(self, event_emitter: IEventEmitter | None = None, clock: "SimulationClock | None" = None) -> None:
         """Initialize the board adapter.
 
         Args:
             event_emitter: Optional IEventEmitter for emitting domain events
+            clock: Optional SimulationClock for deterministic time in tests
+                   If provided, timestamps use simulation clock; otherwise uses wall clock
         """
         self._boards: dict[str, ProjectBoard] = {}  # key: "project_id:board_id"
         self._item_positions: dict[str, tuple[str, str, int]] = {}  # item_id -> (board_id, column_name, position)
+        self._item_column_entries: dict[str, datetime] = {}  # item_id -> entered_column_at timestamp
         self._board_project_map: dict[str, str] = {}  # board_id -> project_id
         self._monitoring: dict[str, MonitoringStatus] = {}  # project_id -> status
         self._movement_log: list[MovementEvent] = []  # Audit trail of all movements
         self._lock = threading.Lock()  # Thread safety for concurrent operations
         self._event_listeners: dict[str, list] = {}  # Event type -> list of handlers
         self._event_emitter = event_emitter
+        self._clock = clock
         self.current_project: str | None = None
         self.current_board: str | None = None
 
@@ -234,7 +238,13 @@ class MockBoardAdapter(IBoardService):
                 msg = "Work item"
                 raise ResourceNotFoundError(msg, work_item_id)
             _, column_name, position = self._item_positions[work_item_id]
-            return WorkItemPosition(work_item_id=work_item_id, column_name=column_name, position=position)
+            entered_at = self._item_column_entries.get(work_item_id)
+            return WorkItemPosition(
+                work_item_id=work_item_id,
+                column_name=column_name,
+                position=position,
+                entered_column_at=entered_at,
+            )
 
     # ===== Command Operations =====
 
@@ -338,6 +348,8 @@ class MockBoardAdapter(IBoardService):
                     target_column,
                     len(target_col.work_item_ids) - 1,
                 )
+                # Track when item entered this column (for SLA monitoring)
+                self._item_column_entries[work_item_id] = self._get_utc_datetime()
 
                 # Log movement
                 timestamp = self._get_utc_datetime()
@@ -588,6 +600,8 @@ class MockBoardAdapter(IBoardService):
             new_items.insert(position, work_item_id)
             object.__setattr__(target_column, "work_item_ids", tuple(new_items))
             self._item_positions[work_item_id] = (board_id, column_name, position)
+            # Track when item entered this column (for SLA monitoring)
+            self._item_column_entries[work_item_id] = self._get_utc_datetime()
 
             # Update positions of items after insertion
             for i in range(position + 1, len(target_column.work_item_ids)):
@@ -716,6 +730,21 @@ class MockBoardAdapter(IBoardService):
         with self._lock:
             return [m for m in self._movement_log if m.work_item_id == work_item_id]
 
+    def get_all_movements(self) -> list[MovementEvent]:
+        """Test helper: Get complete movement audit trail for board.
+
+        Returns all movements on the board in chronological order.
+
+        Returns:
+            List[MovementEvent]: All movements in chronological order
+
+        Example:
+            all_movements = adapter.get_all_movements()
+            assert len(all_movements) >= 1
+        """
+        with self._lock:
+            return list(self._movement_log)
+
     def clear_movement_log(self) -> None:
         """Test helper: Clear movement history for cleanup.
 
@@ -727,14 +756,63 @@ class MockBoardAdapter(IBoardService):
         with self._lock:
             self._movement_log.clear()
 
+    async def get_all_boards(self) -> list[ProjectBoard]:
+        """Get all boards across all projects.
+
+        Returns all boards managed by this service, including structure and items.
+        Used for cross-board queries like SLA monitoring.
+
+        Returns:
+            List[ProjectBoard]: All boards with columns and items
+        """
+        with self._lock:
+            return list(self._boards.values())
+
+    async def get_board_items(self, project_id: str, board_id: str) -> list[WorkItemPosition]:
+        """Get all work items on a board with their column positions and entry times.
+
+        Returns all items across all columns on the specified board,
+        including their current column, position, and entry timestamp.
+
+        Args:
+            project_id: Project containing the board
+            board_id: Board to query
+
+        Returns:
+            List[WorkItemPosition]: All items with column, position, and entry time
+        """
+        board = await self.get_board(project_id, board_id)
+        items = []
+
+        with self._lock:
+            for column in board.columns:
+                for position, work_item_id in enumerate(column.work_item_ids):
+                    entered_at = self._item_column_entries.get(work_item_id)
+                    items.append(
+                        WorkItemPosition(
+                            work_item_id=work_item_id,
+                            column_name=column.name,
+                            position=position,
+                            entered_column_at=entered_at,
+                        )
+                    )
+
+        return items
+
     # ===== Helper Methods =====
 
-    @staticmethod
-    def _get_iso_timestamp() -> str:
+    def _get_iso_timestamp(self) -> str:
         """Get current time as ISO 8601 timestamp."""
+        if self._clock:
+            return self._clock.now().isoformat()
         return datetime.now(UTC).isoformat()
 
-    @staticmethod
-    def _get_utc_datetime() -> datetime:
-        """Get current time as UTC datetime."""
+    def _get_utc_datetime(self) -> datetime:
+        """Get current time as UTC datetime.
+
+        Uses simulation clock if available (for deterministic testing),
+        otherwise uses wall clock time.
+        """
+        if self._clock:
+            return self._clock.now()
         return datetime.now(UTC)
