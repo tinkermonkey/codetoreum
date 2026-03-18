@@ -119,6 +119,7 @@ from codetoreum.application.agent_scheduler import (
 )
 from codetoreum.application.configuration_service import ConfigurationService
 from codetoreum.application.container_recovery_service import ContainerRecoveryService
+from codetoreum.application.pipeline_lock_service import IQueuedPipelineLockService
 from codetoreum.application.event_handlers.board_event_handler import (
     BoardColumnEventHandler,
 )
@@ -707,6 +708,7 @@ class SimulationApplicationBootstrap:
         self._execution_timeout_watchdog: ExecutionTimeoutWatchdog | None = None
         self._sla_expiry_watchdog: SLAExpiryWatchdog | None = None
         self._column_progression_watchdog: ColumnProgressionWatchdog | None = None
+        self._queued_lock_service: "InMemoryLockService | None" = None
 
     @property
     def is_degraded(self) -> bool:
@@ -2229,6 +2231,11 @@ class SimulationApplicationBootstrap:
         and wires the agent executor's completion callback to the handler's
         handle_agent_completion method. This closes the loop: column change ->
         agent execution -> completion callback -> auto-progress to next column.
+
+        NOTE: The handler requires IQueuedPipelineLockService (application-level interface
+        with 4-parameter try_acquire_lock), not the PORT interface IPipelineLockService
+        (which has 3 parameters). For simulation, we create an InMemoryLockService instance
+        that implements the correct interface.
         """
         if not self.adapters or not self.infrastructure:
             logger.warning("Cannot register board column handler: components not ready")
@@ -2245,9 +2252,17 @@ class SimulationApplicationBootstrap:
         if self.services:
             recovery_service = self.services.agent_execution_recovery_service
 
+        # Create InMemoryLockService (application-level) for the handler
+        # This implements IQueuedPipelineLockService with 4-parameter try_acquire_lock
+        # Store it for access by tests via bootstrap._queued_lock_service
+        self._queued_lock_service = InMemoryLockService(
+            event_bus=self.infrastructure.event_bus,
+            clock=self._engine.get_clock_for_testing() if self._engine else None,
+        )
+
         handler = BoardColumnEventHandler(
             board_service=self.adapters.board,
-            lock_service=self.adapters.lock_service,
+            lock_service=self._queued_lock_service,
             workflow_config=self.adapters.workflow_config,
             event_store=self.adapters.event_store,
             agent_executor=self.adapters.agent_executor,

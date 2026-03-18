@@ -205,7 +205,11 @@ class AdapterResolver:
 
     def resolve_storage(self) -> IStorage:
         """Resolve storage adapter."""
-        return self._factory.create_storage(adapter_name=self._config.storage)
+        return self._factory.create_storage(
+            adapter_name=self._config.storage,
+            event_emitter=self._deps.event_emitter,
+            event_bus=self._deps.event_bus,
+        )
 
     def resolve_encryption(self) -> IEncryptionService:
         """Resolve encryption service adapter."""
@@ -233,7 +237,11 @@ class AdapterResolver:
 
     def resolve_container(self) -> IContainer:
         """Resolve container adapter."""
-        return self._factory.create_container(adapter_name=self._config.container)
+        return self._factory.create_container(
+            adapter_name=self._config.container,
+            event_emitter=self._deps.event_emitter,
+            event_bus=self._deps.event_bus,
+        )
 
     def resolve_board(self) -> IBoardService:
         """Resolve board service adapter."""
@@ -254,7 +262,11 @@ class AdapterResolver:
 
     def resolve_queue_service(self) -> IPipelineQueueService:
         """Resolve pipeline queue service adapter."""
-        return self._factory.create_pipeline_queue_service(adapter_name=self._config.queue_service)
+        return self._factory.create_pipeline_queue_service(
+            adapter_name=self._config.queue_service,
+            event_emitter=self._deps.event_emitter,
+            event_bus=self._deps.event_bus,
+        )
 
     def resolve_checkpoint_store(self) -> IRepairCycleCheckpointStore:
         """Resolve repair cycle checkpoint store adapter."""

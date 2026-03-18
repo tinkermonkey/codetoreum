@@ -23,8 +23,11 @@ from codetoreum.adapters.secondary import (
     GitHubCodeReviewAdapter,
     GitHubTicketAdapter,
     GitRepositoryAdapter,
-    InMemoryPipelineLockService,
+    InMemoryLockService,
     MockEventEmitter,
+)
+from codetoreum.adapters.secondary.in_memory_pipeline_lock_service import (
+    InMemoryPipelineLockService,
 )
 
 # Import testing adapters

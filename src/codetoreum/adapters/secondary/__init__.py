@@ -38,8 +38,8 @@ from codetoreum.adapters.secondary.github_ticket_adapter import (
     GitHubConfig,
     GitHubTicketAdapter,
 )
-from codetoreum.adapters.secondary.in_memory_pipeline_lock_service import (
-    InMemoryPipelineLockService,
+from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
+    InMemoryLockService,
 )
 from codetoreum.adapters.secondary.mock_code_review_adapter import (
     MockCodeReviewAdapter,
@@ -76,6 +76,6 @@ __all__ = [
     "MockBoardAdapter",
     "MockDiscussionAdapter",
     "MockCodeReviewAdapter",
-    "InMemoryPipelineLockService",
+    "InMemoryLockService",
     "ConfigurableIdentityService",
 ]

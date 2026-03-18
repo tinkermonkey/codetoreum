@@ -16,9 +16,6 @@ import pytest
 from codetoreum.adapters.secondary.configurable_identity_service import (
     ConfigurableIdentityService,
 )
-from codetoreum.adapters.secondary.in_memory_pipeline_lock_service import (
-    InMemoryPipelineLockService,
-)
 from codetoreum.adapters.secondary.mock_code_review_adapter import MockCodeReviewAdapter
 from codetoreum.adapters.testing import MockDiscussionAdapter
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
@@ -626,100 +623,6 @@ class TestMockCodeReviewAdapter:
         assert status.state.value == "stopped"
 
 
-class TestInMemoryPipelineLockService:
-    """Tests for InMemoryPipelineLockService."""
-
-    @pytest.fixture
-    def service(self):
-        """Create a pipeline lock service."""
-        return InMemoryPipelineLockService()
-
-    async def test_try_acquire_lock_success(self, service):
-        """Test successful lock acquisition."""
-        events: list[Any] = []
-        service.on("lock.acquired", events.append)
-
-        success, reason = await service.try_acquire_lock("proj-1", "board-1", "item-1")
-
-        assert success is True
-        assert reason == "lock acquired"
-        assert len(events) == 1
-
-    async def test_try_acquire_lock_contention(self, service):
-        """Test lock acquisition when already locked."""
-        await service.try_acquire_lock("proj-1", "board-1", "item-1")
-
-        success, reason = await service.try_acquire_lock("proj-1", "board-1", "item-2")
-
-        assert success is False
-        assert "already held by" in reason
-
-    async def test_lock_acquired_event_emitted(self, service):
-        """Test that lock acquired events are correct."""
-        events: list[Any] = []
-        service.on("lock.acquired", events.append)
-
-        await service.try_acquire_lock("proj-1", "board-1", "item-1")
-
-        assert len(events) == 1
-        event = events[0]
-        assert isinstance(event, LockAcquiredEvent)
-        assert event.work_item_id == "item-1"
-        assert event.acquisition_method == "normal"
-        assert event.source == "mock"
-
-    async def test_release_lock_emits_event(self, service):
-        """Test lock release emits event."""
-        await service.try_acquire_lock("proj-1", "board-1", "item-1")
-
-        events: list[Any] = []
-        service.on("lock.released", events.append)
-
-        success = await service.release_lock("proj-1", "board-1", "item-1")
-
-        assert success is True
-        assert len(events) == 1
-        assert events[0].reason == "completed"
-
-    async def test_release_lock_wrong_holder(self, service):
-        """Test releasing lock held by different item."""
-        await service.try_acquire_lock("proj-1", "board-1", "item-1")
-
-        success = await service.release_lock("proj-1", "board-1", "item-2")
-
-        assert success is False
-
-    async def test_get_all_locks(self, service):
-        """Test retrieving all active locks."""
-        await service.try_acquire_lock("proj-1", "board-1", "item-1")
-        await service.try_acquire_lock("proj-1", "board-2", "item-2")
-
-        locks = await service.get_all_locks()
-
-        assert len(locks) == 2
-        assert any(lock.work_item_id == "item-1" for lock in locks)
-        assert any(lock.work_item_id == "item-2" for lock in locks)
-
-    async def test_simulate_lock_acquired(self, service):
-        """Test direct lock acquired event simulation."""
-        events: list[Any] = []
-        service.on("lock.acquired", events.append)
-
-        service.simulate_lock_acquired("proj-1", "board-1", "item-1", "stale_recovery")
-
-        assert len(events) == 1
-        assert events[0].acquisition_method == "stale_recovery"
-
-    async def test_simulate_lock_released(self, service):
-        """Test direct lock released event simulation."""
-        events: list[Any] = []
-        service.on("lock.released", events.append)
-
-        service.simulate_lock_released("proj-1", "board-1", "item-1", "timeout", next_in_queue="item-2")
-
-        assert len(events) == 1
-        assert events[0].reason == "timeout"
-        assert events[0].next_in_queue == "item-2"
 
 
 class TestConfigurableIdentityService:

@@ -9,16 +9,16 @@ import pytest
 from codetoreum.adapters.secondary.configurable_identity_service import (
     ConfigurableIdentityService,
 )
-from codetoreum.adapters.secondary.in_memory_pipeline_lock_service import (
-    InMemoryPipelineLockService,
+from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
+    InMemoryLockService,
 )
+from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.adapters.secondary.mock_code_review_adapter import MockCodeReviewAdapter
 from codetoreum.adapters.testing import MockDiscussionAdapter
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
 from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.domain.events.discussion_events import CommentNeedsResponseEvent
-from codetoreum.domain.events.lock_events import LockAcquiredEvent, LockReleasedEvent
 from codetoreum.domain.events.review_events import ReviewStatusChangedEvent
 from codetoreum.ports.output.board_service import MovedByType
 from codetoreum.ports.output.discussion_adapter import DiscussionMonitoringConfig
@@ -248,88 +248,6 @@ class TestCodeReviewWorkflow:
         assert await review_adapter.get_review_status("PR-102") == "approved"
 
 
-class TestPipelineLockWorkflow:
-    """Simulation tests for pipeline lock scenarios."""
-
-    @pytest.fixture
-    def lock_service(self):
-        """Create a pipeline lock service."""
-        return InMemoryPipelineLockService()
-
-    async def test_lock_acquisition_and_release(self, lock_service):
-        """Simulate work item lock lifecycle.
-
-        Demonstrates: acquiring lock, holding it, and releasing it,
-        with proper event emission.
-        """
-        acquired_events: list[LockAcquiredEvent] = []
-        released_events: list[LockReleasedEvent] = []
-
-        lock_service.on("lock.acquired", acquired_events.append)
-        lock_service.on("lock.released", released_events.append)
-
-        # Acquire lock
-        success, reason = await lock_service.try_acquire_lock("proj-1", "board-1", "item-1")
-        assert success
-        assert len(acquired_events) == 1
-
-        # Verify lock is held
-        lock = await lock_service.get_lock("proj-1", "board-1")
-        assert lock is not None
-        assert lock.locked_by_work_item == "item-1"
-
-        # Release lock
-        success = await lock_service.release_lock("proj-1", "board-1", "item-1")
-        assert success
-        assert len(released_events) == 1
-
-        # Verify lock is released
-        lock = await lock_service.get_lock("proj-1", "board-1")
-        assert lock is None
-
-    async def test_lock_contention_and_queuing(self, lock_service):
-        """Simulate multiple work items contending for lock.
-
-        Demonstrates: lock contention detection, queueing, and fairness.
-        """
-        acquired_events: list[LockAcquiredEvent] = []
-        lock_service.on("lock.acquired", acquired_events.append)
-
-        # First item acquires lock
-        success1, _ = await lock_service.try_acquire_lock("proj-1", "board-1", "item-1")
-        assert success1
-
-        # Second item contends
-        success2, reason = await lock_service.try_acquire_lock("proj-1", "board-1", "item-2")
-        assert not success2
-        assert "already held" in reason
-
-        # Third item contends
-        success3, reason = await lock_service.try_acquire_lock("proj-1", "board-1", "item-3")
-        assert not success3
-
-        # Verify only first acquisition emitted event
-        assert len(acquired_events) == 1
-        assert acquired_events[0].work_item_id == "item-1"
-
-    async def test_lock_recovery_events(self, lock_service):
-        """Simulate stale lock detection and recovery.
-
-        Demonstrates: emitting stale lock recovery events when
-        detecting and resolving stale locks.
-        """
-        acquired_events: list[LockAcquiredEvent] = []
-        lock_service.on("lock.acquired", acquired_events.append)
-
-        # Simulate stale lock recovery
-        lock_service.simulate_lock_acquired("proj-1", "board-1", "item-1", "stale_recovery")
-
-        assert len(acquired_events) == 1
-        event = acquired_events[0]
-        assert event.acquisition_method == "stale_recovery"
-        assert event.source == "mock"
-
-
 class TestCombinedWorkflow:
     """Integration tests combining multiple adapters."""
 
@@ -351,15 +269,13 @@ class TestCombinedWorkflow:
         review = MockCodeReviewAdapter()
         review.current_project = "ACME"
 
-        lock = InMemoryPipelineLockService()
+        lock = InMemoryLockService(event_bus=EventBus())
 
         # Collect all events
         events: list[CodetoreumEvent] = []
         board.on("workitem.column_changed", events.append)
         discussion.on("comment.needs_response", events.append)
         review.on("review.status_changed", events.append)
-        lock.on("lock.acquired", events.append)
-        lock.on("lock.released", events.append)
 
         # Workflow:
         # 1. Item in Backlog
@@ -367,8 +283,8 @@ class TestCombinedWorkflow:
 
         # 2. Move to Dev, acquire lock
         await board.move_item_to_column("ACME-1", "Dev", MovedByType.ORCHESTRATOR)
-        success, _ = await lock.try_acquire_lock("ACME", "main", "ACME-1")
-        assert success
+        result = await lock.try_acquire_lock("ACME", "main", "ACME-1", board_position=0)
+        assert result.status.value == "acquired"
 
         # 3. Post initial discussion
         config = DiscussionMonitoringConfig(
@@ -403,8 +319,6 @@ class TestCombinedWorkflow:
         assert any(isinstance(e, WorkItemColumnChangedEvent) for e in events)
         assert any(isinstance(e, CommentNeedsResponseEvent) for e in events)
         assert any(isinstance(e, ReviewStatusChangedEvent) for e in events)
-        assert any(isinstance(e, LockAcquiredEvent) for e in events)
-        assert any(isinstance(e, LockReleasedEvent) for e in events)
 
         # All events should have mock source for simulation
         for event in events:

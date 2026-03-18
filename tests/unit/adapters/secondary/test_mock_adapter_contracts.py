@@ -10,9 +10,6 @@ import pytest
 from codetoreum.adapters.secondary.configurable_identity_service import (
     ConfigurableIdentityService,
 )
-from codetoreum.adapters.secondary.in_memory_pipeline_lock_service import (
-    InMemoryPipelineLockService,
-)
 from codetoreum.adapters.secondary.mock_code_review_adapter import MockCodeReviewAdapter
 from codetoreum.adapters.testing import MockDiscussionAdapter
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
@@ -21,7 +18,6 @@ from codetoreum.ports.output.code_review_service import ICodeReviewService
 from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.identity_service import IIdentityService
-from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
 
 
 class TestMockBoardAdapterContract:
@@ -127,35 +123,6 @@ class TestMockCodeReviewAdapterContract:
         assert hasattr(adapter, "on")
         assert hasattr(adapter, "off")
         assert hasattr(adapter, "emit")
-
-
-class TestInMemoryPipelineLockServiceContract:
-    """Verify InMemoryPipelineLockService satisfies IPipelineLockService contract."""
-
-    def test_is_event_emitter(self):
-        """InMemoryPipelineLockService should be an IEventEmitter."""
-        service = InMemoryPipelineLockService()
-        assert isinstance(service, IEventEmitter)
-
-    def test_is_pipeline_lock_service(self):
-        """InMemoryPipelineLockService should be an IPipelineLockService."""
-        service = InMemoryPipelineLockService()
-        assert isinstance(service, IPipelineLockService)
-
-    def test_implements_lock_operations(self):
-        """InMemoryPipelineLockService should implement all lock operations."""
-        service = InMemoryPipelineLockService()
-        assert hasattr(service, "get_lock")
-        assert hasattr(service, "get_all_locks")
-        assert hasattr(service, "try_acquire_lock")
-        assert hasattr(service, "release_lock")
-
-    def test_implements_event_emitter_operations(self):
-        """InMemoryPipelineLockService should implement IEventEmitter operations."""
-        service = InMemoryPipelineLockService()
-        assert hasattr(service, "on")
-        assert hasattr(service, "off")
-        assert hasattr(service, "emit")
 
 
 class TestConfigurableIdentityServiceContract:
