@@ -7,16 +7,16 @@ Provides implementation of the audit query port using the audit store backend.
 import logging
 from datetime import UTC, datetime
 
+from codetoreum.infrastructure.audit.interfaces import (
+    AuditQueryFilters,
+    IAuditStore,
+)
 from codetoreum.ports.input.audit_query import (
     AuditEventFilters,
     AuditEventInfo,
     AuditEventPaginationParams,
     AuditEventQueryResult,
     IAuditQueryPort,
-)
-from codetoreum.infrastructure.audit.interfaces import (
-    AuditQueryFilters,
-    IAuditStore,
 )
 
 logger = logging.getLogger(__name__)

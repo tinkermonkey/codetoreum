@@ -4,8 +4,9 @@ Test suite for GET /api/v2/audit/events endpoint
 Tests the audit events API endpoint for querying system-wide audit logs.
 """
 
-import pytest
 from datetime import UTC, datetime
+
+import pytest
 from fastapi.testclient import TestClient
 
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
