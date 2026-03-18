@@ -430,7 +430,8 @@ async def test_cached_store_list_operations_bypass_cache(cached_config_store, sa
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_cached_store_search_bypasses_cache(cached_config_store, sample_project_config):
+@pytest.mark.timeout(10)
+async def test_cached_store_search_bypasses_cache(cached_config_store, sample_project_config, es_client):
     """Test that search operations go directly to storage."""
     # Save project with unique name
     project = sample_project_config
@@ -438,7 +439,9 @@ async def test_cached_store_search_bypasses_cache(cached_config_store, sample_pr
     await cached_config_store.save_project_config(project)
 
     # Wait for indexing
-    await asyncio.sleep(2)
+    from tests.conftest import wait_for_elasticsearch_indexing
+
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Search (should bypass cache)
     results = await cached_config_store.search_configs(query="Searchable Project", config_type="project")
@@ -449,16 +452,19 @@ async def test_cached_store_search_bypasses_cache(cached_config_store, sample_pr
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_cached_store_version_history_bypasses_cache(cached_config_store, sample_project_config):
+@pytest.mark.timeout(15)
+async def test_cached_store_version_history_bypasses_cache(cached_config_store, sample_project_config, es_client):
     """Test that version history operations go directly to storage."""
+    from tests.conftest import wait_for_elasticsearch_indexing
+
     # Save and update project multiple times
     await cached_config_store.save_project_config(sample_project_config)
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     for i in range(3):
         sample_project_config.tech_stacks[f"tool{i}"] = f"v{i}"
         await cached_config_store.save_project_config(sample_project_config)
-        await asyncio.sleep(1)
+        await wait_for_elasticsearch_indexing(es_client)
 
     # Get version history (should bypass cache)
     versions = await cached_config_store.list_config_versions(sample_project_config.id)
@@ -468,11 +474,14 @@ async def test_cached_store_version_history_bypasses_cache(cached_config_store, 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_cached_store_exists_bypasses_cache(cached_config_store, sample_project_config):
+@pytest.mark.timeout(10)
+async def test_cached_store_exists_bypasses_cache(cached_config_store, sample_project_config, es_client):
     """Test that exists() checks go directly to storage."""
+    from tests.conftest import wait_for_elasticsearch_indexing
+
     # Save project
     await cached_config_store.save_project_config(sample_project_config)
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Check existence (should bypass cache)
     exists = await cached_config_store.exists(sample_project_config.id)

@@ -133,6 +133,7 @@ class TestHealthChecker:
         assert result.message and "not found" in result.message
 
     @pytest.mark.asyncio
+    @pytest.mark.timeout(15)
     async def test_check_dependency_timeout(self):
         """Test that slow dependency checks timeout."""
 

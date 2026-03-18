@@ -166,6 +166,7 @@ class TestTimeoutDetection:
             pass
 
     @pytest.mark.asyncio
+    @pytest.mark.timeout(15)
     async def test_cancels_timed_out_task(self, mock_executor, watchdog, mock_event_emitter):
         """Should cancel the task of a timed-out execution."""
         # Arrange
