@@ -80,7 +80,7 @@ class SimMoveResponse(BaseModel):
     """Move result response."""
 
     work_item_id: str
-    from_column: str
+    from_column: str | None
     to_column: str
     moved_by: str
     timestamp: str

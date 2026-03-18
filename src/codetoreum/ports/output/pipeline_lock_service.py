@@ -11,9 +11,32 @@ multi-agent orchestration system.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Literal
+from datetime import datetime
+from typing import Literal, Protocol
 
 from .event_emitter import IEventEmitter
+
+
+class LockStateInfo(Protocol):
+    """Protocol for lock state information returned by get_all_lock_states().
+
+    Defines the contract for objects returned by IPipelineLockService.get_all_lock_states().
+    Both simple lock states and complex queue states must implement this interface.
+
+    This protocol allows different implementations to return different concrete types
+    (LockState, PipelineQueueState, etc.) as long as they provide these two fields
+    for watchdogs and monitoring tools.
+    """
+
+    @property
+    def lock_holder(self) -> str | None:
+        """Current lock holder ID or None if lock is not held."""
+        ...
+
+    @property
+    def lock_acquired_at(self) -> datetime | None:
+        """Datetime when lock was acquired or None if not held."""
+        ...
 
 
 @dataclass(frozen=True)
@@ -158,7 +181,7 @@ class IPipelineLockService(IEventEmitter, ABC):
         """
 
     @abstractmethod
-    def get_all_lock_states(self) -> dict[str, object]:
+    def get_all_lock_states(self) -> dict[str, LockStateInfo]:
         """Return all pipeline lock states for monitoring and diagnostics.
 
         Intended for internal tools (watchdogs, dashboards) that need detailed
@@ -166,16 +189,20 @@ class IPipelineLockService(IEventEmitter, ABC):
         immediate access to current lock state including acquisition times.
 
         Returns:
-            dict[str, object]: Mapping of lock keys to lock state objects
-                              Key format: "project_id:board_id"
-                              Values are LockState objects with:
-                              - lock_holder: Current lock holder ID or None
-                              - lock_acquired_at: Datetime when lock was acquired or None
+            dict[str, LockStateInfo]: Mapping of lock keys to lock state objects
+                                     Key format: "project_id:board_id"
+                                     Values conform to LockStateInfo protocol with:
+                                     - lock_holder: Current lock holder ID or None
+                                     - lock_acquired_at: Datetime when lock was acquired or None
 
         Note:
             This is a synchronous method for performance-critical monitoring
             operations (e.g., stale lock detection in watchdogs). The returned
             dict should contain thread-safe snapshots of lock states.
+
+            Different implementations may return different concrete types
+            (LockState, PipelineQueueState, etc.) as long as they conform
+            to the LockStateInfo protocol.
         """
 
     # Command Operations
