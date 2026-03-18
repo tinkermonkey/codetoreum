@@ -1224,13 +1224,12 @@ class SimulationDataSeeder:
                 column_names=board_model.columns,
             )
             if agent_types:
-                # Extract SLA configuration from board model if available
-                sla_config = getattr(board_model, 'sla_seconds_by_column', None) or {}
+                # Extract SLA configuration from board model (always exists as Pydantic field)
                 self.register_workflow_template(
                     board_id=board_model.board_id,
                     column_names=board_model.columns,
                     agent_types=agent_types,
-                    sla_seconds_by_column=sla_config,
+                    sla_seconds_by_column=board_model.sla_seconds_by_column,
                 )
 
         # Seed board placements (match work items by title prefix)
