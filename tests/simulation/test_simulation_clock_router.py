@@ -137,6 +137,23 @@ class TestSimulationClockRouter:
             state = await client.get("/api/v2/sim/clock")
         assert state.json()["auto_advance_active"] is True
 
+    async def test_clock_router_resume_rejected_while_running(self, app, bootstrap):
+        """Test POST /api/v2/sim/clock/resume returns 409 when auto-advance is already running."""
+        # First pause to ensure we're in a known state
+        async with AsyncClient(app=app, base_url="http://test", follow_redirects=True) as client:
+            await client.post("/api/v2/sim/clock/pause")
+
+        # Resume to start auto-advance
+        async with AsyncClient(app=app, base_url="http://test", follow_redirects=True) as client:
+            await client.post("/api/v2/sim/clock/resume")
+
+        # Try to resume again while already running
+        async with AsyncClient(app=app, base_url="http://test", follow_redirects=True) as client:
+            response = await client.post("/api/v2/sim/clock/resume")
+
+        assert response.status_code == 409
+        assert "already running" in response.json()["detail"].lower()
+
     async def test_clock_router_endpoints_tagged(self, app):
         """Test that endpoints are properly tagged for Swagger UI."""
         # Get OpenAPI schema

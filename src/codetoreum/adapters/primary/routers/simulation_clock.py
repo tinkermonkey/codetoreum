@@ -196,7 +196,17 @@ def create_simulation_clock_router(engine: SimulationEngine) -> APIRouter:
 
         Returns:
             Status and current time
+
+        Raises:
+            HTTPException(409): If auto-advance is already running
         """
+        # Prevent attempting to resume when already running
+        if engine.is_auto_advancing():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Auto-advance is already running. Call /pause first to stop it.",
+            )
+
         await engine.start_auto_advance()
         current_time = engine.now()
 

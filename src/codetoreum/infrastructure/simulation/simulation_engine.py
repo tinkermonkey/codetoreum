@@ -232,7 +232,7 @@ class SimulationEngine:
         Returns:
             True if auto-advance is running, False otherwise
         """
-        return self._clock._running
+        return self._clock.is_auto_advancing()
 
     async def start_auto_advance(self) -> None:
         """Start automatic clock advancement."""

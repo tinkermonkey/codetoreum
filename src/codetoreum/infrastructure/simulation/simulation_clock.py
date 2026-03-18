@@ -337,6 +337,16 @@ class SimulationClock:
         with self._lock:
             return self._speed_multiplier
 
+    def is_auto_advancing(self) -> bool:
+        """
+        Check if automatic clock advancement is currently active.
+
+        Returns:
+            True if auto-advance is running, False otherwise
+        """
+        with self._lock:
+            return self._running
+
     async def start_auto_advance(self) -> None:
         """
         Start automatic clock advancement.
