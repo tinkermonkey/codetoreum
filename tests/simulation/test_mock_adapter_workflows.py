@@ -12,7 +12,6 @@ from codetoreum.adapters.secondary.configurable_identity_service import (
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
 )
-from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.adapters.secondary.mock_code_review_adapter import MockCodeReviewAdapter
 from codetoreum.adapters.testing import MockDiscussionAdapter
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
@@ -20,6 +19,7 @@ from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.domain.events.discussion_events import CommentNeedsResponseEvent
 from codetoreum.domain.events.review_events import ReviewStatusChangedEvent
+from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.output.board_service import MovedByType
 from codetoreum.ports.output.discussion_adapter import DiscussionMonitoringConfig
 

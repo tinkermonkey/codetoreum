@@ -119,7 +119,6 @@ from codetoreum.application.agent_scheduler import (
 )
 from codetoreum.application.configuration_service import ConfigurationService
 from codetoreum.application.container_recovery_service import ContainerRecoveryService
-from codetoreum.application.pipeline_lock_service import IQueuedPipelineLockService
 from codetoreum.application.event_handlers.board_event_handler import (
     BoardColumnEventHandler,
 )
@@ -708,7 +707,7 @@ class SimulationApplicationBootstrap:
         self._execution_timeout_watchdog: ExecutionTimeoutWatchdog | None = None
         self._sla_expiry_watchdog: SLAExpiryWatchdog | None = None
         self._column_progression_watchdog: ColumnProgressionWatchdog | None = None
-        self._queued_lock_service: "InMemoryLockService | None" = None
+        self._queued_lock_service: InMemoryLockService | None = None
 
     @property
     def is_degraded(self) -> bool:
