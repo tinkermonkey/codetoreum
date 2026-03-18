@@ -10,9 +10,9 @@ from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
 )
 from codetoreum.application.pipeline_lock_service import LockStatus
 from codetoreum.domain.events.lock_events import (
-    StaleLockDetectedEvent,
     PipelineLockAcquiredEvent,
     PipelineLockReleasedEvent,
+    StaleLockDetectedEvent,
     WorkItemQueuedEvent,
 )
 

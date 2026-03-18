@@ -5,8 +5,8 @@ import pytest
 from codetoreum.domain.events import (
     LockAcquiredEvent,
     LockReleasedEvent,
-    StaleLockDetectedEvent,
     LockStuckEvent,
+    StaleLockDetectedEvent,
     now_iso,
 )
 

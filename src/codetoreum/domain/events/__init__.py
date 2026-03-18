@@ -132,10 +132,10 @@ from .legacy_domain_events import (
 from .lock_events import (
     LockAcquiredEvent,
     LockReleasedEvent,
-    StaleLockDetectedEvent,
     LockStuckEvent,
     PipelineLockAcquiredEvent,
     PipelineLockReleasedEvent,
+    StaleLockDetectedEvent,
     WorkItemQueuedEvent,
 )
 

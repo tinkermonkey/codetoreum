@@ -21,9 +21,9 @@ from codetoreum.application.pipeline_lock_service import (
     QueueEntry,
 )
 from codetoreum.domain.events.lock_events import (
-    StaleLockDetectedEvent,
     PipelineLockAcquiredEvent,
     PipelineLockReleasedEvent,
+    StaleLockDetectedEvent,
     WorkItemQueuedEvent,
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
