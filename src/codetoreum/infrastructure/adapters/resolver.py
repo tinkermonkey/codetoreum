@@ -64,7 +64,9 @@ class AdapterDependencies:
     """
 
     event_bus: Any  # IEventBus - Available for future adapter initialization
-    event_emitter: IEventEmitter  # CapturingMockEventEmitter in simulation - Available for future adapter initialization
+    event_emitter: (
+        IEventEmitter  # CapturingMockEventEmitter in simulation - Available for future adapter initialization
+    )
     logger: logging.Logger  # Available for future adapter initialization
     engine: "SimulationEngine"  # For clock injection in time-aware adapters (actively used)
     config: "SimulationConfig"  # Actively used for metadata/config lookups
@@ -169,24 +171,18 @@ class AdapterResolver:
             if req.simulation_only:
                 simulation_names = ("in_memory", "mock", "fake", "capturing", "simple", "configurable")
                 if impl_name not in simulation_names:
-                    errors.append(
-                        f"{field_name}: '{impl_name}' is simulation-only, no real adapter exists"
-                    )
+                    errors.append(f"{field_name}: '{impl_name}' is simulation-only, no real adapter exists")
                     continue
 
             # Check required environment variables
             for env_var in req.env_vars:
                 if not os.environ.get(env_var):
-                    errors.append(
-                        f"{field_name}/{impl_name}: missing env var '{env_var}'"
-                    )
+                    errors.append(f"{field_name}/{impl_name}: missing env var '{env_var}'")
 
             # Check required config keys
             for config_key in req.config_keys:
                 if not self._deps.config.metadata.get(config_key):
-                    errors.append(
-                        f"{field_name}/{impl_name}: missing config key '{config_key}'"
-                    )
+                    errors.append(f"{field_name}/{impl_name}: missing config key '{config_key}'")
 
         if errors:
             raise AdapterConfigurationError(errors)
@@ -262,9 +258,7 @@ class AdapterResolver:
 
     def resolve_checkpoint_store(self) -> IRepairCycleCheckpointStore:
         """Resolve repair cycle checkpoint store adapter."""
-        return self._factory.create_repair_cycle_checkpoint_store(
-            adapter_name=self._config.checkpoint_store
-        )
+        return self._factory.create_repair_cycle_checkpoint_store(adapter_name=self._config.checkpoint_store)
 
     def resolve_agent_repository(self) -> IAgentRepository:
         """Resolve agent repository adapter."""
@@ -298,7 +292,6 @@ class AdapterResolver:
         """Resolve project manager service adapter."""
         return self._factory.create_project_manager_service(adapter_name=self._config.project_manager)
 
-
     def resolve_review_cycle(self) -> IReviewCycle:
         """
         Resolve review cycle adapter.
@@ -311,9 +304,8 @@ class AdapterResolver:
             # Engine creates time-aware mock with optional LLM adapter
             llm_adapter = self._resolved.get("llm")
             return self._deps.engine.create_review_cycle_adapter(llm_adapter=llm_adapter)
-        else:
-            # Real adapter: bypass engine, use factory directly
-            return self._factory.create_review_cycle_service(adapter_name=self._config.review_cycle)
+        # Real adapter: bypass engine, use factory directly
+        return self._factory.create_review_cycle_service(adapter_name=self._config.review_cycle)
 
     def resolve_repair_cycle(self) -> IRepairCycle:
         """
@@ -331,9 +323,8 @@ class AdapterResolver:
                 checkpoint_store=checkpoint_store,
                 container_adapter=container_adapter,
             )
-        else:
-            # Real adapter: bypass engine, use factory directly
-            return self._factory.create_repair_cycle(adapter_name=self._config.repair_cycle)
+        # Real adapter: bypass engine, use factory directly
+        return self._factory.create_repair_cycle(adapter_name=self._config.repair_cycle)
 
     def resolve_all(self) -> dict[str, Any]:
         """

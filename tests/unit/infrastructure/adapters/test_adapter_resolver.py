@@ -11,8 +11,9 @@ Tests cover:
 
 import logging
 import os
-import pytest
 from unittest.mock import Mock, patch
+
+import pytest
 
 from codetoreum.infrastructure.adapters.factory import AdapterFactory, AdapterFactoryConfig
 from codetoreum.infrastructure.adapters.registry_base import AdapterCredentialRequirement
@@ -185,8 +186,9 @@ class TestAdapterResolver:
         """Test that simulation-only adapters cannot be configured with non-simulation names."""
         # Register a simulation-only adapter under a real-sounding name in the test factory
         registry = factory.get_registry("metrics")
-        from codetoreum.infrastructure.adapters.registry_base import AdapterMetadata
         from datetime import datetime
+
+        from codetoreum.infrastructure.adapters.registry_base import AdapterMetadata
 
         # Add a fake adapter with simulation_only=True
         registry._adapters["fake_real_name"] = Mock()
@@ -197,11 +199,7 @@ class TestAdapterResolver:
             version="1.0.0",
             tags=[],
             registered_at=datetime.now(),
-            config_schema=AdapterCredentialRequirement(
-                env_vars=[],
-                config_keys=[],
-                simulation_only=True
-            )
+            config_schema=AdapterCredentialRequirement(env_vars=[], config_keys=[], simulation_only=True),
         )
 
         # Configure to use this simulation-only adapter with non-simulation name
@@ -222,7 +220,7 @@ class TestAdapterResolver:
 
         assert event_store is not None
         # Should be an adapter instance
-        assert callable(getattr(event_store, 'append', None))
+        assert callable(getattr(event_store, "append", None))
 
     def test_resolve_config_store(self, factory, dependencies, adapter_config):
         """Test resolving config store adapter."""
@@ -231,7 +229,7 @@ class TestAdapterResolver:
 
         assert config_store is not None
         # Should be an adapter instance
-        assert callable(getattr(config_store, 'get_project_config', None))
+        assert callable(getattr(config_store, "get_project_config", None))
 
     def test_resolve_metrics(self, factory, dependencies, adapter_config):
         """Test resolving metrics adapter."""
@@ -277,9 +275,7 @@ class TestAdapterResolver:
         assert resolver._resolved == result
         assert len(resolver._resolved) == 26
 
-    def test_resolve_all_respects_dependency_order(
-        self, factory, dependencies, adapter_config
-    ):
+    def test_resolve_all_respects_dependency_order(self, factory, dependencies, adapter_config):
         """Test that adapters are resolved in dependency order."""
         resolver = AdapterResolver(adapter_config, factory, dependencies)
 
@@ -357,9 +353,7 @@ class TestAdapterResolver:
         # The returned repair_cycle should be from the engine
         assert result["repair_cycle"] is mock_repair_cycle
 
-    def test_resolve_review_cycle_passes_llm_to_engine(
-        self, factory, dependencies, adapter_config
-    ):
+    def test_resolve_review_cycle_passes_llm_to_engine(self, factory, dependencies, adapter_config):
         """Test that review_cycle resolver passes resolved LLM to engine."""
         resolver = AdapterResolver(adapter_config, factory, dependencies)
 
@@ -379,9 +373,7 @@ class TestAdapterResolver:
         assert "llm_adapter" in call_kwargs
         assert call_kwargs["llm_adapter"] is resolver._resolved["llm"]
 
-    def test_resolve_repair_cycle_passes_dependencies_to_engine(
-        self, factory, dependencies, adapter_config
-    ):
+    def test_resolve_repair_cycle_passes_dependencies_to_engine(self, factory, dependencies, adapter_config):
         """Test that repair_cycle resolver passes resolved dependencies to engine."""
         resolver = AdapterResolver(adapter_config, factory, dependencies)
 
