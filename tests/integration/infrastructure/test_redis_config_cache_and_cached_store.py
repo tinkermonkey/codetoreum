@@ -24,6 +24,7 @@ from tests.conftest import (
     ModernElasticsearchContainer,
     ModernRedisContainer,
     docker_available,
+    wait_for_elasticsearch_indexing,
 )
 
 # Mark all tests in this module as requiring Docker
@@ -121,7 +122,7 @@ async def elasticsearch_storage(es_client):
     )
 
     await storage.initialize()
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     yield storage
 
@@ -228,10 +229,7 @@ async def test_redis_cache_invalidate_project(redis_cache, sample_project_config
     # Invalidate
     await redis_cache.invalidate_project(sample_project_config.id)
 
-    # Wait for invalidation to propagate
-    await asyncio.sleep(0.5)
-
-    # Verify it's removed
+    # Verify it's removed (Redis is synchronous, no wait needed)
     retrieved = await redis_cache.get_project_config(sample_project_config.id)
     assert retrieved is None
 
@@ -279,13 +277,13 @@ async def test_redis_cache_stats(redis_cache, sample_project_config):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_cached_store_write_through(cached_config_store, sample_project_config):
+async def test_cached_store_write_through(cached_config_store, sample_project_config, es_client):
     """Test write-through caching (writes to storage then cache)."""
     # Save project (should write to both storage and cache)
     await cached_config_store.save_project_config(sample_project_config)
 
     # Wait for Elasticsearch indexing
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Get from cache (should hit cache, not storage)
     retrieved = await cached_config_store.get_project_config(sample_project_config.id)
@@ -297,13 +295,13 @@ async def test_cached_store_write_through(cached_config_store, sample_project_co
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_cached_store_read_through(cached_config_store, elasticsearch_storage, sample_project_config):
+async def test_cached_store_read_through(cached_config_store, elasticsearch_storage, sample_project_config, es_client):
     """Test read-through caching (cache miss falls back to storage)."""
     # Save directly to storage (bypass cache)
     await elasticsearch_storage.save_project_config(sample_project_config)
 
     # Wait for indexing
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Get from cached store (should miss cache, hit storage, then populate cache)
     retrieved = await cached_config_store.get_project_config(sample_project_config.id)
@@ -320,13 +318,13 @@ async def test_cached_store_read_through(cached_config_store, elasticsearch_stor
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_cached_store_get_by_name(cached_config_store, sample_project_config):
+async def test_cached_store_get_by_name(cached_config_store, sample_project_config, es_client):
     """Test getting project by name with caching."""
     # Save project
     await cached_config_store.save_project_config(sample_project_config)
 
     # Wait for indexing
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Get by name (should populate cache)
     retrieved = await cached_config_store.get_project_config_by_name(sample_project_config.name)
@@ -338,16 +336,16 @@ async def test_cached_store_get_by_name(cached_config_store, sample_project_conf
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_cached_store_update_invalidates_and_updates_cache(cached_config_store, sample_project_config):
+async def test_cached_store_update_invalidates_and_updates_cache(cached_config_store, sample_project_config, es_client):
     """Test that updates properly update both storage and cache."""
     # Save initial version
     await cached_config_store.save_project_config(sample_project_config)
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Update config
     sample_project_config.tech_stacks["typescript"] = "5.0"
     await cached_config_store.save_project_config(sample_project_config)
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Get from cache (should have updated version)
     retrieved = await cached_config_store.get_project_config(sample_project_config.id)
@@ -359,11 +357,11 @@ async def test_cached_store_update_invalidates_and_updates_cache(cached_config_s
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_cached_store_agent_config(cached_config_store, sample_agent_config):
+async def test_cached_store_agent_config(cached_config_store, sample_agent_config, es_client):
     """Test caching agent configuration through cached store."""
     # Save agent config
     await cached_config_store.save_agent_config(sample_agent_config)
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Get agent config (should hit cache)
     retrieved = await cached_config_store.get_agent_config(
@@ -377,11 +375,11 @@ async def test_cached_store_agent_config(cached_config_store, sample_agent_confi
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_cached_store_delete_invalidates_cache(cached_config_store, redis_cache, sample_project_config):
+async def test_cached_store_delete_invalidates_cache(cached_config_store, redis_cache, sample_project_config, es_client):
     """Test that delete operation invalidates cache."""
     # Save project
     await cached_config_store.save_project_config(sample_project_config)
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Verify it's in cache
     cached = await redis_cache.get_project_config(sample_project_config.id)
@@ -389,7 +387,7 @@ async def test_cached_store_delete_invalidates_cache(cached_config_store, redis_
 
     # Delete project
     await cached_config_store.delete_project_config(sample_project_config.id)
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Verify it's removed from cache
     cached_after = await redis_cache.get_project_config(sample_project_config.id)
@@ -402,7 +400,7 @@ async def test_cached_store_delete_invalidates_cache(cached_config_store, redis_
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_cached_store_list_operations_bypass_cache(cached_config_store, sample_project_config):
+async def test_cached_store_list_operations_bypass_cache(cached_config_store, sample_project_config, es_client):
     """Test that list operations go directly to storage (no caching)."""
     # Save multiple projects
     project1 = sample_project_config
@@ -417,7 +415,7 @@ async def test_cached_store_list_operations_bypass_cache(cached_config_store, sa
     await cached_config_store.save_project_config(project2)
 
     # Wait for indexing
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # List projects (should bypass cache and query storage)
     projects = await cached_config_store.list_projects()
@@ -491,14 +489,14 @@ async def test_cached_store_exists_bypasses_cache(cached_config_store, sample_pr
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_cache_hit_rate_with_repeated_reads(cached_config_store, redis_cache, sample_project_config):
+async def test_cache_hit_rate_with_repeated_reads(cached_config_store, redis_cache, sample_project_config, es_client):
     """Test that repeated reads increase cache hit rate."""
     # Reset stats
     await redis_cache.reset_stats()
 
     # Save project
     await cached_config_store.save_project_config(sample_project_config)
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Read multiple times (should hit cache after first read)
     for _ in range(10):
@@ -514,11 +512,11 @@ async def test_cache_hit_rate_with_repeated_reads(cached_config_store, redis_cac
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_concurrent_cached_store_operations(cached_config_store, sample_project_config):
+async def test_concurrent_cached_store_operations(cached_config_store, sample_project_config, es_client):
     """Test concurrent operations on cached config store."""
     # Save initial project
     await cached_config_store.save_project_config(sample_project_config)
-    await asyncio.sleep(1)
+    await wait_for_elasticsearch_indexing(es_client)
 
     # Perform concurrent reads
     async def read_project():

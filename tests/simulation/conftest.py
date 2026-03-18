@@ -7,6 +7,9 @@ from typing import Any, cast
 import pytest
 from fastapi import FastAPI
 
+# Set default timeout for all simulation tests to prevent hanging indefinitely
+pytestmark = pytest.mark.timeout(60)
+
 from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
 from codetoreum.adapters.testing.in_memory_metrics_adapter import (
     InMemoryMetricsAdapter,
