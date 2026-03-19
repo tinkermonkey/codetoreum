@@ -152,7 +152,7 @@ class TestAdapterResolver:
 
             assert "GITHUB_TOKEN" in str(exc_info.value)
         finally:
-            if original_token:
+            if original_token is not None:
                 os.environ["GITHUB_TOKEN"] = original_token
 
     def test_validate_credentials_unknown_implementation(self, factory, dependencies):
@@ -206,7 +206,10 @@ class TestAdapterResolver:
         metrics = resolver.resolve_metrics()
 
         assert metrics is not None
-        # Should be an adapter instance
+        # Should be an adapter instance with metrics methods
+        assert hasattr(metrics, "record_metric") or hasattr(metrics, "increment") or hasattr(
+            metrics, "record_duration"
+        )
 
     def test_resolve_llm(self, factory, dependencies, adapter_config):
         """Test resolving LLM provider adapter."""

@@ -964,6 +964,42 @@ class TestCLIAdapterIntegration:
         # Error message should mention format
         assert "Invalid adapter override format" in result.output or "Expected format" in result.output
 
+    @pytest.mark.asyncio
+    async def test_cli_adapter_happy_path_valid_swap(self):
+        """Test CLI with valid --adapter flag successfully swaps adapter and boots.
+
+        This is the happy path test ensuring that providing a valid adapter swap
+        (slot=implementation format) allows the application to start successfully
+        with the swapped adapter configuration.
+        """
+        runner = CliRunner()
+
+        # Use valid adapter swap: board=mock (both are valid, swap is explicit)
+        # This should succeed and actually start the server
+        result = runner.invoke(
+            main,
+            [
+                "--adapter",
+                "board=mock",
+                "--no-seed",
+                "--timeout",
+                "5",  # Short timeout to prevent hanging in tests
+            ],
+        )
+
+        # Server should start successfully (exit code 0) or be interrupted by timeout
+        # The key is that it should NOT fail due to adapter configuration issues
+        assert (
+            result.exit_code == 0
+            or "timeout" in result.output.lower()
+            or "interrupt" in result.output.lower()
+        ), f"Expected successful start or timeout, got exit code {result.exit_code}: {result.output}"
+
+        # Should not have adapter configuration errors
+        assert "unknown implementation" not in result.output.lower()
+        assert "unknown adapter slot" not in result.output.lower()
+        assert "adapter configuration error" not in result.output.lower()
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
