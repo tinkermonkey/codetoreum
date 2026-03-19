@@ -91,18 +91,12 @@ def parse_adapter_override(override_str: str) -> tuple[str, str]:
         click.BadParameter: If format is invalid
     """
     if "=" not in override_str:
-        msg = (
-            f"Invalid adapter override format: '{override_str}'. "
-            "Expected format: slot=impl (e.g., 'board=github')"
-        )
+        msg = f"Invalid adapter override format: '{override_str}'. " "Expected format: slot=impl (e.g., 'board=github')"
         raise click.BadParameter(msg)
 
     parts = override_str.split("=", 1)
     if len(parts) != 2 or not parts[0] or not parts[1]:
-        msg = (
-            f"Invalid adapter override format: '{override_str}'. "
-            "Expected format: slot=impl (e.g., 'board=github')"
-        )
+        msg = f"Invalid adapter override format: '{override_str}'. " "Expected format: slot=impl (e.g., 'board=github')"
         raise click.BadParameter(msg)
 
     slot, impl = parts
