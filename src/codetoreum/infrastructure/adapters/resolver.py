@@ -17,10 +17,13 @@ from codetoreum.infrastructure.adapters.registry_base import (
 )
 from codetoreum.infrastructure.simulation.simulation_config import AdapterSelectionConfig
 from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
+from codetoreum.ports.output.agent_executor import IAgentExecutor
 from codetoreum.ports.output.agent_repository import IAgentRepository
 from codetoreum.ports.output.board_service import IBoardService
+from codetoreum.ports.output.code_review_service import ICodeReviewService
 from codetoreum.ports.output.config_store import IConfigStore
 from codetoreum.ports.output.container import IContainer
+from codetoreum.ports.output.container_recovery import IAgentContainerRecoveryService
 from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.encryption_service import IEncryptionService
 from codetoreum.ports.output.event_emitter import IEventEmitter
@@ -35,6 +38,7 @@ from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
 from codetoreum.ports.output.repair_cycle_checkpoint_store import IRepairCycleCheckpointStore
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle
+from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.review_cycle_service import IReviewCycle
 from codetoreum.ports.output.storage import IStorage
 from codetoreum.ports.output.ticket_system import ITicketSystem
@@ -338,6 +342,25 @@ class AdapterResolver:
         # Real adapter: bypass engine, use factory directly
         return self._factory.create_repair_cycle(adapter_name=self._config.repair_cycle)
 
+    def resolve_code_review(self) -> ICodeReviewService:
+        """Resolve code review service adapter."""
+        return self._factory.create_code_review_service(adapter_name=self._config.code_review)
+
+    def resolve_container_recovery(self) -> IAgentContainerRecoveryService:
+        """Resolve container recovery adapter."""
+        return self._factory.create_container_recovery(adapter_name=self._config.container_recovery)
+
+    def resolve_agent_executor(self) -> IAgentExecutor:
+        """Resolve agent executor adapter."""
+        return self._factory.create_agent_executor(adapter_name=self._config.agent_executor)
+
+    def resolve_repository(self) -> IRepository:
+        """Resolve repository adapter."""
+        return self._factory.create_repository(
+            adapter_name=self._config.repository,
+            event_emitter=self._deps.event_emitter,
+        )
+
     def resolve_all(self) -> dict[str, Any]:
         """
         Resolve all adapters in dependency order.
@@ -391,6 +414,14 @@ class AdapterResolver:
 
         # 6. Composite adapters (depend on others)
         self._resolved["project_manager"] = self.resolve_project_manager()
+
+        # 7. Code review and container recovery adapters
+        self._resolved["code_review"] = self.resolve_code_review()
+        self._resolved["container_recovery"] = self.resolve_container_recovery()
+        self._resolved["agent_executor"] = self.resolve_agent_executor()
+
+        # 8. Repository adapter (depends on event_emitter)
+        self._resolved["repository"] = self.resolve_repository()
 
         # Review and repair cycles depend on previously resolved adapters
         # (review_cycle depends on llm, repair_cycle depends on checkpoint_store and container)

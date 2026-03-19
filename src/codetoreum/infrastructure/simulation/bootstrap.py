@@ -192,8 +192,10 @@ from codetoreum.ports.output.active_workflow_run_registry import (
 from codetoreum.ports.output.agent_executor import IAgentExecutor
 from codetoreum.ports.output.agent_repository import IAgentRepository
 from codetoreum.ports.output.board_service import IBoardService
+from codetoreum.ports.output.code_review_service import ICodeReviewService
 from codetoreum.ports.output.config_store import IConfigStore
 from codetoreum.ports.output.container import IContainer
+from codetoreum.ports.output.container_recovery import IAgentContainerRecoveryService
 from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.encryption_service import IEncryptionService
 from codetoreum.ports.output.event_emitter import IEventEmitter
@@ -211,6 +213,7 @@ from codetoreum.ports.output.repair_cycle_checkpoint_store import (
     IRepairCycleCheckpointStore,
 )
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle
+from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.review_cycle_service import IReviewCycle
 from codetoreum.ports.output.storage import IStorage
 from codetoreum.ports.output.ticket_system import ITicketSystem
@@ -293,7 +296,7 @@ class SimulationAdapters:
     ticket_system: ITicketSystem
     llm_provider: ILLMProvider
     container: IContainer
-    repository: Any  # IRepository (not yet in resolver, keeping concrete type)
+    repository: IRepository
     event_store: IEventStore
     metrics: IMetrics
     storage: IStorage
@@ -314,6 +317,8 @@ class SimulationAdapters:
     message_broker: IMessageBroker
     discussion_adapter: IDiscussionAdapter
     review_cycle: IReviewCycle
+    code_review: ICodeReviewService
+    container_recovery: IAgentContainerRecoveryService
     identity_service: IIdentityService
     checkpoint_store: IRepairCycleCheckpointStore
 
@@ -1076,6 +1081,7 @@ class SimulationApplicationBootstrap:
             self._stale_lock_watchdog = None
             self._execution_timeout_watchdog = None
             self._sla_expiry_watchdog = None
+            self._column_progression_watchdog = None
 
             self._is_setup = False
             logger.info("Simulation bootstrap teardown complete")
@@ -1132,9 +1138,10 @@ class SimulationApplicationBootstrap:
         self._adapter_factory = AdapterFactory(factory_config)
 
         # Create adapter dependencies for injection
+        # Note: event_emitter will be resolved by AdapterResolver and provided in resolved dict
         deps = AdapterDependencies(
             event_bus=self.infrastructure.event_bus,
-            event_emitter=CapturingMockEventEmitter(),  # For domain event capture
+            event_emitter=CapturingMockEventEmitter(),  # Placeholder, will be replaced by resolver result
             logger=self.infrastructure.logger,
             engine=self._engine,
             config=self.config,
@@ -1149,6 +1156,9 @@ class SimulationApplicationBootstrap:
 
         # Resolve all adapters in dependency order with credential validation
         resolved = resolver.resolve_all()
+
+        # Extract resolved event_emitter from resolver result
+        event_emitter = cast("IEventEmitter", resolved["event_emitter"])
 
         # Extract resolved adapters and apply simulation-specific post-processing
         # where needed (e.g., pre-configuring default project for tests)
@@ -1183,8 +1193,8 @@ class SimulationApplicationBootstrap:
         if isinstance(storage, InMemoryStorageAdapter):
             storage.container = container
 
-        # Create repository adapter (not provided by resolver)
-        repository = InMemoryRepositoryAdapter(event_emitter=deps.event_emitter)
+        # Extract repository adapter from resolver result
+        repository = cast("IRepository", resolved["repository"])
 
         # Create audit store (not provided by resolver)
         audit_store = InMemoryAuditStore()
@@ -1208,12 +1218,14 @@ class SimulationApplicationBootstrap:
             lock_service=cast("IPipelineLockService", resolved["lock_service"]),
             workflow_config=cast("IWorkflowConfigService", resolved["workflow_config"]),
             queue_service=cast("IPipelineQueueService", resolved["queue_service"]),
-            event_emitter=cast("IEventEmitter", deps.event_emitter),
+            event_emitter=event_emitter,
             audit_store=audit_store,
             version_control=cast("IVersionControlService", resolved["version_control"]),
             message_broker=message_broker,
             discussion_adapter=cast("IDiscussionAdapter", resolved["discussion_adapter"]),
             review_cycle=cast("IReviewCycle", resolved["review_cycle"]),
+            code_review=cast("ICodeReviewService", resolved["code_review"]),
+            container_recovery=cast("IAgentContainerRecoveryService", resolved["container_recovery"]),
             identity_service=identity_service,
             checkpoint_store=cast("IRepairCycleCheckpointStore", resolved["checkpoint_store"]),
             agent_repository=cast("IAgentRepository", resolved["agent_repository"]),
