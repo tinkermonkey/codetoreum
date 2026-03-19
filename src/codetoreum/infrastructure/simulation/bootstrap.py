@@ -317,8 +317,6 @@ class SimulationAdapters:
     message_broker: IMessageBroker
     discussion_adapter: IDiscussionAdapter
     review_cycle: IReviewCycle
-    code_review: ICodeReviewService
-    container_recovery: IAgentContainerRecoveryService
     identity_service: IIdentityService
     checkpoint_store: IRepairCycleCheckpointStore
 
@@ -1224,8 +1222,6 @@ class SimulationApplicationBootstrap:
             message_broker=message_broker,
             discussion_adapter=cast("IDiscussionAdapter", resolved["discussion_adapter"]),
             review_cycle=cast("IReviewCycle", resolved["review_cycle"]),
-            code_review=cast("ICodeReviewService", resolved["code_review"]),
-            container_recovery=cast("IAgentContainerRecoveryService", resolved["container_recovery"]),
             identity_service=identity_service,
             checkpoint_store=cast("IRepairCycleCheckpointStore", resolved["checkpoint_store"]),
             agent_repository=cast("IAgentRepository", resolved["agent_repository"]),
