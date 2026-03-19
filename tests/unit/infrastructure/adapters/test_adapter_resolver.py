@@ -182,18 +182,18 @@ class TestAdapterResolver:
         assert "nonexistent1" in error_msg or "ticket" in error_msg
         assert "nonexistent2" in error_msg or "llm" in error_msg
 
-    def test_validate_credentials_simulation_only_adapter_with_real_name(self, factory, dependencies):
-        """Test that simulation-only adapters cannot be configured with non-simulation names."""
-        # Register a simulation-only adapter under a real-sounding name in the test factory
+    def test_validate_credentials_simulation_only_adapter_detection(self, factory, dependencies):
+        """Test that simulation-only adapters are dynamically detected from registry."""
+        # Register a simulation-only adapter in the test factory
         registry = factory.get_registry("metrics")
         from datetime import datetime
 
         from codetoreum.infrastructure.adapters.registry_base import AdapterMetadata
 
         # Add a fake adapter with simulation_only=True
-        registry._adapters["fake_real_name"] = Mock()
-        registry._metadata["fake_real_name"] = AdapterMetadata(
-            name="fake_real_name",
+        registry._adapters["custom_sim_only"] = Mock()
+        registry._metadata["custom_sim_only"] = AdapterMetadata(
+            name="custom_sim_only",
             adapter_type=Mock,
             description="Test adapter",
             version="1.0.0",
@@ -202,16 +202,12 @@ class TestAdapterResolver:
             config_schema=AdapterCredentialRequirement(env_vars=[], config_keys=[], simulation_only=True),
         )
 
-        # Configure to use this simulation-only adapter with non-simulation name
-        config = AdapterSelectionConfig(metrics="fake_real_name")
+        # Configure to use this simulation-only adapter
+        config = AdapterSelectionConfig(metrics="custom_sim_only")
         resolver = AdapterResolver(config, factory, dependencies)
 
-        with pytest.raises(AdapterConfigurationError) as exc_info:
-            resolver.validate_credentials()
-
-        error_msg = str(exc_info.value)
-        assert "simulation-only" in error_msg.lower()
-        assert "fake_real_name" in error_msg
+        # Should validate successfully since the adapter is registered with simulation_only=True
+        resolver.validate_credentials()
 
     def test_resolve_event_store(self, factory, dependencies, adapter_config):
         """Test resolving event store adapter."""
@@ -467,6 +463,117 @@ class TestAdapterResolver:
         # Verify by checking that validation looked at all slots
         # (we can't directly test this, but if any slot was missed,
         # later tests would fail)
+
+    def test_validate_credentials_accepts_falsy_config_values(self, factory, dependencies):
+        """Test that validate_credentials accepts falsy config values (0, '', False)."""
+        from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+
+        # Create config with falsy values in metadata
+        config = SimulationConfig.create_fast_config("test")
+        config.metadata["falsy_zero"] = 0
+        config.metadata["falsy_empty_string"] = ""
+        config.metadata["falsy_false"] = False
+
+        # Register a test adapter that requires these falsy config keys
+        from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
+
+        registry = factory.get_registry("llm")
+        registry._adapters["test_falsy"] = MockLLMAdapter
+        registry._metadata["test_falsy"] = Mock(
+            config_schema=AdapterCredentialRequirement(config_keys=("falsy_zero", "falsy_empty_string", "falsy_false"))
+        )
+
+        # Configure to use the test adapter with falsy config values
+        adapter_config = AdapterSelectionConfig(llm="test_falsy")
+        deps = AdapterDependencies(
+            event_bus=Mock(),
+            event_emitter=Mock(),
+            logger=logging.getLogger(__name__),
+            engine=Mock(),
+            config=config,
+        )
+        resolver = AdapterResolver(adapter_config, factory, deps)
+
+        # Should validate successfully without rejecting falsy values
+        resolver.validate_credentials()
+
+    def test_validate_credentials_rejects_missing_config_keys(self, factory, dependencies):
+        """Test that validate_credentials still rejects missing config keys."""
+        from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
+
+        # Create config without the required key
+        config = SimulationConfig.create_fast_config("test")
+
+        registry = factory.get_registry("llm")
+        registry._adapters["test_missing"] = MockLLMAdapter
+        registry._metadata["test_missing"] = Mock(
+            config_schema=AdapterCredentialRequirement(config_keys=("required_key",))
+        )
+
+        adapter_config = AdapterSelectionConfig(llm="test_missing")
+        deps = AdapterDependencies(
+            event_bus=Mock(),
+            event_emitter=Mock(),
+            logger=logging.getLogger(__name__),
+            engine=Mock(),
+            config=config,
+        )
+        resolver = AdapterResolver(adapter_config, factory, deps)
+
+        # Should raise error for missing config key
+        with pytest.raises(AdapterConfigurationError) as exc_info:
+            resolver.validate_credentials()
+
+        assert "required_key" in str(exc_info.value)
+
+    def test_is_simulation_only_adapter_dynamic_detection(self, factory, dependencies):
+        """Test that _is_simulation_only_adapter uses registry metadata."""
+        from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
+
+        registry = factory.get_registry("llm")
+
+        # Register an adapter with simulation_only=True
+        registry._adapters["test_sim_only"] = MockLLMAdapter
+        registry._metadata["test_sim_only"] = Mock(
+            config_schema=AdapterCredentialRequirement(simulation_only=True)
+        )
+
+        # Register an adapter with simulation_only=False
+        registry._adapters["test_real"] = MockLLMAdapter
+        registry._metadata["test_real"] = Mock(
+            config_schema=AdapterCredentialRequirement(simulation_only=False)
+        )
+
+        resolver = AdapterResolver(AdapterSelectionConfig(), factory, dependencies)
+
+        # Test simulation_only=True case
+        assert resolver._is_simulation_only_adapter(registry, "test_sim_only") is True
+
+        # Test simulation_only=False case
+        assert resolver._is_simulation_only_adapter(registry, "test_real") is False
+
+    def test_is_simulation_only_adapter_with_no_config_schema(self, factory, dependencies):
+        """Test that _is_simulation_only_adapter returns False when config_schema is None."""
+        from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
+
+        registry = factory.get_registry("llm")
+
+        # Register an adapter with no config_schema
+        registry._adapters["test_no_schema"] = MockLLMAdapter
+        registry._metadata["test_no_schema"] = Mock(config_schema=None)
+
+        resolver = AdapterResolver(AdapterSelectionConfig(), factory, dependencies)
+
+        # Should return False when config_schema is None
+        assert resolver._is_simulation_only_adapter(registry, "test_no_schema") is False
+
+    def test_is_simulation_only_adapter_with_unknown_adapter(self, factory, dependencies):
+        """Test that _is_simulation_only_adapter returns False for unknown adapters."""
+        registry = factory.get_registry("llm")
+        resolver = AdapterResolver(AdapterSelectionConfig(), factory, dependencies)
+
+        # Should return False for adapter not in registry
+        assert resolver._is_simulation_only_adapter(registry, "nonexistent_adapter") is False
 
 
 class TestAdapterResolverIntegration:

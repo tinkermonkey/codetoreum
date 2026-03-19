@@ -12,7 +12,10 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from codetoreum.infrastructure.adapters.registry_base import AdapterCredentialRequirement
+from codetoreum.infrastructure.adapters.registry_base import (
+    AdapterCredentialRequirement,
+    AdapterRegistry,
+)
 from codetoreum.infrastructure.simulation.simulation_config import AdapterSelectionConfig
 from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
 from codetoreum.ports.output.agent_repository import IAgentRepository
@@ -123,6 +126,32 @@ class AdapterResolver:
         self._deps = dependencies
         self._resolved: dict[str, Any] = {}
 
+    def _is_simulation_only_adapter(
+        self,
+        registry: "AdapterRegistry",
+        adapter_name: str,
+    ) -> bool:
+        """
+        Check if an adapter is marked as simulation-only in its metadata.
+
+        Args:
+            registry: The adapter registry to query
+            adapter_name: Name of the adapter to check
+
+        Returns:
+            True if the adapter's metadata has simulation_only=True, False otherwise
+        """
+        try:
+            metadata = registry.get_metadata(adapter_name)
+            if not metadata.config_schema or not isinstance(
+                metadata.config_schema, AdapterCredentialRequirement
+            ):
+                return False
+            return metadata.config_schema.simulation_only
+        except KeyError:
+            # Adapter not found in registry
+            return False
+
     def validate_credentials(self) -> None:
         """
         Pre-flight check: aggregate all missing credential errors.
@@ -169,8 +198,8 @@ class AdapterResolver:
             # Check for simulation-only adapters used with non-simulation names
             # A simulation-only adapter should only be used with known simulation names
             if req.simulation_only:
-                simulation_names = ("in_memory", "mock", "fake", "capturing", "simple", "configurable")
-                if impl_name not in simulation_names:
+                # Dynamically check if this adapter is registered with simulation_only=True
+                if not self._is_simulation_only_adapter(registry, impl_name):
                     errors.append(f"{field_name}: '{impl_name}' is simulation-only, no real adapter exists")
                     continue
 
@@ -181,7 +210,7 @@ class AdapterResolver:
 
             # Check required config keys
             for config_key in req.config_keys:
-                if not self._deps.config.metadata.get(config_key):
+                if config_key not in self._deps.config.metadata:
                     errors.append(f"{field_name}/{impl_name}: missing config key '{config_key}'")
 
         if errors:
