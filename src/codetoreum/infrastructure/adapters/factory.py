@@ -143,7 +143,10 @@ from codetoreum.infrastructure.adapters.registries import (
     WorkItemBranchTrackerRegistry,
     WorkItemServiceRegistry,
 )
-from codetoreum.infrastructure.adapters.registry_base import AdapterCredentialRequirement
+from codetoreum.infrastructure.adapters.registry_base import (
+    AdapterCredentialRequirement,
+    AdapterRegistry,
+)
 from codetoreum.infrastructure.resilience import (
     CLAUDE_RESILIENCE_CONFIG,
     CONTAINER_RESILIENCE_CONFIG,
@@ -1273,7 +1276,9 @@ class AdapterFactory:
             self._resilience_factory.create_resilient_repository,
         )
 
-    def _create_adapter(self, registry: "AdapterRegistry[Any]", adapter_name: str | None, adapter_type_name: str, **kwargs) -> Any:
+    def _create_adapter(
+        self, registry: AdapterRegistry[Any], adapter_name: str | None, adapter_type_name: str, **kwargs
+    ) -> Any:
         """
         Generic helper for creating simple adapters without resilience.
 
@@ -1407,7 +1412,9 @@ class AdapterFactory:
 
     def create_work_item_branch_tracker(self, adapter_name: str | None = None, **kwargs) -> IWorkItemBranchTracker:
         """Create a work item branch tracker adapter instance."""
-        return self._create_adapter(self._work_item_branch_tracker_registry, adapter_name, "work item branch tracker", **kwargs)
+        return self._create_adapter(
+            self._work_item_branch_tracker_registry, adapter_name, "work item branch tracker", **kwargs
+        )
 
     def create_work_item_service(self, adapter_name: str | None = None, **kwargs) -> IWorkItemService:
         """Create a work item service adapter instance."""
@@ -1417,13 +1424,17 @@ class AdapterFactory:
         self, adapter_name: str | None = None, **kwargs
     ) -> IRepairCycleCheckpointStore:
         """Create a repair cycle checkpoint store adapter instance."""
-        return self._create_adapter(self._repair_cycle_checkpoint_registry, adapter_name, "repair cycle checkpoint store", **kwargs)
+        return self._create_adapter(
+            self._repair_cycle_checkpoint_registry, adapter_name, "repair cycle checkpoint store", **kwargs
+        )
 
     def create_active_workflow_run_registry(
         self, adapter_name: str | None = None, **kwargs
     ) -> IActiveWorkflowRunRegistry:
         """Create an active workflow run registry adapter instance."""
-        return self._create_adapter(self._active_workflow_run_registry_registry, adapter_name, "active workflow run registry", **kwargs)
+        return self._create_adapter(
+            self._active_workflow_run_registry_registry, adapter_name, "active workflow run registry", **kwargs
+        )
 
     def _apply_resilience_wrapper(
         self,
