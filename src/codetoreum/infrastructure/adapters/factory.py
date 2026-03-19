@@ -10,6 +10,7 @@ Provides:
 
 import logging
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, TypeVar
 
@@ -1126,26 +1127,13 @@ class AdapterFactory:
         adapter = self._ticket_system_registry.create_instance(adapter_name, **kwargs)
 
         # Apply resilience if enabled
-        if self._config.enable_resilience:
-            try:
-                service_config = None
-                if resilience_config:
-                    service_config = self._convert_resilience_config_to_dict(resilience_config)
-                else:
-                    default_config = self._get_resilience_config("ticket_system", GITHUB_RESILIENCE_CONFIG)
-                    service_config = self._convert_resilience_config_to_dict(default_config)
-
-                adapter = self._resilience_factory.create_resilient_ticket_system(
-                    adapter, service_config=service_config
-                )
-            except Exception as e:
-                logger.error(
-                    f"Failed to apply resilience to ticket system adapter: {e}",
-                    extra={"error_id": "ERR_CONFIGURATION_ERROR"},
-                )
-                raise
-
-        return adapter
+        return self._apply_resilience_wrapper(
+            adapter,
+            "ticket_system",
+            GITHUB_RESILIENCE_CONFIG,
+            resilience_config,
+            self._resilience_factory.create_resilient_ticket_system,
+        )
 
     def create_llm_provider(
         self,
@@ -1185,24 +1173,13 @@ class AdapterFactory:
         adapter = self._llm_provider_registry.create_instance(adapter_name, **kwargs)
 
         # Apply resilience if enabled
-        if self._config.enable_resilience:
-            try:
-                service_config = None
-                if resilience_config:
-                    service_config = self._convert_resilience_config_to_dict(resilience_config)
-                else:
-                    default_config = self._get_resilience_config("llm_provider", CLAUDE_RESILIENCE_CONFIG)
-                    service_config = self._convert_resilience_config_to_dict(default_config)
-
-                adapter = self._resilience_factory.create_resilient_llm_provider(adapter, service_config=service_config)
-            except Exception as e:
-                logger.error(
-                    f"Failed to apply resilience to LLM provider adapter: {e}",
-                    extra={"error_id": "ERR_CONFIGURATION_ERROR"},
-                )
-                raise
-
-        return adapter
+        return self._apply_resilience_wrapper(
+            adapter,
+            "llm_provider",
+            CLAUDE_RESILIENCE_CONFIG,
+            resilience_config,
+            self._resilience_factory.create_resilient_llm_provider,
+        )
 
     def create_container(
         self,
@@ -1242,24 +1219,13 @@ class AdapterFactory:
         adapter = self._container_registry.create_instance(adapter_name, **kwargs)
 
         # Apply resilience if enabled
-        if self._config.enable_resilience:
-            try:
-                service_config = None
-                if resilience_config:
-                    service_config = self._convert_resilience_config_to_dict(resilience_config)
-                else:
-                    default_config = self._get_resilience_config("container", CONTAINER_RESILIENCE_CONFIG)
-                    service_config = self._convert_resilience_config_to_dict(default_config)
-
-                adapter = self._resilience_factory.create_resilient_container(adapter, service_config=service_config)
-            except Exception as e:
-                logger.error(
-                    f"Failed to apply resilience to container adapter: {e}",
-                    extra={"error_id": "ERR_CONFIGURATION_ERROR"},
-                )
-                raise
-
-        return adapter
+        return self._apply_resilience_wrapper(
+            adapter,
+            "container",
+            CONTAINER_RESILIENCE_CONFIG,
+            resilience_config,
+            self._resilience_factory.create_resilient_container,
+        )
 
     def create_repository(
         self,
@@ -1299,26 +1265,15 @@ class AdapterFactory:
         adapter = self._repository_registry.create_instance(adapter_name, **kwargs)
 
         # Apply resilience if enabled
-        if self._config.enable_resilience:
-            try:
-                service_config = None
-                if resilience_config:
-                    service_config = self._convert_resilience_config_to_dict(resilience_config)
-                else:
-                    default_config = self._get_resilience_config("repository", REPOSITORY_RESILIENCE_CONFIG)
-                    service_config = self._convert_resilience_config_to_dict(default_config)
+        return self._apply_resilience_wrapper(
+            adapter,
+            "repository",
+            REPOSITORY_RESILIENCE_CONFIG,
+            resilience_config,
+            self._resilience_factory.create_resilient_repository,
+        )
 
-                adapter = self._resilience_factory.create_resilient_repository(adapter, service_config=service_config)
-            except Exception as e:
-                logger.error(
-                    f"Failed to apply resilience to repository adapter: {e}",
-                    extra={"error_id": "ERR_CONFIGURATION_ERROR"},
-                )
-                raise
-
-        return adapter
-
-    def _create_adapter(self, registry: Any, adapter_name: str | None, adapter_type_name: str, **kwargs) -> Any:
+    def _create_adapter(self, registry: "AdapterRegistry[Any]", adapter_name: str | None, adapter_type_name: str, **kwargs) -> Any:
         """
         Generic helper for creating simple adapters without resilience.
 
@@ -1364,19 +1319,7 @@ class AdapterFactory:
             KeyError: If adapter is not registered
             ValueError: If no default adapter is configured
         """
-        # Determine adapter name
-        if adapter_name is None:
-            adapter_name = self._event_store_registry.get_default_name()
-            if adapter_name is None:
-                message = "No default event store adapter configured"
-                raise ValueError(message)
-
-        logger.info(f"Creating event store adapter: {adapter_name}")
-
-        # Create adapter instance (no resilience applied)
-        adapter = self._event_store_registry.create_instance(adapter_name, **kwargs)
-
-        return adapter
+        return self._create_adapter(self._event_store_registry, adapter_name, "event store", **kwargs)
 
     def create_storage(self, adapter_name: str | None = None, **kwargs) -> IStorage:
         """Create a storage adapter instance."""
@@ -1481,6 +1424,52 @@ class AdapterFactory:
     ) -> IActiveWorkflowRunRegistry:
         """Create an active workflow run registry adapter instance."""
         return self._create_adapter(self._active_workflow_run_registry_registry, adapter_name, "active workflow run registry", **kwargs)
+
+    def _apply_resilience_wrapper(
+        self,
+        adapter: Any,
+        service_type: str,
+        default_config: ServiceResilienceConfig,
+        resilience_config: ServiceResilienceConfig | None,
+        resilience_factory_method: Callable[[Any, dict[str, Any]], Any],
+    ) -> Any:
+        """
+        Apply resilience wrapping to an adapter with standardized error handling.
+
+        Consolidates the identical ~15-line resilience-wrapping pattern used across
+        multiple create_* methods (ticket_system, llm_provider, container, repository).
+
+        Args:
+            adapter: The base adapter instance to wrap
+            service_type: Service type key for config lookup (e.g., "ticket_system")
+            default_config: Default resilience configuration for this service
+            resilience_config: Custom resilience configuration (None = use default)
+            resilience_factory_method: Callable to apply resilience wrapping
+
+        Returns:
+            The adapter wrapped with resilience decorators
+
+        Raises:
+            Exception: Re-raised if resilience application fails
+        """
+        if not self._config.enable_resilience:
+            return adapter
+
+        try:
+            service_config = None
+            if resilience_config:
+                service_config = self._convert_resilience_config_to_dict(resilience_config)
+            else:
+                default_resilience = self._get_resilience_config(service_type, default_config)
+                service_config = self._convert_resilience_config_to_dict(default_resilience)
+
+            return resilience_factory_method(adapter, service_config=service_config)
+        except Exception as e:
+            logger.error(
+                f"Failed to apply resilience to {service_type} adapter: {e}",
+                extra={"error_id": "ERR_CONFIGURATION_ERROR"},
+            )
+            raise
 
     def _convert_resilience_config_to_dict(
         self, resilience_config: ServiceResilienceConfig | None
