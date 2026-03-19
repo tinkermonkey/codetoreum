@@ -126,31 +126,34 @@ class AdapterResolver:
         self._deps = dependencies
         self._resolved: dict[str, Any] = {}
 
-    def _is_simulation_only_adapter(
-        self,
-        registry: "AdapterRegistry",
-        adapter_name: str,
-    ) -> bool:
+    def _get_simulation_only_adapters(self, registry: "AdapterRegistry") -> set[str]:
         """
-        Check if an adapter is marked as simulation-only in its metadata.
+        Get the set of adapter names that are marked as simulation-only.
+
+        Queries the registry metadata to find all adapters registered with
+        simulation_only=True in their config schema. This serves as an independent
+        source of truth for validation.
 
         Args:
             registry: The adapter registry to query
-            adapter_name: Name of the adapter to check
 
         Returns:
-            True if the adapter's metadata has simulation_only=True, False otherwise
+            Set of adapter names that have simulation_only=True
         """
-        try:
-            metadata = registry.get_metadata(adapter_name)
-            if not metadata.config_schema or not isinstance(
-                metadata.config_schema, AdapterCredentialRequirement
-            ):
-                return False
-            return metadata.config_schema.simulation_only
-        except KeyError:
-            # Adapter not found in registry
-            return False
+        simulation_adapters = set()
+        for adapter_name in registry.list_adapters():
+            try:
+                metadata = registry.get_metadata(adapter_name)
+                if (
+                    metadata.config_schema
+                    and isinstance(metadata.config_schema, AdapterCredentialRequirement)
+                    and metadata.config_schema.simulation_only
+                ):
+                    simulation_adapters.add(adapter_name)
+            except KeyError:
+                # Skip adapters that can't be retrieved
+                continue
+        return simulation_adapters
 
     def validate_credentials(self) -> None:
         """
@@ -159,9 +162,9 @@ class AdapterResolver:
         Validates all 26 adapter slots before constructing any adapter.
         Checks that:
         - Implementation names are registered in factories
-        - Simulation-only adapters are not used with non-simulation names
+        - Simulation-only adapters are not used in production (non-simulation names)
         - All required environment variables exist
-        - All required config keys exist
+        - All required config keys exist (accepting falsy values like 0, "", False)
 
         Raises:
             AdapterConfigurationError: If any validation errors are found
@@ -195,20 +198,21 @@ class AdapterResolver:
             if not req or not isinstance(req, AdapterCredentialRequirement):
                 continue
 
-            # Check for simulation-only adapters used with non-simulation names
-            # A simulation-only adapter should only be used with known simulation names
+            # Check if a non-simulation adapter is being used with simulation_only requirement
+            # Get the independent set of simulation-only adapters and validate against it
             if req.simulation_only:
-                # Dynamically check if this adapter is registered with simulation_only=True
-                if not self._is_simulation_only_adapter(registry, impl_name):
-                    errors.append(f"{field_name}: '{impl_name}' is simulation-only, no real adapter exists")
+                simulation_adapters = self._get_simulation_only_adapters(registry)
+                if impl_name not in simulation_adapters:
+                    errors.append(f"{field_name}: '{impl_name}' is not registered as simulation-only")
                     continue
 
             # Check required environment variables
+            # Use membership test (not in) instead of truthiness check to accept falsy values
             for env_var in req.env_vars:
-                if not os.environ.get(env_var):
+                if env_var not in os.environ:
                     errors.append(f"{field_name}/{impl_name}: missing env var '{env_var}'")
 
-            # Check required config keys
+            # Check required config keys (accept falsy values like 0, "", False)
             for config_key in req.config_keys:
                 if config_key not in self._deps.config.metadata:
                     errors.append(f"{field_name}/{impl_name}: missing config key '{config_key}'")
