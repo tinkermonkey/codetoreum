@@ -182,7 +182,6 @@ class TestAdapterResolver:
         assert "nonexistent1" in error_msg or "ticket" in error_msg
         assert "nonexistent2" in error_msg or "llm" in error_msg
 
-
     def test_resolve_event_store(self, factory, dependencies, adapter_config):
         """Test resolving event store adapter."""
         resolver = AdapterResolver(adapter_config, factory, dependencies)
@@ -507,9 +506,7 @@ class TestAdapterResolver:
         # Register an adapter that requires an env var
         registry = factory.get_registry("llm")
         registry._adapters["test_env_var"] = MockLLMAdapter
-        registry._metadata["test_env_var"] = Mock(
-            config_schema=AdapterCredentialRequirement(env_vars=("FALSY_VAR",))
-        )
+        registry._metadata["test_env_var"] = Mock(config_schema=AdapterCredentialRequirement(env_vars=("FALSY_VAR",)))
 
         adapter_config = AdapterSelectionConfig(llm="test_env_var")
         resolver = AdapterResolver(adapter_config, factory, dependencies)
@@ -550,7 +547,6 @@ class TestAdapterResolver:
             resolver.validate_credentials()
 
         assert "MISSING_VAR_12345" in str(exc_info.value)
-
 
 
 class TestAdapterResolverIntegration:

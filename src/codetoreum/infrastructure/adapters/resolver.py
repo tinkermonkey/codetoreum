@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Any
 
 from codetoreum.infrastructure.adapters.registry_base import (
     AdapterCredentialRequirement,
-    AdapterRegistry,
 )
 from codetoreum.infrastructure.simulation.simulation_config import AdapterSelectionConfig
 from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
