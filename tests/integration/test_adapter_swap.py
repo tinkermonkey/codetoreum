@@ -170,7 +170,7 @@ class TestAdapterCredentialValidation:
 
             # If setup succeeds, credentials validation passed
             assert bootstrap.adapters is not None
-            assert bootstrap.adapters.board_service is not None
+            assert bootstrap.adapters.board is not None
             assert bootstrap.adapters.ticket_system is not None
 
             await bootstrap.teardown()
