@@ -964,32 +964,45 @@ class TestCLIAdapterIntegration:
         # Error message should mention format
         assert "Invalid adapter override format" in result.output or "Expected format" in result.output
 
-    @pytest.mark.asyncio
-    async def test_cli_adapter_happy_path_valid_swap(self):
-        """Test CLI with valid --adapter flag successfully swaps adapter and boots.
+    def test_cli_adapter_happy_path_valid_swap(self):
+        """Test CLI with valid --adapter flag in happy path without adapter configuration errors.
 
         This is the happy path test ensuring that providing a valid adapter swap
-        (slot=implementation format) allows the application to start successfully
-        with the swapped adapter configuration.
+        (slot=implementation format) does NOT produce adapter configuration errors.
+        The test verifies that the adapter validation logic accepts the valid format
+        and passes it to bootstrap without raising configuration errors.
         """
+        from unittest.mock import patch, AsyncMock
+
         runner = CliRunner()
 
-        # Use valid adapter swap: board=mock (both are valid, swap is explicit)
-        # Verify argument parsing succeeds without adapter configuration errors
-        result = runner.invoke(
-            main,
-            [
-                "--adapter",
-                "board=mock",
-                "--help",  # Use --help to test argument parsing without starting server
-            ],
-        )
+        # Patch uvicorn.Server.serve() to exit immediately without actually starting the server
+        # This allows the test to complete. The serve() method is async and blocking,
+        # so we patch it to return immediately (simulating graceful shutdown)
+        async def mock_serve():
+            return  # Just return without doing anything
 
-        # Argument parsing should succeed
-        assert result.exit_code == 0, f"Expected successful argument parsing, got exit code {result.exit_code}: {result.output}"
+        with patch("uvicorn.Server.serve", new_callable=AsyncMock, side_effect=mock_serve):
+            result = runner.invoke(
+                main,
+                [
+                    "--adapter",
+                    "board=mock",  # Valid format: registered slot with registered implementation
+                    "--no-seed",  # Skip data seeding
+                ],
+            )
 
-        # Verify the help output is displayed (shows command was recognized)
-        assert "Usage:" in result.output or "simulation-server" in result.output.lower()
+        # The test passes if no adapter configuration errors occur in the output
+        # If adapter validation failed, we'd see one of these error messages
+        assert (
+            "Unknown adapter slot" not in result.output
+            and "Unknown implementation" not in result.output
+            and "Invalid adapter override format" not in result.output
+        ), f"Unexpected adapter configuration error. Output: {result.output}"
+
+        # Verify we reached the point where the adapter was accepted and bootstrap completed
+        # (otherwise we'd see adapter validation errors)
+        assert result.exit_code == 0, f"Expected exit code 0, got {result.exit_code}. Output: {result.output}"
 
 
 if __name__ == "__main__":
