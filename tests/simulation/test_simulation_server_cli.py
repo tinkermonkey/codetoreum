@@ -972,7 +972,7 @@ class TestCLIAdapterIntegration:
         The test verifies that the adapter validation logic accepts the valid format
         and passes it to bootstrap without raising configuration errors.
         """
-        from unittest.mock import patch, AsyncMock
+        from unittest.mock import AsyncMock, patch
 
         runner = CliRunner()
 
