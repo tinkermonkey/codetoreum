@@ -245,7 +245,10 @@ class AdapterResolver:
 
     def resolve_board(self) -> IBoardService:
         """Resolve board service adapter."""
-        return self._factory.create_board_service(adapter_name=self._config.board)
+        return self._factory.create_board_service(
+            adapter_name=self._config.board,
+            event_emitter=self._deps.event_emitter,
+        )
 
     def resolve_discussion_adapter(self) -> IDiscussionAdapter:
         """Resolve discussion adapter."""
@@ -298,7 +301,10 @@ class AdapterResolver:
 
     def resolve_version_control(self) -> IVersionControlService:
         """Resolve version control service adapter."""
-        return self._factory.create_version_control_service(adapter_name=self._config.version_control)
+        return self._factory.create_version_control_service(
+            adapter_name=self._config.version_control,
+            event_emitter=self._deps.event_emitter,
+        )
 
     def resolve_project_manager(self) -> IProjectManagerService:
         """Resolve project manager service adapter."""
