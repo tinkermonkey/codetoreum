@@ -22,9 +22,7 @@ from codetoreum.infrastructure.simulation.simulation_config import (
 )
 
 
-def assert_same_event_types(
-    events_a: list[CodetoreumEvent], events_b: list[CodetoreumEvent]
-) -> None:
+def assert_same_event_types(events_a: list[CodetoreumEvent], events_b: list[CodetoreumEvent]) -> None:
     """Assert that two event sequences have identical event types in order.
 
     Args:
@@ -36,9 +34,7 @@ def assert_same_event_types(
     """
     types_a = [type(e).__name__ for e in events_a]
     types_b = [type(e).__name__ for e in events_b]
-    assert (
-        types_a == types_b
-    ), f"Event sequences differ:\nA: {types_a}\nB: {types_b}"
+    assert types_a == types_b, f"Event sequences differ:\nA: {types_a}\nB: {types_b}"
 
 
 class TestAdapterBootstrapBasics:
@@ -99,9 +95,7 @@ class TestAdapterCredentialValidation:
         # Verify error message includes: slot, implementation, and missing env var
         error_message = str(exc_info.value)
         assert "board" in error_message.lower(), "Error should mention 'board' slot"
-        assert (
-            "github" in error_message.lower()
-        ), "Error should mention 'github' implementation"
+        assert "github" in error_message.lower(), "Error should mention 'github' implementation"
         assert (
             "GITHUB_TOKEN" in error_message or "GITHUB_ORG" in error_message
         ), "Error should mention missing credentials"
@@ -132,14 +126,12 @@ class TestAdapterCredentialValidation:
 
         error_message = str(exc_info.value)
         # Error should mention at least some of the missing credentials
-        assert "GITHUB" in error_message or "CLAUDE" in error_message, (
-            "Error should mention credentials for at least one adapter"
-        )
+        assert (
+            "GITHUB" in error_message or "CLAUDE" in error_message
+        ), "Error should mention credentials for at least one adapter"
 
     @pytest.mark.asyncio
-    async def test_real_adapter_with_credentials_present_passes_validation(
-        self, monkeypatch: Any
-    ) -> None:
+    async def test_real_adapter_with_credentials_present_passes_validation(self, monkeypatch: Any) -> None:
         """Verify real adapter validates successfully when credentials are present.
 
         This test ensures that providing required credentials allows the adapter
@@ -177,9 +169,7 @@ class TestAdapterCredentialValidation:
         except AdapterConfigurationError as e:
             # If credential validation still fails, it should NOT be about missing GITHUB_TOKEN
             error_msg = str(e).lower()
-            assert "github_token" not in error_msg, (
-                f"Credentials should be present, but got: {e}"
-            )
+            assert "github_token" not in error_msg, f"Credentials should be present, but got: {e}"
         except Exception:
             # Other errors (network, GitHub API, etc.) are acceptable
             # This test validates credential checking, not full adapter instantiation
@@ -199,6 +189,7 @@ class TestAdapterSwappingEquivalence:
         and explicitly setting ticket="in_memory" are functionally equivalent,
         validating adapter parity and configuration substitutability.
         """
+
         # Helper function to collect events from bootstrap
         async def collect_events_from_bootstrap(
             config: SimulationConfig,
@@ -330,9 +321,6 @@ class TestAdapterConfigurationErrors:
         has_impl = "github" in error_message.lower()
         has_var = "GITHUB" in error_message
 
-        assert (
-            has_slot and (has_impl or has_var)
-        ), (
-            f"Error message should include slot and (implementation or var). "
-            f"Got: {error_message}"
+        assert has_slot and (has_impl or has_var), (
+            f"Error message should include slot and (implementation or var). " f"Got: {error_message}"
         )
