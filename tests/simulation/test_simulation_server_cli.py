@@ -634,7 +634,7 @@ class TestAdapterOverrides:
         factory = AdapterFactory(factory_config)
 
         # Apply override
-        overrides = (("board", "mock"),)
+        overrides = ("board=mock",)
         result = apply_adapter_overrides(config, overrides, factory)
 
         # Verify override was applied
@@ -659,9 +659,9 @@ class TestAdapterOverrides:
 
         # Apply multiple overrides
         overrides = (
-            ("board", "mock"),
-            ("llm", "mock"),
-            ("container", "fake"),
+            "board=mock",
+            "llm=mock",
+            "container=fake",
         )
         result = apply_adapter_overrides(config, overrides, factory)
 
@@ -708,7 +708,7 @@ class TestAdapterOverrides:
         factory = AdapterFactory(factory_config)
 
         # Try to use invalid slot name
-        overrides = (("invalid_slot_xyz", "mock"),)
+        overrides = ("invalid_slot_xyz=mock",)
 
         with pytest.raises(click.UsageError) as exc_info:
             apply_adapter_overrides(config, overrides, factory)
@@ -733,7 +733,7 @@ class TestAdapterOverrides:
         factory = AdapterFactory(factory_config)
 
         # Try to use invalid impl name for a valid slot
-        overrides = (("board", "invalid_impl_xyz"),)
+        overrides = ("board=invalid_impl_xyz",)
 
         with pytest.raises(click.UsageError) as exc_info:
             apply_adapter_overrides(config, overrides, factory)
@@ -760,9 +760,9 @@ class TestAdapterOverrides:
 
         # Try to use multiple invalid overrides
         overrides = (
-            ("invalid_slot1", "mock"),
-            ("board", "invalid_impl1"),
-            ("invalid_slot2", "invalid_impl2"),
+            "invalid_slot1=mock",
+            "board=invalid_impl1",
+            "invalid_slot2=invalid_impl2",
         )
 
         with pytest.raises(click.UsageError) as exc_info:
@@ -777,7 +777,7 @@ class TestAdapterOverrides:
     async def test_bootstrap_with_adapter_overrides(self):
         """Test bootstrap applies adapter overrides correctly."""
         # Test that bootstrap_application accepts and applies adapter overrides
-        overrides = (("llm", "mock"),)
+        overrides = ("llm=mock",)
         bootstrap, _ = await bootstrap_application(
             scenario="default",
             scenario_file=None,
@@ -802,7 +802,7 @@ class TestAdapterOverrides:
 
         assert result.exit_code == 0
         assert "--adapter" in result.output
-        assert "SLOT IMPL" in result.output
+        assert "SLOT=IMPL" in result.output
         assert "Override a single adapter" in result.output
 
 
@@ -878,8 +878,7 @@ class TestCLIAdapterIntegration:
             main,
             [
                 "--adapter",
-                "invalid_slot_name",
-                "mock",
+                "invalid_slot_name=mock",
                 "--no-seed",
             ],
         )
@@ -896,8 +895,7 @@ class TestCLIAdapterIntegration:
             main,
             [
                 "--adapter",
-                "board",
-                "invalid_impl_name",
+                "board=invalid_impl_name",
                 "--no-seed",
             ],
         )
@@ -910,10 +908,61 @@ class TestCLIAdapterIntegration:
     def test_cli_adapter_option_parsing(self):
         """Test CLI parser accepts --adapter option with valid syntax."""
         runner = CliRunner()
-        # Test that --help with --adapter parses successfully (option exists and accepts tuple)
-        result = runner.invoke(main, ["--adapter", "board", "mock", "--help"])
+        # Test that --help with --adapter parses successfully (option exists and accepts SLOT=IMPL format)
+        result = runner.invoke(main, ["--adapter", "board=mock", "--help"])
         assert result.exit_code == 0
         assert "--adapter" in result.output
+
+    def test_cli_adapter_invalid_format_missing_equals(self):
+        """Test CLI with invalid adapter format (missing equals sign)."""
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            [
+                "--adapter",
+                "board mock",
+                "--no-seed",
+            ],
+        )
+
+        # Should fail with non-zero exit code
+        assert result.exit_code != 0
+        # Error message should mention format
+        assert "Invalid adapter override format" in result.output or "Expected format" in result.output
+
+    def test_cli_adapter_invalid_format_no_slot(self):
+        """Test CLI with invalid adapter format (no slot name)."""
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            [
+                "--adapter",
+                "=mock",
+                "--no-seed",
+            ],
+        )
+
+        # Should fail with non-zero exit code
+        assert result.exit_code != 0
+        # Error message should mention format
+        assert "Invalid adapter override format" in result.output or "Expected format" in result.output
+
+    def test_cli_adapter_invalid_format_no_impl(self):
+        """Test CLI with invalid adapter format (no implementation name)."""
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            [
+                "--adapter",
+                "board=",
+                "--no-seed",
+            ],
+        )
+
+        # Should fail with non-zero exit code
+        assert result.exit_code != 0
+        # Error message should mention format
+        assert "Invalid adapter override format" in result.output or "Expected format" in result.output
 
 
 if __name__ == "__main__":

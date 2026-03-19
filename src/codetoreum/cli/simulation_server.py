@@ -77,9 +77,41 @@ def validate_speed_multiplier(speed: float) -> None:
         raise click.BadParameter(msg)
 
 
+def parse_adapter_override(override_str: str) -> tuple[str, str]:
+    """
+    Parse adapter override string in SLOT=IMPL format.
+
+    Args:
+        override_str: Override string in format "slot=impl"
+
+    Returns:
+        Tuple of (slot_name, impl_name)
+
+    Raises:
+        click.BadParameter: If format is invalid
+    """
+    if "=" not in override_str:
+        msg = (
+            f"Invalid adapter override format: '{override_str}'. "
+            "Expected format: slot=impl (e.g., 'board=github')"
+        )
+        raise click.BadParameter(msg)
+
+    parts = override_str.split("=", 1)
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        msg = (
+            f"Invalid adapter override format: '{override_str}'. "
+            "Expected format: slot=impl (e.g., 'board=github')"
+        )
+        raise click.BadParameter(msg)
+
+    slot, impl = parts
+    return slot.strip(), impl.strip()
+
+
 def apply_adapter_overrides(
     config: SimulationConfig,
-    overrides: tuple[tuple[str, str], ...],
+    overrides: tuple[str, ...],
     factory: AdapterFactory,
 ) -> SimulationConfig:
     """
@@ -89,7 +121,7 @@ def apply_adapter_overrides(
 
     Args:
         config: SimulationConfig to modify
-        overrides: Tuple of (slot_name, impl_name) tuples from CLI --adapter flags
+        overrides: Tuple of override strings in "slot=impl" format from CLI --adapter flags
         factory: AdapterFactory for validation
 
     Returns:
@@ -97,6 +129,7 @@ def apply_adapter_overrides(
 
     Raises:
         click.UsageError: If any slot or impl name is unknown
+        click.BadParameter: If any override has invalid format
     """
     if not overrides:
         return config
@@ -104,7 +137,13 @@ def apply_adapter_overrides(
     errors = []
     current = {f: getattr(config.adapters, f) for f in AdapterSelectionConfig.__dataclass_fields__}
 
-    for slot, impl in overrides:
+    for override_str in overrides:
+        # Parse SLOT=IMPL format
+        try:
+            slot, impl = parse_adapter_override(override_str)
+        except click.BadParameter as e:
+            errors.append(str(e))
+            continue
         # Validate slot name
         if slot not in AdapterSelectionConfig.__dataclass_fields__:
             valid_slots = sorted(AdapterSelectionConfig.__dataclass_fields__)
@@ -272,7 +311,7 @@ async def bootstrap_application(
     scenario_file: Path | None,
     speed_multiplier: float,
     auto_advance: bool,
-    adapter_overrides: tuple[tuple[str, str], ...] | None = None,
+    adapter_overrides: tuple[str, ...] | None = None,
 ) -> tuple[SimulationApplicationBootstrap, AdapterFactory]:
     """
     Bootstrap the application in simulation mode.
@@ -282,7 +321,7 @@ async def bootstrap_application(
         scenario_file: Optional custom scenario file path
         speed_multiplier: Time speed multiplier
         auto_advance: Whether to automatically advance simulation clock
-        adapter_overrides: Optional tuple of (slot, impl) adapter overrides from CLI
+        adapter_overrides: Optional tuple of "slot=impl" adapter overrides from CLI
 
     Returns:
         Tuple of (configured SimulationApplicationBootstrap instance, AdapterFactory instance)
@@ -561,7 +600,7 @@ async def main_async(
     auto_advance: bool,
     no_seed: bool,
     debug: bool,
-    adapter_overrides: tuple[tuple[str, str], ...] | None = None,
+    adapter_overrides: tuple[str, ...] | None = None,
 ) -> None:
     """
     Main async entry point for simulation server.
@@ -575,7 +614,7 @@ async def main_async(
         auto_advance: Whether to automatically advance simulation clock
         no_seed: Skip seeding if True
         debug: Debug mode enabled
-        adapter_overrides: Optional tuple of (slot, impl) adapter overrides from CLI
+        adapter_overrides: Optional tuple of "slot=impl" adapter overrides from CLI
     """
     bootstrap = None
     shutdown_requested = False
@@ -706,9 +745,8 @@ async def main_async(
     "--adapter",
     "adapter_overrides",
     multiple=True,
-    type=(str, str),
-    metavar="SLOT IMPL",
-    help="Override a single adapter: --adapter board github. Repeatable.",
+    metavar="SLOT=IMPL",
+    help="Override a single adapter: --adapter board=github. Repeatable.",
 )
 @click.option(
     "--debug",
@@ -723,7 +761,7 @@ def main(
     speed_multiplier: float,
     auto_advance: bool,
     no_seed: bool,
-    adapter_overrides: tuple[tuple[str, str], ...],
+    adapter_overrides: tuple[str, ...],
     debug: bool,
 ) -> None:
     """
@@ -753,10 +791,10 @@ def main(
         python -m codetoreum.cli.simulation_server --no-seed
 
         # Override adapters (repeatable)
-        python -m codetoreum.cli.simulation_server --adapter board github --adapter llm mock
+        python -m codetoreum.cli.simulation_server --adapter board=github --adapter llm=mock
 
         # Override ticket system to use in_memory instead of mock
-        python -m codetoreum.cli.simulation_server --adapter ticket in_memory
+        python -m codetoreum.cli.simulation_server --adapter ticket=in_memory
     """
     # Validate inputs
     try:
