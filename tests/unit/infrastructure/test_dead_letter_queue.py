@@ -496,3 +496,87 @@ class TestDeadLetterQueue:
 
         # Should have been retried at least once
         assert retry_count >= 1
+
+    @pytest.mark.asyncio
+    async def test_retry_loop_with_circuit_breaker(self):
+        """Test that retry loop uses circuit breaker to prevent unbounded errors."""
+        dlq = DeadLetterQueue(
+            retry_interval_seconds=0.05,
+            retry_loop_failure_threshold=2,
+            retry_loop_timeout_seconds=0.2,
+        )
+
+        loop_call_count = 0
+
+        # Patch _process_retryable_events to fail
+        original_process = dlq._process_retryable_events
+
+        async def failing_process():
+            nonlocal loop_call_count
+            loop_call_count += 1
+            raise Exception("Process failure")
+
+        dlq._process_retryable_events = failing_process
+
+        async def dummy_handler(event_type, event_data):
+            pass
+
+        await dlq.start_retry_processor(dummy_handler)
+
+        # Wait for circuit breaker to open (after 2 failures)
+        await asyncio.sleep(0.35)
+
+        # Circuit breaker should be OPEN now
+        assert dlq._retry_loop_circuit_breaker.is_open()
+
+        # Record call count when circuit is open
+        calls_when_open = loop_call_count
+
+        # Wait a bit more - calls should be throttled by circuit breaker
+        await asyncio.sleep(0.3)
+
+        # New calls should be much fewer due to circuit breaker backoff
+        calls_after_open = loop_call_count - calls_when_open
+        # With circuit breaker open and backoff, we shouldn't get many new calls
+        assert calls_after_open <= 2
+
+        await dlq.stop_retry_processor()
+
+    @pytest.mark.asyncio
+    async def test_retry_loop_circuit_breaker_recovery(self):
+        """Test that circuit breaker recovers and retry loop resumes."""
+        dlq = DeadLetterQueue(
+            retry_interval_seconds=0.05,
+            retry_loop_failure_threshold=2,
+            retry_loop_timeout_seconds=0.15,
+        )
+
+        call_count = 0
+
+        async def initially_failing_process():
+            nonlocal call_count
+            call_count += 1
+            if call_count < 4:
+                raise Exception("Temporary failure")
+
+        dlq._process_retryable_events = initially_failing_process
+
+        async def dummy_handler(event_type, event_data):
+            pass
+
+        await dlq.start_retry_processor(dummy_handler)
+
+        # Wait for circuit to open
+        await asyncio.sleep(0.2)
+
+        # Circuit should be open
+        assert dlq._retry_loop_circuit_breaker.is_open()
+
+        # Wait for recovery timeout
+        await asyncio.sleep(0.25)
+
+        # Circuit should attempt recovery (HALF_OPEN or CLOSED)
+        state = dlq._retry_loop_circuit_breaker.get_state()
+        assert state.value in ["half_open", "closed"]
+
+        await dlq.stop_retry_processor()

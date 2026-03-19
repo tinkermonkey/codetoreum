@@ -15,6 +15,7 @@ from typing import Any
 from uuid import uuid4
 
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.infrastructure.resilience.circuit_breaker import CircuitBreaker
 
 logger = logging.getLogger(__name__)
 
@@ -189,6 +190,8 @@ class DeadLetterQueue:
         base_delay_seconds: float = 60.0,
         exponential_base: float = 2.0,
         retry_interval_seconds: float = 30.0,
+        retry_loop_failure_threshold: int = 5,
+        retry_loop_timeout_seconds: float = 300.0,
     ):
         """
         Initialize dead letter queue.
@@ -199,6 +202,8 @@ class DeadLetterQueue:
             base_delay_seconds: Base delay for exponential backoff
             exponential_base: Base for exponential calculation
             retry_interval_seconds: How often to check for retryable events
+            retry_loop_failure_threshold: Consecutive failures before circuit opens
+            retry_loop_timeout_seconds: Time to wait before attempting recovery
         """
         self._storage: dict[str, FailedEvent] = storage if storage is not None else {}
         self._max_retries = max_retries
@@ -215,6 +220,14 @@ class DeadLetterQueue:
         self._retry_task: asyncio.Task | None = None
         self._running = False
         self._retry_handler: Callable | None = None
+
+        # Circuit breaker for retry loop to prevent unbounded error logs
+        self._retry_loop_circuit_breaker = CircuitBreaker(
+            failure_threshold=retry_loop_failure_threshold,
+            timeout_seconds=retry_loop_timeout_seconds,
+            success_threshold=1,
+            expected_exceptions=(Exception,),
+        )
 
         # Register this instance in the global registry
         _dlq_registry.register(self)
@@ -367,24 +380,71 @@ class DeadLetterQueue:
                 pass
 
     async def _retry_loop(self) -> None:
-        """Background loop for processing retries."""
+        """
+        Background loop for processing retries with circuit breaker protection.
+
+        Uses circuit breaker to prevent unbounded error logs on persistent failures.
+        When circuit opens, retry loop backs off exponentially before attempting recovery.
+        """
+        consecutive_successes = 0
+
         while self._running:
             try:
-                await self._process_retryable_events()
-            except Exception as e:
-                # Log error but continue processing
-                logger.error(
-                    "Error processing retryable events in dead letter queue: %s",
-                    str(e),
-                    exc_info=True,
-                    extra={
-                        "component": "dead_letter_queue",
-                        "operation": "retry_loop",
-                        "error_id": ErrorRegistry.ERR_DEAD_LETTER_QUEUE_ERROR,
-                    },
+                # Try to execute processing through circuit breaker
+                await self._retry_loop_circuit_breaker.call(
+                    self._process_retryable_events,
+                    "process_retryable_events",
                 )
+                consecutive_successes += 1
 
-            await asyncio.sleep(self._retry_interval_seconds)
+                # Normal interval after success
+                await asyncio.sleep(self._retry_interval_seconds)
+
+            except Exception as e:
+                consecutive_successes = 0
+
+                # Check circuit breaker state
+                if self._retry_loop_circuit_breaker.is_open():
+                    # Circuit is open - use exponential backoff to prevent hammering
+                    stats = self._retry_loop_circuit_breaker.get_stats()
+                    time_until_retry = self._retry_loop_circuit_breaker._time_until_retry()
+
+                    logger.error(
+                        "Dead letter queue retry loop circuit breaker is OPEN. "
+                        "Will pause processing and attempt recovery in %.1fs. "
+                        "Error: %s",
+                        time_until_retry,
+                        str(e),
+                        exc_info=True,
+                        extra={
+                            "component": "dead_letter_queue",
+                            "operation": "retry_loop",
+                            "error_id": ErrorRegistry.ERR_DEAD_LETTER_QUEUE_ERROR,
+                            "circuit_state": "OPEN",
+                            "total_failures": stats.total_failures,
+                            "failure_count": stats.failure_count,
+                        },
+                    )
+
+                    # Back off exponentially while circuit is open
+                    # Use circuit breaker's timeout as minimum backoff
+                    await asyncio.sleep(time_until_retry)
+                else:
+                    # Circuit is in HALF_OPEN state (recovering) - log but continue
+                    logger.warning(
+                        "Error in dead letter queue retry loop (recovery attempt): %s",
+                        str(e),
+                        exc_info=True,
+                        extra={
+                            "component": "dead_letter_queue",
+                            "operation": "retry_loop",
+                            "error_id": ErrorRegistry.ERR_DEAD_LETTER_QUEUE_ERROR,
+                            "circuit_state": "HALF_OPEN",
+                        },
+                    )
+
+                    # Use normal interval, let circuit breaker handle recovery
+                    await asyncio.sleep(self._retry_interval_seconds)
 
     async def _process_retryable_events(self) -> None:
         """Process all retryable events."""
