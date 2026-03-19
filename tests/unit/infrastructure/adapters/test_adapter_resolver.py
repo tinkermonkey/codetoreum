@@ -27,6 +27,7 @@ from codetoreum.infrastructure.simulation.simulation_config import (
     SimulationConfig,
 )
 from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
+from codetoreum.ports.output.metrics import IMetrics
 
 
 class TestAdapterDependencies:
@@ -206,10 +207,8 @@ class TestAdapterResolver:
         metrics = resolver.resolve_metrics()
 
         assert metrics is not None
-        # Should be an adapter instance with metrics methods
-        assert hasattr(metrics, "record_metric") or hasattr(metrics, "increment") or hasattr(
-            metrics, "record_duration"
-        )
+        # Should implement the IMetrics interface contract
+        assert isinstance(metrics, IMetrics)
 
     def test_resolve_llm(self, factory, dependencies, adapter_config):
         """Test resolving LLM provider adapter."""

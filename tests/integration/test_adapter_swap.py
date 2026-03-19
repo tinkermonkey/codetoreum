@@ -156,10 +156,6 @@ class TestAdapterCredentialValidation:
         # Should pass credential validation and either:
         # 1. Successfully boot (if all dependencies available), or
         # 2. Fail with error other than missing credentials
-        credential_error_occurred = False
-        setup_succeeded = False
-        other_error = None
-
         try:
             bootstrap = SimulationApplicationBootstrap(config)
             await bootstrap.setup()
@@ -168,28 +164,19 @@ class TestAdapterCredentialValidation:
             assert bootstrap.adapters is not None
             assert bootstrap.adapters.board is not None
             assert bootstrap.adapters.ticket_system is not None
-            setup_succeeded = True
 
             await bootstrap.teardown()
         except AdapterConfigurationError as e:
-            # If credential validation still fails, it should NOT be about missing GITHUB_TOKEN
+            # If credential validation fails, it should NOT be about missing GITHUB_TOKEN
             error_msg = str(e).lower()
             if "github_token" in error_msg:
-                credential_error_occurred = True
                 raise AssertionError(f"Credentials should be present, but got: {e}")
             # Other credential errors (missing GITHUB_ORG, etc.) are acceptable
             # since we might not have set all possible env vars
-        except Exception as e:
-            # Capture other errors (network, GitHub API, etc.)
-            other_error = e
-
-        # At least one of these should be true:
-        # - Setup succeeded (best case)
-        # - Other error occurred (not a credential error)
-        # - No credential error occurred
-        assert setup_succeeded or other_error is not None or not credential_error_occurred, (
-            "Either setup should succeed, or some error other than missing credentials should occur"
-        )
+        except Exception:
+            # Other errors (network, GitHub API, etc.) are acceptable
+            # The test's purpose is only to verify GITHUB_TOKEN isn't rejected
+            pass
 
 
 class TestAdapterSwappingEquivalence:
@@ -283,45 +270,42 @@ class TestAdapterSwappingEquivalence:
         """Verify that different implementations can be swapped for the same adapter slot.
 
         This test validates adapter substitutability by swapping between genuinely different
-        implementations (not just explicit vs implicit defaults) and verifying both work.
+        implementations (mock vs capturing event emitters) and verifying both work.
         """
-        # Config 1: Use in_memory ticket adapter
-        config_in_memory = SimulationConfig.create_fast_config("ticket_in_memory")
-        config_in_memory = dataclasses.replace(
-            config_in_memory,
+        # Config 1: Use mock event emitter
+        config_mock_emitter = SimulationConfig.create_fast_config("emitter_mock")
+        config_mock_emitter = dataclasses.replace(
+            config_mock_emitter,
             adapters=dataclasses.replace(
-                config_in_memory.adapters,
-                ticket="in_memory",  # In-memory implementation
+                config_mock_emitter.adapters,
+                event_emitter="mock",  # Mock implementation
             ),
         )
 
-        # Config 2: Use in_memory ticket adapter (same)
-        # (Note: Other implementations might not be available in simulation environment,
-        # so we test that the same implementation works consistently)
-        config_explicit = dataclasses.replace(
-            config_in_memory,
-            # Explicitly set to in_memory for clarity
+        # Config 2: Use capturing event emitter (genuinely different implementation)
+        config_capturing_emitter = dataclasses.replace(
+            config_mock_emitter,
             adapters=dataclasses.replace(
-                config_in_memory.adapters,
-                ticket="in_memory",
+                config_mock_emitter.adapters,
+                event_emitter="capturing",  # Capturing implementation (different behavior)
             ),
         )
 
         # Boot with both configurations
-        bootstrap1 = SimulationApplicationBootstrap(config_in_memory)
+        bootstrap1 = SimulationApplicationBootstrap(config_mock_emitter)
         await bootstrap1.setup()
         assert bootstrap1.adapters is not None
-        assert bootstrap1.adapters.ticket_system is not None
+        assert bootstrap1.adapters.event_emitter is not None
         await bootstrap1.teardown()
 
-        bootstrap2 = SimulationApplicationBootstrap(config_explicit)
+        bootstrap2 = SimulationApplicationBootstrap(config_capturing_emitter)
         await bootstrap2.setup()
         assert bootstrap2.adapters is not None
-        assert bootstrap2.adapters.ticket_system is not None
+        assert bootstrap2.adapters.event_emitter is not None
         await bootstrap2.teardown()
 
-        # Both should have successfully bootstrapped with the same ticket implementation
-        # This validates that the adapter is swappable and works correctly
+        # Both should have successfully bootstrapped with different event emitter implementations
+        # This validates that the adapter slot is properly substitutable between implementations
 
 
 class TestAdapterConfigurationErrors:
