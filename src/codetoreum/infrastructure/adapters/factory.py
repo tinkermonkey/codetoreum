@@ -1127,21 +1127,13 @@ class AdapterFactory:
 
         # Apply resilience if enabled
         if self._config.enable_resilience:
-            # Convert ServiceResilienceConfig to service_config dict
-            service_config = None
             try:
+                service_config = None
                 if resilience_config:
-                    if hasattr(resilience_config, "to_dict"):
-                        service_config = resilience_config.to_dict()
-                    else:
-                        message = f"resilience_config must have to_dict() method, got {type(resilience_config)}"
-                        raise TypeError(message)
+                    service_config = self._convert_resilience_config_to_dict(resilience_config)
                 else:
                     default_config = self._get_resilience_config("ticket_system", GITHUB_RESILIENCE_CONFIG)
-                    if hasattr(default_config, "to_dict"):
-                        service_config = default_config.to_dict()
-                    else:
-                        service_config = None
+                    service_config = self._convert_resilience_config_to_dict(default_config)
 
                 adapter = self._resilience_factory.create_resilient_ticket_system(
                     adapter, service_config=service_config
@@ -1194,21 +1186,13 @@ class AdapterFactory:
 
         # Apply resilience if enabled
         if self._config.enable_resilience:
-            # Convert ServiceResilienceConfig to service_config dict
-            service_config = None
             try:
+                service_config = None
                 if resilience_config:
-                    if hasattr(resilience_config, "to_dict"):
-                        service_config = resilience_config.to_dict()
-                    else:
-                        message = f"resilience_config must have to_dict() method, got {type(resilience_config)}"
-                        raise TypeError(message)
+                    service_config = self._convert_resilience_config_to_dict(resilience_config)
                 else:
                     default_config = self._get_resilience_config("llm_provider", CLAUDE_RESILIENCE_CONFIG)
-                    if hasattr(default_config, "to_dict"):
-                        service_config = default_config.to_dict()
-                    else:
-                        service_config = None
+                    service_config = self._convert_resilience_config_to_dict(default_config)
 
                 adapter = self._resilience_factory.create_resilient_llm_provider(adapter, service_config=service_config)
             except Exception as e:
@@ -1259,21 +1243,13 @@ class AdapterFactory:
 
         # Apply resilience if enabled
         if self._config.enable_resilience:
-            # Convert ServiceResilienceConfig to service_config dict
-            service_config = None
             try:
+                service_config = None
                 if resilience_config:
-                    if hasattr(resilience_config, "to_dict"):
-                        service_config = resilience_config.to_dict()
-                    else:
-                        message = f"resilience_config must have to_dict() method, got {type(resilience_config)}"
-                        raise TypeError(message)
+                    service_config = self._convert_resilience_config_to_dict(resilience_config)
                 else:
                     default_config = self._get_resilience_config("container", CONTAINER_RESILIENCE_CONFIG)
-                    if hasattr(default_config, "to_dict"):
-                        service_config = default_config.to_dict()
-                    else:
-                        service_config = None
+                    service_config = self._convert_resilience_config_to_dict(default_config)
 
                 adapter = self._resilience_factory.create_resilient_container(adapter, service_config=service_config)
             except Exception as e:
@@ -1324,21 +1300,13 @@ class AdapterFactory:
 
         # Apply resilience if enabled
         if self._config.enable_resilience:
-            # Convert ServiceResilienceConfig to service_config dict
-            service_config = None
             try:
+                service_config = None
                 if resilience_config:
-                    if hasattr(resilience_config, "to_dict"):
-                        service_config = resilience_config.to_dict()
-                    else:
-                        message = f"resilience_config must have to_dict() method, got {type(resilience_config)}"
-                        raise TypeError(message)
+                    service_config = self._convert_resilience_config_to_dict(resilience_config)
                 else:
                     default_config = self._get_resilience_config("repository", REPOSITORY_RESILIENCE_CONFIG)
-                    if hasattr(default_config, "to_dict"):
-                        service_config = default_config.to_dict()
-                    else:
-                        service_config = None
+                    service_config = self._convert_resilience_config_to_dict(default_config)
 
                 adapter = self._resilience_factory.create_resilient_repository(adapter, service_config=service_config)
             except Exception as e:
@@ -1349,6 +1317,31 @@ class AdapterFactory:
                 raise
 
         return adapter
+
+    def _create_adapter(self, registry: Any, adapter_name: str | None, adapter_type_name: str, **kwargs) -> Any:
+        """
+        Generic helper for creating simple adapters without resilience.
+
+        Eliminates boilerplate code across ~26 create_* methods.
+
+        Args:
+            registry: The adapter registry to use
+            adapter_name: Name of adapter to use (None = use default)
+            adapter_type_name: Human-readable type name for logging and errors
+            **kwargs: Additional arguments for adapter constructor
+
+        Returns:
+            The created adapter instance
+
+        Raises:
+            ValueError: If no default adapter is configured
+        """
+        resolved_name = adapter_name or registry.get_default_name()
+        if not resolved_name:
+            raise ValueError(f"No default {adapter_type_name} adapter configured")
+
+        logger.info(f"Creating {adapter_type_name} adapter: {resolved_name}")
+        return registry.create_instance(resolved_name, **kwargs)
 
     def create_event_store(self, adapter_name: str | None = None, **kwargs) -> IEventStore:
         """
@@ -1387,207 +1380,133 @@ class AdapterFactory:
 
     def create_storage(self, adapter_name: str | None = None, **kwargs) -> IStorage:
         """Create a storage adapter instance."""
-        adapter_name = adapter_name or self._storage_registry.get_default_name()
-        if not adapter_name:
-            raise ValueError("No default storage adapter configured")
-        logger.info(f"Creating storage adapter: {adapter_name}")
-        return self._storage_registry.create_instance(adapter_name, **kwargs)
+        return self._create_adapter(self._storage_registry, adapter_name, "storage", **kwargs)
 
     def create_board_service(self, adapter_name: str | None = None, **kwargs) -> IBoardService:
         """Create a board service adapter instance."""
-        adapter_name = adapter_name or self._board_service_registry.get_default_name()
-        if not adapter_name:
-            raise ValueError("No default board service adapter configured")
-        logger.info(f"Creating board service adapter: {adapter_name}")
-        return self._board_service_registry.create_instance(adapter_name, **kwargs)
+        return self._create_adapter(self._board_service_registry, adapter_name, "board service", **kwargs)
 
     def create_code_review_service(self, adapter_name: str | None = None, **kwargs) -> ICodeReviewService:
         """Create a code review service adapter instance."""
-        adapter_name = adapter_name or self._code_review_registry.get_default_name()
-        if not adapter_name:
-            raise ValueError("No default code review service adapter configured")
-        logger.info(f"Creating code review service adapter: {adapter_name}")
-        return self._code_review_registry.create_instance(adapter_name, **kwargs)
+        return self._create_adapter(self._code_review_registry, adapter_name, "code review service", **kwargs)
 
     def create_discussion_adapter(self, adapter_name: str | None = None, **kwargs) -> IDiscussionAdapter:
         """Create a discussion adapter instance."""
-        adapter_name = adapter_name or self._discussion_adapter_registry.get_default_name()
-        if not adapter_name:
-            raise ValueError("No default discussion adapter configured")
-        logger.info(f"Creating discussion adapter: {adapter_name}")
-        return self._discussion_adapter_registry.create_instance(adapter_name, **kwargs)
+        return self._create_adapter(self._discussion_adapter_registry, adapter_name, "discussion", **kwargs)
 
     def create_version_control_service(self, adapter_name: str | None = None, **kwargs) -> IVersionControlService:
         """Create a version control service adapter instance."""
-        adapter_name = adapter_name or self._version_control_registry.get_default_name()
-        if not adapter_name:
-            raise ValueError("No default version control service adapter configured")
-        logger.info(f"Creating version control service adapter: {adapter_name}")
-        return self._version_control_registry.create_instance(adapter_name, **kwargs)
+        return self._create_adapter(self._version_control_registry, adapter_name, "version control service", **kwargs)
 
     def create_metrics(self, adapter_name: str | None = None, **kwargs) -> IMetrics:
         """Create a metrics adapter instance."""
-        adapter_name = adapter_name or self._metrics_registry.get_default_name()
-        if not adapter_name:
-            raise ValueError("No default metrics adapter configured")
-        logger.info(f"Creating metrics adapter: {adapter_name}")
-        return self._metrics_registry.create_instance(adapter_name, **kwargs)
+        return self._create_adapter(self._metrics_registry, adapter_name, "metrics", **kwargs)
 
     def create_notifier(self, adapter_name: str | None = None, **kwargs) -> INotifier:
         """Create a notifier adapter instance."""
-        adapter_name = adapter_name or self._notifier_registry.get_default_name()
-        if not adapter_name:
-            raise ValueError("No default notifier adapter configured")
-        logger.info(f"Creating notifier adapter: {adapter_name}")
-        return self._notifier_registry.create_instance(adapter_name, **kwargs)
+        return self._create_adapter(self._notifier_registry, adapter_name, "notifier", **kwargs)
 
     def create_message_broker(self, adapter_name: str | None = None, **kwargs) -> IMessageBroker:
         """Create a message broker adapter instance."""
-        adapter_name = adapter_name or self._message_broker_registry.get_default_name()
-        if not adapter_name:
-            raise ValueError("No default message broker adapter configured")
-        logger.info(f"Creating message broker adapter: {adapter_name}")
-        return self._message_broker_registry.create_instance(adapter_name, **kwargs)
+        return self._create_adapter(self._message_broker_registry, adapter_name, "message broker", **kwargs)
 
     def create_config_store(self, adapter_name: str | None = None, **kwargs) -> IConfigStore:
         """Create a config store adapter instance."""
-        adapter_name = adapter_name or self._config_store_registry.get_default_name()
-        if not adapter_name:
-            raise ValueError("No default config store adapter configured")
-        logger.info(f"Creating config store adapter: {adapter_name}")
-        return self._config_store_registry.create_instance(adapter_name, **kwargs)
+        return self._create_adapter(self._config_store_registry, adapter_name, "config store", **kwargs)
 
     def create_repair_cycle(self, adapter_name: str | None = None, **kwargs) -> IRepairCycle:
         """Create a repair cycle adapter instance."""
-        adapter_name = adapter_name or self._repair_cycle_registry.get_default_name()
-        if not adapter_name:
-            raise ValueError("No default repair cycle adapter configured")
-        logger.info(f"Creating repair cycle adapter: {adapter_name}")
-        return self._repair_cycle_registry.create_instance(adapter_name, **kwargs)
+        return self._create_adapter(self._repair_cycle_registry, adapter_name, "repair cycle", **kwargs)
 
     def create_review_cycle_service(self, adapter_name: str | None = None, **kwargs) -> IReviewCycle:
         """Create a review cycle service adapter instance."""
-        adapter_name = adapter_name or self._review_cycle_registry.get_default_name()
-        if not adapter_name:
-            raise ValueError("No default review cycle service adapter configured")
-        logger.info(f"Creating review cycle service adapter: {adapter_name}")
-        return self._review_cycle_registry.create_instance(adapter_name, **kwargs)
+        return self._create_adapter(self._review_cycle_registry, adapter_name, "review cycle service", **kwargs)
 
     def create_container_recovery(self, adapter_name: str | None = None, **kwargs) -> IAgentContainerRecoveryService:
         """Create a container recovery adapter instance."""
-        adapter_name = adapter_name or self._container_recovery_registry.get_default_name()
-        if not adapter_name:
-            raise ValueError("No default container recovery adapter configured")
-        logger.info(f"Creating container recovery adapter: {adapter_name}")
-        return self._container_recovery_registry.create_instance(adapter_name, **kwargs)
+        return self._create_adapter(self._container_recovery_registry, adapter_name, "container recovery", **kwargs)
 
     def create_encryption_service(self, adapter_name: str | None = None, **kwargs) -> IEncryptionService:
         """Create an encryption service adapter instance."""
-        adapter_name = adapter_name or self._encryption_registry.get_default_name()
-        if not adapter_name:
-            raise ValueError("No default encryption service adapter configured")
-        logger.info(f"Creating encryption service adapter: {adapter_name}")
-        return self._encryption_registry.create_instance(adapter_name, **kwargs)
+        return self._create_adapter(self._encryption_registry, adapter_name, "encryption service", **kwargs)
 
     def create_pipeline_lock_service(self, adapter_name: str | None = None, **kwargs) -> IPipelineLockService:
         """Create a pipeline lock service adapter instance."""
-        adapter_name = adapter_name or self._pipeline_lock_registry.get_default_name()
-        if not adapter_name:
-            raise ValueError("No default pipeline lock service adapter configured")
-        logger.info(f"Creating pipeline lock service adapter: {adapter_name}")
-        return self._pipeline_lock_registry.create_instance(adapter_name, **kwargs)
+        return self._create_adapter(self._pipeline_lock_registry, adapter_name, "pipeline lock service", **kwargs)
 
     def create_pipeline_queue_service(self, adapter_name: str | None = None, **kwargs) -> IPipelineQueueService:
         """Create a pipeline queue service adapter instance."""
-        adapter_name = adapter_name or self._pipeline_queue_registry.get_default_name()
-        if not adapter_name:
-            raise ValueError("No default pipeline queue service adapter configured")
-        logger.info(f"Creating pipeline queue service adapter: {adapter_name}")
-        return self._pipeline_queue_registry.create_instance(adapter_name, **kwargs)
+        return self._create_adapter(self._pipeline_queue_registry, adapter_name, "pipeline queue service", **kwargs)
 
     def create_project_manager_service(self, adapter_name: str | None = None, **kwargs) -> IProjectManagerService:
         """Create a project manager service adapter instance."""
-        adapter_name = adapter_name or self._project_manager_registry.get_default_name()
-        if not adapter_name:
-            raise ValueError("No default project manager service adapter configured")
-        logger.info(f"Creating project manager service adapter: {adapter_name}")
-        return self._project_manager_registry.create_instance(adapter_name, **kwargs)
+        return self._create_adapter(self._project_manager_registry, adapter_name, "project manager service", **kwargs)
 
     def create_workflow_config_service(self, adapter_name: str | None = None, **kwargs) -> IWorkflowConfigService:
         """Create a workflow config service adapter instance."""
-        adapter_name = adapter_name or self._workflow_config_registry.get_default_name()
-        if not adapter_name:
-            raise ValueError("No default workflow config service adapter configured")
-        logger.info(f"Creating workflow config service adapter: {adapter_name}")
-        return self._workflow_config_registry.create_instance(adapter_name, **kwargs)
+        return self._create_adapter(self._workflow_config_registry, adapter_name, "workflow config service", **kwargs)
 
     def create_event_emitter(self, adapter_name: str | None = None, **kwargs) -> IEventEmitter:
         """Create an event emitter adapter instance."""
-        adapter_name = adapter_name or self._event_emitter_registry.get_default_name()
-        if not adapter_name:
-            raise ValueError("No default event emitter adapter configured")
-        logger.info(f"Creating event emitter adapter: {adapter_name}")
-        return self._event_emitter_registry.create_instance(adapter_name, **kwargs)
+        return self._create_adapter(self._event_emitter_registry, adapter_name, "event emitter", **kwargs)
 
     def create_identity_service(self, adapter_name: str | None = None, **kwargs) -> IIdentityService:
         """Create an identity service adapter instance."""
-        adapter_name = adapter_name or self._identity_service_registry.get_default_name()
-        if not adapter_name:
-            raise ValueError("No default identity service adapter configured")
-        logger.info(f"Creating identity service adapter: {adapter_name}")
-        return self._identity_service_registry.create_instance(adapter_name, **kwargs)
+        return self._create_adapter(self._identity_service_registry, adapter_name, "identity service", **kwargs)
 
     def create_agent_executor(self, adapter_name: str | None = None, **kwargs) -> IAgentExecutor:
         """Create an agent executor adapter instance."""
-        adapter_name = adapter_name or self._agent_executor_registry.get_default_name()
-        if not adapter_name:
-            raise ValueError("No default agent executor adapter configured")
-        logger.info(f"Creating agent executor adapter: {adapter_name}")
-        return self._agent_executor_registry.create_instance(adapter_name, **kwargs)
+        return self._create_adapter(self._agent_executor_registry, adapter_name, "agent executor", **kwargs)
 
     def create_agent_repository(self, adapter_name: str | None = None, **kwargs) -> IAgentRepository:
         """Create an agent repository adapter instance."""
-        adapter_name = adapter_name or self._agent_repository_registry.get_default_name()
-        if not adapter_name:
-            raise ValueError("No default agent repository adapter configured")
-        logger.info(f"Creating agent repository adapter: {adapter_name}")
-        return self._agent_repository_registry.create_instance(adapter_name, **kwargs)
+        return self._create_adapter(self._agent_repository_registry, adapter_name, "agent repository", **kwargs)
 
     def create_work_item_branch_tracker(self, adapter_name: str | None = None, **kwargs) -> IWorkItemBranchTracker:
         """Create a work item branch tracker adapter instance."""
-        adapter_name = adapter_name or self._work_item_branch_tracker_registry.get_default_name()
-        if not adapter_name:
-            raise ValueError("No default work item branch tracker adapter configured")
-        logger.info(f"Creating work item branch tracker adapter: {adapter_name}")
-        return self._work_item_branch_tracker_registry.create_instance(adapter_name, **kwargs)
+        return self._create_adapter(self._work_item_branch_tracker_registry, adapter_name, "work item branch tracker", **kwargs)
 
     def create_work_item_service(self, adapter_name: str | None = None, **kwargs) -> IWorkItemService:
         """Create a work item service adapter instance."""
-        adapter_name = adapter_name or self._work_item_service_registry.get_default_name()
-        if not adapter_name:
-            raise ValueError("No default work item service adapter configured")
-        logger.info(f"Creating work item service adapter: {adapter_name}")
-        return self._work_item_service_registry.create_instance(adapter_name, **kwargs)
+        return self._create_adapter(self._work_item_service_registry, adapter_name, "work item service", **kwargs)
 
     def create_repair_cycle_checkpoint_store(
         self, adapter_name: str | None = None, **kwargs
     ) -> IRepairCycleCheckpointStore:
         """Create a repair cycle checkpoint store adapter instance."""
-        adapter_name = adapter_name or self._repair_cycle_checkpoint_registry.get_default_name()
-        if not adapter_name:
-            raise ValueError("No default repair cycle checkpoint store adapter configured")
-        logger.info(f"Creating repair cycle checkpoint store adapter: {adapter_name}")
-        return self._repair_cycle_checkpoint_registry.create_instance(adapter_name, **kwargs)
+        return self._create_adapter(self._repair_cycle_checkpoint_registry, adapter_name, "repair cycle checkpoint store", **kwargs)
 
     def create_active_workflow_run_registry(
         self, adapter_name: str | None = None, **kwargs
     ) -> IActiveWorkflowRunRegistry:
         """Create an active workflow run registry adapter instance."""
-        adapter_name = adapter_name or self._active_workflow_run_registry_registry.get_default_name()
-        if not adapter_name:
-            raise ValueError("No default active workflow run registry adapter configured")
-        logger.info(f"Creating active workflow run registry adapter: {adapter_name}")
-        return self._active_workflow_run_registry_registry.create_instance(adapter_name, **kwargs)
+        return self._create_adapter(self._active_workflow_run_registry_registry, adapter_name, "active workflow run registry", **kwargs)
+
+    def _convert_resilience_config_to_dict(
+        self, resilience_config: ServiceResilienceConfig | None
+    ) -> dict[str, Any] | None:
+        """
+        Convert a ServiceResilienceConfig to a dict for resilience factory consumption.
+
+        Uses isinstance() instead of hasattr() for type safety and clarity.
+
+        Args:
+            resilience_config: ServiceResilienceConfig instance or None
+
+        Returns:
+            Dictionary representation of config, or None if input is None
+
+        Raises:
+            TypeError: If config is not a ServiceResilienceConfig instance
+        """
+        if resilience_config is None:
+            return None
+
+        if not isinstance(resilience_config, ServiceResilienceConfig):
+            message = f"resilience_config must be ServiceResilienceConfig, got {type(resilience_config).__name__}"
+            raise TypeError(message)
+
+        return resilience_config.to_dict()
 
     def _get_resilience_config(
         self, service_type: str, default_config: ServiceResilienceConfig
