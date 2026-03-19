@@ -229,8 +229,8 @@ class TestAdapterResolver:
         resolver = AdapterResolver(adapter_config, factory, dependencies)
         result = resolver.resolve_all()
 
-        # Should return 26 adapters
-        assert len(result) == 26
+        # Should return 27 adapters
+        assert len(result) == 27
 
         # All values should be adapter instances (not None)
         for slot_name, adapter in result.items():
@@ -242,7 +242,7 @@ class TestAdapterResolver:
         result = resolver.resolve_all()
 
         assert resolver._resolved == result
-        assert len(resolver._resolved) == 26
+        assert len(resolver._resolved) == 27
 
     def test_resolve_all_respects_dependency_order(self, factory, dependencies, adapter_config):
         """Test that adapters are resolved in dependency order."""
@@ -364,7 +364,7 @@ class TestAdapterResolver:
         assert "container_adapter" in call_kwargs
 
     def test_all_26_adapter_slots_resolved(self, factory, dependencies, adapter_config):
-        """Test that all 26 adapter slots are successfully resolved."""
+        """Test that all 27 adapter slots are successfully resolved."""
         resolver = AdapterResolver(adapter_config, factory, dependencies)
         result = resolver.resolve_all()
 
@@ -395,9 +395,10 @@ class TestAdapterResolver:
             "run_registry",
             "branch_tracker",
             "work_item_service",
+            "repository",
         }
 
-        assert len(expected_slots) == 26
+        assert len(expected_slots) == 27
         assert set(result.keys()) == expected_slots
 
     def test_get_registry_method_exists_on_factory(self, factory):
@@ -425,12 +426,12 @@ class TestAdapterResolver:
         assert "nonexistent_slot" in str(exc_info.value)
 
     def test_validate_credentials_checks_all_slots(self, factory, dependencies):
-        """Test that validate_credentials checks credentials for all 26 slots."""
+        """Test that validate_credentials checks credentials for all 27 slots."""
         # Use all default simulation adapters (no credentials needed)
         config = AdapterSelectionConfig()
         resolver = AdapterResolver(config, factory, dependencies)
 
-        # Should validate all 26 slots without error
+        # Should validate all 27 slots without error
         resolver.validate_credentials()
 
         # Verify by checking that validation looked at all slots
@@ -572,5 +573,5 @@ class TestAdapterResolverIntegration:
         result = resolver.resolve_all()
 
         # All adapters should be created successfully
-        assert len(result) == 26
+        assert len(result) == 27
         assert all(adapter is not None for adapter in result.values())
