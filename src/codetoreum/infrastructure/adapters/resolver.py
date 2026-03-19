@@ -126,35 +126,6 @@ class AdapterResolver:
         self._deps = dependencies
         self._resolved: dict[str, Any] = {}
 
-    def _get_simulation_only_adapters(self, registry: "AdapterRegistry") -> set[str]:
-        """
-        Get the set of adapter names that are marked as simulation-only.
-
-        Queries the registry metadata to find all adapters registered with
-        simulation_only=True in their config schema. This serves as an independent
-        source of truth for validation.
-
-        Args:
-            registry: The adapter registry to query
-
-        Returns:
-            Set of adapter names that have simulation_only=True
-        """
-        simulation_adapters = set()
-        for adapter_name in registry.list_adapters():
-            try:
-                metadata = registry.get_metadata(adapter_name)
-                if (
-                    metadata.config_schema
-                    and isinstance(metadata.config_schema, AdapterCredentialRequirement)
-                    and metadata.config_schema.simulation_only
-                ):
-                    simulation_adapters.add(adapter_name)
-            except KeyError:
-                # Skip adapters that can't be retrieved
-                continue
-        return simulation_adapters
-
     def validate_credentials(self) -> None:
         """
         Pre-flight check: aggregate all missing credential errors.
@@ -162,7 +133,6 @@ class AdapterResolver:
         Validates all 26 adapter slots before constructing any adapter.
         Checks that:
         - Implementation names are registered in factories
-        - Simulation-only adapters are not used in production (non-simulation names)
         - All required environment variables exist
         - All required config keys exist (accepting falsy values like 0, "", False)
 
@@ -197,14 +167,6 @@ class AdapterResolver:
             req = metadata.config_schema
             if not req or not isinstance(req, AdapterCredentialRequirement):
                 continue
-
-            # Check if a non-simulation adapter is being used with simulation_only requirement
-            # Get the independent set of simulation-only adapters and validate against it
-            if req.simulation_only:
-                simulation_adapters = self._get_simulation_only_adapters(registry)
-                if impl_name not in simulation_adapters:
-                    errors.append(f"{field_name}: '{impl_name}' is not registered as simulation-only")
-                    continue
 
             # Check required environment variables
             # Use membership test (not in) instead of truthiness check to accept falsy values

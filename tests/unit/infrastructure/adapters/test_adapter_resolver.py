@@ -182,69 +182,6 @@ class TestAdapterResolver:
         assert "nonexistent1" in error_msg or "ticket" in error_msg
         assert "nonexistent2" in error_msg or "llm" in error_msg
 
-    def test_validate_credentials_simulation_only_adapter_acceptance(self, factory, dependencies):
-        """Test that adapters with simulation_only=True in requirement are accepted when registered as simulation-only."""
-        # Register a simulation-only adapter in the test factory
-        registry = factory.get_registry("metrics")
-        from datetime import datetime
-
-        from codetoreum.infrastructure.adapters.registry_base import AdapterMetadata
-
-        # Add a fake adapter with simulation_only=True
-        registry._adapters["custom_sim_only"] = Mock()
-        registry._metadata["custom_sim_only"] = AdapterMetadata(
-            name="custom_sim_only",
-            adapter_type=Mock,
-            description="Test adapter",
-            version="1.0.0",
-            tags=[],
-            registered_at=datetime.now(),
-            config_schema=AdapterCredentialRequirement(env_vars=[], config_keys=[], simulation_only=True),
-        )
-
-        # Configure to use this simulation-only adapter
-        config = AdapterSelectionConfig(metrics="custom_sim_only")
-        resolver = AdapterResolver(config, factory, dependencies)
-
-        # Should validate successfully since the adapter is registered with simulation_only=True
-        resolver.validate_credentials()
-
-    def test_validate_credentials_simulation_only_detection_consistency(self, factory, dependencies):
-        """Test that simulation-only adapter detection is consistent across multiple registrations."""
-        from codetoreum.adapters.testing.in_memory_metrics_adapter import InMemoryMetricsAdapter
-
-        registry = factory.get_registry("metrics")
-
-        # Register multiple adapters with mixed simulation_only settings
-        registry._adapters["real_adapter"] = InMemoryMetricsAdapter
-        registry._metadata["real_adapter"] = Mock(
-            config_schema=AdapterCredentialRequirement(env_vars=[], config_keys=[], simulation_only=False)
-        )
-
-        registry._adapters["sim_adapter_1"] = InMemoryMetricsAdapter
-        registry._metadata["sim_adapter_1"] = Mock(
-            config_schema=AdapterCredentialRequirement(env_vars=[], config_keys=[], simulation_only=True)
-        )
-
-        registry._adapters["sim_adapter_2"] = InMemoryMetricsAdapter
-        registry._metadata["sim_adapter_2"] = Mock(
-            config_schema=AdapterCredentialRequirement(env_vars=[], config_keys=[], simulation_only=True)
-        )
-
-        resolver = AdapterResolver(AdapterSelectionConfig(), factory, dependencies)
-
-        # Get simulation-only adapters from registry
-        sim_adapters = resolver._get_simulation_only_adapters(registry)
-
-        # Verify that simulation adapters are correctly identified
-        assert "sim_adapter_1" in sim_adapters
-        assert "sim_adapter_2" in sim_adapters
-        assert "real_adapter" not in sim_adapters
-
-        # Now verify that using a simulation adapter validates successfully
-        config = AdapterSelectionConfig(metrics="sim_adapter_1")
-        resolver2 = AdapterResolver(config, factory, dependencies)
-        resolver2.validate_credentials()  # Should not raise
 
     def test_resolve_event_store(self, factory, dependencies, adapter_config):
         """Test resolving event store adapter."""
@@ -614,53 +551,6 @@ class TestAdapterResolver:
 
         assert "MISSING_VAR_12345" in str(exc_info.value)
 
-    def test_get_simulation_only_adapters_finds_all_simulation_adapters(self, factory, dependencies):
-        """Test that _get_simulation_only_adapters correctly identifies all simulation-only adapters."""
-        from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
-
-        registry = factory.get_registry("llm")
-
-        # Register multiple adapters with different simulation_only settings
-        registry._adapters["test_sim_only_1"] = MockLLMAdapter
-        registry._metadata["test_sim_only_1"] = Mock(
-            config_schema=AdapterCredentialRequirement(simulation_only=True)
-        )
-
-        registry._adapters["test_sim_only_2"] = MockLLMAdapter
-        registry._metadata["test_sim_only_2"] = Mock(
-            config_schema=AdapterCredentialRequirement(simulation_only=True)
-        )
-
-        registry._adapters["test_real"] = MockLLMAdapter
-        registry._metadata["test_real"] = Mock(
-            config_schema=AdapterCredentialRequirement(simulation_only=False)
-        )
-
-        registry._adapters["test_no_schema"] = MockLLMAdapter
-        registry._metadata["test_no_schema"] = Mock(config_schema=None)
-
-        resolver = AdapterResolver(AdapterSelectionConfig(), factory, dependencies)
-
-        # Get simulation-only adapters
-        sim_adapters = resolver._get_simulation_only_adapters(registry)
-
-        # Should include both simulation-only adapters
-        assert "test_sim_only_1" in sim_adapters
-        assert "test_sim_only_2" in sim_adapters
-        # Should not include real or schema-less adapters
-        assert "test_real" not in sim_adapters
-        assert "test_no_schema" not in sim_adapters
-
-    def test_get_simulation_only_adapters_handles_missing_adapters(self, factory, dependencies):
-        """Test that _get_simulation_only_adapters gracefully handles missing adapters."""
-        registry = factory.get_registry("llm")
-        resolver = AdapterResolver(AdapterSelectionConfig(), factory, dependencies)
-
-        # Registry may have adapters that can't be retrieved - should not crash
-        sim_adapters = resolver._get_simulation_only_adapters(registry)
-
-        # Should return a set (possibly empty if no simulation adapters registered)
-        assert isinstance(sim_adapters, set)
 
 
 class TestAdapterResolverIntegration:
