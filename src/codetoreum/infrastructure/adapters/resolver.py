@@ -17,7 +17,6 @@ from codetoreum.infrastructure.adapters.registry_base import (
 )
 from codetoreum.infrastructure.simulation.simulation_config import AdapterSelectionConfig
 from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
-from codetoreum.ports.output.agent_executor import IAgentExecutor
 from codetoreum.ports.output.agent_repository import IAgentRepository
 from codetoreum.ports.output.board_service import IBoardService
 from codetoreum.ports.output.config_store import IConfigStore
