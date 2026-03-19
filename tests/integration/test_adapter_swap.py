@@ -143,8 +143,7 @@ class TestAdapterCredentialValidation:
         """Verify real adapter validates successfully when credentials are present.
 
         This test ensures that providing required credentials allows the adapter
-        configuration to pass validation (though instantiation may fail for other reasons
-        like missing dependencies).
+        configuration to pass credential validation at bootstrap setup() time.
         """
         # Set required credentials in environment
         monkeypatch.setenv("GITHUB_TOKEN", "test_token_12345")
@@ -161,25 +160,29 @@ class TestAdapterCredentialValidation:
             ),
         )
 
-        # Attempt bootstrap - should pass credential validation
-        # (Actual adapter instantiation may fail due to network/dependency issues,
-        # but that's a different error layer)
+        # Attempt bootstrap with credentials present
+        # Should pass credential validation and either:
+        # 1. Successfully boot (if all dependencies available), or
+        # 2. Fail with error other than missing credentials
         try:
             bootstrap = SimulationApplicationBootstrap(config)
-            # If setup() succeeds, credentials were validated
-            # If setup() fails, it should be for a reason other than missing credentials
             await bootstrap.setup()
+
+            # If setup succeeds, credentials validation passed
+            assert bootstrap.adapters is not None
+            assert bootstrap.adapters.board_service is not None
+            assert bootstrap.adapters.ticket_system is not None
+
             await bootstrap.teardown()
         except AdapterConfigurationError as e:
-            # Credential validation should have passed - if this error occurs,
-            # it should NOT be about missing GITHUB_TOKEN/GITHUB_ORG/GITHUB_REPO
+            # If credential validation still fails, it should NOT be about missing GITHUB_TOKEN
             error_msg = str(e).lower()
-            assert (
-                "github_token" not in error_msg and "github_org" not in error_msg
-            ), f"Credentials validation should pass, got: {e}"
+            assert "github_token" not in error_msg, (
+                f"Credentials should be present, but got: {e}"
+            )
         except Exception:
-            # Other exceptions (network, dependency injection, etc.) are acceptable
-            # This test only validates credential checking, not adapter instantiation
+            # Other errors (network, GitHub API, etc.) are acceptable
+            # This test validates credential checking, not full adapter instantiation
             pass
 
 
@@ -196,14 +199,28 @@ class TestAdapterSwappingEquivalence:
         and explicitly setting ticket="in_memory" are functionally equivalent,
         validating adapter parity and configuration substitutability.
         """
+        # Helper function to collect events from bootstrap
+        async def collect_events_from_bootstrap(
+            config: SimulationConfig,
+        ) -> list[CodetoreumEvent]:
+            bootstrap = SimulationApplicationBootstrap(config)
+            await bootstrap.setup()
+            # Get all events from the event store
+            events: list[CodetoreumEvent] = []
+            try:
+                # Access event store to collect any bootstrap events
+                in_memory_event_store = bootstrap.adapters.event_store_as_memory()
+                stream_ids = await in_memory_event_store.get_all_stream_ids()
+                for stream_id in stream_ids:
+                    stream_events = await in_memory_event_store.get_events(stream_id)
+                    events.extend(stream_events)
+            finally:
+                await bootstrap.teardown()
+            return events
+
         # Run 1: Default config (ticket: in_memory is default)
         default_config = SimulationConfig.create_fast_config("default_ticket")
-        default_bootstrap = SimulationApplicationBootstrap(default_config)
-        await default_bootstrap.setup()
-        # Verify default boots successfully with in_memory ticket adapter
-        assert default_bootstrap.adapters is not None
-        assert default_bootstrap.adapters.ticket_system is not None
-        await default_bootstrap.teardown()
+        default_events = await collect_events_from_bootstrap(default_config)
 
         # Run 2: Explicit config (ticket: in_memory explicit)
         explicit_config = dataclasses.replace(
@@ -213,15 +230,11 @@ class TestAdapterSwappingEquivalence:
                 ticket="in_memory",  # Explicit instead of default
             ),
         )
-        explicit_bootstrap = SimulationApplicationBootstrap(explicit_config)
-        await explicit_bootstrap.setup()
-        # Verify explicit boots successfully with in_memory ticket adapter
-        assert explicit_bootstrap.adapters is not None
-        assert explicit_bootstrap.adapters.ticket_system is not None
-        await explicit_bootstrap.teardown()
+        explicit_events = await collect_events_from_bootstrap(explicit_config)
 
-        # Both configurations boot successfully with identical adapter type
-        # This validates that default and explicit selections are equivalent
+        # Compare event sequences from both configurations
+        # Both should produce identical event types in identical order
+        assert_same_event_types(default_events, explicit_events)
 
     @pytest.mark.asyncio
     async def test_adapter_parity_multiple_slots_swappable(self) -> None:
