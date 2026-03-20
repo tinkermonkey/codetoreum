@@ -283,6 +283,11 @@ class SimulationAdapters:
     always ExecutionServiceAgentExecutor. It implements IAgentExecutor and provides
     set_completion_handler() for BoardColumnEventHandler wiring.
 
+    Event Bus Wiring: The code_review adapter is available here for wiring to the
+    central event bus via EventBusWiring.wire_review_service(). Currently not wired
+    by default in bootstrap, but accessible for test scenarios that need code review
+    event handling.
+
     For test code that needs simulation-specific methods (e.g., add_response(),
     movements, executions), use the accessor helpers:
     - ticket_as_mock() -> InMemoryTicketAdapter
@@ -1651,11 +1656,9 @@ class SimulationApplicationBootstrap:
         )
 
         # Container Recovery Service
-        mock_recovery_adapter = MockContainerRecoveryAdapter()
-        mock_event_emitter = MockEventEmitter()
         container_recovery_service = ContainerRecoveryService(
-            recovery_adapter=mock_recovery_adapter,
-            event_emitter=mock_event_emitter,
+            recovery_adapter=self.adapters.container_recovery,
+            event_emitter=self.adapters.event_emitter,
             container_timeout_hours=2,
         )
 
@@ -1664,7 +1667,7 @@ class SimulationApplicationBootstrap:
             project_manager=self.adapters.project_manager,
             workflow_orchestrator=workflow_orchestrator,
             board_service=self.adapters.board,
-            event_emitter=mock_event_emitter,
+            event_emitter=self.adapters.event_emitter,
             poll_interval_seconds=30,
         )
 

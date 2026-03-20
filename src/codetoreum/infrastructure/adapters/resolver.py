@@ -70,7 +70,7 @@ class AdapterDependencies:
 
     event_bus: Any  # IEventBus - Available for future adapter initialization
     event_emitter: (
-        IEventEmitter  # CapturingMockEventEmitter in simulation - Available for future adapter initialization
+        IEventEmitter  # CapturingMockEventEmitter in simulation - Fallback default for resolved adapters
     )
     logger: logging.Logger  # Available for future adapter initialization
     engine: "SimulationEngine"  # For clock injection in time-aware adapters (actively used)
@@ -204,7 +204,7 @@ class AdapterResolver:
         """Resolve storage adapter."""
         return self._factory.create_storage(
             adapter_name=self._config.storage,
-            event_emitter=self._resolved.get("event_emitter", self._deps.event_emitter),
+            event_emitter=self._resolved["event_emitter"],
             event_bus=self._deps.event_bus,
         )
 
@@ -236,7 +236,7 @@ class AdapterResolver:
         """Resolve container adapter."""
         return self._factory.create_container(
             adapter_name=self._config.container,
-            event_emitter=self._resolved.get("event_emitter", self._deps.event_emitter),
+            event_emitter=self._resolved["event_emitter"],
             event_bus=self._deps.event_bus,
         )
 
@@ -244,7 +244,7 @@ class AdapterResolver:
         """Resolve board service adapter."""
         return self._factory.create_board_service(
             adapter_name=self._config.board,
-            event_emitter=self._resolved.get("event_emitter", self._deps.event_emitter),
+            event_emitter=self._resolved["event_emitter"],
         )
 
     def resolve_discussion_adapter(self) -> IDiscussionAdapter:
@@ -264,7 +264,7 @@ class AdapterResolver:
         """Resolve pipeline queue service adapter."""
         return self._factory.create_pipeline_queue_service(
             adapter_name=self._config.queue_service,
-            event_emitter=self._resolved.get("event_emitter", self._deps.event_emitter),
+            event_emitter=self._resolved["event_emitter"],
             event_bus=self._deps.event_bus,
         )
 
@@ -300,7 +300,7 @@ class AdapterResolver:
         """Resolve version control service adapter."""
         return self._factory.create_version_control_service(
             adapter_name=self._config.version_control,
-            event_emitter=self._resolved.get("event_emitter", self._deps.event_emitter),
+            event_emitter=self._resolved["event_emitter"],
         )
 
     def resolve_project_manager(self) -> IProjectManagerService:
