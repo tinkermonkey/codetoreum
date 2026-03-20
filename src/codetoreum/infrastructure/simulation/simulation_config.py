@@ -523,7 +523,7 @@ class SimulationConfig:
         invalid_keys = set(adapters_raw.keys()) - valid_keys
         if invalid_keys:
             raise ValueError(
-                f"Unknown adapter keys in YAML configuration: {', '.join(sorted(invalid_keys))}. "
+                f"Unknown adapter keys in configuration: {', '.join(sorted(invalid_keys))}. "
                 f"Valid keys are: {', '.join(sorted(valid_keys))}"
             )
 

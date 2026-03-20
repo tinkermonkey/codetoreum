@@ -700,7 +700,7 @@ adapters:
             temp_path = f.name
 
         try:
-            with pytest.raises(ValueError, match="Unknown adapter keys in YAML configuration"):
+            with pytest.raises(ValueError, match="Unknown adapter keys in configuration"):
                 SimulationConfig.from_yaml(temp_path)
         finally:
             Path(temp_path).unlink()
@@ -715,7 +715,7 @@ adapters:
                 "llm": "claude_code",
             }
         }
-        with pytest.raises(ValueError, match="Unknown adapter keys in YAML configuration: unknown_adapter"):
+        with pytest.raises(ValueError, match="Unknown adapter keys in configuration: unknown_adapter"):
             SimulationConfig.from_dict(data)
 
     def test_from_dict_accepts_correct_field_name(self) -> None:

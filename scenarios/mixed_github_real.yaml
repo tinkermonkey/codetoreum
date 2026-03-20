@@ -35,9 +35,9 @@ adapters:
   board: github          # Real GitHub project board
   ticket: github         # Real GitHub issues/PRs
   discussion_adapter: github     # Real GitHub issue comments (corrected field name from 'discussion')
-  review_cycle: mock     # Simulated code reviews
-  work_item_service: mock  # Simulated work items
-  identity_service: configurable   # Configurable user identification
+  review_cycle: github   # Real GitHub code reviews
+  work_item_service: github  # Real GitHub work items
+  identity_service: github   # Real GitHub identity service
 
   # Simulated/in-memory adapters
   llm: mock              # Deterministic mock LLM responses
@@ -159,7 +159,7 @@ scenario_config:
   adapter_overrides:
     - board
     - ticket
-    - discussion
+    - discussion_adapter
     - review_cycle
     - work_item_service
     - identity_service
