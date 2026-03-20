@@ -69,9 +69,7 @@ class AdapterDependencies:
     """
 
     event_bus: Any  # IEventBus - Available for future adapter initialization
-    event_emitter: (
-        IEventEmitter  # CapturingMockEventEmitter in simulation - Fallback default for resolved adapters
-    )
+    event_emitter: IEventEmitter  # CapturingMockEventEmitter in simulation - Fallback default for resolved adapters
     logger: logging.Logger  # Available for future adapter initialization
     engine: "SimulationEngine"  # For clock injection in time-aware adapters (actively used)
     config: "SimulationConfig"  # Actively used for metadata/config lookups

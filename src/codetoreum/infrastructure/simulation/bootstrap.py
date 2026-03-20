@@ -69,7 +69,6 @@ from codetoreum.adapters.secondary.failed_event_store_adapter import (
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
 )
-from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 
 # Adapters
 from codetoreum.adapters.testing import (
@@ -100,9 +99,6 @@ from codetoreum.adapters.testing.execution_service_agent_executor import (
     ExecutionServiceAgentExecutor,
 )
 from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
-from codetoreum.adapters.testing.mock_container_recovery_adapter import (
-    MockContainerRecoveryAdapter,
-)
 from codetoreum.adapters.testing.mock_work_item_service import MockWorkItemService
 
 # Application Services
