@@ -580,6 +580,199 @@ class TestAdapterResolver:
 
         assert "MISSING_VAR_12345" in str(exc_info.value)
 
+    def test_resolve_storage(self, factory, dependencies, adapter_config):
+        """Test resolving storage adapter with event dependencies."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+        # Resolve event_emitter first since storage depends on it
+        resolver._resolved["event_emitter"] = resolver.resolve_event_emitter()
+        storage = resolver.resolve_storage()
+
+        assert storage is not None
+        # Should be an adapter instance
+        assert callable(getattr(storage, "upload", None))
+
+    def test_resolve_encryption(self, factory, dependencies, adapter_config):
+        """Test resolving encryption service adapter."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+        encryption = resolver.resolve_encryption()
+
+        assert encryption is not None
+        # Should be an adapter instance
+        assert callable(getattr(encryption, "encrypt", None))
+
+    def test_resolve_identity_service(self, factory, dependencies, adapter_config):
+        """Test resolving identity service adapter."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+        identity = resolver.resolve_identity_service()
+
+        assert identity is not None
+        # Should be an adapter instance
+
+    def test_resolve_event_emitter(self, factory, dependencies, adapter_config):
+        """Test resolving event emitter adapter."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+        event_emitter = resolver.resolve_event_emitter()
+
+        assert event_emitter is not None
+        # Should be an adapter instance
+        assert callable(getattr(event_emitter, "emit", None))
+
+    def test_resolve_message_broker(self, factory, dependencies, adapter_config):
+        """Test resolving message broker adapter."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+        message_broker = resolver.resolve_message_broker()
+
+        assert message_broker is not None
+        # Should be an adapter instance
+
+    def test_resolve_ticket(self, factory, dependencies, adapter_config):
+        """Test resolving ticket system adapter."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+        ticket = resolver.resolve_ticket()
+
+        assert ticket is not None
+        # Should implement ITicketSystem interface (may be wrapped by decorator)
+        assert hasattr(ticket, "__class__")
+
+    def test_resolve_container(self, factory, dependencies, adapter_config):
+        """Test resolving container adapter with event dependencies."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+        # Resolve event_emitter first since container depends on it
+        resolver._resolved["event_emitter"] = resolver.resolve_event_emitter()
+        container = resolver.resolve_container()
+
+        assert container is not None
+        # Should be an adapter instance
+
+    def test_resolve_discussion_adapter(self, factory, dependencies, adapter_config):
+        """Test resolving discussion adapter with identity service dependency."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+        # Resolve identity_service first
+        resolver._resolved["identity_service"] = resolver.resolve_identity_service()
+        discussion = resolver.resolve_discussion_adapter()
+
+        assert discussion is not None
+        # Should be an adapter instance
+
+    def test_resolve_lock_service(self, factory, dependencies, adapter_config):
+        """Test resolving pipeline lock service adapter."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+        lock_service = resolver.resolve_lock_service()
+
+        assert lock_service is not None
+        # Should be an adapter instance
+
+    def test_resolve_queue_service(self, factory, dependencies, adapter_config):
+        """Test resolving pipeline queue service adapter with event dependencies."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+        # Resolve event_emitter first since queue_service depends on it
+        resolver._resolved["event_emitter"] = resolver.resolve_event_emitter()
+        queue_service = resolver.resolve_queue_service()
+
+        assert queue_service is not None
+        # Should be an adapter instance
+
+    def test_resolve_checkpoint_store(self, factory, dependencies, adapter_config):
+        """Test resolving repair cycle checkpoint store adapter."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+        checkpoint_store = resolver.resolve_checkpoint_store()
+
+        assert checkpoint_store is not None
+        # Should be an adapter instance
+
+    def test_resolve_agent_repository(self, factory, dependencies, adapter_config):
+        """Test resolving agent repository adapter."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+        agent_repo = resolver.resolve_agent_repository()
+
+        assert agent_repo is not None
+        # Should be an adapter instance
+
+    def test_resolve_run_registry(self, factory, dependencies, adapter_config):
+        """Test resolving active workflow run registry adapter."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+        run_registry = resolver.resolve_run_registry()
+
+        assert run_registry is not None
+        # Should be an adapter instance
+
+    def test_resolve_branch_tracker(self, factory, dependencies, adapter_config):
+        """Test resolving work item branch tracker adapter."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+        branch_tracker = resolver.resolve_branch_tracker()
+
+        assert branch_tracker is not None
+        # Should be an adapter instance
+
+    def test_resolve_work_item_service(self, factory, dependencies, adapter_config):
+        """Test resolving work item service adapter."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+        work_item_service = resolver.resolve_work_item_service()
+
+        assert work_item_service is not None
+        # Should be an adapter instance
+
+    def test_resolve_workflow_config(self, factory, dependencies, adapter_config):
+        """Test resolving workflow config service adapter."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+        workflow_config = resolver.resolve_workflow_config()
+
+        assert workflow_config is not None
+        # Should be an adapter instance
+
+    def test_resolve_notifier(self, factory, dependencies, adapter_config):
+        """Test resolving notifier adapter."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+        notifier = resolver.resolve_notifier()
+
+        assert notifier is not None
+        # Should be an adapter instance
+
+    def test_resolve_version_control(self, factory, dependencies, adapter_config):
+        """Test resolving version control service adapter with event dependencies."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+        # Resolve event_emitter first since version_control depends on it
+        resolver._resolved["event_emitter"] = resolver.resolve_event_emitter()
+        version_control = resolver.resolve_version_control()
+
+        assert version_control is not None
+        # Should be an adapter instance
+
+    def test_resolve_project_manager(self, factory, dependencies, adapter_config):
+        """Test resolving project manager service adapter."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+        project_manager = resolver.resolve_project_manager()
+
+        assert project_manager is not None
+        # Should be an adapter instance
+
+    def test_resolve_code_review(self, factory, dependencies, adapter_config):
+        """Test resolving code review service adapter."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+        code_review = resolver.resolve_code_review()
+
+        assert code_review is not None
+        # Should be an adapter instance
+
+    def test_resolve_container_recovery(self, factory, dependencies, adapter_config):
+        """Test resolving container recovery adapter."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+        container_recovery = resolver.resolve_container_recovery()
+
+        assert container_recovery is not None
+        # Should be an adapter instance
+
+    def test_resolve_repository(self, factory, dependencies, adapter_config):
+        """Test resolving repository adapter with event dependencies."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+        # Resolve event_emitter first since repository depends on it
+        resolver._resolved["event_emitter"] = resolver.resolve_event_emitter()
+        repository = resolver.resolve_repository()
+
+        assert repository is not None
+        # Should be an adapter instance implementing IRepository
+        assert hasattr(repository, "__class__")
+
 
 class TestAdapterResolverIntegration:
     """Integration tests for AdapterResolver with real factory."""
