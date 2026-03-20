@@ -1,5 +1,6 @@
 """Simulation configuration for test scenarios."""
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -7,6 +8,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -562,8 +565,6 @@ class SimulationConfig:
                     )
                 else:
                     # Warn if agent_id is missing
-                    import logging
-                    logger = logging.getLogger(__name__)
                     logger.warning(
                         "Skipping agent in agents list without agent_id: %s",
                         agent_obj,
@@ -711,8 +712,6 @@ class SimulationConfig:
                     agents_dict[agent_id] = agent_obj
                 else:
                     # Warn if agent_id is missing
-                    import logging
-                    logger = logging.getLogger(__name__)
                     logger.warning(
                         "Skipping agent in agents list without agent_id: %s",
                         agent_obj,
