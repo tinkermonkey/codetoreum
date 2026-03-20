@@ -170,6 +170,10 @@ class AdapterResolver:
             if not req or not isinstance(req, AdapterCredentialRequirement):
                 continue
 
+            # Skip credential validation for simulation-only adapters
+            if req.simulation_only:
+                continue
+
             # Check required environment variables
             # Use membership test (not in) instead of truthiness check to accept falsy values
             for env_var in req.env_vars:

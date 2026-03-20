@@ -604,6 +604,38 @@ class TestAdapterResolver:
 
         assert "MISSING_VAR_12345" in str(exc_info.value)
 
+    def test_validate_credentials_skips_simulation_only_adapters(self, factory, dependencies):
+        """Test that simulation-only adapters skip credential validation.
+
+        Verifies that adapters marked with simulation_only=True are not validated
+        for credentials, even if they have env_vars or config_keys specified.
+        This ensures simulation adapters can optionally define credentials without
+        causing production validation failures.
+        """
+        from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
+
+        # Register a simulation-only adapter with required env var and config key
+        registry = factory.get_registry("llm")
+        registry._adapters["test_sim_only"] = MockLLMAdapter
+        registry._metadata["test_sim_only"] = Mock(
+            config_schema=AdapterCredentialRequirement(
+                env_vars=("MISSING_VAR_FOR_SIM_ONLY",),
+                config_keys=("missing_config_key",),
+                simulation_only=True,  # Mark as simulation-only
+            )
+        )
+
+        adapter_config = AdapterSelectionConfig(llm="test_sim_only")
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+
+        # Ensure the env var and config key are missing
+        if "MISSING_VAR_FOR_SIM_ONLY" in os.environ:
+            del os.environ["MISSING_VAR_FOR_SIM_ONLY"]
+
+        # Should NOT raise error even though credentials are missing
+        # because this is a simulation-only adapter
+        resolver.validate_credentials()
+
     def test_resolve_storage(self, factory, dependencies, adapter_config):
         """Test resolving storage adapter with event dependencies."""
         resolver = AdapterResolver(adapter_config, factory, dependencies)
