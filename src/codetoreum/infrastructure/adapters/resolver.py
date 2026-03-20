@@ -15,6 +15,8 @@ from typing import TYPE_CHECKING, Any
 from codetoreum.infrastructure.adapters.registry_base import (
     AdapterCredentialRequirement,
 )
+from codetoreum.infrastructure.audit.interfaces import IAuditStore
+from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation.simulation_config import AdapterSelectionConfig
 from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
 from codetoreum.ports.output.agent_repository import IAgentRepository
@@ -69,9 +71,9 @@ class AdapterDependencies:
     like event emission and structured logging.
     """
 
-    event_bus: Any  # IEventBus - Available for future adapter initialization
+    event_bus: EventBus  # In-process event bus for pub/sub event handling
     event_emitter: IEventEmitter  # CapturingMockEventEmitter in simulation - Fallback default for resolved adapters
-    logger: logging.Logger  # Available for future adapter initialization
+    logger: logging.Logger  # Standard Python logger for structured logging
     engine: "SimulationEngine"  # For clock injection in time-aware adapters (actively used)
     config: "SimulationConfig"  # Actively used for metadata/config lookups
 

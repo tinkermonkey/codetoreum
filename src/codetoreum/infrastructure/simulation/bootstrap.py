@@ -140,6 +140,7 @@ from codetoreum.infrastructure.adapters.resolver import (
     AdapterDependencies,
     AdapterResolver,
 )
+from codetoreum.infrastructure.audit.interfaces import IAuditStore
 from codetoreum.infrastructure.audit.stores import InMemoryAuditStore
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 
@@ -311,7 +312,7 @@ class SimulationAdapters:
     workflow_config: IWorkflowConfigService
     queue_service: IPipelineQueueService
     event_emitter: IEventEmitter  # CapturingMockEventEmitter in simulation
-    audit_store: Any  # InMemoryAuditStore (not a port interface yet)
+    audit_store: IAuditStore | None  # InMemoryAuditStore in simulation, None in testing
 
     # Additional adapters (typed as interfaces where available)
     version_control: IVersionControlService
