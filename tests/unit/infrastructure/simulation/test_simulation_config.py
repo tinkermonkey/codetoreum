@@ -713,7 +713,7 @@ adapters:
                 "board": "github",
                 "unknown_adapter": "some_value",
                 "llm": "claude_code",
-            }
+            },
         }
         with pytest.raises(ValueError, match="Unknown adapter keys in configuration: unknown_adapter"):
             SimulationConfig.from_dict(data)
@@ -725,7 +725,7 @@ adapters:
             "adapters": {
                 "discussion_adapter": "github",
                 "board": "mock",
-            }
+            },
         }
         config = SimulationConfig.from_dict(data)
         assert config.adapters.discussion_adapter == "github"
