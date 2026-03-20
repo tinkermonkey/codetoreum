@@ -67,49 +67,84 @@ try:
     from codetoreum.adapters.secondary.mock_code_review_adapter import (
         MockCodeReviewAdapter,
     )
-except ImportError:
+except ImportError as e:
+    logger.warning(
+        "Optional adapter MockCodeReviewAdapter not available, skipping registration",
+        exc_info=True,
+        extra={"adapter": "MockCodeReviewAdapter"},
+    )
     MockCodeReviewAdapter = None  # type: ignore
 
 try:
     from codetoreum.adapters.secondary.prometheus_metrics_adapter import (
         PrometheusMetricsAdapter,
     )
-except ImportError:
+except ImportError as e:
+    logger.warning(
+        "Optional adapter PrometheusMetricsAdapter not available, skipping registration",
+        exc_info=True,
+        extra={"adapter": "PrometheusMetricsAdapter"},
+    )
     PrometheusMetricsAdapter = None  # type: ignore
 
 try:
     from codetoreum.adapters.secondary.redis_pubsub_adapter import (
         RedisPubSubAdapter,
     )
-except ImportError:
+except ImportError as e:
+    logger.warning(
+        "Optional adapter RedisPubSubAdapter not available, skipping registration",
+        exc_info=True,
+        extra={"adapter": "RedisPubSubAdapter"},
+    )
     RedisPubSubAdapter = None  # type: ignore
 
 try:
     from codetoreum.adapters.secondary.github_discussion_adapter import (
         GitHubDiscussionAdapter,
     )
-except ImportError:
+except ImportError as e:
+    logger.warning(
+        "Optional adapter GitHubDiscussionAdapter not available, skipping registration",
+        exc_info=True,
+        extra={"adapter": "GitHubDiscussionAdapter"},
+    )
     GitHubDiscussionAdapter = None  # type: ignore
 
 try:
     from codetoreum.adapters.secondary.elasticsearch_event_store import (
         ElasticsearchEventStore,
     )
-except ImportError:
+except ImportError as e:
+    logger.warning(
+        "Optional adapter ElasticsearchEventStore not available, skipping registration",
+        exc_info=True,
+        extra={"adapter": "ElasticsearchEventStore"},
+    )
     ElasticsearchEventStore = None  # type: ignore
 
 try:
     from codetoreum.adapters.secondary.docker_container_recovery_adapter import (
         DockerContainerRecoveryAdapter,
     )
-except ImportError:
+except ImportError as e:
+    logger.warning(
+        "Optional adapter DockerContainerRecoveryAdapter not available, skipping registration",
+        exc_info=True,
+        extra={"adapter": "DockerContainerRecoveryAdapter"},
+    )
     DockerContainerRecoveryAdapter = None  # type: ignore
 
 try:
     from codetoreum.adapters.secondary.production_repair_cycle_adapter import (
         ProductionRepairCycleAdapter,
     )
-except ImportError:
+except ImportError as e:
+    logger.warning(
+        "Optional adapter ProductionRepairCycleAdapter not available, skipping registration",
+        exc_info=True,
+        extra={"adapter": "ProductionRepairCycleAdapter"},
+    )
     ProductionRepairCycleAdapter = None  # type: ignore
 from codetoreum.infrastructure.adapters.registries import (
     ActiveWorkflowRunRegistryRegistry,
@@ -1478,6 +1513,7 @@ class AdapterFactory:
         except Exception as e:
             logger.error(
                 f"Failed to apply resilience to {service_type} adapter: {e}",
+                exc_info=True,
                 extra={"error_id": "ERR_CONFIGURATION_ERROR"},
             )
             raise

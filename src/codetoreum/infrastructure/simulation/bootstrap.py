@@ -838,6 +838,7 @@ class SimulationApplicationBootstrap:
                     error_msg = f"Auto-advance already running or failed to start: {e}"
                     logger.warning(
                         error_msg,
+                        exc_info=True,
                         extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
                     )
                     self._degraded_mode.mark_failed(BootstrapPhase.AUTO_ADVANCE, str(e))
@@ -1378,6 +1379,7 @@ class SimulationApplicationBootstrap:
                 message = f"Unknown event type '{event_type}' in dead letter queue - handler mapping not updated"
                 logger.error(
                     message,
+                    exc_info=True,
                     extra={
                         "event_type": event_type,
                         "error_id": ErrorRegistry.ERR_INTERNAL_ERROR,
