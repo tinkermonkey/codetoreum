@@ -50,7 +50,7 @@ adapters:
   # Real GitHub adapters
   board: github
   ticket: github
-  discussion: github
+  discussion_adapter: github
   review_cycle: github
   work_item_service: github
   identity_service: github

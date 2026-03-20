@@ -686,8 +686,8 @@ speed_multiplier: 15.0
         finally:
             Path(temp_path).unlink()
 
-    def test_from_yaml_ignores_unknown_adapter_keys(self) -> None:
-        """Test that from_yaml ignores unknown adapter keys."""
+    def test_from_yaml_rejects_unknown_adapter_keys(self) -> None:
+        """Test that from_yaml rejects unknown adapter keys with helpful error message."""
         yaml_content = """name: UnknownAdaptersTest
 adapters:
   board: github
@@ -700,15 +700,36 @@ adapters:
             temp_path = f.name
 
         try:
-            config = SimulationConfig.from_yaml(temp_path)
-            # Known adapters should be parsed
-            assert config.adapters.board == "github"
-            assert config.adapters.llm == "claude_code"
-            # Unknown key should be silently ignored (no error)
-            # Verify other defaults are still present
-            assert config.adapters.ticket == "in_memory"
+            with pytest.raises(ValueError, match="Unknown adapter keys in YAML configuration"):
+                SimulationConfig.from_yaml(temp_path)
         finally:
             Path(temp_path).unlink()
+
+    def test_from_dict_rejects_unknown_adapter_keys(self) -> None:
+        """Test that from_dict rejects unknown adapter keys with helpful error message."""
+        data = {
+            "scenario_name": "test",
+            "adapters": {
+                "board": "github",
+                "unknown_adapter": "some_value",
+                "llm": "claude_code",
+            }
+        }
+        with pytest.raises(ValueError, match="Unknown adapter keys in YAML configuration: unknown_adapter"):
+            SimulationConfig.from_dict(data)
+
+    def test_from_dict_accepts_correct_field_name(self) -> None:
+        """Test that from_dict accepts discussion_adapter (not discussion)."""
+        data = {
+            "scenario_name": "test",
+            "adapters": {
+                "discussion_adapter": "github",
+                "board": "mock",
+            }
+        }
+        config = SimulationConfig.from_dict(data)
+        assert config.adapters.discussion_adapter == "github"
+        assert config.adapters.board == "mock"
 
     def test_create_fast_config_has_default_adapters(self) -> None:
         """Test that create_fast_config factory method has default adapters."""

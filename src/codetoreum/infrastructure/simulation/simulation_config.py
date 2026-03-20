@@ -511,11 +511,24 @@ class SimulationConfig:
 
         Returns:
             SimulationConfig instance
+
+        Raises:
+            ValueError: If unknown adapter keys are found in the YAML configuration
         """
         # Parse adapter selection config
         adapters_raw = data.get("adapters", {})
+
+        # Check for unknown adapter keys and raise error with helpful message
+        valid_keys = set(AdapterSelectionConfig.__dataclass_fields__)
+        invalid_keys = set(adapters_raw.keys()) - valid_keys
+        if invalid_keys:
+            raise ValueError(
+                f"Unknown adapter keys in YAML configuration: {', '.join(sorted(invalid_keys))}. "
+                f"Valid keys are: {', '.join(sorted(valid_keys))}"
+            )
+
         # Only include keys that are actual fields in AdapterSelectionConfig
-        adapters_kwargs = {k: v for k, v in adapters_raw.items() if k in AdapterSelectionConfig.__dataclass_fields__}
+        adapters_kwargs = {k: v for k, v in adapters_raw.items() if k in valid_keys}
         adapters = AdapterSelectionConfig(**adapters_kwargs)
 
         time_data = data.get("time", {})

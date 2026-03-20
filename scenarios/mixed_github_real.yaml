@@ -34,10 +34,10 @@ adapters:
   # Real GitHub adapters
   board: github          # Real GitHub project board
   ticket: github         # Real GitHub issues/PRs
-  discussion: github     # Real GitHub issue comments
-  review_cycle: github   # Real GitHub code reviews
-  work_item_service: github  # Real GitHub work items
-  identity_service: github   # Real GitHub user identification
+  discussion_adapter: github     # Real GitHub issue comments (corrected field name from 'discussion')
+  review_cycle: mock     # Simulated code reviews
+  work_item_service: mock  # Simulated work items
+  identity_service: configurable   # Configurable user identification
 
   # Simulated/in-memory adapters
   llm: mock              # Deterministic mock LLM responses
