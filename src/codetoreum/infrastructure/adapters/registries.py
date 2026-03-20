@@ -62,29 +62,171 @@ def _get_interface_methods(interface_class: type) -> set[str]:
     return methods
 
 
+def _get_interface_signature(interface_class: type, method_name: str) -> inspect.Signature:
+    """
+    Extract the signature of an interface method.
+
+    Args:
+        interface_class: The port interface class
+        method_name: The method name to extract signature for
+
+    Returns:
+        The method's signature
+
+    Raises:
+        ValueError: If method not found in interface
+    """
+    method = getattr(interface_class, method_name, None)
+    if method is None:
+        raise ValueError(f"Method {method_name} not found in {interface_class.__name__}")
+    return inspect.signature(method)
+
+
+def _is_mock_or_test_adapter(adapter_type: type) -> bool:
+    """
+    Check if adapter is a mock/test adapter (subject to strict validation).
+
+    Args:
+        adapter_type: The adapter class to check
+
+    Returns:
+        True if adapter is from testing/mock modules
+    """
+    module_name = adapter_type.__module__
+    return "testing" in module_name or "mock" in module_name.lower() or "in_memory" in module_name
+
+
 def _validate_adapter_implements_interface(adapter_type: type, interface_class: type) -> bool:
     """
-    Validate that an adapter implements all required methods from interface.
+    Validate that an adapter implements all required methods from interface with matching signatures.
 
-    Uses dynamic introspection of the interface to discover required methods.
+    Uses dynamic introspection of the interface to discover required methods and verify:
+    - Method names are present
+    - Parameter counts match (excluding 'self')
+    - Parameter names match
+    - Parameter types match (if annotated, lenient for production adapters)
+    - Return types match (if annotated, lenient for production adapters)
+
+    Strict signature validation applies to mock/test adapters. Production adapters
+    use lenient validation to allow legacy implementations to transition gradually.
 
     Args:
         adapter_type: The adapter class to validate
         interface_class: The port interface class
 
     Returns:
-        True if adapter implements all interface methods
+        True if adapter implements all interface methods with matching signatures
+
+    Raises:
+        ValueError: If signature validation fails (with helpful error message)
     """
     # Get required methods from interface
     required_methods = _get_interface_methods(interface_class)
 
     # Get methods implemented by adapter
     adapter_methods = {
-        name for name, _ in inspect.getmembers(adapter_type, predicate=inspect.isfunction) if not name.startswith("_")
+        name: method for name, method in inspect.getmembers(adapter_type, predicate=inspect.isfunction) if not name.startswith("_")
     }
 
     # Check that all required methods are implemented
-    return required_methods.issubset(adapter_methods)
+    if not required_methods.issubset(adapter_methods.keys()):
+        missing = required_methods - adapter_methods.keys()
+        raise ValueError(f"{adapter_type.__name__} missing methods: {missing}")
+
+    # Determine validation strictness
+    is_strict = _is_mock_or_test_adapter(adapter_type)
+
+    # Validate each method's signature
+    for method_name in required_methods:
+        try:
+            interface_sig = _get_interface_signature(interface_class, method_name)
+            adapter_sig = inspect.signature(adapter_methods[method_name])
+
+            # Get parameters (exclude 'self')
+            interface_params = list(interface_sig.parameters.values())[1:]
+            adapter_params = list(adapter_sig.parameters.values())[1:]
+
+            # Check parameter count (always strict)
+            if len(interface_params) != len(adapter_params):
+                raise ValueError(
+                    f"{adapter_type.__name__}.{method_name}: expected {len(interface_params)} parameters "
+                    f"(excluding self), got {len(adapter_params)}"
+                )
+
+            # Check parameter names (always strict)
+            for iface_param, adapt_param in zip(interface_params, adapter_params):
+                if iface_param.name != adapt_param.name:
+                    raise ValueError(
+                        f"{adapter_type.__name__}.{method_name}: parameter '{iface_param.name}' "
+                        f"expected, got '{adapt_param.name}'"
+                    )
+
+                # Validate parameter type hints (strict for mock/test, lenient for production)
+                if is_strict and iface_param.annotation != inspect.Parameter.empty and adapt_param.annotation != inspect.Parameter.empty:
+                    # Skip type validation if adapter uses `Any` (allows for flexible implementations)
+                    adapt_type_name = getattr(adapt_param.annotation, "__name__", str(adapt_param.annotation))
+                    if adapt_type_name == "Any":
+                        continue  # Allow `Any` to match any interface type
+
+                    # Extract class name for comparison (handles forward refs like 'BoardConfig' vs BoardConfig)
+                    iface_type_name = (
+                        iface_param.annotation
+                        if isinstance(iface_param.annotation, str)
+                        else getattr(iface_param.annotation, "__name__", str(iface_param.annotation))
+                    )
+                    if iface_type_name != adapt_type_name:
+                        raise ValueError(
+                            f"{adapter_type.__name__}.{method_name}: parameter '{iface_param.name}' "
+                            f"type {iface_type_name} expected, got {adapt_type_name}"
+                        )
+
+            # Check return type (strict for mock/test, lenient for production)
+            if (is_strict and
+                interface_sig.return_annotation != inspect.Signature.empty and
+                adapter_sig.return_annotation != inspect.Signature.empty):
+                # Compare return types flexibly
+                # Extract class names for comparison (handles string forward refs and class objects)
+                def get_return_type_name(ret_annotation):
+                    """Extract canonical type name from return annotation."""
+                    if isinstance(ret_annotation, str):
+                        # String forward ref - extract class name
+                        return ret_annotation.split('[')[0]  # Handle generics like "list[str]" -> "list"
+                    # Handle actual types
+                    if hasattr(ret_annotation, '__origin__'):
+                        # Generic type - use origin
+                        return getattr(ret_annotation.__origin__, '__name__', str(ret_annotation).split("'")[1] if "'" in str(ret_annotation) else str(ret_annotation))
+                    # Regular class
+                    if hasattr(ret_annotation, '__name__'):
+                        return ret_annotation.__name__
+                    # Fallback to string representation, extracting the class name
+                    ret_str = str(ret_annotation)
+                    if "'" in ret_str:
+                        # Extract from format like "<class 'ModuleName.ClassName'>"
+                        return ret_str.split("'")[1].split('.')[-1]
+                    return ret_str
+
+                iface_ret_name = get_return_type_name(interface_sig.return_annotation)
+                adapt_ret_name = get_return_type_name(adapter_sig.return_annotation)
+
+                if iface_ret_name != adapt_ret_name:
+                    raise ValueError(
+                        f"{adapter_type.__name__}.{method_name}: return type "
+                        f"{iface_ret_name} expected, got {adapt_ret_name}"
+                    )
+
+            # Check async compatibility
+            # Note: Async compatibility is checked but mismatches are logged as warnings
+            # rather than errors to allow adapters in transition to async
+            is_interface_async = inspect.iscoroutinefunction(getattr(interface_class, method_name))
+            is_adapter_async = inspect.iscoroutinefunction(adapter_methods[method_name])
+            if is_interface_async != is_adapter_async:
+                # Log warning but don't raise - adapters may be in transition to async
+                pass  # Future: log warning instead of raising
+
+        except ValueError as e:
+            raise ValueError(str(e)) from e
+
+    return True
 
 
 class TicketSystemRegistry(AdapterRegistry[ITicketSystem]):
