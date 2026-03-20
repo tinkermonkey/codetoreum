@@ -193,7 +193,7 @@ def _validate_adapter_implements_interface(adapter_type: type, interface_class: 
                 )
 
             # Check parameter names (always strict)
-            for iface_param, adapt_param in zip(interface_params, adapter_params):
+            for iface_param, adapt_param in zip(interface_params, adapter_params, strict=True):
                 if iface_param.name != adapt_param.name:
                     raise ValueError(
                         f"{adapter_type.__name__}.{method_name}: parameter '{iface_param.name}' "

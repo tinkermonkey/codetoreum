@@ -101,8 +101,8 @@ class TestGetInterfaceSignature:
         """Test that signature includes parameter annotations."""
         sig = _get_interface_signature(ISimplePort, "simple_method")
         params = list(sig.parameters.values())
-        assert params[1].annotation == str  # param1
-        assert params[2].annotation == int  # param2
+        assert params[1].annotation is str  # param1
+        assert params[2].annotation is int  # param2
 
 
 class TestIsMockOrTestAdapter:
@@ -164,8 +164,6 @@ class TestGetReturnTypeName:
 
     def test_handles_generic_type_objects(self):
         """Test handling of generic type objects."""
-        from typing import List
-
         result = _get_return_type_name(list[str])
         assert result == "list"
 
