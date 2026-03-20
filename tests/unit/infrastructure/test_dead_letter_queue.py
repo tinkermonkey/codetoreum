@@ -491,10 +491,13 @@ class TestDeadLetterQueue:
 
         # Wait for retry processor to process it with buffer for slow CI runners
         # Retry interval is 0.05s, so we wait up to 500ms for processing
-        max_wait = 0.5
-        start = asyncio.get_event_loop().time()
-        while retry_count == 0 and (asyncio.get_event_loop().time() - start) < max_wait:
-            await asyncio.sleep(0.05)
+        async def poll_until_processed():
+            for _ in range(10):  # 10 * 0.05s = 0.5s max wait
+                if retry_count > 0:
+                    return
+                await asyncio.sleep(0.05)
+
+        await poll_until_processed()
 
         await dlq.stop_retry_processor()
 
@@ -529,13 +532,13 @@ class TestDeadLetterQueue:
 
         # Wait for circuit breaker to open (after 2 failures with timeout)
         # Give plenty of buffer for slow CI runners
-        max_wait = 1.0
-        start = asyncio.get_event_loop().time()
-        while (
-            not dlq._retry_loop_circuit_breaker.is_open()
-            and (asyncio.get_event_loop().time() - start) < max_wait
-        ):
-            await asyncio.sleep(0.05)
+        async def poll_until_breaker_open():
+            for _ in range(20):  # 20 * 0.05s = 1.0s max wait
+                if dlq._retry_loop_circuit_breaker.is_open():
+                    return
+                await asyncio.sleep(0.05)
+
+        await poll_until_breaker_open()
 
         # Circuit breaker should be OPEN now
         assert dlq._retry_loop_circuit_breaker.is_open(), "Circuit breaker should be open after failures"
@@ -579,13 +582,13 @@ class TestDeadLetterQueue:
         await dlq.start_retry_processor(dummy_handler)
 
         # Wait for circuit to open with buffer for slow CI runners
-        max_open_wait = 1.0
-        start = asyncio.get_event_loop().time()
-        while (
-            not dlq._retry_loop_circuit_breaker.is_open()
-            and (asyncio.get_event_loop().time() - start) < max_open_wait
-        ):
-            await asyncio.sleep(0.05)
+        async def poll_until_breaker_open():
+            for _ in range(20):  # 20 * 0.05s = 1.0s max wait
+                if dlq._retry_loop_circuit_breaker.is_open():
+                    return
+                await asyncio.sleep(0.05)
+
+        await poll_until_breaker_open()
 
         # Circuit should be open
         assert dlq._retry_loop_circuit_breaker.is_open(), "Circuit breaker should have opened"
