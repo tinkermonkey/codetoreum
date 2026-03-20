@@ -560,6 +560,14 @@ class SimulationConfig:
                         response_patterns=agent_obj.get("response_patterns", {}),
                         token_usage=agent_obj.get("token_usage", {"input": 100, "output": 50}),
                     )
+                else:
+                    # Warn if agent_id is missing
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(
+                        "Skipping agent in agents list without agent_id: %s",
+                        agent_obj,
+                    )
         elif isinstance(agents_raw, dict):
             # Dict format {agent_id: {...}}
             for agent_id, agent_data in agents_raw.items():
@@ -571,7 +579,8 @@ class SimulationConfig:
                     token_usage=agent_data.get("token_usage", {"input": 100, "output": 50}),
                 )
 
-        container_data = data.get("container", {})
+        # Support both 'container' and 'containers' keys (plural/singular)
+        container_data = data.get("container") or data.get("containers") or {}
         container = ContainerBehaviorConfig(
             default_exit_code=container_data.get("default_exit_code", 0),
             execution_delay=container_data.get("execution_delay", 0.1),
@@ -592,8 +601,12 @@ class SimulationConfig:
             tracked_metrics=metrics_data.get("tracked_metrics", []),
         )
 
-        fidelity_str = data.get("fidelity_level", "low")
-        fidelity_level = FidelityLevel(fidelity_str) if isinstance(fidelity_str, str) else fidelity_str
+        # Support both 'fidelity_level' and 'fidelity' keys, with case-insensitive enum values
+        fidelity_str = data.get("fidelity_level") or data.get("fidelity") or "low"
+        if isinstance(fidelity_str, str):
+            fidelity_level = FidelityLevel(fidelity_str.lower())
+        else:
+            fidelity_level = fidelity_str
 
         return cls(
             scenario_name=data["scenario_name"],
@@ -623,10 +636,13 @@ class SimulationConfig:
         which are handled by scenario_models.ScenarioModel.
 
         Supports flexible YAML key naming for compatibility with different scenario formats:
-        - speed_multiplier: Can be at top-level OR nested under simulation:
-        - fidelity_level: Can be 'fidelity_level' or 'fidelity' (both lowercase enum values)
+        - speed_multiplier: Can be at top-level OR nested under simulation: (nested takes precedence)
+        - fidelity_level: Can be 'fidelity_level' or 'fidelity' (both lowercase enum values; fidelity_level takes precedence)
         - containers/container: Supports both singular and plural forms
         - agents: Supports both list-of-objects [{agent_id: ...}, ...] and dict format
+
+        Agents without an agent_id field are silently skipped with a warning log. This prevents
+        silent configuration loss and makes missing identifiers visible to users.
 
         Args:
             file_path: Path to YAML scenario file
@@ -693,6 +709,14 @@ class SimulationConfig:
                 if isinstance(agent_obj, dict) and "agent_id" in agent_obj:
                     agent_id = agent_obj["agent_id"]
                     agents_dict[agent_id] = agent_obj
+                else:
+                    # Warn if agent_id is missing
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(
+                        "Skipping agent in agents list without agent_id: %s",
+                        agent_obj,
+                    )
         elif isinstance(agents_raw, dict):
             # Dict format: {agent_id: {...}, agent_id: {...}}
             agents_dict = agents_raw

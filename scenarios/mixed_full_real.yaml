@@ -48,7 +48,7 @@ simulation:
 # Adapter configuration - ALL PRODUCTION
 # NOTE: Some adapters listed below (vault, real, prometheus) are aspirational and not yet implemented.
 # Using this scenario will fail at startup until these adapters are registered in the adapter factory.
-# See documentation/01_design/adapters/ADAPTER_REGISTRY.md for current implementation status.
+# Adapter validation happens during runtime via AdapterResolver.validate_credentials().
 adapters:
   # Real GitHub adapters
   board: github

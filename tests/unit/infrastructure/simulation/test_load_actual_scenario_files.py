@@ -16,13 +16,20 @@ class TestLoadActualScenarioFiles:
     """Test suite for loading actual scenario YAML files."""
 
     def _get_scenarios_dir(self) -> Path:
-        """Get the scenarios directory path."""
+        """Get the scenarios directory path.
+
+        The test file is at: tests/unit/infrastructure/simulation/test_load_actual_scenario_files.py
+        That's 5 levels deep from the project root, so we navigate up 5 parents.
+        """
         # Navigate from test file location to project root, then to scenarios/
+        # Test file path: tests/unit/infrastructure/simulation/test_load_actual_scenario_files.py
+        # Parent levels: test_file -> simulation -> infrastructure -> unit -> tests -> workspace (5 parents)
         test_file = Path(__file__).resolve()
-        project_root = test_file.parent.parent.parent.parent
+        project_root = test_file.parent.parent.parent.parent.parent
         scenarios_dir = project_root / "scenarios"
 
-        # If not found, try from current working directory
+        # Fallback: try from current working directory if absolute path doesn't exist
+        # This depends on pytest being run from the project root
         if not scenarios_dir.exists():
             scenarios_dir = Path("scenarios").resolve()
 
