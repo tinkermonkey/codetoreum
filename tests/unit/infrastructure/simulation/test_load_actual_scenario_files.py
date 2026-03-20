@@ -255,16 +255,14 @@ class TestLoadActualScenarioFiles:
             pytest.fail(error_msg)
 
         # Verify all files were loaded
-        assert len(loaded_configs) == len(yaml_files), (
-            f"Loaded {len(loaded_configs)} files but found {len(yaml_files)} total"
-        )
+        assert len(loaded_configs) == len(
+            yaml_files
+        ), f"Loaded {len(loaded_configs)} files but found {len(yaml_files)} total"
 
         # Verify each config has required fields
         for filename, config in loaded_configs:
             assert config.scenario_name, f"{filename}: scenario_name is required"
-            assert config.time.speed_multiplier > 0, (
-                f"{filename}: speed_multiplier must be positive"
-            )
-            assert isinstance(config.fidelity_level, FidelityLevel), (
-                f"{filename}: fidelity_level must be a FidelityLevel enum"
-            )
+            assert config.time.speed_multiplier > 0, f"{filename}: speed_multiplier must be positive"
+            assert isinstance(
+                config.fidelity_level, FidelityLevel
+            ), f"{filename}: fidelity_level must be a FidelityLevel enum"
