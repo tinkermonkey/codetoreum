@@ -1067,3 +1067,53 @@ class TestInMemoryLockServiceBehavior:
         # Queue should have all 5 items
         state = await service.get_queue_state("proj-1", "board-1")
         assert len(state.queue) == 5
+
+
+class TestInMemoryLockServiceInitialization:
+    """Test InMemoryLockService initialization and parameter handling.
+
+    These tests verify implementation-specific behavior such as parameter
+    acceptance, default values, and initialization state.
+    """
+
+    def test_accepts_event_bus_parameter(self):
+        """InMemoryLockService should accept optional event_bus parameter."""
+        mock_bus = AsyncMock()
+        service = InMemoryLockService(event_bus=mock_bus)
+        assert service._event_bus is mock_bus
+
+    def test_accepts_stale_threshold_parameter(self):
+        """InMemoryLockService should accept optional stale_threshold_seconds parameter."""
+        service = InMemoryLockService(stale_threshold_seconds=3600)
+        assert service._stale_threshold_seconds == 3600
+
+    def test_accepts_clock_parameter(self):
+        """InMemoryLockService should accept optional clock parameter."""
+        from unittest.mock import Mock
+
+        mock_clock = Mock()
+        service = InMemoryLockService(clock=mock_clock)
+        assert service._clock is mock_clock
+
+    def test_default_stale_threshold_is_2_hours(self):
+        """InMemoryLockService should have 2-hour (7200 second) default stale threshold."""
+        service = InMemoryLockService()
+        assert service._stale_threshold_seconds == 7200
+
+    @pytest.mark.asyncio
+    async def test_can_initialize_with_all_parameters(self):
+        """InMemoryLockService should initialize with all optional parameters together."""
+        from unittest.mock import Mock
+
+        mock_bus = AsyncMock()
+        mock_clock = Mock()
+
+        service = InMemoryLockService(
+            event_bus=mock_bus,
+            stale_threshold_seconds=1800,
+            clock=mock_clock,
+        )
+
+        assert service._event_bus is mock_bus
+        assert service._stale_threshold_seconds == 1800
+        assert service._clock is mock_clock

@@ -21,7 +21,10 @@ from codetoreum.ports.output.code_review_service import ICodeReviewService
 from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.identity_service import IIdentityService
-from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
+from codetoreum.application.pipeline_lock_service import (
+    IPipelineLockService,
+    IQueuedPipelineLockService,
+)
 
 
 class TestMockBoardAdapterContract:
@@ -177,12 +180,17 @@ class TestEventEmitterContract:
 
 
 class TestInMemoryLockServiceContract:
-    """Verify InMemoryLockService satisfies IPipelineLockService contract."""
+    """Verify InMemoryLockService satisfies IPipelineLockService/IQueuedPipelineLockService contract."""
 
     def test_is_pipeline_lock_service(self):
-        """InMemoryLockService should be an IPipelineLockService."""
+        """InMemoryLockService should be an IPipelineLockService (application-layer alias)."""
         service = InMemoryLockService()
         assert isinstance(service, IPipelineLockService)
+
+    def test_is_queued_pipeline_lock_service(self):
+        """InMemoryLockService should be an IQueuedPipelineLockService."""
+        service = InMemoryLockService()
+        assert isinstance(service, IQueuedPipelineLockService)
 
     def test_implements_query_operations(self):
         """InMemoryLockService should implement query operations."""
@@ -208,32 +216,6 @@ class TestInMemoryLockServiceContract:
         """InMemoryLockService should implement test helper operations."""
         service = InMemoryLockService()
         assert hasattr(service, "set_lock_acquired_at")
-
-    def test_accepts_event_bus_parameter(self):
-        """InMemoryLockService should accept optional event_bus parameter."""
-        from unittest.mock import AsyncMock
-
-        mock_bus = AsyncMock()
-        service = InMemoryLockService(event_bus=mock_bus)
-        assert service._event_bus is mock_bus
-
-    def test_accepts_stale_threshold_parameter(self):
-        """InMemoryLockService should accept optional stale_threshold_seconds parameter."""
-        service = InMemoryLockService(stale_threshold_seconds=3600)
-        assert service._stale_threshold_seconds == 3600
-
-    def test_accepts_clock_parameter(self):
-        """InMemoryLockService should accept optional clock parameter."""
-        from unittest.mock import Mock
-
-        mock_clock = Mock()
-        service = InMemoryLockService(clock=mock_clock)
-        assert service._clock is mock_clock
-
-    def test_default_stale_threshold_is_2_hours(self):
-        """InMemoryLockService should have 2-hour (7200 second) default stale threshold."""
-        service = InMemoryLockService()
-        assert service._stale_threshold_seconds == 7200
 
 
 if __name__ == "__main__":

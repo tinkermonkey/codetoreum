@@ -2213,8 +2213,9 @@ class SimulationApplicationBootstrap:
 
         NOTE: The handler requires IQueuedPipelineLockService (application-level interface
         with 4-parameter try_acquire_lock), not the PORT interface IPipelineLockService
-        (which has 3 parameters). For simulation, we create an InMemoryLockService instance
-        that implements the correct interface.
+        (which has 3 parameters). For simulation, the shared InMemoryLockService from
+        AdapterResolver implements the correct interface via the backward-compat alias
+        (application.pipeline_lock_service.IPipelineLockService = IQueuedPipelineLockService).
         """
         if not self.adapters or not self.infrastructure:
             logger.warning("Cannot register board column handler: components not ready")
