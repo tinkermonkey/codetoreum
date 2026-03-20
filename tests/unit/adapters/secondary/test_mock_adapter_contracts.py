@@ -195,8 +195,7 @@ class TestInMemoryLockServiceContract:
     def test_implements_query_operations(self):
         """InMemoryLockService should implement query operations."""
         service = InMemoryLockService()
-        assert hasattr(service, "get_lock")
-        assert hasattr(service, "get_all_locks")
+        assert hasattr(service, "get_queue_state")
         assert hasattr(service, "get_all_lock_states")
 
     def test_implements_command_operations(self):
