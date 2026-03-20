@@ -70,7 +70,7 @@ An **adapter slot** is a port interface that can be swapped between implementati
 - **Example Usage**: `await ticket_system.create_issue(title, description)`, `await ticket_system.close_issue(issue_id)`
 - **Credentials Required (GitHub)**: `GITHUB_TOKEN`, `GITHUB_REPO`
 
-#### discussion (IDiscussionAdapter)
+#### discussion_adapter (IDiscussionAdapter)
 - **Simulation**: MockDiscussionAdapter
 - **Production**: GitHubDiscussionAdapter
 - **Status**: ✅ Available
@@ -85,6 +85,24 @@ An **adapter slot** is a port interface that can be swapped between implementati
 - **Purpose**: Work item CRUD operations and metadata management
 - **Example Usage**: `await work_item_service.get_work_item(id)`, `await work_item_service.update_work_item(id, updates)`
 - **Credentials Required (GitHub)**: `GITHUB_TOKEN`
+
+#### code_review (ICodeReviewService)
+- **Simulation**: MockCodeReviewAdapter
+- **Production**: *(Planned)*
+- **Status**: 🔧 Simulation-only
+- **Purpose**: Code review management (PR feedback, review status)
+- **Example Usage**: `await code_review.create_review(pr_id, body)`, `await code_review.request_review(pr_id, reviewer)`
+- **Target Production**: GitHub or GitLab code review integration
+- **Credentials Required (GitHub)**: `GITHUB_TOKEN` (when implemented)
+
+#### container_recovery (IContainerRecoveryService)
+- **Simulation**: MockContainerRecoveryAdapter
+- **Production**: *(Planned)*
+- **Status**: 🔧 Simulation-only
+- **Purpose**: Container failure detection, recovery orchestration, and restart
+- **Example Usage**: `await container_recovery.create_recovery_plan(failed_container)`, `await container_recovery.execute_recovery(plan)`
+- **Target Production**: Container monitoring and recovery service
+- **Credentials Required**: Docker daemon access (when implemented)
 
 ---
 
@@ -148,6 +166,16 @@ An **adapter slot** is a port interface that can be swapped between implementati
 - **Target Production**: GitPython or libgit2 wrapper
 - **Credentials Required (Git)**: SSH keys or GitHub credentials (when implemented)
 - **Note**: Currently orchestrator handles git operations directly
+
+#### repository (IVersionControlService)
+- **Simulation**: InMemoryRepositoryAdapter
+- **Production**: *(Planned)*
+- **Status**: 🔧 Simulation-only
+- **Purpose**: Git repository operations (clone, commit, push, branch management)
+- **Example Usage**: `await repository.clone(url)`, `await repository.commit(message)`, `await repository.push(branch)`
+- **Target Production**: GitPython, libgit2 wrapper, or Git subprocess integration
+- **Credentials Required (Git)**: SSH keys or GitHub token for authenticated repositories (when implemented)
+- **Note**: Separate from version_control; handles repository-level operations
 
 #### storage (IStorage)
 - **Simulation**: InMemoryStorageAdapter

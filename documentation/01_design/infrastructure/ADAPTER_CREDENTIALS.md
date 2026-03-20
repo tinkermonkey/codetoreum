@@ -9,9 +9,12 @@ This document specifies the environment variables required for each production a
 | board | GitHubBoardAdapter | GITHUB_TOKEN, GITHUB_ORG | GITHUB_API_URL |
 | ticket | GitHubTicketAdapter | GITHUB_TOKEN, GITHUB_REPO | GITHUB_API_URL |
 | discussion_adapter | GitHubDiscussionAdapter | GITHUB_TOKEN | - |
+| code_review | *(Planned)* | *(TBD)* | - |
 | review_cycle | GitHubCodeReviewAdapter | GITHUB_TOKEN | - |
 | work_item_service | GitHubWorkItemService | GITHUB_TOKEN, GITHUB_REPO | - |
 | version_control | *(Planned)* | *(TBD)* | - |
+| repository | *(Planned)* | *(TBD)* | - |
+| container_recovery | *(Planned)* | *(TBD)* | - |
 | llm | ClaudeCodeAdapter | CLAUDE_CODE_API_KEY or CLI auth | - |
 | container | DockerContainerAdapter | Docker daemon socket | - |
 | event_store | RedisEventStore | REDIS_URL or REDIS_HOST + REDIS_PORT | REDIS_PASSWORD |
@@ -179,6 +182,70 @@ GITHUB_REPO="org/repo-name"      # Repository in org/repo format (from ticket ad
 GITHUB_TOKEN="ghp_xxxxxxxxxxxx"  # Personal Access Token with repo scope
 GITHUB_REPO="org/repo-name"      # Repository in org/repo format
 ```
+
+---
+
+### code_review (Planned)
+
+**Purpose**: Code review management (PR feedback, review status)
+
+**Status**: *(Planned)* - Production adapter implementation TBD
+
+**Simulation**: MockCodeReviewAdapter (no credentials required)
+
+**Production Requirements** *(when implemented)*:
+- Will likely require GitHub token with PR review permissions
+- May support GitLab or other code review systems
+- TBD: Specific environment variables and scope requirements
+
+**Notes:**
+- Currently available in simulation mode only
+- Production implementation being designed
+- Will integrate with review_cycle and approval workflows
+
+---
+
+### repository (Planned)
+
+**Purpose**: Git repository operations (clone, commit, push, branch management)
+
+**Status**: *(Planned)* - Production adapter implementation TBD
+
+**Simulation**: InMemoryRepositoryAdapter (no credentials required)
+
+**Production Requirements** *(when implemented)*:
+- Will require Git authentication (SSH key or token)
+- Possible environment variables: `GIT_SSH_KEY`, `GITHUB_TOKEN`, or `GIT_CREDENTIALS`
+- May support multiple Git providers (GitHub, GitLab, Gitea, etc.)
+- TBD: Specific scope requirements and authentication methods
+
+**Notes:**
+- Currently available in simulation mode only
+- Handles repository-level operations (clone, commit, push)
+- Separate from version_control adapter (which handles broader VCS operations)
+- Production implementation will support authenticated repositories
+
+---
+
+### container_recovery (Planned)
+
+**Purpose**: Container failure detection, recovery orchestration, and restart
+
+**Status**: *(Planned)* - Production adapter implementation TBD
+
+**Simulation**: MockContainerRecoveryAdapter (no credentials required)
+
+**Production Requirements** *(when implemented)*:
+- Will require Docker daemon access (similar to container adapter)
+- May use monitoring services for failure detection
+- Possible environment variables: `DOCKER_HOST`, monitoring service credentials
+- TBD: Specific recovery strategy configuration and orchestration details
+
+**Notes:**
+- Currently available in simulation mode only
+- Works with container adapter for failure recovery workflows
+- Production implementation will include monitoring, failure detection, and automated recovery
+- May integrate with observability/metrics adapters for health checks
 
 ---
 
