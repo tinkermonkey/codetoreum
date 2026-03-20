@@ -688,10 +688,7 @@ class TestAdapterResolver:
         lock_service = resolver.resolve_lock_service()
 
         assert lock_service is not None
-        # Verify expected methods exist (ports IPipelineLockService has interface mismatch)
-        assert hasattr(lock_service, "try_acquire_lock")
-        assert hasattr(lock_service, "release_lock")
-        assert hasattr(lock_service, "get_queue_state")
+        assert isinstance(lock_service, IPipelineLockService)
 
     def test_resolve_queue_service(self, factory, dependencies, adapter_config):
         """Test resolving pipeline queue service adapter with event dependencies."""

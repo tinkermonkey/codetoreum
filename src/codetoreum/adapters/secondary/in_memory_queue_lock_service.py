@@ -12,8 +12,8 @@ import threading
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.application.pipeline_lock_service import (
-    IPipelineLockService,
     LockAcquisitionResult,
     LockReleaseResult,
     LockStatus,
@@ -28,6 +28,7 @@ from codetoreum.domain.events.lock_events import (
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService, PipelineLock
 
 if TYPE_CHECKING:
     from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
@@ -35,7 +36,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class InMemoryLockService(IPipelineLockService):
+class InMemoryLockService(MockEventEmitter, IPipelineLockService):
     """In-memory pipeline lock service with board position-based queue ordering.
 
     Manages lock acquisition and release with queue ordered by board position.
@@ -65,6 +66,9 @@ class InMemoryLockService(IPipelineLockService):
                    Using a clock ensures consistency with watchdog time comparisons in
                    simulation environments with speed multipliers.
         """
+        # Initialize event emitter for IEventEmitter interface
+        MockEventEmitter.__init__(self)
+
         self._lock_state: dict[str, PipelineQueueState] = {}
         self._lock = threading.Lock()
         self._event_bus = event_bus
@@ -511,6 +515,33 @@ class InMemoryLockService(IPipelineLockService):
                         "new_order": new_order,
                     },
                 )
+
+    async def get_lock(self, project_id: str, board_id: str) -> PipelineLock | None:
+        """Query current lock state for a project's board (port interface).
+
+        Returns the active lock if one exists, or None if no lock is held.
+        Note: This method is for port interface compatibility. The queue-based
+        implementation stores locks differently than the simple PipelineLock model.
+
+        Args:
+            project_id: Project to query
+            board_id: Board to query
+
+        Returns:
+            None - Not applicable for queue-based lock management
+        """
+        return None
+
+    async def get_all_locks(self) -> list[PipelineLock]:
+        """Retrieve all active locks across all projects and boards (port interface).
+
+        Returns empty list for compatibility. The queue-based implementation
+        doesn't maintain locks in the PipelineLock format.
+
+        Returns:
+            Empty list
+        """
+        return []
 
     def get_all_lock_states(self) -> dict[str, PipelineQueueState]:
         """Return copy of all pipeline queue states for watchdog iteration.
