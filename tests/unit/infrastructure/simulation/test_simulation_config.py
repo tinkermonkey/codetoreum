@@ -52,7 +52,7 @@ class TestAdapterSelectionConfig:
         assert config.work_item_service == "mock"
         assert config.repository == "in_memory"
 
-    def test_all_26_adapter_slots_present(self) -> None:
+    def test_all_29_adapter_slots_present(self) -> None:
         """Test that all 29 adapter slots are defined."""
         config = AdapterSelectionConfig()
         field_names = set(config.__dataclass_fields__.keys())

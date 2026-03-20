@@ -48,6 +48,7 @@ from codetoreum.ports.output.workflow_config_service import IWorkflowConfigServi
 
 if TYPE_CHECKING:
     from codetoreum.infrastructure.adapters.factory import AdapterFactory
+    from codetoreum.infrastructure.simulation.bootstrap import SimulationAdapters
     from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
     from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
 
@@ -358,7 +359,7 @@ class AdapterResolver:
             event_emitter=self._resolved["event_emitter"],
         )
 
-    def resolve_all(self) -> dict[str, Any]:
+    def resolve_all(self) -> "SimulationAdapters":
         """
         Resolve all adapters in dependency order.
 
@@ -367,7 +368,7 @@ class AdapterResolver:
         are constructed after their dependencies.
 
         Returns:
-            Dictionary mapping adapter slot names to instances
+            SimulationAdapters instance with all 29 adapters fully typed
 
         Raises:
             AdapterConfigurationError: If credentials are missing/invalid
@@ -431,4 +432,43 @@ class AdapterResolver:
             extra={"adapter_count": len(self._resolved)},
         )
 
-        return self._resolved
+        # Import here to avoid circular import
+        from codetoreum.infrastructure.simulation.bootstrap import SimulationAdapters
+
+        # Construct SimulationAdapters with resolved adapters
+        return SimulationAdapters(
+            # Output port adapters
+            ticket_system=self._resolved["ticket"],
+            llm_provider=self._resolved["llm"],
+            container=self._resolved["container"],
+            repository=self._resolved["repository"],
+            event_store=self._resolved["event_store"],
+            metrics=self._resolved["metrics"],
+            storage=self._resolved["storage"],
+            config_store=self._resolved["config_store"],
+            notifier=self._resolved["notifier"],
+            encryption=self._resolved["encryption"],
+            board=self._resolved["board"],
+            repair_cycle=self._resolved["repair_cycle"],
+            project_manager=self._resolved["project_manager"],
+            lock_service=self._resolved["lock_service"],
+            workflow_config=self._resolved["workflow_config"],
+            queue_service=self._resolved["queue_service"],
+            event_emitter=self._resolved["event_emitter"],
+            audit_store=self._resolved.get("audit_store"),
+            # Additional adapters
+            version_control=self._resolved["version_control"],
+            message_broker=self._resolved["message_broker"],
+            discussion_adapter=self._resolved["discussion_adapter"],
+            review_cycle=self._resolved["review_cycle"],
+            code_review=self._resolved["code_review"],
+            identity_service=self._resolved["identity_service"],
+            checkpoint_store=self._resolved["checkpoint_store"],
+            # Phase 3 adapters
+            agent_repository=self._resolved["agent_repository"],
+            run_registry=self._resolved["run_registry"],
+            branch_tracker=self._resolved["branch_tracker"],
+            work_item_service=self._resolved["work_item_service"],
+            # Container recovery
+            container_recovery=self._resolved["container_recovery"],
+        )

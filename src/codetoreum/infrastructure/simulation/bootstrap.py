@@ -1161,18 +1161,15 @@ class SimulationApplicationBootstrap:
         )
 
         # Resolve all adapters in dependency order with credential validation
+        # resolve_all() now returns fully typed SimulationAdapters directly
         resolved = resolver.resolve_all()
 
-        # Extract resolved event_emitter from resolver result
-        event_emitter = cast("IEventEmitter", resolved["event_emitter"])
-
-        # Extract resolved adapters and apply simulation-specific post-processing
-        # where needed (e.g., pre-configuring default project for tests)
+        # Apply simulation-specific post-processing where needed
+        # (e.g., pre-configuring default project for tests)
 
         # Post-process project manager: pre-configure default test project
-        project_manager = cast("IProjectManagerService", resolved["project_manager"])
-        if isinstance(project_manager, MockProjectManagerAdapter):
-            project_manager.add_project(
+        if isinstance(resolved.project_manager, MockProjectManagerAdapter):
+            resolved.project_manager.add_project(
                 "default_project",
                 ProjectConfig(
                     repo_url="https://vcs.example.com/org/default.git",
@@ -1183,63 +1180,30 @@ class SimulationApplicationBootstrap:
             )
 
         # Post-process message broker: initialize async
-        message_broker = cast("IMessageBroker", resolved["message_broker"])
-        if isinstance(message_broker, InMemoryMessageBroker):
-            await message_broker.initialize()
+        if isinstance(resolved.message_broker, InMemoryMessageBroker):
+            await resolved.message_broker.initialize()
 
         # Post-process identity service: set bot username
-        identity_service = cast("IIdentityService", resolved["identity_service"])
-        if isinstance(identity_service, ConfigurableIdentityService):
-            identity_service.set_bot_username("codetoreum-bot")
+        if isinstance(resolved.identity_service, ConfigurableIdentityService):
+            resolved.identity_service.set_bot_username("codetoreum-bot")
 
         # Post-process storage adapter: inject container for file retrieval
         # (storage depends on container, so we inject it after resolution)
-        storage = cast("IStorage", resolved["storage"])
-        container = cast("IContainer", resolved["container"])
-        if isinstance(storage, InMemoryStorageAdapter):
-            storage.container = container
-
-        # Extract repository adapter from resolver result
-        repository = cast("IRepository", resolved["repository"])
+        if isinstance(resolved.storage, InMemoryStorageAdapter):
+            resolved.storage.container = resolved.container
 
         # Create audit store (not provided by resolver)
         audit_store = InMemoryAuditStore()
 
-        logger.info("Created 30 simulation adapters via AdapterResolver")
+        logger.info("Created 29 simulation adapters via AdapterResolver")
 
-        return SimulationAdapters(
-            ticket_system=cast("ITicketSystem", resolved["ticket"]),
-            llm_provider=cast("ILLMProvider", resolved["llm"]),
-            container=container,
-            repository=repository,
-            event_store=cast("IEventStore", resolved["event_store"]),
-            metrics=cast("IMetrics", resolved["metrics"]),
-            storage=storage,
-            config_store=cast("IConfigStore", resolved["config_store"]),
-            notifier=cast("INotifier", resolved["notifier"]),
-            encryption=cast("IEncryptionService", resolved["encryption"]),
-            board=cast("IBoardService", resolved["board"]),
-            repair_cycle=cast("IRepairCycle", resolved["repair_cycle"]),
-            project_manager=project_manager,
-            lock_service=cast("IPipelineLockService", resolved["lock_service"]),
-            workflow_config=cast("IWorkflowConfigService", resolved["workflow_config"]),
-            queue_service=cast("IPipelineQueueService", resolved["queue_service"]),
-            event_emitter=event_emitter,
-            audit_store=audit_store,
-            version_control=cast("IVersionControlService", resolved["version_control"]),
-            message_broker=message_broker,
-            discussion_adapter=cast("IDiscussionAdapter", resolved["discussion_adapter"]),
-            review_cycle=cast("IReviewCycle", resolved["review_cycle"]),
-            code_review=cast("ICodeReviewService", resolved["code_review"]),
-            identity_service=identity_service,
-            checkpoint_store=cast("IRepairCycleCheckpointStore", resolved["checkpoint_store"]),
-            agent_repository=cast("IAgentRepository", resolved["agent_repository"]),
-            run_registry=cast("IActiveWorkflowRunRegistry", resolved["run_registry"]),
-            branch_tracker=cast("IWorkItemBranchTracker", resolved["branch_tracker"]),
-            work_item_service=cast("IWorkItemService", resolved["work_item_service"]),
-            container_recovery=cast("IAgentContainerRecoveryService", resolved["container_recovery"]),
-            agent_executor=None,  # Assigned in Phase 3
-        )
+        # Update audit_store in resolved adapters
+        resolved.audit_store = audit_store
+
+        # Set agent_executor to None (assigned in Phase 3)
+        resolved.agent_executor = None
+
+        return resolved
 
     # =========================================================================
     # Phase 2b: Register Causal Links

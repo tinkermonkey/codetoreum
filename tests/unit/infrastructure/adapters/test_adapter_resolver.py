@@ -370,15 +370,21 @@ class TestAdapterResolver:
         assert "checkpoint_store" in call_kwargs
         assert "container_adapter" in call_kwargs
 
-    def test_all_26_adapter_slots_resolved(self, factory, dependencies, adapter_config):
+    def test_all_29_adapter_slots_resolved(self, factory, dependencies, adapter_config):
         """Test that all 29 adapter slots are successfully resolved."""
         resolver = AdapterResolver(adapter_config, factory, dependencies)
         result = resolver.resolve_all()
 
-        expected_slots = {
+        # Result is now a fully typed SimulationAdapters dataclass
+        from codetoreum.infrastructure.simulation.bootstrap import SimulationAdapters
+
+        assert isinstance(result, SimulationAdapters)
+
+        # All expected adapters should be assigned (non-None)
+        expected_fields = {
             "board",
-            "ticket",
-            "llm",
+            "ticket_system",
+            "llm_provider",
             "version_control",
             "container",
             "event_store",
@@ -407,8 +413,13 @@ class TestAdapterResolver:
             "container_recovery",
         }
 
-        assert len(expected_slots) == 29
-        assert set(result.keys()) == expected_slots
+        assert len(expected_fields) == 29
+
+        # Verify all expected fields are present and non-None (except agent_executor which is assigned in Phase 3)
+        for field_name in expected_fields:
+            assert hasattr(result, field_name), f"Missing field: {field_name}"
+            value = getattr(result, field_name)
+            assert value is not None, f"Field {field_name} is None"
 
     def test_get_registry_method_exists_on_factory(self, factory):
         """Test that AdapterFactory has get_registry method."""
@@ -435,12 +446,12 @@ class TestAdapterResolver:
         assert "nonexistent_slot" in str(exc_info.value)
 
     def test_validate_credentials_checks_all_slots(self, factory, dependencies):
-        """Test that validate_credentials checks credentials for all 27 slots."""
+        """Test that validate_credentials checks credentials for all 29 slots."""
         # Use all default simulation adapters (no credentials needed)
         config = AdapterSelectionConfig()
         resolver = AdapterResolver(config, factory, dependencies)
 
-        # Should validate all 27 slots without error
+        # Should validate all 29 slots without error
         resolver.validate_credentials()
 
         # Verify by checking that validation looked at all slots

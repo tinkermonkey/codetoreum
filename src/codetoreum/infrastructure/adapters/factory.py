@@ -1282,7 +1282,7 @@ class AdapterFactory:
         """
         Generic helper for creating simple adapters without resilience.
 
-        Eliminates boilerplate code across ~26 create_* methods.
+        Eliminates boilerplate code across ~29 create_* methods.
 
         Args:
             registry: The adapter registry to use

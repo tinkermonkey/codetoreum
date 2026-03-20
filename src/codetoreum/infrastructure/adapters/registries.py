@@ -1,12 +1,15 @@
 """
 Specific adapter registries for each port interface.
 
-Provides registries for managing implementations of all 27+ adapter slots
+Provides registries for managing implementations of all 29 adapter slots
 including ticket systems, LLM providers, containers, repositories, event stores,
 board services, code review services, and more.
 """
 
 import inspect
+import logging
+
+logger = logging.getLogger(__name__)
 
 from codetoreum.application.pipeline_lock_service import IQueuedPipelineLockService
 from codetoreum.infrastructure.adapters.registry_base import AdapterRegistry
@@ -94,6 +97,36 @@ def _is_mock_or_test_adapter(adapter_type: type) -> bool:
     """
     module_name = adapter_type.__module__
     return "testing" in module_name or "mock" in module_name.lower() or "in_memory" in module_name
+
+
+def _get_return_type_name(ret_annotation) -> str:
+    """
+    Extract canonical type name from return annotation.
+
+    Handles string forward refs, generic types, and class objects consistently.
+
+    Args:
+        ret_annotation: The return annotation to extract name from
+
+    Returns:
+        The canonical type name
+    """
+    if isinstance(ret_annotation, str):
+        # String forward ref - extract class name
+        return ret_annotation.split('[')[0]  # Handle generics like "list[str]" -> "list"
+    # Handle actual types
+    if hasattr(ret_annotation, '__origin__'):
+        # Generic type - use origin
+        return getattr(ret_annotation.__origin__, '__name__', str(ret_annotation).split("'")[1] if "'" in str(ret_annotation) else str(ret_annotation))
+    # Regular class
+    if hasattr(ret_annotation, '__name__'):
+        return ret_annotation.__name__
+    # Fallback to string representation, extracting the class name
+    ret_str = str(ret_annotation)
+    if "'" in ret_str:
+        # Extract from format like "<class 'ModuleName.ClassName'>"
+        return ret_str.split("'")[1].split('.')[-1]
+    return ret_str
 
 
 def _validate_adapter_implements_interface(adapter_type: type, interface_class: type) -> bool:
@@ -184,35 +217,17 @@ def _validate_adapter_implements_interface(adapter_type: type, interface_class: 
             if (is_strict and
                 interface_sig.return_annotation != inspect.Signature.empty and
                 adapter_sig.return_annotation != inspect.Signature.empty):
-                # Compare return types flexibly
-                # Extract class names for comparison (handles string forward refs and class objects)
-                def get_return_type_name(ret_annotation):
-                    """Extract canonical type name from return annotation."""
-                    if isinstance(ret_annotation, str):
-                        # String forward ref - extract class name
-                        return ret_annotation.split('[')[0]  # Handle generics like "list[str]" -> "list"
-                    # Handle actual types
-                    if hasattr(ret_annotation, '__origin__'):
-                        # Generic type - use origin
-                        return getattr(ret_annotation.__origin__, '__name__', str(ret_annotation).split("'")[1] if "'" in str(ret_annotation) else str(ret_annotation))
-                    # Regular class
-                    if hasattr(ret_annotation, '__name__'):
-                        return ret_annotation.__name__
-                    # Fallback to string representation, extracting the class name
-                    ret_str = str(ret_annotation)
-                    if "'" in ret_str:
-                        # Extract from format like "<class 'ModuleName.ClassName'>"
-                        return ret_str.split("'")[1].split('.')[-1]
-                    return ret_str
+                # Skip type validation if adapter uses `Any` (allows for flexible implementations)
+                adapt_ret_type_name = getattr(adapter_sig.return_annotation, "__name__", str(adapter_sig.return_annotation))
+                if adapt_ret_type_name != "Any":
+                    iface_ret_name = _get_return_type_name(interface_sig.return_annotation)
+                    adapt_ret_name = _get_return_type_name(adapter_sig.return_annotation)
 
-                iface_ret_name = get_return_type_name(interface_sig.return_annotation)
-                adapt_ret_name = get_return_type_name(adapter_sig.return_annotation)
-
-                if iface_ret_name != adapt_ret_name:
-                    raise ValueError(
-                        f"{adapter_type.__name__}.{method_name}: return type "
-                        f"{iface_ret_name} expected, got {adapt_ret_name}"
-                    )
+                    if iface_ret_name != adapt_ret_name:
+                        raise ValueError(
+                            f"{adapter_type.__name__}.{method_name}: return type "
+                            f"{iface_ret_name} expected, got {adapt_ret_name}"
+                        )
 
             # Check async compatibility
             # Note: Async compatibility is checked but mismatches are logged as warnings
@@ -220,8 +235,11 @@ def _validate_adapter_implements_interface(adapter_type: type, interface_class: 
             is_interface_async = inspect.iscoroutinefunction(getattr(interface_class, method_name))
             is_adapter_async = inspect.iscoroutinefunction(adapter_methods[method_name])
             if is_interface_async != is_adapter_async:
-                # Log warning but don't raise - adapters may be in transition to async
-                pass  # Future: log warning instead of raising
+                logger.warning(
+                    f"{adapter_type.__name__}.{method_name}: async/sync mismatch - "
+                    f"interface is {'async' if is_interface_async else 'sync'}, "
+                    f"adapter is {'async' if is_adapter_async else 'sync'}"
+                )
 
         except ValueError as e:
             raise ValueError(str(e)) from e
@@ -526,10 +544,17 @@ class PipelineLockServiceRegistry(AdapterRegistry[IPipelineLockService]):
     def _is_valid_adapter(self, adapter_type: type[IPipelineLockService]) -> bool:
         """Validate that an adapter implements IPipelineLockService or IQueuedPipelineLockService."""
         # Check if implements port interface
-        if _validate_adapter_implements_interface(adapter_type, self._port_interface):
-            return True
+        try:
+            if _validate_adapter_implements_interface(adapter_type, self._port_interface):
+                return True
+        except ValueError:
+            # Fall through to check IQueuedPipelineLockService alternative
+            pass
         # Also accept adapters that implement IQueuedPipelineLockService (application interface)
-        return _validate_adapter_implements_interface(adapter_type, IQueuedPipelineLockService)
+        try:
+            return _validate_adapter_implements_interface(adapter_type, IQueuedPipelineLockService)
+        except ValueError:
+            return False
 
 
 class PipelineQueueServiceRegistry(AdapterRegistry[IPipelineQueueService]):
