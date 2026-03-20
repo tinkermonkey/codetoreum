@@ -26,12 +26,10 @@ class ISimplePort(ABC):
     @abstractmethod
     def simple_method(self, param1: str, param2: int) -> bool:
         """A simple method."""
-        pass
 
     @abstractmethod
     def method_with_defaults(self, param1: str, param2: int = 10) -> None:
         """Method with default parameters."""
-        pass
 
 
 class IMockPortInTestModule(ABC):
@@ -40,7 +38,6 @@ class IMockPortInTestModule(ABC):
     @abstractmethod
     def test_method(self) -> str:
         """Test method."""
-        pass
 
 
 class ValidAdapterImpl:
@@ -113,6 +110,7 @@ class TestIsMockOrTestAdapter:
 
     def test_identifies_mock_adapters(self):
         """Test that mock adapters are identified."""
+
         # Create a class in a mock module context
         class MockAdapter:
             pass
@@ -168,7 +166,7 @@ class TestGetReturnTypeName:
         """Test handling of generic type objects."""
         from typing import List
 
-        result = _get_return_type_name(List[str])
+        result = _get_return_type_name(list[str])
         assert result == "list"
 
     def test_handles_custom_class_types(self):
@@ -196,16 +194,12 @@ class TestValidateAdapterImplementsInterface:
     def test_wrong_parameter_count_raises_error(self):
         """Test that wrong parameter count raises ValueError."""
         with pytest.raises(ValueError, match="expected 2 parameters"):
-            _validate_adapter_implements_interface(
-                WrongParameterCountAdapter, ISimplePort
-            )
+            _validate_adapter_implements_interface(WrongParameterCountAdapter, ISimplePort)
 
     def test_wrong_parameter_name_raises_error(self):
         """Test that wrong parameter name raises ValueError."""
         with pytest.raises(ValueError, match="parameter 'param2'"):
-            _validate_adapter_implements_interface(
-                WrongParameterNameAdapter, ISimplePort
-            )
+            _validate_adapter_implements_interface(WrongParameterNameAdapter, ISimplePort)
 
     def test_strict_mode_for_mock_adapters(self):
         """Test that mock adapters use strict validation."""
@@ -216,9 +210,7 @@ class TestValidateAdapterImplementsInterface:
             def simple_method(self, param1: str, param2: int) -> bool:
                 return True
 
-            def method_with_defaults(
-                self, param1: str, param2: int = 10
-            ) -> None:
+            def method_with_defaults(self, param1: str, param2: int = 10) -> None:
                 pass
 
         # Should be strict for mock adapters
@@ -233,9 +225,7 @@ class TestValidateAdapterImplementsInterface:
             def simple_method(self, param1: str, param2: int) -> bool:
                 return True
 
-            def method_with_defaults(
-                self, param1: str, param2: int = 10
-            ) -> None:
+            def method_with_defaults(self, param1: str, param2: int = 10) -> None:
                 pass
 
         # Should be lenient for production adapters

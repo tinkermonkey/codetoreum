@@ -113,19 +113,23 @@ def _get_return_type_name(ret_annotation) -> str:
     """
     if isinstance(ret_annotation, str):
         # String forward ref - extract class name
-        return ret_annotation.split('[')[0]  # Handle generics like "list[str]" -> "list"
+        return ret_annotation.split("[")[0]  # Handle generics like "list[str]" -> "list"
     # Handle actual types
-    if hasattr(ret_annotation, '__origin__'):
+    if hasattr(ret_annotation, "__origin__"):
         # Generic type - use origin
-        return getattr(ret_annotation.__origin__, '__name__', str(ret_annotation).split("'")[1] if "'" in str(ret_annotation) else str(ret_annotation))
+        return getattr(
+            ret_annotation.__origin__,
+            "__name__",
+            str(ret_annotation).split("'")[1] if "'" in str(ret_annotation) else str(ret_annotation),
+        )
     # Regular class
-    if hasattr(ret_annotation, '__name__'):
+    if hasattr(ret_annotation, "__name__"):
         return ret_annotation.__name__
     # Fallback to string representation, extracting the class name
     ret_str = str(ret_annotation)
     if "'" in ret_str:
         # Extract from format like "<class 'ModuleName.ClassName'>"
-        return ret_str.split("'")[1].split('.')[-1]
+        return ret_str.split("'")[1].rsplit(".", maxsplit=1)[-1]
     return ret_str
 
 
@@ -158,7 +162,9 @@ def _validate_adapter_implements_interface(adapter_type: type, interface_class: 
 
     # Get methods implemented by adapter
     adapter_methods = {
-        name: method for name, method in inspect.getmembers(adapter_type, predicate=inspect.isfunction) if not name.startswith("_")
+        name: method
+        for name, method in inspect.getmembers(adapter_type, predicate=inspect.isfunction)
+        if not name.startswith("_")
     }
 
     # Check that all required methods are implemented
@@ -195,7 +201,11 @@ def _validate_adapter_implements_interface(adapter_type: type, interface_class: 
                     )
 
                 # Validate parameter type hints (strict for mock/test, lenient for production)
-                if is_strict and iface_param.annotation != inspect.Parameter.empty and adapt_param.annotation != inspect.Parameter.empty:
+                if (
+                    is_strict
+                    and iface_param.annotation != inspect.Parameter.empty
+                    and adapt_param.annotation != inspect.Parameter.empty
+                ):
                     # Skip type validation if adapter uses `Any` (allows for flexible implementations)
                     adapt_type_name = getattr(adapt_param.annotation, "__name__", str(adapt_param.annotation))
                     if adapt_type_name == "Any":
@@ -214,11 +224,15 @@ def _validate_adapter_implements_interface(adapter_type: type, interface_class: 
                         )
 
             # Check return type (strict for mock/test, lenient for production)
-            if (is_strict and
-                interface_sig.return_annotation != inspect.Signature.empty and
-                adapter_sig.return_annotation != inspect.Signature.empty):
+            if (
+                is_strict
+                and interface_sig.return_annotation != inspect.Signature.empty
+                and adapter_sig.return_annotation != inspect.Signature.empty
+            ):
                 # Skip type validation if adapter uses `Any` (allows for flexible implementations)
-                adapt_ret_type_name = getattr(adapter_sig.return_annotation, "__name__", str(adapter_sig.return_annotation))
+                adapt_ret_type_name = getattr(
+                    adapter_sig.return_annotation, "__name__", str(adapter_sig.return_annotation)
+                )
                 if adapt_ret_type_name != "Any":
                     iface_ret_name = _get_return_type_name(interface_sig.return_annotation)
                     adapt_ret_name = _get_return_type_name(adapter_sig.return_annotation)
