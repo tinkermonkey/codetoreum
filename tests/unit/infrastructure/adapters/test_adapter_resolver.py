@@ -221,6 +221,8 @@ class TestAdapterResolver:
     def test_resolve_board(self, factory, dependencies, adapter_config):
         """Test resolving board service adapter."""
         resolver = AdapterResolver(adapter_config, factory, dependencies)
+        # Resolve event_emitter first since board depends on it
+        resolver._resolved["event_emitter"] = resolver.resolve_event_emitter()
         board = resolver.resolve_board()
 
         assert board is not None
@@ -231,8 +233,8 @@ class TestAdapterResolver:
         resolver = AdapterResolver(adapter_config, factory, dependencies)
         result = resolver.resolve_all()
 
-        # Should return 27 adapters
-        assert len(result) == 27
+        # Should return 29 adapters
+        assert len(result) == 29
 
         # All values should be adapter instances (not None)
         for slot_name, adapter in result.items():
@@ -244,7 +246,7 @@ class TestAdapterResolver:
         result = resolver.resolve_all()
 
         assert resolver._resolved == result
-        assert len(resolver._resolved) == 27
+        assert len(resolver._resolved) == 29
 
     def test_resolve_all_respects_dependency_order(self, factory, dependencies, adapter_config):
         """Test that adapters are resolved in dependency order."""
@@ -353,6 +355,9 @@ class TestAdapterResolver:
         resolver._deps.engine.create_repair_cycle_adapter.return_value = mock_repair_cycle
 
         # Populate _resolved with required adapters
+        # container depends on event_emitter, so resolve that first
+        resolver._resolved["event_emitter"] = resolver.resolve_event_emitter()
+        resolver._resolved["event_bus"] = resolver._deps.event_bus
         resolver._resolved["checkpoint_store"] = resolver.resolve_checkpoint_store()
         resolver._resolved["container"] = resolver.resolve_container()
 
@@ -366,7 +371,7 @@ class TestAdapterResolver:
         assert "container_adapter" in call_kwargs
 
     def test_all_26_adapter_slots_resolved(self, factory, dependencies, adapter_config):
-        """Test that all 27 adapter slots are successfully resolved."""
+        """Test that all 29 adapter slots are successfully resolved."""
         resolver = AdapterResolver(adapter_config, factory, dependencies)
         result = resolver.resolve_all()
 
@@ -385,6 +390,7 @@ class TestAdapterResolver:
             "discussion_adapter",
             "review_cycle",
             "repair_cycle",
+            "code_review",
             "project_manager",
             "lock_service",
             "workflow_config",
@@ -398,9 +404,10 @@ class TestAdapterResolver:
             "branch_tracker",
             "work_item_service",
             "repository",
+            "container_recovery",
         }
 
-        assert len(expected_slots) == 27
+        assert len(expected_slots) == 29
         assert set(result.keys()) == expected_slots
 
     def test_get_registry_method_exists_on_factory(self, factory):
@@ -575,5 +582,5 @@ class TestAdapterResolverIntegration:
         result = resolver.resolve_all()
 
         # All adapters should be created successfully
-        assert len(result) == 27
+        assert len(result) == 29
         assert all(adapter is not None for adapter in result.values())
