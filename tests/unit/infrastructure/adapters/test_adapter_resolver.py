@@ -240,6 +240,7 @@ class TestAdapterResolver:
 
         # All adapter fields should be non-None (except optional ones)
         import dataclasses
+
         optional_fields = {"agent_executor", "audit_store"}
         for field in dataclasses.fields(result):
             adapter = getattr(result, field.name)
@@ -607,6 +608,7 @@ class TestAdapterResolverIntegration:
         # Result should be SimulationAdapters dataclass with all non-optional fields set
         assert isinstance(result, SimulationAdapters)
         import dataclasses
+
         optional_fields = {"agent_executor", "audit_store"}
         for field in dataclasses.fields(result):
             adapter = getattr(result, field.name)
