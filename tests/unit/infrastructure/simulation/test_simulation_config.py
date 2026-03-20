@@ -753,3 +753,133 @@ adapters:
         assert config.adapters.board == "mock"
         assert config.adapters.llm == "mock"
         assert config.adapters.container == "fake"
+
+    def test_from_yaml_with_nested_simulation_section(self) -> None:
+        """Test that from_yaml handles speed_multiplier nested under 'simulation:' key."""
+        yaml_content = """name: NestedSimulation
+description: Test nested simulation section
+simulation:
+  speed_multiplier: 25.0
+  auto_advance: true
+  start_time: null
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            temp_path = f.name
+
+        try:
+            config = SimulationConfig.from_yaml(temp_path)
+            assert config.scenario_name == "NestedSimulation"
+            assert config.time.speed_multiplier == 25.0
+            assert config.time.auto_advance is True
+        finally:
+            Path(temp_path).unlink()
+
+    def test_from_yaml_with_agents_as_list(self) -> None:
+        """Test that from_yaml handles agents as list-of-objects format."""
+        yaml_content = """name: AgentsListTest
+agents:
+  - agent_id: reviewer
+    execution_delay: 0.2
+    success_rate: 0.95
+    response_patterns:
+      code_review: "Code review completed"
+  - agent_id: analyzer
+    execution_delay: 0.15
+    success_rate: 0.98
+    response_patterns:
+      analysis: "Analysis complete"
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            temp_path = f.name
+
+        try:
+            config = SimulationConfig.from_yaml(temp_path)
+            assert "reviewer" in config.agents
+            assert "analyzer" in config.agents
+            assert config.agents["reviewer"].execution_delay == 0.2
+            assert config.agents["reviewer"].success_rate == 0.95
+            assert config.agents["analyzer"].execution_delay == 0.15
+            assert config.agents["analyzer"].success_rate == 0.98
+        finally:
+            Path(temp_path).unlink()
+
+    def test_from_yaml_with_containers_plural_key(self) -> None:
+        """Test that from_yaml handles 'containers:' (plural) as well as 'container:'."""
+        yaml_content = """name: ContainersPluralTest
+containers:
+  default_exit_code: 1
+  execution_delay: 0.5
+  command_exit_codes:
+    "pytest": 0
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            temp_path = f.name
+
+        try:
+            config = SimulationConfig.from_yaml(temp_path)
+            assert config.container.default_exit_code == 1
+            assert config.container.execution_delay == 0.5
+            assert config.container.command_exit_codes["pytest"] == 0
+        finally:
+            Path(temp_path).unlink()
+
+    def test_from_yaml_with_fidelity_uppercase_normalized(self) -> None:
+        """Test that from_yaml normalizes uppercase fidelity values to lowercase."""
+        yaml_content = """name: FidelityUppercaseTest
+fidelity: MEDIUM
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            temp_path = f.name
+
+        try:
+            config = SimulationConfig.from_yaml(temp_path)
+            assert config.fidelity_level == FidelityLevel.MEDIUM
+        finally:
+            Path(temp_path).unlink()
+
+    def test_from_yaml_with_fidelity_level_key(self) -> None:
+        """Test that from_yaml accepts 'fidelity_level' key."""
+        yaml_content = """name: FidelityLevelKeyTest
+fidelity_level: high
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+            temp_path = f.name
+
+        try:
+            config = SimulationConfig.from_yaml(temp_path)
+            assert config.fidelity_level == FidelityLevel.HIGH
+        finally:
+            Path(temp_path).unlink()
+
+    def test_from_dict_with_agents_as_list(self) -> None:
+        """Test that from_dict handles agents as list-of-objects format."""
+        data = {
+            "scenario_name": "AgentsListDictTest",
+            "agents": [
+                {
+                    "agent_id": "reviewer",
+                    "execution_delay": 0.2,
+                    "success_rate": 0.95,
+                },
+                {
+                    "agent_id": "analyzer",
+                    "execution_delay": 0.15,
+                    "success_rate": 0.98,
+                },
+            ],
+        }
+        config = SimulationConfig.from_dict(data)
+        assert "reviewer" in config.agents
+        assert "analyzer" in config.agents
+        assert config.agents["reviewer"].execution_delay == 0.2
+        assert config.agents["analyzer"].execution_delay == 0.15

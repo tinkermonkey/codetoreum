@@ -11,11 +11,15 @@
 #   GITHUB_TOKEN - Personal Access Token (repo, project scopes)
 #   GITHUB_ORG - GitHub organization name
 #   GITHUB_REPO - Repository in org/repo format
-#   REDIS_URL - Redis connection (for event store, message broker)
+#   REDIS_URL - Redis connection (for event store, message broker) [OPTIONAL - not yet implemented]
 #
 # Performance:
 #   Speed: 10-50x faster than all-real (no LLM inference)
 #   Determinism: High (mock agents + real boards)
+#
+# Note:
+#   All adapters referenced in this scenario are registered and available.
+#   See documentation/01_design/adapters/ADAPTER_REGISTRATION_STATUS.md for implementation status.
 
 name: mixed_github_real
 description: Real GitHub boards and tickets, simulated agents and containers

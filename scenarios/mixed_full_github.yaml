@@ -11,13 +11,20 @@
 #   GITHUB_TOKEN - Personal Access Token (repo, project scopes)
 #   GITHUB_ORG - GitHub organization name
 #   GITHUB_REPO - Repository in org/repo format
-#   REDIS_URL - Redis connection (for event store, message broker, locks)
+#   REDIS_URL - Redis connection [NOT YET IMPLEMENTED - see ADAPTER_REGISTRATION_STATUS.md]
 #   DATABASE_URL - PostgreSQL connection (for config, workflows)
 #   Docker - Docker daemon socket at /var/run/docker.sock
 #
 # Performance:
 #   Speed: 5-10x faster than all-real (no LLM inference, fast container execution)
 #   Determinism: High (mock agents + real systems)
+#
+# IMPORTANT: Redis Adapters Not Yet Implemented
+#   This scenario references Redis adapters for event_store, message_broker, lock_service,
+#   and queue_service which are not yet registered in AdapterFactory.
+#   Loading this scenario will fail at runtime with AdapterConfigurationError.
+#   See documentation/01_design/adapters/ADAPTER_REGISTRATION_STATUS.md for details.
+#   Issue #474 tracks this limitation.
 
 name: mixed_full_github
 description: Real GitHub, real infrastructure (Docker/Redis/PostgreSQL), simulated agents

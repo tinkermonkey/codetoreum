@@ -545,14 +545,31 @@ class SimulationConfig:
         )
 
         agents = {}
-        for agent_id, agent_data in data.get("agents", {}).items():
-            agents[agent_id] = AgentBehaviorConfig(
-                agent_id=agent_id,
-                execution_delay=agent_data.get("execution_delay", 0.1),
-                success_rate=agent_data.get("success_rate", 1.0),
-                response_patterns=agent_data.get("response_patterns", {}),
-                token_usage=agent_data.get("token_usage", {"input": 100, "output": 50}),
-            )
+        agents_raw = data.get("agents", {})
+
+        # Support both dict format {agent_id: {...}} and list-of-objects format [{agent_id: "...", ...}]
+        if isinstance(agents_raw, list):
+            # List-of-objects format
+            for agent_obj in agents_raw:
+                if isinstance(agent_obj, dict) and "agent_id" in agent_obj:
+                    agent_id = agent_obj["agent_id"]
+                    agents[agent_id] = AgentBehaviorConfig(
+                        agent_id=agent_id,
+                        execution_delay=agent_obj.get("execution_delay", 0.1),
+                        success_rate=agent_obj.get("success_rate", 1.0),
+                        response_patterns=agent_obj.get("response_patterns", {}),
+                        token_usage=agent_obj.get("token_usage", {"input": 100, "output": 50}),
+                    )
+        elif isinstance(agents_raw, dict):
+            # Dict format {agent_id: {...}}
+            for agent_id, agent_data in agents_raw.items():
+                agents[agent_id] = AgentBehaviorConfig(
+                    agent_id=agent_id,
+                    execution_delay=agent_data.get("execution_delay", 0.1),
+                    success_rate=agent_data.get("success_rate", 1.0),
+                    response_patterns=agent_data.get("response_patterns", {}),
+                    token_usage=agent_data.get("token_usage", {"input": 100, "output": 50}),
+                )
 
         container_data = data.get("container", {})
         container = ContainerBehaviorConfig(
@@ -605,6 +622,12 @@ class SimulationConfig:
         container, etc.) but NOT the data seeding definitions (projects, workflows, etc.)
         which are handled by scenario_models.ScenarioModel.
 
+        Supports flexible YAML key naming for compatibility with different scenario formats:
+        - speed_multiplier: Can be at top-level OR nested under simulation:
+        - fidelity_level: Can be 'fidelity_level' or 'fidelity' (both lowercase enum values)
+        - containers/container: Supports both singular and plural forms
+        - agents: Supports both list-of-objects [{agent_id: ...}, ...] and dict format
+
         Args:
             file_path: Path to YAML scenario file
 
@@ -614,7 +637,7 @@ class SimulationConfig:
         Raises:
             FileNotFoundError: If file doesn't exist
             yaml.YAMLError: If YAML is malformed
-            ValueError: If required fields are missing
+            ValueError: If required fields are missing or fidelity value is invalid
         """
         file_path = Path(file_path)
 
@@ -635,20 +658,63 @@ class SimulationConfig:
             message = "Scenario file must contain 'name' field"
             raise ValueError(message)
 
+        # Extract speed_multiplier with flexible key naming:
+        # Try top-level first, then nested under 'simulation' key
+        speed_multiplier = data.get("speed_multiplier", 10.0)
+        simulation_section = data.get("simulation", {})
+        if isinstance(simulation_section, dict) and "speed_multiplier" in simulation_section:
+            speed_multiplier = simulation_section["speed_multiplier"]
+
+        # Extract auto_advance with flexible key naming:
+        # Try top-level first, then nested under 'simulation' key
+        auto_advance = data.get("auto_advance", False)
+        if isinstance(simulation_section, dict) and "auto_advance" in simulation_section:
+            auto_advance = simulation_section["auto_advance"]
+
+        # Extract start_time with flexible key naming
+        start_time = data.get("start_time")
+        if isinstance(simulation_section, dict) and "start_time" in simulation_section:
+            start_time = simulation_section["start_time"]
+
+        # Extract fidelity_level with flexible key naming:
+        # Support both 'fidelity_level' and 'fidelity' keys, always lowercase
+        fidelity_str = data.get("fidelity_level") or data.get("fidelity", "low")
+        if isinstance(fidelity_str, str):
+            # Normalize to lowercase for enum matching
+            fidelity_str = fidelity_str.lower()
+
+        # Parse agents: Support both list-of-objects and dict formats
+        agents_raw = data.get("agents", {})
+        agents_dict = {}
+
+        if isinstance(agents_raw, list):
+            # List-of-objects format: [{agent_id: "foo", ...}, {agent_id: "bar", ...}]
+            for agent_obj in agents_raw:
+                if isinstance(agent_obj, dict) and "agent_id" in agent_obj:
+                    agent_id = agent_obj["agent_id"]
+                    agents_dict[agent_id] = agent_obj
+        elif isinstance(agents_raw, dict):
+            # Dict format: {agent_id: {...}, agent_id: {...}}
+            agents_dict = agents_raw
+
+        # Extract container config: Support both 'container' and 'containers' keys
+        container_data = data.get("container") or data.get("containers", {})
+
         # Build config using from_dict for consistency
         config_dict = {
             "scenario_name": scenario_name,
             "scenario_description": data.get("description", ""),
             "adapters": data.get("adapters", {}),
             "time": {
-                "speed_multiplier": data.get("speed_multiplier", 10.0),
-                "auto_advance": data.get("auto_advance", False),
+                "speed_multiplier": speed_multiplier,
+                "start_time": start_time,
+                "auto_advance": auto_advance,
             },
-            "agents": {},
-            "container": data.get("container", {}),
+            "agents": agents_dict,
+            "container": container_data,
             "notifications": data.get("notifications", {}),
             "metrics": data.get("metrics", {}),
-            "fidelity_level": data.get("fidelity_level", "low"),
+            "fidelity_level": fidelity_str,
             "ms_per_token": data.get("ms_per_token", 50.0),
             "ms_per_file_operation": data.get("ms_per_file_operation", 10.0),
             "ms_per_event": data.get("ms_per_event", 1.0),
