@@ -34,6 +34,7 @@ class AdapterSelectionConfig:
     discussion_adapter: str = "mock"
     review_cycle: str = "mock"
     repair_cycle: str = "mock"
+    code_review: str = "mock"
     project_manager: str = "mock"
     lock_service: str = "in_memory"
     workflow_config: str = "in_memory"
@@ -47,6 +48,7 @@ class AdapterSelectionConfig:
     branch_tracker: str = "in_memory"
     work_item_service: str = "mock"
     repository: str = "in_memory"
+    container_recovery: str = "mock"
 
     def __post_init__(self) -> None:
         """Validate that all adapter selections are non-empty strings."""

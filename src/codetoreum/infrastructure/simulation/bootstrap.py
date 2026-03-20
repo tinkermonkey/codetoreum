@@ -192,8 +192,10 @@ from codetoreum.ports.output.active_workflow_run_registry import (
 from codetoreum.ports.output.agent_executor import IAgentExecutor
 from codetoreum.ports.output.agent_repository import IAgentRepository
 from codetoreum.ports.output.board_service import IBoardService
+from codetoreum.ports.output.code_review_service import ICodeReviewService
 from codetoreum.ports.output.config_store import IConfigStore
 from codetoreum.ports.output.container import IContainer
+from codetoreum.ports.output.container_recovery import IAgentContainerRecoveryService
 from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.encryption_service import IEncryptionService
 from codetoreum.ports.output.event_emitter import IEventEmitter
@@ -315,6 +317,7 @@ class SimulationAdapters:
     message_broker: IMessageBroker
     discussion_adapter: IDiscussionAdapter
     review_cycle: IReviewCycle
+    code_review: ICodeReviewService
     identity_service: IIdentityService
     checkpoint_store: IRepairCycleCheckpointStore
 
@@ -323,6 +326,9 @@ class SimulationAdapters:
     run_registry: IActiveWorkflowRunRegistry
     branch_tracker: IWorkItemBranchTracker
     work_item_service: IWorkItemService
+
+    # Container recovery adapter
+    container_recovery: IAgentContainerRecoveryService
 
     # Fields with defaults (must come after fields without defaults)
     agent_executor: IAgentExecutor | None = None
@@ -1097,17 +1103,20 @@ class SimulationApplicationBootstrap:
 
     async def _create_adapters(self) -> SimulationAdapters:
         """
-        Create all 28 adapters using AdapterResolver in dependency order.
+        Create all 30 adapters using AdapterResolver in dependency order.
 
         Phase 2 bootstrap creates adapters following a partial dependency ordering:
-        1. Leaf adapters (no dependencies): event_store, config_store, metrics, storage, encryption
+        1. Leaf adapters (no dependencies): event_store, config_store, metrics, encryption, identity_service
         2. Event infrastructure: event_emitter, message_broker
-        3. External systems: ticket_system, llm_provider, container, version_control
-        4. Coordination: board, discussion_adapter, lock_service, queue_service
-        5. State: checkpoint_store, agent_repository, run_registry, branch_tracker, work_item_service,
+        3. Adapters depending on event_emitter: storage, container, version_control, board, queue_service
+        4. External systems: ticket_system, llm_provider
+        5. Coordination: discussion_adapter, lock_service
+        6. State: checkpoint_store, agent_repository, run_registry, branch_tracker, work_item_service,
                    workflow_config, notifier
-        6. Composite: project_manager
-        7. Engine-coupled: review_cycle, repair_cycle (use SimulationEngine for clock injection)
+        7. Composite: project_manager
+        8. Repository: (depends on event_emitter)
+        9. Engine-coupled: review_cycle, repair_cycle (use SimulationEngine for clock injection)
+        10. Additional services: code_review, container_recovery
 
         AdapterResolver validates credentials before construction and raises aggregated
         configuration errors if any adapter is misconfigured.
@@ -1117,7 +1126,7 @@ class SimulationApplicationBootstrap:
         simulation-specific methods.
 
         Returns:
-            SimulationAdapters with all 28 adapters typed as port interfaces
+            SimulationAdapters with all 30 adapters typed as port interfaces
         """
         if not self._engine:
             message = "SimulationEngine must be created before adapters"
@@ -1195,7 +1204,7 @@ class SimulationApplicationBootstrap:
         # Create audit store (not provided by resolver)
         audit_store = InMemoryAuditStore()
 
-        logger.info("Created 28 simulation adapters via AdapterResolver")
+        logger.info("Created 30 simulation adapters via AdapterResolver")
 
         return SimulationAdapters(
             ticket_system=cast("ITicketSystem", resolved["ticket"]),
@@ -1220,12 +1229,14 @@ class SimulationApplicationBootstrap:
             message_broker=message_broker,
             discussion_adapter=cast("IDiscussionAdapter", resolved["discussion_adapter"]),
             review_cycle=cast("IReviewCycle", resolved["review_cycle"]),
+            code_review=cast("ICodeReviewService", resolved["code_review"]),
             identity_service=identity_service,
             checkpoint_store=cast("IRepairCycleCheckpointStore", resolved["checkpoint_store"]),
             agent_repository=cast("IAgentRepository", resolved["agent_repository"]),
             run_registry=cast("IActiveWorkflowRunRegistry", resolved["run_registry"]),
             branch_tracker=cast("IWorkItemBranchTracker", resolved["branch_tracker"]),
             work_item_service=cast("IWorkItemService", resolved["work_item_service"]),
+            container_recovery=cast("IAgentContainerRecoveryService", resolved["container_recovery"]),
             agent_executor=None,  # Assigned in Phase 3
         )
 

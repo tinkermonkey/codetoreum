@@ -19,8 +19,10 @@ from codetoreum.infrastructure.simulation.simulation_config import AdapterSelect
 from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
 from codetoreum.ports.output.agent_repository import IAgentRepository
 from codetoreum.ports.output.board_service import IBoardService
+from codetoreum.ports.output.code_review_service import ICodeReviewService
 from codetoreum.ports.output.config_store import IConfigStore
 from codetoreum.ports.output.container import IContainer
+from codetoreum.ports.output.container_recovery import IAgentContainerRecoveryService
 from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.encryption_service import IEncryptionService
 from codetoreum.ports.output.event_emitter import IEventEmitter
@@ -130,7 +132,7 @@ class AdapterResolver:
         """
         Pre-flight check: aggregate all missing credential errors.
 
-        Validates all 27 adapter slots before constructing any adapter.
+        Validates all 29 adapter slots before constructing any adapter.
         Checks that:
         - Implementation names are registered in factories
         - All required environment variables exist
@@ -183,7 +185,7 @@ class AdapterResolver:
             raise AdapterConfigurationError(errors)
 
     # =========================================================================
-    # Resolve methods for all 27 adapter slots
+    # Resolve methods for all 29 adapter slots
     # =========================================================================
 
     def resolve_event_store(self) -> IEventStore:
@@ -202,7 +204,7 @@ class AdapterResolver:
         """Resolve storage adapter."""
         return self._factory.create_storage(
             adapter_name=self._config.storage,
-            event_emitter=self._deps.event_emitter,
+            event_emitter=self._resolved.get("event_emitter", self._deps.event_emitter),
             event_bus=self._deps.event_bus,
         )
 
@@ -234,7 +236,7 @@ class AdapterResolver:
         """Resolve container adapter."""
         return self._factory.create_container(
             adapter_name=self._config.container,
-            event_emitter=self._deps.event_emitter,
+            event_emitter=self._resolved.get("event_emitter", self._deps.event_emitter),
             event_bus=self._deps.event_bus,
         )
 
@@ -242,7 +244,7 @@ class AdapterResolver:
         """Resolve board service adapter."""
         return self._factory.create_board_service(
             adapter_name=self._config.board,
-            event_emitter=self._deps.event_emitter,
+            event_emitter=self._resolved.get("event_emitter", self._deps.event_emitter),
         )
 
     def resolve_discussion_adapter(self) -> IDiscussionAdapter:
@@ -262,7 +264,7 @@ class AdapterResolver:
         """Resolve pipeline queue service adapter."""
         return self._factory.create_pipeline_queue_service(
             adapter_name=self._config.queue_service,
-            event_emitter=self._deps.event_emitter,
+            event_emitter=self._resolved.get("event_emitter", self._deps.event_emitter),
             event_bus=self._deps.event_bus,
         )
 
@@ -298,7 +300,7 @@ class AdapterResolver:
         """Resolve version control service adapter."""
         return self._factory.create_version_control_service(
             adapter_name=self._config.version_control,
-            event_emitter=self._deps.event_emitter,
+            event_emitter=self._resolved.get("event_emitter", self._deps.event_emitter),
         )
 
     def resolve_project_manager(self) -> IProjectManagerService:
@@ -339,6 +341,14 @@ class AdapterResolver:
         # Real adapter: bypass engine, use factory directly
         return self._factory.create_repair_cycle(adapter_name=self._config.repair_cycle)
 
+    def resolve_code_review(self) -> ICodeReviewService:
+        """Resolve code review service adapter."""
+        return self._factory.create_code_review_service(adapter_name=self._config.code_review)
+
+    def resolve_container_recovery(self) -> IAgentContainerRecoveryService:
+        """Resolve container recovery adapter."""
+        return self._factory.create_container_recovery(adapter_name=self._config.container_recovery)
+
     def resolve_repository(self) -> IRepository:
         """Resolve repository adapter.
 
@@ -368,31 +378,33 @@ class AdapterResolver:
         self.validate_credentials()
 
         # Dependency order (leaf adapters first, composite last):
-        # 1. Leaf adapters (no adapter dependencies)
+        # 1. Leaf adapters (no adapter dependencies, excluding those that need event_emitter)
         self._resolved["event_store"] = self.resolve_event_store()
         self._resolved["config_store"] = self.resolve_config_store()
         self._resolved["metrics"] = self.resolve_metrics()
-        self._resolved["storage"] = self.resolve_storage()
         self._resolved["encryption"] = self.resolve_encryption()
         self._resolved["identity_service"] = self.resolve_identity_service()
 
-        # 2. Event infrastructure
+        # 2. Event infrastructure (must come before adapters that use event_emitter)
         self._resolved["event_emitter"] = self.resolve_event_emitter()
         self._resolved["message_broker"] = self.resolve_message_broker()
 
-        # 3. External system adapters
-        self._resolved["ticket"] = self.resolve_ticket()
-        self._resolved["llm"] = self.resolve_llm()
+        # 3. Adapters that depend on event_emitter (resolved in step 2)
+        self._resolved["storage"] = self.resolve_storage()
         self._resolved["container"] = self.resolve_container()
         self._resolved["version_control"] = self.resolve_version_control()
-
-        # 4. Coordination adapters
         self._resolved["board"] = self.resolve_board()
-        self._resolved["discussion_adapter"] = self.resolve_discussion_adapter()
-        self._resolved["lock_service"] = self.resolve_lock_service()
         self._resolved["queue_service"] = self.resolve_queue_service()
 
-        # 5. State adapters
+        # 4. External system adapters
+        self._resolved["ticket"] = self.resolve_ticket()
+        self._resolved["llm"] = self.resolve_llm()
+
+        # 5. Coordination adapters
+        self._resolved["discussion_adapter"] = self.resolve_discussion_adapter()
+        self._resolved["lock_service"] = self.resolve_lock_service()
+
+        # 6. State adapters
         self._resolved["checkpoint_store"] = self.resolve_checkpoint_store()
         self._resolved["agent_repository"] = self.resolve_agent_repository()
         self._resolved["run_registry"] = self.resolve_run_registry()
@@ -401,16 +413,20 @@ class AdapterResolver:
         self._resolved["workflow_config"] = self.resolve_workflow_config()
         self._resolved["notifier"] = self.resolve_notifier()
 
-        # 6. Composite adapters (depend on others)
+        # 7. Composite adapters (depend on others)
         self._resolved["project_manager"] = self.resolve_project_manager()
 
-        # 7. Repository adapter (depends on event_emitter)
+        # 8. Repository adapter (depends on event_emitter)
         self._resolved["repository"] = self.resolve_repository()
 
-        # Review and repair cycles depend on previously resolved adapters
+        # 9. Review and repair cycles depend on previously resolved adapters
         # (review_cycle depends on llm, repair_cycle depends on checkpoint_store and container)
         self._resolved["review_cycle"] = self.resolve_review_cycle()
         self._resolved["repair_cycle"] = self.resolve_repair_cycle()
+
+        # 10. Code review and container recovery adapters
+        self._resolved["code_review"] = self.resolve_code_review()
+        self._resolved["container_recovery"] = self.resolve_container_recovery()
 
         logger.info(
             f"Successfully resolved all {len(self._resolved)} adapters",
