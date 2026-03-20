@@ -76,7 +76,7 @@ class TestTicketSystemRegistry:
         class InvalidAdapter:
             """Not a valid ITicketSystem implementation."""
 
-        with pytest.raises(ValueError, match="does not implement"):
+        with pytest.raises(ValueError, match="missing methods"):
             # Cast to valid type for type-checking purposes, but the runtime
             # validation will catch that it doesn't actually implement ITicketSystem
             registry.register(

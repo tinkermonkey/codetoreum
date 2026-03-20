@@ -63,6 +63,53 @@ This directory contains pre-built YAML scenario files for Codetoreum simulation 
 - Timeout behavior validation
 - Recovery strategy testing
 
+### 6. mixed_github_real.yaml
+**Purpose**: Real GitHub integration with simulated agents
+**Adapter Configuration**: Real GitHub + Simulated LLM/Agents
+**Speed**: 10x
+**Credentials Required**:
+- GITHUB_TOKEN (repo, project scopes)
+- GITHUB_ORG
+- GITHUB_REPO
+**Use Cases**:
+- Testing workflow logic with real issue data
+- Avoiding Claude Code API costs during testing
+- Verifying GitHub integration without agent variability
+- Integration testing against actual GitHub projects
+
+### 7. mixed_full_github.yaml
+**Purpose**: Real GitHub and infrastructure with simulated agents
+**Adapter Configuration**: Real GitHub + Docker + Redis + PostgreSQL + Simulated LLM
+**Speed**: 10x
+**Credentials Required**:
+- GITHUB_TOKEN, GITHUB_ORG, GITHUB_REPO
+- REDIS_URL
+- DATABASE_URL
+- Docker daemon socket
+**Use Cases**:
+- Integration testing with real GitHub and complete infrastructure
+- Testing container execution and database interactions
+- Avoiding Claude Code API costs while testing real systems
+- Production-like testing environment
+
+### 8. mixed_full_real.yaml
+**Purpose**: Complete production deployment with all real systems
+**Adapter Configuration**: All Real Systems (GitHub, Claude Code API, Docker, AWS S3, Redis, PostgreSQL, Slack)
+**Speed**: 1x (real-time, no acceleration)
+**Credentials Required**:
+- GITHUB_TOKEN, GITHUB_ORG, GITHUB_REPO
+- CLAUDE_CODE_API_KEY
+- Docker daemon socket
+- AWS credentials (S3)
+- Redis URL
+- PostgreSQL connection
+- Slack bot token
+**Use Cases**:
+- Production deployment and testing
+- End-to-end testing with real services
+- Performance and load testing
+- Chaos engineering with real external systems
+
 ## Usage
 
 ### Loading a Scenario (Programmatic)
@@ -114,6 +161,22 @@ await seeder.seed_review_cycle()
 # Failure scenario
 await seeder.seed_failure_scenario()
 ```
+
+## Important Notes on Adapter Configuration
+
+### Adapter Field Names
+All mixed scenario files use adapter configuration sections that define which implementations to use for each adapter slot. The correct field names must match the `AdapterSelectionConfig` dataclass fields in `simulation_config.py`. Common field names:
+
+- `discussion_adapter` (NOT `discussion`)
+- `board`, `ticket`, `llm`, `container`
+- `event_store`, `message_broker`, `lock_service`
+- `config_store`, `storage`, `metrics`
+- `review_cycle`, `repair_cycle`, etc.
+
+**Important**: If you use an incorrect field name (e.g., `discussion` instead of `discussion_adapter`), the configuration will raise a clear `ValueError` with a list of valid field names.
+
+### Unregistered Adapter Implementations
+If you specify an adapter implementation that is not registered (e.g., `event_store: vault` when Vault adapter is not available), the system will raise an `AdapterConfigurationError` during bootstrap with a helpful message indicating which adapter is unknown.
 
 ## Creating Custom Scenarios
 

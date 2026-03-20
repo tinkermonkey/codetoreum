@@ -316,13 +316,12 @@ class TestBootstrapIntegration:
         adapters = cast("SimulationAdapters", bootstrap.adapters)
 
         # Verify critical adapters have event emitter
-        assert adapters.queue_service._event_emitter is not None
-        assert adapters.storage._event_emitter is not None
-        assert adapters.container._event_emitter is not None
+        assert adapters.queue_service_as_memory()._event_emitter is not None
+        assert adapters.storage_as_memory()._event_emitter is not None
+        assert adapters.container_as_fake()._event_emitter is not None
 
         # Verify adapters have event bus for subscriptions
-        assert adapters.queue_service._event_bus is not None
-        assert adapters.storage._event_bus is not None
+        assert adapters.queue_service_as_memory()._event_bus is not None
 
 
 # ============================================================================

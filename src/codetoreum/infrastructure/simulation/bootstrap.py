@@ -29,7 +29,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import Enum
-from typing import Any
+from typing import Any, cast
 
 from fastapi import FastAPI
 
@@ -69,7 +69,6 @@ from codetoreum.adapters.secondary.failed_event_store_adapter import (
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
 )
-from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 
 # Adapters
 from codetoreum.adapters.testing import (
@@ -92,7 +91,6 @@ from codetoreum.adapters.testing import (
     MockBoardAdapter,
     MockDiscussionAdapter,
     MockLLMAdapter,
-    MockNotifierAdapter,
     MockProjectManagerAdapter,
     MockReviewCycleAdapter,
     SimpleEncryptionAdapter,
@@ -101,9 +99,6 @@ from codetoreum.adapters.testing.execution_service_agent_executor import (
     ExecutionServiceAgentExecutor,
 )
 from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
-from codetoreum.adapters.testing.mock_container_recovery_adapter import (
-    MockContainerRecoveryAdapter,
-)
 from codetoreum.adapters.testing.mock_work_item_service import MockWorkItemService
 
 # Application Services
@@ -141,6 +136,11 @@ from codetoreum.infrastructure.adapters.factory import (
     AdapterFactory,
     AdapterFactoryConfig,
 )
+from codetoreum.infrastructure.adapters.resolver import (
+    AdapterDependencies,
+    AdapterResolver,
+)
+from codetoreum.infrastructure.audit.interfaces import IAuditStore
 from codetoreum.infrastructure.audit.stores import InMemoryAuditStore
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 
@@ -183,8 +183,41 @@ from codetoreum.ports.input.workflow_definition_command import (
 from codetoreum.ports.input.workflow_query import IWorkflowQueryPort
 from codetoreum.ports.input.workflow_run_query import IWorkflowRunQueryPort
 from codetoreum.ports.input.workspace_query import IWorkspaceQueryPort
+from codetoreum.ports.output.active_workflow_run_registry import (
+    IActiveWorkflowRunRegistry,
+)
 from codetoreum.ports.output.agent_executor import IAgentExecutor
+from codetoreum.ports.output.agent_repository import IAgentRepository
+from codetoreum.ports.output.board_service import IBoardService
+from codetoreum.ports.output.code_review_service import ICodeReviewService
+from codetoreum.ports.output.config_store import IConfigStore
+from codetoreum.ports.output.container import IContainer
+from codetoreum.ports.output.container_recovery import IAgentContainerRecoveryService
+from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
+from codetoreum.ports.output.encryption_service import IEncryptionService
+from codetoreum.ports.output.event_emitter import IEventEmitter
+from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.output.failed_event_store import IFailedEventStore
+from codetoreum.ports.output.identity_service import IIdentityService
+from codetoreum.ports.output.llm_provider import ILLMProvider
+from codetoreum.ports.output.message_broker import IMessageBroker
+from codetoreum.ports.output.metrics import IMetrics
+from codetoreum.ports.output.notifier import INotifier
+from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
+from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
+from codetoreum.ports.output.project_manager_service import IProjectManagerService
+from codetoreum.ports.output.repair_cycle_checkpoint_store import (
+    IRepairCycleCheckpointStore,
+)
+from codetoreum.ports.output.repair_cycle_service import IRepairCycle
+from codetoreum.ports.output.repository import IRepository
+from codetoreum.ports.output.review_cycle_service import IReviewCycle
+from codetoreum.ports.output.storage import IStorage
+from codetoreum.ports.output.ticket_system import ITicketSystem
+from codetoreum.ports.output.version_control_service import IVersionControlService
+from codetoreum.ports.output.work_item_branch_tracker import IWorkItemBranchTracker
+from codetoreum.ports.output.work_item_service import IWorkItemService
+from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 logger = logging.getLogger(__name__)
 
@@ -239,48 +272,340 @@ class BootstrapDegradedModeState:
 class SimulationAdapters:
     """Container for all simulation adapters.
 
+    All fields are typed as port interfaces, not concrete adapter classes.
+    This allows test code to inject different implementations (mock vs. real)
+    while maintaining type safety.
+
     Note: agent_executor is assigned in Phase 3 (ExecutionService creation) and is
     always ExecutionServiceAgentExecutor. It implements IAgentExecutor and provides
     set_completion_handler() for BoardColumnEventHandler wiring.
+
+    Event Bus Wiring: The code_review adapter is available here for wiring to the
+    central event bus via EventBusWiring.wire_review_service(). Currently not wired
+    by default in bootstrap, but accessible for test scenarios that need code review
+    event handling.
+
+    For test code that needs simulation-specific methods (e.g., add_response(),
+    movements, executions), use the accessor helpers:
+    - ticket_as_mock() -> InMemoryTicketAdapter
+    - llm_as_mock() -> MockLLMAdapter
+    - container_as_fake() -> FakeContainerAdapter
+    - board_as_mock() -> MockBoardAdapter
+    - etc.
     """
 
-    # Output port adapters
-    ticket_system: InMemoryTicketAdapter
-    llm_provider: MockLLMAdapter
-    container: FakeContainerAdapter
-    repository: InMemoryRepositoryAdapter
-    event_store: InMemoryEventStore
-    metrics: InMemoryMetricsAdapter
-    storage: InMemoryStorageAdapter
-    config_store: InMemoryConfigStore
-    notifier: MockNotifierAdapter
-    encryption: SimpleEncryptionAdapter
-    board: MockBoardAdapter
-    repair_cycle: Any  # MockRepairCycleAdapter - lazy imported to avoid circular dependency
-    project_manager: MockProjectManagerAdapter  # Multi-project management
-    lock_service: InMemoryLockService
-    workflow_config: InMemoryWorkflowConfigService
-    queue_service: InMemoryQueueService  # Pipeline queue service for board automation
-    event_emitter: CapturingMockEventEmitter  # For domain event capture
-    audit_store: InMemoryAuditStore  # For audit query adapter
+    # Output port adapters (typed as interfaces)
+    ticket_system: ITicketSystem
+    llm_provider: ILLMProvider
+    container: IContainer
+    repository: IRepository
+    event_store: IEventStore
+    metrics: IMetrics
+    storage: IStorage
+    config_store: IConfigStore
+    notifier: INotifier
+    encryption: IEncryptionService
+    board: IBoardService
+    repair_cycle: IRepairCycle
+    project_manager: IProjectManagerService
+    lock_service: IPipelineLockService
+    workflow_config: IWorkflowConfigService
+    queue_service: IPipelineQueueService
+    event_emitter: IEventEmitter  # CapturingMockEventEmitter in simulation
+    audit_store: IAuditStore | None  # InMemoryAuditStore in simulation, None in testing
 
-    # Additional adapters (wired in simulation mode)
-    version_control: InMemoryVersionControlService  # Version control operations
-    message_broker: InMemoryMessageBroker  # Pub/sub message distribution
-    discussion_adapter: MockDiscussionAdapter  # Discussion/comment thread management
-    review_cycle: MockReviewCycleAdapter  # Code review workflow
-    identity_service: ConfigurableIdentityService  # Bot/user identification
-    checkpoint_store: InMemoryCheckpointStore  # Repair cycle state persistence
+    # Additional adapters (typed as interfaces where available)
+    version_control: IVersionControlService
+    message_broker: IMessageBroker
+    discussion_adapter: IDiscussionAdapter
+    review_cycle: IReviewCycle
+    code_review: ICodeReviewService
+    identity_service: IIdentityService
+    checkpoint_store: IRepairCycleCheckpointStore
 
     # Phase 3 adapters (ExecutionService chain)
-    agent_repository: InMemoryAgentRepository  # Domain Agent objects for execution chain
-    run_registry: InMemoryActiveWorkflowRunRegistry  # Active workflow run tracking
-    branch_tracker: InMemoryWorkItemBranchTracker  # Work item → VCS branch tracking
-    work_item_service: MockWorkItemService  # Work item lookups for execution chain
+    agent_repository: IAgentRepository
+    run_registry: IActiveWorkflowRunRegistry
+    branch_tracker: IWorkItemBranchTracker
+    work_item_service: IWorkItemService
+
+    # Container recovery adapter
+    container_recovery: IAgentContainerRecoveryService
 
     # Fields with defaults (must come after fields without defaults)
-    # Agent executor (assigned in Phase 3, after ExecutionService is created)
     agent_executor: IAgentExecutor | None = None
+
+    # =========================================================================
+    # Accessor helpers for test code needing simulation-specific methods
+    # =========================================================================
+
+    def ticket_as_mock(self) -> InMemoryTicketAdapter:
+        """Get ticket system as InMemoryTicketAdapter.
+
+        Raises TypeError if ticket_system is not InMemoryTicketAdapter.
+        """
+        if not isinstance(self.ticket_system, InMemoryTicketAdapter):
+            msg = f"ticket_system is {type(self.ticket_system).__name__}, not InMemoryTicketAdapter"
+            raise TypeError(msg)
+        return cast("InMemoryTicketAdapter", self.ticket_system)
+
+    def llm_as_mock(self) -> MockLLMAdapter:
+        """Get LLM provider as MockLLMAdapter.
+
+        Raises TypeError if llm_provider is not MockLLMAdapter.
+        """
+        if not isinstance(self.llm_provider, MockLLMAdapter):
+            msg = f"llm_provider is {type(self.llm_provider).__name__}, not MockLLMAdapter"
+            raise TypeError(msg)
+        return cast("MockLLMAdapter", self.llm_provider)
+
+    def container_as_fake(self) -> FakeContainerAdapter:
+        """Get container as FakeContainerAdapter.
+
+        Raises TypeError if container is not FakeContainerAdapter.
+        """
+        if not isinstance(self.container, FakeContainerAdapter):
+            msg = f"container is {type(self.container).__name__}, not FakeContainerAdapter"
+            raise TypeError(msg)
+        return cast("FakeContainerAdapter", self.container)
+
+    def repository_as_memory(self) -> InMemoryRepositoryAdapter:
+        """Get repository as InMemoryRepositoryAdapter.
+
+        Raises TypeError if repository is not InMemoryRepositoryAdapter.
+        """
+        if not isinstance(self.repository, InMemoryRepositoryAdapter):
+            msg = f"repository is {type(self.repository).__name__}, not InMemoryRepositoryAdapter"
+            raise TypeError(msg)
+        return cast("InMemoryRepositoryAdapter", self.repository)
+
+    def board_as_mock(self) -> MockBoardAdapter:
+        """Get board as MockBoardAdapter.
+
+        Raises TypeError if board is not MockBoardAdapter.
+        """
+        if not isinstance(self.board, MockBoardAdapter):
+            msg = f"board is {type(self.board).__name__}, not MockBoardAdapter"
+            raise TypeError(msg)
+        return cast("MockBoardAdapter", self.board)
+
+    def repair_cycle_as_mock(self) -> "MockRepairCycleAdapter":
+        """Get repair cycle as MockRepairCycleAdapter.
+
+        Raises TypeError if repair_cycle is not MockRepairCycleAdapter.
+        """
+        try:
+            from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
+                MockRepairCycleAdapter,
+            )
+
+            if not isinstance(self.repair_cycle, MockRepairCycleAdapter):
+                msg = f"repair_cycle is {type(self.repair_cycle).__name__}, not MockRepairCycleAdapter"
+                raise TypeError(msg)
+            return cast("MockRepairCycleAdapter", self.repair_cycle)
+        except ImportError as e:
+            msg = f"Failed to import MockRepairCycleAdapter: {e}"
+            raise TypeError(msg) from e
+
+    def project_manager_as_mock(self) -> MockProjectManagerAdapter:
+        """Get project manager as MockProjectManagerAdapter.
+
+        Raises TypeError if project_manager is not MockProjectManagerAdapter.
+        """
+        if not isinstance(self.project_manager, MockProjectManagerAdapter):
+            msg = f"project_manager is {type(self.project_manager).__name__}, not MockProjectManagerAdapter"
+            raise TypeError(msg)
+        return cast("MockProjectManagerAdapter", self.project_manager)
+
+    def lock_service_as_memory(self) -> InMemoryLockService:
+        """Get lock service as InMemoryLockService.
+
+        Raises TypeError if lock_service is not InMemoryLockService.
+        """
+        if not isinstance(self.lock_service, InMemoryLockService):
+            msg = f"lock_service is {type(self.lock_service).__name__}, not InMemoryLockService"
+            raise TypeError(msg)
+        return cast("InMemoryLockService", self.lock_service)
+
+    def workflow_config_as_memory(self) -> InMemoryWorkflowConfigService:
+        """Get workflow config as InMemoryWorkflowConfigService.
+
+        Raises TypeError if workflow_config is not InMemoryWorkflowConfigService.
+        """
+        if not isinstance(self.workflow_config, InMemoryWorkflowConfigService):
+            msg = f"workflow_config is {type(self.workflow_config).__name__}, not InMemoryWorkflowConfigService"
+            raise TypeError(msg)
+        return cast("InMemoryWorkflowConfigService", self.workflow_config)
+
+    def queue_service_as_memory(self) -> InMemoryQueueService:
+        """Get queue service as InMemoryQueueService.
+
+        Raises TypeError if queue_service is not InMemoryQueueService.
+        """
+        if not isinstance(self.queue_service, InMemoryQueueService):
+            msg = f"queue_service is {type(self.queue_service).__name__}, not InMemoryQueueService"
+            raise TypeError(msg)
+        return cast("InMemoryQueueService", self.queue_service)
+
+    def event_emitter_as_capturing(self) -> CapturingMockEventEmitter:
+        """Get event emitter as CapturingMockEventEmitter.
+
+        Raises TypeError if event_emitter is not CapturingMockEventEmitter.
+        """
+        if not isinstance(self.event_emitter, CapturingMockEventEmitter):
+            msg = f"event_emitter is {type(self.event_emitter).__name__}, not CapturingMockEventEmitter"
+            raise TypeError(msg)
+        return cast("CapturingMockEventEmitter", self.event_emitter)
+
+    def version_control_as_memory(self) -> InMemoryVersionControlService:
+        """Get version control as InMemoryVersionControlService.
+
+        Raises TypeError if version_control is not InMemoryVersionControlService.
+        """
+        if not isinstance(self.version_control, InMemoryVersionControlService):
+            msg = f"version_control is {type(self.version_control).__name__}, not InMemoryVersionControlService"
+            raise TypeError(msg)
+        return cast("InMemoryVersionControlService", self.version_control)
+
+    def message_broker_as_memory(self) -> InMemoryMessageBroker:
+        """Get message broker as InMemoryMessageBroker.
+
+        Raises TypeError if message_broker is not InMemoryMessageBroker.
+        """
+        if not isinstance(self.message_broker, InMemoryMessageBroker):
+            msg = f"message_broker is {type(self.message_broker).__name__}, not InMemoryMessageBroker"
+            raise TypeError(msg)
+        return cast("InMemoryMessageBroker", self.message_broker)
+
+    def discussion_adapter_as_mock(self) -> MockDiscussionAdapter:
+        """Get discussion adapter as MockDiscussionAdapter.
+
+        Raises TypeError if discussion_adapter is not MockDiscussionAdapter.
+        """
+        if not isinstance(self.discussion_adapter, MockDiscussionAdapter):
+            msg = f"discussion_adapter is {type(self.discussion_adapter).__name__}, not MockDiscussionAdapter"
+            raise TypeError(msg)
+        return cast("MockDiscussionAdapter", self.discussion_adapter)
+
+    def review_cycle_as_mock(self) -> MockReviewCycleAdapter:
+        """Get review cycle as MockReviewCycleAdapter.
+
+        Raises TypeError if review_cycle is not MockReviewCycleAdapter.
+        """
+        if not isinstance(self.review_cycle, MockReviewCycleAdapter):
+            msg = f"review_cycle is {type(self.review_cycle).__name__}, not MockReviewCycleAdapter"
+            raise TypeError(msg)
+        return cast("MockReviewCycleAdapter", self.review_cycle)
+
+    def identity_service_as_configurable(self) -> ConfigurableIdentityService:
+        """Get identity service as ConfigurableIdentityService.
+
+        Raises TypeError if identity_service is not ConfigurableIdentityService.
+        """
+        if not isinstance(self.identity_service, ConfigurableIdentityService):
+            msg = f"identity_service is {type(self.identity_service).__name__}, not ConfigurableIdentityService"
+            raise TypeError(msg)
+        return cast("ConfigurableIdentityService", self.identity_service)
+
+    def checkpoint_store_as_memory(self) -> InMemoryCheckpointStore:
+        """Get checkpoint store as InMemoryCheckpointStore.
+
+        Raises TypeError if checkpoint_store is not InMemoryCheckpointStore.
+        """
+        if not isinstance(self.checkpoint_store, InMemoryCheckpointStore):
+            msg = f"checkpoint_store is {type(self.checkpoint_store).__name__}, not InMemoryCheckpointStore"
+            raise TypeError(msg)
+        return cast("InMemoryCheckpointStore", self.checkpoint_store)
+
+    def agent_repository_as_memory(self) -> InMemoryAgentRepository:
+        """Get agent repository as InMemoryAgentRepository.
+
+        Raises TypeError if agent_repository is not InMemoryAgentRepository.
+        """
+        if not isinstance(self.agent_repository, InMemoryAgentRepository):
+            msg = f"agent_repository is {type(self.agent_repository).__name__}, not InMemoryAgentRepository"
+            raise TypeError(msg)
+        return cast("InMemoryAgentRepository", self.agent_repository)
+
+    def run_registry_as_memory(self) -> InMemoryActiveWorkflowRunRegistry:
+        """Get run registry as InMemoryActiveWorkflowRunRegistry.
+
+        Raises TypeError if run_registry is not InMemoryActiveWorkflowRunRegistry.
+        """
+        if not isinstance(self.run_registry, InMemoryActiveWorkflowRunRegistry):
+            msg = f"run_registry is {type(self.run_registry).__name__}, not InMemoryActiveWorkflowRunRegistry"
+            raise TypeError(msg)
+        return cast("InMemoryActiveWorkflowRunRegistry", self.run_registry)
+
+    def branch_tracker_as_memory(self) -> InMemoryWorkItemBranchTracker:
+        """Get branch tracker as InMemoryWorkItemBranchTracker.
+
+        Raises TypeError if branch_tracker is not InMemoryWorkItemBranchTracker.
+        """
+        if not isinstance(self.branch_tracker, InMemoryWorkItemBranchTracker):
+            msg = f"branch_tracker is {type(self.branch_tracker).__name__}, not InMemoryWorkItemBranchTracker"
+            raise TypeError(msg)
+        return cast("InMemoryWorkItemBranchTracker", self.branch_tracker)
+
+    def work_item_service_as_mock(self) -> MockWorkItemService:
+        """Get work item service as MockWorkItemService.
+
+        Raises TypeError if work_item_service is not MockWorkItemService.
+        """
+        if not isinstance(self.work_item_service, MockWorkItemService):
+            msg = f"work_item_service is {type(self.work_item_service).__name__}, not MockWorkItemService"
+            raise TypeError(msg)
+        return cast("MockWorkItemService", self.work_item_service)
+
+    def storage_as_memory(self) -> InMemoryStorageAdapter:
+        """Get storage as InMemoryStorageAdapter.
+
+        Raises TypeError if storage is not InMemoryStorageAdapter.
+        """
+        if not isinstance(self.storage, InMemoryStorageAdapter):
+            msg = f"storage is {type(self.storage).__name__}, not InMemoryStorageAdapter"
+            raise TypeError(msg)
+        return cast("InMemoryStorageAdapter", self.storage)
+
+    def event_store_as_memory(self) -> InMemoryEventStore:
+        """Get event store as InMemoryEventStore.
+
+        Raises TypeError if event_store is not InMemoryEventStore.
+        """
+        if not isinstance(self.event_store, InMemoryEventStore):
+            msg = f"event_store is {type(self.event_store).__name__}, not InMemoryEventStore"
+            raise TypeError(msg)
+        return cast("InMemoryEventStore", self.event_store)
+
+    def config_store_as_memory(self) -> InMemoryConfigStore:
+        """Get config store as InMemoryConfigStore.
+
+        Raises TypeError if config_store is not InMemoryConfigStore.
+        """
+        if not isinstance(self.config_store, InMemoryConfigStore):
+            msg = f"config_store is {type(self.config_store).__name__}, not InMemoryConfigStore"
+            raise TypeError(msg)
+        return cast("InMemoryConfigStore", self.config_store)
+
+    def encryption_as_simple(self) -> SimpleEncryptionAdapter:
+        """Get encryption as SimpleEncryptionAdapter.
+
+        Raises TypeError if encryption is not SimpleEncryptionAdapter.
+        """
+        if not isinstance(self.encryption, SimpleEncryptionAdapter):
+            msg = f"encryption is {type(self.encryption).__name__}, not SimpleEncryptionAdapter"
+            raise TypeError(msg)
+        return cast("SimpleEncryptionAdapter", self.encryption)
+
+    def metrics_as_memory(self) -> InMemoryMetricsAdapter:
+        """Get metrics as InMemoryMetricsAdapter.
+
+        Raises TypeError if metrics is not InMemoryMetricsAdapter.
+        """
+        if not isinstance(self.metrics, InMemoryMetricsAdapter):
+            msg = f"metrics is {type(self.metrics).__name__}, not InMemoryMetricsAdapter"
+            raise TypeError(msg)
+        return cast("InMemoryMetricsAdapter", self.metrics)
 
 
 @dataclass
@@ -391,6 +716,7 @@ class SimulationApplicationBootstrap:
         self._execution_timeout_watchdog: ExecutionTimeoutWatchdog | None = None
         self._sla_expiry_watchdog: SLAExpiryWatchdog | None = None
         self._column_progression_watchdog: ColumnProgressionWatchdog | None = None
+        self._queued_lock_service: InMemoryLockService | None = None
 
     @property
     def is_degraded(self) -> bool:
@@ -513,6 +839,7 @@ class SimulationApplicationBootstrap:
                     error_msg = f"Auto-advance already running or failed to start: {e}"
                     logger.warning(
                         error_msg,
+                        exc_info=True,
                         extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
                     )
                     self._degraded_mode.mark_failed(BootstrapPhase.AUTO_ADVANCE, str(e))
@@ -759,6 +1086,7 @@ class SimulationApplicationBootstrap:
             self._stale_lock_watchdog = None
             self._execution_timeout_watchdog = None
             self._sla_expiry_watchdog = None
+            self._column_progression_watchdog = None
 
             self._is_setup = False
             logger.info("Simulation bootstrap teardown complete")
@@ -778,27 +1106,30 @@ class SimulationApplicationBootstrap:
 
     async def _create_adapters(self) -> SimulationAdapters:
         """
-        Create all 24 mock adapters in simulation mode.
+        Create all 30 adapters using AdapterResolver in dependency order.
 
-        5 adapters created via AdapterFactory:
-        - ticket_system (in_memory)
-        - llm_provider (mock)
-        - container (fake)
-        - repository (in_memory)
-        - event_store (in_memory)
+        Phase 2 bootstrap creates adapters following a partial dependency ordering:
+        1. Leaf adapters (no dependencies): event_store, config_store, metrics, encryption, identity_service
+        2. Event infrastructure: event_emitter, message_broker
+        3. Adapters depending on event_emitter: storage, container, version_control, board, queue_service
+        4. External systems: ticket_system, llm_provider
+        5. Coordination: discussion_adapter, lock_service
+        6. State: checkpoint_store, agent_repository, run_registry, branch_tracker, work_item_service,
+                   workflow_config, notifier
+        7. Composite: project_manager
+        8. Repository: (depends on event_emitter)
+        9. Engine-coupled: review_cycle, repair_cycle (use SimulationEngine for clock injection)
+        10. Additional services: code_review, container_recovery
 
-        19 additional adapters created directly:
-        - metrics, storage, config_store, notifier, encryption, board, repair_cycle, project_manager
-        - lock_service, workflow_config, agent_executor
-        - version_control, message_broker, discussion_adapter, review_cycle, identity_service, checkpoint_store
-        - queue_service, event_emitter
+        AdapterResolver validates credentials before construction and raises aggregated
+        configuration errors if any adapter is misconfigured.
 
-        The SimulationEngine automatically injects the clock into time-aware
-        adapters (repair_cycle), hiding simulation implementation details from
-        the adapter constructors.
+        All adapters are typed as port interfaces, allowing test code to use accessor
+        helpers (e.g., adapters.board_as_mock(), adapters.llm_as_mock()) to access
+        simulation-specific methods.
 
         Returns:
-            SimulationAdapters with all 24 adapters configured in SimulationAdapters dataclass
+            SimulationAdapters with all 30 adapters typed as port interfaces
         """
         if not self._engine:
             message = "SimulationEngine must be created before adapters"
@@ -807,143 +1138,74 @@ class SimulationApplicationBootstrap:
             message = "Infrastructure (event bus) must be created before adapters"
             raise RuntimeError(message)
 
-        # Create adapter factory in simulation mode with resilience disabled
+        # Phase 2: Create adapter factory and resolver
         factory_config = AdapterFactoryConfig(
             operation_mode=OperationMode.SIMULATION,
             enable_resilience=False,  # ADR-005: No resilience in simulation
         )
         self._adapter_factory = AdapterFactory(factory_config)
 
-        # Create event emitter for domain event capture
-        event_emitter = CapturingMockEventEmitter()
-
-        # Get event bus from infrastructure for event subscriptions
-        event_bus = self.infrastructure.event_bus
-
-        # Create adapters using factory
-        ticket_system = self._adapter_factory.create_ticket_system(adapter_name="in_memory")
-
-        # Pass config and clock to LLM adapter for fidelity-aware timing
-        llm_provider = self._adapter_factory.create_llm_provider(
-            adapter_name="mock",
+        # Create adapter dependencies for injection
+        # Note: event_emitter will be resolved by AdapterResolver and provided in resolved dict
+        deps = AdapterDependencies(
+            event_bus=self.infrastructure.event_bus,
+            event_emitter=CapturingMockEventEmitter(),  # Placeholder, will be replaced by resolver result
+            logger=self.infrastructure.logger,
+            engine=self._engine,
             config=self.config,
-            clock=self._engine.get_clock_for_testing() if self._engine else None,
         )
 
-        # Pass event_emitter, event_bus, config, and clock to container for event subscription
-        # and fidelity-aware timing
-        container = self._adapter_factory.create_container(
-            adapter_name="fake",
-            event_emitter=event_emitter,
-            event_bus=event_bus,
-            config=self.config,
-            clock=self._engine.get_clock_for_testing() if self._engine else None,
+        # Create resolver with dependency order management
+        resolver = AdapterResolver(
+            adapter_config=self.config.adapters,
+            factory=self._adapter_factory,
+            dependencies=deps,
         )
 
-        repository = InMemoryRepositoryAdapter(event_emitter=event_emitter)
-        event_store = self._adapter_factory.create_event_store(adapter_name="in_memory")
+        # Resolve all adapters in dependency order with credential validation
+        # resolve_all() now returns fully typed SimulationAdapters directly
+        resolved = resolver.resolve_all()
 
-        # Adapters not in factory yet - create directly with event bus for causal linking
-        metrics = InMemoryMetricsAdapter()
-        storage = InMemoryStorageAdapter(
-            event_emitter=event_emitter,
-            event_bus=event_bus,  # Subscribe to container execution completion events
-            container=container,  # Enable retrieval of actual file content from container
-        )
-        config_store = InMemoryConfigStore()
-        notifier = MockNotifierAdapter()
+        # Apply simulation-specific post-processing where needed
+        # (e.g., pre-configuring default project for tests)
 
-        # Create queue service with event emitter and event bus for causal linking
-        queue_service = InMemoryQueueService(
-            event_emitter=event_emitter,
-            event_bus=event_bus,  # Subscribe to board position changes
-        )
+        # Post-process project manager: pre-configure default test project
+        if isinstance(resolved.project_manager, MockProjectManagerAdapter):
+            resolved.project_manager.add_project(
+                "default_project",
+                ProjectConfig(
+                    repo_url="https://vcs.example.com/org/default.git",
+                    branch="main",
+                    enabled=True,
+                    org="test-org",
+                ),
+            )
 
-        # Note: SimpleEncryptionAdapter is created directly (not via AdapterFactory)
-        # because it's a simple utility service, not a main output port adapter.
-        # AdapterFactory is specifically for the 5 main output ports:
-        # ticket_system, llm_provider, container, repository, and event_store.
-        encryption = SimpleEncryptionAdapter()
+        # Post-process message broker: initialize async
+        if isinstance(resolved.message_broker, InMemoryMessageBroker):
+            await resolved.message_broker.initialize()
 
-        # Create time-aware adapters via engine (clock is injected internally)
-        repair_cycle = self._engine.create_repair_cycle_adapter()
+        # Post-process identity service: set bot username
+        if isinstance(resolved.identity_service, ConfigurableIdentityService):
+            resolved.identity_service.set_bot_username("codetoreum-bot")
 
-        # Create board adapter with event emitter for domain events
-        board = MockBoardAdapter(event_emitter=event_emitter)
+        # Post-process storage adapter: inject container for file retrieval
+        # (storage depends on container, so we inject it after resolution)
+        if isinstance(resolved.storage, InMemoryStorageAdapter):
+            resolved.storage.container = resolved.container
 
-        # Create project manager adapter
-        project_manager = MockProjectManagerAdapter()
-
-        # Create pipeline lock with simulation clock for consistent time tracking
-        # This ensures lock timestamps use simulation time (respecting speed multipliers)
-        # which aligns with StaleLockWatchdog comparisons against clock.now()
-        lock_service = InMemoryLockService(clock=self._engine.get_clock_for_testing() if self._engine else None)
-        workflow_config = InMemoryWorkflowConfigService()
-        # agent_executor will be initialized in Phase 3 as ExecutionServiceAgentExecutor
-
-        # Pre-configure default test project for simulation testing
-        project_manager.add_project(
-            "default_project",
-            ProjectConfig(
-                repo_url="https://vcs.example.com/org/default.git",
-                branch="main",
-                enabled=True,
-                org="test-org",
-            ),
-        )
-
-        # Create additional adapters (version control, messaging, discussion, etc.)
-        version_control = InMemoryVersionControlService(event_emitter=event_emitter)
-        message_broker = InMemoryMessageBroker()
-        await message_broker.initialize()  # Initialize message broker
-        identity_service = ConfigurableIdentityService()
-        identity_service.set_bot_username("codetoreum-bot")
-        discussion_adapter = MockDiscussionAdapter(identity_service=identity_service)
-        review_cycle = MockReviewCycleAdapter(clock=self._engine.get_clock_for_testing() if self._engine else None)
-        checkpoint_store = InMemoryCheckpointStore()
-
-        # Phase 3: Create new adapters for ExecutionService chain
-        agent_repository = InMemoryAgentRepository()
-        run_registry = InMemoryActiveWorkflowRunRegistry()
-        branch_tracker = InMemoryWorkItemBranchTracker()
-        work_item_service = MockWorkItemService()
-
-        # Create audit store for audit query adapter
+        # Create audit store (not provided by resolver)
         audit_store = InMemoryAuditStore()
 
-        logger.info("Created 24+ simulation adapters with domain event emission")
+        logger.info("Created 29 simulation adapters via AdapterResolver")
 
-        return SimulationAdapters(
-            ticket_system=ticket_system,
-            llm_provider=llm_provider,
-            container=container,
-            repository=repository,
-            event_store=event_store,
-            metrics=metrics,
-            storage=storage,
-            config_store=config_store,
-            notifier=notifier,
-            encryption=encryption,
-            board=board,
-            repair_cycle=repair_cycle,
-            project_manager=project_manager,
-            lock_service=lock_service,
-            workflow_config=workflow_config,
-            agent_executor=None,
-            queue_service=queue_service,
-            event_emitter=event_emitter,
-            audit_store=audit_store,
-            version_control=version_control,
-            message_broker=message_broker,
-            discussion_adapter=discussion_adapter,
-            review_cycle=review_cycle,
-            identity_service=identity_service,
-            checkpoint_store=checkpoint_store,
-            agent_repository=agent_repository,
-            run_registry=run_registry,
-            branch_tracker=branch_tracker,
-            work_item_service=work_item_service,
-        )
+        # Update audit_store in resolved adapters
+        resolved.audit_store = audit_store
+
+        # Set agent_executor to None (assigned in Phase 3)
+        resolved.agent_executor = None
+
+        return resolved
 
     # =========================================================================
     # Phase 2b: Register Causal Links
@@ -1356,11 +1618,9 @@ class SimulationApplicationBootstrap:
         )
 
         # Container Recovery Service
-        mock_recovery_adapter = MockContainerRecoveryAdapter()
-        mock_event_emitter = MockEventEmitter()
         container_recovery_service = ContainerRecoveryService(
-            recovery_adapter=mock_recovery_adapter,
-            event_emitter=mock_event_emitter,
+            recovery_adapter=self.adapters.container_recovery,
+            event_emitter=self.adapters.event_emitter,
             container_timeout_hours=2,
         )
 
@@ -1369,7 +1629,7 @@ class SimulationApplicationBootstrap:
             project_manager=self.adapters.project_manager,
             workflow_orchestrator=workflow_orchestrator,
             board_service=self.adapters.board,
-            event_emitter=mock_event_emitter,
+            event_emitter=self.adapters.event_emitter,
             poll_interval_seconds=30,
         )
 
@@ -1952,6 +2212,12 @@ class SimulationApplicationBootstrap:
         and wires the agent executor's completion callback to the handler's
         handle_agent_completion method. This closes the loop: column change ->
         agent execution -> completion callback -> auto-progress to next column.
+
+        NOTE: The handler requires IQueuedPipelineLockService (application-level interface
+        with 4-parameter try_acquire_lock), not the PORT interface IPipelineLockService
+        (which has 3 parameters). For simulation, the shared InMemoryLockService from
+        AdapterResolver implements the correct interface via the backward-compat alias
+        (application.pipeline_lock_service.IPipelineLockService = IQueuedPipelineLockService).
         """
         if not self.adapters or not self.infrastructure:
             logger.warning("Cannot register board column handler: components not ready")
@@ -1968,9 +2234,17 @@ class SimulationApplicationBootstrap:
         if self.services:
             recovery_service = self.services.agent_execution_recovery_service
 
+        # Use the shared lock service instance resolved by AdapterResolver
+        # The lock_service implements IQueuedPipelineLockService (with 4-parameter try_acquire_lock)
+        # via IPipelineLockService (backward compat alias). Store reference for tests.
+        if not isinstance(self.adapters.lock_service, InMemoryLockService):
+            msg = f"Expected InMemoryLockService, got {type(self.adapters.lock_service).__name__}"
+            logger.warning(msg)
+        self._queued_lock_service = self.adapters.lock_service
+
         handler = BoardColumnEventHandler(
             board_service=self.adapters.board,
-            lock_service=self.adapters.lock_service,
+            lock_service=self._queued_lock_service,
             workflow_config=self.adapters.workflow_config,
             event_store=self.adapters.event_store,
             agent_executor=self.adapters.agent_executor,

@@ -463,6 +463,7 @@ asyncio_default_fixture_loop_scope = "function"
 addopts = [
     "-v",
     "--strict-markers",
+    "--timeout=120",
     # Coverage collection removed from default runs to reduce memory usage
     # Use 'make test-cov' or add --cov flags manually when coverage is needed
 ]

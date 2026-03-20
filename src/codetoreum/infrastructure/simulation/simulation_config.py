@@ -1,5 +1,6 @@
 """Simulation configuration for test scenarios."""
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -7,6 +8,57 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class AdapterSelectionConfig:
+    """Per-adapter implementation selector. Values are registry keys.
+
+    Each field represents an adapter slot and can be set to a registry key
+    (e.g., "in_memory", "mock", "github", "docker", etc.) to select which
+    implementation to use for that adapter in the simulation.
+
+    All fields default to simulation variant names for fully deterministic testing.
+    """
+
+    board: str = "mock"
+    ticket: str = "in_memory"
+    llm: str = "mock"
+    version_control: str = "in_memory"
+    container: str = "fake"
+    event_store: str = "in_memory"
+    metrics: str = "in_memory"
+    storage: str = "in_memory"
+    config_store: str = "in_memory"
+    notifier: str = "mock"
+    encryption: str = "simple"
+    discussion_adapter: str = "mock"
+    review_cycle: str = "mock"
+    repair_cycle: str = "mock"
+    code_review: str = "mock"
+    project_manager: str = "mock"
+    lock_service: str = "in_memory"
+    workflow_config: str = "in_memory"
+    queue_service: str = "in_memory"
+    event_emitter: str = "capturing"
+    message_broker: str = "in_memory"
+    identity_service: str = "configurable"
+    checkpoint_store: str = "in_memory"
+    agent_repository: str = "in_memory"
+    run_registry: str = "in_memory"
+    branch_tracker: str = "in_memory"
+    work_item_service: str = "mock"
+    repository: str = "in_memory"
+    container_recovery: str = "mock"
+
+    def __post_init__(self) -> None:
+        """Validate that all adapter selections are non-empty strings."""
+        for field_name in self.__dataclass_fields__:
+            value = getattr(self, field_name)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"AdapterSelectionConfig.{field_name} must be a non-empty string, " f"got {value!r}")
 
 
 class FidelityLevel(Enum):
@@ -142,6 +194,9 @@ class SimulationConfig:
     # Scenario identification
     scenario_name: str
     scenario_description: str = ""
+
+    # Adapter selection configuration
+    adapters: AdapterSelectionConfig = field(default_factory=AdapterSelectionConfig)
 
     # Time configuration
     time: TimeConfig = field(default_factory=TimeConfig)
@@ -411,6 +466,9 @@ class SimulationConfig:
         return {
             "scenario_name": self.scenario_name,
             "scenario_description": self.scenario_description,
+            "adapters": {
+                field_name: getattr(self.adapters, field_name) for field_name in self.adapters.__dataclass_fields__
+            },
             "time": {
                 "speed_multiplier": self.time.speed_multiplier,
                 "start_time": self.time.start_time.isoformat() if self.time.start_time else None,
@@ -458,7 +516,26 @@ class SimulationConfig:
 
         Returns:
             SimulationConfig instance
+
+        Raises:
+            ValueError: If unknown adapter keys are found in the YAML configuration
         """
+        # Parse adapter selection config
+        adapters_raw = data.get("adapters", {})
+
+        # Check for unknown adapter keys and raise error with helpful message
+        valid_keys = set(AdapterSelectionConfig.__dataclass_fields__)
+        invalid_keys = set(adapters_raw.keys()) - valid_keys
+        if invalid_keys:
+            raise ValueError(
+                f"Unknown adapter keys in configuration: {', '.join(sorted(invalid_keys))}. "
+                f"Valid keys are: {', '.join(sorted(valid_keys))}"
+            )
+
+        # Only include keys that are actual fields in AdapterSelectionConfig
+        adapters_kwargs = {k: v for k, v in adapters_raw.items() if k in valid_keys}
+        adapters = AdapterSelectionConfig(**adapters_kwargs)
+
         time_data = data.get("time", {})
         start_time = None
         if time_data.get("start_time"):
@@ -471,16 +548,40 @@ class SimulationConfig:
         )
 
         agents = {}
-        for agent_id, agent_data in data.get("agents", {}).items():
-            agents[agent_id] = AgentBehaviorConfig(
-                agent_id=agent_id,
-                execution_delay=agent_data.get("execution_delay", 0.1),
-                success_rate=agent_data.get("success_rate", 1.0),
-                response_patterns=agent_data.get("response_patterns", {}),
-                token_usage=agent_data.get("token_usage", {"input": 100, "output": 50}),
-            )
+        agents_raw = data.get("agents", {})
 
-        container_data = data.get("container", {})
+        # Support both dict format {agent_id: {...}} and list-of-objects format [{agent_id: "...", ...}]
+        if isinstance(agents_raw, list):
+            # List-of-objects format
+            for agent_obj in agents_raw:
+                if isinstance(agent_obj, dict) and "agent_id" in agent_obj:
+                    agent_id = agent_obj["agent_id"]
+                    agents[agent_id] = AgentBehaviorConfig(
+                        agent_id=agent_id,
+                        execution_delay=agent_obj.get("execution_delay", 0.1),
+                        success_rate=agent_obj.get("success_rate", 1.0),
+                        response_patterns=agent_obj.get("response_patterns", {}),
+                        token_usage=agent_obj.get("token_usage", {"input": 100, "output": 50}),
+                    )
+                else:
+                    # Warn if agent_id is missing
+                    logger.warning(
+                        "Skipping agent in agents list without agent_id: %s",
+                        agent_obj,
+                    )
+        elif isinstance(agents_raw, dict):
+            # Dict format {agent_id: {...}}
+            for agent_id, agent_data in agents_raw.items():
+                agents[agent_id] = AgentBehaviorConfig(
+                    agent_id=agent_id,
+                    execution_delay=agent_data.get("execution_delay", 0.1),
+                    success_rate=agent_data.get("success_rate", 1.0),
+                    response_patterns=agent_data.get("response_patterns", {}),
+                    token_usage=agent_data.get("token_usage", {"input": 100, "output": 50}),
+                )
+
+        # Support both 'container' and 'containers' keys (plural/singular)
+        container_data = data.get("container") or data.get("containers") or {}
         container = ContainerBehaviorConfig(
             default_exit_code=container_data.get("default_exit_code", 0),
             execution_delay=container_data.get("execution_delay", 0.1),
@@ -501,12 +602,17 @@ class SimulationConfig:
             tracked_metrics=metrics_data.get("tracked_metrics", []),
         )
 
-        fidelity_str = data.get("fidelity_level", "low")
-        fidelity_level = FidelityLevel(fidelity_str) if isinstance(fidelity_str, str) else fidelity_str
+        # Support both 'fidelity_level' and 'fidelity' keys, with case-insensitive enum values
+        fidelity_str = data.get("fidelity_level") or data.get("fidelity") or "low"
+        if isinstance(fidelity_str, str):
+            fidelity_level = FidelityLevel(fidelity_str.lower())
+        else:
+            fidelity_level = fidelity_str
 
         return cls(
             scenario_name=data["scenario_name"],
             scenario_description=data.get("scenario_description", ""),
+            adapters=adapters,
             time=time_config,
             agents=agents,
             container=container,
@@ -530,6 +636,15 @@ class SimulationConfig:
         container, etc.) but NOT the data seeding definitions (projects, workflows, etc.)
         which are handled by scenario_models.ScenarioModel.
 
+        Supports flexible YAML key naming for compatibility with different scenario formats:
+        - speed_multiplier: Can be at top-level OR nested under simulation: (nested takes precedence)
+        - fidelity_level: Can be 'fidelity_level' or 'fidelity' (both lowercase enum values; fidelity_level takes precedence)
+        - containers/container: Supports both singular and plural forms
+        - agents: Supports both list-of-objects [{agent_id: ...}, ...] and dict format
+
+        Agents without an agent_id field are silently skipped with a warning log. This prevents
+        silent configuration loss and makes missing identifiers visible to users.
+
         Args:
             file_path: Path to YAML scenario file
 
@@ -539,7 +654,7 @@ class SimulationConfig:
         Raises:
             FileNotFoundError: If file doesn't exist
             yaml.YAMLError: If YAML is malformed
-            ValueError: If required fields are missing
+            ValueError: If required fields are missing or fidelity value is invalid
         """
         file_path = Path(file_path)
 
@@ -560,19 +675,69 @@ class SimulationConfig:
             message = "Scenario file must contain 'name' field"
             raise ValueError(message)
 
+        # Extract speed_multiplier with flexible key naming:
+        # Try top-level first, then nested under 'simulation' key
+        speed_multiplier = data.get("speed_multiplier", 10.0)
+        simulation_section = data.get("simulation", {})
+        if isinstance(simulation_section, dict) and "speed_multiplier" in simulation_section:
+            speed_multiplier = simulation_section["speed_multiplier"]
+
+        # Extract auto_advance with flexible key naming:
+        # Try top-level first, then nested under 'simulation' key
+        auto_advance = data.get("auto_advance", False)
+        if isinstance(simulation_section, dict) and "auto_advance" in simulation_section:
+            auto_advance = simulation_section["auto_advance"]
+
+        # Extract start_time with flexible key naming
+        start_time = data.get("start_time")
+        if isinstance(simulation_section, dict) and "start_time" in simulation_section:
+            start_time = simulation_section["start_time"]
+
+        # Extract fidelity_level with flexible key naming:
+        # Support both 'fidelity_level' and 'fidelity' keys, always lowercase
+        fidelity_str = data.get("fidelity_level") or data.get("fidelity", "low")
+        if isinstance(fidelity_str, str):
+            # Normalize to lowercase for enum matching
+            fidelity_str = fidelity_str.lower()
+
+        # Parse agents: Support both list-of-objects and dict formats
+        agents_raw = data.get("agents", {})
+        agents_dict = {}
+
+        if isinstance(agents_raw, list):
+            # List-of-objects format: [{agent_id: "foo", ...}, {agent_id: "bar", ...}]
+            for agent_obj in agents_raw:
+                if isinstance(agent_obj, dict) and "agent_id" in agent_obj:
+                    agent_id = agent_obj["agent_id"]
+                    agents_dict[agent_id] = agent_obj
+                else:
+                    # Warn if agent_id is missing
+                    logger.warning(
+                        "Skipping agent in agents list without agent_id: %s",
+                        agent_obj,
+                    )
+        elif isinstance(agents_raw, dict):
+            # Dict format: {agent_id: {...}, agent_id: {...}}
+            agents_dict = agents_raw
+
+        # Extract container config: Support both 'container' and 'containers' keys
+        container_data = data.get("container") or data.get("containers", {})
+
         # Build config using from_dict for consistency
         config_dict = {
             "scenario_name": scenario_name,
             "scenario_description": data.get("description", ""),
+            "adapters": data.get("adapters", {}),
             "time": {
-                "speed_multiplier": data.get("speed_multiplier", 10.0),
-                "auto_advance": data.get("auto_advance", False),
+                "speed_multiplier": speed_multiplier,
+                "start_time": start_time,
+                "auto_advance": auto_advance,
             },
-            "agents": {},
-            "container": data.get("container", {}),
+            "agents": agents_dict,
+            "container": container_data,
             "notifications": data.get("notifications", {}),
             "metrics": data.get("metrics", {}),
-            "fidelity_level": data.get("fidelity_level", "low"),
+            "fidelity_level": fidelity_str,
             "ms_per_token": data.get("ms_per_token", 50.0),
             "ms_per_file_operation": data.get("ms_per_file_operation", 10.0),
             "ms_per_event": data.get("ms_per_event", 1.0),

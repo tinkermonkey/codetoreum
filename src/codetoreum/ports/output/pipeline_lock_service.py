@@ -181,12 +181,12 @@ class IPipelineLockService(IEventEmitter, ABC):
         """
 
     @abstractmethod
-    def get_all_lock_states(self) -> dict[str, LockStateInfo]:
+    async def get_all_lock_states(self) -> dict[str, LockStateInfo]:
         """Return all pipeline lock states for monitoring and diagnostics.
 
         Intended for internal tools (watchdogs, dashboards) that need detailed
-        lock state without waiting for async operations. This method provides
-        immediate access to current lock state including acquisition times.
+        lock state. This async method properly coordinates with async lock
+        acquisition to prevent deadlocks.
 
         Returns:
             dict[str, LockStateInfo]: Mapping of lock keys to lock state objects
@@ -196,9 +196,10 @@ class IPipelineLockService(IEventEmitter, ABC):
                                      - lock_acquired_at: Datetime when lock was acquired or None
 
         Note:
-            This is a synchronous method for performance-critical monitoring
-            operations (e.g., stale lock detection in watchdogs). The returned
-            dict should contain thread-safe snapshots of lock states.
+            This is an async method to ensure async-safety with asyncio.Lock-based
+            implementations and prevent deadlocks when called from async watchdog
+            operations (e.g., stale lock detection). The returned dict should
+            contain async-safe snapshots of lock states.
 
             Different implementations may return different concrete types
             (LockState, PipelineQueueState, etc.) as long as they conform

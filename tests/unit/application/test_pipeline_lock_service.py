@@ -582,3 +582,159 @@ class TestOrphanedLockHolder:
         # This would be cleaned up by board reconciliation/timeout logic
         state = await service.get_queue_state("proj-1", "board-1")
         assert state.lock_holder == "item-2"
+
+
+class TestPortInterfaceCompliance:
+    """Tests for IPipelineLockService port interface compliance.
+
+    Ensures InMemoryLockService properly implements the IPipelineLockService
+    interface methods get_lock() and get_all_locks() for querying lock state.
+    """
+
+    @pytest.mark.asyncio
+    async def test_get_lock_returns_lock_when_held(self):
+        """get_lock() should return PipelineLock when lock is held."""
+        service = InMemoryLockService()
+
+        # Acquire lock
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1", board_position=0)
+
+        # Query lock
+        lock = await service.get_lock("proj-1", "board-1")
+
+        assert lock is not None
+        assert lock.project_id == "proj-1"
+        assert lock.board_id == "board-1"
+        assert lock.work_item_id == "item-1"
+        assert lock.locked_by_work_item == "item-1"
+        assert lock.lock_status == "locked"
+        assert lock.lock_acquired_at is not None  # ISO 8601 string
+
+    @pytest.mark.asyncio
+    async def test_get_lock_returns_none_when_not_held(self):
+        """get_lock() should return None when no lock is held."""
+        service = InMemoryLockService()
+
+        lock = await service.get_lock("proj-1", "board-1")
+
+        assert lock is None
+
+    @pytest.mark.asyncio
+    async def test_get_lock_returns_none_after_release(self):
+        """get_lock() should return None after lock is released."""
+        service = InMemoryLockService()
+
+        # Acquire and release
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1", board_position=0)
+        await service.release_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1")
+
+        # Query lock
+        lock = await service.get_lock("proj-1", "board-1")
+
+        assert lock is None
+
+    @pytest.mark.asyncio
+    async def test_get_lock_invalid_project_id_raises(self):
+        """get_lock() should raise ValueError for empty project_id."""
+        service = InMemoryLockService()
+
+        with pytest.raises(ValueError, match="project_id"):
+            await service.get_lock("", "board-1")
+
+    @pytest.mark.asyncio
+    async def test_get_lock_invalid_board_id_raises(self):
+        """get_lock() should raise ValueError for empty board_id."""
+        service = InMemoryLockService()
+
+        with pytest.raises(ValueError, match="board_id"):
+            await service.get_lock("proj-1", "")
+
+    @pytest.mark.asyncio
+    async def test_get_all_locks_empty_service(self):
+        """get_all_locks() should return empty list when no locks are held."""
+        service = InMemoryLockService()
+
+        locks = await service.get_all_locks()
+
+        assert locks == []
+
+    @pytest.mark.asyncio
+    async def test_get_all_locks_includes_single_lock(self):
+        """get_all_locks() should include a single held lock."""
+        service = InMemoryLockService()
+
+        # Acquire lock
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1", board_position=0)
+
+        locks = await service.get_all_locks()
+
+        assert len(locks) == 1
+        assert locks[0].project_id == "proj-1"
+        assert locks[0].board_id == "board-1"
+        assert locks[0].work_item_id == "item-1"
+        assert locks[0].locked_by_work_item == "item-1"
+        assert locks[0].lock_status == "locked"
+
+    @pytest.mark.asyncio
+    async def test_get_all_locks_includes_multiple_locks(self):
+        """get_all_locks() should include all held locks."""
+        service = InMemoryLockService()
+
+        # Acquire locks on different boards
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1", board_position=0)
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-2", work_item_id="item-2", board_position=0)
+        await service.try_acquire_lock(project_id="proj-2", board_id="board-1", work_item_id="item-3", board_position=0)
+
+        locks = await service.get_all_locks()
+
+        assert len(locks) == 3
+        lock_items = {lock.work_item_id for lock in locks}
+        assert lock_items == {"item-1", "item-2", "item-3"}
+
+    @pytest.mark.asyncio
+    async def test_get_all_locks_excludes_released_locks(self):
+        """get_all_locks() should not include released locks."""
+        service = InMemoryLockService()
+
+        # Acquire two locks
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1", board_position=0)
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-2", work_item_id="item-2", board_position=0)
+
+        # Release one
+        await service.release_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1")
+
+        locks = await service.get_all_locks()
+
+        assert len(locks) == 1
+        assert locks[0].work_item_id == "item-2"
+
+    @pytest.mark.asyncio
+    async def test_get_all_locks_returns_empty_after_all_released(self):
+        """get_all_locks() should return empty list after all locks are released."""
+        service = InMemoryLockService()
+
+        # Acquire lock
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1", board_position=0)
+
+        # Release it
+        await service.release_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1")
+
+        locks = await service.get_all_locks()
+
+        assert locks == []
+
+    @pytest.mark.asyncio
+    async def test_get_all_locks_ignores_queued_items(self):
+        """get_all_locks() should only include lock holders, not queued items."""
+        service = InMemoryLockService()
+
+        # Acquire lock
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-1", board_position=0)
+
+        # Queue another item (doesn't hold lock)
+        await service.try_acquire_lock(project_id="proj-1", board_id="board-1", work_item_id="item-2", board_position=1)
+
+        locks = await service.get_all_locks()
+
+        assert len(locks) == 1
+        assert locks[0].work_item_id == "item-1"  # Only holder, not queued item

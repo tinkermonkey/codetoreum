@@ -155,7 +155,8 @@ async def test_lock_released_after_cascade(e2e_env):
     bootstrap, seeder = e2e_env
     adapters = cast("SimulationAdapters", bootstrap.adapters)
     board = adapters.board
-    lock_service = adapters.lock_service
+    # Use the queued lock service which handles the board event handler's lock operations
+    lock_service = bootstrap._queued_lock_service
     work_item_id = seeder.created_items.work_items[0]
 
     # Determine the project_id the seeder used

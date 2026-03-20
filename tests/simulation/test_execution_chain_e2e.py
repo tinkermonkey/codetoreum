@@ -79,29 +79,32 @@ async def test_execution_chain_llm_path_reaches_done(exec_chain_env):
     work_item_id = seeder.created_items.work_items[0]
 
     # Human moves item from Backlog → Ready (pipeline trigger)
-    await board.move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)
+    board_mock = adapters.board_as_mock()
+    await board_mock.move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)
 
     # Wait for cascade to reach Done (longer timeout: real execution chain)
-    reached_done = await wait_for_column(board, work_item_id, "Done", timeout=30.0)
+    reached_done = await wait_for_column(board_mock, work_item_id, "Done", timeout=30.0)
     assert reached_done, (
         f"Item did not reach 'Done' within timeout. "
-        f"Current position: {(await board.get_item_position(work_item_id)).column_name}"
+        f"Current position: {(await board_mock.get_item_position(work_item_id)).column_name}"
     )
 
     # Wait for background cleanup tasks and LLM calls to complete
+    llm_mock = adapters.llm_as_mock()
+
     async def llm_has_been_called():
-        return adapters.llm_provider.get_request_count() >= 1
+        return llm_mock.get_request_count() >= 1
 
     await assert_condition(
         llm_has_been_called, timeout=5.0, poll_interval=0.05, message="LLM should have been called via ExecutionService"
     )
 
     # The LLM should have been called at least once (one call per stage: architect, coder, tester)
-    llm_call_count = adapters.llm_provider.get_request_count()
+    llm_call_count = llm_mock.get_request_count()
     assert llm_call_count >= 1, f"Expected at least 1 LLM call via ExecutionService, got {llm_call_count}"
 
     # Verify movement history: Backlog → Ready → In Progress → Review → Done
-    history = board.get_movement_history(work_item_id)
+    history = board_mock.get_movement_history(work_item_id)
     assert len(history) == 4, (
         f"Expected 4 movements (Backlog→Ready, Ready→In Progress, "
         f"In Progress→Review, Review→Done), got {len(history)}"
@@ -139,22 +142,23 @@ async def test_execution_chain_emits_vcs_events(exec_chain_env):
     state produces consistent results across all adapters."
     """
     bootstrap, seeder, adapters = exec_chain_env
-    board = adapters.board
-    event_emitter = adapters.event_emitter
+    board_mock = adapters.board_as_mock()
+    event_emitter_capturing = adapters.event_emitter_as_capturing()
     work_item_id = seeder.created_items.work_items[0]
 
     # Human trigger
-    await board.move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)
+    await board_mock.move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)
 
     # Wait for cascade to complete
-    reached_done = await wait_for_column(board, work_item_id, "Done", timeout=30.0)
+    reached_done = await wait_for_column(board_mock, work_item_id, "Done", timeout=30.0)
     assert reached_done, (
-        f"Item did not reach 'Done'. " f"Current position: {(await board.get_item_position(work_item_id)).column_name}"
+        f"Item did not reach 'Done'. "
+        f"Current position: {(await board_mock.get_item_position(work_item_id)).column_name}"
     )
 
     # Wait for VCS events to be emitted
     async def vcs_events_emitted():
-        branch_events = event_emitter.get_events_by_type("repository.branch_created")
+        branch_events = event_emitter_capturing.get_events_by_type("repository.branch_created")
         return len(branch_events) >= 3  # Expect 3 stages: architect, coder, tester
 
     await assert_condition(
@@ -168,25 +172,26 @@ async def test_execution_chain_emits_vcs_events(exec_chain_env):
     # Each of the 3 pipeline stages creates a workspace, which calls
     # WorkspaceRouter.prepare_workspace() → vcs.create_branch().
     # These branch events demonstrate that the execution → workspace → VCS chain works.
-    branch_events = event_emitter.get_events_by_type("repository.branch_created")
+    branch_events = event_emitter_capturing.get_events_by_type("repository.branch_created")
     assert len(branch_events) >= 3, (
         f"Expected at least 3 BranchCreatedEvents (one per pipeline stage), "
         f"got {len(branch_events)}. This validates the spec requirement that "
         f"'a sequence of calls that would mutate state produces consistent results "
         f"across all adapters' (ExecutionService → WorkspaceRouter → IVersionControlService → event). "
-        f"All events: {[getattr(e, 'type', None) for e in event_emitter.get_events()]}"
+        f"All events: {[getattr(e, 'type', None) for e in event_emitter_capturing.get_events()]}"
     )
 
     # Additional validation: CommitCreatedEvent is NOT expected in this LLM-only path
     # because mock agents don't modify files. WorkspaceRouter.finalize_workspace()
     # only commits when has_changes=true. To test CommitCreatedEvent, use a different
     # test with container path execution that actually modifies files.
-    commit_events = event_emitter.get_events_by_type("repository.commit_created")
+    commit_events = event_emitter_capturing.get_events_by_type("repository.commit_created")
     # Note: In a container path with file modifications, we would assert >= 1.
     # The absence here is correct for this LLM-only path.
 
     # Verify LLM execution occurred (chain reaches completion)
-    llm_call_count = adapters.llm_provider.get_request_count()
+    llm_mock = adapters.llm_as_mock()
+    llm_call_count = llm_mock.get_request_count()
     assert llm_call_count >= 1, f"Expected at least 1 LLM execution, got {llm_call_count}"
 
 
@@ -197,21 +202,24 @@ async def test_execution_chain_workflow_completes(exec_chain_env):
     WorkflowCreated → WorkflowStarted → (stage advances) → WorkflowCompleted.
     """
     bootstrap, seeder, adapters = exec_chain_env
-    board = adapters.board
-    event_store = adapters.event_store
+    board_mock = adapters.board_as_mock()
+    # Use accessor helper to get the concrete InMemoryEventStore type
+    event_store = adapters.event_store_as_memory()
     work_item_id = seeder.created_items.work_items[0]
 
     # Human trigger
-    await board.move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)
+    await board_mock.move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)
 
     # Wait for cascade to complete
-    reached_done = await wait_for_column(board, work_item_id, "Done", timeout=30.0)
+    reached_done = await wait_for_column(board_mock, work_item_id, "Done", timeout=30.0)
     assert reached_done, (
-        f"Item did not reach 'Done'. " f"Current position: {(await board.get_item_position(work_item_id)).column_name}"
+        f"Item did not reach 'Done'. "
+        f"Current position: {(await board_mock.get_item_position(work_item_id)).column_name}"
     )
 
     # Wait for workflow events to be recorded
     async def workflow_events_recorded():
+        # For simulation, event_store is InMemoryEventStore which has get_all_events_list()
         all_events = event_store.get_all_events_list()
         workflow_events = [
             e for e in all_events if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == work_item_id
@@ -257,17 +265,17 @@ async def test_executions_endpoint_visibility(exec_chain_env):
     3. Verifying that execution records are returned with correct data
     """
     bootstrap, seeder, adapters = exec_chain_env
-    board = adapters.board
+    board_mock = adapters.board_as_mock()
     work_item_id = seeder.created_items.work_items[0]
 
     # Human moves item from Backlog → Ready (pipeline trigger)
-    await board.move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)
+    await board_mock.move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)
 
     # Wait for cascade to reach Done
-    reached_done = await wait_for_column(board, work_item_id, "Done", timeout=30.0)
+    reached_done = await wait_for_column(board_mock, work_item_id, "Done", timeout=30.0)
     assert reached_done, (
         f"Item did not reach 'Done' within timeout. "
-        f"Current position: {(await board.get_item_position(work_item_id)).column_name}"
+        f"Current position: {(await board_mock.get_item_position(work_item_id)).column_name}"
     )
 
     # Wait for execution records to be available

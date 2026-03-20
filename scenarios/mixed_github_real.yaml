@@ -1,0 +1,175 @@
+# Mixed Configuration: Real GitHub + Simulated Agents
+#
+# Use Case:
+#   Integration testing against real GitHub issues while keeping agent responses
+#   deterministic and fast. Useful for:
+#   - Testing workflow logic with real issue data
+#   - Avoiding Claude Code API costs during testing
+#   - Verifying GitHub integration without agent variability
+#
+# Credentials Required:
+#   GITHUB_TOKEN - Personal Access Token (repo, project scopes)
+#   GITHUB_ORG - GitHub organization name
+#   GITHUB_REPO - Repository in org/repo format
+#   REDIS_URL - Redis connection (for event store, message broker) [OPTIONAL - not yet implemented]
+#
+# Performance:
+#   Speed: 10-50x faster than all-real (no LLM inference)
+#   Determinism: High (mock agents + real boards)
+#
+# Note:
+#   All adapters referenced in this scenario are registered and available.
+#   See documentation/01_design/adapters/ADAPTER_REGISTRATION_STATUS.md for implementation status.
+
+name: mixed_github_real
+description: Real GitHub boards and tickets, simulated agents and containers
+version: "1.0"
+
+# Fidelity level: MEDIUM = realistic timing with causal linking via events
+fidelity: MEDIUM
+
+# Simulation timing
+simulation:
+  speed_multiplier: 10.0
+  start_time: null  # Current time
+
+# Adapter configuration
+adapters:
+  # Real GitHub adapters
+  board: github          # Real GitHub project board
+  ticket: github         # Real GitHub issues/PRs
+  discussion_adapter: github     # Real GitHub issue comments (corrected field name from 'discussion')
+  review_cycle: github   # Real GitHub code reviews
+  work_item_service: github  # Real GitHub work items
+  identity_service: github   # Real GitHub identity service
+
+  # Simulated/in-memory adapters
+  llm: mock              # Deterministic mock LLM responses
+  container: fake        # Fake container executor (no Docker needed)
+  version_control: in_memory  # In-memory Git simulation
+
+  # Infrastructure adapters
+  event_store: in_memory        # Or use Redis for persistent testing
+  message_broker: in_memory     # Or use Redis for distributed testing
+  lock_service: in_memory       # In-memory distributed locking
+
+  # Configuration and storage
+  config_store: in_memory
+  workflow_config: in_memory
+  storage: in_memory
+
+  # Observability and utility
+  metrics: in_memory
+  notifier: mock
+  encryption: simple
+  repair_cycle: mock
+  project_manager: mock
+  checkpoint_store: in_memory
+  agent_repository: in_memory
+  run_registry: in_memory
+  branch_tracker: in_memory
+  event_emitter: mock
+  queue_service: in_memory
+
+# Agent behavior configuration
+agents:
+  - agent_id: reviewer
+    execution_delay: 0.2
+    success_rate: 0.95
+    response_patterns:
+      code_review: "Code review completed. No issues found."
+      feedback: "Changes look good, proceeding to next stage."
+
+  - agent_id: analyzer
+    execution_delay: 0.15
+    success_rate: 0.98
+    response_patterns:
+      analysis: "Analysis complete. All requirements met."
+      test: "Tests passing, coverage at 95%."
+
+# Container behavior configuration
+containers:
+  default_exit_code: 0
+  execution_delay: 0.1
+  command_exit_codes:
+    "pytest": 0
+    "npm test": 0
+    "black": 0
+  command_outputs:
+    "pytest": { stdout: "===== 42 passed in 0.12s =====", stderr: "" }
+    "npm test": { stdout: "Test Suites: 1 passed, 1 total", stderr: "" }
+
+# Notification configuration
+notifications:
+  send_delay: 0.01
+  simulate_failures: false
+
+# Metrics configuration
+metrics:
+  collect_enabled: true
+  detailed_tracking: true
+
+# Scenario test cases
+test_scenarios:
+  - name: real_github_issue_workflow
+    description: Complete workflow with real GitHub issue
+    steps:
+      - action: trigger_workflow
+        params:
+          issue_id: 1
+          workflow_type: standard_review
+      - action: wait_for_event
+        params:
+          event_type: WorkflowStarted
+          timeout_seconds: 10
+      - action: advance_time
+        params:
+          delta_seconds: 60
+      - action: assert_event
+        params:
+          event_type: ReviewStatusChangedEvent
+      - action: assert_event
+        params:
+          event_type: WorkItemColumnChangedEvent
+
+  - name: real_github_board_sync
+    description: Sync real GitHub board columns and issues
+    steps:
+      - action: trigger_action
+        params:
+          action: sync_board
+      - action: wait_for_event
+        params:
+          event_type: BoardReconciledEvent
+          timeout_seconds: 30
+      - action: assert_state
+        params:
+          check: board_has_columns
+          expected_count: 3
+
+# Environment variable references (required)
+environment_variables:
+  # GitHub credentials
+  GITHUB_TOKEN: required  # Set via: export GITHUB_TOKEN="ghp_..."
+  GITHUB_ORG: required    # Set via: export GITHUB_ORG="anthropic"
+  GITHUB_REPO: required   # Set via: export GITHUB_REPO="anthropic/codetoreum"
+
+  # Optional: Use different GitHub API endpoint
+  # GITHUB_API_URL: "https://api.github.com"  # Default for GitHub.com
+
+# Scenario configuration
+scenario_config:
+  # Which adapters to override from this config
+  adapter_overrides:
+    - board
+    - ticket
+    - discussion_adapter
+    - review_cycle
+    - work_item_service
+    - identity_service
+
+  # Load order: simulation defaults, then scenario overrides, then env vars
+  load_order:
+    - default_simulation_config
+    - scenario_adapters
+    - environment_overrides

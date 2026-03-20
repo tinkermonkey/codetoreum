@@ -574,15 +574,21 @@ class SimulationE2EClient:
         Raises:
             TimeoutError: If status not reached within timeout
         """
-        start = asyncio.get_event_loop().time()
-        while (asyncio.get_event_loop().time() - start) < timeout:
-            executions = self.get_executions()
-            for execution in executions:
-                if execution["id"] == execution_id and execution["status"] == expected_status:
-                    return execution
-            await asyncio.sleep(poll_interval)
+        max_iterations = int(timeout / poll_interval) + 1
 
-        raise TimeoutError(f"Execution {execution_id} did not reach status {expected_status} " f"within {timeout}s")
+        async def poll_execution_status():
+            for _ in range(max_iterations):
+                executions = self.get_executions()
+                for execution in executions:
+                    if execution["id"] == execution_id and execution["status"] == expected_status:
+                        return execution
+                await asyncio.sleep(poll_interval)
+            return None
+
+        result = await poll_execution_status()
+        if result is not None:
+            return result
+        raise TimeoutError(f"Execution {execution_id} did not reach status {expected_status} within {timeout}s")
 
     def assert_metrics_recorded(
         self,
@@ -602,9 +608,9 @@ class SimulationE2EClient:
             AssertionError: If metrics not found
         """
         metrics = self.get_metrics(metric_name=metric_name, labels=labels)
-        assert len(metrics) >= min_count, (
-            f"Expected at least {min_count} data points for metric " f"'{metric_name}', but found {len(metrics)}"
-        )
+        assert (
+            len(metrics) >= min_count
+        ), f"Expected at least {min_count} data points for metric '{metric_name}', but found {len(metrics)}"
 
     def assert_events_recorded(
         self,
@@ -624,6 +630,6 @@ class SimulationE2EClient:
             AssertionError: If events not found
         """
         events = self.get_events(event_type=event_type, aggregate_id=aggregate_id)
-        assert len(events) >= min_count, (
-            f"Expected at least {min_count} events of type '{event_type}', " f"but found {len(events)}"
-        )
+        assert (
+            len(events) >= min_count
+        ), f"Expected at least {min_count} events of type '{event_type}', but found {len(events)}"

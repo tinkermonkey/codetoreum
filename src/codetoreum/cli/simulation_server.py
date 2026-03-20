@@ -11,6 +11,7 @@ Usage:
 """
 
 import asyncio
+import dataclasses
 import logging
 import signal
 import sys
@@ -23,12 +24,17 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from codetoreum.infrastructure.adapters.factory import AdapterFactory, AdapterFactoryConfig
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.infrastructure.resilience import OperationMode
 from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationApplicationBootstrap,
 )
 from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
-from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+from codetoreum.infrastructure.simulation.simulation_config import (
+    AdapterSelectionConfig,
+    SimulationConfig,
+)
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -69,6 +75,131 @@ def validate_speed_multiplier(speed: float) -> None:
     if speed <= 0:
         msg = f"Speed multiplier must be positive, got {speed}"
         raise click.BadParameter(msg)
+
+
+def parse_adapter_override(override_str: str) -> tuple[str, str]:
+    """
+    Parse adapter override string in SLOT=IMPL format.
+
+    Args:
+        override_str: Override string in format "slot=impl"
+
+    Returns:
+        Tuple of (slot_name, impl_name)
+
+    Raises:
+        click.BadParameter: If format is invalid
+    """
+    if "=" not in override_str:
+        msg = f"Invalid adapter override format: '{override_str}'. " "Expected format: slot=impl (e.g., 'board=github')"
+        raise click.BadParameter(msg)
+
+    parts = override_str.split("=", 1)
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        msg = f"Invalid adapter override format: '{override_str}'. " "Expected format: slot=impl (e.g., 'board=github')"
+        raise click.BadParameter(msg)
+
+    slot, impl = parts
+    return slot.strip(), impl.strip()
+
+
+def apply_adapter_overrides(
+    config: SimulationConfig,
+    overrides: tuple[str, ...],
+    factory: AdapterFactory,
+) -> SimulationConfig:
+    """
+    Apply adapter override flags to SimulationConfig.
+
+    Validates that slot names and implementation names are registered before applying.
+
+    Args:
+        config: SimulationConfig to modify
+        overrides: Tuple of override strings in "slot=impl" format from CLI --adapter flags
+        factory: AdapterFactory for validation
+
+    Returns:
+        Modified SimulationConfig with overrides applied
+
+    Raises:
+        click.UsageError: If any slot or impl name is unknown
+        click.BadParameter: If any override has invalid format
+    """
+    if not overrides:
+        return config
+
+    errors = []
+    current = {f: getattr(config.adapters, f) for f in AdapterSelectionConfig.__dataclass_fields__}
+
+    for override_str in overrides:
+        # Parse SLOT=IMPL format
+        try:
+            slot, impl = parse_adapter_override(override_str)
+        except click.BadParameter as e:
+            errors.append(str(e))
+            continue
+        # Validate slot name
+        if slot not in AdapterSelectionConfig.__dataclass_fields__:
+            valid_slots = sorted(AdapterSelectionConfig.__dataclass_fields__)
+            errors.append(f"Unknown adapter slot: '{slot}'. Valid slots: {', '.join(valid_slots)}")
+            continue
+
+        # Validate impl name for this slot
+        try:
+            registry = factory.get_registry(slot)
+        except (KeyError, ValueError) as e:
+            errors.append(f"Cannot find registry for slot '{slot}': {e}")
+            continue
+
+        if not registry.has_adapter(impl):
+            available = registry.list_adapters()
+            errors.append(f"Unknown implementation '{impl}' for slot '{slot}'. Available: {', '.join(available)}")
+            continue
+
+        current[slot] = impl
+
+    if errors:
+        raise click.UsageError("\n".join(errors))
+
+    new_adapters = AdapterSelectionConfig(**current)
+    return dataclasses.replace(config, adapters=new_adapters)
+
+
+def display_adapter_summary(config: SimulationConfig, factory: AdapterFactory) -> None:
+    """
+    Display adapter configuration summary with simulation vs. real labels.
+
+    Args:
+        config: SimulationConfig to display
+        factory: AdapterFactory for metadata lookup
+    """
+    console.print("\n[bold cyan]Adapter Configuration[/bold cyan]")
+
+    # Create table
+    table = Table(show_header=True, box=None, padding=(0, 2))
+    table.add_column("Slot", style="cyan")
+    table.add_column("Implementation", style="white")
+    table.add_column("Type", style="dim")
+
+    # Iterate over all slots in order
+    for slot in sorted(AdapterSelectionConfig.__dataclass_fields__):
+        impl = getattr(config.adapters, slot)
+        try:
+            registry = factory.get_registry(slot)
+            if registry.has_adapter(impl):
+                meta = registry.get_metadata(impl)
+                # Check if "simulation" tag is present
+                is_sim = "simulation" in (meta.tags or [])
+                type_label = "[simulation]" if is_sim else "[REAL]"
+            else:
+                type_label = "[unknown]"
+        except (KeyError, ValueError):
+            logger.warning(f"Failed to resolve adapter metadata for slot '{slot}' with impl '{impl}'", exc_info=True)
+            type_label = "[unknown]"
+
+        table.add_row(slot, impl, type_label)
+
+    console.print(table)
 
 
 def validate_yaml_file(file_path: Path) -> None:
@@ -148,7 +279,7 @@ def get_scenario_file_path(scenario: str) -> Path:
     Get the path to a built-in scenario file.
 
     Args:
-        scenario: Scenario name (default, demo, stress_test, review_cycle, failure_recovery)
+        scenario: Scenario name (default, demo, stress_test, review_cycle, failure_recovery, mixed_full_github, mixed_full_real, mixed_github_real)
 
     Returns:
         Path to scenario file
@@ -163,7 +294,8 @@ def get_scenario_file_path(scenario: str) -> Path:
     if not scenario_file.exists():
         msg = (
             f"Scenario '{scenario}' not found at {scenario_file}. "
-            f"Available scenarios: default, demo, stress_test, review_cycle, failure_recovery"
+            f"Available scenarios: default, demo, stress_test, review_cycle, failure_recovery, "
+            f"mixed_full_github, mixed_full_real, mixed_github_real"
         )
         raise FileNotFoundError(msg)
 
@@ -173,23 +305,26 @@ def get_scenario_file_path(scenario: str) -> Path:
 async def bootstrap_application(
     scenario: str,
     scenario_file: Path | None,
-    speed_multiplier: float,
+    speed_multiplier: float | None,
     auto_advance: bool,
-) -> SimulationApplicationBootstrap:
+    adapter_overrides: tuple[str, ...] | None = None,
+) -> tuple[SimulationApplicationBootstrap, AdapterFactory]:
     """
     Bootstrap the application in simulation mode.
 
     Args:
         scenario: Scenario name
         scenario_file: Optional custom scenario file path
-        speed_multiplier: Time speed multiplier
+        speed_multiplier: Time speed multiplier (None to use config file default or 1.0)
         auto_advance: Whether to automatically advance simulation clock
+        adapter_overrides: Optional tuple of "slot=impl" adapter overrides from CLI
 
     Returns:
-        Configured SimulationApplicationBootstrap instance
+        Tuple of (configured SimulationApplicationBootstrap instance, AdapterFactory instance)
 
     Raises:
         click.FileError: If scenario file cannot be read
+        click.UsageError: If adapter overrides are invalid
         RuntimeError: If bootstrap fails
     """
     console.print("\n[bold cyan]Loading Configuration[/bold cyan]")
@@ -200,16 +335,16 @@ async def bootstrap_application(
             console.print(f"Loading configuration from: {scenario_file}")
             validate_yaml_file(scenario_file)
             sim_config = SimulationConfig.from_yaml(scenario_file)
-            # Override speed multiplier if provided
-            if speed_multiplier != 1.0:
+            # Override speed multiplier if provided (CLI takes precedence)
+            if speed_multiplier is not None:
                 sim_config.time.speed_multiplier = speed_multiplier
         else:
             # Use built-in scenario (config-only)
             console.print(f"Using built-in scenario: {scenario}")
-            sim_config = SimulationConfig.create_fast_config(
-                scenario_name=scenario,
-                speed_multiplier=speed_multiplier,
-            )
+            kwargs = {"scenario_name": scenario}
+            if speed_multiplier is not None:
+                kwargs["speed_multiplier"] = speed_multiplier
+            sim_config = SimulationConfig.create_fast_config(**kwargs)
     except PermissionError as e:
         msg = f"Permission denied: {e}"
         raise click.FileError(str(scenario_file), msg) from e
@@ -223,6 +358,25 @@ async def bootstrap_application(
     console.print(f"[dim]Speed multiplier: {sim_config.time.speed_multiplier}x[/dim]")
     console.print(f"[dim]Auto-advance: {'enabled' if auto_advance else 'disabled'}[/dim]")
 
+    # Create factory for adapter overrides and display
+    factory_config = AdapterFactoryConfig(
+        operation_mode=OperationMode.SIMULATION,
+        enable_resilience=False,
+    )
+    factory = AdapterFactory(factory_config)
+
+    # Apply adapter overrides if provided
+    if adapter_overrides:
+        console.print("[dim]Applying adapter overrides...[/dim]")
+        try:
+            sim_config = apply_adapter_overrides(sim_config, adapter_overrides, factory)
+            console.print(f"[dim]Applied {len(adapter_overrides)} adapter override(s)[/dim]")
+        except click.UsageError:
+            raise
+        except Exception as e:
+            msg = f"Failed to apply adapter overrides: {e}"
+            raise RuntimeError(msg) from e
+
     console.print("\n[bold cyan]Bootstrapping Application[/bold cyan]")
 
     # Create and setup bootstrap
@@ -235,7 +389,7 @@ async def bootstrap_application(
 
     console.print("[green]✓ Application bootstrapped successfully[/green]")
 
-    return bootstrap
+    return bootstrap, factory
 
 
 async def seed_data(
@@ -317,10 +471,12 @@ def display_startup_info(
     port: int,
     scenario: str,
     scenario_file: Path | None,
-    speed_multiplier: float,
+    speed_multiplier: float | None,
     auto_advance: bool,
     debug: bool,
     seeded_data: dict,
+    sim_config: SimulationConfig | None = None,
+    factory: AdapterFactory | None = None,
 ) -> None:
     """
     Display startup information.
@@ -334,6 +490,8 @@ def display_startup_info(
         auto_advance: Whether auto-advance is enabled
         debug: Debug mode enabled
         seeded_data: Seeded data counts
+        sim_config: Optional SimulationConfig for adapter display
+        factory: Optional AdapterFactory for adapter metadata
     """
     console.print("\n")
 
@@ -345,7 +503,9 @@ def display_startup_info(
     table.add_row("Host", host)
     table.add_row("Port", str(port))
     table.add_row("Scenario", scenario if not scenario_file else str(scenario_file))
-    table.add_row("Speed Multiplier", f"{speed_multiplier}x")
+    # Use resolved config speed multiplier if available, otherwise fall back to CLI parameter
+    display_speed = sim_config.time.speed_multiplier if sim_config else speed_multiplier
+    table.add_row("Speed Multiplier", f"{display_speed}x")
     table.add_row("Auto-advance", "Enabled" if auto_advance else "Disabled")
     table.add_row("Debug Mode", "Enabled" if debug else "Disabled")
     table.add_row("Executor", "[green]ExecutionServiceAgentExecutor[/green]")
@@ -365,6 +525,10 @@ def display_startup_info(
         border_style="green",
     )
     console.print(panel)
+
+    # Display adapter configuration if available
+    if sim_config and factory:
+        display_adapter_summary(sim_config, factory)
 
     # Display URLs
     console.print("\n[bold cyan]URLs:[/bold cyan]")
@@ -430,10 +594,11 @@ async def main_async(
     port: int,
     scenario: str,
     scenario_file: Path | None,
-    speed_multiplier: float,
+    speed_multiplier: float | None,
     auto_advance: bool,
     no_seed: bool,
     debug: bool,
+    adapter_overrides: tuple[str, ...] | None = None,
 ) -> None:
     """
     Main async entry point for simulation server.
@@ -443,10 +608,11 @@ async def main_async(
         port: Server port
         scenario: Scenario name
         scenario_file: Optional custom scenario file
-        speed_multiplier: Time speed multiplier
+        speed_multiplier: Time speed multiplier (None to use config file default or 1.0)
         auto_advance: Whether to automatically advance simulation clock
         no_seed: Skip seeding if True
         debug: Debug mode enabled
+        adapter_overrides: Optional tuple of "slot=impl" adapter overrides from CLI
     """
     bootstrap = None
     shutdown_requested = False
@@ -463,8 +629,10 @@ async def main_async(
     signal.signal(signal.SIGTERM, shutdown_handler_sync)
 
     try:
-        # Bootstrap application
-        bootstrap = await bootstrap_application(scenario, scenario_file, speed_multiplier, auto_advance)
+        # Bootstrap application (returns both bootstrap and factory instances)
+        bootstrap, factory = await bootstrap_application(
+            scenario, scenario_file, speed_multiplier, auto_advance, adapter_overrides
+        )
 
         if shutdown_requested:
             return
@@ -475,8 +643,19 @@ async def main_async(
         if shutdown_requested:
             return
 
-        # Display startup info
-        display_startup_info(host, port, scenario, scenario_file, speed_multiplier, auto_advance, debug, seeded_data)
+        # Display startup info with adapter configuration
+        display_startup_info(
+            host,
+            port,
+            scenario,
+            scenario_file,
+            speed_multiplier,
+            auto_advance,
+            debug,
+            seeded_data,
+            bootstrap.config,
+            factory,
+        )
 
         # Run server (blocking)
         await run_server(bootstrap, host, port, debug)
@@ -535,7 +714,7 @@ async def main_async(
 @click.option(
     "--scenario",
     default="default",
-    help="Pre-built scenario name (default, demo, stress_test, review_cycle, failure_recovery)",
+    help="Pre-built scenario name (default, demo, stress_test, review_cycle, failure_recovery, mixed_full_github, mixed_full_real, mixed_github_real)",
     show_default=True,
 )
 @click.option(
@@ -545,10 +724,10 @@ async def main_async(
 )
 @click.option(
     "--speed-multiplier",
-    default=1.0,
+    default=None,
     type=float,
-    help="Time speed multiplier (must be positive, e.g., 10 = 10x faster)",
-    show_default=True,
+    help="Time speed multiplier (must be positive, e.g., 10 = 10x faster). If not provided, uses config file default or 1.0",
+    show_default=False,
 )
 @click.option(
     "--auto-advance/--no-auto-advance",
@@ -561,6 +740,13 @@ async def main_async(
     help="Skip seeding test data (start with empty state)",
 )
 @click.option(
+    "--adapter",
+    "adapter_overrides",
+    multiple=True,
+    metavar="SLOT=IMPL",
+    help="Override a single adapter: --adapter board=github. Repeatable.",
+)
+@click.option(
     "--debug",
     is_flag=True,
     help="Enable debug logging",
@@ -570,9 +756,10 @@ def main(
     port: int,
     scenario: str,
     scenario_file: Path | None,
-    speed_multiplier: float,
+    speed_multiplier: float | None,
     auto_advance: bool,
     no_seed: bool,
+    adapter_overrides: tuple[str, ...],
     debug: bool,
 ) -> None:
     """
@@ -600,11 +787,18 @@ def main(
 
         # Start without seeding data
         python -m codetoreum.cli.simulation_server --no-seed
+
+        # Override adapters (repeatable)
+        python -m codetoreum.cli.simulation_server --adapter board=github --adapter llm=mock
+
+        # Override ticket system to use in_memory instead of mock
+        python -m codetoreum.cli.simulation_server --adapter ticket=in_memory
     """
     # Validate inputs
     try:
         validate_port(port)
-        validate_speed_multiplier(speed_multiplier)
+        if speed_multiplier is not None:
+            validate_speed_multiplier(speed_multiplier)
         if scenario_file:
             validate_yaml_file(scenario_file)
     except (click.BadParameter, click.FileError) as e:
@@ -621,9 +815,25 @@ def main(
 
     # Run async main
     try:
-        asyncio.run(main_async(host, port, scenario, scenario_file, speed_multiplier, auto_advance, no_seed, debug))
+        asyncio.run(
+            main_async(
+                host,
+                port,
+                scenario,
+                scenario_file,
+                speed_multiplier,
+                auto_advance,
+                no_seed,
+                debug,
+                adapter_overrides,
+            )
+        )
     except KeyboardInterrupt:
         console.print("\n[yellow]Server stopped by user[/yellow]")
+    except click.UsageError as e:
+        console.print(f"\n[bold red]Configuration error:[/bold red] {e}")
+        logger.error(f"Configuration error: {e}", exc_info=True)
+        sys.exit(1)
     except Exception as e:
         console.print(f"\n[bold red]Fatal error:[/bold red] {e}")
         logger.exception("Fatal error in simulation server", extra={"error_id": "ERR_UNHANDLED_EXCEPTION"})

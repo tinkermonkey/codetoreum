@@ -7,13 +7,14 @@ sorting by board position when items are enqueued or positions update.
 Thread-safe via internal locking mechanism.
 """
 
+import asyncio
 import logging
-import threading
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.application.pipeline_lock_service import (
-    IPipelineLockService,
+    IQueuedPipelineLockService,
     LockAcquisitionResult,
     LockReleaseResult,
     LockStatus,
@@ -28,6 +29,7 @@ from codetoreum.domain.events.lock_events import (
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService, PipelineLock
 
 if TYPE_CHECKING:
     from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
@@ -35,17 +37,17 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class InMemoryLockService(IPipelineLockService):
+class InMemoryLockService(MockEventEmitter, IPipelineLockService, IQueuedPipelineLockService):
     """In-memory pipeline lock service with board position-based queue ordering.
 
     Manages lock acquisition and release with queue ordered by board position.
     Topmost items (lowest position value) have highest priority in queue.
 
-    Thread-safe for concurrent access via internal threading lock.
+    Async-safe concurrent access via asyncio.Lock.
 
     Attributes:
         _lock_state: Dict mapping "project_id:board_id" to PipelineQueueState
-        _lock: Threading lock for thread-safe access
+        _lock: Asyncio lock for async-safe access
         _event_bus: Optional event bus for emitting domain events
     """
 
@@ -65,8 +67,11 @@ class InMemoryLockService(IPipelineLockService):
                    Using a clock ensures consistency with watchdog time comparisons in
                    simulation environments with speed multipliers.
         """
+        # Initialize event emitter for IEventEmitter interface
+        MockEventEmitter.__init__(self)
+
         self._lock_state: dict[str, PipelineQueueState] = {}
-        self._lock = threading.Lock()
+        self._lock = asyncio.Lock()
         self._event_bus = event_bus
         self._stale_threshold_seconds = stale_threshold_seconds
         self._clock = clock
@@ -109,7 +114,7 @@ class InMemoryLockService(IPipelineLockService):
         # Get current time from clock (simulation or wall-clock)
         now = self._clock.now() if self._clock else datetime.now(UTC)
 
-        with self._lock:
+        async with self._lock:
             board_key = f"{project_id}:{board_id}"
 
             # Initialize state if needed
@@ -332,7 +337,7 @@ class InMemoryLockService(IPipelineLockService):
         # Get current time from clock (simulation or wall-clock)
         now = self._clock.now() if self._clock else datetime.now(UTC)
 
-        with self._lock:
+        async with self._lock:
             board_key = f"{project_id}:{board_id}"
             state = self._lock_state.get(board_key)
 
@@ -435,7 +440,7 @@ class InMemoryLockService(IPipelineLockService):
             msg = "board_id cannot be empty"
             raise ValueError(msg)
 
-        with self._lock:
+        async with self._lock:
             board_key = f"{project_id}:{board_id}"
             if board_key not in self._lock_state:
                 return PipelineQueueState(
@@ -479,7 +484,7 @@ class InMemoryLockService(IPipelineLockService):
             msg = "board_id cannot be empty"
             raise ValueError(msg)
 
-        with self._lock:
+        async with self._lock:
             board_key = f"{project_id}:{board_id}"
             state = self._lock_state.get(board_key)
 
@@ -512,10 +517,75 @@ class InMemoryLockService(IPipelineLockService):
                     },
                 )
 
-    def get_all_lock_states(self) -> dict[str, PipelineQueueState]:
+    async def get_lock(self, project_id: str, board_id: str) -> PipelineLock | None:
+        """Query current lock state for a project's board (port interface).
+
+        Returns the active lock if one exists, or None if no lock is held.
+
+        Args:
+            project_id: Project to query
+            board_id: Board to query
+
+        Returns:
+            PipelineLock if a lock is currently held, None otherwise
+        """
+        # Validate inputs
+        if not project_id:
+            msg = "project_id cannot be empty"
+            raise ValueError(msg)
+        if not board_id:
+            msg = "board_id cannot be empty"
+            raise ValueError(msg)
+
+        async with self._lock:
+            board_key = f"{project_id}:{board_id}"
+            state = self._lock_state.get(board_key)
+
+            # Return None if no state exists or no lock is held
+            if not state or state.lock_holder is None or state.lock_acquired_at is None:
+                return None
+
+            # Convert internal state to PipelineLock
+            return PipelineLock(
+                project_id=project_id,
+                board_id=board_id,
+                work_item_id=state.lock_holder,
+                locked_by_work_item=state.lock_holder,
+                lock_acquired_at=state.lock_acquired_at.isoformat(),
+                lock_status="locked",
+            )
+
+    async def get_all_locks(self) -> list[PipelineLock]:
+        """Retrieve all active locks across all projects and boards (port interface).
+
+        Returns all currently held locks across all boards, converting internal
+        queue state to PipelineLock format.
+
+        Returns:
+            List[PipelineLock]: All currently held locks
+        """
+        locks: list[PipelineLock] = []
+
+        async with self._lock:
+            for board_key, state in self._lock_state.items():
+                # Only include states with active locks
+                if state.lock_holder is not None and state.lock_acquired_at is not None:
+                    lock = PipelineLock(
+                        project_id=state.project_id,
+                        board_id=state.board_id,
+                        work_item_id=state.lock_holder,
+                        locked_by_work_item=state.lock_holder,
+                        lock_acquired_at=state.lock_acquired_at.isoformat(),
+                        lock_status="locked",
+                    )
+                    locks.append(lock)
+
+        return locks
+
+    async def get_all_lock_states(self) -> dict[str, PipelineQueueState]:
         """Return copy of all pipeline queue states for watchdog iteration.
 
-        Thread-safe snapshot of all lock states across all boards.
+        Async-safe snapshot of all lock states across all boards.
         Returns deep copies of PipelineQueueState objects to ensure that
         reads outside the lock (e.g., by watchdog) cannot observe concurrent
         mutations of lock_holder or lock_acquired_at.
@@ -523,7 +593,7 @@ class InMemoryLockService(IPipelineLockService):
         Returns:
             Dict mapping "project_id:board_id" keys to PipelineQueueState deep copies
         """
-        with self._lock:
+        async with self._lock:
             result = {}
             for key, state in self._lock_state.items():
                 # Deep copy each PipelineQueueState to prevent watchdog from reading
@@ -545,7 +615,7 @@ class InMemoryLockService(IPipelineLockService):
                 )
             return result
 
-    def set_lock_acquired_at(self, project_id: str, board_id: str, timestamp: datetime) -> None:
+    async def set_lock_acquired_at(self, project_id: str, board_id: str, timestamp: datetime) -> None:
         """Test helper to manipulate lock timestamp for stale lock testing.
 
         Allows tests to set the lock acquisition timestamp to simulate
@@ -560,7 +630,7 @@ class InMemoryLockService(IPipelineLockService):
         Raises:
             ValueError: If lock doesn't exist for the given board
         """
-        with self._lock:
+        async with self._lock:
             board_key = f"{project_id}:{board_id}"
             state = self._lock_state.get(board_key)
 

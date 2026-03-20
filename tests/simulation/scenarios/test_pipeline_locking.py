@@ -127,7 +127,7 @@ class TestPipelineLockingSimulation:
 
         # Simulate lock acquired 3 hours ago (use timezone-aware datetime)
         three_hours_ago = datetime.now(UTC) - timedelta(hours=3)
-        lock_service.set_lock_acquired_at(project_id, board_id, three_hours_ago)
+        await lock_service.set_lock_acquired_at(project_id, board_id, three_hours_ago)
 
         # Step 2-4: #101 attempts acquisition → stale recovery
         result = await lock_service.try_acquire_lock(project_id, board_id, "#101", board_position=0)
@@ -300,7 +300,7 @@ class TestPipelineLockingSimulation:
         # Test 1h59m: NOT stale
         await lock_service.try_acquire_lock(project_id, board_id, "#100", board_position=0)
         almost_stale = datetime.now(UTC) - timedelta(hours=1, minutes=59)
-        lock_service.set_lock_acquired_at(project_id, board_id, almost_stale)
+        await lock_service.set_lock_acquired_at(project_id, board_id, almost_stale)
 
         result = await lock_service.try_acquire_lock(project_id, board_id, "#101", board_position=1)
         # 1h59m should NOT trigger stale recovery - lock is still valid
@@ -311,7 +311,7 @@ class TestPipelineLockingSimulation:
 
         await lock_service.try_acquire_lock(project_id, board_id, "#103", board_position=0)
         definitely_stale = datetime.now(UTC) - timedelta(hours=2, minutes=1)
-        lock_service.set_lock_acquired_at(project_id, board_id, definitely_stale)
+        await lock_service.set_lock_acquired_at(project_id, board_id, definitely_stale)
 
         result = await lock_service.try_acquire_lock(project_id, board_id, "#104", board_position=1)
         # 2h01m SHOULD trigger stale recovery

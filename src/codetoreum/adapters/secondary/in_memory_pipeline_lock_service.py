@@ -98,11 +98,12 @@ class InMemoryPipelineLockService(MockEventEmitter, IPipelineLockService):
         """
         return list(self._locks.values())
 
-    def get_all_lock_states(self) -> dict[str, LockState]:
+    async def get_all_lock_states(self) -> dict[str, LockState]:
         """Return all pipeline lock states for monitoring and diagnostics.
 
-        Provides immediate thread-safe snapshots of all lock states without
-        async overhead. Used by watchdogs and monitoring tools.
+        Provides snapshots of all lock states. Implemented as async to match
+        the IPipelineLockService interface contract and coordinate with async
+        lock implementations.
 
         Returns:
             dict[str, LockState]: Mapping of lock keys to LockState objects

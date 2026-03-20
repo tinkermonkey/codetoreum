@@ -51,3 +51,31 @@ Tests that try to verify internal cleanup mechanisms can be removed if:
 3. Mocking would require violating type constraints
 
 The internal cleanup behavior is already tested implicitly through end-to-end tests that exercise the full adapter lifecycle.
+
+## Dependency Injection: Avoid Duplicate Instance Creation
+
+### Problem: Separate Lock Service Instances with Unshared State
+When the AdapterResolver creates a singleton instance of an adapter (e.g., InMemoryLockService), don't create a second instance in bootstrap code:
+
+**WRONG:**
+```python
+# bootstrap.py: AdapterResolver creates self.adapters.lock_service
+self._queued_lock_service = InMemoryLockService(
+    event_bus=self.infrastructure.event_bus,
+    clock=self._engine.get_clock_for_testing()
+)
+```
+
+This creates duplicate instances with unshared state. Locks acquired through one are invisible to the other.
+
+**CORRECT:**
+```python
+# Reuse the resolver-created instance
+self._queued_lock_service = self.adapters.lock_service
+
+# Verify it's the right type (both resolve to same singleton)
+if not isinstance(self.adapters.lock_service, InMemoryLockService):
+    logger.warning(f"Expected InMemoryLockService, got {type(self.adapters.lock_service).__name__}")
+```
+
+Key principle: When dependency injection creates a singleton, always use that instance. Don't create parallel instances in bootstrap code.

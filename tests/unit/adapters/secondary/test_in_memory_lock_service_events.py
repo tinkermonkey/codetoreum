@@ -356,7 +356,7 @@ class TestStaleLockDetection:
         # Set lock time to 59 seconds ago (below 60 second threshold)
         now = datetime.now(UTC)
         old_time = now - timedelta(seconds=59)
-        lock_service_with_short_threshold.set_lock_acquired_at(
+        await lock_service_with_short_threshold.set_lock_acquired_at(
             project_id="proj-1", board_id="board-1", timestamp=old_time
         )
 
@@ -392,7 +392,7 @@ class TestStaleLockDetection:
         # Set lock time to 61 seconds ago (above 60 second threshold)
         now = datetime.now(UTC)
         old_time = now - timedelta(seconds=61)
-        lock_service_with_short_threshold.set_lock_acquired_at(
+        await lock_service_with_short_threshold.set_lock_acquired_at(
             project_id="proj-1", board_id="board-1", timestamp=old_time
         )
 
@@ -438,7 +438,7 @@ class TestStaleLockDetection:
         # Set lock time to 59.5 seconds ago (clearly below 60 second threshold)
         now = datetime.now(UTC)
         old_time = now - timedelta(seconds=59.5)
-        lock_service_with_short_threshold.set_lock_acquired_at(
+        await lock_service_with_short_threshold.set_lock_acquired_at(
             project_id="proj-1", board_id="board-1", timestamp=old_time
         )
 
@@ -471,7 +471,7 @@ class TestStaleLockDetection:
 
         # Set specific lock time
         specific_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
-        lock_service_with_short_threshold.set_lock_acquired_at(
+        await lock_service_with_short_threshold.set_lock_acquired_at(
             project_id="proj-1", board_id="board-1", timestamp=specific_time
         )
 
@@ -507,7 +507,7 @@ class TestStaleLockDetection:
         # Age the lock
         now = datetime.now(UTC)
         old_time = now - timedelta(seconds=61)
-        lock_service_with_short_threshold.set_lock_acquired_at(
+        await lock_service_with_short_threshold.set_lock_acquired_at(
             project_id="proj-1", board_id="board-1", timestamp=old_time
         )
 
@@ -540,7 +540,7 @@ class TestStaleLockDetection:
 
         # Set specific timestamp
         new_time = datetime(2024, 12, 25, 10, 30, 0, tzinfo=UTC)
-        lock_service_with_short_threshold.set_lock_acquired_at(
+        await lock_service_with_short_threshold.set_lock_acquired_at(
             project_id="proj-1", board_id="board-1", timestamp=new_time
         )
 
@@ -554,7 +554,7 @@ class TestStaleLockDetection:
         new_time = datetime.now(UTC)
 
         with pytest.raises(ValueError, match="No lock exists"):
-            lock_service_with_short_threshold.set_lock_acquired_at(
+            await lock_service_with_short_threshold.set_lock_acquired_at(
                 project_id="proj-1",
                 board_id="board-1",
                 timestamp=new_time,
@@ -588,7 +588,7 @@ class TestStaleLockDetection:
         # Age the lock
         now = datetime.now(UTC)
         old_time = now - timedelta(seconds=61)
-        lock_service_with_short_threshold.set_lock_acquired_at(
+        await lock_service_with_short_threshold.set_lock_acquired_at(
             project_id="proj-1", board_id="board-1", timestamp=old_time
         )
 
@@ -630,7 +630,7 @@ class TestStaleLockDetection:
         # Age the lock to be stale
         now = datetime.now(UTC)
         old_time = now - timedelta(seconds=61)
-        service_no_bus.set_lock_acquired_at(project_id="proj-1", board_id="board-1", timestamp=old_time)
+        await service_no_bus.set_lock_acquired_at(project_id="proj-1", board_id="board-1", timestamp=old_time)
 
         # Try to acquire with different item - should recover stale lock
         result = await service_no_bus.try_acquire_lock(
@@ -646,3 +646,474 @@ class TestStaleLockDetection:
         # Verify new lock holder
         state = await service_no_bus.get_queue_state(project_id="proj-1", board_id="board-1")
         assert state.lock_holder == "item-2"
+
+
+class TestInMemoryLockServiceBehavior:
+    """Test behavioral characteristics of InMemoryLockService."""
+
+    @pytest.mark.asyncio
+    async def test_successful_lock_acquisition(self):
+        """Should successfully acquire lock when not held."""
+        service = InMemoryLockService()
+
+        result = await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+            board_position=0,
+        )
+
+        assert result.status == LockStatus.ACQUIRED
+        assert result.work_item_id == "item-1"
+        assert result.queue_position is None
+        assert result.queue_length == 0
+
+    @pytest.mark.asyncio
+    async def test_lock_acquisition_when_already_held(self):
+        """Should return ALREADY_HELD when same item tries to re-acquire."""
+        service = InMemoryLockService()
+
+        # First acquisition
+        await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+            board_position=0,
+        )
+
+        # Re-acquisition attempt
+        result = await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+            board_position=0,
+        )
+
+        assert result.status == LockStatus.ALREADY_HELD
+        assert result.work_item_id == "item-1"
+
+    @pytest.mark.asyncio
+    async def test_lock_contention_queues_item(self):
+        """Should queue item when lock is already held by another."""
+        service = InMemoryLockService()
+
+        # Item 1 acquires lock
+        await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+            board_position=0,
+        )
+
+        # Item 2 tries to acquire - should be queued
+        result = await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-2",
+            board_position=1,
+        )
+
+        assert result.status == LockStatus.QUEUED
+        assert result.work_item_id == "item-2"
+        assert result.queue_position == 0
+        assert result.queue_length == 1
+
+    @pytest.mark.asyncio
+    async def test_lock_release_success(self):
+        """Should successfully release lock held by item."""
+        service = InMemoryLockService()
+
+        # Acquire lock
+        await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+            board_position=0,
+        )
+
+        # Release lock
+        result = await service.release_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+        )
+
+        assert result.released_work_item_id == "item-1"
+        assert result.next_work_item_id is None
+        assert result.queue_length_after_release == 0
+
+    @pytest.mark.asyncio
+    async def test_lock_release_with_queued_items(self):
+        """Should grant lock to next queued item on release."""
+        service = InMemoryLockService()
+
+        # Item 1 acquires lock
+        await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+            board_position=0,
+        )
+
+        # Items 2 and 3 get queued
+        await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-2",
+            board_position=1,
+        )
+        await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-3",
+            board_position=2,
+        )
+
+        # Item 1 releases
+        result = await service.release_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+        )
+
+        # Item 2 should get lock
+        assert result.next_work_item_id == "item-2"
+        assert result.queue_length_after_release == 1
+
+        # Verify new lock holder
+        state = await service.get_queue_state(
+            project_id="proj-1",
+            board_id="board-1",
+        )
+        assert state.lock_holder == "item-2"
+        assert len(state.queue) == 1
+        assert state.queue[0].work_item_id == "item-3"
+
+    @pytest.mark.asyncio
+    async def test_lock_release_fails_for_non_holder(self):
+        """Should raise ValueError when non-holder tries to release."""
+        service = InMemoryLockService()
+
+        # Item 1 acquires lock
+        await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+            board_position=0,
+        )
+
+        # Item 2 tries to release (doesn't hold lock)
+        with pytest.raises(ValueError, match="does not hold lock"):
+            await service.release_lock(
+                project_id="proj-1",
+                board_id="board-1",
+                work_item_id="item-2",
+            )
+
+    @pytest.mark.asyncio
+    async def test_queue_ordering_by_board_position(self):
+        """Queue should be ordered by board_position (lowest/topmost first)."""
+        service = InMemoryLockService()
+
+        # Item 1 acquires lock at position 0
+        await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+            board_position=0,
+        )
+
+        # Items queue in non-sequential order
+        # Item 3 at position 3
+        await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-3",
+            board_position=3,
+        )
+
+        # Item 2 at position 1 (should become first in queue)
+        await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-2",
+            board_position=1,
+        )
+
+        # Item 4 at position 2
+        await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-4",
+            board_position=2,
+        )
+
+        # Get queue state
+        state = await service.get_queue_state(
+            project_id="proj-1",
+            board_id="board-1",
+        )
+
+        # Queue should be ordered by position
+        assert len(state.queue) == 3
+        assert state.queue[0].work_item_id == "item-2"  # position 1 (first)
+        assert state.queue[0].board_position == 1
+        assert state.queue[1].work_item_id == "item-4"  # position 2 (second)
+        assert state.queue[1].board_position == 2
+        assert state.queue[2].work_item_id == "item-3"  # position 3 (third)
+        assert state.queue[2].board_position == 3
+
+    @pytest.mark.asyncio
+    async def test_update_queue_positions_reorders_queue(self):
+        """Should reorder queue when positions are updated."""
+        service = InMemoryLockService()
+
+        # Item 1 acquires lock
+        await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+            board_position=0,
+        )
+
+        # Queue items 2, 3, 4 in order
+        await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-2",
+            board_position=1,
+        )
+        await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-3",
+            board_position=2,
+        )
+        await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-4",
+            board_position=3,
+        )
+
+        # Update positions - item 4 moves to top of queue
+        await service.update_queue_positions(
+            project_id="proj-1",
+            board_id="board-1",
+            updated_positions={
+                "item-4": 0,
+                "item-2": 2,
+                "item-3": 3,
+            },
+        )
+
+        # Get queue state
+        state = await service.get_queue_state(
+            project_id="proj-1",
+            board_id="board-1",
+        )
+
+        # Queue should be reordered
+        assert state.queue[0].work_item_id == "item-4"  # Now position 0 (first)
+        assert state.queue[1].work_item_id == "item-2"  # Now position 2
+        assert state.queue[2].work_item_id == "item-3"  # Still position 3
+
+    @pytest.mark.asyncio
+    async def test_get_queue_state_returns_copy(self):
+        """get_queue_state should return independent copy, not reference."""
+        service = InMemoryLockService()
+
+        # Acquire lock and queue items
+        await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+            board_position=0,
+        )
+        await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-2",
+            board_position=1,
+        )
+
+        # Get state and modify it
+        state1 = await service.get_queue_state("proj-1", "board-1")
+        original_length = len(state1.queue)
+
+        # Try to modify returned state (should not affect internal state)
+        state1.queue.clear()
+
+        # Get state again
+        state2 = await service.get_queue_state("proj-1", "board-1")
+
+        # Internal state should be unchanged
+        assert len(state2.queue) == original_length
+
+    @pytest.mark.asyncio
+    async def test_get_all_lock_states_returns_all_boards(self):
+        """get_all_lock_states should return states for all boards."""
+        service = InMemoryLockService()
+
+        # Create locks on multiple boards
+        await service.try_acquire_lock("proj-1", "board-1", "item-1", 0)
+        await service.try_acquire_lock("proj-1", "board-2", "item-2", 0)
+        await service.try_acquire_lock("proj-2", "board-1", "item-3", 0)
+
+        # Get all states
+        states = await service.get_all_lock_states()
+
+        # Should have 3 entries
+        assert len(states) == 3
+        assert "proj-1:board-1" in states
+        assert "proj-1:board-2" in states
+        assert "proj-2:board-1" in states
+
+        # Verify each state
+        assert states["proj-1:board-1"].lock_holder == "item-1"
+        assert states["proj-1:board-2"].lock_holder == "item-2"
+        assert states["proj-2:board-1"].lock_holder == "item-3"
+
+    @pytest.mark.asyncio
+    async def test_parallel_boards_independent_locks(self):
+        """Locks on different boards should be independent."""
+        service = InMemoryLockService()
+
+        # Board 1: item-1 acquires lock
+        result1 = await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-1",
+            work_item_id="item-1",
+            board_position=0,
+        )
+
+        # Board 2: item-2 should also acquire lock
+        result2 = await service.try_acquire_lock(
+            project_id="proj-1",
+            board_id="board-2",
+            work_item_id="item-2",
+            board_position=0,
+        )
+
+        # Both should have locks
+        assert result1.status == LockStatus.ACQUIRED
+        assert result2.status == LockStatus.ACQUIRED
+
+    @pytest.mark.asyncio
+    async def test_validation_rejects_empty_project_id(self):
+        """Should raise ValueError for empty project_id."""
+        service = InMemoryLockService()
+
+        with pytest.raises(ValueError, match="project_id cannot be empty"):
+            await service.try_acquire_lock("", "board-1", "item-1", 0)
+
+    @pytest.mark.asyncio
+    async def test_validation_rejects_empty_board_id(self):
+        """Should raise ValueError for empty board_id."""
+        service = InMemoryLockService()
+
+        with pytest.raises(ValueError, match="board_id cannot be empty"):
+            await service.try_acquire_lock("proj-1", "", "item-1", 0)
+
+    @pytest.mark.asyncio
+    async def test_validation_rejects_empty_work_item_id(self):
+        """Should raise ValueError for empty work_item_id."""
+        service = InMemoryLockService()
+
+        with pytest.raises(ValueError, match="work_item_id cannot be empty"):
+            await service.try_acquire_lock("proj-1", "board-1", "", 0)
+
+    @pytest.mark.asyncio
+    async def test_validation_rejects_negative_board_position(self):
+        """Should raise ValueError for negative board_position."""
+        service = InMemoryLockService()
+
+        with pytest.raises(ValueError, match="board_position cannot be negative"):
+            await service.try_acquire_lock("proj-1", "board-1", "item-1", -1)
+
+    @pytest.mark.asyncio
+    async def test_thread_safe_concurrent_acquisitions(self):
+        """Lock service should be thread-safe for concurrent operations."""
+        import asyncio
+
+        service = InMemoryLockService()
+
+        # Item 1 acquires lock
+        await service.try_acquire_lock("proj-1", "board-1", "item-1", 0)
+
+        # Simulate concurrent acquisition attempts from multiple tasks
+        results = []
+
+        async def acquire_lock(item_id, position):
+            result = await service.try_acquire_lock("proj-1", "board-1", item_id, position)
+            results.append((item_id, result.status))
+
+        # Run 5 concurrent acquisition attempts
+        await asyncio.gather(
+            acquire_lock("item-2", 1),
+            acquire_lock("item-3", 2),
+            acquire_lock("item-4", 3),
+            acquire_lock("item-5", 4),
+            acquire_lock("item-6", 5),
+        )
+
+        # Should have 5 results
+        assert len(results) == 5
+
+        # All should be queued (not acquired)
+        for item_id, status in results:
+            assert status == LockStatus.QUEUED
+
+        # Queue should have all 5 items
+        state = await service.get_queue_state("proj-1", "board-1")
+        assert len(state.queue) == 5
+
+
+class TestInMemoryLockServiceInitialization:
+    """Test InMemoryLockService initialization and parameter handling.
+
+    These tests verify implementation-specific behavior such as parameter
+    acceptance, default values, and initialization state.
+    """
+
+    def test_accepts_event_bus_parameter(self):
+        """InMemoryLockService should accept optional event_bus parameter."""
+        mock_bus = AsyncMock()
+        service = InMemoryLockService(event_bus=mock_bus)
+        assert service._event_bus is mock_bus
+
+    def test_accepts_stale_threshold_parameter(self):
+        """InMemoryLockService should accept optional stale_threshold_seconds parameter."""
+        service = InMemoryLockService(stale_threshold_seconds=3600)
+        assert service._stale_threshold_seconds == 3600
+
+    def test_accepts_clock_parameter(self):
+        """InMemoryLockService should accept optional clock parameter."""
+        from unittest.mock import Mock
+
+        mock_clock = Mock()
+        service = InMemoryLockService(clock=mock_clock)
+        assert service._clock is mock_clock
+
+    def test_default_stale_threshold_is_2_hours(self):
+        """InMemoryLockService should have 2-hour (7200 second) default stale threshold."""
+        service = InMemoryLockService()
+        assert service._stale_threshold_seconds == 7200
+
+    @pytest.mark.asyncio
+    async def test_can_initialize_with_all_parameters(self):
+        """InMemoryLockService should initialize with all optional parameters together."""
+        from unittest.mock import Mock
+
+        mock_bus = AsyncMock()
+        mock_clock = Mock()
+
+        service = InMemoryLockService(
+            event_bus=mock_bus,
+            stale_threshold_seconds=1800,
+            clock=mock_clock,
+        )
+
+        assert service._event_bus is mock_bus
+        assert service._stale_threshold_seconds == 1800
+        assert service._clock is mock_clock

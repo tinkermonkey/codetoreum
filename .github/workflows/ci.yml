@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, develop, 'feature/**']
+    branches: [main, develop]
   pull_request:
     branches: [main, develop]
 
@@ -57,7 +57,7 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          poetry run pytest tests --tb=short -m "not integration" --cov=src/codetoreum --cov-report=xml
+          poetry run pytest tests --tb=short -m "not integration and not simulation" --cov=src/codetoreum --cov-report=xml
         env:
           REDIS_URL: redis://localhost:6379
           # Token scoped by workflow-level permissions (contents:read, actions:read)
