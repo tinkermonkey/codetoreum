@@ -193,7 +193,8 @@ def display_adapter_summary(config: SimulationConfig, factory: AdapterFactory) -
                 type_label = "[simulation]" if is_sim else "[REAL]"
             else:
                 type_label = "[unknown]"
-        except (KeyError, ValueError):
+        except (KeyError, ValueError) as e:
+            logger.warning(f"Failed to resolve adapter metadata for slot '{slot}' with impl '{impl}'", exc_info=True)
             type_label = "[unknown]"
 
         table.add_row(slot, impl, type_label)
@@ -278,7 +279,7 @@ def get_scenario_file_path(scenario: str) -> Path:
     Get the path to a built-in scenario file.
 
     Args:
-        scenario: Scenario name (default, demo, stress_test, review_cycle, failure_recovery)
+        scenario: Scenario name (default, demo, stress_test, review_cycle, failure_recovery, mixed_full_github, mixed_full_real, mixed_github_real)
 
     Returns:
         Path to scenario file
@@ -293,7 +294,8 @@ def get_scenario_file_path(scenario: str) -> Path:
     if not scenario_file.exists():
         msg = (
             f"Scenario '{scenario}' not found at {scenario_file}. "
-            f"Available scenarios: default, demo, stress_test, review_cycle, failure_recovery"
+            f"Available scenarios: default, demo, stress_test, review_cycle, failure_recovery, "
+            f"mixed_full_github, mixed_full_real, mixed_github_real"
         )
         raise FileNotFoundError(msg)
 
@@ -303,7 +305,7 @@ def get_scenario_file_path(scenario: str) -> Path:
 async def bootstrap_application(
     scenario: str,
     scenario_file: Path | None,
-    speed_multiplier: float,
+    speed_multiplier: float | None,
     auto_advance: bool,
     adapter_overrides: tuple[str, ...] | None = None,
 ) -> tuple[SimulationApplicationBootstrap, AdapterFactory]:
@@ -313,7 +315,7 @@ async def bootstrap_application(
     Args:
         scenario: Scenario name
         scenario_file: Optional custom scenario file path
-        speed_multiplier: Time speed multiplier
+        speed_multiplier: Time speed multiplier (None to use config file default or 1.0)
         auto_advance: Whether to automatically advance simulation clock
         adapter_overrides: Optional tuple of "slot=impl" adapter overrides from CLI
 
@@ -333,8 +335,8 @@ async def bootstrap_application(
             console.print(f"Loading configuration from: {scenario_file}")
             validate_yaml_file(scenario_file)
             sim_config = SimulationConfig.from_yaml(scenario_file)
-            # Override speed multiplier if provided
-            if speed_multiplier != 1.0:
+            # Override speed multiplier if provided (CLI takes precedence)
+            if speed_multiplier is not None:
                 sim_config.time.speed_multiplier = speed_multiplier
         else:
             # Use built-in scenario (config-only)
@@ -469,7 +471,7 @@ def display_startup_info(
     port: int,
     scenario: str,
     scenario_file: Path | None,
-    speed_multiplier: float,
+    speed_multiplier: float | None,
     auto_advance: bool,
     debug: bool,
     seeded_data: dict,
@@ -590,7 +592,7 @@ async def main_async(
     port: int,
     scenario: str,
     scenario_file: Path | None,
-    speed_multiplier: float,
+    speed_multiplier: float | None,
     auto_advance: bool,
     no_seed: bool,
     debug: bool,
@@ -604,7 +606,7 @@ async def main_async(
         port: Server port
         scenario: Scenario name
         scenario_file: Optional custom scenario file
-        speed_multiplier: Time speed multiplier
+        speed_multiplier: Time speed multiplier (None to use config file default or 1.0)
         auto_advance: Whether to automatically advance simulation clock
         no_seed: Skip seeding if True
         debug: Debug mode enabled
@@ -710,7 +712,7 @@ async def main_async(
 @click.option(
     "--scenario",
     default="default",
-    help="Pre-built scenario name (default, demo, stress_test, review_cycle, failure_recovery)",
+    help="Pre-built scenario name (default, demo, stress_test, review_cycle, failure_recovery, mixed_full_github, mixed_full_real, mixed_github_real)",
     show_default=True,
 )
 @click.option(
@@ -720,10 +722,10 @@ async def main_async(
 )
 @click.option(
     "--speed-multiplier",
-    default=1.0,
+    default=None,
     type=float,
-    help="Time speed multiplier (must be positive, e.g., 10 = 10x faster)",
-    show_default=True,
+    help="Time speed multiplier (must be positive, e.g., 10 = 10x faster). If not provided, uses config file default or 1.0",
+    show_default=False,
 )
 @click.option(
     "--auto-advance/--no-auto-advance",
@@ -752,7 +754,7 @@ def main(
     port: int,
     scenario: str,
     scenario_file: Path | None,
-    speed_multiplier: float,
+    speed_multiplier: float | None,
     auto_advance: bool,
     no_seed: bool,
     adapter_overrides: tuple[str, ...],
@@ -793,7 +795,8 @@ def main(
     # Validate inputs
     try:
         validate_port(port)
-        validate_speed_multiplier(speed_multiplier)
+        if speed_multiplier is not None:
+            validate_speed_multiplier(speed_multiplier)
         if scenario_file:
             validate_yaml_file(scenario_file)
     except (click.BadParameter, click.FileError) as e:
