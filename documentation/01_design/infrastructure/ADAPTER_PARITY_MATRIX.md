@@ -1,6 +1,6 @@
 # Adapter Parity Matrix
 
-This document provides a comprehensive inventory of all 26 adapter slots in the Codetoreum system, showing which have production implementations available and which are simulation-only.
+This document provides a comprehensive inventory of all 29 adapter slots in the Codetoreum system, showing which have production implementations available and which are simulation-only.
 
 ## Overview
 
@@ -18,7 +18,8 @@ An **adapter slot** is a port interface that can be swapped between implementati
 | llm | MockLLMAdapter | ClaudeCodeAdapter | ✅ Available | LLM provider integration |
 | container | FakeContainerAdapter | DockerContainerAdapter | ✅ Available | Container runtime (execute agents) |
 | version_control | InMemoryVersionControlService | *(Planned)* | 🔧 Simulation-only | Git operations (clone, commit, push) |
-| discussion | MockDiscussionAdapter | GitHubDiscussionAdapter | ✅ Available | Comments and discussion threads |
+| discussion_adapter | MockDiscussionAdapter | GitHubDiscussionAdapter | ✅ Available | Comments and discussion threads |
+| code_review | MockCodeReviewAdapter | *(Planned)* | 🔧 Simulation-only | Code review management |
 | review_cycle | MockReviewCycleAdapter | GitHubCodeReviewAdapter | ✅ Available | Code review lifecycle (PRs, approvals) |
 | event_store | InMemoryEventStore | RedisEventStore | ✅ Available | Domain event persistence and replay |
 | message_broker | InMemoryMessageBroker | RedisPubSubAdapter | ✅ Available | Async pub/sub for event distribution |
@@ -39,6 +40,8 @@ An **adapter slot** is a port interface that can be swapped between implementati
 | branch_tracker | InMemoryWorkItemBranchTracker | *(Planned)* | 🔧 Simulation-only | Work item branch association |
 | work_item_service | MockWorkItemService | GitHubWorkItemService | ✅ Available | Work item CRUD operations |
 | repair_cycle | MockRepairCycleAdapter | *(Planned)* | 🔧 Simulation-only | Test-fix-validate cycles |
+| container_recovery | MockContainerRecoveryAdapter | *(Planned)* | 🔧 Simulation-only | Container failure recovery and restart |
+| repository | InMemoryRepositoryAdapter | *(Planned)* | 🔧 Simulation-only | Git repository operations |
 
 **Legend:**
 - ✅ Available: Real production adapter exists and is tested
@@ -311,13 +314,15 @@ AdapterSelectionConfig(
     notifier="mock",
     encryption="simple",
     discussion_adapter="mock",
+    code_review="mock",
     review_cycle="mock",
     repair_cycle="mock",
+    container_recovery="mock",
     project_manager="mock",
     lock_service="in_memory",
     workflow_config="in_memory",
     queue_service="in_memory",
-    event_emitter="mock",
+    event_emitter="capturing",
     message_broker="in_memory",
     identity_service="configurable",
     checkpoint_store="in_memory",
@@ -325,6 +330,7 @@ AdapterSelectionConfig(
     run_registry="in_memory",
     branch_tracker="in_memory",
     work_item_service="mock",
+    repository="in_memory",
 )
 ```
 

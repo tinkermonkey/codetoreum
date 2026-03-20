@@ -8,7 +8,7 @@ This document specifies the environment variables required for each production a
 |---------|----------------|--------------------------------|-------------------|
 | board | GitHubBoardAdapter | GITHUB_TOKEN, GITHUB_ORG | GITHUB_API_URL |
 | ticket | GitHubTicketAdapter | GITHUB_TOKEN, GITHUB_REPO | GITHUB_API_URL |
-| discussion | GitHubDiscussionAdapter | GITHUB_TOKEN | - |
+| discussion_adapter | GitHubDiscussionAdapter | GITHUB_TOKEN | - |
 | review_cycle | GitHubCodeReviewAdapter | GITHUB_TOKEN | - |
 | work_item_service | GitHubWorkItemService | GITHUB_TOKEN, GITHUB_REPO | - |
 | version_control | *(Planned)* | *(TBD)* | - |
@@ -138,7 +138,7 @@ curl -H "Authorization: token $GITHUB_TOKEN" \
 
 ---
 
-### discussion (GitHubDiscussionAdapter)
+### discussion_adapter (GitHubDiscussionAdapter)
 
 **Purpose**: Comment and discussion thread management
 
