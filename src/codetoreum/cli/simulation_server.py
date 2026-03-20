@@ -193,7 +193,7 @@ def display_adapter_summary(config: SimulationConfig, factory: AdapterFactory) -
                 type_label = "[simulation]" if is_sim else "[REAL]"
             else:
                 type_label = "[unknown]"
-        except (KeyError, ValueError) as e:
+        except (KeyError, ValueError):
             logger.warning(f"Failed to resolve adapter metadata for slot '{slot}' with impl '{impl}'", exc_info=True)
             type_label = "[unknown]"
 
