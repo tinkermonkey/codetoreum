@@ -521,28 +521,66 @@ class InMemoryLockService(MockEventEmitter, IPipelineLockService, IQueuedPipelin
         """Query current lock state for a project's board (port interface).
 
         Returns the active lock if one exists, or None if no lock is held.
-        Note: This method is for port interface compatibility. The queue-based
-        implementation stores locks differently than the simple PipelineLock model.
 
         Args:
             project_id: Project to query
             board_id: Board to query
 
         Returns:
-            None - Not applicable for queue-based lock management
+            PipelineLock if a lock is currently held, None otherwise
         """
-        return None
+        # Validate inputs
+        if not project_id:
+            msg = "project_id cannot be empty"
+            raise ValueError(msg)
+        if not board_id:
+            msg = "board_id cannot be empty"
+            raise ValueError(msg)
+
+        with self._lock:
+            board_key = f"{project_id}:{board_id}"
+            state = self._lock_state.get(board_key)
+
+            # Return None if no state exists or no lock is held
+            if not state or state.lock_holder is None or state.lock_acquired_at is None:
+                return None
+
+            # Convert internal state to PipelineLock
+            return PipelineLock(
+                project_id=project_id,
+                board_id=board_id,
+                work_item_id=state.lock_holder,
+                locked_by_work_item=state.lock_holder,
+                lock_acquired_at=state.lock_acquired_at.isoformat(),
+                lock_status="locked",
+            )
 
     async def get_all_locks(self) -> list[PipelineLock]:
         """Retrieve all active locks across all projects and boards (port interface).
 
-        Returns empty list for compatibility. The queue-based implementation
-        doesn't maintain locks in the PipelineLock format.
+        Returns all currently held locks across all boards, converting internal
+        queue state to PipelineLock format.
 
         Returns:
-            Empty list
+            List[PipelineLock]: All currently held locks
         """
-        return []
+        locks: list[PipelineLock] = []
+
+        with self._lock:
+            for board_key, state in self._lock_state.items():
+                # Only include states with active locks
+                if state.lock_holder is not None and state.lock_acquired_at is not None:
+                    lock = PipelineLock(
+                        project_id=state.project_id,
+                        board_id=state.board_id,
+                        work_item_id=state.lock_holder,
+                        locked_by_work_item=state.lock_holder,
+                        lock_acquired_at=state.lock_acquired_at.isoformat(),
+                        lock_status="locked",
+                    )
+                    locks.append(lock)
+
+        return locks
 
     def get_all_lock_states(self) -> dict[str, PipelineQueueState]:
         """Return copy of all pipeline queue states for watchdog iteration.
