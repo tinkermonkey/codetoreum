@@ -196,10 +196,10 @@ class IPipelineLockService(IEventEmitter, ABC):
                                      - lock_acquired_at: Datetime when lock was acquired or None
 
         Note:
-            This is an async method to ensure thread-safety with asyncio.Lock-based
-            implementations and prevent deadlocks when called from async watchdog contexts
-            operations (e.g., stale lock detection in watchdogs). The returned
-            dict should contain thread-safe snapshots of lock states.
+            This is an async method to ensure async-safety with asyncio.Lock-based
+            implementations and prevent deadlocks when called from async watchdog
+            operations (e.g., stale lock detection). The returned dict should
+            contain async-safe snapshots of lock states.
 
             Different implementations may return different concrete types
             (LockState, PipelineQueueState, etc.) as long as they conform
