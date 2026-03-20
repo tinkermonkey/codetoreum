@@ -27,7 +27,31 @@ from codetoreum.infrastructure.simulation.simulation_config import (
     SimulationConfig,
 )
 from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
+from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
+from codetoreum.ports.output.agent_repository import IAgentRepository
+from codetoreum.ports.output.code_review_service import ICodeReviewService
+from codetoreum.ports.output.container import IContainer
+from codetoreum.ports.output.container_recovery import IAgentContainerRecoveryService
+from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
+from codetoreum.ports.output.encryption_service import IEncryptionService
+from codetoreum.ports.output.event_emitter import IEventEmitter
+from codetoreum.ports.output.identity_service import IIdentityService
+from codetoreum.ports.output.message_broker import IMessageBroker
 from codetoreum.ports.output.metrics import IMetrics
+from codetoreum.ports.output.notifier import INotifier
+from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
+from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
+from codetoreum.ports.output.project_manager_service import IProjectManagerService
+from codetoreum.ports.output.repair_cycle_checkpoint_store import IRepairCycleCheckpointStore
+from codetoreum.ports.output.repair_cycle_service import IRepairCycle
+from codetoreum.ports.output.repository import IRepository
+from codetoreum.ports.output.review_cycle_service import IReviewCycle
+from codetoreum.ports.output.storage import IStorage
+from codetoreum.ports.output.ticket_system import ITicketSystem
+from codetoreum.ports.output.version_control_service import IVersionControlService
+from codetoreum.ports.output.work_item_branch_tracker import IWorkItemBranchTracker
+from codetoreum.ports.output.work_item_service import IWorkItemService
+from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 
 class TestAdapterDependencies:
@@ -588,8 +612,8 @@ class TestAdapterResolver:
         storage = resolver.resolve_storage()
 
         assert storage is not None
-        # Should be an adapter instance
-        assert callable(getattr(storage, "upload", None))
+        # Should implement IStorage interface
+        assert isinstance(storage, IStorage)
 
     def test_resolve_encryption(self, factory, dependencies, adapter_config):
         """Test resolving encryption service adapter."""
@@ -597,8 +621,8 @@ class TestAdapterResolver:
         encryption = resolver.resolve_encryption()
 
         assert encryption is not None
-        # Should be an adapter instance
-        assert callable(getattr(encryption, "encrypt", None))
+        # Should implement IEncryptionService interface
+        assert isinstance(encryption, IEncryptionService)
 
     def test_resolve_identity_service(self, factory, dependencies, adapter_config):
         """Test resolving identity service adapter."""
@@ -606,7 +630,8 @@ class TestAdapterResolver:
         identity = resolver.resolve_identity_service()
 
         assert identity is not None
-        # Should be an adapter instance
+        # Should implement IIdentityService interface
+        assert isinstance(identity, IIdentityService)
 
     def test_resolve_event_emitter(self, factory, dependencies, adapter_config):
         """Test resolving event emitter adapter."""
@@ -614,8 +639,8 @@ class TestAdapterResolver:
         event_emitter = resolver.resolve_event_emitter()
 
         assert event_emitter is not None
-        # Should be an adapter instance
-        assert callable(getattr(event_emitter, "emit", None))
+        # Should implement IEventEmitter interface
+        assert isinstance(event_emitter, IEventEmitter)
 
     def test_resolve_message_broker(self, factory, dependencies, adapter_config):
         """Test resolving message broker adapter."""
@@ -623,7 +648,8 @@ class TestAdapterResolver:
         message_broker = resolver.resolve_message_broker()
 
         assert message_broker is not None
-        # Should be an adapter instance
+        # Should implement IMessageBroker interface
+        assert isinstance(message_broker, IMessageBroker)
 
     def test_resolve_ticket(self, factory, dependencies, adapter_config):
         """Test resolving ticket system adapter."""
@@ -632,7 +658,7 @@ class TestAdapterResolver:
 
         assert ticket is not None
         # Should implement ITicketSystem interface (may be wrapped by decorator)
-        assert hasattr(ticket, "__class__")
+        assert isinstance(ticket, ITicketSystem)
 
     def test_resolve_container(self, factory, dependencies, adapter_config):
         """Test resolving container adapter with event dependencies."""
@@ -642,7 +668,8 @@ class TestAdapterResolver:
         container = resolver.resolve_container()
 
         assert container is not None
-        # Should be an adapter instance
+        # Should implement IContainer interface
+        assert isinstance(container, IContainer)
 
     def test_resolve_discussion_adapter(self, factory, dependencies, adapter_config):
         """Test resolving discussion adapter with identity service dependency."""
@@ -652,7 +679,8 @@ class TestAdapterResolver:
         discussion = resolver.resolve_discussion_adapter()
 
         assert discussion is not None
-        # Should be an adapter instance
+        # Should implement IDiscussionAdapter interface
+        assert isinstance(discussion, IDiscussionAdapter)
 
     def test_resolve_lock_service(self, factory, dependencies, adapter_config):
         """Test resolving pipeline lock service adapter."""
@@ -661,6 +689,7 @@ class TestAdapterResolver:
 
         assert lock_service is not None
         # Should be an adapter instance
+        assert hasattr(lock_service, "try_acquire_lock")
 
     def test_resolve_queue_service(self, factory, dependencies, adapter_config):
         """Test resolving pipeline queue service adapter with event dependencies."""
@@ -670,7 +699,8 @@ class TestAdapterResolver:
         queue_service = resolver.resolve_queue_service()
 
         assert queue_service is not None
-        # Should be an adapter instance
+        # Should implement IPipelineQueueService interface
+        assert isinstance(queue_service, IPipelineQueueService)
 
     def test_resolve_checkpoint_store(self, factory, dependencies, adapter_config):
         """Test resolving repair cycle checkpoint store adapter."""
@@ -678,7 +708,8 @@ class TestAdapterResolver:
         checkpoint_store = resolver.resolve_checkpoint_store()
 
         assert checkpoint_store is not None
-        # Should be an adapter instance
+        # Should implement IRepairCycleCheckpointStore interface
+        assert isinstance(checkpoint_store, IRepairCycleCheckpointStore)
 
     def test_resolve_agent_repository(self, factory, dependencies, adapter_config):
         """Test resolving agent repository adapter."""
@@ -686,7 +717,8 @@ class TestAdapterResolver:
         agent_repo = resolver.resolve_agent_repository()
 
         assert agent_repo is not None
-        # Should be an adapter instance
+        # Should implement IAgentRepository interface
+        assert isinstance(agent_repo, IAgentRepository)
 
     def test_resolve_run_registry(self, factory, dependencies, adapter_config):
         """Test resolving active workflow run registry adapter."""
@@ -694,7 +726,8 @@ class TestAdapterResolver:
         run_registry = resolver.resolve_run_registry()
 
         assert run_registry is not None
-        # Should be an adapter instance
+        # Should implement IActiveWorkflowRunRegistry interface
+        assert isinstance(run_registry, IActiveWorkflowRunRegistry)
 
     def test_resolve_branch_tracker(self, factory, dependencies, adapter_config):
         """Test resolving work item branch tracker adapter."""
@@ -702,7 +735,8 @@ class TestAdapterResolver:
         branch_tracker = resolver.resolve_branch_tracker()
 
         assert branch_tracker is not None
-        # Should be an adapter instance
+        # Should implement IWorkItemBranchTracker interface
+        assert isinstance(branch_tracker, IWorkItemBranchTracker)
 
     def test_resolve_work_item_service(self, factory, dependencies, adapter_config):
         """Test resolving work item service adapter."""
@@ -710,7 +744,8 @@ class TestAdapterResolver:
         work_item_service = resolver.resolve_work_item_service()
 
         assert work_item_service is not None
-        # Should be an adapter instance
+        # Should implement IWorkItemService interface
+        assert isinstance(work_item_service, IWorkItemService)
 
     def test_resolve_workflow_config(self, factory, dependencies, adapter_config):
         """Test resolving workflow config service adapter."""
@@ -718,7 +753,8 @@ class TestAdapterResolver:
         workflow_config = resolver.resolve_workflow_config()
 
         assert workflow_config is not None
-        # Should be an adapter instance
+        # Should implement IWorkflowConfigService interface
+        assert isinstance(workflow_config, IWorkflowConfigService)
 
     def test_resolve_notifier(self, factory, dependencies, adapter_config):
         """Test resolving notifier adapter."""
@@ -726,7 +762,8 @@ class TestAdapterResolver:
         notifier = resolver.resolve_notifier()
 
         assert notifier is not None
-        # Should be an adapter instance
+        # Should implement INotifier interface
+        assert isinstance(notifier, INotifier)
 
     def test_resolve_version_control(self, factory, dependencies, adapter_config):
         """Test resolving version control service adapter with event dependencies."""
@@ -736,7 +773,8 @@ class TestAdapterResolver:
         version_control = resolver.resolve_version_control()
 
         assert version_control is not None
-        # Should be an adapter instance
+        # Should implement IVersionControlService interface
+        assert isinstance(version_control, IVersionControlService)
 
     def test_resolve_project_manager(self, factory, dependencies, adapter_config):
         """Test resolving project manager service adapter."""
@@ -744,7 +782,8 @@ class TestAdapterResolver:
         project_manager = resolver.resolve_project_manager()
 
         assert project_manager is not None
-        # Should be an adapter instance
+        # Should implement IProjectManagerService interface
+        assert isinstance(project_manager, IProjectManagerService)
 
     def test_resolve_code_review(self, factory, dependencies, adapter_config):
         """Test resolving code review service adapter."""
@@ -752,7 +791,8 @@ class TestAdapterResolver:
         code_review = resolver.resolve_code_review()
 
         assert code_review is not None
-        # Should be an adapter instance
+        # Should implement ICodeReviewService interface
+        assert isinstance(code_review, ICodeReviewService)
 
     def test_resolve_container_recovery(self, factory, dependencies, adapter_config):
         """Test resolving container recovery adapter."""
@@ -760,7 +800,8 @@ class TestAdapterResolver:
         container_recovery = resolver.resolve_container_recovery()
 
         assert container_recovery is not None
-        # Should be an adapter instance
+        # Should implement IAgentContainerRecoveryService interface
+        assert isinstance(container_recovery, IAgentContainerRecoveryService)
 
     def test_resolve_repository(self, factory, dependencies, adapter_config):
         """Test resolving repository adapter with event dependencies."""
@@ -771,7 +812,33 @@ class TestAdapterResolver:
 
         assert repository is not None
         # Should be an adapter instance implementing IRepository
-        assert hasattr(repository, "__class__")
+        assert isinstance(repository, IRepository)
+
+    def test_resolve_review_cycle(self, factory, dependencies, adapter_config):
+        """Test resolving review cycle service adapter."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+        # Mock the engine to return a proper IReviewCycle adapter
+        mock_review_cycle = Mock(spec=IReviewCycle)
+        resolver._deps.engine.create_review_cycle_adapter.return_value = mock_review_cycle
+
+        review_cycle = resolver.resolve_review_cycle()
+
+        assert review_cycle is not None
+        # Should implement IReviewCycle interface (ABC - can use isinstance)
+        assert isinstance(review_cycle, IReviewCycle)
+
+    def test_resolve_repair_cycle(self, factory, dependencies, adapter_config):
+        """Test resolving repair cycle service adapter."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+        # Mock the engine to return a proper IRepairCycle adapter (Protocol without @runtime_checkable)
+        mock_repair_cycle = Mock(spec=IRepairCycle)
+        resolver._deps.engine.create_repair_cycle_adapter.return_value = mock_repair_cycle
+
+        repair_cycle = resolver.resolve_repair_cycle()
+
+        assert repair_cycle is not None
+        # Verify the engine was called to create the adapter
+        assert resolver._deps.engine.create_repair_cycle_adapter.called
 
 
 class TestAdapterResolverIntegration:

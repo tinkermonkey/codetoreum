@@ -8,6 +8,7 @@ Tests:
 - Graceful shutdown
 """
 
+import logging
 import time
 from collections.abc import AsyncGenerator
 
@@ -89,11 +90,10 @@ class TestSimulationServerCLI:
             # Allow generous timeout for slow CI runners (10 seconds)
             # but log warning if it exceeds 5 seconds for performance awareness
             if elapsed > 5.0:
-                import logging
                 logger = logging.getLogger(__name__)
                 logger.warning(f"Bootstrap took {elapsed:.2f}s (expected <5s on modern hardware)")
 
-            assert elapsed < 10.0, f"Bootstrap took {elapsed:.2f}s, expected <10s (CI timeout)"
+            assert elapsed < 5.0, f"Bootstrap took {elapsed:.2f}s, expected <5s (CI timeout)"
 
         finally:
             await bootstrap.teardown()
@@ -456,12 +456,11 @@ class TestSimulationServerPerformance:
             else:
                 performance_level = "slow (but acceptable on CI)"
 
-            import logging
             logger = logging.getLogger(__name__)
             logger.info(f"Startup took {elapsed:.2f}s ({performance_level})")
 
             # Total startup time should complete within reasonable timeframe for CI
-            assert elapsed < 15.0, f"Startup took {elapsed:.2f}s, expected <15s (CI timeout)"
+            assert elapsed < 5.0, f"Startup took {elapsed:.2f}s, expected <5s (CI timeout)"
 
         finally:
             await bootstrap.teardown()
@@ -496,12 +495,11 @@ class TestSimulationServerPerformance:
             else:
                 performance_level = "slow (but acceptable on CI)"
 
-            import logging
             logger = logging.getLogger(__name__)
             logger.info(f"Seeded {seeded_data.get('work_items', 0)} work items in {elapsed:.2f}s ({performance_level})")
 
             # Should complete within reasonable timeframe for CI
-            assert elapsed < 10.0, f"Seeding took {elapsed:.2f}s, expected <10s (CI timeout)"
+            assert elapsed < 3.0, f"Seeding took {elapsed:.2f}s, expected <3s (CI timeout)"
             assert seeded_data["work_items"] > 0, "Should have seeded some work items"
 
         finally:
