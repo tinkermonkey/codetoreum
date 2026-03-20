@@ -10,6 +10,9 @@ import pytest
 from codetoreum.adapters.secondary.configurable_identity_service import (
     ConfigurableIdentityService,
 )
+from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
+    InMemoryLockService,
+)
 from codetoreum.adapters.secondary.mock_code_review_adapter import MockCodeReviewAdapter
 from codetoreum.adapters.testing import MockDiscussionAdapter
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
@@ -18,6 +21,7 @@ from codetoreum.ports.output.code_review_service import ICodeReviewService
 from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.identity_service import IIdentityService
+from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
 
 
 class TestMockBoardAdapterContract:
@@ -170,6 +174,66 @@ class TestEventEmitterContract:
         assert hasattr(emitter, "off")
         assert hasattr(emitter, "emit")
         assert hasattr(emitter, "once")
+
+
+class TestInMemoryLockServiceContract:
+    """Verify InMemoryLockService satisfies IPipelineLockService contract."""
+
+    def test_is_pipeline_lock_service(self):
+        """InMemoryLockService should be an IPipelineLockService."""
+        service = InMemoryLockService()
+        assert isinstance(service, IPipelineLockService)
+
+    def test_implements_query_operations(self):
+        """InMemoryLockService should implement query operations."""
+        service = InMemoryLockService()
+        assert hasattr(service, "get_lock")
+        assert hasattr(service, "get_all_locks")
+        assert hasattr(service, "get_all_lock_states")
+
+    def test_implements_command_operations(self):
+        """InMemoryLockService should implement command operations."""
+        service = InMemoryLockService()
+        assert hasattr(service, "try_acquire_lock")
+        assert hasattr(service, "release_lock")
+
+    def test_implements_queue_operations(self):
+        """InMemoryLockService should implement IQueuedPipelineLockService operations."""
+        service = InMemoryLockService()
+        # IQueuedPipelineLockService methods
+        assert hasattr(service, "get_queue_state")
+        assert hasattr(service, "update_queue_positions")
+
+    def test_implements_test_helper_operations(self):
+        """InMemoryLockService should implement test helper operations."""
+        service = InMemoryLockService()
+        assert hasattr(service, "set_lock_acquired_at")
+
+    def test_accepts_event_bus_parameter(self):
+        """InMemoryLockService should accept optional event_bus parameter."""
+        from unittest.mock import AsyncMock
+
+        mock_bus = AsyncMock()
+        service = InMemoryLockService(event_bus=mock_bus)
+        assert service._event_bus is mock_bus
+
+    def test_accepts_stale_threshold_parameter(self):
+        """InMemoryLockService should accept optional stale_threshold_seconds parameter."""
+        service = InMemoryLockService(stale_threshold_seconds=3600)
+        assert service._stale_threshold_seconds == 3600
+
+    def test_accepts_clock_parameter(self):
+        """InMemoryLockService should accept optional clock parameter."""
+        from unittest.mock import Mock
+
+        mock_clock = Mock()
+        service = InMemoryLockService(clock=mock_clock)
+        assert service._clock is mock_clock
+
+    def test_default_stale_threshold_is_2_hours(self):
+        """InMemoryLockService should have 2-hour (7200 second) default stale threshold."""
+        service = InMemoryLockService()
+        assert service._stale_threshold_seconds == 7200
 
 
 if __name__ == "__main__":

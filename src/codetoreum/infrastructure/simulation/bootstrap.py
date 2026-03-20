@@ -2231,13 +2231,13 @@ class SimulationApplicationBootstrap:
         if self.services:
             recovery_service = self.services.agent_execution_recovery_service
 
-        # Create InMemoryLockService (application-level) for the handler
-        # This implements IQueuedPipelineLockService with 4-parameter try_acquire_lock
-        # Store it for access by tests via bootstrap._queued_lock_service
-        self._queued_lock_service = InMemoryLockService(
-            event_bus=self.infrastructure.event_bus,
-            clock=self._engine.get_clock_for_testing() if self._engine else None,
-        )
+        # Use the shared lock service instance resolved by AdapterResolver
+        # The lock_service implements IQueuedPipelineLockService (with 4-parameter try_acquire_lock)
+        # via IPipelineLockService (backward compat alias). Store reference for tests.
+        if not isinstance(self.adapters.lock_service, InMemoryLockService):
+            msg = f"Expected InMemoryLockService, got {type(self.adapters.lock_service).__name__}"
+            logger.warning(msg)
+        self._queued_lock_service = self.adapters.lock_service
 
         handler = BoardColumnEventHandler(
             board_service=self.adapters.board,
