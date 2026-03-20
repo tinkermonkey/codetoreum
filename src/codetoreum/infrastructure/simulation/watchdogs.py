@@ -203,7 +203,7 @@ class StaleLockWatchdog:
         now = self._clock.now()
 
         # Get all lock states from the port interface method
-        all_states = self._lock_service.get_all_lock_states()
+        all_states = await self._lock_service.get_all_lock_states()
 
         for key, state in all_states.items():
             # Only check locks that are currently held

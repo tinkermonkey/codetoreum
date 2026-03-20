@@ -104,7 +104,7 @@ class TestStaleDetection:
 
         # Manually set lock acquired time to be older than threshold (1 hour before current time)
         old_time = watchdog._clock.now() - timedelta(seconds=3700)
-        lock_service.set_lock_acquired_at("proj-1", "board-1", old_time)
+        await lock_service.set_lock_acquired_at("proj-1", "board-1", old_time)
 
         # Act
         await watchdog._check_stale_locks()
@@ -147,7 +147,7 @@ class TestStaleDetection:
 
         # Make it stale
         old_time = watchdog._clock.now() - timedelta(seconds=3700)
-        lock_service.set_lock_acquired_at("proj-1", "board-1", old_time)
+        await lock_service.set_lock_acquired_at("proj-1", "board-1", old_time)
 
         # Verify lock is held before
         state_before = await lock_service.get_queue_state("proj-1", "board-1")
@@ -180,8 +180,8 @@ class TestStaleDetection:
 
         # Make both stale
         old_time = watchdog._clock.now() - timedelta(seconds=3700)
-        lock_service.set_lock_acquired_at("proj-1", "board-1", old_time)
-        lock_service.set_lock_acquired_at("proj-1", "board-2", old_time)
+        await lock_service.set_lock_acquired_at("proj-1", "board-1", old_time)
+        await lock_service.set_lock_acquired_at("proj-1", "board-2", old_time)
 
         # Act
         await watchdog._check_stale_locks()
@@ -213,7 +213,7 @@ class TestStaleDetection:
 
         # Set lock to be old according to clock
         old_time = watchdog._clock.now() - timedelta(seconds=3700)
-        lock_service.set_lock_acquired_at("proj-1", "board-1", old_time)
+        await lock_service.set_lock_acquired_at("proj-1", "board-1", old_time)
 
         # Mock datetime.now to ensure it's not used
         with patch("codetoreum.infrastructure.simulation.watchdogs.datetime") as mock_datetime:
@@ -271,7 +271,7 @@ class TestTickAndRescheduling:
             board_position=0,
         )
         old_time = watchdog._clock.now() - timedelta(seconds=3700)
-        lock_service.set_lock_acquired_at("proj-1", "board-1", old_time)
+        await lock_service.set_lock_acquired_at("proj-1", "board-1", old_time)
 
         # Make the emit call fail
         mock_event_emitter.emit.side_effect = Exception("Test error")
@@ -300,7 +300,7 @@ class TestEventEmission:
         )
 
         old_time = watchdog._clock.now() - timedelta(seconds=3700)
-        lock_service.set_lock_acquired_at("proj-123", "board-456", old_time)
+        await lock_service.set_lock_acquired_at("proj-123", "board-456", old_time)
 
         # Act
         await watchdog._check_stale_locks()
@@ -336,7 +336,7 @@ class TestEndToEndWatchdogFlow:
 
         # Make it stale
         old_time = simulation_clock.now() - timedelta(seconds=3700)
-        lock_service.set_lock_acquired_at("proj-1", "board-1", old_time)
+        await lock_service.set_lock_acquired_at("proj-1", "board-1", old_time)
 
         # Advance time to trigger watchdog tick
         await simulation_clock.advance(timedelta(seconds=60))

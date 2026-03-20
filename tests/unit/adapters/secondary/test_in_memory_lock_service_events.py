@@ -356,7 +356,7 @@ class TestStaleLockDetection:
         # Set lock time to 59 seconds ago (below 60 second threshold)
         now = datetime.now(UTC)
         old_time = now - timedelta(seconds=59)
-        lock_service_with_short_threshold.set_lock_acquired_at(
+        await lock_service_with_short_threshold.set_lock_acquired_at(
             project_id="proj-1", board_id="board-1", timestamp=old_time
         )
 
@@ -392,7 +392,7 @@ class TestStaleLockDetection:
         # Set lock time to 61 seconds ago (above 60 second threshold)
         now = datetime.now(UTC)
         old_time = now - timedelta(seconds=61)
-        lock_service_with_short_threshold.set_lock_acquired_at(
+        await lock_service_with_short_threshold.set_lock_acquired_at(
             project_id="proj-1", board_id="board-1", timestamp=old_time
         )
 
@@ -438,7 +438,7 @@ class TestStaleLockDetection:
         # Set lock time to 59.5 seconds ago (clearly below 60 second threshold)
         now = datetime.now(UTC)
         old_time = now - timedelta(seconds=59.5)
-        lock_service_with_short_threshold.set_lock_acquired_at(
+        await lock_service_with_short_threshold.set_lock_acquired_at(
             project_id="proj-1", board_id="board-1", timestamp=old_time
         )
 
@@ -471,7 +471,7 @@ class TestStaleLockDetection:
 
         # Set specific lock time
         specific_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
-        lock_service_with_short_threshold.set_lock_acquired_at(
+        await lock_service_with_short_threshold.set_lock_acquired_at(
             project_id="proj-1", board_id="board-1", timestamp=specific_time
         )
 
@@ -507,7 +507,7 @@ class TestStaleLockDetection:
         # Age the lock
         now = datetime.now(UTC)
         old_time = now - timedelta(seconds=61)
-        lock_service_with_short_threshold.set_lock_acquired_at(
+        await lock_service_with_short_threshold.set_lock_acquired_at(
             project_id="proj-1", board_id="board-1", timestamp=old_time
         )
 
@@ -540,7 +540,7 @@ class TestStaleLockDetection:
 
         # Set specific timestamp
         new_time = datetime(2024, 12, 25, 10, 30, 0, tzinfo=UTC)
-        lock_service_with_short_threshold.set_lock_acquired_at(
+        await lock_service_with_short_threshold.set_lock_acquired_at(
             project_id="proj-1", board_id="board-1", timestamp=new_time
         )
 
@@ -554,7 +554,7 @@ class TestStaleLockDetection:
         new_time = datetime.now(UTC)
 
         with pytest.raises(ValueError, match="No lock exists"):
-            lock_service_with_short_threshold.set_lock_acquired_at(
+            await lock_service_with_short_threshold.set_lock_acquired_at(
                 project_id="proj-1",
                 board_id="board-1",
                 timestamp=new_time,
@@ -588,7 +588,7 @@ class TestStaleLockDetection:
         # Age the lock
         now = datetime.now(UTC)
         old_time = now - timedelta(seconds=61)
-        lock_service_with_short_threshold.set_lock_acquired_at(
+        await lock_service_with_short_threshold.set_lock_acquired_at(
             project_id="proj-1", board_id="board-1", timestamp=old_time
         )
 
@@ -630,7 +630,7 @@ class TestStaleLockDetection:
         # Age the lock to be stale
         now = datetime.now(UTC)
         old_time = now - timedelta(seconds=61)
-        service_no_bus.set_lock_acquired_at(project_id="proj-1", board_id="board-1", timestamp=old_time)
+        await service_no_bus.set_lock_acquired_at(project_id="proj-1", board_id="board-1", timestamp=old_time)
 
         # Try to acquire with different item - should recover stale lock
         result = await service_no_bus.try_acquire_lock(
@@ -961,7 +961,7 @@ class TestInMemoryLockServiceBehavior:
         await service.try_acquire_lock("proj-2", "board-1", "item-3", 0)
 
         # Get all states
-        states = service.get_all_lock_states()
+        states = await service.get_all_lock_states()
 
         # Should have 3 entries
         assert len(states) == 3

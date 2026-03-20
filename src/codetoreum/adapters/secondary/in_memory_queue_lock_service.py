@@ -7,8 +7,8 @@ sorting by board position when items are enqueued or positions update.
 Thread-safe via internal locking mechanism.
 """
 
+import asyncio
 import logging
-import threading
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -43,11 +43,11 @@ class InMemoryLockService(MockEventEmitter, IPipelineLockService, IQueuedPipelin
     Manages lock acquisition and release with queue ordered by board position.
     Topmost items (lowest position value) have highest priority in queue.
 
-    Thread-safe for concurrent access via internal threading lock.
+    Async-safe concurrent access via asyncio.Lock.
 
     Attributes:
         _lock_state: Dict mapping "project_id:board_id" to PipelineQueueState
-        _lock: Threading lock for thread-safe access
+        _lock: Asyncio lock for async-safe access
         _event_bus: Optional event bus for emitting domain events
     """
 
@@ -71,7 +71,7 @@ class InMemoryLockService(MockEventEmitter, IPipelineLockService, IQueuedPipelin
         MockEventEmitter.__init__(self)
 
         self._lock_state: dict[str, PipelineQueueState] = {}
-        self._lock = threading.Lock()
+        self._lock = asyncio.Lock()
         self._event_bus = event_bus
         self._stale_threshold_seconds = stale_threshold_seconds
         self._clock = clock
@@ -114,7 +114,7 @@ class InMemoryLockService(MockEventEmitter, IPipelineLockService, IQueuedPipelin
         # Get current time from clock (simulation or wall-clock)
         now = self._clock.now() if self._clock else datetime.now(UTC)
 
-        with self._lock:
+        async with self._lock:
             board_key = f"{project_id}:{board_id}"
 
             # Initialize state if needed
@@ -337,7 +337,7 @@ class InMemoryLockService(MockEventEmitter, IPipelineLockService, IQueuedPipelin
         # Get current time from clock (simulation or wall-clock)
         now = self._clock.now() if self._clock else datetime.now(UTC)
 
-        with self._lock:
+        async with self._lock:
             board_key = f"{project_id}:{board_id}"
             state = self._lock_state.get(board_key)
 
@@ -440,7 +440,7 @@ class InMemoryLockService(MockEventEmitter, IPipelineLockService, IQueuedPipelin
             msg = "board_id cannot be empty"
             raise ValueError(msg)
 
-        with self._lock:
+        async with self._lock:
             board_key = f"{project_id}:{board_id}"
             if board_key not in self._lock_state:
                 return PipelineQueueState(
@@ -484,7 +484,7 @@ class InMemoryLockService(MockEventEmitter, IPipelineLockService, IQueuedPipelin
             msg = "board_id cannot be empty"
             raise ValueError(msg)
 
-        with self._lock:
+        async with self._lock:
             board_key = f"{project_id}:{board_id}"
             state = self._lock_state.get(board_key)
 
@@ -537,7 +537,7 @@ class InMemoryLockService(MockEventEmitter, IPipelineLockService, IQueuedPipelin
             msg = "board_id cannot be empty"
             raise ValueError(msg)
 
-        with self._lock:
+        async with self._lock:
             board_key = f"{project_id}:{board_id}"
             state = self._lock_state.get(board_key)
 
@@ -566,7 +566,7 @@ class InMemoryLockService(MockEventEmitter, IPipelineLockService, IQueuedPipelin
         """
         locks: list[PipelineLock] = []
 
-        with self._lock:
+        async with self._lock:
             for board_key, state in self._lock_state.items():
                 # Only include states with active locks
                 if state.lock_holder is not None and state.lock_acquired_at is not None:
@@ -582,10 +582,10 @@ class InMemoryLockService(MockEventEmitter, IPipelineLockService, IQueuedPipelin
 
         return locks
 
-    def get_all_lock_states(self) -> dict[str, PipelineQueueState]:
+    async def get_all_lock_states(self) -> dict[str, PipelineQueueState]:
         """Return copy of all pipeline queue states for watchdog iteration.
 
-        Thread-safe snapshot of all lock states across all boards.
+        Async-safe snapshot of all lock states across all boards.
         Returns deep copies of PipelineQueueState objects to ensure that
         reads outside the lock (e.g., by watchdog) cannot observe concurrent
         mutations of lock_holder or lock_acquired_at.
@@ -593,7 +593,7 @@ class InMemoryLockService(MockEventEmitter, IPipelineLockService, IQueuedPipelin
         Returns:
             Dict mapping "project_id:board_id" keys to PipelineQueueState deep copies
         """
-        with self._lock:
+        async with self._lock:
             result = {}
             for key, state in self._lock_state.items():
                 # Deep copy each PipelineQueueState to prevent watchdog from reading
@@ -615,7 +615,7 @@ class InMemoryLockService(MockEventEmitter, IPipelineLockService, IQueuedPipelin
                 )
             return result
 
-    def set_lock_acquired_at(self, project_id: str, board_id: str, timestamp: datetime) -> None:
+    async def set_lock_acquired_at(self, project_id: str, board_id: str, timestamp: datetime) -> None:
         """Test helper to manipulate lock timestamp for stale lock testing.
 
         Allows tests to set the lock acquisition timestamp to simulate
@@ -630,7 +630,7 @@ class InMemoryLockService(MockEventEmitter, IPipelineLockService, IQueuedPipelin
         Raises:
             ValueError: If lock doesn't exist for the given board
         """
-        with self._lock:
+        async with self._lock:
             board_key = f"{project_id}:{board_id}"
             state = self._lock_state.get(board_key)
 
