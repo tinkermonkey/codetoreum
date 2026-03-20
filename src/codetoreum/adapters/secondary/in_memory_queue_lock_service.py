@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.application.pipeline_lock_service import (
+    IQueuedPipelineLockService,
     LockAcquisitionResult,
     LockReleaseResult,
     LockStatus,
@@ -36,7 +37,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class InMemoryLockService(MockEventEmitter, IPipelineLockService):
+class InMemoryLockService(MockEventEmitter, IPipelineLockService, IQueuedPipelineLockService):
     """In-memory pipeline lock service with board position-based queue ordering.
 
     Manages lock acquisition and release with queue ordered by board position.
