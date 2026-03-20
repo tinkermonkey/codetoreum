@@ -62,6 +62,8 @@ from codetoreum.adapters.testing import (
     SimpleEncryptionAdapter,
 )
 
+logger = logging.getLogger(__name__)
+
 # Import optional secondary adapter types
 try:
     from codetoreum.adapters.secondary.mock_code_review_adapter import (
@@ -222,9 +224,6 @@ from codetoreum.ports.output.version_control_service import IVersionControlServi
 from codetoreum.ports.output.work_item_branch_tracker import IWorkItemBranchTracker
 from codetoreum.ports.output.work_item_service import IWorkItemService
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
-
-logger = logging.getLogger(__name__)
-
 
 T = TypeVar("T")
 
