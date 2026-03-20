@@ -341,10 +341,10 @@ async def bootstrap_application(
         else:
             # Use built-in scenario (config-only)
             console.print(f"Using built-in scenario: {scenario}")
-            sim_config = SimulationConfig.create_fast_config(
-                scenario_name=scenario,
-                speed_multiplier=speed_multiplier,
-            )
+            kwargs = {"scenario_name": scenario}
+            if speed_multiplier is not None:
+                kwargs["speed_multiplier"] = speed_multiplier
+            sim_config = SimulationConfig.create_fast_config(**kwargs)
     except PermissionError as e:
         msg = f"Permission denied: {e}"
         raise click.FileError(str(scenario_file), msg) from e
@@ -503,7 +503,9 @@ def display_startup_info(
     table.add_row("Host", host)
     table.add_row("Port", str(port))
     table.add_row("Scenario", scenario if not scenario_file else str(scenario_file))
-    table.add_row("Speed Multiplier", f"{speed_multiplier}x")
+    # Use resolved config speed multiplier if available, otherwise fall back to CLI parameter
+    display_speed = sim_config.time.speed_multiplier if sim_config else speed_multiplier
+    table.add_row("Speed Multiplier", f"{display_speed}x")
     table.add_row("Auto-advance", "Enabled" if auto_advance else "Disabled")
     table.add_row("Debug Mode", "Enabled" if debug else "Disabled")
     table.add_row("Executor", "[green]ExecutionServiceAgentExecutor[/green]")
