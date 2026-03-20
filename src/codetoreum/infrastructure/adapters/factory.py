@@ -67,7 +67,7 @@ try:
     from codetoreum.adapters.secondary.mock_code_review_adapter import (
         MockCodeReviewAdapter,
     )
-except ImportError as e:
+except ImportError:
     logger.warning(
         "Optional adapter MockCodeReviewAdapter not available, skipping registration",
         exc_info=True,
@@ -79,7 +79,7 @@ try:
     from codetoreum.adapters.secondary.prometheus_metrics_adapter import (
         PrometheusMetricsAdapter,
     )
-except ImportError as e:
+except ImportError:
     logger.warning(
         "Optional adapter PrometheusMetricsAdapter not available, skipping registration",
         exc_info=True,
@@ -91,7 +91,7 @@ try:
     from codetoreum.adapters.secondary.redis_pubsub_adapter import (
         RedisPubSubAdapter,
     )
-except ImportError as e:
+except ImportError:
     logger.warning(
         "Optional adapter RedisPubSubAdapter not available, skipping registration",
         exc_info=True,
@@ -103,7 +103,7 @@ try:
     from codetoreum.adapters.secondary.github_discussion_adapter import (
         GitHubDiscussionAdapter,
     )
-except ImportError as e:
+except ImportError:
     logger.warning(
         "Optional adapter GitHubDiscussionAdapter not available, skipping registration",
         exc_info=True,
@@ -115,7 +115,7 @@ try:
     from codetoreum.adapters.secondary.elasticsearch_event_store import (
         ElasticsearchEventStore,
     )
-except ImportError as e:
+except ImportError:
     logger.warning(
         "Optional adapter ElasticsearchEventStore not available, skipping registration",
         exc_info=True,
@@ -127,7 +127,7 @@ try:
     from codetoreum.adapters.secondary.docker_container_recovery_adapter import (
         DockerContainerRecoveryAdapter,
     )
-except ImportError as e:
+except ImportError:
     logger.warning(
         "Optional adapter DockerContainerRecoveryAdapter not available, skipping registration",
         exc_info=True,
@@ -139,13 +139,14 @@ try:
     from codetoreum.adapters.secondary.production_repair_cycle_adapter import (
         ProductionRepairCycleAdapter,
     )
-except ImportError as e:
+except ImportError:
     logger.warning(
         "Optional adapter ProductionRepairCycleAdapter not available, skipping registration",
         exc_info=True,
         extra={"adapter": "ProductionRepairCycleAdapter"},
     )
     ProductionRepairCycleAdapter = None  # type: ignore
+
 from codetoreum.infrastructure.adapters.registries import (
     ActiveWorkflowRunRegistryRegistry,
     AgentExecutorRegistry,

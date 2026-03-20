@@ -1379,7 +1379,6 @@ class SimulationApplicationBootstrap:
                 message = f"Unknown event type '{event_type}' in dead letter queue - handler mapping not updated"
                 logger.error(
                     message,
-                    exc_info=True,
                     extra={
                         "event_type": event_type,
                         "error_id": ErrorRegistry.ERR_INTERNAL_ERROR,
