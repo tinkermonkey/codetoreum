@@ -230,22 +230,32 @@ class TestAdapterResolver:
 
     def test_resolve_all_basic(self, factory, dependencies, adapter_config):
         """Test resolving all adapters with default simulation config."""
+        from codetoreum.infrastructure.simulation.bootstrap import SimulationAdapters
+
         resolver = AdapterResolver(adapter_config, factory, dependencies)
         result = resolver.resolve_all()
 
-        # Should return 29 adapters
-        assert len(result) == 29
+        # Should return a SimulationAdapters dataclass
+        assert isinstance(result, SimulationAdapters)
 
-        # All values should be adapter instances (not None)
-        for slot_name, adapter in result.items():
-            assert adapter is not None, f"{slot_name} adapter is None"
+        # All adapter fields should be non-None (except optional ones)
+        import dataclasses
+        optional_fields = {"agent_executor", "audit_store"}
+        for field in dataclasses.fields(result):
+            adapter = getattr(result, field.name)
+            if field.name not in optional_fields:
+                assert adapter is not None, f"{field.name} adapter is None"
 
     def test_resolve_all_populates_resolved_dict(self, factory, dependencies, adapter_config):
         """Test that resolve_all populates the internal _resolved dict."""
+        from codetoreum.infrastructure.simulation.bootstrap import SimulationAdapters
+
         resolver = AdapterResolver(adapter_config, factory, dependencies)
         result = resolver.resolve_all()
 
-        assert resolver._resolved == result
+        # result is a SimulationAdapters dataclass, not a dict
+        assert isinstance(result, SimulationAdapters)
+        # The internal _resolved dict should have 29 entries (all except audit_store which is optional)
         assert len(resolver._resolved) == 29
 
     def test_resolve_all_respects_dependency_order(self, factory, dependencies, adapter_config):
@@ -303,8 +313,8 @@ class TestAdapterResolver:
         # Engine should have been called to create review cycle
         resolver._deps.engine.create_review_cycle_adapter.assert_called_once()
 
-        # The returned review_cycle should be from the engine
-        assert result["review_cycle"] is mock_review_cycle
+        # The returned review_cycle should be from the engine (access as attribute)
+        assert result.review_cycle is mock_review_cycle
 
     def test_repair_cycle_mock_uses_engine(self, factory, dependencies, adapter_config):
         """Test that mock repair_cycle uses SimulationEngine."""
@@ -323,8 +333,8 @@ class TestAdapterResolver:
         # Engine should have been called to create repair cycle
         resolver._deps.engine.create_repair_cycle_adapter.assert_called_once()
 
-        # The returned repair_cycle should be from the engine
-        assert result["repair_cycle"] is mock_repair_cycle
+        # The returned repair_cycle should be from the engine (access as attribute)
+        assert result.repair_cycle is mock_repair_cycle
 
     def test_resolve_review_cycle_passes_llm_to_engine(self, factory, dependencies, adapter_config):
         """Test that review_cycle resolver passes resolved LLM to engine."""
@@ -575,6 +585,8 @@ class TestAdapterResolverIntegration:
 
     def test_resolve_all_with_real_factory(self):
         """Test resolving all adapters with real AdapterFactory instance."""
+        from codetoreum.infrastructure.simulation.bootstrap import SimulationAdapters
+
         factory = AdapterFactory(config=AdapterFactoryConfig())
         config = SimulationConfig.create_fast_config("test_integration")
         dependencies = AdapterDependencies(
@@ -592,6 +604,11 @@ class TestAdapterResolverIntegration:
         resolver = AdapterResolver(AdapterSelectionConfig(), factory, dependencies)
         result = resolver.resolve_all()
 
-        # All adapters should be created successfully
-        assert len(result) == 29
-        assert all(adapter is not None for adapter in result.values())
+        # Result should be SimulationAdapters dataclass with all non-optional fields set
+        assert isinstance(result, SimulationAdapters)
+        import dataclasses
+        optional_fields = {"agent_executor", "audit_store"}
+        for field in dataclasses.fields(result):
+            adapter = getattr(result, field.name)
+            if field.name not in optional_fields:
+                assert adapter is not None, f"{field.name} is None"
