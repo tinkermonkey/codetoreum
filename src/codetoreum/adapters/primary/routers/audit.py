@@ -369,6 +369,11 @@ def create_audit_router(
             hops = 0
             actual_root_id = root_event_id
 
+            # Fetch registry metadata once before traversing the chain (not per-event)
+            all_links = None
+            if causal_link_registry is not None:
+                all_links = causal_link_registry.get_all_links()
+
             while current_event_id and hops < max_hops:
                 if current_event_id not in events_by_id:
                     break
@@ -403,24 +408,25 @@ def create_audit_router(
 
                     # Check for links targeting components mentioned in the payload
                     # This enriches the chain with structural dependency info
-                    links = causal_link_registry.get_all_links()
+                    # Use pre-fetched all_links instead of querying on each event
                     payload_links = []
-                    for field_name, field_value in payload_summary.items():
-                        # Look for links where field_value might be a component name
-                        field_str = str(field_value)
-                        for link in links:
-                            if link.source == field_str or link.target == field_str:
-                                payload_links.append(
-                                    {
-                                        "source": link.source,
-                                        "target": link.target,
-                                        "link_type": link.link_type.value if hasattr(link.link_type, "value") else str(link.link_type),
-                                        "field": field_name,
-                                    }
-                                )
+                    if all_links:
+                        for field_name, field_value in payload_summary.items():
+                            # Look for links where field_value might be a component name
+                            field_str = str(field_value)
+                            for link in all_links:
+                                if link.source == field_str or link.target == field_str:
+                                    payload_links.append(
+                                        {
+                                            "source": link.source,
+                                            "target": link.target,
+                                            "link_type": link.link_type.value if hasattr(link.link_type, "value") else str(link.link_type),
+                                            "field": field_name,
+                                        }
+                                    )
 
-                    if payload_links:
-                        registry_metadata["dependency_links"] = payload_links
+                        if payload_links:
+                            registry_metadata["dependency_links"] = payload_links
 
                 chain_event = CausalChainEvent(
                     eventId=str(event.event_id),
