@@ -137,12 +137,13 @@ def create_simulation_board_state_router(
         Raises:
             HTTPException(404): If board_id does not exist in adapter state
         """
-        snapshot_time = clock.now()
-
         # Acquire lock and snapshot board state
         # ===================================================================
         try:
             async with board_adapter._lock:
+                # Capture snapshot time after acquiring lock to ensure it reflects
+                # the actual time when board data was read
+                snapshot_time = clock.now()
                 # Verify board exists
                 if board_id not in board_adapter._board_project_map:
                     raise HTTPException(
@@ -169,6 +170,10 @@ def create_simulation_board_state_router(
                 # Build column structure with work items
                 columns_data: list[dict] = []
 
+                # First pass: collect board state under lock
+                # Store item data without run info (to be looked up outside lock)
+                items_by_column: dict[str, list[dict]] = {}
+
                 for column in columns_ordered:
                     column_items: list[dict] = []
 
@@ -189,20 +194,12 @@ def create_simulation_board_state_router(
                             time_delta = snapshot_time - entered_at
                             time_in_column = max(0.0, time_delta.total_seconds())
 
-                            # Look up active run (stage/agent info)
-                            active_run = run_registry._runs.get(item_id)
-                            stage_name = active_run.stage_name if active_run else None
-                            # Agent name is derived from stage_name or we could get run_id
-                            agent_name = active_run.run_id if active_run else None
-
                             column_items.append(
                                 {
                                     "work_item_id": item_id,
                                     "position": position,
                                     "entered_column_at": entered_at,
                                     "time_in_column_seconds": time_in_column,
-                                    "assigned_agent": agent_name,
-                                    "execution_status": stage_name,
                                 }
                             )
 
@@ -216,6 +213,7 @@ def create_simulation_board_state_router(
                             "items": column_items,
                         }
                     )
+                    items_by_column[column.name] = column_items
 
         except HTTPException:
             raise
@@ -230,21 +228,25 @@ def create_simulation_board_state_router(
                 detail="Error reading board state",
             ) from e
 
-        # Fetch work item titles concurrently (outside lock)
+        # Fetch work item enrichment data concurrently (outside lock)
         # ===================================================================
-        # Collect all work item IDs that need titles
-        item_ids_needing_titles = set()
+        # Collect all work item IDs that need enrichment (titles and run info)
+        item_ids_needing_enrichment = set()
         for column_data in columns_data:
             for item_data in column_data["items"]:
-                item_ids_needing_titles.add(item_data["work_item_id"])
+                item_ids_needing_enrichment.add(item_data["work_item_id"])
 
-        # Batch fetch titles from ticket adapter
-        title_tasks = [_get_work_item_title(ticket_adapter, item_id) for item_id in item_ids_needing_titles]
+        # Batch fetch titles from ticket adapter and run info from registry
+        # Use the public API (get_active_run) instead of private _runs dict
+        title_tasks = [_get_work_item_title(ticket_adapter, item_id) for item_id in item_ids_needing_enrichment]
+        run_tasks = [run_registry.get_active_run(item_id) for item_id in item_ids_needing_enrichment]
 
-        if title_tasks:
+        if title_tasks or run_tasks:
             titles_list = await asyncio.gather(*title_tasks, return_exceptions=True)
+            runs_list = await asyncio.gather(*run_tasks, return_exceptions=True)
+
             titles_dict = {}
-            for item_id, title in zip(item_ids_needing_titles, titles_list, strict=False):
+            for item_id, title in zip(item_ids_needing_enrichment, titles_list, strict=False):
                 if isinstance(title, Exception):
                     logger.error(
                         f"Failed to fetch title for work item {item_id}: {title}",
@@ -253,16 +255,33 @@ def create_simulation_board_state_router(
                     )
                 else:
                     titles_dict[item_id] = title
+
+            runs_dict = {}
+            for item_id, run_info in zip(item_ids_needing_enrichment, runs_list, strict=False):
+                if isinstance(run_info, Exception):
+                    logger.debug(
+                        f"Could not fetch run info for work item {item_id}: {run_info}",
+                        extra={"item_id": item_id},
+                    )
+                else:
+                    runs_dict[item_id] = run_info
         else:
             titles_dict = {}
+            runs_dict = {}
 
-        # Assemble final response with titles
+        # Assemble final response with titles and run info
         # ===================================================================
         columns_response = []
         for column_data in columns_data:
             items_response = []
             for item_data in column_data["items"]:
                 title = titles_dict.get(item_data["work_item_id"])
+
+                # Look up run info for this work item
+                run_info = runs_dict.get(item_data["work_item_id"])
+                assigned_agent = run_info.run_id if run_info else None
+                execution_status = run_info.stage_name if run_info else None
+
                 items_response.append(
                     WorkItemState(
                         work_item_id=item_data["work_item_id"],
@@ -270,8 +289,8 @@ def create_simulation_board_state_router(
                         position=item_data["position"],
                         entered_column_at=item_data["entered_column_at"],
                         time_in_column_seconds=item_data["time_in_column_seconds"],
-                        assigned_agent=item_data["assigned_agent"],
-                        execution_status=item_data["execution_status"],
+                        assigned_agent=assigned_agent,
+                        execution_status=execution_status,
                     )
                 )
 
