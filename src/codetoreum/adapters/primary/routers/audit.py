@@ -167,7 +167,19 @@ def create_audit_router(
 
             # Build filters
             filters = None
-            if any([eventType, resourceType, resourceId, userId, action, success is not None, effective_start_time, endTime, workItemId]):
+            if any(
+                [
+                    eventType,
+                    resourceType,
+                    resourceId,
+                    userId,
+                    action,
+                    success is not None,
+                    effective_start_time,
+                    endTime,
+                    workItemId,
+                ]
+            ):
                 filters = AuditEventFilters(
                     event_type=eventType,
                     resource_type=resourceType,
@@ -337,9 +349,7 @@ def create_audit_router(
             response_description="Causal chain of events",
         )
         async def get_causal_chain(
-            event_id: str = Path(
-                ..., description="Event ID to trace the causal chain for (format: UUID)"
-            ),
+            event_id: str = Path(..., description="Event ID to trace the causal chain for (format: UUID)"),
         ) -> CausalChainResponse:
             """
             Get the causal chain for a specific event by traversing backward through causation_id.

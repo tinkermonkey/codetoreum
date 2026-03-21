@@ -20,7 +20,6 @@ from codetoreum.infrastructure.simulation.bootstrap import SimulationApplication
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 from codetoreum.ports.input.audit_query import AuditEventFilters
 
-
 # ============================================================================
 # Fixtures
 # ============================================================================
@@ -367,9 +366,7 @@ async def test_causal_chain_chain_ordering(bootstrap, client):
 
     # Verify temporal ordering: each event's timestamp should be >= previous event's
     for i in range(len(chain) - 1):
-        current_time = datetime.fromisoformat(
-            chain[i]["occurredAt"].replace("Z", "+00:00")
-        )
+        current_time = datetime.fromisoformat(chain[i]["occurredAt"].replace("Z", "+00:00"))
         next_time = datetime.fromisoformat(chain[i + 1]["occurredAt"].replace("Z", "+00:00"))
         assert current_time >= next_time  # Going backward in time from leaf to root
 
@@ -559,9 +556,7 @@ async def test_audit_events_since_and_start_time_conflict(bootstrap, client):
     iso_time = past_time.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     # Try to provide both since and startTime
-    response = client.get(
-        f"/api/v2/audit/events?since={iso_time}&startTime={iso_time}"
-    )
+    response = client.get(f"/api/v2/audit/events?since={iso_time}&startTime={iso_time}")
 
     # Should return 400 Bad Request
     assert response.status_code == 400
