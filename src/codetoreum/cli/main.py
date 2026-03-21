@@ -22,6 +22,7 @@ from codetoreum.cli.simulation_server import main as simulation_server_main
 # Conditionally import yaml_import to handle import errors gracefully
 try:
     from codetoreum.cli.yaml_import import cli as yaml_import_cli
+
     YAML_IMPORT_AVAILABLE = True
 except ImportError:
     YAML_IMPORT_AVAILABLE = False
