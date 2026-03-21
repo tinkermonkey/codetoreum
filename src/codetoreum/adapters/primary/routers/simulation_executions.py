@@ -17,7 +17,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Literal
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from codetoreum.adapters.testing.in_memory_active_workflow_run_registry import (
@@ -123,42 +123,44 @@ def create_simulation_executions_router(
 
         Returns:
             ExecutionStatusResponse with active and recently_completed lists
+
+        Raises:
+            HTTPException(500): If an error occurs while reading execution status
         """
-        now = clock.now()
+        try:
+            now = clock.now()
 
-        # =====================================================================
-        # Query active executions from registry
-        # =====================================================================
-        active_executions: list[ActiveExecution] = []
-        for work_item_id, run_info in run_registry._runs.items():
-            # Find most recent event for this run to determine current_step and get execution start info
-            current_step = _get_current_step(event_store, run_info.run_id)
-            agent_id, started_at = _get_agent_execution_info(event_store, run_info.run_id)
+            # =====================================================================
+            # Query active executions from registry
+            # =====================================================================
+            active_executions: list[ActiveExecution] = []
+            for work_item_id, run_info in run_registry._runs.items():
+                # Find most recent event for this run to determine current_step and get execution start info
+                current_step = await _get_current_step(event_store, run_info.run_id)
+                agent_id, started_at = await _get_agent_execution_info(event_store, run_info.run_id)
 
-            active = ActiveExecution(
-                work_item_id=work_item_id,
-                run_id=run_info.run_id,
-                agent_id=agent_id,  # Extracted from AgentExecutionStarted event
-                stage_name=run_info.stage_name,
-                project_id=run_info.project_id,
-                status="running",
-                started_at=started_at or now,  # Use actual start time from event, fallback to now
-                current_step=current_step,
-            )
-            active_executions.append(active)
+                active = ActiveExecution(
+                    work_item_id=work_item_id,
+                    run_id=run_info.run_id,
+                    agent_id=agent_id,  # Extracted from AgentExecutionStarted event
+                    stage_name=run_info.stage_name,
+                    project_id=run_info.project_id,
+                    status="running",
+                    started_at=started_at or now,  # Use actual start time from event, fallback to now
+                    current_step=current_step,
+                )
+                active_executions.append(active)
 
-        # =====================================================================
-        # Query recently completed executions from event store
-        # =====================================================================
-        completed_executions: list[CompletedExecution] = []
-        since = now - timedelta(minutes=minutes)
+            # =====================================================================
+            # Query recently completed executions from event store
+            # =====================================================================
+            completed_executions: list[CompletedExecution] = []
+            since = now - timedelta(minutes=minutes)
 
-        # Get WorkflowCompleted events from the event store
-        workflow_completed_events = event_store._events_by_type.get("WorkflowCompleted", [])
+            # Get WorkflowCompleted events from the event store using public method
+            workflow_completed_events = await event_store.get_events_by_type("WorkflowCompleted", since=since)
 
-        for event in workflow_completed_events:
-            # Only include events within the time window
-            if event.occurred_at >= since:
+            for event in workflow_completed_events:
                 # Extract run_id from event if available
                 run_id = _extract_run_id_from_event(event)
                 work_item_id = _extract_work_item_id_from_event(event)
@@ -171,20 +173,30 @@ def create_simulation_executions_router(
                 )
                 completed_executions.append(completed)
 
-        # =====================================================================
-        # Apply status filter
-        # =====================================================================
-        if status_filter == "active":
-            completed_executions = []
-        elif status_filter == "completed":
-            active_executions = []
-        # else: status_filter == "all" - include both
+            # =====================================================================
+            # Apply status filter
+            # =====================================================================
+            if status_filter == "active":
+                completed_executions = []
+            elif status_filter == "completed":
+                active_executions = []
+            # else: status_filter == "all" - include both
 
-        return ExecutionStatusResponse(
-            snapshot_time=now,
-            active=active_executions,
-            recently_completed=completed_executions,
-        )
+            return ExecutionStatusResponse(
+                snapshot_time=now,
+                active=active_executions,
+                recently_completed=completed_executions,
+            )
+        except Exception as e:
+            logger.error(
+                f"Error reading execution status: {e}",
+                extra={"status_filter": status_filter, "minutes": minutes},
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Error reading execution status",
+            ) from e
 
     return router
 
@@ -194,7 +206,7 @@ def create_simulation_executions_router(
 # =========================================================================
 
 
-def _get_agent_execution_info(event_store: InMemoryEventStore, run_id: str) -> tuple[str | None, datetime | None]:
+async def _get_agent_execution_info(event_store: InMemoryEventStore, run_id: str) -> tuple[str | None, datetime | None]:
     """
     Extract agent_id and started_at timestamp from AgentExecutionStarted event.
 
@@ -206,7 +218,7 @@ def _get_agent_execution_info(event_store: InMemoryEventStore, run_id: str) -> t
         Tuple of (agent_id, started_at) where agent_id is the agent ID (or None),
         and started_at is the timestamp when execution started (or None)
     """
-    events = event_store._events_by_correlation.get(str(run_id), [])
+    events = await event_store.get_events_by_correlation_id(str(run_id))
 
     # Search for AgentExecutionStarted event (first in the sequence for a run)
     for event in events:
@@ -217,7 +229,7 @@ def _get_agent_execution_info(event_store: InMemoryEventStore, run_id: str) -> t
     return None, None
 
 
-def _get_current_step(event_store: InMemoryEventStore, run_id: str) -> str | None:
+async def _get_current_step(event_store: InMemoryEventStore, run_id: str) -> str | None:
     """
     Extract the most recent event type for a given run (correlation_id).
 
@@ -229,7 +241,7 @@ def _get_current_step(event_store: InMemoryEventStore, run_id: str) -> str | Non
         Event type of the most recent event, or None if no events found
     """
     run_id_str = str(run_id)
-    events = event_store._events_by_correlation.get(run_id_str, [])
+    events = await event_store.get_events_by_correlation_id(run_id_str)
 
     if not events:
         return None
