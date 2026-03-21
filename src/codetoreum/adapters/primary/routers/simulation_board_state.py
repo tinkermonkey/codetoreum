@@ -23,7 +23,7 @@ This router is ONLY mounted in SimulationApplicationBootstrap, never in producti
 
 import asyncio
 import logging
-from datetime import UTC, datetime
+from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
@@ -239,10 +239,7 @@ def create_simulation_board_state_router(
                 item_ids_needing_titles.add(item_data["work_item_id"])
 
         # Batch fetch titles from ticket adapter
-        title_tasks = [
-            _get_work_item_title(ticket_adapter, item_id)
-            for item_id in item_ids_needing_titles
-        ]
+        title_tasks = [_get_work_item_title(ticket_adapter, item_id) for item_id in item_ids_needing_titles]
 
         if title_tasks:
             titles_list = await asyncio.gather(*title_tasks, return_exceptions=True)

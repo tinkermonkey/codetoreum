@@ -374,9 +374,11 @@ class TestSimulationBoardStateRouter:
         # Manually add an item to the board without creating it in ticket adapter
         # This simulates a work item that doesn't exist in the ticket system
         board_adapter._item_positions["fake-item-1"] = ("board-1", "Backlog", 0)
-        board_adapter._item_column_entries["fake-item-1"] = board_adapter._clock.now() if board_adapter._clock else __import__(
-            "datetime"
-        ).datetime.now(__import__("datetime").UTC)
+        board_adapter._item_column_entries["fake-item-1"] = (
+            board_adapter._clock.now()
+            if board_adapter._clock
+            else __import__("datetime").datetime.now(__import__("datetime").UTC)
+        )
 
         # Query board state
         async with AsyncClient(app=app, base_url="http://test", follow_redirects=True) as client:

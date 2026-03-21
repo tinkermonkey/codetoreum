@@ -1811,9 +1811,9 @@ class SimulationApplicationBootstrap:
 
         # Mount simulation-only board state snapshot router (never in production create_app)
         board_state_router = create_simulation_board_state_router(
-            board_adapter=cast(MockBoardAdapter, self.adapters.board),
-            run_registry=cast(InMemoryActiveWorkflowRunRegistry, self.adapters.run_registry),
-            ticket_adapter=cast(InMemoryTicketAdapter, self.adapters.ticket_system),
+            board_adapter=cast("MockBoardAdapter", self.adapters.board),
+            run_registry=cast("InMemoryActiveWorkflowRunRegistry", self.adapters.run_registry),
+            ticket_adapter=cast("InMemoryTicketAdapter", self.adapters.ticket_system),
             clock=self._engine,
         )
         app.include_router(board_state_router)
