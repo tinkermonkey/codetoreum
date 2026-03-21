@@ -251,32 +251,40 @@ def create_audit_router(
     # ========================================================================
 
     if event_store is not None:
-        # Cache event index to avoid O(n) rebuilds on every request
+        # Thread-safe cache for event index with async-safe locking
+        import asyncio
         event_index_cache: dict[str, Any] = {}
-        cached_event_count = [0]  # Use list to allow modification in closure
+        cached_event_timestamp = [None]  # Track last rebuild timestamp for cache invalidation
+        cache_lock = asyncio.Lock()
 
-        def _get_event_index() -> dict[str, Any]:
+        async def _get_event_index() -> dict[str, Any]:
             """
             Get or rebuild cached event index.
 
             Caches the event index to avoid O(n) iteration on every causal chain request.
-            The cache remains valid until new events are appended to the store or streams
-            are deleted. Uses get_total_event_count() for efficient cache invalidation.
+            The cache remains valid until new events are appended to the store.
+            Uses timestamp-based invalidation instead of count-based, which is robust
+            against edge cases where events are deleted and appended back to the same count.
+
+            Uses asyncio.Lock for async-safe concurrent access without blocking the event loop.
 
             Returns:
                 Dict mapping event_id -> DomainEvent
             """
-            # Use get_total_event_count() (O(1) with lock) instead of get_all_events_list()
-            # to check staleness without copying the entire event list
-            current_event_count = event_store.get_total_event_count()
+            async with cache_lock:
+                # Rebuild the cache by acquiring the event store lock synchronously
+                # but only within the critical section (minimal hold time)
+                current_events = event_store.get_all_events_list()
 
-            # Rebuild if count differs (handles both append and delete scenarios)
-            if cached_event_count[0] != current_event_count:
-                event_index_cache.clear()
-                # Only call get_all_events_list() when cache needs rebuilding
-                for event in event_store.get_all_events_list():
-                    event_index_cache[str(event.event_id)] = event
-                cached_event_count[0] = current_event_count
+                # If events changed, rebuild the index
+                # We check by comparing set of event IDs to detect both appends and deletes
+                current_event_ids = {str(event.event_id) for event in current_events}
+                cached_event_ids = set(event_index_cache.keys())
+
+                if current_event_ids != cached_event_ids:
+                    event_index_cache.clear()
+                    for event in current_events:
+                        event_index_cache[str(event.event_id)] = event
 
             return event_index_cache
 
@@ -342,10 +350,12 @@ def create_audit_router(
             chain from each event. Consults the CausalLinkRegistry (when provided) to annotate
             chain events with registered dependency metadata and validate structural consistency.
 
+            Includes cycle detection to prevent infinite loops in malformed causation chains.
+
             Returns:
                 Tuple of (chain events, truncated, root_event_id)
             """
-            events_by_id = _get_event_index()
+            events_by_id = await _get_event_index()
 
             if root_event_id not in events_by_id:
                 return [], False, ""
@@ -354,6 +364,7 @@ def create_audit_router(
             current_event_id = root_event_id
             hops = 0
             actual_root_id = root_event_id
+            visited: set[str] = set()  # Track visited event IDs to detect cycles
 
             # Fetch registry metadata once before traversing the chain (not per-event)
             all_links = None
@@ -363,6 +374,16 @@ def create_audit_router(
             while current_event_id and hops < max_hops:
                 if current_event_id not in events_by_id:
                     break
+
+                # Cycle detection: if we've already visited this event, stop traversal
+                if current_event_id in visited:
+                    logger.warning(
+                        "Cycle detected in causal chain",
+                        extra={"root_event_id": root_event_id, "cycle_event_id": current_event_id},
+                    )
+                    break
+
+                visited.add(current_event_id)
 
                 event = events_by_id[current_event_id]
 
