@@ -1,6 +1,9 @@
-"""Integration tests for SSE stream router endpoint."""
+"""Integration tests for SSE stream router endpoint.
 
-import asyncio
+These tests verify that the SSE stream endpoint integrates correctly
+with the FastAPI app, event bus, and simulation engine without testing
+the full async streaming behavior (which requires HTTP client interaction).
+"""
 
 import pytest
 from fastapi import FastAPI
@@ -26,83 +29,78 @@ def engine():
     return SimulationEngine(config)
 
 
-class TestSSEStreamRouterCreation:
-    """Test SSE stream router creation and wiring."""
+class TestSSEStreamRouterIntegration:
+    """Test SSE stream router integration with FastAPI and infrastructure."""
 
-    def test_router_can_be_created(self, event_bus, engine):
-        """Test that router can be created without errors."""
+    def test_router_creation_succeeds_with_event_bus_and_engine(self, event_bus, engine):
+        """Test that router can be created with required dependencies."""
         router = create_simulation_stream_router(event_bus, engine)
         assert router is not None
         assert router.prefix == "/api/v2/sim"
 
     def test_router_has_stream_endpoint(self, event_bus, engine):
-        """Test that router has the /stream endpoint."""
+        """Test that router declares the /stream endpoint."""
         router = create_simulation_stream_router(event_bus, engine)
-        # FastAPI routers have routes attribute
+        # Verify the endpoint path is registered
         route_paths = [route.path for route in router.routes]
-        assert "/api/v2/sim/stream" in route_paths or "/stream" in route_paths
+        # Path will be either full or relative depending on FastAPI internal behavior
+        assert any(
+            "/stream" in path for path in route_paths
+        ), f"Expected /stream endpoint, got: {route_paths}"
 
-    def test_router_can_be_added_to_fastapi_app(self, event_bus, engine):
-        """Test that router can be added to FastAPI app."""
+    def test_router_integrates_with_fastapi_app(self, event_bus, engine):
+        """Test that router can be included in a FastAPI application."""
         app = FastAPI()
         router = create_simulation_stream_router(event_bus, engine)
         app.include_router(router)
 
-        # Verify router was added
+        # Verify router was added successfully
         assert len(app.routes) > 0
 
-
-class TestSSEStreamCleanup:
-    """Test cleanup when SSE client disconnects."""
-
-    @pytest.mark.asyncio
-    async def test_callback_unsubscribed_on_client_disconnect(self, event_bus, engine):
-        """Test that EventBus callback is unsubscribed on client disconnect."""
-        app = FastAPI()
+    def test_router_endpoint_accepts_query_parameters(self, event_bus, engine):
+        """Test that router endpoint function accepts query parameters."""
         router = create_simulation_stream_router(event_bus, engine)
-        app.include_router(router)
+        # Get the endpoint function (first route should be the stream endpoint)
+        endpoint = router.routes[0].endpoint
 
-        # Get stats before connection
-        stats_before = event_bus.get_statistics()
-        callbacks_before = stats_before.get("wildcard_callbacks", 0)
+        # Verify endpoint is callable and accepts the expected parameters
+        import inspect
 
-        # Verify callbacks match expected count
-        assert isinstance(callbacks_before, int)
-        assert callbacks_before >= 0
+        sig = inspect.signature(endpoint)
+        param_names = set(sig.parameters.keys())
 
-    @pytest.mark.asyncio
-    async def test_multiple_routers_have_independent_state(self, event_bus, engine):
-        """Test that each router instance has its own connection state."""
-        # Create two separate routers
+        # Should accept event_type and work_item_id parameters
+        assert "event_type" in param_names
+        assert "work_item_id" in param_names
+
+    def test_multiple_routers_can_coexist_without_state_interference(
+        self, event_bus, engine
+    ):
+        """Test that multiple router instances don't share mutable state."""
+        # Create two independent routers on the same event bus
         router1 = create_simulation_stream_router(event_bus, engine)
         router2 = create_simulation_stream_router(event_bus, engine)
 
-        app1 = FastAPI()
-        app1.include_router(router1)
+        # Both should be valid and independent
+        assert router1 is not router2
+        assert router1.prefix == router2.prefix == "/api/v2/sim"
 
-        app2 = FastAPI()
-        app2.include_router(router2)
+        # Add both to an app to verify they can coexist
+        app = FastAPI()
+        app.include_router(router1)
+        app.include_router(router2)
 
-        # Both routers should be creatable and addable
-        assert len(app1.routes) > 0
-        assert len(app2.routes) > 0
+        # App should contain both routers' routes
+        assert len(app.routes) >= 2
 
-        # Verify they are independent - no shared global state issues
-        # This is verified by the fact that they can both be created
-        # without one interfering with the other
-
-
-class TestSSEStreamQueryParameters:
-    """Test query parameter handling."""
-
-    def test_router_accepts_event_type_parameter(self, event_bus, engine):
-        """Test that router endpoint accepts event_type parameter."""
+    def test_router_endpoint_is_async_function(self, event_bus, engine):
+        """Test that the endpoint function is async (returns a coroutine)."""
         router = create_simulation_stream_router(event_bus, engine)
-        # Verify router created successfully with event_type handling
-        assert router is not None
+        endpoint = router.routes[0].endpoint
 
-    def test_router_accepts_work_item_id_parameter(self, event_bus, engine):
-        """Test that router endpoint accepts work_item_id parameter."""
-        router = create_simulation_stream_router(event_bus, engine)
-        # Verify router created successfully with work_item_id handling
-        assert router is not None
+        # Verify endpoint is an async function
+        import inspect
+
+        assert inspect.iscoroutinefunction(
+            endpoint
+        ), "Endpoint should be an async function"
