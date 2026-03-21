@@ -173,8 +173,10 @@ class TestSimulationBoardStateRouter:
         items = data["columns"][0]["items"]
         assert len(items) == 1
         item = items[0]
-        assert item["assigned_agent"] == "agent-executor-001"  # run_id
-        assert item["execution_status"] == "analysis"  # stage_name
+        # assigned_agent is None because ActiveRunInfo doesn't carry an agent identifier
+        # (only run_id, stage_name, project_id, work_item_id)
+        assert item["assigned_agent"] is None
+        assert item["execution_status"] == "analysis"  # stage_name from ActiveRunInfo
 
     async def test_board_state_work_item_no_active_run(self, app, bootstrap):
         """Test that assigned_agent and execution_status are None when no active run."""

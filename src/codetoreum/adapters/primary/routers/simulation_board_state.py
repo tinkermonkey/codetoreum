@@ -6,7 +6,7 @@ Provides a simulation-only endpoint for retrieving the current state of a board:
 
 This router reads from:
 1. MockBoardAdapter._boards, _item_positions, _item_column_entries (board state)
-2. IActiveWorkflowRunRegistry._runs (agent assignments and execution status)
+2. IActiveWorkflowRunRegistry.get_active_run() (active workflow runs)
 3. InMemoryTicketAdapter (work item titles)
 
 The endpoint returns a snapshot of the board state at request time (read-only), reflecting:
@@ -55,7 +55,7 @@ class WorkItemState(BaseModel):
         description="Number of seconds the item has been in the current column",
         ge=0,
     )
-    assigned_agent: str | None = Field(..., description="Name of the assigned agent (None if no active run)")
+    assigned_agent: str | None = Field(..., description="Workflow run ID if an execution is active (None if no active run)")
     execution_status: str | None = Field(..., description="Current execution stage/status (None if no active run)")
 
 
@@ -171,9 +171,6 @@ def create_simulation_board_state_router(
                 columns_data: list[dict] = []
 
                 # First pass: collect board state under lock
-                # Store item data without run info (to be looked up outside lock)
-                items_by_column: dict[str, list[dict]] = {}
-
                 for column in columns_ordered:
                     column_items: list[dict] = []
 
@@ -213,7 +210,6 @@ def create_simulation_board_state_router(
                             "items": column_items,
                         }
                     )
-                    items_by_column[column.name] = column_items
 
         except HTTPException:
             raise
@@ -279,7 +275,11 @@ def create_simulation_board_state_router(
 
                 # Look up run info for this work item
                 run_info = runs_dict.get(item_data["work_item_id"])
-                assigned_agent = run_info.run_id if run_info else None
+                # NOTE: assigned_agent is set to None for now. ActiveRunInfo does not carry
+                # an agent identifier; it only has run_id (a UUID), stage_name, project_id,
+                # and work_item_id. To populate this field with an actual agent identifier,
+                # ActiveRunInfo would need to be extended with an agent_id field.
+                assigned_agent = None
                 execution_status = run_info.stage_name if run_info else None
 
                 items_response.append(
