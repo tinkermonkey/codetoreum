@@ -243,11 +243,16 @@ def create_simulation_board_state_router(
 
         if title_tasks:
             titles_list = await asyncio.gather(*title_tasks, return_exceptions=True)
-            titles_dict = {
-                item_id: title
-                for item_id, title in zip(item_ids_needing_titles, titles_list, strict=False)
-                if not isinstance(title, Exception)
-            }
+            titles_dict = {}
+            for item_id, title in zip(item_ids_needing_titles, titles_list, strict=False):
+                if isinstance(title, Exception):
+                    logger.error(
+                        f"Failed to fetch title for work item {item_id}: {title}",
+                        extra={"item_id": item_id},
+                        exc_info=title,
+                    )
+                else:
+                    titles_dict[item_id] = title
         else:
             titles_dict = {}
 
