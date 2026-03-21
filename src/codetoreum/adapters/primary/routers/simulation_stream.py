@@ -254,6 +254,10 @@ def create_simulation_stream_router(
                             timeout=SSE_KEEPALIVE_INTERVAL_SECONDS,
                         )
 
+                        # Sentinel check: None signals stream should close
+                        if event is None:
+                            break
+
                         try:
                             # Serialize event to SSE payload, excluding work_item_id and agent_id from details
                             # to avoid redundancy (they appear as top-level fields)
@@ -324,6 +328,10 @@ def create_simulation_stream_router(
         return StreamingResponse(
             event_generator(),
             media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
         )
 
     return router
