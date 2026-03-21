@@ -14,10 +14,10 @@ This router is ONLY mounted in SimulationApplicationBootstrap, never in producti
 """
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
 from codetoreum.adapters.testing.in_memory_active_workflow_run_registry import (
@@ -105,6 +105,7 @@ def create_simulation_executions_router(
     async def get_execution_status(
         status_filter: Literal["active", "completed", "all"] = Query(
             "all",
+            alias="status",
             description="Filter by status: 'active', 'completed', or 'all'",
         ),
         minutes: int = Query(
@@ -215,12 +216,9 @@ def _get_current_step(event_store: InMemoryEventStore, run_id: str) -> str | Non
 
     # Events should already be ordered, but sort by occurred_at descending to be safe
     sorted_events = sorted(events, key=lambda e: e.occurred_at, reverse=True)
-    if sorted_events:
-        most_recent = sorted_events[0]
-        # Return the event type as current_step
-        return most_recent.event_type if hasattr(most_recent, "event_type") else None
-
-    return None
+    most_recent = sorted_events[0]
+    # Return the event type as current_step
+    return most_recent.event_type if hasattr(most_recent, "event_type") else None
 
 
 def _extract_run_id_from_event(event: object) -> str | None:

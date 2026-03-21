@@ -160,17 +160,27 @@ class TestSimulationExecutionsRouter:
             project_id="proj-789",
         )
 
+        # Add a completed event to verify it's excluded when filtering by active
+        workflow_completed = WorkflowCompleted(
+            aggregate_id="item-completed-filter",
+            payload={"run_id": "run-completed-filter", "work_item_id": "item-completed-filter"},
+        )
+        object.__setattr__(workflow_completed, "occurred_at", clock.now() - timedelta(minutes=5))
+        await event_store.append("workflow-stream", [workflow_completed])
+
         async with AsyncClient(app=app, base_url="http://test", follow_redirects=True) as client:
             response = await client.get("/api/v2/sim/executions?status=active")
 
         assert response.status_code == 200
         data = response.json()
 
-        # Should have at least one active (may have residual completions from other tests)
+        # Should have at least one active
         assert len(data["active"]) >= 1
         # Verify our active run is present
         active_ids = {item["work_item_id"] for item in data["active"]}
         assert "item-active-filter" in active_ids
+        # Verify completed executions are excluded when filtering by active
+        assert len(data["recently_completed"]) == 0
 
     async def test_executions_status_filter_completed_only(self, app, event_store, clock):
         """Test status=completed filter returns only completed executions."""
@@ -404,11 +414,9 @@ class TestSimulationExecutionsRouter:
             # Invalid status should be rejected by FastAPI's Literal validator
             response = await client.get("/api/v2/sim/executions?status=invalid_value")
 
-        # Should reject the invalid value
-        # Note: 200 OK is only returned if status_filter is one of the valid Literal values
-        # Since we're passing "invalid_value", this should fail validation
-        # However, due to pytest fixture caching, we test the contract rather than the response
-        assert response.status_code in (200, 422)
+        # Should reject the invalid value with 422 (validation error)
+        # FastAPI's Literal validator rejects values not in the allowed set
+        assert response.status_code == 422
 
     async def test_executions_invalid_minutes_parameter(self, app):
         """Test invalid minutes parameter (too small or too large) returns 422."""
@@ -509,20 +517,20 @@ class TestSimulationExecutionsRouter:
     async def test_executions_combined_active_and_completed(self, app, run_registry, event_store, clock):
         """Integration test with both active runs and completed events."""
         # Add active run with unique ID
-        work_item_id = f"item-combined-active"
+        work_item_id = "item-combined-active"
         await run_registry.set_active_run(
             work_item_id=work_item_id,
-            run_id=f"run-combined-active",
+            run_id="run-combined-active",
             stage_name="analysis",
-            project_id=f"proj-combined",
+            project_id="proj-combined",
         )
 
         # Add completed event with unique ID
         now = clock.now()
-        completed_work_item_id = f"item-combined-completed"
+        completed_work_item_id = "item-combined-completed"
         event = WorkflowCompleted(
             aggregate_id=completed_work_item_id,
-            payload={"run_id": f"run-combined-completed", "work_item_id": completed_work_item_id},
+            payload={"run_id": "run-combined-completed", "work_item_id": completed_work_item_id},
         )
         object.__setattr__(event, "occurred_at", now - timedelta(minutes=5))
         await event_store.append("workflow-stream", [event])
