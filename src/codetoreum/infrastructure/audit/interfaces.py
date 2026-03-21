@@ -22,6 +22,7 @@ class AuditQueryFilters:
     success: bool | None = None
     start_time: datetime | None = None
     end_time: datetime | None = None
+    work_item_id: str | None = None
     limit: int = 100
     offset: int = 0
 

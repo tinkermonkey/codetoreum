@@ -209,20 +209,6 @@ def create_audit_router(
             # Execute query via port
             result = await query_port.query_audit_events(filters, pagination)
 
-            # Post-filter for work_item_id if provided (check in payload and resource_id)
-            events = list(result.events)
-            if workItemId:
-                filtered_events = []
-                for event in events:
-                    # Check if work_item_id matches resource_id or appears in metadata
-                    if (
-                        event.resource_id == workItemId
-                        or workItemId in str(event.metadata)
-                        or workItemId in str(event.correlation_id)
-                    ):
-                        filtered_events.append(event)
-                events = filtered_events
-
             # Convert to response DTO
             return AuditEventsListResponse(
                 events=[
@@ -239,12 +225,12 @@ def create_audit_router(
                         "errorMessage": event.error_message,
                         "metadata": event.metadata,
                     }
-                    for event in events
+                    for event in result.events
                 ],
-                totalEventCount=len(events),  # Updated count after post-filtering
+                totalEventCount=result.total_count,
                 offset=result.offset,
                 limit=result.limit,
-                hasNext=False,  # Pagination is approximate after post-filtering
+                hasNext=result.has_next,
             )
 
         except HTTPException:

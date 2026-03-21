@@ -141,6 +141,16 @@ class InMemoryAuditStore(IAuditStore):
         if filters.end_time:
             matching_events = [e for e in matching_events if e["timestamp"] <= filters.end_time]
 
+        if filters.work_item_id:
+            matching_events = [
+                e for e in matching_events
+                if (
+                    e.get("resource_id") == filters.work_item_id
+                    or filters.work_item_id in str(e.get("metadata", {}))
+                    or filters.work_item_id in str(e.get("correlation_id", ""))
+                )
+            ]
+
         # Sort by timestamp (newest first)
         matching_events.sort(key=lambda e: e["timestamp"], reverse=True)
 
@@ -161,6 +171,7 @@ class InMemoryAuditStore(IAuditStore):
                 success=filters.success,
                 start_time=filters.start_time,
                 end_time=filters.end_time,
+                work_item_id=filters.work_item_id,
                 limit=1000000,  # Get all for counting
                 offset=0,
             )
@@ -321,6 +332,12 @@ class FileAuditStore(IAuditStore):
                         continue
                     if filters.end_time and event["timestamp"] > filters.end_time:
                         continue
+                    if filters.work_item_id and not (
+                        event.get("resource_id") == filters.work_item_id
+                        or filters.work_item_id in str(event.get("metadata", {}))
+                        or filters.work_item_id in str(event.get("correlation_id", ""))
+                    ):
+                        continue
 
                     matching_events.append(event)
 
@@ -355,6 +372,7 @@ class FileAuditStore(IAuditStore):
                 success=filters.success,
                 start_time=filters.start_time,
                 end_time=filters.end_time,
+                work_item_id=filters.work_item_id,
                 limit=1000000,  # Get all for counting
                 offset=0,
             )
@@ -575,6 +593,16 @@ class PostgreSQLAuditStore(IAuditStore):
             where_clauses.append("timestamp <= :end_time")
             params["end_time"] = filters.end_time
 
+        if filters.work_item_id:
+            where_clauses.append(
+                "(resource_id = :work_item_id OR "
+                "metadata::text LIKE :work_item_id_metadata OR "
+                "correlation_id::text LIKE :work_item_id_correlation)"
+            )
+            params["work_item_id"] = filters.work_item_id
+            params["work_item_id_metadata"] = f"%{filters.work_item_id}%"
+            params["work_item_id_correlation"] = f"%{filters.work_item_id}%"
+
         where_sql = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
 
         params["limit"] = filters.limit
@@ -662,6 +690,16 @@ class PostgreSQLAuditStore(IAuditStore):
         if filters.end_time:
             where_clauses.append("timestamp <= :end_time")
             params["end_time"] = filters.end_time
+
+        if filters.work_item_id:
+            where_clauses.append(
+                "(resource_id = :work_item_id OR "
+                "metadata::text LIKE :work_item_id_metadata OR "
+                "correlation_id::text LIKE :work_item_id_correlation)"
+            )
+            params["work_item_id"] = filters.work_item_id
+            params["work_item_id_metadata"] = f"%{filters.work_item_id}%"
+            params["work_item_id_correlation"] = f"%{filters.work_item_id}%"
 
         where_sql = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
 
