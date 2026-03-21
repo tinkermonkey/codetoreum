@@ -35,10 +35,6 @@ SSE_KEEPALIVE_INTERVAL_SECONDS = 15
 SSE_QUEUE_MAXSIZE = 1000
 SSE_MAX_CONCURRENT_CONNECTIONS = 50
 
-# Track concurrent SSE connections
-_active_sse_connections = 0
-_connection_lock = asyncio.Lock()
-
 
 # =========================================================================
 # Request/Response DTOs
@@ -76,7 +72,8 @@ def format_sse_frame(event_type: str, event_id: str, data: dict[str, Any]) -> st
     """
     frame = f"event: {event_type}\n"
     frame += f"id: {event_id}\n"
-    frame += f"data: {json.dumps(data)}\n\n"
+    # Use ensure_ascii=False for proper unicode support (emoji, international characters)
+    frame += f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
     return frame
 
 
@@ -138,6 +135,9 @@ def create_simulation_stream_router(
     It takes concrete simulation types (not port interfaces) because this is
     simulation infrastructure, not production code.
 
+    Connection state is scoped to the router instance to support multiple
+    router instances (e.g., in tests or when bootstrap is recreated).
+
     Args:
         event_bus: EventBus for subscribing to domain events
         clock: SimulationEngine for timestamp generation
@@ -145,6 +145,9 @@ def create_simulation_stream_router(
     Returns:
         Configured APIRouter
     """
+    # Router instance state - scoped to this router, not global
+    connection_state = {"count": 0, "lock": asyncio.Lock()}
+
     router = APIRouter(prefix="/api/v2/sim", tags=["simulation-stream"])
 
     @router.get("/stream", response_class=StreamingResponse)
@@ -171,8 +174,6 @@ def create_simulation_stream_router(
         Returns:
             StreamingResponse with text/event-stream media type
         """
-        global _active_sse_connections
-
         # Parse comma-separated event types
         event_types = None
         if event_type:
@@ -221,25 +222,23 @@ def create_simulation_stream_router(
             Handles:
             - Event streaming from queue
             - Keepalive comments every 15 seconds during idle periods
-            - Cleanup on client disconnect (via CancelledError)
+            - Cleanup on client disconnect (via GeneratorExit from aclose())
             """
-            global _active_sse_connections
-
             # Check connection limit
-            async with _connection_lock:
-                if _active_sse_connections >= SSE_MAX_CONCURRENT_CONNECTIONS:
+            async with connection_state["lock"]:
+                if connection_state["count"] >= SSE_MAX_CONCURRENT_CONNECTIONS:
                     # Send error and close
                     yield f"event: error\ndata: {{\"error\": \"Max concurrent connections ({SSE_MAX_CONCURRENT_CONNECTIONS}) reached\"}}\n\n"
                     return
 
-                _active_sse_connections += 1
+                connection_state["count"] += 1
 
             logger.info(
                 "SSE client connected",
                 extra={
                     "event_type_filter": event_types,
                     "work_item_id_filter": work_item_id,
-                    "active_connections": _active_sse_connections,
+                    "active_connections": connection_state["count"],
                 },
             )
 
@@ -255,7 +254,12 @@ def create_simulation_stream_router(
                             timeout=SSE_KEEPALIVE_INTERVAL_SECONDS,
                         )
 
-                        # Serialize event to SSE payload
+                        # Serialize event to SSE payload, excluding work_item_id and agent_id from details
+                        # to avoid redundancy (they appear as top-level fields)
+                        details_dict = dict(event.payload)
+                        details_dict.pop("work_item_id", None)
+                        details_dict.pop("agent_id", None)
+
                         payload = SSEEventPayload(
                             event_type=event.event_type,
                             event_id=str(event.event_id),
@@ -263,7 +267,7 @@ def create_simulation_stream_router(
                             simulation_time=clock.now(),
                             work_item_id=event.payload.get("work_item_id"),
                             agent_id=event.payload.get("agent_id"),
-                            details=dict(event.payload),
+                            details=details_dict,
                         )
 
                         # Yield SSE frame
@@ -278,9 +282,9 @@ def create_simulation_stream_router(
                         yield format_keepalive_comment()
 
             except asyncio.CancelledError:
-                # Client disconnected
-                logger.info(
-                    "SSE client disconnected",
+                # Client disconnected (caught but logged separately for diagnostics)
+                logger.debug(
+                    "SSE client disconnected via CancelledError",
                     extra={
                         "event_type_filter": event_types,
                         "work_item_id_filter": work_item_id,
@@ -293,13 +297,13 @@ def create_simulation_stream_router(
                 event_bus.unsubscribe(None, event_callback)
 
                 # Decrement connection count
-                async with _connection_lock:
-                    _active_sse_connections -= 1
+                async with connection_state["lock"]:
+                    connection_state["count"] -= 1
 
                 logger.info(
                     "SSE cleanup complete",
                     extra={
-                        "active_connections": _active_sse_connections,
+                        "active_connections": connection_state["count"],
                     },
                 )
 
