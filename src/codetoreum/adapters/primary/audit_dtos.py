@@ -372,3 +372,99 @@ class AuditEventsListResponse(BaseModel):
             }
         },
     )
+
+
+# ============================================================================
+# Causal Chain Models
+# ============================================================================
+
+
+class CausalChainEvent(BaseModel):
+    """Event in a causal chain."""
+
+    eventId: str = Field(..., description="Unique event ID", serialization_alias="eventId")
+    eventType: str = Field(..., description="Type of event", serialization_alias="eventType")
+    occurredAt: datetime = Field(..., description="When the event occurred", serialization_alias="occurredAt")
+    causationId: str | None = Field(
+        None, description="ID of the event that caused this event", serialization_alias="causationId"
+    )
+    payloadSummary: dict[str, Any] = Field(
+        default_factory=dict, description="Subset of payload for readability", serialization_alias="payloadSummary"
+    )
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_schema_extra={
+            "example": {
+                "eventId": "evt-123",
+                "eventType": "WorkItemColumnChanged",
+                "occurredAt": "2026-02-20T10:15:00Z",
+                "causationId": "evt-122",
+                "payloadSummary": {
+                    "work_item_id": "WI-456",
+                    "from_column": "TODO",
+                    "to_column": "IN_PROGRESS",
+                },
+            }
+        },
+    )
+
+
+class CausalChainResponse(BaseModel):
+    """Response for causal chain endpoint."""
+
+    rootEventId: str = Field(
+        ..., description="ID of the root event (oldest in chain)", serialization_alias="rootEventId"
+    )
+    chain: list[CausalChainEvent] = Field(
+        ...,
+        description="Events in causal chain, ordered from queried event back to root",
+    )
+    truncated: bool = Field(
+        ..., description="True if chain was truncated at 100 hops limit", serialization_alias="truncated"
+    )
+    hopCount: int = Field(..., description="Number of hops in the chain", serialization_alias="hopCount")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_schema_extra={
+            "example": {
+                "rootEventId": "evt-120",
+                "chain": [
+                    {
+                        "eventId": "evt-123",
+                        "eventType": "WorkflowCompleted",
+                        "occurredAt": "2026-02-20T10:30:00Z",
+                        "causationId": "evt-122",
+                        "payloadSummary": {
+                            "workflow_id": "wf-123",
+                            "status": "completed",
+                        },
+                    },
+                    {
+                        "eventId": "evt-122",
+                        "eventType": "WorkflowStageAdvanced",
+                        "occurredAt": "2026-02-20T10:20:00Z",
+                        "causationId": "evt-121",
+                        "payloadSummary": {
+                            "workflow_id": "wf-123",
+                            "stage": "review",
+                        },
+                    },
+                    {
+                        "eventId": "evt-120",
+                        "eventType": "WorkItemColumnChanged",
+                        "occurredAt": "2026-02-20T10:15:00Z",
+                        "causationId": None,
+                        "payloadSummary": {
+                            "work_item_id": "WI-456",
+                            "from_column": "TODO",
+                            "to_column": "IN_PROGRESS",
+                        },
+                    },
+                ],
+                "truncated": False,
+                "hopCount": 3,
+            }
+        },
+    )

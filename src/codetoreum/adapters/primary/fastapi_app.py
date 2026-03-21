@@ -553,9 +553,15 @@ def create_app(
 
     # Include Audit router (if audit_query_port is provided)
     if audit_query_port is not None:
+        # Check if event_store is InMemoryEventStore (simulation-only feature)
+        from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
+
+        memory_event_store = event_store if isinstance(event_store, InMemoryEventStore) else None
+
         audit_router = create_audit_router(
             query_port=audit_query_port,
             auth_deps=auth_deps,
+            event_store=memory_event_store,
         )
         app.include_router(audit_router)
 

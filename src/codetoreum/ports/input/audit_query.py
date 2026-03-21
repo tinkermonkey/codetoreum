@@ -23,6 +23,7 @@ class AuditEventFilters:
     success: bool | None = None
     start_time: datetime | None = None
     end_time: datetime | None = None
+    work_item_id: str | None = None
 
 
 @dataclass(frozen=True)
