@@ -206,22 +206,13 @@ def _get_agent_execution_info(event_store: InMemoryEventStore, run_id: str) -> t
         Tuple of (agent_id, started_at) where agent_id is the agent ID (or None),
         and started_at is the timestamp when execution started (or None)
     """
-    run_id_str = str(run_id)
-    events = event_store._events_by_correlation.get(run_id_str, [])
+    events = event_store._events_by_correlation.get(str(run_id), [])
 
     # Search for AgentExecutionStarted event (first in the sequence for a run)
     for event in events:
-        if hasattr(event, "event_type") and event.event_type == "AgentExecutionStarted":
-            # Extract agent_id from payload
-            agent_id = None
-            if hasattr(event, "payload"):
-                payload = dict(event.payload) if hasattr(event.payload, "items") else event.payload
-                if isinstance(payload, dict):
-                    agent_id = payload.get("agent_id")
-
-            # Get started_at from event timestamp
-            started_at = event.occurred_at if hasattr(event, "occurred_at") else None
-            return agent_id, started_at
+        if event.event_type == "AgentExecutionStarted":
+            agent_id = event.payload.get("agent_id")
+            return agent_id, event.occurred_at
 
     return None, None
 

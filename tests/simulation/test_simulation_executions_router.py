@@ -12,7 +12,7 @@ import pytest
 from httpx import AsyncClient
 
 from codetoreum.adapters.testing import InMemoryActiveWorkflowRunRegistry, InMemoryEventStore
-from codetoreum.domain.events.legacy_domain_events import WorkflowCompleted
+from codetoreum.domain.events.legacy_domain_events import AgentExecutionStarted, WorkflowCompleted
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 
@@ -546,3 +546,114 @@ class TestSimulationExecutionsRouter:
         # Check that our completed item is returned
         response_completed_ids = {item["work_item_id"] for item in data["recently_completed"]}
         assert completed_work_item_id in response_completed_ids
+
+    async def test_executions_agent_id_populated_from_event(self, app, run_registry, event_store, clock):
+        """Test that agent_id is correctly populated from AgentExecutionStarted event.
+
+        This test verifies the fix for the issue where agent_id was always None.
+        The agent_id should be extracted from the AgentExecutionStarted event payload.
+        """
+        run_id = "run-with-agent"
+        work_item_id = "item-with-agent"
+        project_id = "proj-agent-test"
+        expected_agent_id = "agent-test-123"
+
+        # 1. Register an active run
+        await run_registry.set_active_run(
+            work_item_id=work_item_id,
+            run_id=run_id,
+            stage_name="analysis",
+            project_id=project_id,
+        )
+
+        # 2. Create and append an AgentExecutionStarted event with the expected agent_id
+        event_time = clock.now()
+        agent_started_event = AgentExecutionStarted(
+            aggregate_id=work_item_id,
+            payload={"agent_id": expected_agent_id},
+            correlation_id=run_id,
+            occurred_at=event_time,
+        )
+        await event_store.append("agent-execution-stream", [agent_started_event])
+
+        # 3. Query the endpoint
+        async with AsyncClient(app=app, base_url="http://test", follow_redirects=True) as client:
+            response = await client.get("/api/v2/sim/executions")
+
+        # 4. Verify agent_id is now populated (not None)
+        assert response.status_code == 200
+        data = response.json()
+        active_executions = data["active"]
+
+        # Find our execution
+        our_execution = next((ex for ex in active_executions if ex["run_id"] == run_id), None)
+        assert our_execution is not None, f"Run {run_id} not found in active executions"
+
+        # Verify agent_id is correctly populated
+        assert our_execution["agent_id"] == expected_agent_id, (
+            f"Expected agent_id={expected_agent_id}, got {our_execution['agent_id']}"
+        )
+
+    async def test_executions_started_at_from_event_timestamp(self, app, run_registry, event_store, clock):
+        """Test that started_at reflects the actual event timestamp, not query time.
+
+        This test verifies the fix for the issue where started_at was set to the
+        current query time, causing inconsistent values on repeated queries.
+        The started_at should reflect the actual AgentExecutionStarted event timestamp.
+        """
+        run_id = "run-with-start-time"
+        work_item_id = "item-with-start-time"
+        project_id = "proj-start-time-test"
+
+        # 1. Register an active run
+        await run_registry.set_active_run(
+            work_item_id=work_item_id,
+            run_id=run_id,
+            stage_name="analysis",
+            project_id=project_id,
+        )
+
+        # 2. Create event with a specific timestamp (5 minutes ago)
+        event_time = clock.now() - timedelta(minutes=5)
+        agent_started_event = AgentExecutionStarted(
+            aggregate_id=work_item_id,
+            payload={"agent_id": "test-agent"},
+            correlation_id=run_id,
+            occurred_at=event_time,
+        )
+        await event_store.append("agent-execution-stream", [agent_started_event])
+
+        # 3. Query the endpoint (first query)
+        async with AsyncClient(app=app, base_url="http://test", follow_redirects=True) as client:
+            response1 = await client.get("/api/v2/sim/executions")
+        assert response1.status_code == 200
+        data1 = response1.json()
+        active1 = next((ex for ex in data1["active"] if ex["run_id"] == run_id), None)
+        started_at_1 = datetime.fromisoformat(active1["started_at"].replace("Z", "+00:00"))
+
+        # 4. Advance time by 1 minute
+        await clock.advance(timedelta(minutes=1))
+
+        # 5. Query again (second query)
+        async with AsyncClient(app=app, base_url="http://test", follow_redirects=True) as client:
+            response2 = await client.get("/api/v2/sim/executions")
+        assert response2.status_code == 200
+        data2 = response2.json()
+        active2 = next((ex for ex in data2["active"] if ex["run_id"] == run_id), None)
+        started_at_2 = datetime.fromisoformat(active2["started_at"].replace("Z", "+00:00"))
+
+        # 6. Verify started_at is consistent across queries and equals event time
+        assert started_at_1 == started_at_2, (
+            f"started_at changed between queries: {started_at_1} vs {started_at_2}"
+        )
+        assert started_at_1 == event_time, (
+            f"Expected started_at={event_time}, got {started_at_1}"
+        )
+
+        # 7. Verify the timestamp reflects the event time (5 minutes ago), not current time
+        query_time = datetime.now(UTC)
+        time_diff = query_time - started_at_1
+        # Should be approximately 5 minutes (allow ±1 minute for test execution time)
+        assert timedelta(minutes=4) < time_diff < timedelta(minutes=6), (
+            f"started_at should be ~5 minutes ago, but is {time_diff} ago"
+        )
