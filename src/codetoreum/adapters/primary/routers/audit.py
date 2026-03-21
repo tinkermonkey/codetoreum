@@ -5,7 +5,7 @@ Provides RESTful endpoints for querying system-wide audit events.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
@@ -330,7 +330,7 @@ def create_audit_router(
                 return simulation_clock.now()
 
             # Last resort: wall-clock time (only if simulation clock is unavailable)
-            return datetime.now()
+            return datetime.now(timezone.utc)
 
         async def _build_causal_chain(
             root_event_id: str, max_hops: int = 100
