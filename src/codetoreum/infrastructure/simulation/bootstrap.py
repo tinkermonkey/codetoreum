@@ -1810,6 +1810,8 @@ class SimulationApplicationBootstrap:
         audit_router_with_chains = create_audit_router_sim(
             query_port=self.ports.audit_query,
             event_store=cast("InMemoryEventStore", self.adapters.event_store),
+            causal_link_registry=self.infrastructure.causal_link_registry,
+            simulation_clock=self._engine.get_clock_for_testing() if self._engine else None,
         )
         app.include_router(audit_router_with_chains)
 

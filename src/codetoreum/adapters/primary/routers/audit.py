@@ -27,6 +27,10 @@ from codetoreum.ports.input.audit_query import (
 
 if TYPE_CHECKING:
     from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
+    from codetoreum.infrastructure.simulation.causal_link_registry import (
+        CausalLinkRegistry,
+    )
+    from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +39,8 @@ def create_audit_router(
     query_port: IAuditQueryPort,
     auth_deps: SimpleAuthDependencies | None = None,
     event_store: "InMemoryEventStore | None" = None,
+    causal_link_registry: "CausalLinkRegistry | None" = None,
+    simulation_clock: "SimulationClock | None" = None,
 ) -> APIRouter:
     """
     Create the audit events REST API router.
@@ -43,6 +49,8 @@ def create_audit_router(
         query_port: Audit query input port
         auth_deps: Optional authentication dependencies
         event_store: Optional InMemoryEventStore for causal chain traversal (simulation-only)
+        causal_link_registry: Optional CausalLinkRegistry for causal dependency metadata (simulation-only)
+        simulation_clock: Optional SimulationClock for time-aware event timestamps (simulation-only)
 
     Returns:
         Configured APIRouter for audit events
@@ -257,11 +265,29 @@ def create_audit_router(
     # ========================================================================
 
     if event_store is not None:
+        # Cache event index to avoid O(n) rebuilds on every request
+        event_index_cache: dict[str, Any] = {}
+        cache_version = [0]  # Use list to allow modification in closure
 
-        def _build_event_index() -> dict[str, Any]:
-            """Build a lookup index of events by ID from the event store."""
-            events = event_store.get_all_events_list()
-            return {str(e.event_id): e for e in events}
+        def _get_event_index() -> dict[str, Any]:
+            """
+            Get or rebuild cached event index.
+
+            Caches the event index to avoid O(n) iteration on every causal chain request.
+            The cache remains valid until new events are appended to the store.
+
+            Returns:
+                Dict mapping event_id -> DomainEvent
+            """
+            # Check if cache needs rebuilding by comparing event count
+            current_events = event_store.get_all_events_list()
+            if len(event_index_cache) != len(current_events):
+                # Rebuild index: O(n) but only when event count changes
+                event_index_cache.clear()
+                for event in current_events:
+                    event_index_cache[str(event.event_id)] = event
+                cache_version[0] += 1
+            return event_index_cache
 
         def _extract_payload_summary(event: Any) -> dict[str, Any]:
             """Extract a readable summary from event payload."""
@@ -289,16 +315,46 @@ def create_audit_router(
                     summary[field] = payload[field]
             return summary
 
+        def _get_event_timestamp(event: Any) -> datetime:
+            """
+            Get event timestamp using simulation clock when available.
+
+            Uses the simulation clock for time-aware timestamps in simulation mode,
+            falling back to event's occurred_at field if available, and finally to
+            wall-clock time only as a last resort.
+
+            Args:
+                event: Domain event object
+
+            Returns:
+                datetime: Timestamp of event
+            """
+            # First try to use the event's occurred_at timestamp
+            occurred_at = getattr(event, "occurred_at", None)
+            if occurred_at is not None:
+                return occurred_at
+
+            # If simulation clock is available, use it for consistency
+            if simulation_clock is not None:
+                return simulation_clock.now()
+
+            # Last resort: wall-clock time (only if simulation clock is unavailable)
+            return datetime.now()
+
         async def _build_causal_chain(
             root_event_id: str, max_hops: int = 100
         ) -> tuple[list[CausalChainEvent], bool, str]:
             """
             Traverse the causal chain backward from a root event.
 
+            Uses the cached event index for O(1) lookups. Traversal follows the causation_id
+            chain from each event. The CausalLinkRegistry (when provided) could be leveraged
+            for supplementary dependency metadata or validation in future enhancements.
+
             Returns:
                 Tuple of (chain events, truncated, root_event_id)
             """
-            events_by_id = _build_event_index()
+            events_by_id = _get_event_index()
 
             if root_event_id not in events_by_id:
                 return [], False, ""
@@ -317,7 +373,7 @@ def create_audit_router(
                 # Build event info for chain
                 event_type = getattr(event, "event_type", None) or getattr(event, "type", None)
                 causation_id = getattr(event, "causation_id", None)
-                occurred_at = getattr(event, "occurred_at", datetime.now())
+                occurred_at = _get_event_timestamp(event)
 
                 chain_event = CausalChainEvent(
                     eventId=str(event.event_id),
