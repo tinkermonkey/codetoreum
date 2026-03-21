@@ -191,25 +191,27 @@ async def stream_events(host: str, port: int, board_id: str, update_callback: Ca
                                     error_message=None,
                                 )
                             except json.JSONDecodeError as e:
-                                logger.debug(f"Malformed SSE event: {str(e)} (line: {line[:100]})")
+                                logger.debug(f"Malformed SSE event: {e!s} (line: {line[:100]})")
         except asyncio.CancelledError:
             # Normal shutdown
             await update_callback(connected=False)
             raise
         except (httpx.RequestError, httpx.HTTPError) as e:
             # Connection error, attempt to reconnect
+            error_str = f"{e!s}"[:50]
             await update_callback(
                 connected=False,
-                error_message=f"Connection lost: {str(e)[:50]}",
+                error_message=f"Connection lost: {error_str}",
             )
-            logger.warning(f"SSE connection failed: {e}. Retrying in {reconnect_delay}s...")
+            logger.warning(f"SSE connection failed: {e!s}. Retrying in {reconnect_delay}s...")
             await asyncio.sleep(reconnect_delay)
             reconnect_delay = min(reconnect_delay * 1.5, max_reconnect_delay)
         except Exception as e:
             # Unexpected error, attempt to reconnect
+            error_str = f"{e!s}"[:50]
             await update_callback(
                 connected=False,
-                error_message=f"Error: {str(e)[:50]}",
+                error_message=f"Error: {error_str}",
             )
             logger.exception("Unexpected error in SSE listener")
             await asyncio.sleep(reconnect_delay)
@@ -244,7 +246,7 @@ async def poll_board_state(
                         )
                 except httpx.RequestError as e:
                     await update_callback(
-                        error_message=f"Request failed: {e}",
+                        error_message=f"Request failed: {e!s}",
                     )
 
                 # Wait 2 seconds before next poll
@@ -253,7 +255,7 @@ async def poll_board_state(
         pass  # Normal shutdown
     except Exception as e:
         await update_callback(
-            error_message=f"Poll error: {e}",
+            error_message=f"Poll error: {e!s}",
         )
 
 
@@ -341,7 +343,7 @@ async def _run_watch(host: str, port: int, board_id: str) -> None:
                     pass
 
     except Exception as e:
-        console.print(f"[bold red]Error:[/bold red] {e}")
+        console.print(f"[bold red]Error:[/bold red] {e!s}")
         logger.exception("Error in sim-watch")
         sys.exit(1)
 
@@ -388,7 +390,7 @@ def sim_watch_command(host: str, port: int, board_id: str) -> None:
     except KeyboardInterrupt:
         console.print("\n[yellow]Exited by user[/yellow]")
     except Exception as e:
-        console.print(f"\n[bold red]Fatal error:[/bold red] {e}")
+        console.print(f"\n[bold red]Fatal error:[/bold red] {e!s}")
         logger.exception("Fatal error in sim-watch")
         sys.exit(1)
 
