@@ -131,17 +131,18 @@ def create_simulation_executions_router(
         # =====================================================================
         active_executions: list[ActiveExecution] = []
         for work_item_id, run_info in run_registry._runs.items():
-            # Find most recent event for this run to determine current_step
+            # Find most recent event for this run to determine current_step and get execution start info
             current_step = _get_current_step(event_store, run_info.run_id)
+            agent_id, started_at = _get_agent_execution_info(event_store, run_info.run_id)
 
             active = ActiveExecution(
                 work_item_id=work_item_id,
                 run_id=run_info.run_id,
-                agent_id=None,  # Not stored in ActiveRunInfo, would need additional context
+                agent_id=agent_id,  # Extracted from AgentExecutionStarted event
                 stage_name=run_info.stage_name,
                 project_id=run_info.project_id,
                 status="running",
-                started_at=now,  # Event time not available in ActiveRunInfo
+                started_at=started_at or now,  # Use actual start time from event, fallback to now
                 current_step=current_step,
             )
             active_executions.append(active)
@@ -191,6 +192,38 @@ def create_simulation_executions_router(
 # =========================================================================
 # Helper Functions
 # =========================================================================
+
+
+def _get_agent_execution_info(event_store: InMemoryEventStore, run_id: str) -> tuple[str | None, datetime | None]:
+    """
+    Extract agent_id and started_at timestamp from AgentExecutionStarted event.
+
+    Args:
+        event_store: Event store to query
+        run_id: Run identifier to look up (used as correlation_id)
+
+    Returns:
+        Tuple of (agent_id, started_at) where agent_id is the agent ID (or None),
+        and started_at is the timestamp when execution started (or None)
+    """
+    run_id_str = str(run_id)
+    events = event_store._events_by_correlation.get(run_id_str, [])
+
+    # Search for AgentExecutionStarted event (first in the sequence for a run)
+    for event in events:
+        if hasattr(event, "event_type") and event.event_type == "AgentExecutionStarted":
+            # Extract agent_id from payload
+            agent_id = None
+            if hasattr(event, "payload"):
+                payload = dict(event.payload) if hasattr(event.payload, "items") else event.payload
+                if isinstance(payload, dict):
+                    agent_id = payload.get("agent_id")
+
+            # Get started_at from event timestamp
+            started_at = event.occurred_at if hasattr(event, "occurred_at") else None
+            return agent_id, started_at
+
+    return None, None
 
 
 def _get_current_step(event_store: InMemoryEventStore, run_id: str) -> str | None:
