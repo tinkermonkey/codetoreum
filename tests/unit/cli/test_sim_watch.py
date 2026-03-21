@@ -548,11 +548,10 @@ class TestStreamEvents:
 
             async def aiter_lines(self):
                 # Multi-line data should be concatenated with newlines
-                yield "data: {\"event_type\": \"TestEvent\","
-                yield "data: \"details\": \"multi-line\"}"
+                yield 'data: {"event_type": "TestEvent",'
+                yield 'data: "details": "multi-line"}'
                 yield ""  # Empty line signals end of event
                 await asyncio.sleep(0.1)
-                return
 
             async def __aenter__(self):
                 return self
@@ -599,7 +598,6 @@ class TestStreamEvents:
                 yield "data: " + json.dumps({"event_type": "DefaultType"})
                 yield ""  # Empty line signals end of event
                 await asyncio.sleep(0.1)
-                return
 
             async def __aenter__(self):
                 return self
