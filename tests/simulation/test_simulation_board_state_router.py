@@ -69,15 +69,12 @@ class TestSimulationBoardStateRouter:
         columns = data["columns"]
         assert len(columns) == 3
         assert columns[0]["name"] == "Backlog"
-        assert columns[0]["position"] == 0
         assert columns[0]["items"] == []
 
         assert columns[1]["name"] == "In Progress"
-        assert columns[1]["position"] == 1
         assert columns[1]["items"] == []
 
         assert columns[2]["name"] == "Done"
-        assert columns[2]["position"] == 2
         assert columns[2]["items"] == []
 
     async def test_board_state_with_work_items(self, app, bootstrap):
@@ -331,7 +328,6 @@ class TestSimulationBoardStateRouter:
         # Verify column structure
         for column in data["columns"]:
             assert isinstance(column["name"], str)
-            assert isinstance(column["position"], int)
             assert isinstance(column["items"], list)
 
             # Verify work item structure

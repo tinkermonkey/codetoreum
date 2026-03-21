@@ -63,7 +63,6 @@ class ColumnState(BaseModel):
     """State of a board column."""
 
     name: str = Field(..., description="Column name")
-    position: int = Field(..., description="Column position (0-indexed)")
     items: list[WorkItemState] = Field(default_factory=list, description="Work items in this column")
 
 
@@ -140,7 +139,7 @@ def create_simulation_board_state_router(
         """
         snapshot_time = clock.now()
 
-        # Phase 1: Acquire lock and snapshot board state
+        # Acquire lock and snapshot board state
         # ===================================================================
         try:
             with board_adapter._lock:
@@ -231,7 +230,7 @@ def create_simulation_board_state_router(
                 detail="Error reading board state",
             ) from e
 
-        # Phase 2: Concurrently fetch work item titles (outside lock)
+        # Fetch work item titles concurrently (outside lock)
         # ===================================================================
         # Collect all work item IDs that need titles
         item_ids_needing_titles = set()
@@ -255,7 +254,7 @@ def create_simulation_board_state_router(
         else:
             titles_dict = {}
 
-        # Phase 3: Assemble final response with titles
+        # Assemble final response with titles
         # ===================================================================
         columns_response = []
         for column_data in columns_data:
@@ -277,7 +276,6 @@ def create_simulation_board_state_router(
             columns_response.append(
                 ColumnState(
                     name=column_data["name"],
-                    position=column_data["position"],
                     items=items_response,
                 )
             )
