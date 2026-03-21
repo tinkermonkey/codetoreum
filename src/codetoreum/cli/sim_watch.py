@@ -13,9 +13,8 @@ import asyncio
 import json
 import logging
 import sys
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import datetime
-from typing import Any, Awaitable
 
 import click
 import httpx
@@ -150,9 +149,7 @@ def build_status_display(connected: bool, last_event: str | None, event_count: i
     return Panel(status_table, title="Status", expand=False)
 
 
-async def stream_events(
-    host: str, port: int, board_id: str, update_callback: Callable[..., Awaitable[None]]
-) -> None:
+async def stream_events(host: str, port: int, board_id: str, update_callback: Callable[..., Awaitable[None]]) -> None:
     """
     Stream SSE events from the simulation server with automatic reconnection.
 
@@ -219,7 +216,9 @@ async def stream_events(
             reconnect_delay = min(reconnect_delay * 1.5, max_reconnect_delay)
 
 
-async def poll_board_state(host: str, port: int, board_id: str, update_callback: Callable[..., Awaitable[None]]) -> None:
+async def poll_board_state(
+    host: str, port: int, board_id: str, update_callback: Callable[..., Awaitable[None]]
+) -> None:
     """
     Poll board state every 2 seconds.
 
