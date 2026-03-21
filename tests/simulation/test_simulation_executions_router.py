@@ -590,9 +590,9 @@ class TestSimulationExecutionsRouter:
         assert our_execution is not None, f"Run {run_id} not found in active executions"
 
         # Verify agent_id is correctly populated
-        assert our_execution["agent_id"] == expected_agent_id, (
-            f"Expected agent_id={expected_agent_id}, got {our_execution['agent_id']}"
-        )
+        assert (
+            our_execution["agent_id"] == expected_agent_id
+        ), f"Expected agent_id={expected_agent_id}, got {our_execution['agent_id']}"
 
     async def test_executions_started_at_from_event_timestamp(self, app, run_registry, event_store, clock):
         """Test that started_at reflects the actual event timestamp, not query time.
@@ -643,17 +643,13 @@ class TestSimulationExecutionsRouter:
         started_at_2 = datetime.fromisoformat(active2["started_at"].replace("Z", "+00:00"))
 
         # 6. Verify started_at is consistent across queries and equals event time
-        assert started_at_1 == started_at_2, (
-            f"started_at changed between queries: {started_at_1} vs {started_at_2}"
-        )
-        assert started_at_1 == event_time, (
-            f"Expected started_at={event_time}, got {started_at_1}"
-        )
+        assert started_at_1 == started_at_2, f"started_at changed between queries: {started_at_1} vs {started_at_2}"
+        assert started_at_1 == event_time, f"Expected started_at={event_time}, got {started_at_1}"
 
         # 7. Verify the timestamp reflects the event time (5 minutes ago), not current time
         query_time = datetime.now(UTC)
         time_diff = query_time - started_at_1
         # Should be approximately 5 minutes (allow ±1 minute for test execution time)
-        assert timedelta(minutes=4) < time_diff < timedelta(minutes=6), (
-            f"started_at should be ~5 minutes ago, but is {time_diff} ago"
-        )
+        assert (
+            timedelta(minutes=4) < time_diff < timedelta(minutes=6)
+        ), f"started_at should be ~5 minutes ago, but is {time_diff} ago"
