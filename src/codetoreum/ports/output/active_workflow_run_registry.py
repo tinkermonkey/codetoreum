@@ -72,3 +72,11 @@ class IActiveWorkflowRunRegistry(ABC):
         Args:
             work_item_id: Work item identifier
         """
+
+    @abstractmethod
+    async def get_all_runs(self) -> list[tuple[str, "ActiveRunInfo"]]:
+        """Get all active workflow runs.
+
+        Returns:
+            List of tuples (work_item_id, ActiveRunInfo) for all active runs
+        """

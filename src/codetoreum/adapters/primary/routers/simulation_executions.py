@@ -134,7 +134,8 @@ def create_simulation_executions_router(
             # Query active executions from registry
             # =====================================================================
             active_executions: list[ActiveExecution] = []
-            for work_item_id, run_info in run_registry._runs.items():
+            all_runs = await run_registry.get_all_runs()
+            for work_item_id, run_info in all_runs:
                 # Find most recent event for this run to determine current_step and get execution start info
                 current_step = await _get_current_step(event_store, run_info.run_id)
                 agent_id, started_at = await _get_agent_execution_info(event_store, run_info.run_id)
@@ -157,8 +158,11 @@ def create_simulation_executions_router(
             completed_executions: list[CompletedExecution] = []
             since = now - timedelta(minutes=minutes)
 
-            # Get WorkflowCompleted events from the event store using public method
-            workflow_completed_events = await event_store.get_events_by_type("WorkflowCompleted", since=since)
+            # Get WorkflowCompleted events from the event store using public method.
+            # Subtract one microsecond from since to preserve inclusive boundary behavior (>=)
+            # because get_events_by_type uses strict > comparison internally.
+            since_adjusted = since - timedelta(microseconds=1)
+            workflow_completed_events = await event_store.get_events_by_type("WorkflowCompleted", since=since_adjusted)
 
             for event in workflow_completed_events:
                 # Extract run_id from event if available
