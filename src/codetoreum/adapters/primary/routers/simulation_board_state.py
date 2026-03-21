@@ -142,7 +142,7 @@ def create_simulation_board_state_router(
         # Acquire lock and snapshot board state
         # ===================================================================
         try:
-            with board_adapter._lock:
+            async with board_adapter._lock:
                 # Verify board exists
                 if board_id not in board_adapter._board_project_map:
                     raise HTTPException(
