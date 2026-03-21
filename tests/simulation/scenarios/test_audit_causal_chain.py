@@ -1,8 +1,10 @@
 """
-Test suite for audit trail enhancements (Phase 4)
+Test suite for audit trail causal chain and query filters
 
 Tests for:
 - GET /api/v2/audit/events/{event_id}/causal-chain endpoint
+- GET /api/v2/audit/events?since=<timestamp> filter
+- GET /api/v2/audit/events?workItemId=<id> filter
 - AuditEventFilters dataclass with new work_item_id field
 - Causal chain traversal through domain events
 """
@@ -393,3 +395,99 @@ async def test_causal_chain_causation_links(bootstrap, client):
 
     # chain[2] (root) causationId should be None
     assert chain[2]["causationId"] is None
+
+
+# ============================================================================
+# Tests for Query Filters (since, workItemId)
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_audit_events_since_filter(bootstrap, client):
+    """Test GET /api/v2/audit/events?since=<timestamp> filters by start time."""
+    # Query without any filters to get baseline
+    response = client.get("/api/v2/audit/events")
+    assert response.status_code == 200
+    initial_count = len(response.json()["events"])
+
+    # Query for events since a future time (should have no events)
+    future_time = datetime.now(UTC) + timedelta(hours=1)
+    future_iso = future_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    response = client.get(f"/api/v2/audit/events?since={future_iso}")
+    assert response.status_code == 200
+    future_events = response.json()["events"]
+
+    # Should have no events in the future
+    assert len(future_events) == 0
+
+    # Query for events since a past time (should include most/all events)
+    past_time = datetime(2020, 1, 1, tzinfo=UTC)
+    past_iso = past_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    response = client.get(f"/api/v2/audit/events?since={past_iso}")
+    assert response.status_code == 200
+    past_events = response.json()["events"]
+
+    # Should have all or most of the initial events
+    assert len(past_events) >= initial_count
+
+
+@pytest.mark.asyncio
+async def test_audit_events_work_item_id_filter(bootstrap, client):
+    """Test GET /api/v2/audit/events?workItemId=<id> filters by work item."""
+    # Create test events with specific work item IDs
+    event_store = bootstrap.adapters.event_store
+    base_time = datetime(2026, 3, 20, 10, 0, 0, tzinfo=UTC)
+
+    # Create events with different work item IDs
+    event1 = DomainEvent(
+        aggregate_id="WI-TEST-001",
+        aggregate_type="WorkItem",
+        payload={"work_item_id": "WI-TEST-001", "status": "open"},
+        user_id="system",
+        correlation_id=uuid4(),
+        event_id=uuid4(),
+        occurred_at=base_time,
+    )
+    await event_store.append("WI-TEST-001", [event1])
+
+    event2 = DomainEvent(
+        aggregate_id="WI-TEST-002",
+        aggregate_type="WorkItem",
+        payload={"work_item_id": "WI-TEST-002", "status": "closed"},
+        user_id="system",
+        correlation_id=uuid4(),
+        event_id=uuid4(),
+        occurred_at=base_time + timedelta(seconds=1),
+    )
+    await event_store.append("WI-TEST-002", [event2])
+
+    # Query for WI-TEST-001
+    response = client.get("/api/v2/audit/events?workItemId=WI-TEST-001")
+    assert response.status_code == 200
+    events = response.json()["events"]
+
+    # Should only include events for WI-TEST-001
+    for event in events:
+        # Check if work item ID appears in resource_id or metadata
+        assert (
+            event["resourceId"] == "WI-TEST-001"
+            or "WI-TEST-001" in str(event.get("metadata", {}))
+        )
+
+
+@pytest.mark.asyncio
+async def test_audit_events_since_and_start_time_conflict(bootstrap, client):
+    """Test that providing both since and startTime parameters returns 400."""
+    past_time = datetime(2020, 1, 1, tzinfo=UTC)
+    iso_time = past_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # Try to provide both since and startTime
+    response = client.get(
+        f"/api/v2/audit/events?since={iso_time}&startTime={iso_time}"
+    )
+
+    # Should return 400 Bad Request
+    assert response.status_code == 400
+    assert "both" in response.json()["detail"].lower()

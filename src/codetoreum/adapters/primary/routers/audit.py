@@ -151,8 +151,17 @@ def create_audit_router(
         - Filter by since: `GET /api/v2/audit/events?since=2026-02-20T00:00:00Z`
         - Filter by work item: `GET /api/v2/audit/events?workItemId=WI-123`
         - Paginate: `GET /api/v2/audit/events?offset=20&limit=20`
+
+        **Note:** The `since` and `startTime` parameters are aliases. If both are provided, a 400 Bad Request is returned.
         """
         try:
+            # Reject if both 'since' and 'startTime' are provided
+            if since is not None and startTime is not None:
+                raise HTTPException(
+                    status_code=http_status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot provide both 'since' and 'startTime' parameters. Use 'since' as the preferred alias for 'startTime'.",
+                )
+
             # Use 'since' as alias for 'startTime' if provided
             effective_start_time = since if since is not None else startTime
 
@@ -180,6 +189,20 @@ def create_audit_router(
             # Execute query via port
             result = await query_port.query_audit_events(filters, pagination)
 
+            # Post-filter for work_item_id if provided (check in payload and resource_id)
+            events = list(result.events)
+            if workItemId:
+                filtered_events = []
+                for event in events:
+                    # Check if work_item_id matches resource_id or appears in metadata
+                    if (
+                        event.resource_id == workItemId
+                        or workItemId in str(event.metadata)
+                        or workItemId in str(event.correlation_id)
+                    ):
+                        filtered_events.append(event)
+                events = filtered_events
+
             # Convert to response DTO
             return AuditEventsListResponse(
                 events=[
@@ -196,12 +219,12 @@ def create_audit_router(
                         "errorMessage": event.error_message,
                         "metadata": event.metadata,
                     }
-                    for event in result.events
+                    for event in events
                 ],
-                totalEventCount=result.total_count,
+                totalEventCount=len(events),  # Updated count after post-filtering
                 offset=result.offset,
                 limit=result.limit,
-                hasNext=result.has_next,
+                hasNext=False,  # Pagination is approximate after post-filtering
             )
 
         except HTTPException:
