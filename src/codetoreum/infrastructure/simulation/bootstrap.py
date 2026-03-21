@@ -55,6 +55,9 @@ from codetoreum.adapters.primary.input_port_adapters.mock import (
     MockWorkItemQueryAdapter,
     MockWorkspaceQueryAdapter,
 )
+from codetoreum.adapters.primary.routers.simulation_board_state import (
+    create_simulation_board_state_router,
+)
 from codetoreum.adapters.primary.routers.simulation_clock import (
     create_simulation_clock_router,
 )
@@ -1805,6 +1808,15 @@ class SimulationApplicationBootstrap:
         # Mount simulation-only clock control router (never in production create_app)
         clock_router = create_simulation_clock_router(self._engine)
         app.include_router(clock_router)
+
+        # Mount simulation-only board state snapshot router (never in production create_app)
+        board_state_router = create_simulation_board_state_router(
+            board_adapter=cast(MockBoardAdapter, self.adapters.board),
+            run_registry=cast(InMemoryActiveWorkflowRunRegistry, self.adapters.run_registry),
+            ticket_adapter=cast(InMemoryTicketAdapter, self.adapters.ticket_system),
+            clock=self._engine,
+        )
+        app.include_router(board_state_router)
 
         # Mount simulation-only SSE stream router (never in production create_app)
         stream_router = create_simulation_stream_router(self.infrastructure.event_bus, self._engine)
