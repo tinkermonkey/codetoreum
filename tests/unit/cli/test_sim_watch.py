@@ -79,7 +79,8 @@ class TestBuildBoardDisplay:
         panel = build_board_display(board_state)
         assert isinstance(panel, Panel)
         rendered = render_panel_text(panel)
-        assert "Test Board" in rendered or "board-1" in rendered
+        # Should contain the specific board name provided
+        assert "Test Board" in rendered
 
     def test_board_with_multiple_columns(self):
         """Test rendering board with multiple columns."""
@@ -96,7 +97,8 @@ class TestBuildBoardDisplay:
         panel = build_board_display(board_state)
         assert isinstance(panel, Panel)
         rendered = render_panel_text(panel)
-        assert "Multi-col Board" in rendered or "board-1" in rendered
+        # Should contain the specific board name provided
+        assert "Multi-col Board" in rendered
 
     def test_timestamp_parsing_iso_format(self):
         """Test ISO format timestamp parsing."""
@@ -155,9 +157,15 @@ class TestBuildBoardDisplay:
             }
             panel = build_board_display(board_state)
             assert isinstance(panel, Panel)
+            rendered = render_panel_text(panel)
+            # Verify status text appears in rendered output
+            if status:
+                assert status in rendered
+            # Always verify work item ID is present
+            assert "WI-1" in rendered
 
     def test_long_work_item_title_truncation(self):
-        """Test that long titles are truncated."""
+        """Test that long titles are truncated to 30 characters."""
         long_title = "A" * 100
         board_state = {
             "board_id": "board-1",
@@ -170,6 +178,11 @@ class TestBuildBoardDisplay:
         }
         panel = build_board_display(board_state)
         assert isinstance(panel, Panel)
+        rendered = render_panel_text(panel)
+        # Verify the full 100-character string does NOT appear (truncation worked)
+        assert long_title not in rendered
+        # Verify truncated portion appears
+        assert "A" * 30 in rendered
 
     def test_missing_work_item_fields(self):
         """Test rendering with missing optional fields."""
@@ -350,72 +363,29 @@ class TestStreamEvents:
         """Test exponential backoff on reconnection."""
         callback = AsyncMock()
 
-        async def mock_stream(*args, **kwargs):
-            """Mock SSE stream that always fails."""
+        class MockResponse:
+            status_code = 503  # Service Unavailable
 
-            class MockResponse:
-                status_code = 503  # Service Unavailable
+            async def aiter_lines(self):
+                yield ""
 
-                async def aiter_lines(self):
-                    yield ""
+            async def __aenter__(self):
+                return self
 
-                async def __aenter__(self):
-                    return self
-
-                async def __aexit__(self, *args):
-                    pass
-
-            return MockResponse()
-
-        with patch("codetoreum.cli.sim_watch.httpx.AsyncClient") as mock_client:
-            mock_instance = AsyncMock()
-            mock_instance.stream = AsyncMock(side_effect=mock_stream)
-            mock_instance.__aenter__.return_value = mock_instance
-            mock_instance.__aexit__.return_value = None
-            mock_client.return_value = mock_instance
-
-            task = asyncio.create_task(
-                stream_events("localhost", 8000, "board-1", callback)
-            )
-            await asyncio.sleep(0.3)
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
+            async def __aexit__(self, *args):
                 pass
 
-    @pytest.mark.asyncio
-    async def test_malformed_json_handling(self):
-        """Test handling of malformed JSON in SSE."""
-        callback = AsyncMock()
+        class MockClient:
+            def stream(self, *args, **kwargs):
+                return MockResponse()
 
-        async def mock_stream(*args, **kwargs):
-            """Mock SSE stream with malformed JSON."""
+            async def __aenter__(self):
+                return self
 
-            class MockResponse:
-                status_code = 200
+            async def __aexit__(self, *args):
+                pass
 
-                async def aiter_lines(self):
-                    yield "data: {invalid json}"
-                    yield "data: " + json.dumps({"event_type": "ValidEvent"})
-                    await asyncio.sleep(0.1)
-                    raise StopAsyncIteration()
-
-                async def __aenter__(self):
-                    return self
-
-                async def __aexit__(self, *args):
-                    pass
-
-            return MockResponse()
-
-        with patch("codetoreum.cli.sim_watch.httpx.AsyncClient") as mock_client:
-            mock_instance = AsyncMock()
-            mock_instance.stream = AsyncMock(side_effect=mock_stream)
-            mock_instance.__aenter__.return_value = mock_instance
-            mock_instance.__aexit__.return_value = None
-            mock_client.return_value = mock_instance
-
+        with patch("codetoreum.cli.sim_watch.httpx.AsyncClient", return_value=MockClient()):
             task = asyncio.create_task(
                 stream_events("localhost", 8000, "board-1", callback)
             )
@@ -425,6 +395,64 @@ class TestStreamEvents:
                 await task
             except asyncio.CancelledError:
                 pass
+
+            # Verify error callback was called indicating connection failure
+            assert any(
+                call[1].get("error_message") is not None
+                for call in callback.call_args_list
+            ), "Callback should be called with error message on connection failure"
+
+    @pytest.mark.asyncio
+    async def test_malformed_json_handling(self, caplog):
+        """Test handling of malformed JSON in SSE."""
+        callback = AsyncMock()
+
+        class MockResponse:
+            status_code = 200
+
+            async def aiter_lines(self):
+                yield "data: {invalid json}"
+                yield "data: " + json.dumps({"event_type": "ValidEvent"})
+                await asyncio.sleep(0.1)
+                raise StopAsyncIteration()
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                pass
+
+        class MockClient:
+            def stream(self, *args, **kwargs):
+                # Return an object that is itself an async context manager
+                return MockResponse()
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                pass
+
+        with patch("codetoreum.cli.sim_watch.httpx.AsyncClient", return_value=MockClient()):
+            with caplog.at_level(logging.DEBUG):
+                task = asyncio.create_task(
+                    stream_events("localhost", 8000, "board-1", callback)
+                )
+                await asyncio.sleep(0.2)
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+
+            # Verify malformed JSON was logged at DEBUG level
+            assert "Malformed SSE event" in caplog.text
+
+            # Verify valid event was still processed after malformed event
+            assert any(
+                call[1].get("last_event") == "ValidEvent"
+                for call in callback.call_args_list
+            ), "Valid event should be processed even after malformed JSON"
 
     @pytest.mark.asyncio
     async def test_sse_cancellation(self):
@@ -526,6 +554,76 @@ class TestStreamEvents:
 
             # Verify error was logged
             assert "SSE connection failed" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_sse_generic_exception_handling(self, caplog):
+        """Test handling of unexpected exceptions in SSE stream."""
+        callback = AsyncMock()
+        attempt_count = 0
+
+        class MockClient:
+            def stream(self, *args, **kwargs):
+                nonlocal attempt_count
+                attempt_count += 1
+
+                if attempt_count > 1:
+                    # Return a valid response on second attempt
+                    class MockResponse:
+                        status_code = 200
+
+                        async def __aenter__(self):
+                            return self
+
+                        async def __aexit__(self, *args):
+                            pass
+
+                        async def aiter_lines(self):
+                            await asyncio.sleep(0.05)
+                            raise StopAsyncIteration()
+
+                    return MockResponse()
+
+                # First attempt raises error
+                class ErrorResponse:
+                    status_code = 200
+
+                    async def __aenter__(self):
+                        return self
+
+                    async def __aexit__(self, *args):
+                        pass
+
+                    async def aiter_lines(self):
+                        raise RuntimeError("Unexpected stream error")
+
+                return ErrorResponse()
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                pass
+
+        with patch("codetoreum.cli.sim_watch.httpx.AsyncClient", return_value=MockClient()):
+            with caplog.at_level(logging.ERROR):
+                task = asyncio.create_task(
+                    stream_events("localhost", 8000, "board-1", callback)
+                )
+                await asyncio.sleep(0.2)
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+
+            # Verify unexpected error was logged with traceback
+            assert "Unexpected error in SSE listener" in caplog.text
+
+            # Verify error callback was called
+            assert any(
+                call[1].get("error_message") is not None
+                for call in callback.call_args_list
+            ), "Callback should be called with error message on unexpected exception"
 
 
 class TestPollBoardState:
@@ -695,34 +793,35 @@ class TestPollBoardState:
 
     @pytest.mark.asyncio
     async def test_poll_interval(self):
-        """Test polling interval is respected."""
+        """Test polling interval is approximately 2 seconds."""
         callback = AsyncMock()
-        call_times = []
+        call_count = 0
 
-        async def mock_get(*args, **kwargs):
-            """Mock get that records call time."""
-            call_times.append(asyncio.get_event_loop().time())
-            mock_response = AsyncMock()
-            mock_response.status_code = 200
-            mock_response.json.return_value = {"board_id": "board-1"}
-            return mock_response
+        class MockClient:
+            async def get(self, *args, **kwargs):
+                nonlocal call_count
+                call_count += 1
+                mock_response = AsyncMock()
+                mock_response.status_code = 200
+                mock_response.json.return_value = {"board_id": "board-1"}
+                return mock_response
 
-        with patch("codetoreum.cli.sim_watch.httpx.AsyncClient") as mock_client:
-            mock_instance = AsyncMock()
-            mock_instance.get = AsyncMock(side_effect=mock_get)
-            mock_instance.__aenter__.return_value = mock_instance
-            mock_instance.__aexit__.return_value = None
-            mock_client.return_value = mock_instance
+            async def __aenter__(self):
+                return self
 
+            async def __aexit__(self, *args):
+                pass
+
+        with patch("codetoreum.cli.sim_watch.httpx.AsyncClient", return_value=MockClient()):
             task = asyncio.create_task(
                 poll_board_state("localhost", 8000, "board-1", callback)
             )
-            await asyncio.sleep(4.5)  # Allow multiple polls
+            await asyncio.sleep(4.5)  # Allow multiple polls with real timing
             task.cancel()
             try:
                 await task
             except asyncio.CancelledError:
                 pass
 
-            # Should have at least 2 polls (initial + 1 after 2 second wait)
-            assert len(call_times) >= 2
+            # Should have at least 2 polls (initial + 1 after 2 second sleep)
+            assert call_count >= 2, f"Should perform at least 2 polling cycles, got {call_count}"
