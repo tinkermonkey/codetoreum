@@ -63,7 +63,7 @@ class TestSSEFrameFormatting:
 
         # Extract the JSON data part
         lines = frame.split("\n")
-        data_line = [l for l in lines if l.startswith("data: ")][0]
+        data_line = [line for line in lines if line.startswith("data: ")][0]
         data_json = data_line[6:]  # Remove "data: " prefix
 
         # Should be valid JSON
