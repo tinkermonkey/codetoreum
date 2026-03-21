@@ -44,9 +44,7 @@ class ActiveExecution(BaseModel):
     project_id: str = Field(..., description="Project identifier")
     status: str = Field(default="running", description="Execution status")
     started_at: datetime = Field(..., description="Time execution started (simulation time)")
-    current_step: str | None = Field(
-        ..., description="Most recent event type for this run (current_step)"
-    )
+    current_step: str | None = Field(..., description="Most recent event type for this run (current_step)")
 
 
 class CompletedExecution(BaseModel):
@@ -62,9 +60,7 @@ class ExecutionStatusResponse(BaseModel):
     """Response containing active and recently completed executions."""
 
     snapshot_time: datetime = Field(..., description="Time of snapshot (simulation time)")
-    active: list[ActiveExecution] = Field(
-        default_factory=list, description="Currently active executions"
-    )
+    active: list[ActiveExecution] = Field(default_factory=list, description="Currently active executions")
     recently_completed: list[CompletedExecution] = Field(
         default_factory=list, description="Recently completed executions (within 30 minutes)"
     )
@@ -236,13 +232,13 @@ def _extract_run_id_from_event(event: object) -> str | None:
     """
     # Try correlation_id first (used for event sourcing)
     if hasattr(event, "correlation_id"):
-        correlation_id = getattr(event, "correlation_id")
+        correlation_id = event.correlation_id
         if correlation_id:
             return str(correlation_id)
 
     # Try aggregate_id (fallback)
     if hasattr(event, "aggregate_id"):
-        aggregate_id = getattr(event, "aggregate_id")
+        aggregate_id = event.aggregate_id
         if aggregate_id:
             return str(aggregate_id)
 
@@ -274,7 +270,7 @@ def _extract_work_item_id_from_event(event: object) -> str | None:
 
     # Try aggregate_id (if it encodes work item ID)
     if hasattr(event, "aggregate_id"):
-        aggregate_id = getattr(event, "aggregate_id")
+        aggregate_id = event.aggregate_id
         if aggregate_id:
             return str(aggregate_id)
 

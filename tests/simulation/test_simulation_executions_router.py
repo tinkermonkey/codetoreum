@@ -475,7 +475,6 @@ class TestSimulationExecutionsRouter:
             MockWorkItemQueryAdapter,
             MockWorkspaceQueryAdapter,
         )
-        from codetoreum.adapters.testing import InMemoryEventStore
         from codetoreum.infrastructure.event_bus import EventBus
 
         # Create production app with mock ports
@@ -510,9 +509,7 @@ class TestSimulationExecutionsRouter:
         routes = [route.path for route in app.routes]
         executions_routes = [r for r in routes if "/sim/executions" in r]
 
-        assert (
-            len(executions_routes) == 0
-        ), f"Executions routes found in production app: {executions_routes}"
+        assert len(executions_routes) == 0, f"Executions routes found in production app: {executions_routes}"
 
     async def test_executions_combined_active_and_completed(self, app, run_registry, event_store, clock):
         """Integration test with both active runs and completed events."""
