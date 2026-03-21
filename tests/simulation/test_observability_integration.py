@@ -14,11 +14,13 @@ the integrated infrastructure including event bus, event store, and
 observability routers.
 """
 
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
 from starlette.testclient import TestClient
 
+from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 from codetoreum.ports.output.board_service import MovedByType
@@ -338,44 +340,85 @@ class TestObservabilityIntegration:
         Test causal chain endpoint traces event ancestry back to root cause.
 
         This test verifies the causal chain feature by:
-        1. Creating a work item column change event (root cause)
-        2. Storing it in the event store with known ID
-        3. Querying the causal-chain endpoint for that event
-        4. Verifying the response contains the event data and structure
+        1. Creating and storing a root cause event
+        2. Creating and storing a dependent event linked via causation_id
+        3. Querying the causal-chain endpoint for the dependent event
+        4. Verifying the response contains the full chain with correct causation links
 
         The causal chain for a workflow event should include ancestor events
         that triggered it, allowing audit trail visibility of cause-and-effect.
         """
-        # Get the event store to manually add a test event
         event_store = bootstrap.adapters.event_store
+        base_time = datetime(2026, 3, 20, 10, 0, 0, tzinfo=UTC)
 
-        # Create a test event ID that we'll store
-        test_event_id = str(uuid4())
+        # Create root event: WorkItemColumnChanged (no causation)
+        root_event = DomainEvent(
+            aggregate_id="WI-ROOT",
+            aggregate_type="WorkItem",
+            payload={
+                "work_item_id": "WI-ROOT",
+                "from_column": "TODO",
+                "to_column": "IN_PROGRESS",
+            },
+            user_id="system",
+            correlation_id=uuid4(),
+            causation_id=None,  # Root has no causation
+            event_id=uuid4(),
+            occurred_at=base_time,
+        )
+        await event_store.append("WI-ROOT", [root_event])
+        root_event_id = root_event.event_id
 
-        # Note: In a real scenario, events would be emitted through the domain layer
-        # and stored automatically. For this test, we verify the endpoint is callable
-        # and returns proper responses for both existing and non-existing events.
+        # Create dependent event: caused by root event via causation_id
+        dependent_event = DomainEvent(
+            aggregate_id="WF-DEP",
+            aggregate_type="Workflow",
+            payload={
+                "workflow_id": "WF-DEP",
+                "work_item_id": "WI-ROOT",
+                "status": "started",
+            },
+            user_id="system",
+            correlation_id=root_event.correlation_id,
+            causation_id=root_event_id,  # Link to root via causation
+            event_id=uuid4(),
+            occurred_at=base_time + timedelta(seconds=10),
+        )
+        await event_store.append("WF-DEP", [dependent_event])
+        dependent_event_id = dependent_event.event_id
 
         client = TestClient(app)
 
-        # Query the causal chain endpoint for the test event
+        # Query causal chain endpoint for the dependent event
         response = client.get(
-            f"/api/v2/audit/events/{test_event_id}/causal-chain"
+            f"/api/v2/audit/events/{dependent_event_id}/causal-chain"
         )
 
-        # Endpoint should be accessible and return proper response
-        # 200 if event found, 404 if not found, NOT 404 "route not found"
-        assert response.status_code in [200, 404], (
-            f"Expected 200 or 404, got {response.status_code}: {response.text}"
-        )
+        # Should return 200 with chain data
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
 
-        # Verify response is valid JSON structure
         data = response.json()
-        assert isinstance(data, (dict, list)), "Causal chain response should be valid JSON"
 
-        # If 404, verify it's proper app error response, not route not found
-        if response.status_code == 404:
-            assert "detail" in data, "404 response should have detail field"
+        # Verify response structure
+        assert "chain" in data, "Response should have chain field"
+        assert "rootEventId" in data, "Response should have rootEventId field"
+        assert "hopCount" in data, "Response should have hopCount field"
+
+        # Verify chain contains both events
+        assert len(data["chain"]) == 2, f"Expected 2 events in chain, got {len(data['chain'])}"
+        assert data["hopCount"] == 2, f"Expected hopCount=2, got {data['hopCount']}"
+
+        # Verify causation links
+        # Chain is ordered from queried event to root
+        assert str(data["chain"][0]["eventId"]) == str(dependent_event_id)
+        assert str(data["chain"][1]["eventId"]) == str(root_event_id)
+
+        # Verify causation relationships
+        assert str(data["chain"][0]["causationId"]) == str(root_event_id)
+        assert data["chain"][1]["causationId"] is None  # Root has no causation
+
+        # Verify root event ID is correct
+        assert str(data["rootEventId"]) == str(root_event_id)
 
     # =========================================================================
     # Production Isolation Tests
@@ -449,12 +492,12 @@ class TestObservabilityIntegration:
 
     async def test_event_flow_through_event_bus_and_store(self, app, bootstrap):
         """
-        Test complete event flow: domain event → event bus → audit endpoint.
+        Test complete event flow: domain event → event bus → infrastructure.
 
         This demonstrates that events are properly:
         1. Emitted by domain logic (when moving item between columns)
         2. Distributed via event bus
-        3. Made available through audit endpoint
+        3. Reflected in observability endpoints
         """
         board_adapter = bootstrap.adapters.board
         ticket_adapter = bootstrap.adapters.ticket_system
@@ -480,24 +523,26 @@ class TestObservabilityIntegration:
 
         # Trigger event: move item to In Progress
         # This should emit a WorkItemColumnChangedEvent that flows through
-        # the event bus
+        # the event bus and triggers infrastructure handlers
         await board_adapter.move_item_to_column(
             work_item_id=work_item.id,
             target_column="In Progress",
             moved_by=MovedByType.ORCHESTRATOR,
         )
 
-        # Verify the board state was updated (indicates event was processed)
+        # Verify the board state reflects the mutation
+        # This confirms the event was processed through the event bus infrastructure
         client = TestClient(app)
         response = client.get("/api/v2/sim/boards/board-1/state")
         assert response.status_code == 200
         state = response.json()
 
-        # Verify item is in new position
+        # Verify item moved to correct column (proves event flow → board mutation)
         in_progress = [c for c in state["columns"] if c["name"] == "In Progress"][0]
-        assert len(in_progress["items"]) == 1
+        assert len(in_progress["items"]) == 1, "Item should be in In Progress column"
+        assert in_progress["items"][0]["work_item_id"] == work_item.id
 
-        # Verify audit endpoint is accessible (even if no events are stored)
+        # Verify audit endpoint is accessible and returns proper structure
         response = client.get("/api/v2/audit/events")
         assert response.status_code == 200
         events_response = response.json()
