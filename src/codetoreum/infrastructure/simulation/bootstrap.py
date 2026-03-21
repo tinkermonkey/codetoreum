@@ -1795,24 +1795,22 @@ class SimulationApplicationBootstrap:
             event_bus=self.infrastructure.event_bus,
             config_service=config_service_interface,
             logger=logger_interface,
-            audit_query_port=self.ports.audit_query,
+            audit_query_port=None,  # Defer to simulation bootstrap to include with event_store
             disable_auth=True,  # ADR-003: Disable authentication in simulation
             cors_origins=["*"],  # Allow all origins in simulation mode (auth is disabled)
             container_recovery_service=self.services.container_recovery_service,
         )
 
         # Mount simulation-only audit causal chain endpoint (never in production create_app)
-        # In simulation, we override the audit router to pass the InMemoryEventStore
-        # for causal chain traversal. First remove the default audit router if it was already mounted.
+        # In simulation, we include the audit router with the InMemoryEventStore
+        # for causal chain traversal. We defer this to the bootstrap rather than create_app()
+        # to avoid registering the endpoint twice, which would cause duplicate operation ID warnings.
         from codetoreum.adapters.primary.routers.audit import create_audit_router as create_audit_router_sim
 
         audit_router_with_chains = create_audit_router_sim(
             query_port=self.ports.audit_query,
             event_store=cast("InMemoryEventStore", self.adapters.event_store),
         )
-        # The audit router was already mounted in create_app() without event_store.
-        # In simulation, we include the enhanced version (with event_store).
-        # Both have the same prefix, so the second include_router call updates it.
         app.include_router(audit_router_with_chains)
 
         # Mount simulation-only ticketing router (never in production create_app)
