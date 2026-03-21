@@ -14,6 +14,7 @@ This router is ONLY mounted in SimulationApplicationBootstrap, never in producti
 """
 
 import logging
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 from typing import Literal
 
@@ -285,7 +286,7 @@ def _extract_run_id_from_event(event: object) -> str | None:
     # Try payload (for newer event models)
     if hasattr(event, "payload"):
         payload = getattr(event, "payload", {})
-        if isinstance(payload, dict) and "run_id" in payload:
+        if isinstance(payload, Mapping) and "run_id" in payload:
             return payload["run_id"]
 
     return None
@@ -304,7 +305,7 @@ def _extract_work_item_id_from_event(event: object) -> str | None:
     # Try payload first (common location for context data)
     if hasattr(event, "payload"):
         payload = getattr(event, "payload", {})
-        if isinstance(payload, dict):
+        if isinstance(payload, Mapping):
             if "work_item_id" in payload:
                 return payload["work_item_id"]
 
