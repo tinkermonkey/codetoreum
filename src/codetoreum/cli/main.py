@@ -11,6 +11,8 @@ Usage:
     codetoreum yaml-import import-batch <config_dir> [options]
 """
 
+from importlib.metadata import PackageNotFoundError, version
+
 import click
 
 # Import subcommand groups and commands
@@ -26,8 +28,15 @@ except ImportError:
     yaml_import_cli = None
 
 
+# Get version from package metadata, fallback to development version
+try:
+    _version = version("codetoreum")
+except PackageNotFoundError:
+    _version = "0.1.0+dev"
+
+
 @click.group()
-@click.version_option(version="0.1.0", prog_name="codetoreum")
+@click.version_option(version=_version, prog_name="codetoreum")
 def cli() -> None:
     """
     Codetoreum - AI Agent Orchestration Platform CLI.
@@ -67,7 +76,7 @@ cli.add_command(sim_watch_command)
 
 # Register the yaml-import group (which has its own subcommands: import-config, import-batch)
 if YAML_IMPORT_AVAILABLE:
-    cli.add_command(yaml_import_cli)
+    cli.add_command(yaml_import_cli, name="yaml-import")
 
 
 if __name__ == "__main__":
