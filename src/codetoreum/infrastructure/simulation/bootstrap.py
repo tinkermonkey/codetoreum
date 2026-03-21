@@ -1807,9 +1807,7 @@ class SimulationApplicationBootstrap:
         app.include_router(clock_router)
 
         # Mount simulation-only SSE stream router (never in production create_app)
-        stream_router = create_simulation_stream_router(
-            self.infrastructure.event_bus, self._engine
-        )
+        stream_router = create_simulation_stream_router(self.infrastructure.event_bus, self._engine)
         app.include_router(stream_router)
 
         logger.info("Created FastAPI application with all ports wired")

@@ -17,7 +17,6 @@ from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
 
-
 # =========================================================================
 # Unit Tests for SSE Frame Formatting
 # =========================================================================
@@ -137,17 +136,11 @@ class TestEventFiltering:
 
     def test_event_matches_filters_with_work_item_id_match(self, work_item_event):
         """Test work item ID filter when event matches."""
-        assert (
-            event_matches_filters(work_item_event, None, "WI-123")
-            is True
-        )
+        assert event_matches_filters(work_item_event, None, "WI-123") is True
 
     def test_event_matches_filters_with_work_item_id_mismatch(self, work_item_event):
         """Test work item ID filter when event does not match."""
-        assert (
-            event_matches_filters(work_item_event, None, "WI-999")
-            is False
-        )
+        assert event_matches_filters(work_item_event, None, "WI-999") is False
 
     def test_event_matches_filters_with_both_filters_match(self, work_item_event):
         """Test both filters when event matches both."""
@@ -185,10 +178,7 @@ class TestEventFiltering:
     def test_event_matches_filters_with_event_without_work_item_id(self, workflow_event):
         """Test filtering event that doesn't have work_item_id in payload."""
         # Event has no work_item_id, filter requires WI-123
-        assert (
-            event_matches_filters(workflow_event, None, "WI-123")
-            is False
-        )
+        assert event_matches_filters(workflow_event, None, "WI-123") is False
 
     def test_event_matches_filters_with_none_work_item_in_payload(self):
         """Test filtering when work_item_id is None in payload."""

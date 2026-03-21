@@ -17,7 +17,7 @@ This router is ONLY mounted in SimulationApplicationBootstrap, never in producti
 import asyncio
 import json
 import logging
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Query
@@ -228,7 +228,7 @@ def create_simulation_stream_router(
             async with connection_state["lock"]:
                 if connection_state["count"] >= SSE_MAX_CONCURRENT_CONNECTIONS:
                     # Send error and close
-                    yield f"event: error\ndata: {{\"error\": \"Max concurrent connections ({SSE_MAX_CONCURRENT_CONNECTIONS}) reached\"}}\n\n"
+                    yield f'event: error\ndata: {{"error": "Max concurrent connections ({SSE_MAX_CONCURRENT_CONNECTIONS}) reached"}}\n\n'
                     return
 
                 connection_state["count"] += 1
@@ -277,7 +277,7 @@ def create_simulation_stream_router(
                             payload.model_dump(mode="json", exclude_none=False),
                         )
 
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         # No event received within timeout - send keepalive
                         yield format_keepalive_comment()
 

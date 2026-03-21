@@ -44,9 +44,7 @@ class TestSSEStreamRouterIntegration:
         # Verify the endpoint path is registered
         route_paths = [route.path for route in router.routes]
         # Path will be either full or relative depending on FastAPI internal behavior
-        assert any(
-            "/stream" in path for path in route_paths
-        ), f"Expected /stream endpoint, got: {route_paths}"
+        assert any("/stream" in path for path in route_paths), f"Expected /stream endpoint, got: {route_paths}"
 
     def test_router_integrates_with_fastapi_app(self, event_bus, engine):
         """Test that router can be included in a FastAPI application."""
@@ -73,9 +71,7 @@ class TestSSEStreamRouterIntegration:
         assert "event_type" in param_names
         assert "work_item_id" in param_names
 
-    def test_multiple_routers_can_coexist_without_state_interference(
-        self, event_bus, engine
-    ):
+    def test_multiple_routers_can_coexist_without_state_interference(self, event_bus, engine):
         """Test that multiple router instances don't share mutable state."""
         # Create two independent routers on the same event bus
         router1 = create_simulation_stream_router(event_bus, engine)
@@ -101,6 +97,4 @@ class TestSSEStreamRouterIntegration:
         # Verify endpoint is an async function
         import inspect
 
-        assert inspect.iscoroutinefunction(
-            endpoint
-        ), "Endpoint should be an async function"
+        assert inspect.iscoroutinefunction(endpoint), "Endpoint should be an async function"
