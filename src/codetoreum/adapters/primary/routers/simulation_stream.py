@@ -254,28 +254,42 @@ def create_simulation_stream_router(
                             timeout=SSE_KEEPALIVE_INTERVAL_SECONDS,
                         )
 
-                        # Serialize event to SSE payload, excluding work_item_id and agent_id from details
-                        # to avoid redundancy (they appear as top-level fields)
-                        details_dict = dict(event.payload)
-                        details_dict.pop("work_item_id", None)
-                        details_dict.pop("agent_id", None)
+                        try:
+                            # Serialize event to SSE payload, excluding work_item_id and agent_id from details
+                            # to avoid redundancy (they appear as top-level fields)
+                            details_dict = dict(event.payload)
+                            details_dict.pop("work_item_id", None)
+                            details_dict.pop("agent_id", None)
 
-                        payload = SSEEventPayload(
-                            event_type=event.event_type,
-                            event_id=str(event.event_id),
-                            timestamp=event.occurred_at,
-                            simulation_time=clock.now(),
-                            work_item_id=event.payload.get("work_item_id"),
-                            agent_id=event.payload.get("agent_id"),
-                            details=details_dict,
-                        )
+                            payload = SSEEventPayload(
+                                event_type=event.event_type,
+                                event_id=str(event.event_id),
+                                timestamp=event.occurred_at,
+                                simulation_time=clock.now(),
+                                work_item_id=event.payload.get("work_item_id"),
+                                agent_id=event.payload.get("agent_id"),
+                                details=details_dict,
+                            )
 
-                        # Yield SSE frame
-                        yield format_sse_frame(
-                            payload.event_type,
-                            payload.event_id,
-                            payload.model_dump(mode="json", exclude_none=False),
-                        )
+                            # Yield SSE frame
+                            yield format_sse_frame(
+                                payload.event_type,
+                                payload.event_id,
+                                payload.model_dump(mode="json", exclude_none=False),
+                            )
+                        except (TypeError, ValueError) as e:
+                            # Log serialization errors and skip malformed event
+                            # TypeError: event.payload not iterable or None
+                            # ValueError: Pydantic validation error (converted by model_validate)
+                            logger.error(
+                                "Failed to serialize event to SSE payload, skipping",
+                                exc_info=True,
+                                extra={
+                                    "event_type": event.event_type,
+                                    "event_id": str(event.event_id),
+                                    "error": str(e),
+                                },
+                            )
 
                     except TimeoutError:
                         # No event received within timeout - send keepalive
