@@ -1809,7 +1809,7 @@ class SimulationApplicationBootstrap:
 
         audit_router_with_chains = create_audit_router_sim(
             query_port=self.ports.audit_query,
-            event_store=cast("InMemoryEventStore", self.adapters.event_store),
+            event_store=self.adapters.event_store_as_memory(),
             causal_link_registry=self.infrastructure.causal_link_registry,
             simulation_clock=self._engine.get_clock_for_testing() if self._engine else None,
         )
@@ -1828,9 +1828,9 @@ class SimulationApplicationBootstrap:
 
         # Mount simulation-only board state snapshot router (never in production create_app)
         board_state_router = create_simulation_board_state_router(
-            board_adapter=cast("MockBoardAdapter", self.adapters.board),
-            run_registry=cast("InMemoryActiveWorkflowRunRegistry", self.adapters.run_registry),
-            ticket_adapter=cast("InMemoryTicketAdapter", self.adapters.ticket_system),
+            board_adapter=self.adapters.board_as_mock(),
+            run_registry=self.adapters.run_registry_as_memory(),
+            ticket_adapter=self.adapters.ticket_as_mock(),
             clock=self._engine,
         )
         app.include_router(board_state_router)
@@ -1841,8 +1841,8 @@ class SimulationApplicationBootstrap:
 
         # Mount simulation-only executions status router (never in production create_app)
         executions_router = create_simulation_executions_router(
-            run_registry=cast("InMemoryActiveWorkflowRunRegistry", self.adapters.run_registry),
-            event_store=cast("InMemoryEventStore", self.adapters.event_store),
+            run_registry=self.adapters.run_registry_as_memory(),
+            event_store=self.adapters.event_store_as_memory(),
             clock=self._engine,
         )
         app.include_router(executions_router)
