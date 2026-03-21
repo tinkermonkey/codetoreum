@@ -420,7 +420,11 @@ def create_audit_router(
                                         {
                                             "source": link.source,
                                             "target": link.target,
-                                            "link_type": link.link_type.value if hasattr(link.link_type, "value") else str(link.link_type),
+                                            "link_type": (
+                                                link.link_type.value
+                                                if hasattr(link.link_type, "value")
+                                                else str(link.link_type)
+                                            ),
                                             "field": field_name,
                                         }
                                     )
