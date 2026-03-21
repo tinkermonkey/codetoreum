@@ -271,6 +271,7 @@ class TestStreamEvents:
 
                 async def aiter_lines(self):
                     yield "data: " + json.dumps({"event_type": "TestEvent"})
+                    yield ""  # Empty line signals end of event (RFC 8453)
                     await asyncio.sleep(0.1)
                     raise StopAsyncIteration()
 
@@ -398,7 +399,9 @@ class TestStreamEvents:
 
             async def aiter_lines(self):
                 yield "data: {invalid json}"
+                yield ""  # Empty line signals end of event
                 yield "data: " + json.dumps({"event_type": "ValidEvent"})
+                yield ""  # Empty line signals end of event
                 await asyncio.sleep(0.1)
                 raise StopAsyncIteration()
 
@@ -451,6 +454,7 @@ class TestStreamEvents:
                 async def aiter_lines(self):
                     while True:
                         yield "data: " + json.dumps({"event_type": "Event"})
+                        yield ""  # Empty line signals end of event
                         await asyncio.sleep(0.05)
 
                 async def __aenter__(self):
@@ -533,6 +537,99 @@ class TestStreamEvents:
 
             # Verify error was logged
             assert "SSE connection failed" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_sse_multiline_data_fields(self):
+        """Test handling of multiple consecutive data: lines per RFC 8453."""
+        callback = AsyncMock()
+
+        class MockResponse:
+            status_code = 200
+
+            async def aiter_lines(self):
+                # Multi-line data should be concatenated with newlines
+                yield "data: {\"event_type\": \"TestEvent\","
+                yield "data: \"details\": \"multi-line\"}"
+                yield ""  # Empty line signals end of event
+                await asyncio.sleep(0.1)
+                return
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                pass
+
+        class MockClient:
+            def stream(self, *args, **kwargs):
+                return MockResponse()
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                pass
+
+        with patch("codetoreum.cli.sim_watch.httpx.AsyncClient", return_value=MockClient()):
+            task = asyncio.create_task(stream_events("localhost", 8000, "board-1", callback))
+            await asyncio.sleep(0.2)
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+            # Verify multi-line data was parsed correctly
+            assert any(
+                call[1].get("last_event") == "TestEvent" for call in callback.call_args_list
+            ), "Multi-line data fields should be concatenated and parsed"
+
+    @pytest.mark.asyncio
+    async def test_sse_event_and_id_fields(self):
+        """Test parsing of event: and id: fields per RFC 8453."""
+        callback = AsyncMock()
+
+        class MockResponse:
+            status_code = 200
+
+            async def aiter_lines(self):
+                # Event type and ID fields should be parsed
+                yield "id: event-123"
+                yield "event: CustomEventType"
+                yield "data: " + json.dumps({"event_type": "DefaultType"})
+                yield ""  # Empty line signals end of event
+                await asyncio.sleep(0.1)
+                return
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                pass
+
+        class MockClient:
+            def stream(self, *args, **kwargs):
+                return MockResponse()
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                pass
+
+        with patch("codetoreum.cli.sim_watch.httpx.AsyncClient", return_value=MockClient()):
+            task = asyncio.create_task(stream_events("localhost", 8000, "board-1", callback))
+            await asyncio.sleep(0.2)
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+            # Verify event type from 'event:' field was used (takes precedence)
+            assert any(
+                call[1].get("last_event") == "CustomEventType" for call in callback.call_args_list
+            ), "Event field should take precedence and be parsed correctly"
 
     @pytest.mark.asyncio
     async def test_sse_generic_exception_handling(self, caplog):
