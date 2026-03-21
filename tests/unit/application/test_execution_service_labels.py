@@ -4,7 +4,7 @@ Tests verify that ExecutionService correctly builds Docker labels for containers
 according to the container recovery service requirements.
 """
 
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
