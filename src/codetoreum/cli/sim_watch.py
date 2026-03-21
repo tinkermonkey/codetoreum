@@ -13,7 +13,9 @@ import asyncio
 import json
 import logging
 import sys
+from collections.abc import Callable
 from datetime import datetime
+from typing import Any, Awaitable
 
 import click
 import httpx
@@ -88,7 +90,7 @@ def build_board_display(board_state: dict) -> Panel:
                 if assigned_agent:
                     item_text += f"[magenta]{assigned_agent}[/magenta]"
 
-                cells.append(Text(item_text.strip()))
+                cells.append(Text.from_markup(item_text.strip()))
             else:
                 cells.append(Text(""))
 
@@ -149,10 +151,10 @@ def build_status_display(connected: bool, last_event: str | None, event_count: i
 
 
 async def stream_events(
-    host: str, port: int, board_id: str, update_callback: callable
+    host: str, port: int, board_id: str, update_callback: Callable[..., Awaitable[None]]
 ) -> None:
     """
-    Stream SSE events from the simulation server.
+    Stream SSE events from the simulation server with automatic reconnection.
 
     Args:
         host: Server host
@@ -161,41 +163,63 @@ async def stream_events(
         update_callback: Callback function to call when events arrive
     """
     sse_url = f"http://{host}:{port}/api/v2/sim/stream"
+    reconnect_delay = 3  # Initial reconnection delay in seconds
+    max_reconnect_delay = 30  # Maximum reconnection delay in seconds
 
-    try:
-        async with httpx.AsyncClient() as client:
-            async with client.stream("GET", sse_url, timeout=None) as response:
-                if response.status_code != 200:
-                    await update_callback(
-                        connected=False,
-                        error_message=f"Failed to connect: HTTP {response.status_code}",
-                    )
-                    return
+    while True:
+        try:
+            async with httpx.AsyncClient() as client:
+                async with client.stream("GET", sse_url, timeout=None) as response:
+                    if response.status_code != 200:
+                        await update_callback(
+                            connected=False,
+                            error_message=f"Failed to connect: HTTP {response.status_code}",
+                        )
+                        await asyncio.sleep(reconnect_delay)
+                        reconnect_delay = min(reconnect_delay * 1.5, max_reconnect_delay)
+                        continue
 
-                await update_callback(connected=True, error_message=None)
+                    await update_callback(connected=True, error_message=None)
+                    # Reset delay on successful connection
+                    reconnect_delay = 3
 
-                async for line in response.aiter_lines():
-                    if line.startswith("data:"):
-                        try:
-                            payload = json.loads(line[5:].strip())
-                            event_type = payload.get("event_type", "unknown")
-                            await update_callback(
-                                connected=True,
-                                last_event=event_type,
-                                error_message=None,
-                            )
-                        except json.JSONDecodeError:
-                            pass  # Ignore malformed events
-    except asyncio.CancelledError:
-        pass  # Normal shutdown
-    except Exception as e:
-        await update_callback(
-            connected=False,
-            error_message=str(e),
-        )
+                    async for line in response.aiter_lines():
+                        if line.startswith("data:"):
+                            try:
+                                payload = json.loads(line[5:].strip())
+                                event_type = payload.get("event_type", "unknown")
+                                await update_callback(
+                                    connected=True,
+                                    last_event=event_type,
+                                    error_message=None,
+                                )
+                            except json.JSONDecodeError:
+                                pass  # Ignore malformed events
+        except asyncio.CancelledError:
+            # Normal shutdown
+            await update_callback(connected=False)
+            raise
+        except (httpx.RequestError, httpx.HTTPError) as e:
+            # Connection error, attempt to reconnect
+            await update_callback(
+                connected=False,
+                error_message=f"Connection lost: {str(e)[:50]}",
+            )
+            logger.warning(f"SSE connection failed: {e}. Retrying in {reconnect_delay}s...")
+            await asyncio.sleep(reconnect_delay)
+            reconnect_delay = min(reconnect_delay * 1.5, max_reconnect_delay)
+        except Exception as e:
+            # Unexpected error, attempt to reconnect
+            await update_callback(
+                connected=False,
+                error_message=f"Error: {str(e)[:50]}",
+            )
+            logger.exception("Unexpected error in SSE listener")
+            await asyncio.sleep(reconnect_delay)
+            reconnect_delay = min(reconnect_delay * 1.5, max_reconnect_delay)
 
 
-async def poll_board_state(host: str, port: int, board_id: str, update_callback: callable) -> None:
+async def poll_board_state(host: str, port: int, board_id: str, update_callback: Callable[..., Awaitable[None]]) -> None:
     """
     Poll board state every 2 seconds.
 
@@ -243,7 +267,7 @@ async def _run_watch(host: str, port: int, board_id: str) -> None:
         port: Server port
         board_id: Board ID to display
     """
-    # State management
+    # State management with lock for thread-safe mutations
     state = {
         "board_state": None,
         "connected": False,
@@ -251,6 +275,7 @@ async def _run_watch(host: str, port: int, board_id: str) -> None:
         "event_count": 0,
         "error_message": None,
     }
+    state_lock = asyncio.Lock()
 
     async def update_display(
         board_state: dict | None = None,
@@ -258,18 +283,19 @@ async def _run_watch(host: str, port: int, board_id: str) -> None:
         last_event: str | None = None,
         error_message: str | None = None,
     ) -> None:
-        """Update the display state."""
+        """Update the display state with thread-safe locking."""
         nonlocal state
 
-        if board_state is not None:
-            state["board_state"] = board_state
-        if connected is not None:
-            state["connected"] = connected
-        if last_event is not None:
-            state["last_event"] = last_event
-            state["event_count"] += 1
-        if error_message is not None:
-            state["error_message"] = error_message
+        async with state_lock:
+            if board_state is not None:
+                state["board_state"] = board_state
+            if connected is not None:
+                state["connected"] = connected
+            if last_event is not None:
+                state["last_event"] = last_event
+                state["event_count"] += 1
+            if error_message is not None:
+                state["error_message"] = error_message
 
     try:
         # Run SSE listener and board poller concurrently
@@ -317,7 +343,7 @@ async def _run_watch(host: str, port: int, board_id: str) -> None:
 
     except Exception as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
-        logger.exception("Error in sim-watch", exc_info=True)
+        logger.exception("Error in sim-watch")
         sys.exit(1)
 
 
@@ -364,7 +390,7 @@ def sim_watch_command(host: str, port: int, board_id: str) -> None:
         console.print("\n[yellow]Exited by user[/yellow]")
     except Exception as e:
         console.print(f"\n[bold red]Fatal error:[/bold red] {e}")
-        logger.exception("Fatal error in sim-watch", exc_info=True)
+        logger.exception("Fatal error in sim-watch")
         sys.exit(1)
 
 
