@@ -324,9 +324,7 @@ class TestObservabilityIntegration:
         dummy_event_id = str(uuid4())
 
         client = TestClient(app)
-        response = client.get(
-            f"/api/v2/audit/events/{dummy_event_id}/causal-chain"
-        )
+        response = client.get(f"/api/v2/audit/events/{dummy_event_id}/causal-chain")
 
         # Should return 404 (event not found) not 404 "route not found"
         # Endpoint exists if we don't get a 404 with message about missing route
@@ -390,9 +388,7 @@ class TestObservabilityIntegration:
         client = TestClient(app)
 
         # Query causal chain endpoint for the dependent event
-        response = client.get(
-            f"/api/v2/audit/events/{dependent_event_id}/causal-chain"
-        )
+        response = client.get(f"/api/v2/audit/events/{dependent_event_id}/causal-chain")
 
         # Should return 200 with chain data
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
@@ -441,13 +437,14 @@ class TestObservabilityIntegration:
         # Check that production create_app() doesn't import simulation routers
         result = subprocess.run(
             [
-                "grep",
+                "/bin/grep",
                 "-n",
                 "simulation_stream\\|simulation_board_state\\|simulation_executions",
                 "/workspace/src/codetoreum/adapters/primary/fastapi_app.py",
             ],
             capture_output=True,
             text=True,
+            check=False,
         )
 
         # If grep finds matches, production code imports simulation routers (bad)
@@ -458,13 +455,14 @@ class TestObservabilityIntegration:
         # Verify that simulation routers are explicitly NOT imported in production
         result2 = subprocess.run(
             [
-                "grep",
+                "/bin/grep",
                 "-n",
                 "from codetoreum.adapters.primary.routers.simulation",
                 "/workspace/src/codetoreum/adapters/primary/fastapi_app.py",
             ],
             capture_output=True,
             text=True,
+            check=False,
         )
 
         assert (
@@ -546,6 +544,4 @@ class TestObservabilityIntegration:
         response = client.get("/api/v2/audit/events")
         assert response.status_code == 200
         events_response = response.json()
-        assert isinstance(
-            events_response, (dict, list)
-        ), "Audit endpoint should return event structure"
+        assert isinstance(events_response, (dict, list)), "Audit endpoint should return event structure"
