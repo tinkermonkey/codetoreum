@@ -63,6 +63,9 @@ from codetoreum.adapters.primary.routers.simulation_clock import (
 )
 
 # Import simulation routers
+from codetoreum.adapters.primary.routers.simulation_executions import (
+    create_simulation_executions_router,
+)
 from codetoreum.adapters.primary.routers.simulation_stream import (
     create_simulation_stream_router,
 )
@@ -1821,6 +1824,14 @@ class SimulationApplicationBootstrap:
         # Mount simulation-only SSE stream router (never in production create_app)
         stream_router = create_simulation_stream_router(self.infrastructure.event_bus, self._engine)
         app.include_router(stream_router)
+
+        # Mount simulation-only executions status router (never in production create_app)
+        executions_router = create_simulation_executions_router(
+            run_registry=cast("InMemoryActiveWorkflowRunRegistry", self.adapters.run_registry),
+            event_store=cast("InMemoryEventStore", self.adapters.event_store),
+            clock=self._engine,
+        )
+        app.include_router(executions_router)
 
         logger.info("Created FastAPI application with all ports wired")
 
