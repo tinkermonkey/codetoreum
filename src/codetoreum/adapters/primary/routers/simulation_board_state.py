@@ -55,7 +55,9 @@ class WorkItemState(BaseModel):
         description="Number of seconds the item has been in the current column",
         ge=0,
     )
-    assigned_agent: str | None = Field(..., description="Workflow run ID if an execution is active (None if no active run)")
+    assigned_agent: str | None = Field(
+        ..., description="Workflow run ID if an execution is active (None if no active run)"
+    )
     execution_status: str | None = Field(..., description="Current execution stage/status (None if no active run)")
 
 
