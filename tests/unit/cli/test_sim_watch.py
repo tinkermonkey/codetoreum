@@ -90,8 +90,14 @@ class TestBuildBoardDisplay:
             "snapshot_time": "2025-03-21T10:00:00Z",
             "columns": [
                 {"name": "Todo", "items": [{"work_item_id": "WI-1", "title": "Task 1"}]},
-                {"name": "In Progress", "items": [{"work_item_id": "WI-2", "title": "Task 2", "execution_status": "running"}]},
-                {"name": "Done", "items": [{"work_item_id": "WI-3", "title": "Task 3", "execution_status": "completed"}]},
+                {
+                    "name": "In Progress",
+                    "items": [{"work_item_id": "WI-2", "title": "Task 2", "execution_status": "running"}],
+                },
+                {
+                    "name": "Done",
+                    "items": [{"work_item_id": "WI-3", "title": "Task 3", "execution_status": "completed"}],
+                },
             ],
         }
         panel = build_board_display(board_state)
@@ -204,36 +210,28 @@ class TestBuildStatusDisplay:
 
     def test_connected_status(self):
         """Test connected status display."""
-        panel = build_status_display(
-            connected=True, last_event=None, event_count=0, error_message=None
-        )
+        panel = build_status_display(connected=True, last_event=None, event_count=0, error_message=None)
         assert isinstance(panel, Panel)
         rendered = render_panel_text(panel)
         assert "Connected" in rendered
 
     def test_disconnected_status(self):
         """Test disconnected status display."""
-        panel = build_status_display(
-            connected=False, last_event=None, event_count=0, error_message=None
-        )
+        panel = build_status_display(connected=False, last_event=None, event_count=0, error_message=None)
         assert isinstance(panel, Panel)
         rendered = render_panel_text(panel)
         assert "Disconnected" in rendered
 
     def test_event_count_display(self):
         """Test event count is displayed."""
-        panel = build_status_display(
-            connected=True, last_event="EventType", event_count=42, error_message=None
-        )
+        panel = build_status_display(connected=True, last_event="EventType", event_count=42, error_message=None)
         assert isinstance(panel, Panel)
         rendered = render_panel_text(panel)
         assert "42" in rendered
 
     def test_last_event_display(self):
         """Test last event type is displayed."""
-        panel = build_status_display(
-            connected=True, last_event="WorkItemMoved", event_count=5, error_message=None
-        )
+        panel = build_status_display(connected=True, last_event="WorkItemMoved", event_count=5, error_message=None)
         assert isinstance(panel, Panel)
         rendered = render_panel_text(panel)
         assert "WorkItemMoved" in rendered
@@ -249,9 +247,7 @@ class TestBuildStatusDisplay:
 
     def test_all_fields_populated(self):
         """Test all fields populated together."""
-        panel = build_status_display(
-            connected=True, last_event="TestEvent", event_count=100, error_message=None
-        )
+        panel = build_status_display(connected=True, last_event="TestEvent", event_count=100, error_message=None)
         assert isinstance(panel, Panel)
         rendered = render_panel_text(panel)
         assert "Connected" in rendered
@@ -294,9 +290,7 @@ class TestStreamEvents:
             mock_client.return_value = mock_instance
 
             # Run stream with timeout
-            task = asyncio.create_task(
-                stream_events("localhost", 8000, "board-1", callback)
-            )
+            task = asyncio.create_task(stream_events("localhost", 8000, "board-1", callback))
             await asyncio.sleep(0.2)
             task.cancel()
             try:
@@ -342,9 +336,7 @@ class TestStreamEvents:
             mock_instance.__aexit__.return_value = None
             mock_client.return_value = mock_instance
 
-            task = asyncio.create_task(
-                stream_events("localhost", 8000, "board-1", callback)
-            )
+            task = asyncio.create_task(stream_events("localhost", 8000, "board-1", callback))
             await asyncio.sleep(0.5)
             task.cancel()
             try:
@@ -353,10 +345,7 @@ class TestStreamEvents:
                 pass
 
             # Verify error callback was called
-            assert any(
-                call[1].get("error_message") is not None
-                for call in callback.call_args_list
-            )
+            assert any(call[1].get("error_message") is not None for call in callback.call_args_list)
 
     @pytest.mark.asyncio
     async def test_sse_exponential_backoff(self):
@@ -386,9 +375,7 @@ class TestStreamEvents:
                 pass
 
         with patch("codetoreum.cli.sim_watch.httpx.AsyncClient", return_value=MockClient()):
-            task = asyncio.create_task(
-                stream_events("localhost", 8000, "board-1", callback)
-            )
+            task = asyncio.create_task(stream_events("localhost", 8000, "board-1", callback))
             await asyncio.sleep(0.2)
             task.cancel()
             try:
@@ -398,8 +385,7 @@ class TestStreamEvents:
 
             # Verify error callback was called indicating connection failure
             assert any(
-                call[1].get("error_message") is not None
-                for call in callback.call_args_list
+                call[1].get("error_message") is not None for call in callback.call_args_list
             ), "Callback should be called with error message on connection failure"
 
     @pytest.mark.asyncio
@@ -435,9 +421,7 @@ class TestStreamEvents:
 
         with patch("codetoreum.cli.sim_watch.httpx.AsyncClient", return_value=MockClient()):
             with caplog.at_level(logging.DEBUG):
-                task = asyncio.create_task(
-                    stream_events("localhost", 8000, "board-1", callback)
-                )
+                task = asyncio.create_task(stream_events("localhost", 8000, "board-1", callback))
                 await asyncio.sleep(0.2)
                 task.cancel()
                 try:
@@ -450,8 +434,7 @@ class TestStreamEvents:
 
             # Verify valid event was still processed after malformed event
             assert any(
-                call[1].get("last_event") == "ValidEvent"
-                for call in callback.call_args_list
+                call[1].get("last_event") == "ValidEvent" for call in callback.call_args_list
             ), "Valid event should be processed even after malformed JSON"
 
     @pytest.mark.asyncio
@@ -485,9 +468,7 @@ class TestStreamEvents:
             mock_instance.__aexit__.return_value = None
             mock_client.return_value = mock_instance
 
-            task = asyncio.create_task(
-                stream_events("localhost", 8000, "board-1", callback)
-            )
+            task = asyncio.create_task(stream_events("localhost", 8000, "board-1", callback))
             await asyncio.sleep(0.1)
             task.cancel()
 
@@ -542,9 +523,7 @@ class TestStreamEvents:
             mock_client.return_value = mock_instance
 
             with caplog.at_level(logging.WARNING):
-                task = asyncio.create_task(
-                    stream_events("localhost", 8000, "board-1", callback)
-                )
+                task = asyncio.create_task(stream_events("localhost", 8000, "board-1", callback))
                 await asyncio.sleep(0.2)
                 task.cancel()
                 try:
@@ -606,9 +585,7 @@ class TestStreamEvents:
 
         with patch("codetoreum.cli.sim_watch.httpx.AsyncClient", return_value=MockClient()):
             with caplog.at_level(logging.ERROR):
-                task = asyncio.create_task(
-                    stream_events("localhost", 8000, "board-1", callback)
-                )
+                task = asyncio.create_task(stream_events("localhost", 8000, "board-1", callback))
                 await asyncio.sleep(0.2)
                 task.cancel()
                 try:
@@ -621,8 +598,7 @@ class TestStreamEvents:
 
             # Verify error callback was called
             assert any(
-                call[1].get("error_message") is not None
-                for call in callback.call_args_list
+                call[1].get("error_message") is not None for call in callback.call_args_list
             ), "Callback should be called with error message on unexpected exception"
 
 
@@ -649,9 +625,7 @@ class TestPollBoardState:
             mock_instance.__aexit__.return_value = None
             mock_client.return_value = mock_instance
 
-            task = asyncio.create_task(
-                poll_board_state("localhost", 8000, "board-1", callback)
-            )
+            task = asyncio.create_task(poll_board_state("localhost", 8000, "board-1", callback))
             await asyncio.sleep(0.1)
             task.cancel()
             try:
@@ -660,10 +634,7 @@ class TestPollBoardState:
                 pass
 
             # Verify board state was received
-            assert any(
-                call[1].get("board_state") is not None
-                for call in callback.call_args_list
-            )
+            assert any(call[1].get("board_state") is not None for call in callback.call_args_list)
 
     @pytest.mark.asyncio
     async def test_board_not_found_404(self):
@@ -680,9 +651,7 @@ class TestPollBoardState:
             mock_instance.__aexit__.return_value = None
             mock_client.return_value = mock_instance
 
-            task = asyncio.create_task(
-                poll_board_state("localhost", 8000, "board-1", callback)
-            )
+            task = asyncio.create_task(poll_board_state("localhost", 8000, "board-1", callback))
             await asyncio.sleep(0.1)
             task.cancel()
             try:
@@ -691,10 +660,7 @@ class TestPollBoardState:
                 pass
 
             # Verify error callback was called
-            assert any(
-                "not found" in (call[1].get("error_message") or "").lower()
-                for call in callback.call_args_list
-            )
+            assert any("not found" in (call[1].get("error_message") or "").lower() for call in callback.call_args_list)
 
     @pytest.mark.asyncio
     async def test_poll_request_error(self):
@@ -703,16 +669,12 @@ class TestPollBoardState:
 
         with patch("codetoreum.cli.sim_watch.httpx.AsyncClient") as mock_client:
             mock_instance = AsyncMock()
-            mock_instance.get = AsyncMock(
-                side_effect=httpx.RequestError("Connection timeout")
-            )
+            mock_instance.get = AsyncMock(side_effect=httpx.RequestError("Connection timeout"))
             mock_instance.__aenter__.return_value = mock_instance
             mock_instance.__aexit__.return_value = None
             mock_client.return_value = mock_instance
 
-            task = asyncio.create_task(
-                poll_board_state("localhost", 8000, "board-1", callback)
-            )
+            task = asyncio.create_task(poll_board_state("localhost", 8000, "board-1", callback))
             await asyncio.sleep(0.1)
             task.cancel()
             try:
@@ -721,10 +683,7 @@ class TestPollBoardState:
                 pass
 
             # Verify error callback was called
-            assert any(
-                call[1].get("error_message") is not None
-                for call in callback.call_args_list
-            )
+            assert any(call[1].get("error_message") is not None for call in callback.call_args_list)
 
     @pytest.mark.asyncio
     async def test_poll_unexpected_error_logging(self, caplog):
@@ -743,9 +702,7 @@ class TestPollBoardState:
             mock_client.return_value = mock_instance
 
             with caplog.at_level(logging.ERROR):
-                task = asyncio.create_task(
-                    poll_board_state("localhost", 8000, "board-1", callback)
-                )
+                task = asyncio.create_task(poll_board_state("localhost", 8000, "board-1", callback))
                 await asyncio.sleep(0.1)
                 task.cancel()
                 try:
@@ -778,9 +735,7 @@ class TestPollBoardState:
             mock_instance = MockAsyncContextManager()
             mock_client.return_value = mock_instance
 
-            task = asyncio.create_task(
-                poll_board_state("localhost", 8000, "board-1", callback)
-            )
+            task = asyncio.create_task(poll_board_state("localhost", 8000, "board-1", callback))
             await asyncio.sleep(0.05)
             task.cancel()
 
@@ -813,9 +768,7 @@ class TestPollBoardState:
                 pass
 
         with patch("codetoreum.cli.sim_watch.httpx.AsyncClient", return_value=MockClient()):
-            task = asyncio.create_task(
-                poll_board_state("localhost", 8000, "board-1", callback)
-            )
+            task = asyncio.create_task(poll_board_state("localhost", 8000, "board-1", callback))
             await asyncio.sleep(4.5)  # Allow multiple polls with real timing
             task.cancel()
             try:
