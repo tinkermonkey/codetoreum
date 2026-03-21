@@ -402,13 +402,79 @@ async def test_causal_chain_causation_links(bootstrap, client):
 # ============================================================================
 
 
+async def _seed_audit_events_for_filters(bootstrap):
+    """Seed the audit store with test data for filter tests."""
+    audit_store = bootstrap.adapters.audit_store
+    base_time = datetime(2026, 3, 20, 10, 0, 0, tzinfo=UTC)
+
+    # Event 1: work item created
+    await audit_store.store_event(
+        timestamp=base_time,
+        event_type="work_item_created",
+        resource_type="work_item",
+        resource_id="WI-001",
+        action="create",
+        user_id="system",
+        correlation_id="corr-001",
+        metadata={"work_item_id": "WI-001", "title": "Test Work Item 1"},
+        success=True,
+    )
+
+    # Event 2: workflow started for WI-001 (5 seconds later)
+    await audit_store.store_event(
+        timestamp=base_time + timedelta(seconds=5),
+        event_type="workflow_started",
+        resource_type="workflow",
+        resource_id="WF-001",
+        action="start",
+        user_id="system",
+        correlation_id="corr-002",
+        metadata={"work_item_id": "WI-001", "workflow_id": "WF-001"},
+        success=True,
+    )
+
+    # Event 3: different work item created
+    await audit_store.store_event(
+        timestamp=base_time + timedelta(seconds=10),
+        event_type="work_item_created",
+        resource_type="work_item",
+        resource_id="WI-002",
+        action="create",
+        user_id="system",
+        correlation_id="corr-003",
+        metadata={"work_item_id": "WI-002", "title": "Test Work Item 2"},
+        success=True,
+    )
+
+    # Event 4: work item updated for WI-002
+    await audit_store.store_event(
+        timestamp=base_time + timedelta(seconds=15),
+        event_type="work_item_updated",
+        resource_type="work_item",
+        resource_id="WI-002",
+        action="update",
+        user_id="system",
+        correlation_id="corr-004",
+        metadata={"work_item_id": "WI-002", "field": "status"},
+        success=True,
+    )
+
+
 @pytest.mark.asyncio
 async def test_audit_events_since_filter(bootstrap, client):
     """Test GET /api/v2/audit/events?since=<timestamp> filters by start time."""
+    # Seed the audit store with test data
+    await _seed_audit_events_for_filters(bootstrap)
+
     # Query without any filters to get baseline
     response = client.get("/api/v2/audit/events")
     assert response.status_code == 200
-    initial_count = len(response.json()["events"])
+    events = response.json()["events"]
+    initial_count = len(events)
+    assert initial_count >= 4, "Should have at least 4 seeded events"
+
+    # Get the timestamp of the first event for testing
+    first_event_time = datetime.fromisoformat(events[-1]["timestamp"].replace("Z", "+00:00"))
 
     # Query for events since a future time (should have no events)
     future_time = datetime.now(UTC) + timedelta(hours=1)
@@ -421,7 +487,18 @@ async def test_audit_events_since_filter(bootstrap, client):
     # Should have no events in the future
     assert len(future_events) == 0
 
-    # Query for events since a past time (should include most/all events)
+    # Query for events since the middle of our test period (should exclude oldest event)
+    since_time = first_event_time + timedelta(seconds=3)
+    since_iso = since_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    response = client.get(f"/api/v2/audit/events?since={since_iso}")
+    assert response.status_code == 200
+    since_events = response.json()["events"]
+
+    # Should have fewer events than baseline (excluding the first event)
+    assert len(since_events) < initial_count, f"Expected fewer than {initial_count}, got {len(since_events)}"
+
+    # Query for events since a past time (should include all events)
     past_time = datetime(2020, 1, 1, tzinfo=UTC)
     past_iso = past_time.strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -429,52 +506,50 @@ async def test_audit_events_since_filter(bootstrap, client):
     assert response.status_code == 200
     past_events = response.json()["events"]
 
-    # Should have all or most of the initial events
+    # Should have all of the initial events
     assert len(past_events) >= initial_count
 
 
 @pytest.mark.asyncio
 async def test_audit_events_work_item_id_filter(bootstrap, client):
     """Test GET /api/v2/audit/events?workItemId=<id> filters by work item."""
-    # Create test events with specific work item IDs
-    event_store = bootstrap.adapters.event_store
-    base_time = datetime(2026, 3, 20, 10, 0, 0, tzinfo=UTC)
+    # Seed the audit store with test data
+    await _seed_audit_events_for_filters(bootstrap)
 
-    # Create events with different work item IDs
-    event1 = DomainEvent(
-        aggregate_id="WI-TEST-001",
-        aggregate_type="WorkItem",
-        payload={"work_item_id": "WI-TEST-001", "status": "open"},
-        user_id="system",
-        correlation_id=uuid4(),
-        event_id=uuid4(),
-        occurred_at=base_time,
-    )
-    await event_store.append("WI-TEST-001", [event1])
-
-    event2 = DomainEvent(
-        aggregate_id="WI-TEST-002",
-        aggregate_type="WorkItem",
-        payload={"work_item_id": "WI-TEST-002", "status": "closed"},
-        user_id="system",
-        correlation_id=uuid4(),
-        event_id=uuid4(),
-        occurred_at=base_time + timedelta(seconds=1),
-    )
-    await event_store.append("WI-TEST-002", [event2])
-
-    # Query for WI-TEST-001
-    response = client.get("/api/v2/audit/events?workItemId=WI-TEST-001")
+    # Query for WI-001 (should return 2 events: work_item_created + workflow_started)
+    response = client.get("/api/v2/audit/events?workItemId=WI-001")
     assert response.status_code == 200
-    events = response.json()["events"]
+    events_wi001 = response.json()["events"]
 
-    # Should only include events for WI-TEST-001
-    for event in events:
-        # Check if work item ID appears in resource_id or metadata
+    # Should have events related to WI-001
+    assert len(events_wi001) > 0, "Should have at least one event for WI-001"
+
+    # All returned events should be associated with WI-001
+    for event in events_wi001:
+        # Check if work item ID appears in resource_id, metadata, or correlation_id
         assert (
-            event["resourceId"] == "WI-TEST-001"
-            or "WI-TEST-001" in str(event.get("metadata", {}))
-        )
+            event["resourceId"] == "WI-001"
+            or "WI-001" in str(event.get("metadata", {}))
+            or "WI-001" in str(event.get("correlationId", ""))
+        ), f"Event {event['id']} should be related to WI-001"
+
+    # Query for WI-002 (should return 2 events)
+    response = client.get("/api/v2/audit/events?workItemId=WI-002")
+    assert response.status_code == 200
+    events_wi002 = response.json()["events"]
+
+    assert len(events_wi002) > 0, "Should have at least one event for WI-002"
+
+    # All returned events should be associated with WI-002
+    for event in events_wi002:
+        assert (
+            event["resourceId"] == "WI-002"
+            or "WI-002" in str(event.get("metadata", {}))
+            or "WI-002" in str(event.get("correlationId", ""))
+        ), f"Event {event['id']} should be related to WI-002"
+
+    # The two result sets should be different
+    assert events_wi001 != events_wi002, "Events for different work items should be different"
 
 
 @pytest.mark.asyncio
