@@ -143,7 +143,8 @@ class InMemoryAuditStore(IAuditStore):
 
         if filters.work_item_id:
             matching_events = [
-                e for e in matching_events
+                e
+                for e in matching_events
                 if (
                     e.get("resource_id") == filters.work_item_id
                     or filters.work_item_id in str(e.get("metadata", {}))
