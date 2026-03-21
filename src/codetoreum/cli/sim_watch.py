@@ -154,8 +154,8 @@ async def stream_events(host: str, port: int, board_id: str, update_callback: Ca
     """
     Stream SSE events from the simulation server with automatic reconnection.
 
-    Per RFC 8453 SSE specification, multiple consecutive 'data:' lines in a single
-    event are concatenated with newlines. Event IDs are tracked for reconnection support.
+    Per the WHATWG HTML Living Standard SSE specification, multiple consecutive 'data:'
+    lines in a single event are concatenated with newlines.
 
     Args:
         host: Server host
@@ -184,17 +184,16 @@ async def stream_events(host: str, port: int, board_id: str, update_callback: Ca
                     # Reset delay on successful connection
                     reconnect_delay = 3
 
-                    # Parse SSE events: accumulate data fields, handle event and id fields
+                    # Parse SSE events: accumulate data fields, handle event field
                     event_data_lines = []
                     event_type = None
-                    event_id = None
 
                     async for line in response.aiter_lines():
                         # Empty line signals end of event
                         if not line:
                             if event_data_lines:
                                 try:
-                                    # Join multiple data lines with newlines per RFC 8453
+                                    # Join multiple data lines with newlines per WHATWG SSE spec
                                     data_str = "\n".join(event_data_lines)
                                     payload = json.loads(data_str)
                                     # Use event: field if present, otherwise fallback to payload or default
@@ -209,16 +208,18 @@ async def stream_events(host: str, port: int, board_id: str, update_callback: Ca
                             # Reset for next event
                             event_data_lines = []
                             event_type = None
-                            event_id = None
                         elif line.startswith("data:"):
-                            # Accumulate data lines
-                            event_data_lines.append(line[5:].strip())
+                            # Accumulate data lines (remove single leading space per spec)
+                            value = line[5:]
+                            if value.startswith(" "):
+                                value = value[1:]
+                            event_data_lines.append(value)
                         elif line.startswith("event:"):
-                            # Parse event type field (RFC 8453 sec 4.3)
-                            event_type = line[6:].strip()
-                        elif line.startswith("id:"):
-                            # Parse event ID field (RFC 8453 sec 4.4) for Last-Event-ID support
-                            event_id = line[3:].strip()
+                            # Parse event type field (remove single leading space per spec)
+                            value = line[6:]
+                            if value.startswith(" "):
+                                value = value[1:]
+                            event_type = value
         except asyncio.CancelledError:
             # Normal shutdown
             await update_callback(connected=False)

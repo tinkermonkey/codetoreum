@@ -540,7 +540,7 @@ class TestStreamEvents:
 
     @pytest.mark.asyncio
     async def test_sse_multiline_data_fields(self):
-        """Test handling of multiple consecutive data: lines per RFC 8453."""
+        """Test handling of multiple consecutive data: lines per WHATWG SSE spec."""
         callback = AsyncMock()
 
         class MockResponse:
@@ -586,7 +586,7 @@ class TestStreamEvents:
 
     @pytest.mark.asyncio
     async def test_sse_event_and_id_fields(self):
-        """Test parsing of event: and id: fields per RFC 8453."""
+        """Test parsing of event: field per WHATWG SSE spec."""
         callback = AsyncMock()
 
         class MockResponse:
