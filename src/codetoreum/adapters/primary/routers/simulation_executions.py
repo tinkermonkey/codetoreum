@@ -137,9 +137,10 @@ def create_simulation_executions_router(
             active_executions: list[ActiveExecution] = []
             all_runs = await run_registry.get_all_runs()
             for work_item_id, run_info in all_runs:
-                # Find most recent event for this run to determine current_step and get execution start info
-                current_step = await _get_current_step(event_store, run_info.run_id)
-                agent_id, started_at = await _get_agent_execution_info(event_store, run_info.run_id)
+                # Fetch events once per run and extract both current_step and agent execution info
+                events = await event_store.get_events_by_correlation_id(str(run_info.run_id))
+                current_step = _extract_current_step(events)
+                agent_id, started_at = _extract_agent_execution_info(events)
 
                 active = ActiveExecution(
                     work_item_id=work_item_id,
@@ -211,20 +212,17 @@ def create_simulation_executions_router(
 # =========================================================================
 
 
-async def _get_agent_execution_info(event_store: InMemoryEventStore, run_id: str) -> tuple[str | None, datetime | None]:
+def _extract_agent_execution_info(events: list) -> tuple[str | None, datetime | None]:
     """
     Extract agent_id and started_at timestamp from AgentExecutionStarted event.
 
     Args:
-        event_store: Event store to query
-        run_id: Run identifier to look up (used as correlation_id)
+        events: List of events for a given run (correlation_id)
 
     Returns:
         Tuple of (agent_id, started_at) where agent_id is the agent ID (or None),
         and started_at is the timestamp when execution started (or None)
     """
-    events = await event_store.get_events_by_correlation_id(str(run_id))
-
     # Search for AgentExecutionStarted event (first in the sequence for a run)
     for event in events:
         if event.event_type == "AgentExecutionStarted":
@@ -234,20 +232,16 @@ async def _get_agent_execution_info(event_store: InMemoryEventStore, run_id: str
     return None, None
 
 
-async def _get_current_step(event_store: InMemoryEventStore, run_id: str) -> str | None:
+def _extract_current_step(events: list) -> str | None:
     """
-    Extract the most recent event type for a given run (correlation_id).
+    Extract the most recent event type for a given run.
 
     Args:
-        event_store: Event store to query
-        run_id: Run identifier to look up (used as correlation_id)
+        events: List of events for a given run (correlation_id)
 
     Returns:
         Event type of the most recent event, or None if no events found
     """
-    run_id_str = str(run_id)
-    events = await event_store.get_events_by_correlation_id(run_id_str)
-
     if not events:
         return None
 
