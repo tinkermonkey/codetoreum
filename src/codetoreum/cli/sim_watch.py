@@ -190,8 +190,8 @@ async def stream_events(host: str, port: int, board_id: str, update_callback: Ca
                                     last_event=event_type,
                                     error_message=None,
                                 )
-                            except json.JSONDecodeError:
-                                pass  # Ignore malformed events
+                            except json.JSONDecodeError as e:
+                                logger.debug(f"Malformed SSE event: {str(e)} (line: {line[:100]})")
         except asyncio.CancelledError:
             # Normal shutdown
             await update_callback(connected=False)
