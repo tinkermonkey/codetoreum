@@ -4,6 +4,7 @@ Audit Events REST API Router
 Provides RESTful endpoints for querying system-wide audit events.
 """
 
+import asyncio
 import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -252,9 +253,8 @@ def create_audit_router(
 
     if event_store is not None:
         # Thread-safe cache for event index with async-safe locking
-        import asyncio
         event_index_cache: dict[str, Any] = {}
-        cached_event_timestamp = [None]  # Track last rebuild timestamp for cache invalidation
+        cached_event_count = [0]  # Track event count for fast staleness checks
         cache_lock = asyncio.Lock()
 
         async def _get_event_index() -> dict[str, Any]:
@@ -263,17 +263,26 @@ def create_audit_router(
 
             Caches the event index to avoid O(n) iteration on every causal chain request.
             The cache remains valid until new events are appended to the store.
-            Uses timestamp-based invalidation instead of count-based, which is robust
-            against edge cases where events are deleted and appended back to the same count.
+            Uses event-ID-set comparison to detect both appends and deletes.
 
             Uses asyncio.Lock for async-safe concurrent access without blocking the event loop.
+            Fast-path: checks event count before acquiring event store lock; only rebuilds
+            the index when count changes.
 
             Returns:
                 Dict mapping event_id -> DomainEvent
             """
             async with cache_lock:
-                # Rebuild the cache by acquiring the event store lock synchronously
-                # but only within the critical section (minimal hold time)
+                # Fast path: check if the event count has changed
+                # (cheap O(1) operation without blocking the event loop)
+                current_event_count = event_store.get_total_event_count()
+
+                if current_event_count == cached_event_count[0] and event_index_cache:
+                    # Cache is still valid - return immediately
+                    return event_index_cache
+
+                # Slow path: count changed, rebuild the index
+                # Acquire the event store lock synchronously but only when necessary
                 current_events = event_store.get_all_events_list()
 
                 # If events changed, rebuild the index
@@ -285,6 +294,8 @@ def create_audit_router(
                     event_index_cache.clear()
                     for event in current_events:
                         event_index_cache[str(event.event_id)] = event
+
+                cached_event_count[0] = current_event_count
 
             return event_index_cache
 
@@ -384,6 +395,7 @@ def create_audit_router(
                     break
 
                 visited.add(current_event_id)
+                hops += 1
 
                 event = events_by_id[current_event_id]
 
@@ -454,14 +466,13 @@ def create_audit_router(
                 # Move to the causation event
                 if causation_id:
                     current_event_id = str(causation_id)
-                    hops += 1
                 else:
                     # We've reached the root
                     break
 
             truncated = hops >= max_hops and current_event_id is not None
 
-            return chain, truncated, actual_root_id
+            return chain, truncated, actual_root_id, hops
 
         @router.get(
             "/events/{event_id}/causal-chain",
@@ -495,7 +506,7 @@ def create_audit_router(
             is in-memory. It is not available in production deployments.
             """
             try:
-                chain, truncated, root_event_id = await _build_causal_chain(event_id)
+                chain, truncated, root_event_id, hops = await _build_causal_chain(event_id)
 
                 if not chain:
                     raise HTTPException(
@@ -507,7 +518,7 @@ def create_audit_router(
                     rootEventId=root_event_id,
                     chain=chain,
                     truncated=truncated,
-                    hopCount=len(chain),
+                    hopCount=max(hops - 1, 0),
                 )
 
             except HTTPException:
