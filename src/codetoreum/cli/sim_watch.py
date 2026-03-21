@@ -103,7 +103,8 @@ def build_board_display(board_state: dict) -> Panel:
             time_str = dt.strftime("%H:%M:%S")
         else:
             time_str = str(snapshot_time)
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to parse snapshot time: {e!s}", exc_info=True)
         time_str = str(snapshot_time)
 
     board_panel = Panel(
@@ -254,6 +255,7 @@ async def poll_board_state(
     except asyncio.CancelledError:
         pass  # Normal shutdown
     except Exception as e:
+        logger.error(f"Unexpected error in board state polling: {e!s}", exc_info=True)
         await update_callback(
             error_message=f"Poll error: {e!s}",
         )
