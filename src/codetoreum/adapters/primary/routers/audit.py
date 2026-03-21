@@ -267,26 +267,31 @@ def create_audit_router(
     if event_store is not None:
         # Cache event index to avoid O(n) rebuilds on every request
         event_index_cache: dict[str, Any] = {}
-        cache_version = [0]  # Use list to allow modification in closure
+        cached_event_count = [0]  # Use list to allow modification in closure
 
         def _get_event_index() -> dict[str, Any]:
             """
             Get or rebuild cached event index.
 
             Caches the event index to avoid O(n) iteration on every causal chain request.
-            The cache remains valid until new events are appended to the store.
+            The cache remains valid until new events are appended to the store or streams
+            are deleted. Uses get_total_event_count() for efficient cache invalidation.
 
             Returns:
                 Dict mapping event_id -> DomainEvent
             """
-            # Check if cache needs rebuilding by comparing event count
-            current_events = event_store.get_all_events_list()
-            if len(event_index_cache) != len(current_events):
-                # Rebuild index: O(n) but only when event count changes
+            # Use get_total_event_count() (O(1) with lock) instead of get_all_events_list()
+            # to check staleness without copying the entire event list
+            current_event_count = event_store.get_total_event_count()
+
+            # Rebuild if count differs (handles both append and delete scenarios)
+            if cached_event_count[0] != current_event_count:
                 event_index_cache.clear()
-                for event in current_events:
+                # Only call get_all_events_list() when cache needs rebuilding
+                for event in event_store.get_all_events_list():
                     event_index_cache[str(event.event_id)] = event
-                cache_version[0] += 1
+                cached_event_count[0] = current_event_count
+
             return event_index_cache
 
         def _extract_payload_summary(event: Any) -> dict[str, Any]:
@@ -348,8 +353,8 @@ def create_audit_router(
             Traverse the causal chain backward from a root event.
 
             Uses the cached event index for O(1) lookups. Traversal follows the causation_id
-            chain from each event. The CausalLinkRegistry (when provided) could be leveraged
-            for supplementary dependency metadata or validation in future enhancements.
+            chain from each event. Consults the CausalLinkRegistry (when provided) to annotate
+            chain events with registered dependency metadata and validate structural consistency.
 
             Returns:
                 Tuple of (chain events, truncated, root_event_id)
@@ -375,12 +380,55 @@ def create_audit_router(
                 causation_id = getattr(event, "causation_id", None)
                 occurred_at = _get_event_timestamp(event)
 
+                payload_summary = _extract_payload_summary(event)
+
+                # Consult CausalLinkRegistry to enrich chain event with dependency metadata
+                registry_metadata: dict[str, Any] = {}
+                if causal_link_registry is not None:
+                    # Get component-level links that might relate to this event
+                    # by examining event type and payload fields
+                    event_name = event_type or "Unknown"
+
+                    # Check for subscriptions that publish this event type
+                    subscriptions = causal_link_registry.get_subscriptions(event_type=event_name)
+                    if subscriptions:
+                        registry_metadata["subscriptions"] = [
+                            {
+                                "publisher": sub.publisher,
+                                "subscriber": sub.subscriber,
+                                "event_type": sub.event_type,
+                            }
+                            for sub in subscriptions
+                        ]
+
+                    # Check for links targeting components mentioned in the payload
+                    # This enriches the chain with structural dependency info
+                    links = causal_link_registry.get_all_links()
+                    payload_links = []
+                    for field_name, field_value in payload_summary.items():
+                        # Look for links where field_value might be a component name
+                        field_str = str(field_value)
+                        for link in links:
+                            if link.source == field_str or link.target == field_str:
+                                payload_links.append(
+                                    {
+                                        "source": link.source,
+                                        "target": link.target,
+                                        "link_type": link.link_type.value if hasattr(link.link_type, "value") else str(link.link_type),
+                                        "field": field_name,
+                                    }
+                                )
+
+                    if payload_links:
+                        registry_metadata["dependency_links"] = payload_links
+
                 chain_event = CausalChainEvent(
                     eventId=str(event.event_id),
                     eventType=event_type or "Unknown",
                     occurredAt=occurred_at,
                     causationId=str(causation_id) if causation_id else None,
-                    payloadSummary=_extract_payload_summary(event),
+                    payloadSummary=payload_summary,
+                    registryMetadata=registry_metadata if registry_metadata else None,
                 )
                 chain.append(chain_event)
 

@@ -391,6 +391,11 @@ class CausalChainEvent(BaseModel):
     payloadSummary: dict[str, Any] = Field(
         default_factory=dict, description="Subset of payload for readability", serialization_alias="payloadSummary"
     )
+    registryMetadata: dict[str, Any] | None = Field(
+        None,
+        description="Metadata from CausalLinkRegistry including event subscriptions and dependency links",
+        serialization_alias="registryMetadata",
+    )
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -404,6 +409,23 @@ class CausalChainEvent(BaseModel):
                     "work_item_id": "WI-456",
                     "from_column": "TODO",
                     "to_column": "IN_PROGRESS",
+                },
+                "registryMetadata": {
+                    "subscriptions": [
+                        {
+                            "publisher": "EventBus",
+                            "subscriber": "MockReviewCycleAdapter",
+                            "event_type": "WorkItemColumnChanged",
+                        }
+                    ],
+                    "dependency_links": [
+                        {
+                            "source": "WorkflowOrchestrator",
+                            "target": "ReviewCycleAdapter",
+                            "link_type": "domain_events",
+                            "field": "workflow_id",
+                        }
+                    ],
                 },
             }
         },
