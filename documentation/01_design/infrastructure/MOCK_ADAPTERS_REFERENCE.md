@@ -40,9 +40,11 @@ Mock adapters provide fast, deterministic implementations of port interfaces for
 - ConfigurableIdentityService - Bot/user identification
 - MockProjectManagerAdapter - Multi-project management
 
-### 6. **Support Adapters** (2)
+### 6. **Support Adapters** (4)
 - CapturingMockEventEmitter - Domain event capture
 - MockAgentExecutor - Agent execution simulation (unit-test utility only, not used in bootstrap)
+- ExecutionServiceAgentExecutor - Production agent executor wired by SimulationApplicationBootstrap
+- MockEventEmitter - Basic event emission mock (legacy)
 
 ---
 
@@ -1145,9 +1147,7 @@ executor.set_completion_handler(on_complete, "board-1")
 **Implements**: IAgentExecutor
 **Purpose**: Production agent executor wired by SimulationApplicationBootstrap
 
-**Bootstrap Usage**: ✅ **Always wired**. Used exclusively by SimulationApplicationBootstrap as the unconditional default agent executor for all simulation and E2E testing.
-
-**Key Characteristics**:
+**Key Features**:
 - ✅ Real-world agent execution via ExecutionService
 - ✅ Container lifecycle management (create, start, stop)
 - ✅ Workspace management and file mounting
@@ -1155,10 +1155,38 @@ executor.set_completion_handler(on_complete, "board-1")
 - ✅ Standard error handling and logging
 - ✅ Compatible with both simulation and production modes
 
+**Configuration**:
+```python
+# ExecutionServiceAgentExecutor is automatically configured
+# by SimulationApplicationBootstrap - no manual setup required
+executor = ExecutionServiceAgentExecutor(
+    execution_service=execution_service,
+    container_adapter=container_adapter,
+    storage_adapter=storage_adapter,
+    workspace_router=workspace_router
+)
+```
+
+**Core Methods**:
+```python
+# Execute agent
+result = await executor.execute(
+    work_item_id="item-1",
+    board_id="board-1",
+    agent_config=agent_config,
+    execution_context=context
+)
+
+# Lifecycle management
+await executor.start()
+await executor.stop()
+```
+
 **Use Cases**:
 - Simulation testing (via SimulationApplicationBootstrap)
 - E2E workflow validation
 - Production agent execution
+- Bootstrap default executor for all simulation/E2E scenarios
 
 **Related**:
 - For unit testing of handler logic in isolation, use `MockAgentExecutor` (unit-test only)
