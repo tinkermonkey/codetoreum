@@ -1158,28 +1158,41 @@ executor.set_completion_handler(on_complete, "board-1")
 **Configuration**:
 ```python
 # ExecutionServiceAgentExecutor is automatically configured
-# by SimulationApplicationBootstrap - no manual setup required
+# by SimulationApplicationBootstrap with full dependency injection
 executor = ExecutionServiceAgentExecutor(
     execution_service=execution_service,
-    container_adapter=container_adapter,
-    storage_adapter=storage_adapter,
-    workspace_router=workspace_router
+    workspace_router=workspace_router,
+    config_store=config_store,
+    agent_repository=agent_repository,
+    work_item_service=work_item_service,
+    run_registry=run_registry,
+    branch_tracker=branch_tracker,
+    vcs=vcs,
+    clock=clock,
+    recovery_service=recovery_service,
+    execution_delay=0.0
 )
 ```
 
 **Core Methods**:
 ```python
-# Execute agent
-result = await executor.execute(
-    work_item_id="item-1",
-    board_id="board-1",
-    agent_config=agent_config,
-    execution_context=context
+# Register completion handler (called when execution finishes)
+executor.set_completion_handler(
+    callback=async_callback,
+    default_board_id="board-1"
 )
 
-# Lifecycle management
-await executor.start()
-await executor.stop()
+# Execute agent (fire-and-forget, non-blocking)
+await executor.execute(
+    work_item_id="item-1",
+    agent_id="agent-1",
+    board_id="board-1"  # optional, defaults to None
+)
+
+# Query active executions for timeout monitoring
+active = executor.get_active_executions()
+for exec_info in active:
+    print(f"Task {exec_info.execution_id}: {exec_info.work_item_id}")
 ```
 
 **Use Cases**:
