@@ -76,7 +76,19 @@ This design choice ensures simulation tests catch integration issues between Exe
 
 ### Unit Test Utilities (Not Used in Simulation Bootstrap)
 
-**MockAgentExecutor** is a unit-test-only utility for isolated test scenarios. It is NOT wired by SimulationApplicationBootstrap. It is used exclusively in board automation unit tests that manually construct BoardColumnEventHandler instances to test event handler logic without invoking the full execution chain. For simulation bootstrap wiring, ExecutionServiceAgentExecutor is always used unconditionally.
+Two distinct `MockAgentExecutor` classes exist for different testing purposes:
+
+1. **Production-strength MockAgentExecutor** (`src/codetoreum/adapters/testing/mock_agent_executor.py`):
+   - A unit-test-only utility for isolated test scenarios. It is NOT wired by SimulationApplicationBootstrap.
+   - Used by: `tests/simulation/test_port_adapter_coverage.py` and `tests/unit/infrastructure/adapters/test_new_registries.py`
+   - Simulates agent work with execution delays, tracks full execution pipeline via ExecutionQueryAdapter
+
+2. **Simple MockAgentExecutor** (`tests/simulation/conftest.py`):
+   - A lightweight mock for tests that manually construct BoardColumnEventHandler instances
+   - Used by: `tests/simulation/test_board_automation_scenario_b.py`, `tests/simulation/test_board_automation_scenario_c.py`, `tests/simulation/test_board_automation_scenario_d.py`
+   - Tracks only minimal execution details without delay simulation
+
+For simulation bootstrap wiring, **ExecutionServiceAgentExecutor is always used unconditionally** as the sole agent executor.
 
 ## Architecture
 
