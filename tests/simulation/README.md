@@ -735,7 +735,7 @@ Potential improvements for Phase 5+:
 
 ## References
 
-- **Design Doc**: `documentation/01_design/infrastructure/simulation_design.md`
+- **Scenario Specifications**: `documentation/simulation_scenarios/SCENARIOS_COMPLETE.md`
 - **Scenario Format**: `SCENARIO_FORMAT.md`
 - **Source Code**: `src/codetoreum/infrastructure/simulation/`
 
