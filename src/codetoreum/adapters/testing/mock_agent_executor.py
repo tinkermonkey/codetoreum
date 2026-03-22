@@ -41,14 +41,14 @@ class MockAgentExecutor(IAgentExecutor):
     via asyncio.create_task so the event handler is not blocked waiting
     for agent work to finish.
 
-    WARNING: This class is for isolated unit tests only (e.g., board automation
-    tests that construct their own BoardColumnEventHandler). It is NOT wired
+    WARNING: This class is for isolated unit tests only. It is NOT wired
     by SimulationApplicationBootstrap, which uses ExecutionServiceAgentExecutor
-    directly as the unconditional default. It is used exclusively by board
-    automation unit tests (test_board_automation_scenario_b/c/d.py,
-    test_board_automation_edge_cases.py) to test BoardColumnEventHandler logic
-    without invoking the full execution chain. For simulation bootstrap wiring,
-    ExecutionServiceAgentExecutor is always used unconditionally.
+    directly as the unconditional default. The actual consumers are:
+    - tests/simulation/test_port_adapter_coverage.py: Port-to-adapter coverage audit
+    - tests/unit/infrastructure/adapters/test_new_registries.py: Registry compliance testing
+
+    Do not confuse with the simpler MockAgentExecutor in tests/simulation/conftest.py
+    (used by board automation tests), which tracks minimal execution details.
 
     Attributes:
         _execution_delay: Seconds to simulate agent work
