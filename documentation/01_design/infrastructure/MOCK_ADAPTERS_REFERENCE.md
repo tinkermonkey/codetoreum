@@ -1111,7 +1111,7 @@ emitter.clear()
 **Purpose**: Unit-test utility for isolated executor testing (NOT used in SimulationApplicationBootstrap)
 **Status**: ⚠️ **DEPRECATED FROM BOOTSTRAP** - SimulationApplicationBootstrap uses ExecutionServiceAgentExecutor exclusively
 
-**Important Note**: As of Phase 1 of issue #371, MockAgentExecutor is retained only as a unit-test utility for tests that construct their own BoardColumnEventHandler instances. It is no longer wired by SimulationApplicationBootstrap. The bootstrap now uses ExecutionServiceAgentExecutor directly as the unconditional default executor.
+**Important Note**: As of issue #371, MockAgentExecutor is retained only as a unit-test utility for tests that construct their own BoardColumnEventHandler instances. It is no longer wired by SimulationApplicationBootstrap. The bootstrap now uses ExecutionServiceAgentExecutor directly as the unconditional default executor.
 
 **Key Features**:
 - ✅ Agent execution simulation with configurable delays
@@ -1141,8 +1141,8 @@ executor.set_completion_handler(on_complete, "board-1")
 ---
 
 #### 24. ExecutionServiceAgentExecutor
-**File**: `../../application/services/execution_service.py`
-**Implements**: IAgentExecutor (indirectly via ExecutionService)
+**File**: `execution_service_agent_executor.py`
+**Implements**: IAgentExecutor
 **Purpose**: Production agent executor wired by SimulationApplicationBootstrap
 
 **Bootstrap Usage**: ✅ **Always wired**. Used exclusively by SimulationApplicationBootstrap as the unconditional default agent executor for all simulation and E2E testing.
