@@ -369,7 +369,7 @@ def create_audit_router(
             events_by_id = await _get_event_index()
 
             if root_event_id not in events_by_id:
-                return [], False, ""
+                return [], False, "", 0
 
             chain: list[CausalChainEvent] = []
             current_event_id = root_event_id
@@ -518,7 +518,7 @@ def create_audit_router(
                     rootEventId=root_event_id,
                     chain=chain,
                     truncated=truncated,
-                    hopCount=max(hops - 1, 0),
+                    hopCount=hops,
                 )
 
             except HTTPException:
