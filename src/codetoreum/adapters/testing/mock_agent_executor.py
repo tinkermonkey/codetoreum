@@ -46,6 +46,13 @@ class MockAgentExecutor(IAgentExecutor):
     by SimulationApplicationBootstrap, which uses ExecutionServiceAgentExecutor
     directly as the unconditional default.
 
+    THIS CLASS IS NOT FOR USE IN SimulationApplicationBootstrap.
+    It is used exclusively by board automation unit tests
+    (test_board_automation_scenario_b/c/d.py, test_board_automation_edge_cases.py)
+    to test BoardColumnEventHandler logic without invoking the full execution chain.
+
+    For simulation bootstrap wiring, ExecutionServiceAgentExecutor is always used.
+
     Attributes:
         _execution_delay: Seconds to simulate agent work
         _completion_callback: Async callback invoked after execution
