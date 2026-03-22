@@ -53,3 +53,11 @@ class InMemoryActiveWorkflowRunRegistry(IActiveWorkflowRunRegistry):
             work_item_id: Work item identifier
         """
         self._runs.pop(work_item_id, None)
+
+    async def get_all_runs(self) -> list[tuple[str, ActiveRunInfo]]:
+        """Get all active workflow runs.
+
+        Returns:
+            List of tuples (work_item_id, ActiveRunInfo) for all active runs
+        """
+        return list(self._runs.items())

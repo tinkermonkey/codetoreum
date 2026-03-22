@@ -7,7 +7,6 @@ for simulating board changes via event emission and tracking movement history.
 
 import asyncio
 import logging
-import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -106,7 +105,7 @@ class MockBoardAdapter(IBoardService):
         self._board_project_map: dict[str, str] = {}  # board_id -> project_id
         self._monitoring: dict[str, MonitoringStatus] = {}  # project_id -> status
         self._movement_log: list[MovementEvent] = []  # Audit trail of all movements
-        self._lock = threading.Lock()  # Thread safety for concurrent operations
+        self._lock = asyncio.Lock()  # Async-safe lock for concurrent operations
         self._event_listeners: dict[str, list] = {}  # Event type -> list of handlers
         self._event_emitter = event_emitter
         self._clock = clock
@@ -165,7 +164,7 @@ class MockBoardAdapter(IBoardService):
         Raises:
             ValueError: Board doesn't exist
         """
-        with self._lock:
+        async with self._lock:
             key = f"{project_id}:{board_id}"
             if key not in self._boards:
                 msg = f"Board not found: {board_id}"
@@ -207,7 +206,7 @@ class MockBoardAdapter(IBoardService):
             msg = "current_project not set"
             raise ValueError(msg)
         board = await self.get_board(self.current_project, board_id)
-        with self._lock:
+        async with self._lock:
             for column in board.columns:
                 if column.name == column_name:
                     return [
@@ -233,7 +232,7 @@ class MockBoardAdapter(IBoardService):
         Raises:
             ResourceNotFoundError: Work item not found on any board
         """
-        with self._lock:
+        async with self._lock:
             if work_item_id not in self._item_positions:
                 msg = "Work item"
                 raise ResourceNotFoundError(msg, work_item_id)
@@ -278,7 +277,7 @@ class MockBoardAdapter(IBoardService):
         """
         from codetoreum.ports.output.board_service import ColumnMovementResult
 
-        with self._lock:
+        async with self._lock:
             if work_item_id not in self._item_positions:
                 msg = "Work item"
                 raise ResourceNotFoundError(msg, work_item_id)
@@ -294,7 +293,7 @@ class MockBoardAdapter(IBoardService):
 
         board = await self.get_board(project_id, board_id)
 
-        with self._lock:
+        async with self._lock:
             # Validate target column exists
             target_col = None
             for col in board.columns:
@@ -404,7 +403,7 @@ class MockBoardAdapter(IBoardService):
 
         board = await self.get_board(self.current_project, board_id)
 
-        with self._lock:
+        async with self._lock:
             columns_added = []
             columns_removed = []
             columns_renamed = []
@@ -463,7 +462,7 @@ class MockBoardAdapter(IBoardService):
             project_id: Project to monitor
             config: Monitoring configuration
         """
-        with self._lock:
+        async with self._lock:
             self._monitoring[project_id] = MonitoringStatus(
                 state=MonitoringState.ACTIVE,
                 project_id=project_id,
@@ -476,7 +475,7 @@ class MockBoardAdapter(IBoardService):
         Args:
             project_id: Project to stop monitoring
         """
-        with self._lock:
+        async with self._lock:
             if project_id in self._monitoring:
                 status = self._monitoring[project_id]
                 stopped_status = MonitoringStatus(
@@ -496,7 +495,7 @@ class MockBoardAdapter(IBoardService):
         Returns:
             MonitoringStatus with current state
         """
-        with self._lock:
+        async with self._lock:
             return self._monitoring.get(
                 project_id,
                 MonitoringStatus(state=MonitoringState.STOPPED, project_id=project_id),
@@ -524,24 +523,25 @@ class MockBoardAdapter(IBoardService):
         Example:
             adapter.create_board("proj-1", "board-1", "My Board", ["Backlog", "In Progress", "Done"])
         """
-        with self._lock:
-            key = f"{project_id}:{board_id}"
-            self._boards[key] = ProjectBoard(
-                id=board_id,
-                name=board_name,
-                project_id=project_id,
-                columns=[
-                    BoardColumn(
-                        id=f"col-{i}",
-                        name=col,
-                        position=i,
-                        work_item_ids=[],
-                    )
-                    for i, col in enumerate(column_names)
-                ],
-            )
-            # Register board -> project mapping for multi-project support
-            self._board_project_map[board_id] = project_id
+        # Use a workaround for sync context: directly access protected state
+        # This is safe because create_board is only called from test setup (no concurrency)
+        key = f"{project_id}:{board_id}"
+        self._boards[key] = ProjectBoard(
+            id=board_id,
+            name=board_name,
+            project_id=project_id,
+            columns=[
+                BoardColumn(
+                    id=f"col-{i}",
+                    name=col,
+                    position=i,
+                    work_item_ids=[],
+                )
+                for i, col in enumerate(column_names)
+            ],
+        )
+        # Register board -> project mapping for multi-project support
+        self._board_project_map[board_id] = project_id
 
     def add_item_to_column(
         self,
@@ -568,61 +568,61 @@ class MockBoardAdapter(IBoardService):
             msg = "current_project not set"
             raise ValueError(msg)
 
-        with self._lock:
-            # Find the board containing this column
-            board = None
-            project_id = self.current_project
-            if project_id:
-                key = f"{project_id}:{board_id}"
-                board = self._boards.get(key)
+        # Use direct access (no lock needed in test setup context)
+        # Find the board containing this column
+        board = None
+        project_id = self.current_project
+        if project_id:
+            key = f"{project_id}:{board_id}"
+            board = self._boards.get(key)
 
-            if board is None:
-                msg = f"Board {board_id} not found in project {project_id}"
-                raise ValueError(msg)
+        if board is None:
+            msg = f"Board {board_id} not found in project {project_id}"
+            raise ValueError(msg)
 
-            # Find the target column
-            target_column = None
-            for col in board.columns:
-                if col.name == column_name:
-                    target_column = col
-                    break
+        # Find the target column
+        target_column = None
+        for col in board.columns:
+            if col.name == column_name:
+                target_column = col
+                break
 
-            if target_column is None:
-                msg = f"Column {column_name} not found in board {board_id}"
-                raise ValueError(msg)
+        if target_column is None:
+            msg = f"Column {column_name} not found in board {board_id}"
+            raise ValueError(msg)
 
-            # Insert work item at specified position
-            if position is None:
-                position = len(target_column.work_item_ids)
+        # Insert work item at specified position
+        if position is None:
+            position = len(target_column.work_item_ids)
 
-            # Create new work_item_ids tuple with item inserted at position
-            new_items = list(target_column.work_item_ids)
-            new_items.insert(position, work_item_id)
-            object.__setattr__(target_column, "work_item_ids", tuple(new_items))
-            self._item_positions[work_item_id] = (board_id, column_name, position)
-            # Track when item entered this column (for SLA monitoring)
-            self._item_column_entries[work_item_id] = self._get_utc_datetime()
+        # Create new work_item_ids tuple with item inserted at position
+        new_items = list(target_column.work_item_ids)
+        new_items.insert(position, work_item_id)
+        object.__setattr__(target_column, "work_item_ids", tuple(new_items))
+        self._item_positions[work_item_id] = (board_id, column_name, position)
+        # Track when item entered this column (for SLA monitoring)
+        self._item_column_entries[work_item_id] = self._get_utc_datetime()
 
-            # Update positions of items after insertion
-            for i in range(position + 1, len(target_column.work_item_ids)):
-                item_id = target_column.work_item_ids[i]
-                if item_id in self._item_positions:
-                    board_id_stored, col, old_pos = self._item_positions[item_id]
-                    self._item_positions[item_id] = (board_id_stored, col, i)
-                    # Emit position change event for shifted items
-                    self.emit(
-                        WorkItemPositionChangedEvent(
-                            type="workitem.position_changed",
-                            work_item_id=item_id,
-                            project_id=self.current_project,
-                            board_id=board_id,
-                            column_name=col,
-                            old_position=old_pos,
-                            new_position=i,
-                            timestamp=self._get_iso_timestamp(),
-                            source="mock",
-                        )
+        # Update positions of items after insertion
+        for i in range(position + 1, len(target_column.work_item_ids)):
+            item_id = target_column.work_item_ids[i]
+            if item_id in self._item_positions:
+                board_id_stored, col, old_pos = self._item_positions[item_id]
+                self._item_positions[item_id] = (board_id_stored, col, i)
+                # Emit position change event for shifted items
+                self.emit(
+                    WorkItemPositionChangedEvent(
+                        type="workitem.position_changed",
+                        work_item_id=item_id,
+                        project_id=self.current_project,
+                        board_id=board_id,
+                        column_name=col,
+                        old_position=old_pos,
+                        new_position=i,
+                        timestamp=self._get_iso_timestamp(),
+                        source="mock",
                     )
+                )
 
     async def simulate_human_move_async(self, work_item_id: str, target_column: str) -> None:
         """Test helper: Simulate user dragging card in board UI (async version).
@@ -701,14 +701,14 @@ class MockBoardAdapter(IBoardService):
         Example:
             adapter.assert_item_in_column("item-1", "In Progress")
         """
-        with self._lock:
-            actual = None
-            if work_item_id in self._item_positions:
-                _, actual, _ = self._item_positions[work_item_id]
+        # Direct access for test assertions (no concurrent modification expected)
+        actual = None
+        if work_item_id in self._item_positions:
+            _, actual, _ = self._item_positions[work_item_id]
 
-            if actual != expected_column:
-                msg = f"Expected work item {work_item_id} in column '{expected_column}', found in column '{actual}'"
-                raise AssertionError(msg)
+        if actual != expected_column:
+            msg = f"Expected work item {work_item_id} in column '{expected_column}', found in column '{actual}'"
+            raise AssertionError(msg)
 
     def get_movement_history(self, work_item_id: str) -> list[MovementEvent]:
         """Test helper: Get movement audit trail for work item.
@@ -727,8 +727,8 @@ class MockBoardAdapter(IBoardService):
             assert history[0].from_column == "Backlog"
             assert history[0].to_column == "In Progress"
         """
-        with self._lock:
-            return [m for m in self._movement_log if m.work_item_id == work_item_id]
+        # Direct access for test helpers (snapshot read, no concurrent modification expected)
+        return [m for m in self._movement_log if m.work_item_id == work_item_id]
 
     def get_all_movements(self) -> list[MovementEvent]:
         """Test helper: Get complete movement audit trail for board.
@@ -742,8 +742,8 @@ class MockBoardAdapter(IBoardService):
             all_movements = adapter.get_all_movements()
             assert len(all_movements) >= 1
         """
-        with self._lock:
-            return list(self._movement_log)
+        # Direct access for test helpers (snapshot read, no concurrent modification expected)
+        return list(self._movement_log)
 
     def clear_movement_log(self) -> None:
         """Test helper: Clear movement history for cleanup.
@@ -753,8 +753,8 @@ class MockBoardAdapter(IBoardService):
         Example:
             adapter.clear_movement_log()
         """
-        with self._lock:
-            self._movement_log.clear()
+        # Direct access for test cleanup (no concurrent modification expected)
+        self._movement_log.clear()
 
     async def get_all_boards(self) -> list[ProjectBoard]:
         """Get all boards across all projects.
@@ -765,7 +765,7 @@ class MockBoardAdapter(IBoardService):
         Returns:
             List[ProjectBoard]: All boards with columns and items
         """
-        with self._lock:
+        async with self._lock:
             return list(self._boards.values())
 
     async def get_board_items(self, project_id: str, board_id: str) -> list[WorkItemPosition]:
@@ -784,7 +784,7 @@ class MockBoardAdapter(IBoardService):
         board = await self.get_board(project_id, board_id)
         items = []
 
-        with self._lock:
+        async with self._lock:
             for column in board.columns:
                 for position, work_item_id in enumerate(column.work_item_ids):
                     entered_at = self._item_column_entries.get(work_item_id)

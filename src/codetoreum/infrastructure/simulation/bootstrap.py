@@ -55,11 +55,20 @@ from codetoreum.adapters.primary.input_port_adapters.mock import (
     MockWorkItemQueryAdapter,
     MockWorkspaceQueryAdapter,
 )
+from codetoreum.adapters.primary.routers.simulation_board_state import (
+    create_simulation_board_state_router,
+)
 from codetoreum.adapters.primary.routers.simulation_clock import (
     create_simulation_clock_router,
 )
 
 # Import simulation routers
+from codetoreum.adapters.primary.routers.simulation_executions import (
+    create_simulation_executions_router,
+)
+from codetoreum.adapters.primary.routers.simulation_stream import (
+    create_simulation_stream_router,
+)
 from codetoreum.adapters.primary.routers.simulation_ticketing import (
     create_simulation_ticketing_router,
 )
@@ -1786,11 +1795,25 @@ class SimulationApplicationBootstrap:
             event_bus=self.infrastructure.event_bus,
             config_service=config_service_interface,
             logger=logger_interface,
-            audit_query_port=self.ports.audit_query,
+            audit_query_port=None,  # Defer to simulation bootstrap to include with event_store
             disable_auth=True,  # ADR-003: Disable authentication in simulation
             cors_origins=["*"],  # Allow all origins in simulation mode (auth is disabled)
             container_recovery_service=self.services.container_recovery_service,
         )
+
+        # Mount simulation-only audit causal chain endpoint (never in production create_app)
+        # In simulation, we include the audit router with the InMemoryEventStore
+        # for causal chain traversal. We defer this to the bootstrap rather than create_app()
+        # to avoid registering the endpoint twice, which would cause duplicate operation ID warnings.
+        from codetoreum.adapters.primary.routers.audit import create_audit_router as create_audit_router_sim
+
+        audit_router_with_chains = create_audit_router_sim(
+            query_port=self.ports.audit_query,
+            event_store=self.adapters.event_store_as_memory(),
+            causal_link_registry=self.infrastructure.causal_link_registry,
+            simulation_clock=self._engine.get_clock_for_testing() if self._engine else None,
+        )
+        app.include_router(audit_router_with_chains)
 
         # Mount simulation-only ticketing router (never in production create_app)
         # Pass workflow_config_service to enable proper staging column detection (issue #442)
@@ -1802,6 +1825,27 @@ class SimulationApplicationBootstrap:
         # Mount simulation-only clock control router (never in production create_app)
         clock_router = create_simulation_clock_router(self._engine)
         app.include_router(clock_router)
+
+        # Mount simulation-only board state snapshot router (never in production create_app)
+        board_state_router = create_simulation_board_state_router(
+            board_adapter=self.adapters.board_as_mock(),
+            run_registry=self.adapters.run_registry_as_memory(),
+            ticket_adapter=self.adapters.ticket_as_mock(),
+            clock=self._engine,
+        )
+        app.include_router(board_state_router)
+
+        # Mount simulation-only SSE stream router (never in production create_app)
+        stream_router = create_simulation_stream_router(self.infrastructure.event_bus, self._engine)
+        app.include_router(stream_router)
+
+        # Mount simulation-only executions status router (never in production create_app)
+        executions_router = create_simulation_executions_router(
+            run_registry=self.adapters.run_registry_as_memory(),
+            event_store=self.adapters.event_store_as_memory(),
+            clock=self._engine,
+        )
+        app.include_router(executions_router)
 
         logger.info("Created FastAPI application with all ports wired")
 

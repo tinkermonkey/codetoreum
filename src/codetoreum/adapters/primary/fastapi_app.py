@@ -553,6 +553,7 @@ def create_app(
 
     # Include Audit router (if audit_query_port is provided)
     if audit_query_port is not None:
+        # Production: no event store for causal chain (simulation-only feature)
         audit_router = create_audit_router(
             query_port=audit_query_port,
             auth_deps=auth_deps,

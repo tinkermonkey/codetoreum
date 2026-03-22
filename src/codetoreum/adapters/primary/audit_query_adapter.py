@@ -68,6 +68,7 @@ class AuditQueryAdapter(IAuditQueryPort):
             success=filters.success if filters else None,
             start_time=filters.start_time if filters else None,
             end_time=filters.end_time if filters else None,
+            work_item_id=filters.work_item_id if filters else None,
             limit=pagination.limit,
             offset=pagination.offset,
         )
@@ -85,6 +86,7 @@ class AuditQueryAdapter(IAuditQueryPort):
             success=store_filters.success,
             start_time=store_filters.start_time,
             end_time=store_filters.end_time,
+            work_item_id=store_filters.work_item_id,
         )
         total_count = await self.audit_store.count_events(count_filters)
 

@@ -6,6 +6,9 @@ authors = ["Codetoreum Team"]
 readme = "README.md"
 packages = [{include = "codetoreum", from = "src"}]
 
+[tool.poetry.scripts]
+codetoreum = "codetoreum.cli.main:cli"
+
 [tool.poetry.dependencies]
 python = "^3.11"
 fastapi = "^0.115.0"
