@@ -1,6 +1,6 @@
 # Mock Adapters Reference
 
-**Complete inventory of 24 testing and simulation adapters**
+**Complete inventory of 24 testing/simulation adapters + ExecutionServiceAgentExecutor (bootstrap default)**
 
 ## Overview
 
@@ -1140,7 +1140,33 @@ executor.set_completion_handler(on_complete, "board-1")
 
 ---
 
-#### 24. MockEventEmitter (Legacy)
+#### 24. ExecutionServiceAgentExecutor
+**File**: `../../application/services/execution_service.py`
+**Implements**: IAgentExecutor (indirectly via ExecutionService)
+**Purpose**: Production agent executor wired by SimulationApplicationBootstrap
+
+**Bootstrap Usage**: ✅ **Always wired**. Used exclusively by SimulationApplicationBootstrap as the unconditional default agent executor for all simulation and E2E testing.
+
+**Key Characteristics**:
+- ✅ Real-world agent execution via ExecutionService
+- ✅ Container lifecycle management (create, start, stop)
+- ✅ Workspace management and file mounting
+- ✅ Environment variable and context setup
+- ✅ Standard error handling and logging
+- ✅ Compatible with both simulation and production modes
+
+**Use Cases**:
+- Simulation testing (via SimulationApplicationBootstrap)
+- E2E workflow validation
+- Production agent execution
+
+**Related**:
+- For unit testing of handler logic in isolation, use `MockAgentExecutor` (unit-test only)
+- For full workflow simulation, SimulationApplicationBootstrap automatically wires ExecutionServiceAgentExecutor
+
+---
+
+#### 25. MockEventEmitter (Legacy)
 **File**: `../secondary/mock_event_emitter.py`
 **Purpose**: Basic event emission mock (deprecated in favor of CapturingMockEventEmitter)
 
