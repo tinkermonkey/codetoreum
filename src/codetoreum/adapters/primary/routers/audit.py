@@ -364,7 +364,11 @@ def create_audit_router(
             Includes cycle detection to prevent infinite loops in malformed causation chains.
 
             Returns:
-                Tuple of (chain events, truncated, root_event_id, hop_count)
+                Tuple of (chain events, truncated, root_event_id, hop_count):
+                - chain events: List of CausalChainEvent objects in reverse chronological order
+                - truncated: Boolean indicating if the chain was truncated at max_hops
+                - root_event_id: The ID of the root/deepest event in the chain
+                - hop_count: The number of hops traversed in the chain
             """
             events_by_id = await _get_event_index()
 
