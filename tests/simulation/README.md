@@ -74,6 +74,10 @@ There is **no optional lightweight execution mode**. The architecture ensures th
 
 This design choice ensures simulation tests catch integration issues between ExecutionService, WorkspaceRouter, and VCS operations before production deployment.
 
+### Unit Test Utilities (Not Used in Simulation Bootstrap)
+
+**MockAgentExecutor** is a unit-test-only utility for isolated test scenarios. It is NOT wired by SimulationApplicationBootstrap. It is used exclusively in board automation unit tests that manually construct BoardColumnEventHandler instances to test event handler logic without invoking the full execution chain. For simulation bootstrap wiring, ExecutionServiceAgentExecutor is always used unconditionally.
+
 ## Architecture
 
 ```
