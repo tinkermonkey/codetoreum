@@ -41,9 +41,9 @@ class MockAgentExecutor(IAgentExecutor):
     via asyncio.create_task so the event handler is not blocked waiting
     for agent work to finish.
 
-    WARNING: This class is for isolated unit tests only. It is NOT wired
-    by SimulationApplicationBootstrap, which uses ExecutionServiceAgentExecutor
-    directly as the unconditional default. The actual consumers are:
+    THIS CLASS IS NOT FOR USE IN SimulationApplicationBootstrap. The
+    bootstrap uses ExecutionServiceAgentExecutor directly as the unconditional
+    default. The actual consumers are:
     - tests/simulation/test_port_adapter_coverage.py: Port-to-adapter coverage audit
     - tests/unit/infrastructure/adapters/test_new_registries.py: Registry compliance testing
 
