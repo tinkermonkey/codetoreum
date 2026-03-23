@@ -2,16 +2,16 @@
 
 This production-strength mock simulates agent work by sleeping for a configurable
 duration, then invoking a completion callback. It supports the full execution info
-tracking via ExecutionQueryAdapter and is useful for testing board automation behavior
-in isolation.
+tracking via ExecutionQueryAdapter.
 
-IMPORTANT: This is a unit-test utility for isolated test scenarios. It is NOT wired
+WARNING: This is a unit-test utility for isolated test scenarios. It is NOT wired
 by SimulationApplicationBootstrap. The bootstrap uses ExecutionServiceAgentExecutor
-directly as the unconditional default. This class is only used when manually
-constructing BoardColumnEventHandler instances in isolated unit tests.
+directly as the unconditional default. The actual consumers are:
+- tests/simulation/test_port_adapter_coverage.py: Port-to-adapter coverage audit
+- tests/unit/infrastructure/adapters/test_new_registries.py: Registry compliance testing
 
 Do not confuse this with the simple MockAgentExecutor in tests/simulation/conftest.py,
-which is for tests that manually construct event handlers with minimal tracking.
+which tracks minimal execution details and is used by board automation tests.
 """
 
 import asyncio
@@ -41,10 +41,14 @@ class MockAgentExecutor(IAgentExecutor):
     via asyncio.create_task so the event handler is not blocked waiting
     for agent work to finish.
 
-    WARNING: This class is for isolated unit tests only (e.g., board automation
-    tests that construct their own BoardColumnEventHandler). It is NOT wired
-    by SimulationApplicationBootstrap, which uses ExecutionServiceAgentExecutor
-    directly as the unconditional default.
+    THIS CLASS IS NOT FOR USE IN SimulationApplicationBootstrap. The
+    bootstrap uses ExecutionServiceAgentExecutor directly as the unconditional
+    default. The actual consumers are:
+    - tests/simulation/test_port_adapter_coverage.py: Port-to-adapter coverage audit
+    - tests/unit/infrastructure/adapters/test_new_registries.py: Registry compliance testing
+
+    Do not confuse with the simpler MockAgentExecutor in tests/simulation/conftest.py
+    (used by board automation tests), which tracks minimal execution details.
 
     Attributes:
         _execution_delay: Seconds to simulate agent work

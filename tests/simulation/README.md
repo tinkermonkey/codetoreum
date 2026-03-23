@@ -74,6 +74,22 @@ There is **no optional lightweight execution mode**. The architecture ensures th
 
 This design choice ensures simulation tests catch integration issues between ExecutionService, WorkspaceRouter, and VCS operations before production deployment.
 
+### Unit Test Utilities (Not Used in Simulation Bootstrap)
+
+Two distinct `MockAgentExecutor` classes exist for different testing purposes:
+
+1. **Production-strength MockAgentExecutor** (`src/codetoreum/adapters/testing/mock_agent_executor.py`):
+   - A unit-test-only utility for isolated test scenarios. It is NOT wired by SimulationApplicationBootstrap.
+   - Used by: `tests/simulation/test_port_adapter_coverage.py` and `tests/unit/infrastructure/adapters/test_new_registries.py`
+   - Simulates agent work with execution delays, tracks full execution pipeline via ExecutionQueryAdapter
+
+2. **Simple MockAgentExecutor** (`tests/simulation/conftest.py`):
+   - A lightweight mock for tests that manually construct BoardColumnEventHandler instances
+   - Used by: `tests/simulation/test_board_automation_scenario_b.py`, `tests/simulation/test_board_automation_scenario_c.py`, `tests/simulation/test_board_automation_scenario_d.py`
+   - Tracks only minimal execution details without delay simulation
+
+For simulation bootstrap wiring, **ExecutionServiceAgentExecutor is always used unconditionally** as the sole agent executor.
+
 ## Architecture
 
 ```
@@ -731,7 +747,8 @@ Potential improvements for Phase 5+:
 
 ## References
 
-- **Design Doc**: `documentation/01_design/infrastructure/simulation_design.md`
+- **Design Doc**: `documentation/simulation_mode_architecture.md`
+- **Scenario Specifications**: `documentation/simulation_scenarios/SCENARIOS_COMPLETE.md`
 - **Scenario Format**: `SCENARIO_FORMAT.md`
 - **Source Code**: `src/codetoreum/infrastructure/simulation/`
 

@@ -1,6 +1,6 @@
 # Mock Adapters Reference
 
-**Complete inventory of 24 testing and simulation adapters**
+**Complete inventory of 25 testing/simulation adapters + ExecutionServiceAgentExecutor (bootstrap default)**
 
 ## Overview
 
@@ -40,9 +40,11 @@ Mock adapters provide fast, deterministic implementations of port interfaces for
 - ConfigurableIdentityService - Bot/user identification
 - MockProjectManagerAdapter - Multi-project management
 
-### 6. **Support Adapters** (2)
+### 6. **Support Adapters** (4)
 - CapturingMockEventEmitter - Domain event capture
 - MockAgentExecutor - Agent execution simulation (unit-test utility only, not used in bootstrap)
+- ExecutionServiceAgentExecutor - Production agent executor wired by SimulationApplicationBootstrap
+- MockEventEmitter - Basic event emission mock (legacy)
 
 ---
 
@@ -1111,7 +1113,7 @@ emitter.clear()
 **Purpose**: Unit-test utility for isolated executor testing (NOT used in SimulationApplicationBootstrap)
 **Status**: ⚠️ **DEPRECATED FROM BOOTSTRAP** - SimulationApplicationBootstrap uses ExecutionServiceAgentExecutor exclusively
 
-**Important Note**: As of Phase 1 of issue #371, MockAgentExecutor is retained only as a unit-test utility for tests that construct their own BoardColumnEventHandler instances. It is no longer wired by SimulationApplicationBootstrap. The bootstrap now uses ExecutionServiceAgentExecutor directly as the unconditional default executor.
+**Important Note**: As of issue #371, MockAgentExecutor is retained only as a unit-test utility for tests that construct their own BoardColumnEventHandler instances. It is no longer wired by SimulationApplicationBootstrap. The bootstrap now uses ExecutionServiceAgentExecutor directly as the unconditional default executor.
 
 **Key Features**:
 - ✅ Agent execution simulation with configurable delays
@@ -1140,7 +1142,72 @@ executor.set_completion_handler(on_complete, "board-1")
 
 ---
 
-#### 24. MockEventEmitter (Legacy)
+#### 24. ExecutionServiceAgentExecutor
+**File**: `execution_service_agent_executor.py`
+**Implements**: IAgentExecutor
+**Purpose**: Production agent executor wired by SimulationApplicationBootstrap
+
+**Key Features**:
+- ✅ Real-world agent execution via ExecutionService
+- ✅ Container lifecycle management (create, start, stop)
+- ✅ Workspace management and file mounting
+- ✅ Environment variable and context setup
+- ✅ Standard error handling and logging
+- ✅ Compatible with both simulation and production modes
+
+**Configuration**:
+```python
+# ExecutionServiceAgentExecutor is automatically configured
+# by SimulationApplicationBootstrap with full dependency injection
+executor = ExecutionServiceAgentExecutor(
+    execution_service=execution_service,
+    workspace_router=workspace_router,
+    config_store=config_store,
+    agent_repository=agent_repository,
+    work_item_service=work_item_service,
+    run_registry=run_registry,
+    branch_tracker=branch_tracker,
+    vcs=vcs,
+    clock=clock,
+    recovery_service=recovery_service,
+    execution_delay=0.0
+)
+```
+
+**Core Methods**:
+```python
+# Register completion handler (called when execution finishes)
+executor.set_completion_handler(
+    callback=async_callback,
+    default_board_id="board-1"
+)
+
+# Execute agent (fire-and-forget, non-blocking)
+await executor.execute(
+    work_item_id="item-1",
+    agent_id="agent-1",
+    board_id="board-1"  # optional, defaults to None
+)
+
+# Query active executions for timeout monitoring
+active = executor.get_active_executions()
+for exec_info in active:
+    print(f"Task {exec_info.execution_id}: {exec_info.work_item_id}")
+```
+
+**Use Cases**:
+- Simulation testing (via SimulationApplicationBootstrap)
+- E2E workflow validation
+- Production agent execution
+- Bootstrap default executor for all simulation/E2E scenarios
+
+**Related**:
+- For unit testing of handler logic in isolation, use `MockAgentExecutor` (unit-test only)
+- For full workflow simulation, SimulationApplicationBootstrap automatically wires ExecutionServiceAgentExecutor
+
+---
+
+#### 25. MockEventEmitter (Legacy)
 **File**: `../secondary/mock_event_emitter.py`
 **Purpose**: Basic event emission mock (deprecated in favor of CapturingMockEventEmitter)
 
