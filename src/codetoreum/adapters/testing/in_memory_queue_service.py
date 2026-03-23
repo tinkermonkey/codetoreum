@@ -230,7 +230,7 @@ class InMemoryQueueService(IPipelineQueueService):
             self._event_emitter.emit(
                 QueueItemAddedEvent(
                     type="queue.item_added",
-                    timestamp=datetime.now(UTC).isoformat(),
+                    timestamp=self._time_source().isoformat(),
                     source="mock",
                     queue_name=queue_key,
                     item_id=work_item_id,
@@ -334,7 +334,7 @@ class InMemoryQueueService(IPipelineQueueService):
                         self._event_emitter.emit(
                             QueueItemRemovedEvent(
                                 type="queue.item_removed",
-                                timestamp=datetime.now(UTC).isoformat(),
+                                timestamp=self._time_source().isoformat(),
                                 source="mock",
                                 queue_name=queue_key,
                                 item_id=work_item_id,
@@ -515,7 +515,7 @@ class InMemoryQueueService(IPipelineQueueService):
                                 self._event_emitter.emit(
                                     QueuePositionChangedEvent(
                                         type="queue.position_changed",
-                                        timestamp=datetime.now(UTC).isoformat(),
+                                        timestamp=self._time_source().isoformat(),
                                         source="mock",
                                         queue_name=queue_key,
                                         item_id=work_item_id,
@@ -642,7 +642,7 @@ class InMemoryQueueService(IPipelineQueueService):
                             self._event_emitter.emit(
                                 QueuePositionChangedEvent(
                                     type="queue.position_changed",
-                                    timestamp=datetime.now(UTC).isoformat(),
+                                    timestamp=self._time_source().isoformat(),
                                     source="mock",
                                     queue_name=queue_key,
                                     item_id=event.work_item_id,

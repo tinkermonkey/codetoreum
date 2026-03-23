@@ -38,6 +38,7 @@ from codetoreum.adapters.testing import (
     InMemoryActiveWorkflowRunRegistry,
     InMemoryAgentRepository,
     InMemoryCheckpointStore,
+    InMemoryCodeReviewAdapter,
     InMemoryConfigStore,
     InMemoryEventStore,
     InMemoryMessageBroker,
@@ -63,19 +64,6 @@ from codetoreum.adapters.testing import (
 )
 
 logger = logging.getLogger(__name__)
-
-# Import optional secondary adapter types
-try:
-    from codetoreum.adapters.secondary.mock_code_review_adapter import (
-        MockCodeReviewAdapter,
-    )
-except ImportError:
-    logger.warning(
-        "Optional adapter MockCodeReviewAdapter not available, skipping registration",
-        exc_info=True,
-        extra={"adapter": "MockCodeReviewAdapter"},
-    )
-    MockCodeReviewAdapter = None  # type: ignore
 
 try:
     from codetoreum.adapters.secondary.prometheus_metrics_adapter import (
@@ -469,18 +457,17 @@ class AdapterFactory:
             ),
             set_as_default=True,
         )
-        if MockCodeReviewAdapter:
-            self._code_review_registry.register(
-                name="mock",
-                adapter_type=MockCodeReviewAdapter,
-                description="Mock code review adapter for testing",
-                version="1.0.0",
-                tags=["testing", "simulation", "mock"],
-                config_schema=AdapterCredentialRequirement(
-                    simulation_only=True,
-                    description="Simulation-only adapter, no credentials required",
-                ),
-            )
+        self._code_review_registry.register(
+            name="mock",
+            adapter_type=InMemoryCodeReviewAdapter,
+            description="In-memory code review adapter for testing",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
+        )
 
         # Discussion Adapter
         self._discussion_adapter_registry.register(

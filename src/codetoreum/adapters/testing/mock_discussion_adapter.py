@@ -5,6 +5,7 @@ discussion threads and comments in memory, and includes test helper methods
 for simulating discussion updates via event emission.
 """
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -96,17 +97,24 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
         assert not adapter.is_monitoring("item-1")
     """
 
-    def __init__(self, identity_service: IIdentityService) -> None:
+    def __init__(
+        self,
+        identity_service: IIdentityService,
+        time_source: Callable[[], datetime] | None = None,
+    ) -> None:
         """Initialize the discussion adapter.
 
         Args:
             identity_service: Service for identifying bot users
+            time_source: Optional callable returning current datetime for simulation clock control.
+                        Defaults to datetime.now(UTC).
         """
         super().__init__()
         self._threads: dict[str, list[Comment]] = {}  # work_item_id -> comments
         self._monitoring: dict[str, DiscussionMonitoringConfig] = {}  # work_item_id -> config
         self._processed_comment_ids: dict[str, set] = {}  # work_item_id -> set of comment IDs
         self._identity_service = identity_service
+        self._time_source = time_source or (lambda: datetime.now(UTC))
 
     # Query Operations
 
@@ -565,7 +573,6 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
 
     # Helper Methods
 
-    @staticmethod
-    def _get_iso_timestamp() -> str:
+    def _get_iso_timestamp(self) -> str:
         """Get current time as ISO 8601 timestamp."""
-        return datetime.now(UTC).isoformat()
+        return self._time_source().isoformat()

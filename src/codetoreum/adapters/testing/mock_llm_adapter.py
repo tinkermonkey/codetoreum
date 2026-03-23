@@ -3,7 +3,7 @@
 import asyncio
 import re
 import threading
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import UTC, datetime
 from re import Pattern
 from typing import TYPE_CHECKING
@@ -90,8 +90,10 @@ class MockLLMAdapter(ILLMProvider):
         # Lazy-load delay calculator to avoid circular import
         self._delay_calculator: ProportionalDelayCalculator | None = None
 
-        # Pattern-based responses
-        self._response_patterns: list[tuple[Pattern, str]] = []
+        # Pattern-based responses: response can be a static string or a callable
+        # (sync or async) that receives the prompt and returns a response
+        ResponseGenerator = str | Callable[[str], str] | Callable[[str], Awaitable[str]]
+        self._response_patterns: list[tuple[Pattern, ResponseGenerator]] = []
 
         # Usage tracking
         self._total_requests = 0
@@ -121,21 +123,30 @@ class MockLLMAdapter(ILLMProvider):
         # Counter for probabilistic failures (deterministic for reproducibility)
         self._execution_counter = 0
 
-    def add_response_pattern(self, pattern: str, response: str) -> None:
+    def add_response_pattern(
+        self,
+        pattern: str,
+        response: "str | Callable[[str], str] | Callable[[str], Awaitable[str]]",
+    ) -> None:
         """
         Add a pattern-based response.
 
+        The response can be a static string, a sync callable (prompt: str) -> str,
+        or an async callable (prompt: str) -> Awaitable[str]. Callables allow
+        generating context-aware responses based on the prompt content.
+
         Args:
             pattern: Regex pattern to match against prompts
-            response: Response to return when pattern matches
+            response: Static response string, or callable invoked with the prompt
 
         Raises:
-            ValidationError: If pattern or response is empty
+            ValidationError: If pattern is empty or response is neither a non-empty
+                            string nor a callable
         """
         if not pattern:
             msg = "Pattern cannot be empty"
             raise ValidationError(msg)
-        if not response:
+        if not callable(response) and not response:
             msg = "Response cannot be empty"
             raise ValidationError(msg)
 
@@ -169,9 +180,11 @@ class MockLLMAdapter(ILLMProvider):
 
         return should_fail
 
-    def _get_response_for_prompt(self, prompt: str) -> str:
+    async def _get_response_for_prompt(self, prompt: str) -> str:
         """
         Get response for a given prompt based on patterns.
+
+        Dispatches static strings, sync callables, and async callables.
 
         Args:
             prompt: The input prompt
@@ -180,10 +193,18 @@ class MockLLMAdapter(ILLMProvider):
             Response string (either pattern-matched or default)
         """
         with self._lock:
-            for pattern, response in self._response_patterns:
-                if pattern.search(prompt):
-                    return response
-            return self._default_response
+            patterns = list(self._response_patterns)
+
+        for pattern, response in patterns:
+            if pattern.search(prompt):
+                if callable(response):
+                    result = response(prompt)
+                    if asyncio.iscoroutine(result):
+                        return await result
+                    return result  # type: ignore[return-value]
+                return response
+
+        return self._default_response
 
     def _calculate_delay_seconds(self, prompt: str, response: str) -> float:
         """
@@ -245,10 +266,10 @@ class MockLLMAdapter(ILLMProvider):
             msg = "LLM execution timeout (HIGH fidelity probabilistic failure)"
             raise RateLimitError(msg)
 
-        started_at = datetime.now(UTC)
+        started_at = self._clock.now() if self._clock else datetime.now(UTC)
 
         # Get response
-        response = self._get_response_for_prompt(prompt)
+        response = await self._get_response_for_prompt(prompt)
 
         # Calculate delay based on fidelity level
         delay_seconds = self._calculate_delay_seconds(prompt, response)
@@ -273,7 +294,7 @@ class MockLLMAdapter(ILLMProvider):
             self._output_tokens += completion_tokens
             self._total_tokens += prompt_tokens + completion_tokens
 
-        completed_at = datetime.now(UTC)
+        completed_at = self._clock.now() if self._clock else datetime.now(UTC)
         duration_ms = int((completed_at - started_at).total_seconds() * 1000)
 
         # If streaming callback provided, simulate streaming
@@ -364,7 +385,7 @@ class MockLLMAdapter(ILLMProvider):
             raise ValidationError(msg)
 
         # Get response
-        response = self._get_response_for_prompt(prompt)
+        response = await self._get_response_for_prompt(prompt)
 
         # Split into words and stream
         words = response.split()
@@ -376,7 +397,7 @@ class MockLLMAdapter(ILLMProvider):
                 content=word + (" " if i < len(words) - 1 else ""),
                 chunk_index=i,
                 is_final=(i == len(words) - 1),
-                timestamp=datetime.now(UTC),
+                timestamp=self._clock.now() if self._clock else datetime.now(UTC),
             )
             yield chunk
 
@@ -556,8 +577,8 @@ class MockLLMAdapter(ILLMProvider):
                 input_tokens=self._input_tokens,
                 output_tokens=self._output_tokens,
                 total_cost=0.0,
-                period_start=since or datetime.now(UTC),
-                period_end=datetime.now(UTC),
+                period_start=since or (self._clock.now() if self._clock else datetime.now(UTC)),
+                period_end=self._clock.now() if self._clock else datetime.now(UTC),
                 by_model={
                     self._model_info.model_id: {
                         "requests": self._total_requests,

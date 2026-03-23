@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import threading
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -50,11 +51,17 @@ class InMemoryVersionControlService(IVersionControlService):
         assert repo.name == "repo"
     """
 
-    def __init__(self, event_emitter: IEventEmitter | None = None) -> None:
+    def __init__(
+        self,
+        event_emitter: IEventEmitter | None = None,
+        time_source: Callable[[], datetime] | None = None,
+    ) -> None:
         """Initialize the in-memory version control service.
 
         Args:
             event_emitter: Optional event emitter for VCS domain events
+            time_source: Optional callable returning current datetime for simulation clock control.
+                        Defaults to datetime.now(UTC).
         """
         # Map of (repo_path) -> {
         #     'url': str,
@@ -82,6 +89,7 @@ class InMemoryVersionControlService(IVersionControlService):
         self._lock = threading.Lock()
 
         self._event_emitter = event_emitter
+        self._time_source = time_source or (lambda: datetime.now(UTC))
 
     async def clone_repository(self, url: str, target_path: str, branch: str | None = None) -> None:
         """Clone a repository to local path.
@@ -238,7 +246,7 @@ class InMemoryVersionControlService(IVersionControlService):
 
             event = CommitCreatedEvent(
                 type="repository.commit_created",
-                timestamp=datetime.now(UTC).isoformat(),
+                timestamp=self._time_source().isoformat(),
                 source="in_memory_vcs",
                 repository_id=repo_path,
                 commit_sha=commit_sha,
@@ -292,7 +300,7 @@ class InMemoryVersionControlService(IVersionControlService):
 
             event = BranchPushedEvent(
                 type="repository.branch_pushed",
-                timestamp=datetime.now(UTC).isoformat(),
+                timestamp=self._time_source().isoformat(),
                 source="in_memory_vcs",
                 repository_id=repo_path,
                 branch_name=branch,
@@ -335,7 +343,7 @@ class InMemoryVersionControlService(IVersionControlService):
 
             event = BranchCreatedEvent(
                 type="repository.branch_created",
-                timestamp=datetime.now(UTC).isoformat(),
+                timestamp=self._time_source().isoformat(),
                 source="in_memory_vcs",
                 repository_id=repo_path,
                 branch_name=branch_name,

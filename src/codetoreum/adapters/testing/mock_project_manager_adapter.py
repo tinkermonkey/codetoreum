@@ -11,6 +11,7 @@ Configuration changes emit ProjectEnabledEvent/ProjectDisabledEvent.
 
 import logging
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -96,6 +97,7 @@ class MockProjectManagerAdapter(IProjectManagerService):
         self,
         event_emitter: IEventEmitter | None = None,
         base_workspace: str = "/workspace",
+        time_source: Callable[[], datetime] | None = None,
     ) -> None:
         """Initialize the mock project manager adapter.
 
@@ -103,6 +105,8 @@ class MockProjectManagerAdapter(IProjectManagerService):
             event_emitter: Optional event emitter for emitting project events.
                           If not provided, events are not emitted.
             base_workspace: Base path for cloned projects (default: /workspace)
+            time_source: Optional callable returning current datetime for simulation clock control.
+                        Defaults to datetime.now(UTC).
         """
         self._projects: dict[str, MockProjectState] = {}
         self._event_emitter = event_emitter
@@ -111,6 +115,7 @@ class MockProjectManagerAdapter(IProjectManagerService):
         self._clone_failures: set[str] = set()  # Per-project clone failures
         self._project_boards: dict[str, list[str]] = {}  # Per-project boards
         self._project_work_items: dict[str, list[WorkItem]] = {}  # Per-project work items
+        self._time_source = time_source or (lambda: datetime.now(UTC))
 
     # =========================================================================
     # IProjectManagerService Implementation
@@ -233,7 +238,7 @@ class MockProjectManagerAdapter(IProjectManagerService):
             # Mark as cloned
             state.cloned = True
             state.clone_path = workspace_path
-            state.last_clone_attempt = datetime.now(UTC)
+            state.last_clone_attempt = self._time_source()
             state.clone_failures = 0
 
             # Emit success event
@@ -454,11 +459,10 @@ class MockProjectManagerAdapter(IProjectManagerService):
     # Private Methods
     # =========================================================================
 
-    @staticmethod
-    def _get_iso_timestamp() -> str:
+    def _get_iso_timestamp(self) -> str:
         """Get current timestamp in ISO 8601 format with UTC timezone.
 
         Returns:
             ISO 8601 timestamp string
         """
-        return datetime.now(UTC).isoformat()
+        return self._time_source().isoformat()

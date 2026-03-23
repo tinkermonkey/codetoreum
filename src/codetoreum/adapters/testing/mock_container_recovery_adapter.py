@@ -5,6 +5,7 @@ for use in unit tests, integration tests, and simulation mode.
 """
 
 import logging
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
 
@@ -35,8 +36,14 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         failed_actions: Set of container_ids where execute_recovery_action should fail
     """
 
-    def __init__(self):
-        """Initialize MockContainerRecoveryAdapter."""
+    def __init__(self, time_source: Callable[[], datetime] | None = None):
+        """Initialize MockContainerRecoveryAdapter.
+
+        Args:
+            time_source: Optional callable returning current datetime for simulation clock control.
+                        Defaults to datetime.now(UTC).
+        """
+        self._time_source = time_source or (lambda: datetime.now(UTC))
         self.containers: list[ContainerMetadata] = []  # Agent containers
         self.repair_cycle_containers: list[ContainerMetadata] = []  # Repair cycle containers
         self.assessments: dict[str, RecoveryAssessment] = {}
@@ -86,9 +93,9 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         """
         if created_at is None:
             if age_hours is not None:
-                created_at = datetime.now(UTC) - timedelta(hours=age_hours)
+                created_at = self._time_source() - timedelta(hours=age_hours)
             else:
-                created_at = datetime.now(UTC)
+                created_at = self._time_source()
 
         metadata = ContainerMetadata(
             container_id=container_id,
@@ -147,9 +154,9 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
         """
         if created_at is None:
             if age_hours is not None:
-                created_at = datetime.now(UTC) - timedelta(hours=age_hours)
+                created_at = self._time_source() - timedelta(hours=age_hours)
             else:
-                created_at = datetime.now(UTC)
+                created_at = self._time_source()
 
         metadata = ContainerMetadata(
             container_id=container_id,
@@ -458,7 +465,7 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
             killed=killed,
             errors=errors,
             repair_cycles_processed=repair_cycles_processed,
-            timestamp=datetime.now(UTC).isoformat(),
+            timestamp=self._time_source().isoformat(),
         )
 
         logger.info(

@@ -258,6 +258,7 @@ class AdapterResolver:
         return self._factory.create_discussion_adapter(
             adapter_name=self._config.discussion_adapter,
             identity_service=identity_service,
+            time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
         )
 
     def resolve_lock_service(self) -> IPipelineLockService:
@@ -270,11 +271,15 @@ class AdapterResolver:
             adapter_name=self._config.queue_service,
             event_emitter=self._resolved["event_emitter"],
             event_bus=self._deps.event_bus,
+            time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
         )
 
     def resolve_checkpoint_store(self) -> IRepairCycleCheckpointStore:
         """Resolve repair cycle checkpoint store adapter."""
-        return self._factory.create_repair_cycle_checkpoint_store(adapter_name=self._config.checkpoint_store)
+        return self._factory.create_repair_cycle_checkpoint_store(
+            adapter_name=self._config.checkpoint_store,
+            time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
+        )
 
     def resolve_agent_repository(self) -> IAgentRepository:
         """Resolve agent repository adapter."""
@@ -290,7 +295,10 @@ class AdapterResolver:
 
     def resolve_work_item_service(self) -> IWorkItemService:
         """Resolve work item service adapter."""
-        return self._factory.create_work_item_service(adapter_name=self._config.work_item_service)
+        return self._factory.create_work_item_service(
+            adapter_name=self._config.work_item_service,
+            time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
+        )
 
     def resolve_workflow_config(self) -> IWorkflowConfigService:
         """Resolve workflow config service adapter."""
@@ -305,11 +313,15 @@ class AdapterResolver:
         return self._factory.create_version_control_service(
             adapter_name=self._config.version_control,
             event_emitter=self._resolved["event_emitter"],
+            time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
         )
 
     def resolve_project_manager(self) -> IProjectManagerService:
         """Resolve project manager service adapter."""
-        return self._factory.create_project_manager_service(adapter_name=self._config.project_manager)
+        return self._factory.create_project_manager_service(
+            adapter_name=self._config.project_manager,
+            time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
+        )
 
     def resolve_review_cycle(self) -> IReviewCycle:
         """
@@ -347,11 +359,17 @@ class AdapterResolver:
 
     def resolve_code_review(self) -> ICodeReviewService:
         """Resolve code review service adapter."""
-        return self._factory.create_code_review_service(adapter_name=self._config.code_review)
+        return self._factory.create_code_review_service(
+            adapter_name=self._config.code_review,
+            time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
+        )
 
     def resolve_container_recovery(self) -> IAgentContainerRecoveryService:
         """Resolve container recovery adapter."""
-        return self._factory.create_container_recovery(adapter_name=self._config.container_recovery)
+        return self._factory.create_container_recovery(
+            adapter_name=self._config.container_recovery,
+            time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
+        )
 
     def resolve_repository(self) -> IRepository:
         """Resolve repository adapter.
@@ -362,6 +380,7 @@ class AdapterResolver:
         return self._factory.create_repository(
             adapter_name=self._config.repository,
             event_emitter=self._resolved["event_emitter"],
+            time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
         )
 
     def resolve_all(self) -> "SimulationAdapters":

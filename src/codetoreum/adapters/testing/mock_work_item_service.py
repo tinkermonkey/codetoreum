@@ -6,6 +6,7 @@ for use in unit tests, integration tests, and simulation mode.
 
 import logging
 import threading
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
@@ -63,12 +64,18 @@ class MockWorkItemService(MockEventEmitter, IWorkItemService):
         assert created_events[0].work_item_id == item.id
     """
 
-    def __init__(self) -> None:
-        """Initialize the mock work item service."""
+    def __init__(self, time_source: Callable[[], datetime] | None = None) -> None:
+        """Initialize the mock work item service.
+
+        Args:
+            time_source: Optional callable returning current datetime for simulation clock control.
+                        Defaults to datetime.now(UTC).
+        """
         super().__init__()
         self._work_items: dict[str, WorkItem] = {}
         self._monitoring_status: dict[str, MonitoringStatus] = {}
         self._lock = threading.Lock()
+        self._time_source = time_source or (lambda: datetime.now(UTC))
 
     # ===== Monitoring Lifecycle =====
 
@@ -90,7 +97,7 @@ class MockWorkItemService(MockEventEmitter, IWorkItemService):
             status = MonitoringStatus(
                 state=MonitoringState.ACTIVE,
                 project_id=project_id,
-                started_at=datetime.now(UTC).isoformat(),
+                started_at=self._time_source().isoformat(),
             )
             self._monitoring_status[project_id] = status
             logger.debug(f"Started monitoring work items for project {project_id}")
@@ -237,7 +244,7 @@ class MockWorkItemService(MockEventEmitter, IWorkItemService):
             # Emit creation event
             event = WorkItemCreatedEvent(
                 type="workitem.created",
-                timestamp=datetime.now(UTC).isoformat(),
+                timestamp=self._time_source().isoformat(),
                 source="mock",
                 work_item_id=work_item.id,
                 project_id=str(project_id),
@@ -291,12 +298,12 @@ class MockWorkItemService(MockEventEmitter, IWorkItemService):
                     priority = WorkItemPriority[priority.upper()]
                 work_item.update_priority(priority)
 
-            work_item.updated_at = datetime.now(UTC)
+            work_item.updated_at = self._time_source()
 
             # Emit update event
             event = WorkItemUpdatedEvent(
                 type="workitem.updated",
-                timestamp=datetime.now(UTC).isoformat(),
+                timestamp=self._time_source().isoformat(),
                 source="mock",
                 work_item_id=work_item.id,
                 project_id=work_item.project_id,

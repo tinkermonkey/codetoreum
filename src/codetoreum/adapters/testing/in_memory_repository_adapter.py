@@ -3,6 +3,7 @@
 import asyncio
 import difflib
 import threading
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -39,12 +40,18 @@ class InMemoryRepositoryAdapter(IRepository):
     dictionary and list modifications are protected by a lock.
     """
 
-    def __init__(self, event_emitter: IEventEmitter | None = None):
+    def __init__(
+        self,
+        event_emitter: IEventEmitter | None = None,
+        time_source: Callable[[], datetime] | None = None,
+    ):
         """Initialize the in-memory repository adapter with thread-safe storage.
 
         Args:
             event_emitter: Optional IEventEmitter for emitting domain events.
                           Defaults to MockEventEmitter.
+            time_source: Optional callable returning current datetime for simulation clock control.
+                        Defaults to datetime.now(UTC).
         """
         # Repository storage: repo_id -> repo_data
         self._repositories: dict[str, dict] = {}
@@ -72,6 +79,7 @@ class InMemoryRepositoryAdapter(IRepository):
 
         # Event emission
         self._event_emitter = event_emitter or MockEventEmitter()
+        self._time_source = time_source or (lambda: datetime.now(UTC))
 
     async def clone(
         self,
@@ -111,7 +119,7 @@ class InMemoryRepositoryAdapter(IRepository):
                 "url": url,
                 "path": str(destination),
                 "current_branch": default_branch,
-                "created_at": datetime.now(UTC),
+                "created_at": self._time_source(),
             }
 
             # Create default branch
@@ -124,7 +132,7 @@ class InMemoryRepositoryAdapter(IRepository):
                 "message": "Initial commit",
                 "author_name": "System",
                 "author_email": "system@codetoreum.local",
-                "timestamp": datetime.now(UTC),
+                "timestamp": self._time_source(),
                 "parent": None,
             }
 
@@ -218,7 +226,7 @@ class InMemoryRepositoryAdapter(IRepository):
             self._event_emitter.emit(
                 BranchCreatedEvent(
                     type="repository.branch_created",
-                    timestamp=datetime.now(UTC).isoformat(),
+                    timestamp=self._time_source().isoformat(),
                     source="mock",
                     repository_id=repo_id,
                     branch_name=str(branch_name),
@@ -272,7 +280,7 @@ class InMemoryRepositoryAdapter(IRepository):
             self._event_emitter.emit(
                 FilesStagedEvent(
                     type="repository.files_staged",
-                    timestamp=datetime.now(UTC).isoformat(),
+                    timestamp=self._time_source().isoformat(),
                     source="mock",
                     repository_id=repo_id,
                     file_paths=tuple(files),
@@ -372,7 +380,7 @@ class InMemoryRepositoryAdapter(IRepository):
                 "message": message,
                 "author_name": author_name,
                 "author_email": author_email,
-                "timestamp": datetime.now(UTC),
+                "timestamp": self._time_source(),
                 "parent": parent_commit,
                 "files": changed_files,
                 "file_contents": file_contents,  # Store snapshot at commit time
@@ -386,7 +394,7 @@ class InMemoryRepositoryAdapter(IRepository):
             self._event_emitter.emit(
                 CommitCreatedEvent(
                     type="repository.commit_created",
-                    timestamp=datetime.now(UTC).isoformat(),
+                    timestamp=self._time_source().isoformat(),
                     source="mock",
                     repository_id=repo_id,
                     commit_sha=str(commit_sha),
@@ -748,7 +756,7 @@ class InMemoryRepositoryAdapter(IRepository):
                 "message": f"Merge branch '{branch}' into '{current_branch}'",
                 "author_name": "System",
                 "author_email": "system@codetoreum.local",
-                "timestamp": datetime.now(UTC),
+                "timestamp": self._time_source(),
                 "parent": current_commit,
                 "merge_parent": merge_commit,
                 "files": list(merged_files.keys()),

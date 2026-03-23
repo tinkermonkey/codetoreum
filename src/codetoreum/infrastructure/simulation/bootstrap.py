@@ -94,6 +94,7 @@ from codetoreum.adapters.testing import (
     InMemoryQueueService,
     InMemoryRepositoryAdapter,
     InMemoryTicketAdapter,
+    InMemoryTracer,
     InMemoryVersionControlService,
     InMemoryWorkflowConfigService,
     InMemoryWorkItemBranchTracker,
@@ -207,6 +208,7 @@ from codetoreum.ports.output.encryption_service import IEncryptionService
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.output.failed_event_store import IFailedEventStore
+from codetoreum.ports.output.i_tracer import ITracer
 from codetoreum.ports.output.identity_service import IIdentityService
 from codetoreum.ports.output.llm_provider import ILLMProvider
 from codetoreum.ports.output.message_broker import IMessageBroker
@@ -343,6 +345,7 @@ class SimulationAdapters:
 
     # Fields with defaults (must come after fields without defaults)
     agent_executor: IAgentExecutor | None = None
+    tracer: ITracer | None = None
 
     # =========================================================================
     # Accessor helpers for test code needing simulation-specific methods
@@ -615,6 +618,16 @@ class SimulationAdapters:
             msg = f"metrics is {type(self.metrics).__name__}, not InMemoryMetricsAdapter"
             raise TypeError(msg)
         return cast("InMemoryMetricsAdapter", self.metrics)
+
+    def tracer_as_in_memory(self) -> InMemoryTracer:
+        """Get tracer as InMemoryTracer.
+
+        Raises TypeError if tracer is not InMemoryTracer.
+        """
+        if not isinstance(self.tracer, InMemoryTracer):
+            msg = f"tracer is {type(self.tracer).__name__}, not InMemoryTracer"
+            raise TypeError(msg)
+        return cast("InMemoryTracer", self.tracer)
 
 
 @dataclass
@@ -1213,6 +1226,9 @@ class SimulationApplicationBootstrap:
 
         # Set agent_executor to None (assigned in Phase 3)
         resolved.agent_executor = None
+
+        # Create tracer with simulation clock
+        resolved.tracer = InMemoryTracer(time_source=lambda: self._engine.get_clock_for_testing().now())
 
         return resolved
 

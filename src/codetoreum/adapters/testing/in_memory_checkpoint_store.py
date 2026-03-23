@@ -6,6 +6,7 @@ persistence overhead.
 """
 
 import threading
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 from codetoreum.domain.repair_cycle_types import RepairCycleCheckpoint
@@ -34,12 +35,18 @@ class InMemoryCheckpointStore(IRepairCycleCheckpointStore):
         assert retrieved is not None
     """
 
-    def __init__(self) -> None:
-        """Initialize in-memory checkpoint store."""
+    def __init__(self, time_source: Callable[[], datetime] | None = None) -> None:
+        """Initialize in-memory checkpoint store.
+
+        Args:
+            time_source: Optional callable returning current datetime for simulation clock control.
+                        Defaults to datetime.now(UTC). Critical for TTL expiry checks.
+        """
         self._checkpoints: dict[tuple[str, str], tuple[RepairCycleCheckpoint, datetime]] = (
             {}
         )  # Key: (workflow_run_id, test_type), Value: (checkpoint, saved_time)
         self._lock = threading.RLock()
+        self._time_source = time_source or (lambda: datetime.now(UTC))
 
     async def save_checkpoint(self, checkpoint: RepairCycleCheckpoint) -> None:
         """Save checkpoint with automatic expiration."""
@@ -53,7 +60,7 @@ class InMemoryCheckpointStore(IRepairCycleCheckpointStore):
                 checkpoint.test_type.value if hasattr(checkpoint.test_type, "value") else str(checkpoint.test_type)
             )
             key = (checkpoint.workflow_run_id, test_type_str)
-            saved_time = datetime.now(UTC)
+            saved_time = self._time_source()
             self._checkpoints[key] = (checkpoint, saved_time)
 
     async def get_checkpoint(
@@ -71,7 +78,7 @@ class InMemoryCheckpointStore(IRepairCycleCheckpointStore):
             checkpoint, saved_time = self._checkpoints[key]
 
             # Check if checkpoint has expired (24 hours)
-            now = datetime.now(UTC)
+            now = self._time_source()
             if now - saved_time > timedelta(hours=24):
                 # Expired - remove it
                 del self._checkpoints[key]
@@ -110,7 +117,7 @@ class InMemoryCheckpointStore(IRepairCycleCheckpointStore):
     def get_all_checkpoints(self) -> dict[tuple[str, str], RepairCycleCheckpoint]:
         """Get all stored checkpoints (for testing)."""
         with self._lock:
-            now = datetime.now(UTC)
+            now = self._time_source()
             return {
                 key: checkpoint
                 for key, (checkpoint, saved_time) in self._checkpoints.items()
@@ -125,7 +132,7 @@ class InMemoryCheckpointStore(IRepairCycleCheckpointStore):
     def get_checkpoint_count(self) -> int:
         """Get number of stored checkpoints (for testing)."""
         with self._lock:
-            now = datetime.now(UTC)
+            now = self._time_source()
             return sum(
                 1
                 for saved_time in (t for _, t in self._checkpoints.values())

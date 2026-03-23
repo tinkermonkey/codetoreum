@@ -16,6 +16,7 @@ from codetoreum.adapters.testing.in_memory_agent_repository import (
     InMemoryAgentRepository,
 )
 from codetoreum.adapters.testing.in_memory_checkpoint_store import InMemoryCheckpointStore
+from codetoreum.adapters.testing.in_memory_code_review_adapter import InMemoryCodeReviewAdapter
 from codetoreum.adapters.testing.in_memory_config_store import InMemoryConfigStore
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.adapters.testing.in_memory_message_broker import InMemoryMessageBroker
@@ -26,6 +27,7 @@ from codetoreum.adapters.testing.in_memory_repository_adapter import (
 )
 from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
 from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
+from codetoreum.adapters.testing.in_memory_tracer import InMemoryTracer
 from codetoreum.adapters.testing.in_memory_version_control_service import (
     InMemoryVersionControlService,
 )
@@ -68,6 +70,7 @@ __all__ = [
     "ConfigurableIdentityService",
     "FakeContainerAdapter",
     "InMemoryCheckpointStore",
+    "InMemoryCodeReviewAdapter",
     "InMemoryConfigStore",
     "InMemoryEventStore",
     "InMemoryMessageBroker",
@@ -76,6 +79,7 @@ __all__ = [
     "InMemoryRepositoryAdapter",
     "InMemoryStorageAdapter",
     "InMemoryTicketAdapter",
+    "InMemoryTracer",
     "InMemoryVersionControlService",
     "InMemoryWorkflowConfigService",
     "MockAgentExecutor",
