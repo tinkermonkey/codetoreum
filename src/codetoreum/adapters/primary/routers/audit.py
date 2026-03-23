@@ -353,7 +353,7 @@ def create_audit_router(
 
         async def _build_causal_chain(
             root_event_id: str, max_hops: int = 100
-        ) -> tuple[list[CausalChainEvent], bool, str]:
+        ) -> tuple[list[CausalChainEvent], bool, str, int]:
             """
             Traverse the causal chain backward from a root event.
 
@@ -364,12 +364,12 @@ def create_audit_router(
             Includes cycle detection to prevent infinite loops in malformed causation chains.
 
             Returns:
-                Tuple of (chain events, truncated, root_event_id)
+                Tuple of (chain events, truncated, root_event_id, hops)
             """
             events_by_id = await _get_event_index()
 
             if root_event_id not in events_by_id:
-                return [], False, ""
+                return [], False, "", 0
 
             chain: list[CausalChainEvent] = []
             current_event_id = root_event_id
@@ -518,7 +518,7 @@ def create_audit_router(
                     rootEventId=root_event_id,
                     chain=chain,
                     truncated=truncated,
-                    hopCount=max(hops - 1, 0),
+                    hopCount=hops,
                 )
 
             except HTTPException:
