@@ -1,6 +1,6 @@
 # Mock Adapters Reference
 
-**Complete inventory of 24 testing/simulation adapters + ExecutionServiceAgentExecutor (bootstrap default)**
+**Complete inventory of 25 testing/simulation adapters + ExecutionServiceAgentExecutor (bootstrap default)**
 
 ## Overview
 
