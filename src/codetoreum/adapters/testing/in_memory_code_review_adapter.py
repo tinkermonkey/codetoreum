@@ -8,6 +8,7 @@ test helper methods for simulation scenarios.
 from collections.abc import Callable
 from datetime import UTC, datetime
 
+from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.domain.events.review_events import ReviewStatusChangedEvent
 from codetoreum.ports.output.code_review_service import (
     Approval,
@@ -21,8 +22,6 @@ from codetoreum.ports.output.monitoring import (
     MonitoringState,
     MonitoringStatus,
 )
-
-from .mock_event_emitter import MockEventEmitter
 
 
 class InMemoryCodeReviewAdapter(MockEventEmitter, ICodeReviewService):
