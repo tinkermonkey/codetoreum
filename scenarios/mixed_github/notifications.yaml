@@ -1,7 +1,0 @@
-# Mixed GitHub Scenario — Notification Configuration
-#
-# Port/Interface: INotifier (MockNotifier settings)
-
-notifications:
-  send_delay: 0.01
-  simulate_failures: false

@@ -119,15 +119,23 @@ class ScenarioColumnConfig(BaseModel):
 
     name: str = Field(..., description="Column name — must match an entry in the parent board's columns list")
     type: str = Field(default="manual", description="Column type: 'manual' or 'automated'")
-    agent_id: str | None = Field(default=None, description="Agent ID to trigger on entry (required when type=automated)")
+    agent_id: str | None = Field(
+        default=None, description="Agent ID to trigger on entry (required when type=automated)"
+    )
     is_pipeline_trigger: bool = Field(default=False, description="If True, acquiring pipeline lock when item enters")
     is_exit_column: bool = Field(default=False, description="If True, releasing pipeline lock when item enters")
     auto_progress_on_completion: bool = Field(
         default=False, description="Automatically move item to next column after agent completion (automated only)"
     )
-    sla_seconds: int | None = Field(default=None, description="SLA threshold in seconds; None disables SLA enforcement", ge=1)
-    on_failure_column: str | None = Field(default=None, description="Column to move item to on agent failure; None keeps item in place")
-    sla_escalation_column: str | None = Field(default=None, description="Column to move item to when SLA expires; None emits event only")
+    sla_seconds: int | None = Field(
+        default=None, description="SLA threshold in seconds; None disables SLA enforcement", ge=1
+    )
+    on_failure_column: str | None = Field(
+        default=None, description="Column to move item to on agent failure; None keeps item in place"
+    )
+    sla_escalation_column: str | None = Field(
+        default=None, description="Column to move item to when SLA expires; None emits event only"
+    )
 
     @field_validator("type")
     @classmethod
@@ -166,9 +174,7 @@ class ScenarioBoardModel(BaseModel):
         column_set = set(self.columns)
         for cfg in self.column_configs:
             if cfg.name not in column_set:
-                msg = (
-                    f"column_configs entry '{cfg.name}' is not listed in columns: {self.columns}"
-                )
+                msg = f"column_configs entry '{cfg.name}' is not listed in columns: {self.columns}"
                 raise ValueError(msg)
             if cfg.on_failure_column and cfg.on_failure_column not in column_set:
                 msg = (

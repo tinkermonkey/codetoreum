@@ -1,9 +1,0 @@
-# Mixed Full Real Scenario — Notification Configuration
-#
-# Port/Interface: INotifier (SlackNotifier settings)
-# Real Slack API calls — no failure simulation in production.
-
-notifications:
-  send_delay: 0.1         # Real Slack API calls
-  simulate_failures: false
-  failure_rate: 0.0

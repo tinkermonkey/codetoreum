@@ -1,8 +1,0 @@
-# Mixed Full Real Scenario — Metrics Configuration
-#
-# Port/Interface: IMetricsAdapter (PrometheusMetricsAdapter settings)
-
-metrics:
-  collect_enabled: true
-  detailed_tracking: true
-  prometheus_scrape_interval: 15  # Prometheus scrape every 15 seconds

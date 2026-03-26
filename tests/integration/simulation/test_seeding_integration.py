@@ -172,7 +172,9 @@ class TestSeedingBootstrapIntegration:
                 await scenario_seeder.seed_from_yaml(scenario_path)
 
                 # Verify scenario loaded successfully
-                assert len(scenario_seeder.created_items.projects) >= 1, f"{scenario_name}/ should create at least 1 project"
+                assert (
+                    len(scenario_seeder.created_items.projects) >= 1
+                ), f"{scenario_name}/ should create at least 1 project"
 
             finally:
                 await bootstrap.teardown()

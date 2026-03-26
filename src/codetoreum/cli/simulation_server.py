@@ -287,9 +287,8 @@ def get_scenario_file_path(scenario: str) -> Path:
 
     Args:
         scenario: Scenario name (smoke, sdlc_pipeline, review_cycle, failure_recovery,
-                  stress_test, mixed_github, mixed_full_github, mixed_full_real)
-                  Aliases: default → smoke, demo → sdlc_pipeline,
-                           mixed_github_real → mixed_github
+                  stress_test)
+                  Aliases: default → smoke, demo → sdlc_pipeline
 
     Returns:
         Path to scenario directory
@@ -301,7 +300,6 @@ def get_scenario_file_path(scenario: str) -> Path:
     _aliases = {
         "default": "smoke",
         "demo": "sdlc_pipeline",
-        "mixed_github_real": "mixed_github",
     }
     resolved = _aliases.get(scenario, scenario)
 
@@ -312,8 +310,7 @@ def get_scenario_file_path(scenario: str) -> Path:
     if not scenario_dir.is_dir():
         msg = (
             f"Scenario '{scenario}' not found at {scenario_dir}. "
-            f"Available scenarios: smoke, sdlc_pipeline, review_cycle, failure_recovery, "
-            f"stress_test, mixed_github, mixed_full_github, mixed_full_real"
+            f"Available scenarios: smoke, sdlc_pipeline, review_cycle, failure_recovery, stress_test"
         )
         raise FileNotFoundError(msg)
 

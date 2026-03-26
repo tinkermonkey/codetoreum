@@ -811,9 +811,7 @@ class BoardColumnEventHandler(EventHandler):
                         await self.board_service.move_item_to_column(
                             work_item_id, column_config.on_failure_column, MovedByType.ORCHESTRATOR
                         )
-                        logger.info(
-                            f"Moved {work_item_id} to failure column '{column_config.on_failure_column}'"
-                        )
+                        logger.info(f"Moved {work_item_id} to failure column '{column_config.on_failure_column}'")
             except Exception as e:
                 logger.error(
                     f"Failed to move {work_item_id} to failure column: {e}",

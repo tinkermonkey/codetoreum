@@ -435,7 +435,9 @@ class TestObservabilityIntegration:
         import subprocess
         from pathlib import Path
 
-        fastapi_app_path = Path(__file__).parent.parent.parent / "src" / "codetoreum" / "adapters" / "primary" / "fastapi_app.py"
+        fastapi_app_path = (
+            Path(__file__).parent.parent.parent / "src" / "codetoreum" / "adapters" / "primary" / "fastapi_app.py"
+        )
 
         # Check that production create_app() doesn't import simulation routers
         result = subprocess.run(

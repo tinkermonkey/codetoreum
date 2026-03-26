@@ -187,16 +187,10 @@ class BoardWorkflowTemplate:
         column_names = {col.name for col in self.columns}
         for col in self.columns:
             if col.on_failure_column and col.on_failure_column not in column_names:
-                msg = (
-                    f"Column '{col.name}' references unknown on_failure_column "
-                    f"'{col.on_failure_column}'"
-                )
+                msg = f"Column '{col.name}' references unknown on_failure_column " f"'{col.on_failure_column}'"
                 raise ValueError(msg)
             if col.sla_escalation_column and col.sla_escalation_column not in column_names:
-                msg = (
-                    f"Column '{col.name}' references unknown sla_escalation_column "
-                    f"'{col.sla_escalation_column}'"
-                )
+                msg = f"Column '{col.name}' references unknown sla_escalation_column " f"'{col.sla_escalation_column}'"
                 raise ValueError(msg)
 
     # ── Query helpers ────────────────────────────────────────────────────────

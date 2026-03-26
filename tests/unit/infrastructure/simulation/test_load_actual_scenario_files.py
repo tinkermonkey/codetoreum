@@ -95,135 +95,6 @@ class TestLoadActualScenarioFiles:
         assert config.scenario_name
         assert config.time.speed_multiplier > 0
 
-    def test_load_mixed_github_real_scenario(self) -> None:
-        """Test loading mixed_github/ directory with flexible key handling.
-
-        The directory uses:
-        - Nested simulation: key (speed_multiplier under simulation:)
-        - agents: as list-of-objects
-        - containers: (plural) instead of container:
-        - fidelity: MEDIUM (uppercase)
-        """
-        scenarios_dir = self._get_scenarios_dir()
-        scenario_dir = scenarios_dir / "mixed_github"
-
-        if not scenario_dir.is_dir():
-            pytest.skip(f"Scenario directory not found: {scenario_dir}")
-
-        config = SimulationConfig.from_yaml(scenario_dir)
-
-        # Verify scenario name
-        assert config.scenario_name == "mixed_github"
-        assert config.scenario_description
-
-        # Verify nested simulation: speed_multiplier was parsed
-        assert config.time.speed_multiplier == 10.0
-
-        # Verify agents were parsed from list-of-objects format
-        assert "reviewer" in config.agents
-        assert "analyzer" in config.agents
-        assert config.agents["reviewer"].execution_delay == 0.2
-        assert config.agents["reviewer"].success_rate == 0.95
-        assert config.agents["analyzer"].execution_delay == 0.15
-        assert config.agents["analyzer"].success_rate == 0.98
-
-        # Verify containers: (plural) was parsed
-        assert config.container.default_exit_code == 0
-        assert config.container.execution_delay == 0.1
-
-        # Verify fidelity: MEDIUM was normalized and parsed
-        assert config.fidelity_level == FidelityLevel.MEDIUM
-
-        # Verify adapters were parsed
-        assert config.adapters.board == "github"
-        assert config.adapters.llm == "mock"
-        assert config.adapters.container == "fake"
-
-    def test_load_mixed_full_github_scenario(self) -> None:
-        """Test loading mixed_full_github/ directory with flexible key handling.
-
-        The directory uses:
-        - Nested simulation: key
-        - agents: as list-of-objects with 4 agents
-        - containers: (plural)
-        - fidelity: MEDIUM
-        """
-        scenarios_dir = self._get_scenarios_dir()
-        scenario_dir = scenarios_dir / "mixed_full_github"
-
-        if not scenario_dir.is_dir():
-            pytest.skip(f"Scenario directory not found: {scenario_dir}")
-
-        config = SimulationConfig.from_yaml(scenario_dir)
-
-        # Verify scenario name
-        assert config.scenario_name == "mixed_full_github"
-        assert config.scenario_description
-
-        # Verify nested simulation: speed_multiplier
-        assert config.time.speed_multiplier == 10.0
-
-        # Verify agents were parsed (4 agents in this scenario)
-        assert "reviewer" in config.agents
-        assert "analyzer" in config.agents
-        assert "implementer" in config.agents
-        assert "tester" in config.agents
-
-        # Verify fidelity: MEDIUM
-        assert config.fidelity_level == FidelityLevel.MEDIUM
-
-        # Verify adapters
-        assert config.adapters.board == "github"
-        assert config.adapters.llm == "mock"
-        assert config.adapters.container == "docker"
-
-    def test_load_mixed_full_real_scenario(self) -> None:
-        """Test loading mixed_full_real/ directory with flexible key handling.
-
-        The directory uses:
-        - Nested simulation: key
-        - agents: as list-of-objects with 4 agents
-        - containers: (plural)
-        - fidelity: HIGH (uppercase)
-
-        Note: This directory references unregistered adapters (vault, prometheus, slack, git),
-        but the YAML parsing should still succeed. The adapter validation happens later
-        during runtime via AdapterResolver.validate_credentials().
-        """
-        scenarios_dir = self._get_scenarios_dir()
-        scenario_dir = scenarios_dir / "mixed_full_real"
-
-        if not scenario_dir.is_dir():
-            pytest.skip(f"Scenario directory not found: {scenario_dir}")
-
-        config = SimulationConfig.from_yaml(scenario_dir)
-
-        # Verify scenario name
-        assert config.scenario_name == "mixed_full_real"
-        assert config.scenario_description
-
-        # Verify nested simulation: speed_multiplier
-        assert config.time.speed_multiplier == 1.0
-
-        # Verify agents were parsed (4 agents in this scenario)
-        assert "reviewer" in config.agents
-        assert "analyzer" in config.agents
-        assert "implementer" in config.agents
-        assert "tester" in config.agents
-
-        # Verify agent token_usage was parsed
-        assert config.agents["reviewer"].token_usage["input"] == 2000
-        assert config.agents["implementer"].token_usage["output"] == 2000
-
-        # Verify fidelity: HIGH
-        assert config.fidelity_level == FidelityLevel.HIGH
-
-        # Verify adapters were parsed (including unregistered ones)
-        # Note: The actual adapter registry validation happens during runtime
-        assert config.adapters.board == "github"
-        assert config.adapters.llm == "claude_code"
-        assert config.adapters.container == "docker"
-
     def test_all_scenario_files_are_loadable(self) -> None:
         """Test that all scenario directories in scenarios/ are loadable.
 
@@ -235,9 +106,7 @@ class TestLoadActualScenarioFiles:
         if not scenarios_dir.exists():
             pytest.skip(f"Scenarios directory not found: {scenarios_dir}")
 
-        scenario_dirs = sorted(
-            p for p in scenarios_dir.iterdir() if p.is_dir() and not p.name.startswith(".")
-        )
+        scenario_dirs = sorted(p for p in scenarios_dir.iterdir() if p.is_dir() and not p.name.startswith("."))
         assert len(scenario_dirs) > 0, "No scenario directories found in scenarios/"
 
         loaded_configs = []
