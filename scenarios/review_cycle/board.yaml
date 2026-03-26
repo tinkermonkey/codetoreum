@@ -1,0 +1,81 @@
+# Review Cycle Scenario — Board Configuration
+#
+# Port/Interface: IBoardService, IWorkflowConfigService
+# Adapter (sim): MockBoardAdapter, InMemoryWorkflowConfigService
+#
+# Board layout:
+#   Backlog (manual)
+#   → In Progress (automated, maker, PIPELINE TRIGGER, on_failure → Backlog)
+#   → Awaiting Review (manual, SLA 24h, sla_escalation → Backlog)
+#   → Review (automated, reviewer, on_failure → Changes Requested)
+#   → Changes Requested (manual, SLA 48h, sla_escalation → Backlog)
+#   → Done (exit)
+
+boards:
+  - board_id: "board-review"
+    board_name: "Review Cycle Board"
+    columns:
+      - "Backlog"
+      - "In Progress"
+      - "Awaiting Review"
+      - "Review"
+      - "Changes Requested"
+      - "Done"
+    column_configs:
+      - name: "Backlog"
+        type: "manual"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: false
+
+      - name: "In Progress"
+        type: "automated"
+        agent_id: "maker"
+        is_pipeline_trigger: true           # Lock acquired when item enters here
+        is_exit_column: false
+        auto_progress_on_completion: true   # Auto-advance to Awaiting Review
+        sla_seconds: 7200                   # 2 h
+        on_failure_column: "Backlog"        # Return to Backlog if maker fails
+
+      - name: "Awaiting Review"
+        type: "manual"                      # Human gate — reviewer must pick up
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: false
+        sla_seconds: 86400                  # 24 h SLA for review assignment
+        sla_escalation_column: "Backlog"    # Return to Backlog if unreviewed too long
+
+      - name: "Review"
+        type: "automated"
+        agent_id: "reviewer"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: true   # Auto-advance to Done on approval
+        sla_seconds: 3600                   # 1 h
+        on_failure_column: "Changes Requested"  # Reviewer flags changes needed
+
+      - name: "Changes Requested"
+        type: "manual"                      # Author responds; re-queuing is manual
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: false
+        sla_seconds: 172800                 # 48 h — don't stall indefinitely
+        sla_escalation_column: "Backlog"    # Return to Backlog if author goes silent
+
+      - name: "Done"
+        type: "manual"
+        is_pipeline_trigger: false
+        is_exit_column: true                # Lock released here
+        auto_progress_on_completion: false
+
+board_placements:
+  - work_item_title: "Implement user profile API"
+    column: "Backlog"
+  - work_item_title: "Add password reset functionality"
+    column: "Backlog"
+  - work_item_title: "Create data export utility"
+    column: "Backlog"
+  - work_item_title: "Optimize image upload pipeline"
+    column: "Backlog"
+  - work_item_title: "Refactor authentication middleware"
+    column: "Backlog"

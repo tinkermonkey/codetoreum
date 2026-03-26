@@ -24,8 +24,8 @@ def sample_workflow_template():
     return BoardWorkflowTemplate(
         id="workflow-1",
         name="Standard Workflow",
-        pipeline_trigger_columns=("In Progress",),
-        exit_columns=("Done",),
+        board_id="board-1",
+        project_id="test-project",
         columns=(
             ColumnTemplate(
                 name="Backlog",
@@ -84,8 +84,8 @@ class TestRegisterTemplate:
         new_template = BoardWorkflowTemplate(
             id="workflow-2",
             name="New Workflow",
-            pipeline_trigger_columns=(),
-            exit_columns=(),
+            board_id="board-1",
+            project_id="test-project",
             columns=(
                 ColumnTemplate(
                     name="Todo",
@@ -134,8 +134,8 @@ class TestGetBoardWorkflowTemplate:
         template2 = BoardWorkflowTemplate(
             id="workflow-2",
             name="Workflow 2",
-            pipeline_trigger_columns=(),
-            exit_columns=(),
+            board_id="board-2",
+            project_id="test-project",
             columns=(
                 ColumnTemplate(
                     name="Open",
@@ -220,8 +220,8 @@ class TestIntegration:
         template2 = BoardWorkflowTemplate(
             id="workflow-alt",
             name="Alternative Workflow",
-            pipeline_trigger_columns=("Backlog",),
-            exit_columns=("Archived",),
+            board_id="board-2",
+            project_id="test-project",
             columns=(
                 ColumnTemplate(
                     name="Backlog",

@@ -112,8 +112,8 @@ def sample_workflow_config():
     return BoardWorkflowTemplate(
         id="workflow-1",
         name="SDLC Workflow",
-        pipeline_trigger_columns=("In Development",),
-        exit_columns=("Done",),
+        board_id="board-1",
+        project_id="test-project",
         columns=(
             ColumnTemplate(
                 name="Backlog",
@@ -715,6 +715,131 @@ class TestHandleAgentCompletion:
 
         # Assert
         mock_board_service.move_item_to_column.assert_not_called()
+
+
+class TestHandleAgentCompletionFailureColumn:
+    """Tests for on_failure_column wiring in handle_agent_completion."""
+
+    def _make_config_with_failure_column(self, failure_col: str | None) -> BoardWorkflowTemplate:
+        """Return a template where 'In Progress' has the given on_failure_column."""
+        return BoardWorkflowTemplate(
+            id="workflow-1",
+            name="Test Workflow",
+            board_id="board-1",
+            project_id="test-project",
+            columns=(
+                ColumnTemplate(
+                    name="Backlog",
+                    type=ColumnType.MANUAL,
+                    agent_id=None,
+                    is_pipeline_trigger=False,
+                    is_exit_column=False,
+                    position=0,
+                    auto_progress_on_completion=False,
+                ),
+                ColumnTemplate(
+                    name="In Progress",
+                    type=ColumnType.AUTOMATED,
+                    agent_id="agent-dev",
+                    is_pipeline_trigger=True,
+                    is_exit_column=False,
+                    position=1,
+                    auto_progress_on_completion=False,
+                    on_failure_column=failure_col,
+                ),
+                ColumnTemplate(
+                    name="Done",
+                    type=ColumnType.MANUAL,
+                    agent_id=None,
+                    is_pipeline_trigger=False,
+                    is_exit_column=True,
+                    position=2,
+                    auto_progress_on_completion=False,
+                ),
+            ),
+        )
+
+    @pytest.mark.asyncio
+    async def test_moves_to_on_failure_column_when_configured(
+        self,
+        handler,
+        mock_workflow_config,
+        mock_board_service,
+    ):
+        """Should move item to on_failure_column when agent fails and column is configured."""
+        config = self._make_config_with_failure_column("Backlog")
+        mock_workflow_config.get_board_workflow_template.return_value = config
+        mock_board_service.get_item_position.return_value = WorkItemPosition(
+            work_item_id="item-1",
+            column_name="In Progress",
+            position=1,
+        )
+
+        await handler.handle_agent_completion(
+            work_item_id="item-1",
+            board_id="board-1",
+            success=False,
+        )
+
+        mock_board_service.move_item_to_column.assert_called_once_with(
+            "item-1",
+            "Backlog",
+            MovedByType.ORCHESTRATOR,
+        )
+
+    @pytest.mark.asyncio
+    async def test_no_move_when_on_failure_column_not_configured(
+        self,
+        handler,
+        mock_workflow_config,
+        mock_board_service,
+    ):
+        """Should not move item when on_failure_column is None."""
+        config = self._make_config_with_failure_column(None)
+        mock_workflow_config.get_board_workflow_template.return_value = config
+        mock_board_service.get_item_position.return_value = WorkItemPosition(
+            work_item_id="item-1",
+            column_name="In Progress",
+            position=1,
+        )
+
+        await handler.handle_agent_completion(
+            work_item_id="item-1",
+            board_id="board-1",
+            success=False,
+        )
+
+        mock_board_service.move_item_to_column.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_fail_workflow_run_called_even_when_failure_move_raises(
+        self,
+        handler,
+        mock_workflow_config,
+        mock_board_service,
+        caplog,
+    ):
+        """Should still call _fail_workflow_run if the failure-column move itself raises."""
+        import logging
+
+        caplog.set_level(logging.ERROR)
+        config = self._make_config_with_failure_column("Backlog")
+        mock_workflow_config.get_board_workflow_template.return_value = config
+        mock_board_service.get_item_position.return_value = WorkItemPosition(
+            work_item_id="item-1",
+            column_name="In Progress",
+            position=1,
+        )
+        mock_board_service.move_item_to_column.side_effect = RuntimeError("board unavailable")
+
+        # Should NOT raise — error is caught; _fail_workflow_run is still called
+        await handler.handle_agent_completion(
+            work_item_id="item-1",
+            board_id="board-1",
+            success=False,
+        )
+
+        assert "Failed to move item-1 to failure column" in caplog.text
 
 
 class TestErrorHandling:

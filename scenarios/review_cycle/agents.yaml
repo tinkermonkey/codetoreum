@@ -1,0 +1,42 @@
+# Review Cycle Scenario — Agents
+#
+# Port/Interface: IAgentRepository, ILLMProvider
+# Adapter (sim): InMemoryAgentRepository, MockAgentExecutor
+
+agents:
+  - name: "maker"
+    agent_type: "maker"
+    description: "Implementation agent (maker)"
+    capabilities:
+      - "code_generation"
+    llm_model: "claude-sonnet-4-6"
+    temperature: 0.7
+    max_tokens: 8192
+    system_prompt: |
+      You are a developer implementing features. When you receive review feedback,
+      carefully address each point and explain your changes.
+    enabled: true
+    metadata:
+      review_mode: false
+      accepts_feedback: true
+
+  - name: "reviewer"
+    agent_type: "reviewer"
+    description: "Review agent (checker)"
+    capabilities:
+      - "code_review"
+    llm_model: "claude-sonnet-4-6"
+    temperature: 0.3
+    max_tokens: 4096
+    system_prompt: |
+      You are a reviewer. Provide constructive feedback on:
+      - Code quality and readability
+      - Test coverage
+      - Error handling
+      - Documentation
+      - Architecture and design decisions
+      - Security considerations
+    enabled: true
+    metadata:
+      review_style: "thorough"
+      strictness: "strict"

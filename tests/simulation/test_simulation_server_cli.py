@@ -49,16 +49,16 @@ class TestSimulationServerCLI:
         await bootstrap.teardown()
 
     def test_get_scenario_file_path_default(self):
-        """Test getting built-in scenario file path."""
-        scenario_file = get_scenario_file_path("default")
-        assert scenario_file.exists()
-        assert scenario_file.name == "default.yaml"
+        """Test getting built-in scenario directory (default → smoke alias)."""
+        scenario_dir = get_scenario_file_path("default")
+        assert scenario_dir.is_dir()
+        assert scenario_dir.name == "smoke"
 
     def test_get_scenario_file_path_demo(self):
-        """Test getting demo scenario file path."""
-        scenario_file = get_scenario_file_path("demo")
-        assert scenario_file.exists()
-        assert scenario_file.name == "demo.yaml"
+        """Test getting demo scenario directory (demo → sdlc_pipeline alias)."""
+        scenario_dir = get_scenario_file_path("demo")
+        assert scenario_dir.is_dir()
+        assert scenario_dir.name == "sdlc_pipeline"
 
     def test_get_scenario_file_path_not_found(self):
         """Test error handling for non-existent scenario."""

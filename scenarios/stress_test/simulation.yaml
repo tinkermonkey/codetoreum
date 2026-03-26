@@ -1,0 +1,27 @@
+# Stress Test Scenario — Simulation Settings
+#
+# Port/Interface: SimulationConfig (speed, clock, behaviour)
+# Adapter: SimulationClock, SimulationApplicationBootstrap
+#
+# High-volume scenario for performance and scalability testing.
+
+name: "Stress Test Scenario"
+description: "High-volume scenario for performance and scalability testing"
+version: "1.0"
+
+speed_multiplier: 100.0
+auto_advance: true
+
+metadata:
+  scenario_type: "performance_test"
+  author: "codetoreum-team"
+  target_load: 100
+  expected_duration_seconds: 30
+  tags:
+    - "stress-test"
+    - "performance"
+    - "scalability"
+  notes: |
+    This scenario contains only 10 work items as an example.
+    For actual stress testing with 100 items, use:
+    seeder.seed_from_yaml("stress_test").create_work_items(count=90)

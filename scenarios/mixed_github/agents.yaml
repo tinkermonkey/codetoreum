@@ -1,0 +1,20 @@
+# Mixed GitHub Scenario — Agent Behaviour Configuration
+#
+# Port/Interface: IAgentRepository, MockAgentExecutor (SimulationConfig format)
+# These control MockAgentExecutor's simulated execution characteristics.
+# Note: These are NOT ScenarioModel agents — they use the SimulationConfig agent format.
+
+agents:
+  - agent_id: reviewer
+    execution_delay: 0.2
+    success_rate: 0.95
+    response_patterns:
+      code_review: "Code review completed. No issues found."
+      feedback: "Changes look good, proceeding to next stage."
+
+  - agent_id: analyzer
+    execution_delay: 0.15
+    success_rate: 0.98
+    response_patterns:
+      analysis: "Analysis complete. All requirements met."
+      test: "Tests passing, coverage at 95%."

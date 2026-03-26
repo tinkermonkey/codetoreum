@@ -1,0 +1,68 @@
+# Stress Test Scenario — Work Items (10 of 100)
+#
+# Port/Interface: IWorkItemService, ITicketSystem
+# Adapter (sim): InMemoryTicketAdapter, MockWorkItemService
+#
+# NOTE: This YAML provides 10 items as a representative sample.
+# For actual stress testing, use create_work_items(count=90) to add the remainder.
+
+work_items:
+  - title: "Stress Test Task #1"
+    description: "Automated stress test work item"
+    labels: ["stress-test", "batch-1"]
+    priority: "medium"
+    status: "new"
+
+  - title: "Stress Test Task #2"
+    description: "Automated stress test work item"
+    labels: ["stress-test", "batch-1"]
+    priority: "medium"
+    status: "new"
+
+  - title: "Stress Test Task #3"
+    description: "Automated stress test work item"
+    labels: ["stress-test", "batch-1"]
+    priority: "medium"
+    status: "new"
+
+  - title: "Stress Test Task #4"
+    description: "Automated stress test work item"
+    labels: ["stress-test", "batch-1"]
+    priority: "medium"
+    status: "new"
+
+  - title: "Stress Test Task #5"
+    description: "Automated stress test work item"
+    labels: ["stress-test", "batch-1"]
+    priority: "medium"
+    status: "new"
+
+  - title: "Stress Test Task #6"
+    description: "Automated stress test work item"
+    labels: ["stress-test", "batch-2"]
+    priority: "medium"
+    status: "new"
+
+  - title: "Stress Test Task #7"
+    description: "Automated stress test work item"
+    labels: ["stress-test", "batch-2"]
+    priority: "medium"
+    status: "new"
+
+  - title: "Stress Test Task #8"
+    description: "Automated stress test work item"
+    labels: ["stress-test", "batch-2"]
+    priority: "medium"
+    status: "new"
+
+  - title: "Stress Test Task #9"
+    description: "Automated stress test work item"
+    labels: ["stress-test", "batch-2"]
+    priority: "medium"
+    status: "new"
+
+  - title: "Stress Test Task #10"
+    description: "Automated stress test work item"
+    labels: ["stress-test", "batch-2"]
+    priority: "medium"
+    status: "new"

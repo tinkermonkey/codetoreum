@@ -148,22 +148,22 @@ class TestSeedingBootstrapIntegration:
         if not scenarios_dir.exists():
             pytest.skip("Scenarios directory not found")
 
-        yaml_files = [
-            "default.yaml",
-            "demo.yaml",
-            "stress_test.yaml",
-            "review_cycle.yaml",
-            "failure_recovery.yaml",
+        scenario_names = [
+            "smoke",
+            "sdlc_pipeline",
+            "stress_test",
+            "review_cycle",
+            "failure_recovery",
         ]
 
-        for yaml_file in yaml_files:
-            scenario_path = scenarios_dir / yaml_file
+        for scenario_name in scenario_names:
+            scenario_path = scenarios_dir / scenario_name
 
-            if not scenario_path.exists():
-                pytest.skip(f"{yaml_file} not found")
+            if not scenario_path.is_dir():
+                pytest.skip(f"{scenario_name}/ directory not found")
 
             # Create fresh bootstrap for each scenario
-            config = SimulationConfig.create_fast_config(f"test-{yaml_file}")
+            config = SimulationConfig.create_fast_config(f"test-{scenario_name}")
             bootstrap = SimulationApplicationBootstrap(config)
             await bootstrap.setup()
 
@@ -172,7 +172,7 @@ class TestSeedingBootstrapIntegration:
                 await scenario_seeder.seed_from_yaml(scenario_path)
 
                 # Verify scenario loaded successfully
-                assert len(scenario_seeder.created_items.projects) >= 1, f"{yaml_file} should create at least 1 project"
+                assert len(scenario_seeder.created_items.projects) >= 1, f"{scenario_name}/ should create at least 1 project"
 
             finally:
                 await bootstrap.teardown()
@@ -180,10 +180,10 @@ class TestSeedingBootstrapIntegration:
     @pytest.mark.asyncio
     async def test_yaml_scenario_data_accessible(self, seeder):
         """Test data from YAML scenario is accessible via adapters."""
-        scenario_path = Path("/workspace/scenarios/default.yaml")
+        scenario_path = Path("/workspace/scenarios/smoke")
 
-        if not scenario_path.exists():
-            pytest.skip("default.yaml not found")
+        if not scenario_path.is_dir():
+            pytest.skip("smoke/ scenario directory not found")
 
         await seeder.seed_from_yaml(scenario_path)
 
@@ -195,16 +195,16 @@ class TestSeedingBootstrapIntegration:
         # Verify workflow exists
         pipeline = await seeder._config_store.get_pipeline_config(project_id, "default-workflow")
         assert pipeline.name == "default-workflow"
-        assert len(pipeline.stages) == 3
+        assert len(pipeline.stages) == 2
 
         # Verify agents exist
-        architect = await seeder._config_store.get_agent_config(project_id, "architect")
-        assert architect.agent_name == "architect"
+        coder = await seeder._config_store.get_agent_config(project_id, "coder")
+        assert coder.agent_name == "coder"
 
         # Verify work items exist
         work_item_id = seeder.created_items.work_items[0]
         work_item = await seeder._ticket_adapter.get_work_item(work_item_id)
-        assert "Default Issue" in work_item.title
+        assert work_item.title  # smoke scenario has realistic work item titles
 
     # =========================================================================
     # Performance Integration Tests
@@ -367,7 +367,7 @@ work_items:
         await seeder.create_project("sla-test-project")
 
         # Register template with default SLA (should be 3600 for automated columns)
-        seeder.register_workflow_template(
+        await seeder.register_workflow_template(
             board_id="sla-test-board",
             column_names=["Backlog", "Ready", "In Progress", "Review", "Done"],
             agent_types=["architect", "coder", "tester"],
@@ -398,7 +398,7 @@ work_items:
             "Review": 2700,  # 45 minutes
         }
 
-        seeder.register_workflow_template(
+        await seeder.register_workflow_template(
             board_id="custom-sla-board",
             column_names=["Backlog", "Ready", "In Progress", "Review", "Done"],
             agent_types=["architect", "coder", "tester"],

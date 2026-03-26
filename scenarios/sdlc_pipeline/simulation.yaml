@@ -1,0 +1,24 @@
+# SDLC Pipeline Scenario — Simulation Settings
+#
+# Port/Interface: SimulationConfig (speed, clock, behaviour)
+# Adapter: SimulationClock, SimulationApplicationBootstrap
+#
+# Canonical 7-stage SDLC workflow used as the primary simulation scenario.
+# Matches Scenario 06 specification in SCENARIOS_COMPLETE.md.
+# Simulated duration: ~45 minutes | Real duration at 100x: ~27 seconds
+
+name: "SDLC Pipeline"
+description: "Full 7-stage SDLC pipeline - canonical workflow for simulation testing"
+version: "2.0"
+
+speed_multiplier: 100.0
+auto_advance: false
+
+metadata:
+  scenario_type: "sdlc_pipeline"
+  author: "codetoreum-team"
+  scenario_ref: "Scenario 06 (SCENARIOS_COMPLETE.md)"
+  tags:
+    - "sdlc"
+    - "full-lifecycle"
+    - "canonical"

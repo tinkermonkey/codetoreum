@@ -120,8 +120,8 @@ class TestScenarioB_LockContention:
         template = BoardWorkflowTemplate(
             id="workflow-1",
             name="Lock Contention",
-            pipeline_trigger_columns=("Development",),
-            exit_columns=("Code Review",),
+            board_id="board-1",
+            project_id="test-project",
             columns=(
                 ColumnTemplate(
                     name="Backlog",

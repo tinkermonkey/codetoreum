@@ -1,0 +1,17 @@
+# Mixed Full GitHub Scenario — Container Configuration
+#
+# Port/Interface: IContainer (DockerContainerAdapter settings)
+
+containers:
+  default_exit_code: 0
+  execution_delay: 0.5    # Real Docker startup takes time
+  command_exit_codes:
+    "pytest": 0
+    "npm test": 0
+    "black": 0
+    "mypy": 0
+  command_outputs:
+    "pytest": { stdout: "===== 127 passed in 23.45s =====", stderr: "" }
+    "npm test": { stdout: "Test Suites: 8 passed, 8 total; Tests: 342 passed, 342 total", stderr: "" }
+    "black": { stdout: "All done! ✨", stderr: "" }
+    "mypy": { stdout: "Success: no issues found in 45 source files", stderr: "" }

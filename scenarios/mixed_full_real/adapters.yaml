@@ -1,0 +1,55 @@
+# Mixed Full Real Scenario — Adapter Configuration
+#
+# Port/Interface: All output ports — production implementations.
+# NOTE: vault, real, prometheus adapters are aspirational and not yet registered
+# in AdapterFactory. Loading this scenario will fail at startup until they are
+# implemented. See ADAPTER_REGISTRATION_STATUS.md.
+
+adapters:
+  # Real GitHub
+  board: github              # IBoardService → GitHubBoardAdapter
+  ticket: github             # ITicketSystem → GitHubTicketAdapter
+  discussion_adapter: github # IDiscussionAdapter → GitHubDiscussionAdapter
+  review_cycle: github       # ICodeReviewService → GitHubCodeReviewAdapter
+  work_item_service: github  # IWorkItemService → GitHubWorkItemAdapter
+  identity_service: github   # IIdentityService → GitHubIdentityAdapter
+
+  # Real LLM and Container
+  llm: claude_code           # ILLMProvider → ClaudeCodeAdapter
+  container: docker          # IContainer → DockerContainerAdapter
+
+  # Real Infrastructure
+  version_control: git       # IVersionControlService → GitVersionControlAdapter (planned)
+  event_store: redis         # IEventStore → RedisEventStore
+  message_broker: redis      # IMessageBroker → RedisMessageBroker
+  lock_service: redis        # IPipelineLockService → RedisLockService
+
+  # Real Configuration Storage
+  config_store: postgres     # IConfigStore → PostgresConfigStore
+  workflow_config: postgres  # IWorkflowConfigService → PostgresWorkflowConfigService
+
+  # Real Artifact Storage
+  storage: s3                # IStorage → S3StorageAdapter
+
+  # Real Observability
+  metrics: prometheus        # IMetricsAdapter → PrometheusMetricsAdapter (planned)
+  notifier: slack            # INotifier → SlackNotifier (planned)
+
+  # Additional production adapters (planned)
+  encryption: vault          # IEncryption → VaultEncryption
+  repair_cycle: real         # IRepairCycleAdapter → RealRepairCycleAdapter
+  project_manager: github    # IProjectManager → GitHubProjectManager
+  checkpoint_store: s3       # ICheckpointStore → S3CheckpointStore
+  agent_repository: postgres # IAgentRepository → PostgresAgentRepository
+  run_registry: postgres     # IRunRegistry → PostgresRunRegistry
+  branch_tracker: postgres   # IBranchTracker → PostgresBranchTracker
+  event_emitter: real        # IEventEmitter → RealEventEmitter (planned)
+  queue_service: redis       # IQueueService → RedisQueueService
+
+scenario_config:
+  adapter_overrides:
+    - all_real
+  load_order:
+    - default_simulation_config
+    - full_production_overrides
+    - environment_overrides

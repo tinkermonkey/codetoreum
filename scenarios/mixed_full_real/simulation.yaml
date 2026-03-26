@@ -1,0 +1,27 @@
+# Mixed Full Real Scenario — Simulation Settings
+#
+# Port/Interface: SimulationConfig (speed, fidelity, clock)
+# Adapter: SimulationClock, SimulationApplicationBootstrap
+#
+# Full production configuration: all real systems.
+# Speed: 1-5x faster than wall-clock time | Determinism: Low | Cost: High
+
+name: mixed_full_real
+description: All real systems - production deployment configuration
+version: "1.0"
+
+# Fidelity level: HIGH = full simulation fidelity with realistic timing
+fidelity: HIGH
+
+# Simulation timing — real-time (no acceleration)
+simulation:
+  speed_multiplier: 1.0
+  start_time: null
+
+# Production monitoring / observability settings
+monitoring:
+  tracing_enabled: true
+  tracing_provider: jaeger
+  metrics_scrape_interval: 15
+  log_level: INFO
+  audit_logging_enabled: true

@@ -5,6 +5,7 @@ where board position (not labels) determines workflow state and agent triggers.
 """
 
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 
 
@@ -27,10 +28,17 @@ class ColumnTemplate:
         is_exit_column: If True, releasing lock when item enters column
         position: Column order (0 = leftmost/first)
         auto_progress_on_completion: If True, automatically move to next column
-                                     after agent completion
+                                     after agent completion (success path)
         sla_seconds: Optional SLA threshold in seconds. If set, work items in this
                      column exceeding this duration will trigger SLA expiry events.
                      None means no SLA enforcement for this column.
+        on_failure_column: Name of the column to move the work item to when the
+                           agent execution fails. None means the item stays in the
+                           current column (pipeline lock is still released).
+                           Validated against the parent template's column names.
+        sla_escalation_column: Name of the column to move the work item to when
+                                the SLA expires. None means only an event is emitted
+                                (no automatic move). Validated against parent columns.
     """
 
     name: str
@@ -41,6 +49,8 @@ class ColumnTemplate:
     position: int
     auto_progress_on_completion: bool
     sla_seconds: int | None = None
+    on_failure_column: str | None = None
+    sla_escalation_column: str | None = None
 
     def __post_init__(self) -> None:
         """Validate column template invariants."""
@@ -76,6 +86,16 @@ class ColumnTemplate:
             msg = f"SLA threshold must be positive, got {self.sla_seconds} seconds"
             raise ValueError(msg)
 
+        # on_failure_column and sla_escalation_column cannot equal this column's
+        # own name (would create an infinite loop / no-op move)
+        if self.on_failure_column and self.on_failure_column == self.name:
+            msg = f"Column '{self.name}': on_failure_column cannot reference itself"
+            raise ValueError(msg)
+
+        if self.sla_escalation_column and self.sla_escalation_column == self.name:
+            msg = f"Column '{self.name}': sla_escalation_column cannot reference itself"
+            raise ValueError(msg)
+
 
 @dataclass(frozen=True)
 class BoardWorkflowTemplate:
@@ -84,84 +104,111 @@ class BoardWorkflowTemplate:
     Defines a workflow where work items progress through board columns,
     with each column optionally triggering an agent or requiring manual action.
 
+    ``pipeline_trigger_columns`` and ``exit_columns`` are **computed properties**
+    derived from the ``columns`` tuple (columns where ``is_pipeline_trigger`` or
+    ``is_exit_column`` is True).  There is no separate stored field for them —
+    ``ColumnTemplate`` flags are the single source of truth.
+
     Attributes:
         id: Unique identifier for the workflow template
         name: Display name
-        pipeline_trigger_columns: Column names that acquire pipeline lock
-        exit_columns: Column names that release pipeline lock
-        columns: Ordered tuple of column configurations (immutable)
+        board_id: The board this template configures (lookup key for IWorkflowConfigService)
+        project_id: The project that owns this board (used for per-project listing)
+        columns: Ordered tuple of column configurations (immutable, single source of truth)
+        created_at: When this template was first persisted (None if not yet saved)
+        updated_at: When this template was last modified (None if not yet saved)
 
     Raises:
-        ValueError: If validation fails (empty ID/name, invalid columns, etc.)
+        ValueError: If validation fails (empty ID/name/board_id/project_id,
+                    non-sequential positions, duplicate names, or invalid
+                    on_failure_column / sla_escalation_column references)
     """
 
     id: str
     name: str
-    pipeline_trigger_columns: tuple[str, ...]
-    exit_columns: tuple[str, ...]
+    board_id: str
+    project_id: str
     columns: tuple[ColumnTemplate, ...]
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    # ── Computed properties (derived from columns — no stored redundancy) ────
+
+    @property
+    def pipeline_trigger_columns(self) -> tuple[str, ...]:
+        """Column names where entering acquires the pipeline lock."""
+        return tuple(c.name for c in self.columns if c.is_pipeline_trigger)
+
+    @property
+    def exit_columns(self) -> tuple[str, ...]:
+        """Column names where entering releases the pipeline lock."""
+        return tuple(c.name for c in self.columns if c.is_exit_column)
+
+    # ── Invariant validation ─────────────────────────────────────────────────
 
     def __post_init__(self) -> None:
         """Validate workflow template invariants."""
-        # Validate ID and name
         if not self.id or not self.id.strip():
             msg = "Template ID cannot be empty"
             raise ValueError(msg)
         if not self.name or not self.name.strip():
             msg = "Template name cannot be empty"
             raise ValueError(msg)
+        if not self.board_id or not self.board_id.strip():
+            msg = "board_id cannot be empty"
+            raise ValueError(msg)
+        if not self.project_id or not self.project_id.strip():
+            msg = "project_id cannot be empty"
+            raise ValueError(msg)
 
-        # Require at least one column
         if not self.columns:
             msg = "Workflow must have at least one column"
             raise ValueError(msg)
 
-        # Validate column positions are unique and sequential
-        positions = sorted([col.position for col in self.columns])
+        # Column positions must be unique and sequential starting at 0
+        positions = sorted(col.position for col in self.columns)
         expected = list(range(len(self.columns)))
-
         if positions != expected:
-            msg = f"Column positions must be unique and sequential starting at 0. Got {positions}, expected {expected}"
+            msg = (
+                f"Column positions must be unique and sequential starting at 0. "
+                f"Got {positions}, expected {expected}"
+            )
             raise ValueError(msg)
 
-        # Validate column names are unique
+        # Column names must be unique
         names = [col.name for col in self.columns]
         if len(names) != len(set(names)):
             duplicates = [n for n in names if names.count(n) > 1]
             msg = f"Column names must be unique, duplicates: {duplicates}"
             raise ValueError(msg)
 
-        # Validate trigger/exit columns exist in columns list
+        # Cross-column reference validation: on_failure_column and
+        # sla_escalation_column must name columns that exist in this template
         column_names = {col.name for col in self.columns}
-        for trigger_col in self.pipeline_trigger_columns:
-            if trigger_col not in column_names:
-                msg = f"pipeline_trigger_columns references non-existent column: {trigger_col}"
+        for col in self.columns:
+            if col.on_failure_column and col.on_failure_column not in column_names:
+                msg = (
+                    f"Column '{col.name}' references unknown on_failure_column "
+                    f"'{col.on_failure_column}'"
+                )
+                raise ValueError(msg)
+            if col.sla_escalation_column and col.sla_escalation_column not in column_names:
+                msg = (
+                    f"Column '{col.name}' references unknown sla_escalation_column "
+                    f"'{col.sla_escalation_column}'"
+                )
                 raise ValueError(msg)
 
-        for exit_col in self.exit_columns:
-            if exit_col not in column_names:
-                msg = f"exit_columns references non-existent column: {exit_col}"
-                raise ValueError(msg)
+    # ── Query helpers ────────────────────────────────────────────────────────
 
     def get_column_config(self, column_name: str) -> ColumnTemplate | None:
-        """Get configuration for a specific column by name.
-
-        Args:
-            column_name: Name of the column to find
-
-        Returns:
-            ColumnTemplate if found, None otherwise
-        """
+        """Return the ColumnTemplate for *column_name*, or None if not found."""
         return next((c for c in self.columns if c.name == column_name), None)
 
     def get_next_column(self, current: str) -> str | None:
-        """Get the next column by position order.
+        """Return the column name immediately after *current* by position.
 
-        Args:
-            current: Current column name
-
-        Returns:
-            Name of the next column by position, or None if current is the last
+        Returns None if *current* is not found or is the last column.
         """
         current_config = self.get_column_config(current)
         if not current_config:

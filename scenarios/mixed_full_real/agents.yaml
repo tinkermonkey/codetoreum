@@ -1,0 +1,33 @@
+# Mixed Full Real Scenario — Agent Behaviour Configuration
+#
+# Port/Interface: IAgentRepository, ILLMProvider (SimulationConfig format)
+# Real Claude Code API — execution delays reflect actual LLM response times.
+
+agents:
+  - agent_id: reviewer
+    execution_delay: 5.0   # Real Claude Code calls take 5–30 seconds
+    success_rate: 0.99
+    token_usage:
+      input: 2000
+      output: 1000
+
+  - agent_id: analyzer
+    execution_delay: 4.0
+    success_rate: 0.99
+    token_usage:
+      input: 1500
+      output: 800
+
+  - agent_id: implementer
+    execution_delay: 8.0   # Code generation takes longer
+    success_rate: 0.95
+    token_usage:
+      input: 3000
+      output: 2000
+
+  - agent_id: tester
+    execution_delay: 6.0
+    success_rate: 0.98
+    token_usage:
+      input: 2500
+      output: 1500

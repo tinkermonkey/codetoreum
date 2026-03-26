@@ -1,0 +1,30 @@
+# Mixed Full GitHub Scenario — Agent Behaviour Configuration
+#
+# Port/Interface: IAgentRepository, MockAgentExecutor (SimulationConfig format)
+
+agents:
+  - agent_id: reviewer
+    execution_delay: 0.2
+    success_rate: 0.95
+    response_patterns:
+      code_review: "Code review completed. No issues found."
+      feedback: "Changes look good, proceeding to next stage."
+
+  - agent_id: analyzer
+    execution_delay: 0.15
+    success_rate: 0.98
+    response_patterns:
+      analysis: "Analysis complete. All requirements met."
+      test: "Tests passing, coverage at 95%."
+
+  - agent_id: implementer
+    execution_delay: 0.3
+    success_rate: 0.92
+    response_patterns:
+      implementation: "Implementation complete and tested."
+
+  - agent_id: tester
+    execution_delay: 0.25
+    success_rate: 0.97
+    response_patterns:
+      test_results: "All tests passing."

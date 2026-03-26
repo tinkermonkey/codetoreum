@@ -7,7 +7,7 @@ These models define the schema for declarative scenario configuration files.
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class ScenarioProjectModel(BaseModel):
@@ -103,6 +103,42 @@ class ScenarioAgentModel(BaseModel):
         return v
 
 
+class ScenarioColumnConfig(BaseModel):
+    """Explicit column configuration for a board workflow template.
+
+    When ``column_configs`` is provided on a board, the seeder uses these
+    definitions directly instead of auto-generating routing from positional
+    rules.  This lets you express the full ``ColumnTemplate`` schema — agent
+    assignments, pipeline-trigger flags, exit columns, SLA thresholds, and
+    auto-progression — in the scenario YAML.
+
+    The ``columns`` list on the parent ``ScenarioBoardModel`` still controls
+    which columns the mock board adapter creates; ``column_configs`` controls
+    the *workflow semantics* registered with ``IWorkflowConfigService``.
+    """
+
+    name: str = Field(..., description="Column name — must match an entry in the parent board's columns list")
+    type: str = Field(default="manual", description="Column type: 'manual' or 'automated'")
+    agent_id: str | None = Field(default=None, description="Agent ID to trigger on entry (required when type=automated)")
+    is_pipeline_trigger: bool = Field(default=False, description="If True, acquiring pipeline lock when item enters")
+    is_exit_column: bool = Field(default=False, description="If True, releasing pipeline lock when item enters")
+    auto_progress_on_completion: bool = Field(
+        default=False, description="Automatically move item to next column after agent completion (automated only)"
+    )
+    sla_seconds: int | None = Field(default=None, description="SLA threshold in seconds; None disables SLA enforcement", ge=1)
+    on_failure_column: str | None = Field(default=None, description="Column to move item to on agent failure; None keeps item in place")
+    sla_escalation_column: str | None = Field(default=None, description="Column to move item to when SLA expires; None emits event only")
+
+    @field_validator("type")
+    @classmethod
+    def validate_type(cls, v: str) -> str:
+        """Validate column type is manual or automated."""
+        if v not in ("manual", "automated"):
+            message = f"Invalid column type: {v!r}. Valid values: manual, automated"
+            raise ValueError(message)
+        return v
+
+
 class ScenarioBoardModel(BaseModel):
     """Board configuration in scenario file."""
 
@@ -112,8 +148,41 @@ class ScenarioBoardModel(BaseModel):
     sla_seconds_by_column: dict[str, int] = Field(
         default_factory=dict,
         description="Optional SLA thresholds in seconds for each column name. "
-        "If not specified, automated columns default to 3600 seconds (1 hour).",
+        "If not specified, automated columns default to 3600 seconds (1 hour). "
+        "Ignored when column_configs is provided.",
     )
+    column_configs: list[ScenarioColumnConfig] = Field(
+        default_factory=list,
+        description="Explicit per-column workflow semantics. "
+        "When non-empty, overrides auto-generation from positional workflow stage order. "
+        "Each entry must correspond to a name listed in columns.",
+    )
+
+    @model_validator(mode="after")
+    def validate_column_configs_references(self) -> "ScenarioBoardModel":
+        """Validate that column_configs names and cross-column references exist in columns."""
+        if not self.column_configs:
+            return self
+        column_set = set(self.columns)
+        for cfg in self.column_configs:
+            if cfg.name not in column_set:
+                msg = (
+                    f"column_configs entry '{cfg.name}' is not listed in columns: {self.columns}"
+                )
+                raise ValueError(msg)
+            if cfg.on_failure_column and cfg.on_failure_column not in column_set:
+                msg = (
+                    f"column_configs '{cfg.name}': on_failure_column '{cfg.on_failure_column}' "
+                    f"is not listed in columns: {self.columns}"
+                )
+                raise ValueError(msg)
+            if cfg.sla_escalation_column and cfg.sla_escalation_column not in column_set:
+                msg = (
+                    f"column_configs '{cfg.name}': sla_escalation_column "
+                    f"'{cfg.sla_escalation_column}' is not listed in columns: {self.columns}"
+                )
+                raise ValueError(msg)
+        return self
 
 
 class ScenarioBoardItemPlacementModel(BaseModel):

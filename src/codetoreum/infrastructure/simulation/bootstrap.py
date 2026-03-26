@@ -1834,7 +1834,10 @@ class SimulationApplicationBootstrap:
         # Mount simulation-only ticketing router (never in production create_app)
         # Pass workflow_config_service to enable proper staging column detection (issue #442)
         sim_router = create_simulation_ticketing_router(
-            self.adapters.ticket_system, self.adapters.board, self.adapters.workflow_config
+            self.adapters.ticket_system,
+            self.adapters.board,
+            self.adapters.workflow_config,
+            self.adapters.work_item_service,
         )
         app.include_router(sim_router)
 

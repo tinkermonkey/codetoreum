@@ -1,0 +1,26 @@
+# Smoke Scenario — Agents
+#
+# Port/Interface: IAgentRepository, ILLMProvider
+# Adapter (sim): InMemoryAgentRepository, MockAgentExecutor
+
+agents:
+  - name: "coder"
+    agent_type: "coder"
+    description: "Software developer agent"
+    capabilities:
+      - "code_generation"
+    llm_model: "claude-sonnet-4-6"
+    temperature: 0.7
+    max_tokens: 4096
+    enabled: true
+
+  - name: "tester"
+    agent_type: "tester"
+    description: "QA tester agent"
+    capabilities:
+      - "code_review"
+      - "testing"
+    llm_model: "claude-sonnet-4-6"
+    temperature: 0.7
+    max_tokens: 4096
+    enabled: true

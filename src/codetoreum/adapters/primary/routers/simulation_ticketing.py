@@ -20,6 +20,7 @@ from codetoreum.domain.board_workflow_template import ColumnType
 from codetoreum.domain.work_item import WorkItemPriority
 from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.ports.output.board_service import MovedByType
+from codetoreum.ports.output.work_item_service import IWorkItemService
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 logger = logging.getLogger(__name__)
@@ -156,6 +157,7 @@ def create_simulation_ticketing_router(
     ticket_adapter: InMemoryTicketAdapter,
     board_adapter: MockBoardAdapter,
     workflow_config_service: IWorkflowConfigService,
+    work_item_service: IWorkItemService | None = None,
 ) -> APIRouter:
     """
     Create the simulation ticketing router.
@@ -270,6 +272,10 @@ def create_simulation_ticketing_router(
             labels=request.labels,
             priority=priority,
         )
+
+        # Mirror into work_item_service so ExecutionServiceAgentExecutor can look it up
+        if work_item_service is not None and hasattr(work_item_service, "add_work_item"):
+            work_item_service.add_work_item(work_item)  # type: ignore[union-attr]
 
         board_position = None
         if request.board_id and request.column:

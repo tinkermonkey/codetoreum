@@ -802,6 +802,24 @@ class BoardColumnEventHandler(EventHandler):
         """
         if not success:
             logger.warning(f"Agent failed for {work_item_id}, skipping auto-progression")
+            try:
+                config = await self.workflow_config.get_board_workflow_template(board_id)
+                if config:
+                    current_position = await self.board_service.get_item_position(work_item_id)
+                    column_config = config.get_column_config(current_position.column_name)
+                    if column_config and column_config.on_failure_column:
+                        await self.board_service.move_item_to_column(
+                            work_item_id, column_config.on_failure_column, MovedByType.ORCHESTRATOR
+                        )
+                        logger.info(
+                            f"Moved {work_item_id} to failure column '{column_config.on_failure_column}'"
+                        )
+            except Exception as e:
+                logger.error(
+                    f"Failed to move {work_item_id} to failure column: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_BOARD_EVENT_FAILURE_COLUMN_MOVE"},
+                )
             await self._fail_workflow_run(work_item_id, "Agent execution failed")
             return
 

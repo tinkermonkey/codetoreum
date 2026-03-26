@@ -1,0 +1,68 @@
+# Mixed Full GitHub Scenario — Adapter Configuration
+#
+# Port/Interface: All output ports (IBoardService, ITicketSystem, IContainer, …)
+# Maps each port slot to its adapter implementation.
+
+adapters:
+  # Real GitHub adapters
+  board: github              # IBoardService → GitHubBoardAdapter
+  ticket: github             # ITicketSystem → GitHubTicketAdapter
+  discussion_adapter: github # IDiscussionAdapter → GitHubDiscussionAdapter
+  review_cycle: github       # ICodeReviewService → GitHubCodeReviewAdapter
+  work_item_service: github  # IWorkItemService → GitHubWorkItemAdapter
+  identity_service: github   # IIdentityService → GitHubIdentityAdapter
+
+  # Simulated LLM (deterministic)
+  llm: mock              # ILLMProvider → MockLLMAdapter
+
+  # Real Container (Docker)
+  container: docker      # IContainer → DockerContainerAdapter
+
+  # Real Infrastructure
+  version_control: git   # IVersionControlService → GitVersionControlAdapter
+  event_store: redis     # IEventStore → RedisEventStore  (⚠ not yet implemented)
+  message_broker: redis  # IMessageBroker → RedisMessageBroker  (⚠ not yet implemented)
+  lock_service: redis    # IPipelineLockService → RedisLockService  (⚠ not yet implemented)
+
+  # Real Configuration Storage (PostgreSQL)
+  config_store: postgres     # IConfigStore → PostgresConfigStore
+  workflow_config: postgres  # IWorkflowConfigService → PostgresWorkflowConfigService
+
+  # Real Artifact Storage
+  storage: s3            # IStorage → S3StorageAdapter
+
+  # Observability
+  metrics: in_memory     # IMetricsAdapter → InMemoryMetricsAdapter
+  notifier: mock         # INotifier → MockNotifier
+  encryption: simple
+  repair_cycle: mock     # IRepairCycleAdapter → MockRepairCycleAdapter
+  project_manager: mock
+  checkpoint_store: in_memory
+  agent_repository: postgres  # IAgentRepository → PostgresAgentRepository
+  run_registry: postgres      # IRunRegistry → PostgresRunRegistry
+  branch_tracker: postgres    # IBranchTracker → PostgresBranchTracker
+  event_emitter: capturing    # IEventEmitter → CapturingMockEventEmitter
+  queue_service: redis        # IQueueService → RedisQueueService  (⚠ not yet implemented)
+
+scenario_config:
+  adapter_overrides:
+    - board
+    - ticket
+    - discussion_adapter
+    - review_cycle
+    - work_item_service
+    - identity_service
+    - container
+    - event_store
+    - message_broker
+    - lock_service
+    - config_store
+    - workflow_config
+    - agent_repository
+    - run_registry
+    - branch_tracker
+    - queue_service
+  load_order:
+    - default_simulation_config
+    - scenario_adapters
+    - environment_overrides

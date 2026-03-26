@@ -1,0 +1,12 @@
+# Failure Recovery Scenario — Projects
+#
+# Port/Interface: ITicketSystem, IVersionControlService
+# Adapter (sim): InMemoryTicketAdapter, InMemoryVersionControlAdapter
+
+projects:
+  - name: "failure-recovery-project"
+    description: "Project for testing failure scenarios and recovery"
+    default_branch: "main"
+    metadata:
+      environment: "chaos_testing"
+      retry_policy: "aggressive"

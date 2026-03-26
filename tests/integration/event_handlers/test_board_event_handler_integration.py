@@ -89,8 +89,8 @@ def sdlc_workflow():
     return BoardWorkflowTemplate(
         id="workflow-1",
         name="SDLC Workflow",
-        pipeline_trigger_columns=("Development",),
-        exit_columns=("Done",),
+        board_id="board-1",
+        project_id="test-project",
         columns=(
             ColumnTemplate(
                 name="Backlog",
@@ -463,8 +463,8 @@ class TestMultipleBoardsAndProjects:
         simple_workflow = BoardWorkflowTemplate(
             id="workflow-2",
             name="Simple Workflow",
-            pipeline_trigger_columns=(),
-            exit_columns=(),
+            board_id="board-1",
+            project_id="test-project",
             columns=(
                 ColumnTemplate(
                     name="Todo",

@@ -1,0 +1,48 @@
+# SDLC Pipeline Scenario — Work Items
+#
+# Port/Interface: IWorkItemService, ITicketSystem
+# Adapter (sim): InMemoryTicketAdapter, MockWorkItemService
+
+work_items:
+  - title: "Add user authentication system"
+    description: |
+      Implement OAuth2-based authentication with JWT tokens.
+
+      Requirements:
+      - OAuth2 provider integration (Google, GitHub)
+      - JWT token generation and validation
+      - Refresh token mechanism
+      - Rate limiting for auth endpoints
+    labels:
+      - "feature"
+      - "authentication"
+    priority: "high"
+    status: "new"
+
+  - title: "Implement real-time notifications"
+    description: |
+      Add WebSocket-based real-time notification system.
+
+      Requirements:
+      - WebSocket connection management
+      - Event broadcasting
+      - Client reconnection handling
+      - Notification persistence
+    labels:
+      - "feature"
+      - "websocket"
+    priority: "medium"
+    status: "new"
+
+  - title: "Optimize database queries"
+    description: |
+      Improve performance of slow database queries.
+
+      - Add missing indexes
+      - Optimize N+1 query patterns
+      - Implement query result caching
+    labels:
+      - "performance"
+      - "database"
+    priority: "high"
+    status: "new"

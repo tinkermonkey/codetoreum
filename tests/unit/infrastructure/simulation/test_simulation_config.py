@@ -471,7 +471,7 @@ metadata:
 
     def test_from_yaml_missing_file_raises_error(self) -> None:
         """Test that missing YAML file raises FileNotFoundError."""
-        with pytest.raises(FileNotFoundError, match="Scenario file not found"):
+        with pytest.raises(FileNotFoundError, match="Scenario path not found"):
             SimulationConfig.from_yaml("/nonexistent/file.yaml")
 
     def test_from_yaml_empty_file_raises_error(self) -> None:
@@ -482,7 +482,7 @@ metadata:
             temp_path = f.name
 
         try:
-            with pytest.raises(ValueError, match="Empty YAML file"):
+            with pytest.raises(ValueError, match="Empty scenario"):
                 SimulationConfig.from_yaml(temp_path)
         finally:
             Path(temp_path).unlink()

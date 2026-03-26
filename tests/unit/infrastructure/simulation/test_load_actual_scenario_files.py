@@ -36,84 +36,84 @@ class TestLoadActualScenarioFiles:
         return scenarios_dir
 
     def test_load_default_scenario(self) -> None:
-        """Test loading the default scenario YAML file."""
+        """Test loading the smoke scenario directory."""
         scenarios_dir = self._get_scenarios_dir()
-        scenario_file = scenarios_dir / "default.yaml"
+        scenario_dir = scenarios_dir / "smoke"
 
-        if not scenario_file.exists():
-            pytest.skip(f"Scenario file not found: {scenario_file}")
+        if not scenario_dir.is_dir():
+            pytest.skip(f"Scenario directory not found: {scenario_dir}")
 
-        config = SimulationConfig.from_yaml(scenario_file)
+        config = SimulationConfig.from_yaml(scenario_dir)
         assert config.scenario_name
         assert config.time.speed_multiplier > 0
 
     def test_load_demo_scenario(self) -> None:
-        """Test loading the demo scenario YAML file."""
+        """Test loading the sdlc_pipeline scenario directory."""
         scenarios_dir = self._get_scenarios_dir()
-        scenario_file = scenarios_dir / "demo.yaml"
+        scenario_dir = scenarios_dir / "sdlc_pipeline"
 
-        if not scenario_file.exists():
-            pytest.skip(f"Scenario file not found: {scenario_file}")
+        if not scenario_dir.is_dir():
+            pytest.skip(f"Scenario directory not found: {scenario_dir}")
 
-        config = SimulationConfig.from_yaml(scenario_file)
+        config = SimulationConfig.from_yaml(scenario_dir)
         assert config.scenario_name
         assert config.time.speed_multiplier > 0
 
     def test_load_review_cycle_scenario(self) -> None:
-        """Test loading the review_cycle scenario YAML file."""
+        """Test loading the review_cycle scenario directory."""
         scenarios_dir = self._get_scenarios_dir()
-        scenario_file = scenarios_dir / "review_cycle.yaml"
+        scenario_dir = scenarios_dir / "review_cycle"
 
-        if not scenario_file.exists():
-            pytest.skip(f"Scenario file not found: {scenario_file}")
+        if not scenario_dir.is_dir():
+            pytest.skip(f"Scenario directory not found: {scenario_dir}")
 
-        config = SimulationConfig.from_yaml(scenario_file)
+        config = SimulationConfig.from_yaml(scenario_dir)
         assert config.scenario_name
         assert config.time.speed_multiplier > 0
 
     def test_load_failure_recovery_scenario(self) -> None:
-        """Test loading the failure_recovery scenario YAML file."""
+        """Test loading the failure_recovery scenario directory."""
         scenarios_dir = self._get_scenarios_dir()
-        scenario_file = scenarios_dir / "failure_recovery.yaml"
+        scenario_dir = scenarios_dir / "failure_recovery"
 
-        if not scenario_file.exists():
-            pytest.skip(f"Scenario file not found: {scenario_file}")
+        if not scenario_dir.is_dir():
+            pytest.skip(f"Scenario directory not found: {scenario_dir}")
 
-        config = SimulationConfig.from_yaml(scenario_file)
+        config = SimulationConfig.from_yaml(scenario_dir)
         assert config.scenario_name
         assert config.time.speed_multiplier > 0
 
     def test_load_stress_test_scenario(self) -> None:
-        """Test loading the stress_test scenario YAML file."""
+        """Test loading the stress_test scenario directory."""
         scenarios_dir = self._get_scenarios_dir()
-        scenario_file = scenarios_dir / "stress_test.yaml"
+        scenario_dir = scenarios_dir / "stress_test"
 
-        if not scenario_file.exists():
-            pytest.skip(f"Scenario file not found: {scenario_file}")
+        if not scenario_dir.is_dir():
+            pytest.skip(f"Scenario directory not found: {scenario_dir}")
 
-        config = SimulationConfig.from_yaml(scenario_file)
+        config = SimulationConfig.from_yaml(scenario_dir)
         assert config.scenario_name
         assert config.time.speed_multiplier > 0
 
     def test_load_mixed_github_real_scenario(self) -> None:
-        """Test loading mixed_github_real.yaml with flexible key handling.
+        """Test loading mixed_github/ directory with flexible key handling.
 
-        This file uses:
+        The directory uses:
         - Nested simulation: key (speed_multiplier under simulation:)
         - agents: as list-of-objects
         - containers: (plural) instead of container:
         - fidelity: MEDIUM (uppercase)
         """
         scenarios_dir = self._get_scenarios_dir()
-        scenario_file = scenarios_dir / "mixed_github_real.yaml"
+        scenario_dir = scenarios_dir / "mixed_github"
 
-        if not scenario_file.exists():
-            pytest.skip(f"Scenario file not found: {scenario_file}")
+        if not scenario_dir.is_dir():
+            pytest.skip(f"Scenario directory not found: {scenario_dir}")
 
-        config = SimulationConfig.from_yaml(scenario_file)
+        config = SimulationConfig.from_yaml(scenario_dir)
 
         # Verify scenario name
-        assert config.scenario_name == "mixed_github_real"
+        assert config.scenario_name == "mixed_github"
         assert config.scenario_description
 
         # Verify nested simulation: speed_multiplier was parsed
@@ -140,21 +140,21 @@ class TestLoadActualScenarioFiles:
         assert config.adapters.container == "fake"
 
     def test_load_mixed_full_github_scenario(self) -> None:
-        """Test loading mixed_full_github.yaml with flexible key handling.
+        """Test loading mixed_full_github/ directory with flexible key handling.
 
-        This file uses:
+        The directory uses:
         - Nested simulation: key
         - agents: as list-of-objects with 4 agents
         - containers: (plural)
         - fidelity: MEDIUM
         """
         scenarios_dir = self._get_scenarios_dir()
-        scenario_file = scenarios_dir / "mixed_full_github.yaml"
+        scenario_dir = scenarios_dir / "mixed_full_github"
 
-        if not scenario_file.exists():
-            pytest.skip(f"Scenario file not found: {scenario_file}")
+        if not scenario_dir.is_dir():
+            pytest.skip(f"Scenario directory not found: {scenario_dir}")
 
-        config = SimulationConfig.from_yaml(scenario_file)
+        config = SimulationConfig.from_yaml(scenario_dir)
 
         # Verify scenario name
         assert config.scenario_name == "mixed_full_github"
@@ -178,25 +178,25 @@ class TestLoadActualScenarioFiles:
         assert config.adapters.container == "docker"
 
     def test_load_mixed_full_real_scenario(self) -> None:
-        """Test loading mixed_full_real.yaml with flexible key handling.
+        """Test loading mixed_full_real/ directory with flexible key handling.
 
-        This file uses:
+        The directory uses:
         - Nested simulation: key
         - agents: as list-of-objects with 4 agents
         - containers: (plural)
         - fidelity: HIGH (uppercase)
 
-        Note: This file references unregistered adapters (vault, prometheus, slack, git),
+        Note: This directory references unregistered adapters (vault, prometheus, slack, git),
         but the YAML parsing should still succeed. The adapter validation happens later
         during runtime via AdapterResolver.validate_credentials().
         """
         scenarios_dir = self._get_scenarios_dir()
-        scenario_file = scenarios_dir / "mixed_full_real.yaml"
+        scenario_dir = scenarios_dir / "mixed_full_real"
 
-        if not scenario_file.exists():
-            pytest.skip(f"Scenario file not found: {scenario_file}")
+        if not scenario_dir.is_dir():
+            pytest.skip(f"Scenario directory not found: {scenario_dir}")
 
-        config = SimulationConfig.from_yaml(scenario_file)
+        config = SimulationConfig.from_yaml(scenario_dir)
 
         # Verify scenario name
         assert config.scenario_name == "mixed_full_real"
@@ -225,44 +225,48 @@ class TestLoadActualScenarioFiles:
         assert config.adapters.container == "docker"
 
     def test_all_scenario_files_are_loadable(self) -> None:
-        """Test that all scenario YAML files in scenarios/ directory are loadable.
+        """Test that all scenario directories in scenarios/ are loadable.
 
-        This comprehensive test ensures no YAML parsing errors occur for any scenario file.
+        Each scenario is now a directory containing per-adapter YAML files.
+        This comprehensive test ensures no YAML parsing errors occur for any scenario.
         """
         scenarios_dir = self._get_scenarios_dir()
 
         if not scenarios_dir.exists():
             pytest.skip(f"Scenarios directory not found: {scenarios_dir}")
 
-        yaml_files = sorted(scenarios_dir.glob("*.yaml"))
-        assert len(yaml_files) > 0, "No YAML files found in scenarios directory"
+        scenario_dirs = sorted(
+            p for p in scenarios_dir.iterdir() if p.is_dir() and not p.name.startswith(".")
+        )
+        assert len(scenario_dirs) > 0, "No scenario directories found in scenarios/"
 
         loaded_configs = []
         errors = []
 
-        for scenario_file in yaml_files:
+        for scenario_dir in scenario_dirs:
+            scenario_label = scenario_dir.name
             try:
-                config = SimulationConfig.from_yaml(scenario_file)
-                loaded_configs.append((scenario_file.name, config))
+                config = SimulationConfig.from_yaml(scenario_dir)
+                loaded_configs.append((scenario_label, config))
             except Exception as e:
-                errors.append((scenario_file.name, str(e)))
+                errors.append((scenario_label, str(e)))
 
         # Report any errors found
         if errors:
-            error_msg = "Failed to load the following scenario files:\n"
-            for filename, error in errors:
-                error_msg += f"  {filename}: {error}\n"
+            error_msg = "Failed to load the following scenario directories:\n"
+            for dirname, error in errors:
+                error_msg += f"  {dirname}/: {error}\n"
             pytest.fail(error_msg)
 
-        # Verify all files were loaded
+        # Verify all directories were loaded
         assert len(loaded_configs) == len(
-            yaml_files
-        ), f"Loaded {len(loaded_configs)} files but found {len(yaml_files)} total"
+            scenario_dirs
+        ), f"Loaded {len(loaded_configs)} scenarios but found {len(scenario_dirs)} directories"
 
         # Verify each config has required fields
-        for filename, config in loaded_configs:
-            assert config.scenario_name, f"{filename}: scenario_name is required"
-            assert config.time.speed_multiplier > 0, f"{filename}: speed_multiplier must be positive"
+        for dirname, config in loaded_configs:
+            assert config.scenario_name, f"{dirname}/: scenario_name is required"
+            assert config.time.speed_multiplier > 0, f"{dirname}/: speed_multiplier must be positive"
             assert isinstance(
                 config.fidelity_level, FidelityLevel
-            ), f"{filename}: fidelity_level must be a FidelityLevel enum"
+            ), f"{dirname}/: fidelity_level must be a FidelityLevel enum"

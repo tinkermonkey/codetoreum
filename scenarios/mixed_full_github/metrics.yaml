@@ -1,0 +1,7 @@
+# Mixed Full GitHub Scenario — Metrics Configuration
+#
+# Port/Interface: IMetricsAdapter (InMemoryMetricsAdapter settings)
+
+metrics:
+  collect_enabled: true
+  detailed_tracking: false

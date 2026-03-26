@@ -659,14 +659,24 @@ class SimulationConfig:
         file_path = Path(file_path)
 
         if not file_path.exists():
-            message = f"Scenario file not found: {file_path}"
+            message = f"Scenario path not found: {file_path}"
             raise FileNotFoundError(message)
 
-        with open(file_path) as f:
-            data = yaml.safe_load(f)
+        if file_path.is_dir():
+            yaml_files = sorted(file_path.glob("*.yaml"))
+            if not yaml_files:
+                raise FileNotFoundError(f"No YAML files found in scenario directory: {file_path}")
+            data: dict = {}
+            for yaml_file in yaml_files:
+                fragment = yaml.safe_load(yaml_file.read_text())
+                if fragment:
+                    data.update(fragment)
+        else:
+            with open(file_path) as f:
+                data = yaml.safe_load(f)
 
         if not data:
-            message = f"Empty YAML file: {file_path}"
+            message = f"Empty scenario (no YAML content): {file_path}"
             raise ValueError(message)
 
         # Extract scenario name (required)

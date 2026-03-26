@@ -99,8 +99,8 @@ class TestBoardWorkflowTemplateCreation:
         template = BoardWorkflowTemplate(
             id="template-1",
             name="Simple Workflow",
-            pipeline_trigger_columns=(),
-            exit_columns=("Done",),
+            board_id="board-1",
+            project_id="test-project",
             columns=columns,
         )
 
@@ -154,8 +154,8 @@ class TestBoardWorkflowTemplateCreation:
         template = BoardWorkflowTemplate(
             id="template-sdlc",
             name="Full SDLC Workflow",
-            pipeline_trigger_columns=("In Progress",),
-            exit_columns=("Done",),
+            board_id="board-1",
+            project_id="test-project",
             columns=columns,
         )
 
@@ -212,8 +212,8 @@ class TestGetColumnConfig:
         return BoardWorkflowTemplate(
             id="template-1",
             name="Test Workflow",
-            pipeline_trigger_columns=("In Progress",),
-            exit_columns=("Done",),
+            board_id="board-1",
+            project_id="test-project",
             columns=columns,
         )
 
@@ -305,8 +305,8 @@ class TestGetNextColumn:
         return BoardWorkflowTemplate(
             id="template-1",
             name="Test Workflow",
-            pipeline_trigger_columns=("In Progress",),
-            exit_columns=("Done",),
+            board_id="board-1",
+            project_id="test-project",
             columns=columns,
         )
 
@@ -395,8 +395,8 @@ class TestBoardWorkflowTemplateEdgeCases:
         template = BoardWorkflowTemplate(
             id="template-1",
             name="Single Column",
-            pipeline_trigger_columns=(),
-            exit_columns=(),
+            board_id="board-1",
+            project_id="test-project",
             columns=columns,
         )
 
@@ -430,8 +430,8 @@ class TestBoardWorkflowTemplateEdgeCases:
         template = BoardWorkflowTemplate(
             id="template-1",
             name="Multi Trigger",
-            pipeline_trigger_columns=("Dev", "QA"),
-            exit_columns=(),
+            board_id="board-1",
+            project_id="test-project",
             columns=columns,
         )
 
@@ -445,8 +445,8 @@ class TestBoardWorkflowTemplateEdgeCases:
             BoardWorkflowTemplate(
                 id="template-1",
                 name="Empty Template",
-                pipeline_trigger_columns=(),
-                exit_columns=(),
+                board_id="board-1",
+                project_id="test-project",
                 columns=(),
             )
 
@@ -495,8 +495,8 @@ class TestBoardWorkflowTemplatePositionValidation:
         template = BoardWorkflowTemplate(
             id="template-1",
             name="Test",
-            pipeline_trigger_columns=(),
-            exit_columns=(),
+            board_id="board-1",
+            project_id="test-project",
             columns=columns,
         )
 
@@ -529,8 +529,8 @@ class TestBoardWorkflowTemplatePositionValidation:
             BoardWorkflowTemplate(
                 id="template-1",
                 name="Test",
-                pipeline_trigger_columns=(),
-                exit_columns=(),
+                board_id="board-1",
+                project_id="test-project",
                 columns=columns,
             )
 
@@ -561,8 +561,8 @@ class TestBoardWorkflowTemplatePositionValidation:
             BoardWorkflowTemplate(
                 id="template-1",
                 name="Test",
-                pipeline_trigger_columns=(),
-                exit_columns=(),
+                board_id="board-1",
+                project_id="test-project",
                 columns=columns,
             )
 
@@ -593,7 +593,148 @@ class TestBoardWorkflowTemplatePositionValidation:
             BoardWorkflowTemplate(
                 id="template-1",
                 name="Test",
-                pipeline_trigger_columns=(),
-                exit_columns=(),
+                board_id="board-1",
+                project_id="test-project",
                 columns=columns,
             )
+
+
+class TestColumnTemplateReferenceValidation:
+    """Tests for on_failure_column and sla_escalation_column validation."""
+
+    def _make_col(self, name: str, position: int, **kwargs) -> ColumnTemplate:
+        return ColumnTemplate(
+            name=name,
+            type=ColumnType.MANUAL,
+            agent_id=None,
+            is_pipeline_trigger=False,
+            is_exit_column=False,
+            position=position,
+            auto_progress_on_completion=False,
+            **kwargs,
+        )
+
+    def test_on_failure_column_self_reference_rejected(self):
+        """ColumnTemplate rejects on_failure_column pointing to itself."""
+        with pytest.raises(ValueError, match="on_failure_column cannot reference itself"):
+            ColumnTemplate(
+                name="In Progress",
+                type=ColumnType.AUTOMATED,
+                agent_id="agent-1",
+                is_pipeline_trigger=False,
+                is_exit_column=False,
+                position=0,
+                auto_progress_on_completion=False,
+                on_failure_column="In Progress",
+            )
+
+    def test_sla_escalation_column_self_reference_rejected(self):
+        """ColumnTemplate rejects sla_escalation_column pointing to itself."""
+        with pytest.raises(ValueError, match="sla_escalation_column cannot reference itself"):
+            ColumnTemplate(
+                name="Waiting",
+                type=ColumnType.MANUAL,
+                agent_id=None,
+                is_pipeline_trigger=False,
+                is_exit_column=False,
+                position=0,
+                auto_progress_on_completion=False,
+                sla_escalation_column="Waiting",
+            )
+
+    def test_on_failure_column_unknown_reference_rejected(self):
+        """BoardWorkflowTemplate rejects on_failure_column referencing a non-existent column."""
+        columns = (
+            self._make_col("Backlog", 0),
+            ColumnTemplate(
+                name="In Progress",
+                type=ColumnType.AUTOMATED,
+                agent_id="agent-1",
+                is_pipeline_trigger=False,
+                is_exit_column=False,
+                position=1,
+                auto_progress_on_completion=False,
+                on_failure_column="Nonexistent",
+            ),
+            self._make_col("Done", 2),
+        )
+        with pytest.raises(ValueError, match="references unknown on_failure_column 'Nonexistent'"):
+            BoardWorkflowTemplate(
+                id="t1",
+                name="T",
+                board_id="b1",
+                project_id="p1",
+                columns=columns,
+            )
+
+    def test_sla_escalation_column_unknown_reference_rejected(self):
+        """BoardWorkflowTemplate rejects sla_escalation_column referencing a non-existent column."""
+        columns = (
+            self._make_col("Backlog", 0),
+            ColumnTemplate(
+                name="Review",
+                type=ColumnType.MANUAL,
+                agent_id=None,
+                is_pipeline_trigger=False,
+                is_exit_column=False,
+                position=1,
+                auto_progress_on_completion=False,
+                sla_seconds=3600,
+                sla_escalation_column="DoesNotExist",
+            ),
+            self._make_col("Done", 2),
+        )
+        with pytest.raises(ValueError, match="references unknown sla_escalation_column 'DoesNotExist'"):
+            BoardWorkflowTemplate(
+                id="t1",
+                name="T",
+                board_id="b1",
+                project_id="p1",
+                columns=columns,
+            )
+
+    def test_valid_on_failure_and_sla_escalation_columns_accepted(self):
+        """BoardWorkflowTemplate accepts valid cross-column references."""
+        columns = (
+            ColumnTemplate(
+                name="Backlog",
+                type=ColumnType.MANUAL,
+                agent_id=None,
+                is_pipeline_trigger=False,
+                is_exit_column=False,
+                position=0,
+                auto_progress_on_completion=False,
+            ),
+            ColumnTemplate(
+                name="In Progress",
+                type=ColumnType.AUTOMATED,
+                agent_id="agent-1",
+                is_pipeline_trigger=True,
+                is_exit_column=False,
+                position=1,
+                auto_progress_on_completion=True,
+                sla_seconds=3600,
+                on_failure_column="Backlog",
+                sla_escalation_column="Backlog",
+            ),
+            ColumnTemplate(
+                name="Done",
+                type=ColumnType.MANUAL,
+                agent_id=None,
+                is_pipeline_trigger=False,
+                is_exit_column=True,
+                position=2,
+                auto_progress_on_completion=False,
+            ),
+        )
+        template = BoardWorkflowTemplate(
+            id="t1",
+            name="T",
+            board_id="b1",
+            project_id="p1",
+            columns=columns,
+        )
+        col = template.get_column_config("In Progress")
+        assert col is not None
+        assert col.on_failure_column == "Backlog"
+        assert col.sla_escalation_column == "Backlog"

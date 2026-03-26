@@ -36,8 +36,8 @@ def workflow_config_service():
     template = BoardWorkflowTemplate(
         id="workflow-test",
         name="Test Workflow",
-        pipeline_trigger_columns=("Ready",),
-        exit_columns=("Done",),
+        board_id="board-1",
+        project_id="test-project",
         columns=(
             ColumnTemplate(
                 name="Backlog",
@@ -157,8 +157,8 @@ class TestStagingColumnDetection:
         template = BoardWorkflowTemplate(
             id="workflow-test-v2",
             name="Test Workflow v2",
-            pipeline_trigger_columns=("Planning",),
-            exit_columns=("Done",),
+            board_id="board-2",
+            project_id="test-project",
             columns=(
                 ColumnTemplate(
                     name="Planning",  # Position 0, but AUTOMATED/trigger
@@ -295,8 +295,8 @@ class TestStagingColumnDetection:
         template = BoardWorkflowTemplate(
             id="workflow-automated",
             name="All Automated Workflow",
-            pipeline_trigger_columns=("Automated1",),
-            exit_columns=("Automated3",),
+            board_id="board-4",
+            project_id="test-project",
             columns=(
                 ColumnTemplate(
                     name="Automated1",

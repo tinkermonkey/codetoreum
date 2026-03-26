@@ -1,0 +1,13 @@
+# Mixed GitHub Scenario — Environment Variables
+#
+# Port/Interface: IIdentityService, IBoardService (GitHub credential requirements)
+# These environment variables must be set before starting the simulation server.
+
+environment_variables:
+  # GitHub credentials (required for all github adapters)
+  GITHUB_TOKEN: required  # Set via: export GITHUB_TOKEN="ghp_..."
+  GITHUB_ORG: required    # Set via: export GITHUB_ORG="your-org"
+  GITHUB_REPO: required   # Set via: export GITHUB_REPO="your-org/your-repo"
+
+  # Optional: Use a different GitHub API endpoint (e.g. GitHub Enterprise)
+  # GITHUB_API_URL: "https://api.github.com"

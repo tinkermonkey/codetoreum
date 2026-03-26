@@ -1,0 +1,44 @@
+# Mixed Full Real Scenario — Environment Variables
+#
+# Port/Interface: All adapters require credentials for production systems.
+# ALL variables below must be set before starting this scenario.
+
+environment_variables:
+  # GitHub
+  GITHUB_TOKEN: required      # Set via: export GITHUB_TOKEN="ghp_..."
+  GITHUB_ORG: required        # Set via: export GITHUB_ORG="your-org"
+  GITHUB_REPO: required       # Set via: export GITHUB_REPO="your-org/your-repo"
+  GITHUB_API_URL: optional    # Default: https://api.github.com (for GH Enterprise)
+
+  # Claude Code (ILLMProvider)
+  CLAUDE_CODE_API_KEY: required  # Set via: export CLAUDE_CODE_API_KEY="sk_..."
+  # OR: Use CLI authentication (claude-code auth login)
+
+  # AWS S3 (IStorage)
+  AWS_ACCESS_KEY_ID: required
+  AWS_SECRET_ACCESS_KEY: required
+  AWS_S3_BUCKET: required
+  AWS_REGION: optional  # Default: us-east-1
+
+  # Redis (IEventStore, IMessageBroker, IPipelineLockService, IQueueService)
+  REDIS_URL: optional  # Set via: export REDIS_URL="redis://localhost:6379/0"
+  REDIS_HOST: optional
+  REDIS_PORT: optional
+  REDIS_PASSWORD: optional
+
+  # PostgreSQL (IConfigStore, IWorkflowConfigService, IAgentRepository, IRunRegistry)
+  DATABASE_URL: optional  # Set via: export DATABASE_URL="postgresql://user:pass@host:5432/codetoreum"
+  POSTGRES_USER: optional
+  POSTGRES_PASSWORD: optional
+  POSTGRES_HOST: optional
+  POSTGRES_PORT: optional
+  POSTGRES_DB: optional
+
+  # Slack (INotifier)
+  SLACK_BOT_TOKEN: optional   # Set via: export SLACK_BOT_TOKEN="xoxb_..."
+  SLACK_WEBHOOK_URL: optional # Set via: export SLACK_WEBHOOK_URL="https://hooks.slack.com/..."
+
+  # Prometheus (IMetricsAdapter)
+  PROMETHEUS_URL: optional  # Default: http://localhost:9090
+
+  # Docker (IContainer) — no env var needed, requires /var/run/docker.sock

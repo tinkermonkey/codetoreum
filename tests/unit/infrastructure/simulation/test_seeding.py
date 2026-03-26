@@ -344,11 +344,11 @@ class TestSimulationDataSeeder:
 
     @pytest.mark.asyncio
     async def test_seed_from_yaml_default_scenario(self, seeder):
-        """Test loading default.yaml scenario."""
-        scenario_path = Path("/workspace/scenarios/default.yaml")
+        """Test loading smoke/scenario.yaml scenario."""
+        scenario_path = Path("/workspace/scenarios/smoke")
 
         if not scenario_path.exists():
-            pytest.skip("default.yaml not found")
+            pytest.skip("smoke/scenario.yaml not found")
 
         await seeder.seed_from_yaml(scenario_path)
 
@@ -383,7 +383,7 @@ projects: []
         empty_yaml = tmp_path / "empty.yaml"
         empty_yaml.write_text("")
 
-        with pytest.raises(ValidationError, match="Empty YAML"):
+        with pytest.raises(ValidationError, match="Empty scenario"):
             await seeder.seed_from_yaml(empty_yaml)
 
     # =========================================================================
@@ -423,7 +423,7 @@ projects: []
         """Test registering workflow template with default SLA values."""
         await seeder.create_project("test-project")
 
-        seeder.register_workflow_template(
+        await seeder.register_workflow_template(
             board_id="board-1",
             column_names=["Backlog", "Ready", "In Progress", "Review", "Done"],
             agent_types=["architect", "coder", "tester"],
@@ -449,7 +449,7 @@ projects: []
             "Review": 1200,  # 20 minutes
         }
 
-        seeder.register_workflow_template(
+        await seeder.register_workflow_template(
             board_id="board-1",
             column_names=["Backlog", "Ready", "In Progress", "Review", "Done"],
             agent_types=["architect", "coder", "tester"],
@@ -474,7 +474,7 @@ projects: []
         # Only specify SLA for some columns
         partial_sla = {"Ready": 2400}  # 40 minutes
 
-        seeder.register_workflow_template(
+        await seeder.register_workflow_template(
             board_id="board-1",
             column_names=["Backlog", "Ready", "In Progress", "Review", "Done"],
             agent_types=["architect", "coder", "tester"],

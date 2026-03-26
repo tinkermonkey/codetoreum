@@ -433,6 +433,9 @@ class TestObservabilityIntegration:
         than trying to instantiate create_app() with all its mock dependencies.
         """
         import subprocess
+        from pathlib import Path
+
+        fastapi_app_path = Path(__file__).parent.parent.parent / "src" / "codetoreum" / "adapters" / "primary" / "fastapi_app.py"
 
         # Check that production create_app() doesn't import simulation routers
         result = subprocess.run(
@@ -440,7 +443,7 @@ class TestObservabilityIntegration:
                 "/bin/grep",
                 "-n",
                 "simulation_stream\\|simulation_board_state\\|simulation_executions",
-                "/workspace/src/codetoreum/adapters/primary/fastapi_app.py",
+                str(fastapi_app_path),
             ],
             capture_output=True,
             text=True,
@@ -458,7 +461,7 @@ class TestObservabilityIntegration:
                 "/bin/grep",
                 "-n",
                 "from codetoreum.adapters.primary.routers.simulation",
-                "/workspace/src/codetoreum/adapters/primary/fastapi_app.py",
+                str(fastapi_app_path),
             ],
             capture_output=True,
             text=True,

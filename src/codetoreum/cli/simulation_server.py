@@ -276,30 +276,48 @@ def setup_logging(debug: bool = False) -> None:
 
 def get_scenario_file_path(scenario: str) -> Path:
     """
-    Get the path to a built-in scenario file.
+    Get the path to a built-in scenario directory.
+
+    Scenarios are stored as scenarios/<name>/ directories containing one YAML file
+    per adapter interface.  Both loaders (SimulationConfig.from_yaml and
+    SimulationDataSeeder.seed_from_yaml) accept a directory and merge the files
+    automatically.
+
+    The legacy name "default" maps to "smoke", and "demo" maps to "sdlc_pipeline".
 
     Args:
-        scenario: Scenario name (default, demo, stress_test, review_cycle, failure_recovery, mixed_full_github, mixed_full_real, mixed_github_real)
+        scenario: Scenario name (smoke, sdlc_pipeline, review_cycle, failure_recovery,
+                  stress_test, mixed_github, mixed_full_github, mixed_full_real)
+                  Aliases: default → smoke, demo → sdlc_pipeline,
+                           mixed_github_real → mixed_github
 
     Returns:
-        Path to scenario file
+        Path to scenario directory
 
     Raises:
-        FileNotFoundError: If scenario file doesn't exist
+        FileNotFoundError: If scenario directory doesn't exist
     """
+    # Resolve legacy and alias names
+    _aliases = {
+        "default": "smoke",
+        "demo": "sdlc_pipeline",
+        "mixed_github_real": "mixed_github",
+    }
+    resolved = _aliases.get(scenario, scenario)
+
     # Look in the workspace scenarios directory
     scenarios_dir = Path(__file__).parent.parent.parent.parent / "scenarios"
-    scenario_file = scenarios_dir / f"{scenario}.yaml"
+    scenario_dir = scenarios_dir / resolved
 
-    if not scenario_file.exists():
+    if not scenario_dir.is_dir():
         msg = (
-            f"Scenario '{scenario}' not found at {scenario_file}. "
-            f"Available scenarios: default, demo, stress_test, review_cycle, failure_recovery, "
-            f"mixed_full_github, mixed_full_real, mixed_github_real"
+            f"Scenario '{scenario}' not found at {scenario_dir}. "
+            f"Available scenarios: smoke, sdlc_pipeline, review_cycle, failure_recovery, "
+            f"stress_test, mixed_github, mixed_full_github, mixed_full_real"
         )
         raise FileNotFoundError(msg)
 
-    return scenario_file
+    return scenario_dir
 
 
 async def bootstrap_application(
@@ -425,7 +443,11 @@ async def seed_data(
             "work_items": 0,
         }
 
-    seeder = SimulationDataSeeder(bootstrap)
+    seeder = SimulationDataSeeder(
+        bootstrap,
+        work_item_service=bootstrap.adapters.work_item_service,
+        agent_repository=bootstrap.adapters.agent_repository,
+    )
 
     # Determine which scenario to seed
     try:

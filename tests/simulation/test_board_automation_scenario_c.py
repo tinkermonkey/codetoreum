@@ -123,8 +123,8 @@ class TestScenarioC_ReviewRejectionLoop:
         template = BoardWorkflowTemplate(
             id="workflow-1",
             name="SDLC Execution",
-            pipeline_trigger_columns=("Development",),
-            exit_columns=("Staged",),
+            board_id="board-1",
+            project_id="test-project",
             columns=(
                 ColumnTemplate(
                     name="Backlog",

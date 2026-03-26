@@ -1,0 +1,13 @@
+# SDLC Pipeline Scenario — Projects
+#
+# Port/Interface: ITicketSystem, IVersionControlService
+# Adapter (sim): InMemoryTicketAdapter, InMemoryVersionControlAdapter
+
+projects:
+  - name: "web-app-project"
+    description: "Modern web application project"
+    repository_url: "https://github.com/demo-org/web-app.git"
+    default_branch: "main"
+    metadata:
+      stack: "React + FastAPI"
+      team: "product-engineering"

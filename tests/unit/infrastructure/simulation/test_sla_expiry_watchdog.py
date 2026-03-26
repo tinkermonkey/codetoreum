@@ -56,8 +56,8 @@ def workflow_config_service() -> InMemoryWorkflowConfigService:
     template = BoardWorkflowTemplate(
         id="template-1",
         name="SLA Test Workflow",
-        pipeline_trigger_columns=("Code Review",),
-        exit_columns=("Done",),
+        board_id="board-1",
+        project_id="test-project",
         columns=(
             ColumnTemplate(
                 name="Backlog",
@@ -403,3 +403,154 @@ async def test_sla_clock_integration(board_adapter, workflow_config_service, eve
     events = [e for e in event_emitter.get_events() if isinstance(e, ColumnSLAExceededEvent)]
     assert len(events) == 1
     assert events[0].elapsed_seconds > 7200  # More than 2 hour SLA
+
+
+# ---------------------------------------------------------------------------
+# sla_escalation_column auto-move tests
+# ---------------------------------------------------------------------------
+
+
+def _make_template_with_escalation(escalation_col: str | None) -> BoardWorkflowTemplate:
+    """Return a template with 'Code Review' having the given sla_escalation_column."""
+    return BoardWorkflowTemplate(
+        id="template-1",
+        name="SLA Escalation Test",
+        board_id="board-1",
+        project_id="test-project",
+        columns=(
+            ColumnTemplate(
+                name="Backlog",
+                type=ColumnType.MANUAL,
+                agent_id=None,
+                is_pipeline_trigger=False,
+                is_exit_column=False,
+                position=0,
+                auto_progress_on_completion=False,
+            ),
+            ColumnTemplate(
+                name="Code Review",
+                type=ColumnType.MANUAL,
+                agent_id=None,
+                is_pipeline_trigger=True,
+                is_exit_column=False,
+                position=1,
+                auto_progress_on_completion=False,
+                sla_seconds=7200,
+                sla_escalation_column=escalation_col,
+            ),
+            ColumnTemplate(
+                name="Done",
+                type=ColumnType.MANUAL,
+                agent_id=None,
+                is_pipeline_trigger=False,
+                is_exit_column=True,
+                position=2,
+                auto_progress_on_completion=False,
+            ),
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_sla_escalation_moves_item_when_column_configured(clock, event_emitter):
+    """SLA expiry triggers move to sla_escalation_column when configured."""
+    board_adapter = MockBoardAdapter(event_emitter, clock)
+    board_adapter.current_project = "proj-1"
+    board_adapter.create_board("proj-1", "board-1", "T", ["Backlog", "Code Review", "Done"])
+    board_adapter.add_item_to_column("board-1", "Backlog", "item-1")
+    await board_adapter.move_item_to_column("item-1", "Code Review", MovedByType.ORCHESTRATOR)
+
+    svc = InMemoryWorkflowConfigService()
+    svc.register_template("board-1", _make_template_with_escalation("Backlog"))
+
+    dog = SLAExpiryWatchdog(
+        board_service=board_adapter,
+        workflow_config_service=svc,
+        event_emitter=event_emitter,
+        clock=clock,
+        check_interval=timedelta(seconds=60),
+    )
+    dog.start()
+
+    clock.start_at(clock.now() + timedelta(hours=3))
+    await dog._check_sla_expiry()
+
+    # Event emitted
+    events = [e for e in event_emitter.get_events() if isinstance(e, ColumnSLAExceededEvent)]
+    assert len(events) == 1
+
+    # Item moved to Backlog
+    position = await board_adapter.get_item_position("item-1")
+    assert position.column_name == "Backlog"
+
+
+@pytest.mark.asyncio
+async def test_sla_escalation_no_move_when_column_not_configured(clock, event_emitter):
+    """SLA expiry emits event but does not move item when sla_escalation_column is None."""
+    board_adapter = MockBoardAdapter(event_emitter, clock)
+    board_adapter.current_project = "proj-1"
+    board_adapter.create_board("proj-1", "board-1", "T", ["Backlog", "Code Review", "Done"])
+    board_adapter.add_item_to_column("board-1", "Backlog", "item-1")
+    await board_adapter.move_item_to_column("item-1", "Code Review", MovedByType.ORCHESTRATOR)
+
+    svc = InMemoryWorkflowConfigService()
+    svc.register_template("board-1", _make_template_with_escalation(None))
+
+    dog = SLAExpiryWatchdog(
+        board_service=board_adapter,
+        workflow_config_service=svc,
+        event_emitter=event_emitter,
+        clock=clock,
+        check_interval=timedelta(seconds=60),
+    )
+    dog.start()
+
+    clock.start_at(clock.now() + timedelta(hours=3))
+    await dog._check_sla_expiry()
+
+    # Event emitted
+    events = [e for e in event_emitter.get_events() if isinstance(e, ColumnSLAExceededEvent)]
+    assert len(events) == 1
+
+    # Item stays in Code Review
+    position = await board_adapter.get_item_position("item-1")
+    assert position.column_name == "Code Review"
+
+
+@pytest.mark.asyncio
+async def test_sla_escalation_error_is_logged_not_raised(clock, event_emitter, caplog):
+    """When sla_escalation move fails, error is logged and watchdog continues."""
+    import logging
+
+    board_adapter = MockBoardAdapter(event_emitter, clock)
+    board_adapter.current_project = "proj-1"
+    board_adapter.create_board("proj-1", "board-1", "T", ["Backlog", "Code Review", "Done"])
+    board_adapter.add_item_to_column("board-1", "Backlog", "item-1")
+    await board_adapter.move_item_to_column("item-1", "Code Review", MovedByType.ORCHESTRATOR)
+
+    svc = InMemoryWorkflowConfigService()
+    svc.register_template("board-1", _make_template_with_escalation("Backlog"))
+
+    # Replace move_item_to_column with a version that always raises (setup is done above)
+    async def always_fail(item_id, col, moved_by):
+        raise RuntimeError("board service down")
+
+    board_adapter.move_item_to_column = always_fail
+
+    dog = SLAExpiryWatchdog(
+        board_service=board_adapter,
+        workflow_config_service=svc,
+        event_emitter=event_emitter,
+        clock=clock,
+        check_interval=timedelta(seconds=60),
+    )
+    dog.start()
+
+    clock.start_at(clock.now() + timedelta(hours=3))
+    caplog.set_level(logging.ERROR)
+    await dog._check_sla_expiry()  # Should not raise
+
+    assert "Failed to move work item item-1 to SLA escalation column 'Backlog'" in caplog.text
+    # Event was still emitted despite the failed move
+    events = [e for e in event_emitter.get_events() if isinstance(e, ColumnSLAExceededEvent)]
+    assert len(events) == 1

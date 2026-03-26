@@ -1,0 +1,109 @@
+# Review Cycle Scenario — Work Items
+#
+# Port/Interface: IWorkItemService, ITicketSystem
+# Adapter (sim): InMemoryTicketAdapter, MockWorkItemService
+
+work_items:
+  - title: "Implement user profile API"
+    description: |
+      Create REST API endpoints for user profile management.
+
+      Requirements:
+      - GET /api/users/{id}/profile
+      - PUT /api/users/{id}/profile
+      - Validation and error handling
+      - Unit and integration tests
+
+      This task will go through multiple review cycles.
+    labels:
+      - "feature"
+      - "api"
+      - "review-required"
+    priority: "high"
+    status: "new"
+    metadata:
+      requires_reviews: 2
+      estimated_review_cycles: 2
+
+  - title: "Add password reset functionality"
+    description: |
+      Implement secure password reset flow.
+
+      Requirements:
+      - Email-based reset token
+      - Token expiration
+      - Secure password validation
+      - Comprehensive tests
+
+      Expected to need feedback iterations.
+    labels:
+      - "feature"
+      - "security"
+      - "review-required"
+    priority: "high"
+    status: "new"
+    metadata:
+      requires_reviews: 2
+      security_sensitive: true
+
+  - title: "Create data export utility"
+    description: |
+      Build utility for exporting user data (GDPR compliance).
+
+      Requirements:
+      - Export to JSON/CSV formats
+      - Data filtering and pagination
+      - Privacy considerations
+      - Documentation
+
+      Will need careful review for data handling.
+    labels:
+      - "feature"
+      - "compliance"
+      - "review-required"
+    priority: "medium"
+    status: "new"
+    metadata:
+      requires_reviews: 2
+      compliance_requirement: "GDPR"
+
+  - title: "Optimize image upload pipeline"
+    description: |
+      Improve performance of image upload and processing.
+
+      Requirements:
+      - Async upload handling
+      - Image compression
+      - Thumbnail generation
+      - Progress tracking
+
+      Performance improvements require thorough review.
+    labels:
+      - "performance"
+      - "media"
+      - "review-required"
+    priority: "medium"
+    status: "new"
+    metadata:
+      requires_reviews: 2
+      performance_target: "< 2s upload time"
+
+  - title: "Refactor authentication middleware"
+    description: |
+      Clean up and improve authentication middleware.
+
+      - Simplify code structure
+      - Add better error messages
+      - Improve test coverage
+      - Update documentation
+
+      Refactoring requires careful review to avoid breaking changes.
+    labels:
+      - "refactoring"
+      - "authentication"
+      - "review-required"
+    priority: "medium"
+    status: "new"
+    metadata:
+      requires_reviews: 2
+      breaking_changes_risk: "low"

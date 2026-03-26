@@ -1,0 +1,38 @@
+# Failure Recovery Scenario — Agents
+#
+# Port/Interface: IAgentRepository, ILLMProvider
+# Adapter (sim): InMemoryAgentRepository, MockAgentExecutor
+
+agents:
+  - name: "flaky_agent"
+    agent_type: "flaky"
+    description: "Agent with 50% failure rate for testing retries"
+    capabilities:
+      - "code_generation"
+    llm_model: "claude-sonnet-4-6"
+    temperature: 0.7
+    max_tokens: 4096
+    system_prompt: "You are an agent that occasionally fails. Simulate intermittent errors."
+    enabled: true
+    metadata:
+      failure_rate: 0.5
+      failure_types:
+        - "network_error"
+        - "timeout"
+        - "invalid_response"
+      simulated_errors: true
+
+  - name: "recovery_agent"
+    agent_type: "recovery"
+    description: "Agent specialized in recovery and validation"
+    capabilities:
+      - "code_generation"
+      - "code_review"
+    llm_model: "claude-sonnet-4-6"
+    temperature: 0.6
+    max_tokens: 4096
+    system_prompt: "You are a recovery agent. Validate previous work and fix issues."
+    enabled: true
+    metadata:
+      failure_rate: 0.0
+      recovery_mode: true

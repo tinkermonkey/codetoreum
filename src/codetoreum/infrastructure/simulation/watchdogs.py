@@ -675,6 +675,29 @@ class SLAExpiryWatchdog:
                         )
                         self._event_emitter.emit(sla_event)
 
+                        # Auto-move if sla_escalation_column is configured
+                        if column_config.sla_escalation_column:
+                            try:
+                                await self._board_service.move_item_to_column(
+                                    item.work_item_id,
+                                    column_config.sla_escalation_column,
+                                    MovedByType.ORCHESTRATOR,
+                                )
+                                self._logger.info(
+                                    "SLA escalation: moved work item %s from '%s' to '%s'",
+                                    item.work_item_id,
+                                    item.column_name,
+                                    column_config.sla_escalation_column,
+                                )
+                            except Exception:
+                                self._logger.error(
+                                    "Failed to move work item %s to SLA escalation column '%s'",
+                                    item.work_item_id,
+                                    column_config.sla_escalation_column,
+                                    exc_info=True,
+                                    extra={"error_id": "ERR_SLA_WATCHDOG_ESCALATION_MOVE"},
+                                )
+
         # Clean up detections for items that have moved to a different column.
         # Unconditionally remove any key in moved_items since it's no longer detected
         # in the current scan. This prevents memory leak of stale detection keys.

@@ -30,7 +30,7 @@ from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationAdapters,
     SimulationApplicationBootstrap,
 )
-from codetoreum.infrastructure.simulation.scenario_models import ScenarioModel
+from codetoreum.infrastructure.simulation.scenario_models import ScenarioColumnConfig, ScenarioModel
 from codetoreum.ports.exceptions import ValidationError
 from codetoreum.ports.output.agent_repository import IAgentRepository
 from codetoreum.ports.output.config_store import (
@@ -41,6 +41,25 @@ from codetoreum.ports.output.config_store import (
 from codetoreum.ports.output.work_item_service import IWorkItemService
 
 logger = logging.getLogger(__name__)
+
+
+def _merge_scenario_dir(dir_path: Path) -> dict:
+    """Merge all ``*.yaml`` files in a scenario directory into one dict.
+
+    Files are processed in alphabetical order so names like ``01_simulation.yaml``
+    can be used to control load order when key conflicts matter.  In practice,
+    each per-adapter file owns distinct top-level keys so ordering is irrelevant
+    for correctness.
+    """
+    yaml_files = sorted(dir_path.glob("*.yaml"))
+    if not yaml_files:
+        raise FileNotFoundError(f"No YAML files found in scenario directory: {dir_path}")
+    merged: dict = {}
+    for yaml_file in yaml_files:
+        data = yaml.safe_load(yaml_file.read_text())
+        if data:
+            merged.update(data)
+    return merged
 
 
 @dataclass
@@ -501,16 +520,17 @@ class SimulationDataSeeder:
         logger.info(f"Placed work item {work_item_id} in column '{column_name}' on board {board_id}")
         return self
 
-    def register_workflow_template(
+    async def register_workflow_template(
         self,
         board_id: str,
         column_names: list[str],
         agent_types: list[str],
         sla_seconds_by_column: dict[str, int] | None = None,
+        project_id: str | None = None,
     ) -> "SimulationDataSeeder":
         """Build and register a BoardWorkflowTemplate for board automation.
 
-        Maps board columns to workflow agents:
+        Maps board columns to workflow agents using positional rules:
         - First column -> MANUAL (no agent)
         - Last column -> MANUAL, exit column (no agent)
         - Middle columns -> AUTOMATED, mapped to agent_types in order
@@ -520,12 +540,21 @@ class SimulationDataSeeder:
             board_id: Board to register template for
             column_names: Ordered column names from the board
             agent_types: Agent type IDs from workflow stages (ordered)
-            sla_seconds_by_column: Optional dict mapping column names to SLA thresholds in seconds.
-                If not provided, automated columns get default 3600 seconds (1 hour).
+            sla_seconds_by_column: Optional dict mapping column names to SLA
+                thresholds in seconds.  Automated columns default to 3600 s.
+            project_id: Project that owns this board.  Defaults to the current
+                project set on the seeder (``_current_project_id``).
 
         Returns:
             Self for chaining
+
+        Raises:
+            ValidationError: If no project_id is available.
         """
+        project_id = project_id or self._current_project_id
+        if not project_id:
+            msg = "No project context. Create a project first or provide project_id."
+            raise ValidationError(msg)
         columns: list[ColumnTemplate] = []
         agent_index = 0
         sla_config = sla_seconds_by_column or {}
@@ -572,21 +601,80 @@ class SimulationDataSeeder:
                     )
                 )
 
-        # Derive trigger/exit column names
-        trigger_cols = tuple(c.name for c in columns if c.is_pipeline_trigger)
-        exit_cols = tuple(c.name for c in columns if c.is_exit_column)
+        template = BoardWorkflowTemplate(
+            id=f"template-{board_id}",
+            name=f"Workflow for {board_id}",
+            board_id=board_id,
+            project_id=project_id,
+            columns=tuple(columns),
+        )
+
+        await self.adapters.workflow_config.save_board_workflow_template(template)
+        logger.info(
+            f"Registered workflow template for board {board_id}: "
+            f"{[c.name + ('*' if c.agent_id else '') + (f'[SLA:{c.sla_seconds}s]' if c.sla_seconds else '') for c in columns]}"
+        )
+        return self
+
+    async def register_workflow_template_from_column_configs(
+        self,
+        board_id: str,
+        column_configs: list[ScenarioColumnConfig],
+        project_id: str | None = None,
+    ) -> "SimulationDataSeeder":
+        """Build and register a BoardWorkflowTemplate from explicit column configurations.
+
+        Unlike ``register_workflow_template`` (which infers routing from positional
+        rules), this method uses the full ``ScenarioColumnConfig`` spec for each
+        column so that agent assignments, trigger/exit flags, SLA thresholds, and
+        auto-progression are all under explicit YAML control.
+
+        Args:
+            board_id: Board to register the template for
+            column_configs: Ordered list of explicit column definitions (position
+                is inferred from list order, 0-based)
+            project_id: Project that owns this board.  Defaults to the current
+                project set on the seeder (``_current_project_id``).
+
+        Returns:
+            Self for chaining
+
+        Raises:
+            ValidationError: If no project_id is available.
+        """
+        project_id = project_id or self._current_project_id
+        if not project_id:
+            msg = "No project context. Create a project first or provide project_id."
+            raise ValidationError(msg)
+        columns: list[ColumnTemplate] = []
+        for pos, cfg in enumerate(column_configs):
+            col_type = ColumnType.AUTOMATED if cfg.type == "automated" else ColumnType.MANUAL
+            columns.append(
+                ColumnTemplate(
+                    name=cfg.name,
+                    type=col_type,
+                    agent_id=cfg.agent_id,
+                    is_pipeline_trigger=cfg.is_pipeline_trigger,
+                    is_exit_column=cfg.is_exit_column,
+                    position=pos,
+                    auto_progress_on_completion=cfg.auto_progress_on_completion,
+                    sla_seconds=cfg.sla_seconds,
+                    on_failure_column=cfg.on_failure_column,
+                    sla_escalation_column=cfg.sla_escalation_column,
+                )
+            )
 
         template = BoardWorkflowTemplate(
             id=f"template-{board_id}",
             name=f"Workflow for {board_id}",
-            pipeline_trigger_columns=trigger_cols,
-            exit_columns=exit_cols,
+            board_id=board_id,
+            project_id=project_id,
             columns=tuple(columns),
         )
 
-        self.bootstrap.adapters.workflow_config.register_template(board_id, template)
+        await self.adapters.workflow_config.save_board_workflow_template(template)
         logger.info(
-            f"Registered workflow template for board {board_id}: "
+            f"Registered explicit workflow template for board {board_id}: "
             f"{[c.name + ('*' if c.agent_id else '') + (f'[SLA:{c.sla_seconds}s]' if c.sla_seconds else '') for c in columns]}"
         )
         return self
@@ -652,7 +740,7 @@ class SimulationDataSeeder:
         )
 
         # Register workflow template for board automation
-        self.register_workflow_template(
+        await self.register_workflow_template(
             board_id="board-1",
             column_names=["Backlog", "Ready", "In Progress", "Review", "Done"],
             agent_types=["architect", "coder", "tester"],
@@ -729,7 +817,7 @@ class SimulationDataSeeder:
             project_id=alpha_project_id,
         )
 
-        self.register_workflow_template(
+        await self.register_workflow_template(
             board_id="board-alpha",
             column_names=["Backlog", "Ready", "In Progress", "Review", "Done"],
             agent_types=["alpha-architect", "alpha-coder", "alpha-tester"],
@@ -786,7 +874,7 @@ class SimulationDataSeeder:
             project_id=beta_project_id,
         )
 
-        self.register_workflow_template(
+        await self.register_workflow_template(
             board_id="board-beta",
             column_names=["Backlog", "Ready", "In Progress", "Review", "Done"],
             agent_types=["beta-architect", "beta-coder", "beta-tester"],
@@ -1088,32 +1176,47 @@ class SimulationDataSeeder:
 
     async def seed_from_yaml(self, file_path: str | Path) -> "SimulationDataSeeder":
         """
-        Seed data from YAML scenario file.
+        Seed data from a YAML scenario file or scenario directory.
+
+        When given a directory, all ``*.yaml`` files inside it are merged in
+        alphabetical order (later files win on key conflicts). This allows
+        splitting a scenario into one file per adapter interface, e.g.:
+
+            smoke/
+              simulation.yaml   # name, version, speed_multiplier, …
+              projects.yaml     # projects: […]
+              workflows.yaml    # workflows: […]
+              agents.yaml       # agents: […]
+              work_items.yaml   # work_items: […]
+              board.yaml        # boards: + board_placements: […]
 
         Args:
-            file_path: Path to YAML scenario file
+            file_path: Path to a YAML scenario file **or** a scenario directory
 
         Returns:
             Self for chaining
 
         Raises:
-            FileNotFoundError: If file doesn't exist
+            FileNotFoundError: If path doesn't exist or directory contains no YAML
             yaml.YAMLError: If YAML is malformed
             ValidationError: If scenario validation fails
         """
         file_path = Path(file_path)
 
         if not file_path.exists():
-            message = f"Scenario file not found: {file_path}"
+            message = f"Scenario path not found: {file_path}"
             raise FileNotFoundError(message)
 
         logger.info(f"Loading scenario from {file_path}...")
 
-        with open(file_path) as f:
-            yaml_data = yaml.safe_load(f)
+        if file_path.is_dir():
+            yaml_data = _merge_scenario_dir(file_path)
+        else:
+            with open(file_path) as f:
+                yaml_data = yaml.safe_load(f)
 
         if not yaml_data:
-            message = f"Empty YAML file: {file_path}"
+            message = f"Empty scenario (no YAML content): {file_path}"
             raise ValidationError(message)
 
         # Validate with Pydantic model
@@ -1223,9 +1326,16 @@ class SimulationDataSeeder:
                 board_name=board_model.board_name,
                 column_names=board_model.columns,
             )
-            if agent_types:
-                # Extract SLA configuration from board model (always exists as Pydantic field)
-                self.register_workflow_template(
+            if board_model.column_configs:
+                # Use explicit column configs when provided — full control over
+                # agent assignments, trigger/exit flags, SLA, and auto-progression.
+                await self.register_workflow_template_from_column_configs(
+                    board_id=board_model.board_id,
+                    column_configs=board_model.column_configs,
+                )
+            elif agent_types:
+                # Fall back to positional auto-generation from workflow stage order.
+                await self.register_workflow_template(
                     board_id=board_model.board_id,
                     column_names=board_model.columns,
                     agent_types=agent_types,

@@ -103,8 +103,8 @@ class TestBoardReconciliation:
         new_template = BoardWorkflowTemplate(
             id="workflow-1",
             name="Updated Workflow",
-            pipeline_trigger_columns=("Development",),
-            exit_columns=("Done",),
+            board_id="board-1",
+            project_id="test-project",
             columns=(
                 ColumnTemplate(
                     name="Backlog",
@@ -210,8 +210,8 @@ class TestBoardReconciliation:
         new_template = BoardWorkflowTemplate(
             id="workflow-1",
             name="Simplified Workflow",
-            pipeline_trigger_columns=("Development",),
-            exit_columns=("Done",),
+            board_id="board-1",
+            project_id="test-project",
             columns=(
                 ColumnTemplate(
                     name="Backlog",
@@ -300,8 +300,8 @@ class TestBoardReconciliation:
         new_template = BoardWorkflowTemplate(
             id="workflow-1",
             name="Simplified Workflow",
-            pipeline_trigger_columns=("Development",),
-            exit_columns=("Done",),
+            board_id="board-1",
+            project_id="test-project",
             columns=(
                 ColumnTemplate(
                     name="Backlog",
@@ -377,8 +377,8 @@ class TestBoardReconciliation:
         new_template = BoardWorkflowTemplate(
             id="workflow-1",
             name="Modified Workflow",
-            pipeline_trigger_columns=("Development",),
-            exit_columns=("Done",),
+            board_id="board-1",
+            project_id="test-project",
             columns=(
                 ColumnTemplate(
                     name="Backlog",
@@ -468,8 +468,8 @@ class TestBoardReconciliation:
         new_template = BoardWorkflowTemplate(
             id="workflow-1",
             name="Event Test Workflow",
-            pipeline_trigger_columns=("Development",),
-            exit_columns=("Done",),
+            board_id="board-1",
+            project_id="test-project",
             columns=(
                 ColumnTemplate(
                     name="Backlog",
@@ -556,8 +556,8 @@ class TestManualColumns:
         template = BoardWorkflowTemplate(
             id="workflow-1",
             name="Test Workflow",
-            pipeline_trigger_columns=("Development",),
-            exit_columns=("Done",),
+            board_id="board-1",
+            project_id="test-project",
             columns=(
                 ColumnTemplate(
                     name="Backlog",
@@ -689,8 +689,8 @@ class TestQueuePositionUpdates:
         template = BoardWorkflowTemplate(
             id="workflow-1",
             name="Test Workflow",
-            pipeline_trigger_columns=("Development",),
-            exit_columns=("Done",),
+            board_id="board-1",
+            project_id="test-project",
             columns=(
                 ColumnTemplate(
                     name="Backlog",

@@ -1,0 +1,22 @@
+# Failure Recovery Scenario — Workflows
+#
+# Port/Interface: IWorkflowConfigService (workflow domain model)
+# Adapter (sim): InMemoryConfigStore
+
+workflows:
+  - name: "resilient-workflow"
+    description: "Workflow designed to handle failures gracefully"
+    stages:
+      - name: "flaky-stage"
+        agent_type: "flaky_agent"
+        description: "Stage with intermittent failures"
+        order: 1
+        max_retries: 5
+        timeout_seconds: 1800
+
+      - name: "recovery-stage"
+        agent_type: "recovery_agent"
+        description: "Recovery and validation stage"
+        order: 2
+        max_retries: 3
+        timeout_seconds: 900
