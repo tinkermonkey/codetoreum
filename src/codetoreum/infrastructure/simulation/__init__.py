@@ -13,9 +13,13 @@ from .mock_tracer import (
 )
 from .proportional_delay_calculator import ProportionalDelayCalculator
 from .scenario_models import (
+    ExternalSeedModel,
+    OrchestratorConfigModel,
     ScenarioAgentModel,
     ScenarioBoardItemPlacementModel,
     ScenarioBoardModel,
+    ScenarioBoardPolicyModel,
+    ScenarioBoardStructureModel,
     ScenarioModel,
     ScenarioProjectModel,
     ScenarioStageModel,
@@ -95,7 +99,7 @@ __all__ = [
     # Seeding
     "SimulationDataSeeder",
     "CreatedItems",
-    # Scenario Models
+    # Scenario Models (legacy flat format)
     "ScenarioModel",
     "ScenarioProjectModel",
     "ScenarioWorkflowModel",
@@ -104,6 +108,11 @@ __all__ = [
     "ScenarioWorkItemModel",
     "ScenarioBoardModel",
     "ScenarioBoardItemPlacementModel",
+    # Scenario Models (split orchestrator/external format)
+    "ExternalSeedModel",
+    "OrchestratorConfigModel",
+    "ScenarioBoardStructureModel",
+    "ScenarioBoardPolicyModel",
 ]
 
 

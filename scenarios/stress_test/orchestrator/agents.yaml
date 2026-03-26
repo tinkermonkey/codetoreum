@@ -1,0 +1,29 @@
+# Stress Test Scenario — Orchestrator: Agent Configurations
+#
+# Port/Interface: IAgentRepository, ILLMProvider
+# Adapter (sim): InMemoryAgentRepository, MockAgentExecutor
+
+agents:
+  - name: "worker"
+    agent_type: "worker"
+    description: "Worker agent for parallel processing"
+    capabilities:
+      - "code_generation"
+    llm_model: "claude-sonnet-4-6"
+    temperature: 0.7
+    max_tokens: 2048
+    enabled: true
+    metadata:
+      worker_pool: "primary"
+
+  - name: "validator"
+    agent_type: "validator"
+    description: "Validation agent"
+    capabilities:
+      - "code_review"
+    llm_model: "claude-sonnet-4-6"
+    temperature: 0.5
+    max_tokens: 1024
+    enabled: true
+    metadata:
+      validation_mode: "fast"

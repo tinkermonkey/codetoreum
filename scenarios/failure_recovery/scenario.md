@@ -51,16 +51,20 @@ metadata, simulating intermittent errors (network, timeout, invalid response).
 
 ## Files
 
-| File              | Owns                                                       |
-|-------------------|------------------------------------------------------------|
-| `simulation.yaml` | Clock speed (10×), fidelity, scenario identity             |
-| `projects.yaml`   | External — chaos-testing project                           |
-| `work_items.yaml` | External — 5 work items covering distinct failure modes    |
-| `workflows.yaml`  | Orchestrator — 2-stage resilient workflow                  |
-| `agents.yaml`     | Orchestrator — flaky and recovery agent configs + metadata |
-| `board.yaml`      | Both — 5-column board structure + column policy            |
+### `orchestrator/` — always applied (Codetoreum-owned config)
 
-> **Note**: `board.yaml` currently mixes external state (board id, column names)
-> with orchestrator policy (triggers, SLAs, failure routing). These will be split
-> into `external/board_structure.yaml` and `orchestrator/board_policy.yaml` when
-> the `external/` / `orchestrator/` directory structure is introduced.
+| File                 | Owns                                                  |
+|----------------------|-------------------------------------------------------|
+| `simulation.yaml`    | Clock speed (10×), fidelity, scenario identity        |
+| `agents.yaml`        | Flaky and recovery agent configs + metadata           |
+| `workflows.yaml`     | 2-stage resilient workflow                            |
+| `board_policy.yaml`  | Column triggers, failure routing, SLAs                |
+
+### `external/` — simulation only (data owned by external system)
+
+| File                   | Owns                                              |
+|------------------------|---------------------------------------------------|
+| `projects.yaml`        | Chaos-testing project                             |
+| `work_items.yaml`      | 5 work items covering distinct failure modes      |
+| `board_structure.yaml` | 5-column board id, name, and column list          |
+| `board_placements.yaml`| Initial work item column placements               |

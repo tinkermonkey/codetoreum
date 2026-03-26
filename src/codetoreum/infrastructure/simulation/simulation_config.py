@@ -663,9 +663,12 @@ class SimulationConfig:
             raise FileNotFoundError(message)
 
         if file_path.is_dir():
-            yaml_files = sorted(file_path.glob("*.yaml"))
+            # New-style split directory: read sim config from orchestrator/ subdir only
+            orchestrator_dir = file_path / "orchestrator"
+            search_dir = orchestrator_dir if orchestrator_dir.is_dir() else file_path
+            yaml_files = sorted(search_dir.glob("*.yaml"))
             if not yaml_files:
-                raise FileNotFoundError(f"No YAML files found in scenario directory: {file_path}")
+                raise FileNotFoundError(f"No YAML files found in scenario directory: {search_dir}")
             data: dict = {}
             for yaml_file in yaml_files:
                 fragment = yaml.safe_load(yaml_file.read_text())

@@ -1,0 +1,59 @@
+# SDLC Pipeline Scenario — Orchestrator: Workflow Definitions
+#
+# Port/Interface: IWorkflowConfigService (workflow domain model)
+# Adapter (sim): InMemoryConfigStore
+#
+# Stages: Requirements → Design → Implementation → Code Review → Testing → Integration → Release
+
+workflows:
+  - name: "sdlc-workflow"
+    description: "Full 7-stage SDLC pipeline"
+    stages:
+      - name: "requirements"
+        agent_type: "requirements_analyst"
+        description: "Parse and understand requirements"
+        order: 1
+        max_retries: 2
+        timeout_seconds: 600
+
+      - name: "design"
+        agent_type: "software_architect"
+        description: "Create design document"
+        order: 2
+        max_retries: 2
+        timeout_seconds: 1200
+
+      - name: "implementation"
+        agent_type: "senior_software_engineer"
+        description: "Generate code"
+        order: 3
+        max_retries: 3
+        timeout_seconds: 1800
+
+      - name: "code-review"
+        agent_type: "code_reviewer"
+        description: "Review approval gate"
+        order: 4
+        max_retries: 2
+        timeout_seconds: 1200
+
+      - name: "testing"
+        agent_type: "qa_engineer"
+        description: "Run UNIT → INTEGRATION → E2E tests"
+        order: 5
+        max_retries: 3
+        timeout_seconds: 2400
+
+      - name: "integration"
+        agent_type: "devops_engineer"
+        description: "Merge to main branch"
+        order: 6
+        max_retries: 2
+        timeout_seconds: 1200
+
+      - name: "release"
+        agent_type: "release_manager"
+        description: "Prepare release notes"
+        order: 7
+        max_retries: 1
+        timeout_seconds: 600

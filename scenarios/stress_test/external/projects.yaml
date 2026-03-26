@@ -1,0 +1,13 @@
+# Stress Test Scenario — External: Projects
+#
+# Port/Interface: ITicketSystem, IVersionControlService
+# Adapter (sim): InMemoryTicketAdapter, InMemoryVersionControlAdapter
+# Skipped when using real adapters (project already exists in GitHub/Jira/etc.)
+
+projects:
+  - name: "stress-test-project"
+    description: "Project for stress testing and performance validation"
+    default_branch: "main"
+    metadata:
+      environment: "performance_test"
+      load_type: "high_concurrency"

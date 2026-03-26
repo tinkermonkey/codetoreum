@@ -1,0 +1,13 @@
+# SDLC Pipeline Scenario — External: Board Item Placements
+#
+# Port/Interface: IBoardService
+# Adapter (sim): MockBoardAdapter
+# Skipped when using real adapters (items are already on the board)
+
+board_placements:
+  - work_item_title: "Add user authentication system"
+    column: "Backlog"
+  - work_item_title: "Implement real-time notifications"
+    column: "Backlog"
+  - work_item_title: "Optimize database queries"
+    column: "Backlog"

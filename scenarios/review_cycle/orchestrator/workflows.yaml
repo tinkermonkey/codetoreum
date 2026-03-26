@@ -1,0 +1,22 @@
+# Review Cycle Scenario — Orchestrator: Workflow Definitions
+#
+# Port/Interface: IWorkflowConfigService (workflow domain model)
+# Adapter (sim): InMemoryConfigStore
+
+workflows:
+  - name: "review-cycle-workflow"
+    description: "Maker-checker review pipeline"
+    stages:
+      - name: "implementation"
+        agent_type: "maker"
+        description: "Implement the change"
+        order: 1
+        max_retries: 3
+        timeout_seconds: 7200
+
+      - name: "code-review"
+        agent_type: "reviewer"
+        description: "Review the implementation"
+        order: 2
+        max_retries: 2
+        timeout_seconds: 3600

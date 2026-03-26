@@ -1,0 +1,13 @@
+# Review Cycle Scenario — External: Projects
+#
+# Port/Interface: ITicketSystem, IVersionControlService
+# Adapter (sim): InMemoryTicketAdapter, InMemoryVersionControlAdapter
+# Skipped when using real adapters (project already exists in GitHub/Jira/etc.)
+
+projects:
+  - name: "review-cycle-project"
+    description: "Project demonstrating review and feedback workflows"
+    default_branch: "main"
+    metadata:
+      review_policy: "mandatory"
+      approval_required: true

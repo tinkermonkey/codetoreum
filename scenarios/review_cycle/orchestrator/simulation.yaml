@@ -1,0 +1,29 @@
+# Review Cycle Scenario — Orchestrator: Simulation Settings
+#
+# Port/Interface: SimulationConfig (speed, clock, behaviour)
+# Adapter: SimulationClock, SimulationApplicationBootstrap
+#
+# Tests the maker-checker review process with feedback and revisions.
+# Moderate speed for observability.
+
+name: "Review Cycle Scenario"
+description: "Maker-checker review board with human gate before automated review"
+version: "1.0"
+
+speed_multiplier: 10.0
+auto_advance: false
+
+metadata:
+  scenario_type: "review_cycle"
+  author: "codetoreum-team"
+  review_rounds: "multiple"
+  feedback_enabled: true
+  tags:
+    - "review"
+    - "feedback"
+    - "iterative"
+    - "maker-checker"
+    - "explicit-config"
+  notes: |
+    This scenario demonstrates the review and feedback loop functionality.
+    Each work item should go through at least one feedback-revision cycle.

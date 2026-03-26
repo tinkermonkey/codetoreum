@@ -1,0 +1,30 @@
+# Smoke Scenario — External: Work Items
+#
+# Port/Interface: IWorkItemService, ITicketSystem
+# Adapter (sim): InMemoryTicketAdapter, MockWorkItemService
+# Skipped when using real adapters (work items already exist in the ticket system)
+
+work_items:
+  - title: "Implement login page"
+    description: "Build the user login page with form validation"
+    labels:
+      - "feature"
+      - "frontend"
+    priority: "high"
+    status: "new"
+
+  - title: "Fix null pointer exception in user service"
+    description: "Address the NPE that occurs when user profile is missing"
+    labels:
+      - "bug"
+      - "backend"
+    priority: "high"
+    status: "new"
+
+  - title: "Add pagination to items list endpoint"
+    description: "Implement cursor-based pagination for the items list API"
+    labels:
+      - "feature"
+      - "api"
+    priority: "medium"
+    status: "new"

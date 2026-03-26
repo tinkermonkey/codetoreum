@@ -34,16 +34,20 @@ Backlog → Ready → In Progress* → Review → Done
 
 ## Files
 
-| File              | Owns                                          |
-|-------------------|-----------------------------------------------|
-| `simulation.yaml` | Clock speed, fidelity, scenario identity      |
-| `projects.yaml`   | External — project/repo definition            |
-| `work_items.yaml` | External — 3 work items seeded in Backlog     |
-| `workflows.yaml`  | Orchestrator — 2-stage workflow definition    |
-| `agents.yaml`     | Orchestrator — coder and tester agent config  |
-| `board.yaml`      | Both — board structure + column policy        |
+### `orchestrator/` — always applied (Codetoreum-owned config)
 
-> **Note**: `board.yaml` currently mixes external state (board id, column names)
-> with orchestrator policy (triggers, SLAs, failure routing). These will be split
-> into `external/board_structure.yaml` and `orchestrator/board_policy.yaml` when
-> the `external/` / `orchestrator/` directory structure is introduced.
+| File                 | Owns                                          |
+|----------------------|-----------------------------------------------|
+| `simulation.yaml`    | Clock speed, fidelity, scenario identity      |
+| `agents.yaml`        | Coder and tester agent configurations         |
+| `workflows.yaml`     | 2-stage workflow definition                   |
+| `board_policy.yaml`  | Column triggers, SLAs, agent assignments      |
+
+### `external/` — simulation only (data owned by external system)
+
+| File                   | Owns                                        |
+|------------------------|---------------------------------------------|
+| `projects.yaml`        | Project / repo definition                   |
+| `work_items.yaml`      | 3 work items seeded in Backlog              |
+| `board_structure.yaml` | Board id, name, and column list             |
+| `board_placements.yaml`| Initial work item column placements         |

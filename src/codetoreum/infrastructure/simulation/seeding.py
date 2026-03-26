@@ -30,7 +30,12 @@ from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationAdapters,
     SimulationApplicationBootstrap,
 )
-from codetoreum.infrastructure.simulation.scenario_models import ScenarioColumnConfig, ScenarioModel
+from codetoreum.infrastructure.simulation.scenario_models import (
+    ExternalSeedModel,
+    OrchestratorConfigModel,
+    ScenarioColumnConfig,
+    ScenarioModel,
+)
 from codetoreum.ports.exceptions import ValidationError
 from codetoreum.ports.output.agent_repository import IAgentRepository
 from codetoreum.ports.output.config_store import (
@@ -43,8 +48,8 @@ from codetoreum.ports.output.work_item_service import IWorkItemService
 logger = logging.getLogger(__name__)
 
 
-def _merge_scenario_dir(dir_path: Path) -> dict:
-    """Merge all ``*.yaml`` files in a scenario directory into one dict.
+def _merge_yaml_dir(dir_path: Path) -> dict:
+    """Merge all ``*.yaml`` files in a directory into one dict.
 
     Files are processed in alphabetical order so names like ``01_simulation.yaml``
     can be used to control load order when key conflicts matter.  In practice,
@@ -53,13 +58,17 @@ def _merge_scenario_dir(dir_path: Path) -> dict:
     """
     yaml_files = sorted(dir_path.glob("*.yaml"))
     if not yaml_files:
-        raise FileNotFoundError(f"No YAML files found in scenario directory: {dir_path}")
+        raise FileNotFoundError(f"No YAML files found in directory: {dir_path}")
     merged: dict = {}
     for yaml_file in yaml_files:
         data = yaml.safe_load(yaml_file.read_text())
         if data:
             merged.update(data)
     return merged
+
+
+# Keep backward-compatible alias (used by some tests via direct module access)
+_merge_scenario_dir = _merge_yaml_dir
 
 
 @dataclass
@@ -1178,17 +1187,28 @@ class SimulationDataSeeder:
         """
         Seed data from a YAML scenario file or scenario directory.
 
-        When given a directory, all ``*.yaml`` files inside it are merged in
-        alphabetical order (later files win on key conflicts). This allows
-        splitting a scenario into one file per adapter interface, e.g.:
+        **New-style split directory** (``orchestrator/`` subdir present):
+        Uses two-pass loading to honour the external/orchestrator boundary:
 
             smoke/
-              simulation.yaml   # name, version, speed_multiplier, …
-              projects.yaml     # projects: […]
-              workflows.yaml    # workflows: […]
-              agents.yaml       # agents: […]
-              work_items.yaml   # work_items: […]
-              board.yaml        # boards: + board_placements: […]
+              orchestrator/
+                simulation.yaml   # name, version, speed_multiplier, …
+                agents.yaml       # agents: […]
+                workflows.yaml    # workflows: […]
+                board_policy.yaml # board_policies: [{board_id, column_configs}]
+              external/
+                projects.yaml     # projects: […]
+                work_items.yaml   # work_items: […]
+                board_structure.yaml  # boards: [{board_id, board_name, columns}]
+                board_placements.yaml # board_placements: […]
+
+        Pass 1 — always: apply ``orchestrator/`` config (agents, workflows, board policies).
+        Pass 2 — simulation only: seed ``external/`` data when the subdir exists
+        (projects, work items, board structure, item placements).
+
+        **Legacy flat directory** (no ``orchestrator/`` subdir):
+        All ``*.yaml`` files are merged into a single ``ScenarioModel`` and
+        seeded in one pass (backward-compatible with pre-split scenarios).
 
         Args:
             file_path: Path to a YAML scenario file **or** a scenario directory
@@ -1209,8 +1229,13 @@ class SimulationDataSeeder:
 
         logger.info(f"Loading scenario from {file_path}...")
 
+        # ── New-style split directory ────────────────────────────────────────
+        if file_path.is_dir() and (file_path / "orchestrator").is_dir():
+            return await self._seed_from_split_dir(file_path)
+
+        # ── Legacy: single file or flat directory ────────────────────────────
         if file_path.is_dir():
-            yaml_data = _merge_scenario_dir(file_path)
+            yaml_data = _merge_yaml_dir(file_path)
         else:
             with open(file_path) as f:
                 yaml_data = yaml.safe_load(f)
@@ -1219,7 +1244,6 @@ class SimulationDataSeeder:
             message = f"Empty scenario (no YAML content): {file_path}"
             raise ValidationError(message)
 
-        # Validate with Pydantic model
         try:
             scenario = ScenarioModel(**yaml_data)
         except Exception as e:
@@ -1227,7 +1251,184 @@ class SimulationDataSeeder:
             raise ValidationError(message)
 
         logger.info(f"Loaded scenario: {scenario.name} (version {scenario.version})")
+        await self._seed_legacy_scenario(scenario)
+        logger.info(f"Scenario seeded successfully from {file_path}")
+        return self
 
+    async def _seed_from_split_dir(self, scenario_dir: Path) -> "SimulationDataSeeder":
+        """Two-pass seeding from a split orchestrator/ + external/ directory."""
+        # Pass 1: always — orchestrator config
+        orch_data = _merge_yaml_dir(scenario_dir / "orchestrator")
+        if not orch_data:
+            message = f"Empty orchestrator config in {scenario_dir / 'orchestrator'}"
+            raise ValidationError(message)
+        try:
+            orch = OrchestratorConfigModel(**orch_data)
+        except Exception as e:
+            message = f"Orchestrator config validation failed: {e}"
+            raise ValidationError(message)
+
+        logger.info(f"Loaded orchestrator config: {orch.name} (version {orch.version})")
+        await self._apply_orchestrator_config(orch)
+
+        # Pass 2: simulation only — external seed data
+        external_dir = scenario_dir / "external"
+        if external_dir.is_dir():
+            ext_data = _merge_yaml_dir(external_dir)
+            if ext_data:
+                try:
+                    ext = ExternalSeedModel(**ext_data)
+                except Exception as e:
+                    message = f"External seed data validation failed: {e}"
+                    raise ValidationError(message)
+                await self._seed_external_data(ext, orch)
+
+        logger.info(f"Scenario seeded successfully from {scenario_dir}")
+        return self
+
+    async def _apply_orchestrator_config(self, orch: OrchestratorConfigModel) -> None:
+        """Apply orchestrator-owned config: workflows, agents, board policies.
+
+        Workflows are registered even when no external project has been seeded
+        yet (real-adapter mode). A synthetic project_id is used as a namespace
+        when the seeder has no current project context.
+        """
+        # Ensure a project context exists so create_workflow doesn't fail.
+        # In real-adapter mode there is no external/ dir, so no project is seeded
+        # by this seeder — use a deterministic placeholder.
+        effective_project_id = self._current_project_id or "orchestrator-default"
+
+        # Seed workflows
+        for workflow_model in orch.workflows:
+            stages = [
+                {
+                    "name": stage.name,
+                    "agent_type": stage.agent_type,
+                    "description": stage.description,
+                    "order": stage.order,
+                    "entry_conditions": stage.entry_conditions,
+                    "exit_conditions": stage.exit_conditions,
+                    "max_retries": stage.max_retries,
+                    "timeout_seconds": stage.timeout_seconds,
+                }
+                for stage in workflow_model.stages
+            ]
+            await self.create_workflow(
+                name=workflow_model.name,
+                description=workflow_model.description,
+                stages=stages,
+                project_id=effective_project_id,
+            )
+
+        # Seed agents
+        agent_defs = [
+            {
+                "name": agent.name,
+                "agent_type": agent.agent_type,
+                "description": agent.description,
+                "capabilities": agent.capabilities,
+                "llm_model": agent.llm_model,
+                "temperature": agent.temperature,
+                "max_tokens": agent.max_tokens,
+                "system_prompt": agent.system_prompt,
+                "enabled": agent.enabled,
+                "metadata": agent.metadata,
+            }
+            for agent in orch.agents
+        ]
+        if agent_defs:
+            await self.create_agents(agent_defs, project_id=effective_project_id)
+
+        # Register board policies (workflow templates) — board structure is in external/
+        # but policies can be registered before the board itself is created; the
+        # board service wires them on first use.
+        for policy in orch.board_policies:
+            await self.register_workflow_template_from_column_configs(
+                board_id=policy.board_id,
+                column_configs=policy.column_configs,
+                project_id=effective_project_id,
+            )
+
+    async def _seed_external_data(self, ext: ExternalSeedModel, orch: OrchestratorConfigModel) -> None:
+        """Seed external-system data: projects, work items, board structures, placements."""
+        # Seed projects
+        for project_model in ext.projects:
+            await self.create_project(
+                name=project_model.name,
+                description=project_model.description,
+                repository_url=project_model.repository_url,
+                default_branch=project_model.default_branch,
+                metadata=project_model.metadata,
+            )
+
+        # Seed work items
+        priority_map = {
+            "low": WorkItemPriority.LOW,
+            "medium": WorkItemPriority.MEDIUM,
+            "high": WorkItemPriority.HIGH,
+            "critical": WorkItemPriority.CRITICAL,
+        }
+        status_map = {
+            "new": WorkItemStatus.NEW,
+            "assigned": WorkItemStatus.ASSIGNED,
+            "in_progress": WorkItemStatus.IN_PROGRESS,
+            "under_review": WorkItemStatus.UNDER_REVIEW,
+            "completed": WorkItemStatus.COMPLETED,
+            "failed": WorkItemStatus.FAILED,
+            "blocked": WorkItemStatus.BLOCKED,
+        }
+        for work_item_model in ext.work_items:
+            priority = priority_map.get(work_item_model.priority, WorkItemPriority.MEDIUM)
+            status = status_map.get(work_item_model.status, WorkItemStatus.NEW)
+            await self.create_work_items(
+                count=1,
+                title_prefix=work_item_model.title,
+                labels=work_item_model.labels,
+                priority=priority,
+                status=status,
+                metadata=work_item_model.metadata,
+            )
+
+        # Seed board structures
+        for board_struct in ext.boards:
+            await self.create_board(
+                board_id=board_struct.board_id,
+                board_name=board_struct.board_name,
+                column_names=board_struct.columns,
+            )
+
+        # Seed board placements (match work items by title prefix)
+        if ext.board_placements:
+            all_items: dict[str, str] = {}
+            for item_id in self.created_items.work_items:
+                try:
+                    item = await self._ticket_adapter.get_work_item(item_id)
+                    all_items[item.title] = item.id
+                except Exception:
+                    logger.error(
+                        f"Failed to retrieve work item {item_id} during board placement seeding",
+                        exc_info=True,
+                    )
+                    continue
+
+            board_id = ext.boards[0].board_id if ext.boards else "board-1"
+            for placement in ext.board_placements:
+                matched_id = None
+                for title, item_id in all_items.items():
+                    if title.startswith(placement.work_item_title):
+                        matched_id = item_id
+                        break
+                if matched_id:
+                    await self.place_item_on_board(
+                        board_id=board_id,
+                        column_name=placement.column,
+                        work_item_id=matched_id,
+                    )
+                else:
+                    logger.warning(f"Board placement: no work item found matching title '{placement.work_item_title}'")
+
+    async def _seed_legacy_scenario(self, scenario: ScenarioModel) -> None:
+        """Seed a legacy (flat) ScenarioModel — all data in one pass."""
         # Seed projects
         for project_model in scenario.projects:
             await self.create_project(
@@ -1253,7 +1454,6 @@ class SimulationDataSeeder:
                 }
                 for stage in workflow_model.stages
             ]
-
             await self.create_workflow(
                 name=workflow_model.name,
                 description=workflow_model.description,
@@ -1276,33 +1476,28 @@ class SimulationDataSeeder:
             }
             for agent in scenario.agents
         ]
-
         if agent_defs:
             await self.create_agents(agent_defs)
 
         # Seed work items
+        priority_map = {
+            "low": WorkItemPriority.LOW,
+            "medium": WorkItemPriority.MEDIUM,
+            "high": WorkItemPriority.HIGH,
+            "critical": WorkItemPriority.CRITICAL,
+        }
+        status_map = {
+            "new": WorkItemStatus.NEW,
+            "assigned": WorkItemStatus.ASSIGNED,
+            "in_progress": WorkItemStatus.IN_PROGRESS,
+            "under_review": WorkItemStatus.UNDER_REVIEW,
+            "completed": WorkItemStatus.COMPLETED,
+            "failed": WorkItemStatus.FAILED,
+            "blocked": WorkItemStatus.BLOCKED,
+        }
         for work_item_model in scenario.work_items:
-            # Convert string priority/status to enum
-            priority_map = {
-                "low": WorkItemPriority.LOW,
-                "medium": WorkItemPriority.MEDIUM,
-                "high": WorkItemPriority.HIGH,
-                "critical": WorkItemPriority.CRITICAL,
-            }
-
-            status_map = {
-                "new": WorkItemStatus.NEW,
-                "assigned": WorkItemStatus.ASSIGNED,
-                "in_progress": WorkItemStatus.IN_PROGRESS,
-                "under_review": WorkItemStatus.UNDER_REVIEW,
-                "completed": WorkItemStatus.COMPLETED,
-                "failed": WorkItemStatus.FAILED,
-                "blocked": WorkItemStatus.BLOCKED,
-            }
-
             priority = priority_map.get(work_item_model.priority, WorkItemPriority.MEDIUM)
             status = status_map.get(work_item_model.status, WorkItemStatus.NEW)
-
             await self.create_work_items(
                 count=1,
                 title_prefix=work_item_model.title,
@@ -1312,13 +1507,12 @@ class SimulationDataSeeder:
                 metadata=work_item_model.metadata,
             )
 
-        # Seed boards and register workflow templates for board automation
-        # Extract agent types from workflow stages (ordered by stage order)
+        # Seed boards and register workflow templates
         agent_types: list[str] = []
         for workflow_model in scenario.workflows:
             sorted_stages = sorted(workflow_model.stages, key=lambda s: s.order)
             agent_types = [stage.agent_type for stage in sorted_stages]
-            break  # Use first workflow's agents
+            break
 
         for board_model in scenario.boards:
             await self.create_board(
@@ -1327,14 +1521,11 @@ class SimulationDataSeeder:
                 column_names=board_model.columns,
             )
             if board_model.column_configs:
-                # Use explicit column configs when provided — full control over
-                # agent assignments, trigger/exit flags, SLA, and auto-progression.
                 await self.register_workflow_template_from_column_configs(
                     board_id=board_model.board_id,
                     column_configs=board_model.column_configs,
                 )
             elif agent_types:
-                # Fall back to positional auto-generation from workflow stage order.
                 await self.register_workflow_template(
                     board_id=board_model.board_id,
                     column_names=board_model.columns,
@@ -1342,10 +1533,9 @@ class SimulationDataSeeder:
                     sla_seconds_by_column=board_model.sla_seconds_by_column,
                 )
 
-        # Seed board placements (match work items by title prefix)
+        # Seed board placements
         if scenario.board_placements:
-            # Build a map of work item title -> id from the ticket adapter
-            all_items = {}
+            all_items: dict[str, str] = {}
             for item_id in self.created_items.work_items:
                 try:
                     item = await self._ticket_adapter.get_work_item(item_id)
@@ -1355,19 +1545,15 @@ class SimulationDataSeeder:
                         f"Failed to retrieve work item {item_id} during board placement seeding",
                         exc_info=True,
                     )
-                    # Continue processing remaining items
                     continue
 
             board_id = scenario.boards[0].board_id if scenario.boards else "board-1"
-
             for placement in scenario.board_placements:
-                # Match by title prefix (work items created from YAML get " #1" appended)
                 matched_id = None
                 for title, item_id in all_items.items():
                     if title.startswith(placement.work_item_title):
                         matched_id = item_id
                         break
-
                 if matched_id:
                     await self.place_item_on_board(
                         board_id=board_id,
@@ -1376,9 +1562,6 @@ class SimulationDataSeeder:
                     )
                 else:
                     logger.warning(f"Board placement: no work item found matching title '{placement.work_item_title}'")
-
-        logger.info(f"Scenario seeded successfully from {file_path}")
-        return self
 
     # =========================================================================
     # Mock Adapter Configuration Methods

@@ -44,16 +44,20 @@ entry to `Ready`; automated work begins at `In Progress`.
 
 ## Files
 
-| File              | Owns                                                   |
-|-------------------|--------------------------------------------------------|
-| `simulation.yaml` | Clock speed (100×), fidelity, scenario identity        |
-| `projects.yaml`   | External — web-app project with repository URL         |
-| `work_items.yaml` | External — 3 work items (auth, notifications, perf)    |
-| `workflows.yaml`  | Orchestrator — 7-stage SDLC workflow definition        |
-| `agents.yaml`     | Orchestrator — 7 specialist agent configurations       |
-| `board.yaml`      | Both — 6-column board structure + column policy        |
+### `orchestrator/` — always applied (Codetoreum-owned config)
 
-> **Note**: `board.yaml` currently mixes external state (board id, column names)
-> with orchestrator policy (triggers, SLAs, failure routing). These will be split
-> into `external/board_structure.yaml` and `orchestrator/board_policy.yaml` when
-> the `external/` / `orchestrator/` directory structure is introduced.
+| File                 | Owns                                              |
+|----------------------|---------------------------------------------------|
+| `simulation.yaml`    | Clock speed (100×), fidelity, scenario identity   |
+| `agents.yaml`        | 7 specialist agent configurations                 |
+| `workflows.yaml`     | 7-stage SDLC workflow definition                  |
+| `board_policy.yaml`  | Column triggers, SLAs, failure routing            |
+
+### `external/` — simulation only (data owned by external system)
+
+| File                   | Owns                                            |
+|------------------------|-------------------------------------------------|
+| `projects.yaml`        | Web-app project with repository URL             |
+| `work_items.yaml`      | 3 work items (auth, notifications, perf)        |
+| `board_structure.yaml` | 6-column board id, name, and column list        |
+| `board_placements.yaml`| Initial work item column placements             |

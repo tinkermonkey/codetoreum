@@ -56,16 +56,20 @@ await seeder.create_work_items(count=90, project_name="stress-test-project")
 
 ## Files
 
-| File              | Owns                                                    |
-|-------------------|---------------------------------------------------------|
-| `simulation.yaml` | Clock speed (100×), `auto_advance: true`, identity      |
-| `projects.yaml`   | External — stress-test project                          |
-| `work_items.yaml` | External — 10 representative items (of 100 target)      |
-| `workflows.yaml`  | Orchestrator — 2-stage parallel workflow                |
-| `agents.yaml`     | Orchestrator — worker and validator agent configs       |
-| `board.yaml`      | Both — 3-column minimal board structure + column policy |
+### `orchestrator/` — always applied (Codetoreum-owned config)
 
-> **Note**: `board.yaml` currently mixes external state (board id, column names)
-> with orchestrator policy (triggers, SLAs, failure routing). These will be split
-> into `external/board_structure.yaml` and `orchestrator/board_policy.yaml` when
-> the `external/` / `orchestrator/` directory structure is introduced.
+| File                 | Owns                                                    |
+|----------------------|---------------------------------------------------------|
+| `simulation.yaml`    | Clock speed (100×), `auto_advance: true`, identity      |
+| `agents.yaml`        | Worker and validator agent configurations               |
+| `workflows.yaml`     | 2-stage parallel workflow                               |
+| `board_policy.yaml`  | Column triggers, SLAs (minimal — no failure routing)    |
+
+### `external/` — simulation only (data owned by external system)
+
+| File                   | Owns                                              |
+|------------------------|---------------------------------------------------|
+| `projects.yaml`        | Stress-test project                               |
+| `work_items.yaml`      | 10 representative items (of 100 target)           |
+| `board_structure.yaml` | 3-column board id, name, and column list          |
+| `board_placements.yaml`| Initial work item column placements               |

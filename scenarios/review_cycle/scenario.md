@@ -46,16 +46,20 @@ the entire path through to `Done`, including the manual `Awaiting Review` gate.
 
 ## Files
 
-| File              | Owns                                                        |
-|-------------------|-------------------------------------------------------------|
-| `simulation.yaml` | Clock speed (10×), fidelity, scenario identity              |
-| `projects.yaml`   | External — review-cycle project                             |
-| `work_items.yaml` | External — 5 work items requiring mandatory review          |
-| `workflows.yaml`  | Orchestrator — 2-stage maker/checker workflow               |
-| `agents.yaml`     | Orchestrator — maker (thorough) and reviewer (strict) config|
-| `board.yaml`      | Both — 6-column board structure + column policy             |
+### `orchestrator/` — always applied (Codetoreum-owned config)
 
-> **Note**: `board.yaml` currently mixes external state (board id, column names)
-> with orchestrator policy (triggers, SLAs, failure routing). These will be split
-> into `external/board_structure.yaml` and `orchestrator/board_policy.yaml` when
-> the `external/` / `orchestrator/` directory structure is introduced.
+| File                 | Owns                                                    |
+|----------------------|---------------------------------------------------------|
+| `simulation.yaml`    | Clock speed (10×), fidelity, scenario identity          |
+| `agents.yaml`        | Maker (thorough) and reviewer (strict) configurations   |
+| `workflows.yaml`     | 2-stage maker/checker workflow                          |
+| `board_policy.yaml`  | Column triggers, SLAs, failure routing                  |
+
+### `external/` — simulation only (data owned by external system)
+
+| File                   | Owns                                              |
+|------------------------|---------------------------------------------------|
+| `projects.yaml`        | Review-cycle project                              |
+| `work_items.yaml`      | 5 work items requiring mandatory review           |
+| `board_structure.yaml` | 6-column board id, name, and column list          |
+| `board_placements.yaml`| Initial work item column placements               |

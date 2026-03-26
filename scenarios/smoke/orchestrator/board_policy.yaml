@@ -1,0 +1,47 @@
+# Smoke Scenario — Orchestrator: Board Column Policy
+#
+# Port/Interface: IWorkflowConfigService
+# Adapter (sim): InMemoryWorkflowConfigService
+#
+# Board layout:
+#   Backlog (manual) → Ready (manual) → In Progress (automated, coder, PIPELINE TRIGGER)
+#   → Review (automated, tester) → Done (exit)
+
+board_policies:
+  - board_id: "board-1"
+    column_configs:
+      - name: "Backlog"
+        type: "manual"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: false
+
+      - name: "Ready"
+        type: "manual"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: false
+
+      - name: "In Progress"
+        type: "automated"
+        agent_id: "coder"
+        is_pipeline_trigger: true
+        is_exit_column: false
+        auto_progress_on_completion: true
+        on_failure_column: "Backlog"
+        sla_seconds: 3600
+
+      - name: "Review"
+        type: "automated"
+        agent_id: "tester"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: true
+        on_failure_column: "Backlog"
+        sla_seconds: 1800
+
+      - name: "Done"
+        type: "manual"
+        is_pipeline_trigger: false
+        is_exit_column: true
+        auto_progress_on_completion: false

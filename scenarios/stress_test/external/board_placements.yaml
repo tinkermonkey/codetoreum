@@ -1,0 +1,27 @@
+# Stress Test Scenario — External: Board Item Placements
+#
+# Port/Interface: IBoardService
+# Adapter (sim): MockBoardAdapter
+# Skipped when using real adapters (items are already on the board)
+
+board_placements:
+  - work_item_title: "Stress Test Task #1"
+    column: "Backlog"
+  - work_item_title: "Stress Test Task #2"
+    column: "Backlog"
+  - work_item_title: "Stress Test Task #3"
+    column: "Backlog"
+  - work_item_title: "Stress Test Task #4"
+    column: "Backlog"
+  - work_item_title: "Stress Test Task #5"
+    column: "Backlog"
+  - work_item_title: "Stress Test Task #6"
+    column: "Backlog"
+  - work_item_title: "Stress Test Task #7"
+    column: "Backlog"
+  - work_item_title: "Stress Test Task #8"
+    column: "Backlog"
+  - work_item_title: "Stress Test Task #9"
+    column: "Backlog"
+  - work_item_title: "Stress Test Task #10"
+    column: "Backlog"

@@ -237,6 +237,104 @@ class ScenarioWorkItemModel(BaseModel):
         return v.lower()
 
 
+class ScenarioBoardStructureModel(BaseModel):
+    """External board structure — owned by the external ticket system.
+
+    Contains only the board identity and column names; no orchestrator
+    policy (triggers, SLAs, agents).  Seeded into ``IBoardService`` during
+    simulation; skipped when using real adapters (the board already exists).
+    """
+
+    board_id: str = Field(..., description="Board ID")
+    board_name: str = Field(..., description="Board display name")
+    columns: list[str] = Field(..., description="Column names in order", min_length=1)
+
+
+class ScenarioBoardPolicyModel(BaseModel):
+    """Orchestrator board policy — always owned by Codetoreum.
+
+    Contains the ``BoardWorkflowTemplate`` metadata for a board: column
+    triggers, exit flags, agent assignments, SLAs, and failure routing.
+    Registered with ``IWorkflowConfigService`` on every startup, regardless
+    of whether real or simulation adapters are used.
+    """
+
+    board_id: str = Field(..., description="Board ID this policy applies to")
+    column_configs: list[ScenarioColumnConfig] = Field(
+        ...,
+        description="Per-column workflow semantics (triggers, SLAs, agents, failure routing)",
+        min_length=1,
+    )
+
+
+class ExternalSeedModel(BaseModel):
+    """Root model for ``external/`` scenario files.
+
+    Data in this model is owned by the external system (ticket tracker, board
+    provider) in production.  During simulation it is seeded so the mock
+    adapters have realistic state to work with.  When real adapters are
+    connected this entire directory should be skipped.
+    """
+
+    projects: list[ScenarioProjectModel] = Field(default_factory=list, description="Projects to create")
+    work_items: list[ScenarioWorkItemModel] = Field(default_factory=list, description="Work items to create")
+    boards: list[ScenarioBoardStructureModel] = Field(default_factory=list, description="Board structures to create")
+    board_placements: list[ScenarioBoardItemPlacementModel] = Field(
+        default_factory=list, description="Initial work item placements on boards"
+    )
+
+    @field_validator("projects")
+    @classmethod
+    def validate_projects(cls, v: list[ScenarioProjectModel]) -> list[ScenarioProjectModel]:
+        """Validate project names are unique."""
+        if len(v) != len({p.name for p in v}):
+            raise ValueError("Project names must be unique")
+        return v
+
+
+class OrchestratorConfigModel(BaseModel):
+    """Root model for ``orchestrator/`` scenario files.
+
+    Config in this model is always owned by Codetoreum.  It is applied on
+    every simulation startup, and will carry across to real-adapter
+    deployments where the same workflow and agent definitions are needed.
+    """
+
+    name: str = Field(..., description="Scenario name")
+    description: str = Field(default="", description="Scenario description")
+    version: str = Field(default="1.0", description="Scenario version")
+
+    # Simulation clock settings
+    speed_multiplier: float = Field(default=10.0, description="Time speed multiplier", gt=0)
+    auto_advance: bool = Field(default=False, description="Auto-advance simulation clock")
+
+    # Orchestrator-owned definitions
+    agents: list[ScenarioAgentModel] = Field(default_factory=list, description="Agent configurations")
+    workflows: list[ScenarioWorkflowModel] = Field(default_factory=list, description="Workflow definitions")
+    board_policies: list[ScenarioBoardPolicyModel] = Field(
+        default_factory=list, description="Per-board column policy (triggers, SLAs, agents)"
+    )
+
+    # Additional metadata
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional scenario metadata")
+
+    @field_validator("agents")
+    @classmethod
+    def validate_agents(cls, v: list[ScenarioAgentModel]) -> list[ScenarioAgentModel]:
+        """Validate agent names are unique."""
+        if len(v) != len({a.name for a in v}):
+            raise ValueError("Agent names must be unique")
+        return v
+
+    @field_validator("workflows")
+    @classmethod
+    def validate_workflows(cls, v: list[ScenarioWorkflowModel]) -> list[ScenarioWorkflowModel]:
+        """Validate workflow names are unique."""
+        if len(v) != len({w.name for w in v}):
+            raise ValueError("Workflow names must be unique")
+        return v
+
+
 class ScenarioModel(BaseModel):
     """
     Complete scenario configuration model.
