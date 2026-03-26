@@ -113,11 +113,12 @@ class CachedConfigStore(IConfigStore):
         Args:
             config: ProjectConfig to save
         """
-        # Write to storage first
+        # Write to storage first (storage assigns version/timestamps)
         await self.storage.save_project_config(config)
 
-        # Update cache
-        await self.cache.set_project_config(config)
+        # Fetch the stored version (with updated version/timestamps) for the cache
+        stored = await self.storage.get_project_config(config.id)
+        await self.cache.set_project_config(stored)
 
         logger.debug(f"Saved project config to storage and cache: {config.id}")
 

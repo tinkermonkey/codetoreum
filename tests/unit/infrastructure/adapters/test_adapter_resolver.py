@@ -265,7 +265,7 @@ class TestAdapterResolver:
         # All adapter fields should be non-None (except optional ones)
         import dataclasses
 
-        optional_fields = {"agent_executor", "audit_store"}
+        optional_fields = {"agent_executor", "audit_store", "tracer"}
         for field in dataclasses.fields(result):
             adapter = getattr(result, field.name)
             if field.name not in optional_fields:
@@ -900,7 +900,7 @@ class TestAdapterResolverIntegration:
         assert isinstance(result, SimulationAdapters)
         import dataclasses
 
-        optional_fields = {"agent_executor", "audit_store"}
+        optional_fields = {"agent_executor", "audit_store", "tracer"}
         for field in dataclasses.fields(result):
             adapter = getattr(result, field.name)
             if field.name not in optional_fields:

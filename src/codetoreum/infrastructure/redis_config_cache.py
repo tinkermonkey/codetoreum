@@ -574,16 +574,16 @@ class RedisConfigCache:
             "name": config.name,
             "github_org": config.github_org,
             "github_repo": config.github_repo,
-            "tech_stacks": config.tech_stacks,
-            "pipelines": config.pipelines,
-            "testing": config.testing,
-            "environment_variables": config.environment_variables,
-            "mounted_commands": config.mounted_commands,
-            "mounted_subagents": config.mounted_subagents,
+            "tech_stacks": dict(config.tech_stacks),
+            "pipelines": [dict(p) for p in config.pipelines],
+            "testing": dict(config.testing),
+            "environment_variables": dict(config.environment_variables),
+            "mounted_commands": dict(config.mounted_commands),
+            "mounted_subagents": dict(config.mounted_subagents),
             "created_at": (config.created_at.isoformat() if config.created_at else None),
             "updated_at": (config.updated_at.isoformat() if config.updated_at else None),
             "version": config.version,
-            "metadata": config.metadata,
+            "metadata": dict(config.metadata),
         }
 
     def _deserialize_project(self, doc: dict[str, Any]) -> ProjectConfig:
@@ -616,13 +616,13 @@ class RedisConfigCache:
             "timeout": config.timeout,
             "requires_docker": config.requires_docker,
             "makes_code_changes": config.makes_code_changes,
-            "mcp_servers": config.mcp_servers,
-            "capabilities": config.capabilities,
-            "constraints": config.constraints,
+            "mcp_servers": list(config.mcp_servers),
+            "capabilities": list(config.capabilities),
+            "constraints": dict(config.constraints),
             "version": config.version,
             "created_at": (config.created_at.isoformat() if config.created_at else None),
             "updated_at": (config.updated_at.isoformat() if config.updated_at else None),
-            "metadata": config.metadata,
+            "metadata": dict(config.metadata),
         }
 
     def _deserialize_agent(self, doc: dict[str, Any]) -> AgentConfig:
@@ -651,12 +651,12 @@ class RedisConfigCache:
             "id": config.id,
             "project_id": config.project_id,
             "name": config.name,
-            "stages": config.stages,
-            "triggers": config.triggers,
+            "stages": [dict(s) for s in config.stages],
+            "triggers": list(config.triggers),
             "version": config.version,
             "created_at": (config.created_at.isoformat() if config.created_at else None),
             "updated_at": (config.updated_at.isoformat() if config.updated_at else None),
-            "metadata": config.metadata,
+            "metadata": dict(config.metadata),
         }
 
     def _deserialize_pipeline(self, doc: dict[str, Any]) -> PipelineConfig:
@@ -681,11 +681,11 @@ class RedisConfigCache:
             "id": template.id,
             "name": template.name,
             "description": template.description,
-            "stages": template.stages,
+            "stages": [dict(s) for s in template.stages],
             "version": template.version,
             "created_at": (template.created_at.isoformat() if template.created_at else None),
             "updated_at": (template.updated_at.isoformat() if template.updated_at else None),
-            "metadata": template.metadata,
+            "metadata": dict(template.metadata),
         }
 
     def _deserialize_workflow(self, doc: dict[str, Any]) -> WorkflowTemplate:

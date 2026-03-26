@@ -4,6 +4,7 @@ These tests use testcontainers to spin up real Redis and Elasticsearch instances
 """
 
 import asyncio
+import dataclasses
 from uuid import uuid4
 
 import pytest
@@ -343,8 +344,11 @@ async def test_cached_store_update_invalidates_and_updates_cache(cached_config_s
     await wait_for_elasticsearch_indexing(es_client)
 
     # Update config
-    sample_project_config.tech_stacks["typescript"] = "5.0"
-    await cached_config_store.save_project_config(sample_project_config)
+    updated_config = dataclasses.replace(
+        sample_project_config,
+        tech_stacks={**sample_project_config.tech_stacks, "typescript": "5.0"},
+    )
+    await cached_config_store.save_project_config(updated_config)
     await wait_for_elasticsearch_indexing(es_client)
 
     # Get from cache (should have updated version)
@@ -434,8 +438,7 @@ async def test_cached_store_list_operations_bypass_cache(cached_config_store, sa
 async def test_cached_store_search_bypasses_cache(cached_config_store, sample_project_config, es_client):
     """Test that search operations go directly to storage."""
     # Save project with unique name
-    project = sample_project_config
-    project.name = f"Searchable Project {uuid4().hex[:8]}"
+    project = dataclasses.replace(sample_project_config, name=f"Searchable Project {uuid4().hex[:8]}")
     await cached_config_store.save_project_config(project)
 
     # Wait for indexing
@@ -461,9 +464,13 @@ async def test_cached_store_version_history_bypasses_cache(cached_config_store, 
     await cached_config_store.save_project_config(sample_project_config)
     await wait_for_elasticsearch_indexing(es_client)
 
+    current_config = sample_project_config
     for i in range(3):
-        sample_project_config.tech_stacks[f"tool{i}"] = f"v{i}"
-        await cached_config_store.save_project_config(sample_project_config)
+        current_config = dataclasses.replace(
+            current_config,
+            tech_stacks={**current_config.tech_stacks, f"tool{i}": f"v{i}"},
+        )
+        await cached_config_store.save_project_config(current_config)
         await wait_for_elasticsearch_indexing(es_client)
 
     # Get version history (should bypass cache)

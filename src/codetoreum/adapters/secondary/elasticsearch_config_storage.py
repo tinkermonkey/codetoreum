@@ -1,5 +1,6 @@
 """Elasticsearch configuration storage adapter for production persistence."""
 
+import dataclasses
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -367,25 +368,20 @@ class ElasticsearchConfigStorage(IConfigStore):
         try:
             # Set timestamps
             now = datetime.now(UTC)
-            if config.created_at is None:
-                config.created_at = now
-            config.updated_at = now
+            created_at = config.created_at if config.created_at is not None else now
 
-            # Serialize configuration
-            doc = self._serialize_project(config)
-
-            # Try to get existing document to check version
+            # Try to get existing document to determine version
             try:
                 existing = await self.client.get(index=self.INDEX_PROJECTS, id=config.id)
-                old_version = existing["_source"].get("version", 1)
-                config.version = old_version + 1
-                doc["version"] = config.version
+                new_version = existing["_source"].get("version", 1) + 1
+                config = dataclasses.replace(config, created_at=created_at, updated_at=now, version=new_version)
+                doc = self._serialize_project(config)
 
                 # Save history
                 await self._save_history(
                     config_id=config.id,
                     config_type="project",
-                    version=config.version,
+                    version=new_version,
                     changed_by="system",  # TODO: Get from context
                     change_type="update",
                     changes={"updated_at": now.isoformat()},
@@ -394,8 +390,8 @@ class ElasticsearchConfigStorage(IConfigStore):
 
             except NotFoundError:
                 # New configuration
-                config.version = 1
-                doc["version"] = 1
+                config = dataclasses.replace(config, created_at=created_at, updated_at=now, version=1)
+                doc = self._serialize_project(config)
 
                 # Save history
                 await self._save_history(
@@ -476,25 +472,20 @@ class ElasticsearchConfigStorage(IConfigStore):
         try:
             # Set timestamps
             now = datetime.now(UTC)
-            if config.created_at is None:
-                config.created_at = now
-            config.updated_at = now
+            created_at = config.created_at if config.created_at is not None else now
 
-            # Serialize configuration
-            doc = self._serialize_agent(config)
-
-            # Try to get existing document to check version
+            # Try to get existing document to determine version
             try:
                 existing = await self.client.get(index=self.INDEX_AGENTS, id=doc_id)
-                old_version = existing["_source"].get("version", 1)
-                config.version = old_version + 1
-                doc["version"] = config.version
+                new_version = existing["_source"].get("version", 1) + 1
+                config = dataclasses.replace(config, created_at=created_at, updated_at=now, version=new_version)
+                doc = self._serialize_agent(config)
 
                 # Save history
                 await self._save_history(
                     config_id=doc_id,
                     config_type="agent",
-                    version=config.version,
+                    version=new_version,
                     changed_by="system",
                     change_type="update",
                     changes={"updated_at": now.isoformat()},
@@ -503,8 +494,8 @@ class ElasticsearchConfigStorage(IConfigStore):
 
             except NotFoundError:
                 # New configuration
-                config.version = 1
-                doc["version"] = 1
+                config = dataclasses.replace(config, created_at=created_at, updated_at=now, version=1)
+                doc = self._serialize_agent(config)
 
                 # Save history
                 await self._save_history(
@@ -598,25 +589,20 @@ class ElasticsearchConfigStorage(IConfigStore):
         try:
             # Set timestamps
             now = datetime.now(UTC)
-            if config.created_at is None:
-                config.created_at = now
-            config.updated_at = now
+            created_at = config.created_at if config.created_at is not None else now
 
-            # Serialize configuration
-            doc = self._serialize_pipeline(config)
-
-            # Try to get existing document to check version
+            # Try to get existing document to determine version
             try:
                 existing = await self.client.get(index=self.INDEX_PIPELINES, id=config.id)
-                old_version = existing["_source"].get("version", 1)
-                config.version = old_version + 1
-                doc["version"] = config.version
+                new_version = existing["_source"].get("version", 1) + 1
+                config = dataclasses.replace(config, created_at=created_at, updated_at=now, version=new_version)
+                doc = self._serialize_pipeline(config)
 
                 # Save history
                 await self._save_history(
                     config_id=config.id,
                     config_type="pipeline",
-                    version=config.version,
+                    version=new_version,
                     changed_by="system",
                     change_type="update",
                     changes={"updated_at": now.isoformat()},
@@ -625,8 +611,8 @@ class ElasticsearchConfigStorage(IConfigStore):
 
             except NotFoundError:
                 # New configuration
-                config.version = 1
-                doc["version"] = 1
+                config = dataclasses.replace(config, created_at=created_at, updated_at=now, version=1)
+                doc = self._serialize_pipeline(config)
 
                 # Save history
                 await self._save_history(
@@ -1230,16 +1216,16 @@ class ElasticsearchConfigStorage(IConfigStore):
             "name": config.name,
             "github_org": config.github_org,
             "github_repo": config.github_repo,
-            "tech_stacks": config.tech_stacks,
-            "pipelines": config.pipelines,
-            "testing": config.testing,
-            "environment_variables": config.environment_variables,
-            "mounted_commands": config.mounted_commands,
-            "mounted_subagents": config.mounted_subagents,
+            "tech_stacks": dict(config.tech_stacks),
+            "pipelines": [dict(p) for p in config.pipelines],
+            "testing": dict(config.testing),
+            "environment_variables": dict(config.environment_variables),
+            "mounted_commands": dict(config.mounted_commands),
+            "mounted_subagents": dict(config.mounted_subagents),
             "created_at": (config.created_at.isoformat() if config.created_at else None),
             "updated_at": (config.updated_at.isoformat() if config.updated_at else None),
             "version": config.version,
-            "metadata": config.metadata,
+            "metadata": dict(config.metadata),
         }
 
     def _deserialize_project(self, doc: dict[str, Any]) -> ProjectConfig:
@@ -1270,13 +1256,13 @@ class ElasticsearchConfigStorage(IConfigStore):
             "timeout": config.timeout,
             "requires_docker": config.requires_docker,
             "makes_code_changes": config.makes_code_changes,
-            "mcp_servers": config.mcp_servers,
-            "capabilities": config.capabilities,
-            "constraints": config.constraints,
+            "mcp_servers": list(config.mcp_servers),
+            "capabilities": list(config.capabilities),
+            "constraints": dict(config.constraints),
             "version": config.version,
             "created_at": (config.created_at.isoformat() if config.created_at else None),
             "updated_at": (config.updated_at.isoformat() if config.updated_at else None),
-            "metadata": config.metadata,
+            "metadata": dict(config.metadata),
         }
 
     def _deserialize_agent(self, doc: dict[str, Any]) -> AgentConfig:
@@ -1303,12 +1289,12 @@ class ElasticsearchConfigStorage(IConfigStore):
             "id": config.id,
             "project_id": config.project_id,
             "name": config.name,
-            "stages": config.stages,
-            "triggers": config.triggers,
+            "stages": [dict(s) for s in config.stages],
+            "triggers": list(config.triggers),
             "version": config.version,
             "created_at": (config.created_at.isoformat() if config.created_at else None),
             "updated_at": (config.updated_at.isoformat() if config.updated_at else None),
-            "metadata": config.metadata,
+            "metadata": dict(config.metadata),
         }
 
     def _deserialize_pipeline(self, doc: dict[str, Any]) -> PipelineConfig:
@@ -1331,11 +1317,11 @@ class ElasticsearchConfigStorage(IConfigStore):
             "id": template.id,
             "name": template.name,
             "description": template.description,
-            "stages": template.stages,
+            "stages": [dict(s) for s in template.stages],
             "version": template.version,
             "created_at": (template.created_at.isoformat() if template.created_at else None),
             "updated_at": (template.updated_at.isoformat() if template.updated_at else None),
-            "metadata": template.metadata,
+            "metadata": dict(template.metadata),
         }
 
     def _deserialize_workflow(self, doc: dict[str, Any]) -> WorkflowTemplate:
