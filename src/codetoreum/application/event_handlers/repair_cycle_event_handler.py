@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from codetoreum.domain.events import DomainEvent, WorkItemColumnChanged
 from codetoreum.domain.repair_cycle_types import (
+    RepairCycleAgentConfig,
     RepairTestRunConfig,
     RepairTestType,
 )
@@ -35,6 +36,7 @@ class RepairCycleEventContext:
     agent_name: str
     max_total_agent_calls: int
     checkpoint_interval: int
+    agent_config: RepairCycleAgentConfig | None = None
 
 
 @event_handler("WorkItemColumnChanged")
@@ -182,6 +184,7 @@ class RepairCycleEventHandler(EventHandler):
                 agent_name="senior_software_engineer",
                 max_total_agent_calls=100,
                 checkpoint_interval=5,
+                agent_config=None,
             )
 
             # Execute repair cycle

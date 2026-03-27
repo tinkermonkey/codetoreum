@@ -549,6 +549,7 @@ class TestRepairCycleEventContext:
             agent_name="senior_software_engineer",
             max_total_agent_calls=100,
             checkpoint_interval=5,
+            agent_config=None,
         )
 
         assert context.stage_name == "Testing"
@@ -556,6 +557,7 @@ class TestRepairCycleEventContext:
         assert context.agent_name == "senior_software_engineer"
         assert context.max_total_agent_calls == 100
         assert context.checkpoint_interval == 5
+        assert context.agent_config is None
 
     def test_context_test_configs_are_tuple(self):
         """Test context test_configs is a tuple."""
@@ -570,6 +572,7 @@ class TestRepairCycleEventContext:
             agent_name="senior_software_engineer",
             max_total_agent_calls=100,
             checkpoint_interval=5,
+            agent_config=None,
         )
 
         assert context.test_configs == configs
