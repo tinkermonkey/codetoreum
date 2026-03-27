@@ -10,6 +10,7 @@ This module provides:
 import asyncio
 import logging
 import os
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -402,7 +403,10 @@ class AdapterResolver:
         - For synchronous repositories (e.g., InMemoryAgentRepository):
           Cache is pre-populated eagerly at resolve time by fetching all agents
         - For asynchronous repositories: Cache is populated on-demand when the
-          factory is called with an agent name
+          factory is called with an agent name, by running async calls via
+          asyncio.run(). This is safe when called from synchronous contexts
+          (before event loops are established), but will fail if the factory
+          is called from within an existing event loop.
 
         The factory uses duck-typing to detect if get_all() and get_by_name() are
         synchronous or asynchronous. This has inherent limitations: a sync wrapper
@@ -417,8 +421,8 @@ class AdapterResolver:
 
         Raises:
             KeyError: If agent_repository not yet resolved when factory is created
-            RuntimeError: If factory is called from sync code but repository methods
-                          are async (indicates architectural mismatch)
+            RuntimeError: If factory is called from within an existing event loop
+                          and repository methods are async
             ResourceNotFoundError: If factory is called with unknown agent name
         """
         # Guard check: agent_repository must be resolved before we create the factory
@@ -428,6 +432,7 @@ class AdapterResolver:
 
         # Pre-populate cache at resolve time (synchronously)
         llm_provider_cache: dict[str, ILLMProvider] = {}
+        llm_provider_cache_lock = threading.Lock()
 
         # For simulation adapters, agent_repo is synchronous (InMemoryAgentRepository).
         # For production, agent_repo may have async methods. Since resolve_repair_cycle()
@@ -455,8 +460,9 @@ class AdapterResolver:
                     if not asyncio.iscoroutinefunction(agent_repo.get_all):
                         # Sync version - safe to call directly
                         agents = agent_repo.get_all()
-                        for agent in agents:
-                            llm_provider_cache[agent.name] = self._build_llm_provider(agent)
+                        with llm_provider_cache_lock:
+                            for agent in agents:
+                                llm_provider_cache[agent.name] = self._build_llm_provider(agent)
                     else:
                         # Async version - cannot call from here, defer to on-demand
                         logger.debug(
@@ -486,8 +492,10 @@ class AdapterResolver:
         def factory(agent_name: str) -> ILLMProvider:
             """Factory function that looks up an agent's LLM provider.
 
-            Implements dual-path resolution: checks cache first, then falls back
-            to on-demand fetching from the repository for unknown agents.
+            Implements dual-path resolution: checks cache first (with thread-safe
+            locking), then falls back to on-demand fetching from the repository
+            for unknown agents. Handles both sync and async repository implementations
+            by running async calls via asyncio.run().
 
             Args:
                 agent_name: Name of the agent to look up
@@ -496,43 +504,58 @@ class AdapterResolver:
                 ILLMProvider configured for the agent
 
             Raises:
-                RuntimeError: If agent_repo.get_by_name is async but factory
-                              is called from sync context
-                ResourceNotFoundError: If agent with given name not found in
-                                       repository
+                RuntimeError: If agent_repo.get_by_name is async and factory is called
+                              from within an existing event loop (asyncio.run() limitation)
+                ResourceNotFoundError: If agent with given name not found in repository
             """
-            # Check cache first
-            if agent_name in llm_provider_cache:
-                return llm_provider_cache[agent_name]
+            # Check cache first (thread-safe)
+            with llm_provider_cache_lock:
+                if agent_name in llm_provider_cache:
+                    return llm_provider_cache[agent_name]
 
             # On-demand population: try to fetch the agent and build its provider
             try:
+                agent = None
+
                 # Check if get_by_name is async
                 if asyncio.iscoroutinefunction(agent_repo.get_by_name):
-                    # Async repository in sync context is an architectural error
-                    logger.error(
-                        f"Agent repository get_by_name is async but factory called from sync context: {agent_name}",
-                        extra={
-                            "agent_name": agent_name,
-                            "repo_type": type(agent_repo).__name__,
-                            "error_id": "ERR_ASYNC_REPO_SYNC_CONTEXT",
-                        },
-                    )
-                    raise RuntimeError(
-                        f"Cannot resolve agent '{agent_name}': agent repository requires async context "
-                        f"but factory is called from synchronous code. This is an architectural mismatch. "
-                        f"Ensure factory is called from async context or use a synchronous repository implementation."
-                    )
-
-                # Sync call - safe to make
-                agent = agent_repo.get_by_name(agent_name)
+                    # Async repository: run the coroutine in a new event loop
+                    # using asyncio.run(). This is safe because the factory is
+                    # created synchronously during adapter resolution, before any
+                    # event loop has been established for the application.
+                    try:
+                        agent = asyncio.run(agent_repo.get_by_name(agent_name))
+                    except RuntimeError as e:
+                        # asyncio.run() fails if called from within an existing event loop
+                        # This indicates a caller error: async factory user should use
+                        # async context or pre-populate the cache
+                        logger.error(
+                            f"Cannot resolve agent '{agent_name}': asyncio.run() failed, "
+                            f"likely due to existing event loop in thread. Agent repository "
+                            f"get_by_name() is async but factory was called from within an async context.",
+                            extra={
+                                "agent_name": agent_name,
+                                "repo_type": type(agent_repo).__name__,
+                                "error_id": "ERR_ASYNC_IN_ASYNC_CONTEXT",
+                            },
+                            exc_info=True,
+                        )
+                        raise RuntimeError(
+                            f"Cannot resolve agent '{agent_name}': asyncio.run() cannot be called "
+                            f"from within an existing event loop. Ensure agents are pre-populated in cache "
+                            f"or call factory from synchronous context."
+                        ) from e
+                else:
+                    # Sync call - safe to make directly
+                    agent = agent_repo.get_by_name(agent_name)
 
                 if agent is None:
                     raise ResourceNotFoundError("Agent", agent_name)
 
-                # Build and cache the provider
+                # Build and cache the provider (thread-safe)
                 provider = self._build_llm_provider(agent)
-                llm_provider_cache[agent_name] = provider
+                with llm_provider_cache_lock:
+                    llm_provider_cache[agent_name] = provider
                 return provider
 
             except (KeyError, AttributeError, ResourceNotFoundError) as e:

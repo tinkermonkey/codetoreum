@@ -1005,10 +1005,18 @@ class TestAgentLLMFactory:
         provider = llm_factory("test_agent")
         assert provider is not None
 
-    def test_agent_llm_factory_raises_runtime_error_for_async_repo_in_sync_context(
+    def test_agent_llm_factory_supports_async_repo_via_asyncio_run(
         self, factory, dependencies, adapter_config
     ):
-        """Test that factory raises RuntimeError when async repo is used from sync context."""
+        """Test that factory correctly handles async repositories by using asyncio.run().
+
+        The factory can now handle both sync and async repositories. For async
+        repositories, it uses asyncio.run() to execute the coroutine from the
+        synchronous factory context. This is safe during adapter resolution
+        (before event loops are established).
+        """
+        from codetoreum.ports.exceptions import ResourceNotFoundError
+
         resolver = AdapterResolver(adapter_config, factory, dependencies)
 
         # Create a mock async repository
@@ -1017,6 +1025,7 @@ class TestAgentLLMFactory:
                 return []
 
             async def get_by_name(self, name: str):
+                # Return None for unknown agents (simulating not found)
                 return None
 
         async_repo = AsyncMockAgentRepository()
@@ -1025,13 +1034,13 @@ class TestAgentLLMFactory:
         # Create the factory
         llm_factory = resolver._create_agent_llm_factory()
 
-        # Calling factory with unknown agent should raise RuntimeError (not ResourceNotFoundError)
-        with pytest.raises(RuntimeError) as exc_info:
+        # Calling factory with unknown agent should raise ResourceNotFoundError
+        # (the async call is successfully executed via asyncio.run())
+        with pytest.raises(ResourceNotFoundError) as exc_info:
             llm_factory("unknown_agent")
 
-        error_msg = str(exc_info.value)
-        assert "async" in error_msg.lower()
-        assert "architectural mismatch" in error_msg.lower()
+        assert "Agent" in str(exc_info.value)
+        assert "unknown_agent" in str(exc_info.value)
 
     def test_agent_llm_factory_unknown_agent_raises_resource_not_found_error(
         self, factory, dependencies, adapter_config
