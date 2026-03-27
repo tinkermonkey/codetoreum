@@ -69,7 +69,8 @@ def _make_adapter(
     llm = AsyncMock()
     llm.execute.return_value = llm_response
     # Create factory that returns the same mock LLM for any agent name
-    llm_factory = lambda agent_name: llm
+    def llm_factory(agent_name):
+        return llm
     config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
     adapter = ProductionRepairCycleAdapter(
         llm_factory=llm_factory,
