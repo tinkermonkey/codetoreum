@@ -290,6 +290,30 @@ class TestRepairCycleTestExecutionCompletedEvent:
         assert len(event.failures) == 2
         assert event.failures[0].file == "test_auth.py"
 
+    def test_empty_agent_name(self):
+        """Test that agent_name is required."""
+        failure = RepairTestFailure(
+            file="test_auth.py",
+            test="test_login",
+            message="AssertionError: expected True",
+        )
+        with pytest.raises(ValueError, match="agent_name"):
+            RepairCycleTestExecutionCompletedEvent(
+                type="repair_cycle.test_execution_completed",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                test_type=RepairTestType.UNIT,
+                test_type_index=1,
+                test_cycle_iteration=1,
+                passed=5,
+                failed=1,
+                warnings=0,
+                has_failures=True,
+                failures=(failure,),
+                agent_name="",  # Invalid
+                workflow_run_id="run-123",
+            )
+
 
 class TestRepairCycleFixCycleStartedEvent:
     """Test RepairCycleFixCycleStartedEvent."""
@@ -361,6 +385,20 @@ class TestRepairCycleFileFixStartedEvent:
                 workflow_run_id="run-123",
             )
 
+    def test_empty_agent_name(self):
+        """Test that agent_name is required."""
+        with pytest.raises(ValueError, match="agent_name"):
+            RepairCycleFileFixStartedEvent(
+                type="repair_cycle.file_fix_started",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                test_file="auth.py",
+                failure_count=2,
+                test_type=RepairTestType.UNIT,
+                agent_name="",  # Invalid
+                workflow_run_id="run-123",
+            )
+
 
 class TestRepairCycleFileFixCompletedEvent:
     """Test RepairCycleFileFixCompletedEvent."""
@@ -382,6 +420,21 @@ class TestRepairCycleFileFixCompletedEvent:
 
         assert event.test_file == "auth.py"
         assert event.success is True
+
+    def test_empty_agent_name(self):
+        """Test that agent_name is required."""
+        with pytest.raises(ValueError, match="agent_name"):
+            RepairCycleFileFixCompletedEvent(
+                type="repair_cycle.file_fix_completed",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                test_file="auth.py",
+                failure_count=2,
+                test_type=RepairTestType.UNIT,
+                success=True,
+                agent_name="",  # Invalid
+                workflow_run_id="run-123",
+            )
 
 
 class TestRepairCycleWarningReviewStartedEvent:
@@ -421,6 +474,25 @@ class TestRepairCycleWarningReviewStartedEvent:
                 warning_count=1,
                 test_type=RepairTestType.UNIT,
                 warnings=(),
+            )
+
+    def test_empty_agent_name(self):
+        """Test that agent_name is required."""
+        warning = RepairTestWarning(
+            file="auth.py",
+            message="DeprecationWarning: use new_function instead",
+        )
+        with pytest.raises(ValueError, match="agent_name"):
+            RepairCycleWarningReviewStartedEvent(
+                type="repair_cycle.warning_review_started",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                source_file="auth.py",
+                warning_count=1,
+                test_type=RepairTestType.UNIT,
+                warnings=(warning,),
+                agent_name="",  # Invalid
+                workflow_run_id="test-run-123",
             )
 
     def test_serialization_with_warnings(self):
@@ -467,6 +539,21 @@ class TestRepairCycleWarningReviewCompletedEvent:
 
         assert event.source_file == "auth.py"
         assert event.success is True
+
+    def test_empty_agent_name(self):
+        """Test that agent_name is required."""
+        with pytest.raises(ValueError, match="agent_name"):
+            RepairCycleWarningReviewCompletedEvent(
+                type="repair_cycle.warning_review_completed",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                source_file="auth.py",
+                warning_count=1,
+                test_type=RepairTestType.UNIT,
+                success=True,
+                agent_name="",  # Invalid
+                workflow_run_id="test-run-123",
+            )
 
 
 class TestRepairCycleTestCycleCompletedEvent:
