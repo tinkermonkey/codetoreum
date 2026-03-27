@@ -28,15 +28,14 @@ import asyncio
 import json
 import logging
 import re
-from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from codetoreum.infrastructure.resilience.interfaces import ICircuitBreaker
-    from codetoreum.ports.output.agent_repository import IAgentRepository
-    from codetoreum.ports.output.llm_provider import ILLMProvider
+    from codetoreum.ports.output.event_emitter import IEventEmitter
+    from codetoreum.ports.output.llm_provider import AgentLLMFactory, ILLMProvider
 
 from codetoreum.domain.events.repair_cycle_events import (
     RepairCycleCheckpointFailedEvent,
@@ -63,6 +62,7 @@ from codetoreum.domain.repair_cycle_types import (
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.resilience.exceptions import CircuitBreakerOpenError
+from codetoreum.ports.output.llm_provider import AgentLLMFactory
 from codetoreum.ports.output.repair_cycle_checkpoint_store import (
     IRepairCycleCheckpointStore,
 )
@@ -101,10 +101,23 @@ class RepairCycleConfig:
 
 
 class NullEventEmitter:
-    """Null-object pattern for optional event emission."""
+    """Null-object pattern for optional event emission.
 
-    def emit(self, event: Any) -> None:
-        """No-op emit."""
+    Implements a no-op event emitter for use when event emission is not required.
+    All methods are silent, allowing the repair cycle to run without event infrastructure.
+    """
+
+    def emit(self, event: object) -> None:
+        """No-op emit - silently discards all events."""
+
+    def on(self, event_type: str, handler: object) -> None:
+        """No-op subscription - no handlers are registered."""
+
+    def off(self, event_type: str, handler: object) -> None:
+        """No-op unsubscription - no handlers to unregister."""
+
+    def once(self, event_type: str, handler: object) -> None:
+        """No-op single subscription - no handlers are registered."""
 
 
 class ProductionRepairCycleAdapter(IRepairCycle):
@@ -127,25 +140,22 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
     def __init__(
         self,
-        llm_factory: Callable[[str], ILLMProvider],
-        agent_repository: IAgentRepository | None = None,
-        config: RepairCycleConfig = None,
-        event_emitter: Any = None,
-        checkpoint_store: IRepairCycleCheckpointStore = None,
+        llm_factory: AgentLLMFactory,
+        config: RepairCycleConfig | None = None,
+        event_emitter: IEventEmitter | None = None,
+        checkpoint_store: IRepairCycleCheckpointStore | None = None,
         circuit_breaker: ICircuitBreaker | None = None,
     ) -> None:
         """Initialize production repair cycle adapter.
 
         Args:
-            llm_factory: Callable that takes agent name and returns ILLMProvider
-            agent_repository: Optional agent repository for agent validation
+            llm_factory: Factory callable that takes agent name and returns configured ILLMProvider
             config: Optional RepairCycleConfig (uses defaults if not provided)
             event_emitter: Optional event emitter (uses null-object if not provided)
             checkpoint_store: Optional checkpoint store for resumable repairs
             circuit_breaker: Optional circuit breaker for LLM call protection
         """
         self._llm_factory = llm_factory
-        self._agent_repository = agent_repository
         self.config = config or RepairCycleConfig()
         self.event_emitter = event_emitter or NullEventEmitter()
         self.checkpoint_store = checkpoint_store
