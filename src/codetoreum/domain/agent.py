@@ -79,21 +79,21 @@ class Agent:
     max_tokens: int = 4096  # Maximum tokens for LLM responses
     system_prompt: str = ""  # System prompt for the agent
 
-    # Constraints
-    requires_docker: bool = True
-    requires_dev_container: bool = False
-    makes_code_changes: bool = False
-    filesystem_write_allowed: bool = True
+    # Constraints (NO DEFAULTS - Required fields)
+    requires_docker: bool
+    requires_dev_container: bool
+    makes_code_changes: bool
+    filesystem_write_allowed: bool
 
-    # MCP servers
-    mcp_servers: list[str] = field(default_factory=list)
+    # MCP servers (NO DEFAULT - Required field)
+    mcp_servers: list[str]
 
-    # Metadata
-    metadata: dict[str, Any] = field(default_factory=dict)
+    # Metadata (NO DEFAULT - Required field)
+    metadata: dict[str, Any]
 
-    # Timestamps
-    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    # Timestamps (NO DEFAULTS - Required fields)
+    created_at: datetime
+    updated_at: datetime
 
     # Event tracking
     _events: list[DomainEvent] = field(default_factory=list, init=False, repr=False)

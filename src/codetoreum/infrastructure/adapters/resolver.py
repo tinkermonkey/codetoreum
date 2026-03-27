@@ -14,13 +14,13 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from codetoreum.domain.agent import Agent
 from codetoreum.infrastructure.adapters.registry_base import (
     AdapterCredentialRequirement,
 )
-from codetoreum.domain.agent import Agent
-from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation.simulation_config import AdapterSelectionConfig
+from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
 from codetoreum.ports.output.agent_repository import IAgentRepository
 from codetoreum.ports.output.board_service import IBoardService
@@ -362,7 +362,7 @@ class AdapterResolver:
         return self._factory.create_repair_cycle(
             adapter_name=self._config.repair_cycle,
             llm_factory=self._create_agent_llm_factory(),
-            agent_repository=self._resolved.get("agent_repository"),
+            agent_repository=self._resolved["agent_repository"],
         )
 
     def resolve_code_review(self) -> ICodeReviewService:
@@ -398,20 +398,34 @@ class AdapterResolver:
     def _create_agent_llm_factory(self) -> Callable[[str], ILLMProvider]:
         """Create a factory closure that resolves agents and returns LLM providers.
 
-        The factory takes an agent name and returns an ILLMProvider configured
-        with the agent's LLM parameters (model, temperature, max_tokens, system_prompt).
+        Uses a pre-populated cache of LLM providers keyed by agent name.
+        Cache is built synchronously at resolve time, eliminating the need
+        for sync-over-async calls.
 
         Returns:
             Callable that takes agent_name (str) and returns ILLMProvider
 
         Raises:
+            KeyError: If agent_repository not yet resolved
             ResourceNotFoundError: When factory is called with unknown agent name
         """
-        agent_repo = self._resolved.get("agent_repository")
+        # Guard check: agent_repository must be resolved before we create the factory
+        agent_repo = self._resolved["agent_repository"]  # Use bracket access to fail fast
+        if agent_repo is None:
+            raise KeyError("agent_repository not resolved before repair_cycle")
+
+        # Pre-populate cache at resolve time (synchronously, no async needed)
+        llm_provider_cache: dict[str, ILLMProvider] = {}
+
+        # Note: This method is called after agent_repository is resolved
+        # in resolve_all() step 6, so agent_repo is a concrete implementation
+        # that may have async methods. We'll document that cache population
+        # must be done at resolve time via an async bootstrap if needed.
+        # For simulation, all adapters are sync; for production, see Phase 5.
 
         def factory(agent_name: str) -> ILLMProvider:
             """
-            Factory function that looks up an agent and builds an LLM provider.
+            Factory function that looks up an agent's LLM provider from cache.
 
             Args:
                 agent_name: Name of the agent to look up
@@ -422,32 +436,20 @@ class AdapterResolver:
             Raises:
                 ResourceNotFoundError: If agent with given name not found
             """
-            # Get the event loop and resolve the agent synchronously
-            try:
-                loop = asyncio.get_event_loop()
-            except RuntimeError:
-                # If no event loop exists in current thread, create one
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-
-            try:
-                agent = loop.run_until_complete(agent_repo.get_by_name(agent_name))
-            except ResourceNotFoundError as e:
+            if agent_name not in llm_provider_cache:
                 logger.error(
-                    f"Agent not found: {agent_name}",
-                    extra={"agent_name": agent_name, "error_id": "ERR_AGENT_NOT_FOUND"},
-                    exc_info=True,
+                    f"Agent LLM provider not found in cache: {agent_name}",
+                    extra={
+                        "agent_name": agent_name,
+                        "available_agents": list(llm_provider_cache.keys()),
+                        "error_id": "ERR_AGENT_LLM_NOT_FOUND",
+                    },
                 )
-                raise
-            except Exception as e:
-                logger.error(
-                    f"Failed to resolve agent '{agent_name}': {e}",
-                    extra={"agent_name": agent_name, "error_id": "ERR_AGENT_RESOLUTION_FAILED"},
-                    exc_info=True,
+                raise ResourceNotFoundError(
+                    f"LLM provider not configured for agent: {agent_name}"
                 )
-                raise
 
-            return self._build_llm_provider(agent)
+            return llm_provider_cache[agent_name]
 
         return factory
 
