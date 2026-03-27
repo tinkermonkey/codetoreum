@@ -31,9 +31,10 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from codetoreum.domain.events.adapter_events import CodetoreumEvent
     from codetoreum.infrastructure.resilience.interfaces import ICircuitBreaker
     from codetoreum.ports.output.event_emitter import IEventEmitter
     from codetoreum.ports.output.llm_provider import AgentLLMFactory, ILLMProvider
@@ -107,7 +108,7 @@ class NullEventEmitter:
     All methods are silent, allowing the repair cycle to run without event infrastructure.
     """
 
-    def emit(self, event: "CodetoreumEvent") -> None:
+    def emit(self, event: CodetoreumEvent) -> None:
         """No-op emit - silently discards all events."""
 
     def on(self, event_type: str, handler: Callable) -> None:
