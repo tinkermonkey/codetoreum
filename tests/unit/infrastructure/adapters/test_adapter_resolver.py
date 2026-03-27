@@ -951,10 +951,11 @@ class TestAgentLLMFactory:
         resolver = AdapterResolver(adapter_config, factory, dependencies)
 
         # Create a mock SYNC repository (for testing the sync code path)
-        from codetoreum.domain.agent import Agent, AgentType, AgentCapability
-        from datetime import datetime, UTC
-        from codetoreum.ports.output.agent_repository import IAgentRepository
+        from datetime import UTC, datetime
+
+        from codetoreum.domain.agent import Agent, AgentCapability, AgentType
         from codetoreum.ports.exceptions import ResourceNotFoundError
+        from codetoreum.ports.output.agent_repository import IAgentRepository
 
         now = datetime.now(UTC)
         mock_agent = Agent(
@@ -1074,9 +1075,10 @@ class TestAgentLLMFactory:
         """Test that factory correctly uses agent LLM configuration."""
         resolver = AdapterResolver(adapter_config, factory, dependencies)
 
-        from codetoreum.domain.agent import Agent, AgentType, AgentCapability
+        from datetime import UTC, datetime
+
+        from codetoreum.domain.agent import Agent, AgentCapability, AgentType
         from codetoreum.ports.exceptions import ResourceNotFoundError
-        from datetime import datetime, UTC
 
         # Create agent with specific LLM configuration
         now = datetime.now(UTC)
