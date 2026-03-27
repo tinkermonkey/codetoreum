@@ -1490,17 +1490,20 @@ class SimulationDataSeeder:
             del self._config_store.agents[placeholder_project_id]
 
         # Migrate board templates
-        if hasattr(self.adapters.workflow_config, "_templates"):
-            templates_to_migrate = []
-            for template_id, template in list(self.adapters.workflow_config._templates.items()):
-                if template.project_id == placeholder_project_id:
-                    templates_to_migrate.append((template_id, template))
+        # List all templates for the placeholder project
+        placeholder_templates = await self.adapters.workflow_config.list_board_workflow_templates(
+            placeholder_project_id
+        )
 
-            for template_id, template in templates_to_migrate:
-                # Create new template with updated project_id
-                new_template = replace(template, project_id=new_project_id)
-                self.adapters.workflow_config._templates[template_id] = new_template
-                logger.info(f"Migrated board template '{template_id}' to project {new_project_id}")
+        for template in placeholder_templates:
+            # Create new template with updated project_id
+            new_template = replace(template, project_id=new_project_id)
+            # Save the new template
+            await self.adapters.workflow_config.save_board_workflow_template(new_template)
+            logger.info(f"Migrated board template '{template.board_id}' to project {new_project_id}")
+
+            # Delete the old template
+            await self.adapters.workflow_config.delete_board_workflow_template(template.board_id)
 
     async def _seed_legacy_scenario(self, scenario: ScenarioModel) -> None:
         """Seed a legacy (flat) ScenarioModel — all data in one pass."""
