@@ -12,11 +12,13 @@ Verifies that the dev_environment_repair scenario:
    - env_verification: qa_engineer (verifies environment health)
 """
 
+import asyncio
 from pathlib import Path
 from typing import cast
 
 import pytest
 
+from codetoreum.domain.events import WorkItemColumnChanged
 from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationAdapters,
     SimulationApplicationBootstrap,
@@ -116,3 +118,55 @@ async def test_dev_environment_repair_all_agents_exist(
     assert required_agents.issubset(set(agent_names)), (
         f"Expected agents {required_agents}, got {set(agent_names)}"
     )
+
+
+@pytest.mark.asyncio
+async def test_dev_environment_repair_end_to_end_agent_dispatch(
+    simulation_bootstrap: SimulationApplicationBootstrap,
+    simulation_seeder: SimulationDataSeeder,
+) -> None:
+    """End-to-end test: Verify repair cycle dispatches correct agents for each sub-task.
+
+    This test exercises the full flow:
+    1. Seed the dev_environment_repair scenario with repair_cycle_agents configured
+    2. Publish a WorkItemColumnChanged event to move item to Testing column
+    3. Let the event handler invoke the repair cycle with agent assignments from column template
+    4. Verify the mock adapter recorded the correct agent selections
+    """
+    # Seed the dev_environment_repair scenario
+    scenarios_dir = Path(__file__).parent.parent.parent / "scenarios" / "dev_environment_repair"
+    await simulation_seeder.seed_from_yaml(file_path=scenarios_dir)
+
+    adapters = cast("SimulationAdapters", simulation_bootstrap.adapters)
+
+    # Publish a WorkItemColumnChanged event for an item entering Testing column
+    event = WorkItemColumnChanged(
+        aggregate_id="work-item-dev-1",
+        payload={
+            "work_item_id": "work-item-dev-1",
+            "board_id": "dev-board-1",
+            "project_id": "test-project",
+            "from_column": "Backlog",
+            "to_column": "Testing",
+            "moved_by": "system",
+        },
+    )
+
+    # Publish event through the event bus
+    event_bus = simulation_bootstrap.infrastructure.event_bus
+    await event_bus.publish(event)
+
+    # Allow async processing to complete
+    await asyncio.sleep(0.5)
+
+    # Verify the mock repair cycle adapter recorded agent assignments
+    # These assertions use the mock adapter methods specified in acceptance criteria
+    repair_cycle_adapter = adapters.repair_cycle
+
+    # The assert_subtask_used_agent method raises AssertionError if check fails
+    repair_cycle_adapter.assert_subtask_used_agent("test_execution", "qa_engineer")
+    repair_cycle_adapter.assert_subtask_used_agent("code_fix", "senior_software_engineer")
+    repair_cycle_adapter.assert_subtask_used_agent("env_rebuild", "devops_engineer")
+    repair_cycle_adapter.assert_subtask_used_agent("systemic_analysis", "senior_software_engineer")
+    repair_cycle_adapter.assert_subtask_used_agent("systemic_fix", "senior_software_engineer")
+    repair_cycle_adapter.assert_subtask_used_agent("env_verification", "qa_engineer")
