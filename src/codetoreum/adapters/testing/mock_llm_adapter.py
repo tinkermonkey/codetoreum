@@ -78,7 +78,8 @@ class MockLLMAdapter(ILLMProvider):
             clock: Optional SimulationClock for time manipulation
 
         Raises:
-            ValidationError: If invalid parameters or values are provided
+            ValidationError: If invalid parameter values are provided (e.g., negative delay_seconds).
+                Unknown keyword arguments raise TypeError from Python itself.
         """
         if delay_seconds < 0:
             msg = "Delay seconds cannot be negative"

@@ -23,6 +23,7 @@ from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 
 if TYPE_CHECKING:
     from codetoreum.ports.output.llm_provider import ILLMProvider
+
 from codetoreum.domain.events.repair_cycle_events import (
     RepairCycleCheckpointFailedEvent,
     RepairCycleCompletedEvent,
@@ -1547,7 +1548,8 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             else context.agent_name
         )
 
-        # If llm_factory is provided, call it to match production adapter behavior
+        # If llm_factory is provided, call it to match production adapter behavior.
+        # Result is intentionally not used - we validate factory execution but don't need the provider.
         if self._llm_factory:
             self._llm_factory(agent_name)
 
