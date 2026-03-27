@@ -14,11 +14,11 @@ from pydantic import ValidationError
 
 from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig
 from codetoreum.infrastructure.simulation.scenario_models import (
+    OrchestratorConfigModel,
     RepairCycleAgentConfigModel,
     ScenarioAgentModel,
     ScenarioBoardPolicyModel,
     ScenarioColumnConfig,
-    OrchestratorConfigModel,
 )
 
 

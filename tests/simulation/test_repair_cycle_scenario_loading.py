@@ -43,7 +43,7 @@ class TestRepairCycleScenarioLoading:
         """Verify all required orchestrator YAML files exist."""
         scenarios_dir = self._get_scenarios_dir()
         orch_dir = scenarios_dir / "repair_cycle_test" / "orchestrator"
-        assert orch_dir.is_dir(), f"orchestrator/ directory not found"
+        assert orch_dir.is_dir(), "orchestrator/ directory not found"
         assert (orch_dir / "simulation.yaml").is_file(), "simulation.yaml missing"
         assert (orch_dir / "agents.yaml").is_file(), "agents.yaml missing"
         assert (orch_dir / "workflows.yaml").is_file(), "workflows.yaml missing"
