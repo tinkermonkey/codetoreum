@@ -247,6 +247,9 @@ class RepairCycleTestExecutionCompletedEvent(CodetoreumEvent):
         if self.warnings < 0:
             msg = "warnings must be >= 0"
             raise ValueError(msg)
+        if not self.agent_name:
+            msg = "agent_name is required"
+            raise ValueError(msg)
         if not self.workflow_run_id:
             msg = "workflow_run_id is required"
             raise ValueError(msg)
@@ -453,6 +456,9 @@ class RepairCycleFileFixStartedEvent(CodetoreumEvent):
         if self.failure_count < 1:
             msg = "failure_count must be >= 1"
             raise ValueError(msg)
+        if not self.agent_name:
+            msg = "agent_name is required"
+            raise ValueError(msg)
         if not self.workflow_run_id:
             msg = "workflow_run_id is required"
             raise ValueError(msg)
@@ -538,6 +544,9 @@ class RepairCycleFileFixCompletedEvent(CodetoreumEvent):
             raise ValueError(msg)
         if self.failure_count < 1:
             msg = "failure_count must be >= 1"
+            raise ValueError(msg)
+        if not self.agent_name:
+            msg = "agent_name is required"
             raise ValueError(msg)
         if not self.workflow_run_id:
             msg = "workflow_run_id is required"
@@ -626,6 +635,9 @@ class RepairCycleWarningReviewStartedEvent(CodetoreumEvent):
             raise ValueError(msg)
         if self.warning_count < 1:
             msg = "warning_count must be >= 1"
+            raise ValueError(msg)
+        if not self.agent_name:
+            msg = "agent_name is required"
             raise ValueError(msg)
         if not self.workflow_run_id:
             msg = "workflow_run_id is required"
@@ -721,6 +733,9 @@ class RepairCycleWarningReviewCompletedEvent(CodetoreumEvent):
             raise ValueError(msg)
         if self.warning_count < 1:
             msg = "warning_count must be >= 1"
+            raise ValueError(msg)
+        if not self.agent_name:
+            msg = "agent_name is required"
             raise ValueError(msg)
         if not self.workflow_run_id:
             msg = "workflow_run_id is required"

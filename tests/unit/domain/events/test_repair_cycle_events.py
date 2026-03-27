@@ -217,6 +217,7 @@ class TestRepairCycleTestExecutionCompletedEvent:
             warnings=1,
             has_failures=True,
             failures=(failure1, failure2),
+            agent_name="test-executor",
             workflow_run_id="run-123",
         )
 
@@ -245,6 +246,7 @@ class TestRepairCycleTestExecutionCompletedEvent:
             warnings=0,
             has_failures=True,
             failures=(failure,),
+            agent_name="test-executor",
             workflow_run_id="run-123",
         )
 
@@ -279,6 +281,7 @@ class TestRepairCycleTestExecutionCompletedEvent:
                     "message": "KeyError",
                 },
             ],
+            "agent_name": "test-executor",
             "workflow_run_id": "run-123",
         }
 
@@ -338,6 +341,7 @@ class TestRepairCycleFileFixStartedEvent:
             test_file="auth.py",
             failure_count=2,
             test_type=RepairTestType.UNIT,
+            agent_name="code-fixer",
             workflow_run_id="run-123",
         )
 
@@ -372,6 +376,7 @@ class TestRepairCycleFileFixCompletedEvent:
             failure_count=2,
             test_type=RepairTestType.UNIT,
             success=True,
+            agent_name="code-fixer",
             workflow_run_id="run-123",
         )
 
@@ -397,6 +402,7 @@ class TestRepairCycleWarningReviewStartedEvent:
             warning_count=1,
             test_type=RepairTestType.UNIT,
             warnings=(warning,),
+            agent_name="code-reviewer",
             workflow_run_id="test-run-123",
         )
 
@@ -432,6 +438,7 @@ class TestRepairCycleWarningReviewStartedEvent:
             warning_count=1,
             test_type=RepairTestType.UNIT,
             warnings=(warning,),
+            agent_name="code-reviewer",
             workflow_run_id="test-run-123",
         )
 
@@ -454,6 +461,7 @@ class TestRepairCycleWarningReviewCompletedEvent:
             warning_count=1,
             test_type=RepairTestType.UNIT,
             success=True,
+            agent_name="code-reviewer",
             workflow_run_id="test-run-123",
         )
 
@@ -664,6 +672,7 @@ class TestRepairCycleEventsImmutability:
             test_file="auth.py",
             failure_count=1,
             test_type=RepairTestType.UNIT,
+            agent_name="code-fixer",
             workflow_run_id="run-123",
         )
 
@@ -722,6 +731,7 @@ class TestRepairCycleEventsSerialization:
             failure_count=3,
             test_type=RepairTestType.E2E,
             success=False,
+            agent_name="code-fixer",
             workflow_run_id="run-789",
         )
 
