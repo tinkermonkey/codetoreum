@@ -61,7 +61,6 @@ class MockLLMAdapter(ILLMProvider):
         max_output_tokens: int = 4096,
         config: "SimulationConfig | None" = None,
         clock: "SimulationClock | None" = None,
-        **kwargs,  # Accept and ignore additional parameters from agent configuration
     ):
         """
         Initialize the mock LLM adapter.
@@ -77,8 +76,9 @@ class MockLLMAdapter(ILLMProvider):
             max_output_tokens: Maximum output tokens
             config: Optional SimulationConfig for fidelity-based timing
             clock: Optional SimulationClock for time manipulation
-            **kwargs: Additional parameters (e.g., model, temperature, max_tokens,
-                      system_prompt from agent configuration) - ignored for mock adapter
+
+        Raises:
+            ValidationError: If invalid parameters or values are provided
         """
         if delay_seconds < 0:
             msg = "Delay seconds cannot be negative"

@@ -15,10 +15,14 @@ The mock adapter:
 
 import logging
 import threading
+from collections.abc import Callable
 from datetime import timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
+
+if TYPE_CHECKING:
+    from codetoreum.ports.output.llm_provider import ILLMProvider
 from codetoreum.domain.events.repair_cycle_events import (
     RepairCycleCheckpointFailedEvent,
     RepairCycleCompletedEvent,
@@ -104,6 +108,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         clock: SimulationClock | None = None,
         checkpoint_store: IRepairCycleCheckpointStore | None = None,
         container_adapter: "Any | None" = None,
+        llm_factory: "Callable[[str], ILLMProvider] | None" = None,
     ) -> None:
         """Initialize the repair cycle adapter with SimulationClock.
 
@@ -114,11 +119,15 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                              If provided, the adapter will use actual container test results
                              instead of pre-configured sequences. This enables integration
                              between test execution and repair cycle decisions.
+            llm_factory: Optional factory for creating LLM providers for agents. Takes agent name
+                        and returns an ILLMProvider instance. Enables behavioral parity with
+                        production adapter's agent selection and LLM instantiation.
         """
         super().__init__()
         self._clock = clock or SimulationClock()
         self._checkpoint_store = checkpoint_store
         self._container_adapter = container_adapter
+        self._llm_factory = llm_factory
         self._current_project: str | None = None
         self._repair_state: dict[str, Any] = {}
         self._test_type_index: dict[str, int] = {}
@@ -662,7 +671,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             RepairTestResult with pass/fail counts and failure details
         """
         # Resolve and record which agent is executing this sub-task
-        self._resolve_and_record_agent("test_execution", context)
+        agent_name = self._resolve_and_record_agent("test_execution", context)
 
         self.agent_call_count += 1
         self.total_agent_calls += 1
@@ -732,6 +741,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                     warnings=result.warnings,
                     has_failures=(result.failed > 0),
                     failures=result.failures,
+                    agent_name=agent_name,
                     workflow_run_id=context.workflow_run_id,
                 )
             )
@@ -760,7 +770,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
         for file_path, failures in grouped_failures.items():
             # Resolve and record which agent is executing this sub-task
-            self._resolve_and_record_agent("code_fix", context)
+            agent_name = self._resolve_and_record_agent("code_fix", context)
 
             self.agent_call_count += 1
             self.total_agent_calls += 1
@@ -775,6 +785,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                         test_file=file_path,
                         failure_count=len(failures),
                         test_type=config.test_type,
+                        agent_name=agent_name,
                         workflow_run_id=context.workflow_run_id,
                     )
                 )
@@ -787,6 +798,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                         test_file=file_path,
                         failure_count=len(failures),
                         test_type=config.test_type,
+                        agent_name=agent_name,
                         success=True,
                         workflow_run_id=context.workflow_run_id,
                     )
@@ -821,7 +833,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
         for warning in test_result.warning_list:
             # Resolve and record which agent is executing this sub-task
-            self._resolve_and_record_agent("code_fix", context)
+            agent_name = self._resolve_and_record_agent("code_fix", context)
 
             self.agent_call_count += 1
             self.total_agent_calls += 1
@@ -837,6 +849,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                         warning_count=1,
                         test_type=config.test_type,
                         warnings=(warning,),
+                        agent_name=agent_name,
                         workflow_run_id=context.workflow_run_id,
                     )
                 )
@@ -849,6 +862,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                         source_file=warning.file,
                         warning_count=1,
                         test_type=config.test_type,
+                        agent_name=agent_name,
                         success=True,
                         workflow_run_id=context.workflow_run_id,
                     )
@@ -1516,8 +1530,9 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         """Resolve agent for a sub-task and record the selection.
 
         Resolves the agent name based on agent_config if available, otherwise
-        uses the default context agent name. Records the selection in the
-        subtask agent calls log for later assertion.
+        uses the default context agent name. If llm_factory is configured,
+        instantiates the LLM provider for behavioral parity with production adapter.
+        Records the selection in the subtask agent calls log for later assertion.
 
         Args:
             sub_task: The sub-task name (e.g., "test_execution", "code_fix")
@@ -1531,6 +1546,10 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             if context.agent_config
             else context.agent_name
         )
+
+        # If llm_factory is provided, call it to match production adapter behavior
+        if self._llm_factory:
+            self._llm_factory(agent_name)
 
         with self._lock:
             self._subtask_agent_calls.append(
