@@ -32,7 +32,6 @@ function AgentExecutionView() {
   const [pipelineRunId, setPipelineRunId] = useState(null)
   const [pipelineExecutions, setPipelineExecutions] = useState([])
   const [autoAdvance, setAutoAdvance] = useState(true)
-  const [loadingExecutions, setLoadingExecutions] = useState(false)
 
   // Refs to prevent concurrent fetches and track state
   const isFetchingExecutionsRef = useRef(false)
@@ -80,7 +79,7 @@ function AgentExecutionView() {
   }, [executionId])
 
   // Fetch all executions in the pipeline run
-  const fetchPipelineExecutions = useCallback(async (runId, isInitialLoad = false) => {
+  const fetchPipelineExecutions = useCallback(async (runId) => {
     if (!runId) return
 
     // Guard against concurrent fetches
@@ -91,10 +90,6 @@ function AgentExecutionView() {
 
     try {
       isFetchingExecutionsRef.current = true
-      // Only show loading spinner on initial load, not on background refreshes
-      if (isInitialLoad) {
-        setLoadingExecutions(true)
-      }
       const response = await fetch(`/pipeline-run-events?workflow_run_id=${runId}`)
       const data = await response.json()
 
@@ -133,9 +128,6 @@ function AgentExecutionView() {
     } catch (err) {
       console.error('Error fetching pipeline executions:', err)
     } finally {
-      if (isInitialLoad) {
-        setLoadingExecutions(false)
-      }
       isFetchingExecutionsRef.current = false
     }
   }, [])
@@ -240,9 +232,9 @@ function AgentExecutionView() {
   }, [pipelineExecutions, executionId, navigate])
 
   // Merge API logs with live WebSocket updates and build agent state
-  const { executionEvents, agentState, mergedLogs } = useMemo(() => {
+  const { agentState, mergedLogs } = useMemo(() => {
     if (!executionData) {
-      return { executionEvents: [], agentState: {}, mergedLogs: [] }
+      return { agentState: {}, mergedLogs: [] }
     }
 
     const agent = executionData.agent
@@ -264,16 +256,6 @@ function AgentExecutionView() {
       mergedCount: logs.length,
       apiLogsCount: executionLogs.length,
       newLogsFromWebSocket: logs.length - executionLogs.length
-    })
-
-    // Filter events for this execution (for display purposes only, not for state)
-    const filteredEvents = allLogs.filter(event => {
-      if (event.agent !== agent) return false
-      const eventTimestamp = normalizeTimestamp(event.timestamp)
-      if (!eventTimestamp || !startTimestamp) return false
-      if (eventTimestamp < startTimestamp) return false
-      if (endTimestamp && eventTimestamp > endTimestamp) return false
-      return true
     })
 
     // Build agent state from merged logs (API + WebSocket)
@@ -379,7 +361,6 @@ function AgentExecutionView() {
     }
 
     return {
-      executionEvents: filteredEvents,
       agentState: {
         lastTodoWrite,
         lastTextMessage,
