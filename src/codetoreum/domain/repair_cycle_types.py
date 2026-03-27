@@ -470,9 +470,6 @@ class RepairCycleAgentConfig:
 
         Returns:
             The agent name to use for this sub-task
-
-        Raises:
-            AttributeError: If sub_task is not a valid field name on this class
         """
         agent = getattr(self, sub_task, None)
         return agent if agent is not None else default
