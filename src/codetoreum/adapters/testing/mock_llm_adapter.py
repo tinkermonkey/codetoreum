@@ -61,6 +61,9 @@ class MockLLMAdapter(ILLMProvider):
         max_output_tokens: int = 4096,
         config: "SimulationConfig | None" = None,
         clock: "SimulationClock | None" = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        system_prompt: str | None = None,
     ):
         """
         Initialize the mock LLM adapter.
@@ -76,6 +79,9 @@ class MockLLMAdapter(ILLMProvider):
             max_output_tokens: Maximum output tokens
             config: Optional SimulationConfig for fidelity-based timing
             clock: Optional SimulationClock for time manipulation
+            temperature: Agent-specific temperature override (unused in mock, stored for compatibility)
+            max_tokens: Agent-specific max tokens override (unused in mock, stored for compatibility)
+            system_prompt: Agent-specific system prompt (unused in mock, stored for compatibility)
 
         Raises:
             ValidationError: If invalid parameter values are provided (e.g., negative delay_seconds).
@@ -90,6 +96,11 @@ class MockLLMAdapter(ILLMProvider):
         self._simulate_rate_limits = simulate_rate_limits
         self._config = config
         self._clock = clock
+
+        # Store agent-specific parameters for compatibility (not used in mock)
+        self._agent_temperature = temperature
+        self._agent_max_tokens = max_tokens
+        self._agent_system_prompt = system_prompt
 
         # Lazy-load delay calculator to avoid circular import
         self._delay_calculator: ProportionalDelayCalculator | None = None
