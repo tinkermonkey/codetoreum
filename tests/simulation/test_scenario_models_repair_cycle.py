@@ -1,4 +1,4 @@
-"""Phase 6: Tests for RepairCycleAgentConfigModel and validation.
+"""Tests for RepairCycleAgentConfigModel and validation.
 
 Verifies:
 - RepairCycleAgentConfigModel can be instantiated with all field combinations

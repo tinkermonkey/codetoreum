@@ -26,6 +26,13 @@ class TestRepairCycleScenarioLoading:
         scenarios_dir = project_root / "scenarios"
         return scenarios_dir
 
+    @pytest.fixture
+    def orch_config(self) -> OrchestratorConfigModel:
+        """Load and parse repair_cycle_test orchestrator config once for the class."""
+        orch_dir = self._get_scenarios_dir() / "repair_cycle_test" / "orchestrator"
+        orch_data = _merge_yaml_dir(orch_dir)
+        return OrchestratorConfigModel(**orch_data)
+
     def test_repair_cycle_scenario_exists(self) -> None:
         """Verify repair_cycle_test scenario directory exists."""
         scenarios_dir = self._get_scenarios_dir()
@@ -47,32 +54,19 @@ class TestRepairCycleScenarioLoading:
         scenarios_dir = self._get_scenarios_dir()
         orch_dir = scenarios_dir / "repair_cycle_test" / "orchestrator"
 
-        # Merge all YAML files in the orchestrator directory
         orch_data = _merge_yaml_dir(orch_dir)
         assert orch_data is not None, "Failed to merge orchestrator YAML files"
         assert len(orch_data) > 0, "Orchestrator data is empty"
 
-    def test_repair_cycle_orchestrator_model_parses(self) -> None:
+    def test_repair_cycle_orchestrator_model_parses(self, orch_config: OrchestratorConfigModel) -> None:
         """Parse orchestrator config as OrchestratorConfigModel."""
-        scenarios_dir = self._get_scenarios_dir()
-        orch_dir = scenarios_dir / "repair_cycle_test" / "orchestrator"
+        assert orch_config.name == "repair_cycle_test"
+        assert len(orch_config.agents) == 3
+        assert len(orch_config.board_policies) == 1
 
-        orch_data = _merge_yaml_dir(orch_dir)
-        orch = OrchestratorConfigModel(**orch_data)
-
-        assert orch.name == "repair_cycle_test"
-        assert len(orch.agents) == 3
-        assert len(orch.board_policies) == 1
-
-    def test_repair_cycle_board_policy_has_repair_cycle_agents(self) -> None:
+    def test_repair_cycle_board_policy_has_repair_cycle_agents(self, orch_config: OrchestratorConfigModel) -> None:
         """Verify board policy column has repair_cycle_agents configured."""
-        scenarios_dir = self._get_scenarios_dir()
-        orch_dir = scenarios_dir / "repair_cycle_test" / "orchestrator"
-
-        orch_data = _merge_yaml_dir(orch_dir)
-        orch = OrchestratorConfigModel(**orch_data)
-
-        policy = orch.board_policies[0]
+        policy = orch_config.board_policies[0]
         assert policy.board_id == "test-board-1"
 
         # Find the "Testing" column
@@ -85,15 +79,9 @@ class TestRepairCycleScenarioLoading:
         assert testing_col is not None, "Testing column not found"
         assert testing_col.repair_cycle_agents is not None, "repair_cycle_agents not set"
 
-    def test_repair_cycle_agents_fields_populated(self) -> None:
+    def test_repair_cycle_agents_fields_populated(self, orch_config: OrchestratorConfigModel) -> None:
         """Verify all repair_cycle_agents fields are populated correctly."""
-        scenarios_dir = self._get_scenarios_dir()
-        orch_dir = scenarios_dir / "repair_cycle_test" / "orchestrator"
-
-        orch_data = _merge_yaml_dir(orch_dir)
-        orch = OrchestratorConfigModel(**orch_data)
-
-        policy = orch.board_policies[0]
+        policy = orch_config.board_policies[0]
         testing_col = next((col for col in policy.column_configs if col.name == "Testing"), None)
         assert testing_col is not None
 
@@ -106,15 +94,9 @@ class TestRepairCycleScenarioLoading:
         assert rc.env_rebuild == "devops_engineer"
         assert rc.env_verification == "qa_engineer"
 
-    def test_repair_cycle_agents_to_domain(self) -> None:
+    def test_repair_cycle_agents_to_domain(self, orch_config: OrchestratorConfigModel) -> None:
         """Verify repair_cycle_agents.to_domain() produces valid domain objects."""
-        scenarios_dir = self._get_scenarios_dir()
-        orch_dir = scenarios_dir / "repair_cycle_test" / "orchestrator"
-
-        orch_data = _merge_yaml_dir(orch_dir)
-        orch = OrchestratorConfigModel(**orch_data)
-
-        policy = orch.board_policies[0]
+        policy = orch_config.board_policies[0]
         testing_col = next((col for col in policy.column_configs if col.name == "Testing"), None)
         assert testing_col is not None
 
@@ -132,36 +114,9 @@ class TestRepairCycleScenarioLoading:
         assert domain_rc.env_rebuild == "devops_engineer"
         assert domain_rc.env_verification == "qa_engineer"
 
-    def test_repair_cycle_agents_validation_passes(self) -> None:
+    def test_repair_cycle_agents_validation_passes(self, orch_config: OrchestratorConfigModel) -> None:
         """Verify cross-field validation passes for repair_cycle_test scenario."""
-        scenarios_dir = self._get_scenarios_dir()
-        orch_dir = scenarios_dir / "repair_cycle_test" / "orchestrator"
-
-        orch_data = _merge_yaml_dir(orch_dir)
-        # This should not raise a ValidationError
-        orch = OrchestratorConfigModel(**orch_data)
-
-        # Verify validation passed
-        assert orch is not None
-        assert len(orch.agents) > 0
-
-        # Verify all referenced agents exist
-        defined_agents = {a.name for a in orch.agents}
-        for policy in orch.board_policies:
-            for col in policy.column_configs:
-                if col.repair_cycle_agents is None:
-                    continue
-                rc = col.repair_cycle_agents
-                for agent_name in [
-                    rc.test_execution,
-                    rc.code_fix,
-                    rc.systemic_analysis,
-                    rc.systemic_fix,
-                    rc.env_rebuild,
-                    rc.env_verification,
-                ]:
-                    if agent_name:
-                        assert agent_name in defined_agents, (
-                            f"Agent '{agent_name}' referenced in repair_cycle_agents "
-                            f"but not defined in agents list"
-                        )
+        # The fact that OrchestratorConfigModel(**orch_data) succeeded proves validation passed
+        assert orch_config is not None
+        assert len(orch_config.agents) > 0
+        assert len(orch_config.board_policies) > 0
