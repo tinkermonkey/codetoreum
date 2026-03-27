@@ -1,0 +1,5 @@
+# External data: Projects for repair cycle test
+
+projects:
+  - name: "repair_cycle_test_project"
+    description: "Test project for repair cycle agent config"

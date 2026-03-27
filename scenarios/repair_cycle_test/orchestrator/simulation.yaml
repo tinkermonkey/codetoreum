@@ -1,0 +1,10 @@
+# Test Scenario: Repair Cycle Agents Configuration
+#
+# Tests the Phase 6 feature: repair_cycle_agents field in column_configs
+# This scenario verifies that repair cycle agent assignments work correctly
+
+name: "repair_cycle_test"
+description: "Test scenario for repair_cycle_agents feature"
+version: "1.0"
+speed_multiplier: 100.0
+auto_advance: false

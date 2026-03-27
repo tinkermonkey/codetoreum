@@ -1,0 +1,32 @@
+# Board policy with repair_cycle_agents configuration
+#
+# This file demonstrates the Phase 6 feature: per-column repair_cycle_agents
+
+board_policies:
+  - board_id: "test-board-1"
+    column_configs:
+      - name: "Backlog"
+        type: "manual"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: false
+
+      - name: "Testing"
+        type: "automated"
+        agent_id: "qa_engineer"
+        is_pipeline_trigger: true
+        is_exit_column: false
+        auto_progress_on_completion: true
+        on_failure_column: "Backlog"
+        sla_seconds: 3600
+        repair_cycle_agents:
+          test_execution: "qa_engineer"
+          code_fix: "senior_software_engineer"
+          env_rebuild: "devops_engineer"
+          env_verification: "qa_engineer"
+
+      - name: "Done"
+        type: "manual"
+        is_pipeline_trigger: false
+        is_exit_column: true
+        auto_progress_on_completion: false

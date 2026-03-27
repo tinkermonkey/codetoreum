@@ -5,9 +5,12 @@ These models define the schema for declarative scenario configuration files.
 """
 
 from datetime import datetime
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+if TYPE_CHECKING:
+    from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig
 
 
 class ScenarioProjectModel(BaseModel):
@@ -103,6 +106,64 @@ class ScenarioAgentModel(BaseModel):
         return v
 
 
+class RepairCycleAgentConfigModel(BaseModel):
+    """YAML representation of per-sub-task agent assignments for the repair cycle.
+
+    Maps repair cycle sub-tasks to specific agents. All fields are optional;
+    None means fall back to the stage's default agent.
+
+    Sub-task names correspond to the operations performed by the repair cycle:
+    - test_execution: Runs tests and parses results
+    - code_fix: Fixes code-level test failures
+    - systemic_analysis: Classifies failure root causes
+    - systemic_fix: Applies cross-cutting fixes
+    - env_rebuild: Rebuilds test environment
+    - env_verification: Verifies rebuilt environment
+    """
+
+    test_execution: str | None = Field(
+        default=None,
+        description="Agent for test execution sub-task",
+    )
+    code_fix: str | None = Field(
+        default=None,
+        description="Agent for code-level fixing sub-task",
+    )
+    systemic_analysis: str | None = Field(
+        default=None,
+        description="Agent for systemic analysis sub-task",
+    )
+    systemic_fix: str | None = Field(
+        default=None,
+        description="Agent for systemic fix sub-task",
+    )
+    env_rebuild: str | None = Field(
+        default=None,
+        description="Agent for environment rebuild sub-task",
+    )
+    env_verification: str | None = Field(
+        default=None,
+        description="Agent for environment verification sub-task",
+    )
+
+    def to_domain(self) -> "RepairCycleAgentConfig":
+        """Convert this Pydantic model to a domain RepairCycleAgentConfig instance.
+
+        Returns:
+            A RepairCycleAgentConfig domain instance with the same field values.
+        """
+        from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig
+
+        return RepairCycleAgentConfig(
+            test_execution=self.test_execution,
+            code_fix=self.code_fix,
+            systemic_analysis=self.systemic_analysis,
+            systemic_fix=self.systemic_fix,
+            env_rebuild=self.env_rebuild,
+            env_verification=self.env_verification,
+        )
+
+
 class ScenarioColumnConfig(BaseModel):
     """Explicit column configuration for a board workflow template.
 
@@ -135,6 +196,10 @@ class ScenarioColumnConfig(BaseModel):
     )
     sla_escalation_column: str | None = Field(
         default=None, description="Column to move item to when SLA expires; None emits event only"
+    )
+    repair_cycle_agents: RepairCycleAgentConfigModel | None = Field(
+        default=None,
+        description="Per-sub-task agent assignments for the repair cycle on this column",
     )
 
     @field_validator("type")
@@ -333,6 +398,42 @@ class OrchestratorConfigModel(BaseModel):
         if len(v) != len({w.name for w in v}):
             raise ValueError("Workflow names must be unique")
         return v
+
+    @model_validator(mode="after")
+    def validate_repair_cycle_agent_refs(self) -> "OrchestratorConfigModel":
+        """Validate that all repair_cycle_agents references exist in the agents list.
+
+        For each column_config with repair_cycle_agents set, verify that every
+        non-None agent name exists in the scenario's agents list.
+
+        Raises:
+            ValueError: If any referenced agent is not defined in the agents list.
+        """
+        defined_agents = {a.name for a in self.agents}
+
+        for policy in self.board_policies:
+            for col in policy.column_configs:
+                if col.repair_cycle_agents is None:
+                    continue
+
+                rc = col.repair_cycle_agents
+                for field_name, agent_name in [
+                    ("test_execution", rc.test_execution),
+                    ("code_fix", rc.code_fix),
+                    ("systemic_analysis", rc.systemic_analysis),
+                    ("systemic_fix", rc.systemic_fix),
+                    ("env_rebuild", rc.env_rebuild),
+                    ("env_verification", rc.env_verification),
+                ]:
+                    if agent_name and agent_name not in defined_agents:
+                        msg = (
+                            f"In board policy '{policy.board_id}', column '{col.name}': "
+                            f"repair_cycle_agents.{field_name} references agent '{agent_name}' "
+                            f"which is not defined in agents list. Defined agents: {sorted(defined_agents)}"
+                        )
+                        raise ValueError(msg)
+
+        return self
 
 
 class ScenarioModel(BaseModel):
