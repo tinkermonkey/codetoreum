@@ -75,22 +75,25 @@ class Agent:
     model: str  # LLM model (e.g., "claude-sonnet-4-5")
     timeout_seconds: int
     max_retries: int
+    temperature: float = 0.7  # LLM temperature (0.0-2.0)
+    max_tokens: int = 4096  # Maximum tokens for LLM responses
+    system_prompt: str = ""  # System prompt for the agent
 
     # Constraints
-    requires_docker: bool
-    requires_dev_container: bool
-    makes_code_changes: bool
-    filesystem_write_allowed: bool
+    requires_docker: bool = True
+    requires_dev_container: bool = False
+    makes_code_changes: bool = False
+    filesystem_write_allowed: bool = True
 
     # MCP servers
-    mcp_servers: list[str]
+    mcp_servers: list[str] = field(default_factory=list)
 
     # Metadata
-    metadata: dict[str, Any]
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     # Timestamps
-    created_at: datetime
-    updated_at: datetime
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     # Event tracking
     _events: list[DomainEvent] = field(default_factory=list, init=False, repr=False)
@@ -140,6 +143,9 @@ class Agent:
         role_description: str,
         model: str,
         capabilities: dict[str, AgentCapability],
+        temperature: float = 0.7,
+        max_tokens: int = 4096,
+        system_prompt: str = "",
         timeout_seconds: int = 300,
         max_retries: int = 3,
         requires_docker: bool = True,
@@ -158,6 +164,9 @@ class Agent:
             role_description: Description of agent's role
             model: LLM model to use
             capabilities: Dictionary of agent capabilities
+            temperature: LLM temperature (0.0-2.0, default: 0.7)
+            max_tokens: Maximum tokens for responses (default: 4096)
+            system_prompt: System prompt for the agent (default: "")
             timeout_seconds: Execution timeout (default: 300)
             max_retries: Maximum retry attempts (default: 3)
             requires_docker: Whether agent requires Docker (default: True)
@@ -181,6 +190,9 @@ class Agent:
             model=model,
             timeout_seconds=timeout_seconds,
             max_retries=max_retries,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            system_prompt=system_prompt,
             requires_docker=requires_docker,
             requires_dev_container=requires_dev_container,
             makes_code_changes=makes_code_changes,

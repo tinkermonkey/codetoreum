@@ -7,14 +7,18 @@ This module provides:
 - AdapterResolver: Per-adapter config entries to concrete adapter instances with validation
 """
 
+import asyncio
 import logging
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from codetoreum.infrastructure.adapters.registry_base import (
     AdapterCredentialRequirement,
 )
+from codetoreum.domain.agent import Agent
+from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation.simulation_config import AdapterSelectionConfig
 from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
@@ -354,8 +358,12 @@ class AdapterResolver:
                 checkpoint_store=checkpoint_store,
                 container_adapter=container_adapter,
             )
-        # Real adapter: bypass engine, use factory directly
-        return self._factory.create_repair_cycle(adapter_name=self._config.repair_cycle)
+        # Real adapter: inject agent-aware factory
+        return self._factory.create_repair_cycle(
+            adapter_name=self._config.repair_cycle,
+            llm_factory=self._create_agent_llm_factory(),
+            agent_repository=self._resolved.get("agent_repository"),
+        )
 
     def resolve_code_review(self) -> ICodeReviewService:
         """Resolve code review service adapter."""
@@ -382,6 +390,102 @@ class AdapterResolver:
             event_emitter=self._resolved["event_emitter"],
             time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
         )
+
+    # =========================================================================
+    # Private factory construction helpers for repair cycle
+    # =========================================================================
+
+    def _create_agent_llm_factory(self) -> Callable[[str], ILLMProvider]:
+        """Create a factory closure that resolves agents and returns LLM providers.
+
+        The factory takes an agent name and returns an ILLMProvider configured
+        with the agent's LLM parameters (model, temperature, max_tokens, system_prompt).
+
+        Returns:
+            Callable that takes agent_name (str) and returns ILLMProvider
+
+        Raises:
+            ResourceNotFoundError: When factory is called with unknown agent name
+        """
+        agent_repo = self._resolved.get("agent_repository")
+
+        def factory(agent_name: str) -> ILLMProvider:
+            """
+            Factory function that looks up an agent and builds an LLM provider.
+
+            Args:
+                agent_name: Name of the agent to look up
+
+            Returns:
+                ILLMProvider configured for the agent
+
+            Raises:
+                ResourceNotFoundError: If agent with given name not found
+            """
+            # Get the event loop and resolve the agent synchronously
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                # If no event loop exists in current thread, create one
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+
+            try:
+                agent = loop.run_until_complete(agent_repo.get_by_name(agent_name))
+            except ResourceNotFoundError as e:
+                logger.error(
+                    f"Agent not found: {agent_name}",
+                    extra={"agent_name": agent_name, "error_id": "ERR_AGENT_NOT_FOUND"},
+                    exc_info=True,
+                )
+                raise
+            except Exception as e:
+                logger.error(
+                    f"Failed to resolve agent '{agent_name}': {e}",
+                    extra={"agent_name": agent_name, "error_id": "ERR_AGENT_RESOLUTION_FAILED"},
+                    exc_info=True,
+                )
+                raise
+
+            return self._build_llm_provider(agent)
+
+        return factory
+
+    def _build_llm_provider(self, agent: Agent) -> ILLMProvider:
+        """Build an LLM provider configured for a specific agent.
+
+        Uses the agent's LLM configuration (model, temperature, max_tokens,
+        system_prompt) to create a specialized provider instance.
+
+        Args:
+            agent: Agent domain object with LLM configuration
+
+        Returns:
+            ILLMProvider instance configured for the agent
+
+        Raises:
+            Exception: If provider creation fails
+        """
+        try:
+            return self._factory.create_llm_provider(
+                adapter_name=self._config.llm,
+                model=agent.model,
+                temperature=agent.temperature,
+                max_tokens=agent.max_tokens,
+                system_prompt=agent.system_prompt,
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to build LLM provider for agent '{agent.name}': {e}",
+                extra={
+                    "agent_id": agent.id,
+                    "agent_name": agent.name,
+                    "model": agent.model,
+                    "error_id": "ERR_LLM_PROVIDER_CREATION_FAILED",
+                },
+                exc_info=True,
+            )
+            raise
 
     def resolve_all(self) -> "SimulationAdapters":
         """
