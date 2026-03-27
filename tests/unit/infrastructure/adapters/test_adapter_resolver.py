@@ -950,24 +950,51 @@ class TestAgentLLMFactory:
         """Test that factory eagerly populates cache for synchronous repositories."""
         resolver = AdapterResolver(adapter_config, factory, dependencies)
 
-        # Create a mock sync repository
-        from codetoreum.adapters.testing.in_memory_agent_repository import InMemoryAgentRepository
-        from codetoreum.domain.agent import Agent
+        # Create a mock SYNC repository (for testing the sync code path)
+        from codetoreum.domain.agent import Agent, AgentType, AgentCapability
+        from datetime import datetime, UTC
+        from codetoreum.ports.output.agent_repository import IAgentRepository
+        from codetoreum.ports.exceptions import ResourceNotFoundError
 
+        now = datetime.now(UTC)
         mock_agent = Agent(
+            id="agent-1",
             name="test_agent",
-            description="Test agent",
+            display_name="Test Agent",
+            agent_type=AgentType.MAKER,
+            role_description="Test agent for testing",
             model="claude-3-sonnet",
+            capabilities={"testing": AgentCapability(skill="testing", proficiency=0.9)},
+            timeout_seconds=300,
+            max_retries=3,
             requires_docker=False,
             requires_dev_container=False,
             makes_code_changes=True,
             filesystem_write_allowed=True,
             mcp_servers=[],
             metadata={},
-            created_at=0.0,
-            updated_at=0.0,
+            created_at=now,
+            updated_at=now,
         )
-        agent_repo = InMemoryAgentRepository([mock_agent])
+
+        # Create a synchronous mock repository
+        class SyncMockAgentRepository:
+            """Synchronous mock repository for testing sync code path."""
+
+            def __init__(self):
+                self._agents_by_name = {"test_agent": mock_agent}
+
+            def get_all(self):
+                """Synchronous method - returns list of agents."""
+                return list(self._agents_by_name.values())
+
+            def get_by_name(self, name: str):
+                """Synchronous method - returns agent by name."""
+                if name not in self._agents_by_name:
+                    raise ResourceNotFoundError("Agent", name)
+                return self._agents_by_name[name]
+
+        agent_repo = SyncMockAgentRepository()
         resolver._resolved["agent_repository"] = agent_repo
 
         # Create the factory
@@ -1009,12 +1036,28 @@ class TestAgentLLMFactory:
         self, factory, dependencies, adapter_config
     ):
         """Test that factory raises ResourceNotFoundError for unknown agents."""
-        from codetoreum.adapters.testing.in_memory_agent_repository import InMemoryAgentRepository
-        from codetoreum.infrastructure.errors import ResourceNotFoundError
+        from codetoreum.ports.exceptions import ResourceNotFoundError
 
         resolver = AdapterResolver(adapter_config, factory, dependencies)
 
-        agent_repo = InMemoryAgentRepository([])
+        # Create a synchronous mock repository (with no agents)
+        class SyncMockAgentRepository:
+            """Synchronous mock repository for testing sync code path."""
+
+            def __init__(self):
+                self._agents_by_name = {}
+
+            def get_all(self):
+                """Synchronous method - returns list of agents."""
+                return list(self._agents_by_name.values())
+
+            def get_by_name(self, name: str):
+                """Synchronous method - returns agent by name."""
+                if name not in self._agents_by_name:
+                    raise ResourceNotFoundError("Agent", name)
+                return self._agents_by_name[name]
+
+        agent_repo = SyncMockAgentRepository()
         resolver._resolved["agent_repository"] = agent_repo
 
         # Create the factory
@@ -1031,28 +1074,53 @@ class TestAgentLLMFactory:
         """Test that factory correctly uses agent LLM configuration."""
         resolver = AdapterResolver(adapter_config, factory, dependencies)
 
-        from codetoreum.adapters.testing.in_memory_agent_repository import InMemoryAgentRepository
-        from codetoreum.domain.agent import Agent
+        from codetoreum.domain.agent import Agent, AgentType, AgentCapability
+        from codetoreum.ports.exceptions import ResourceNotFoundError
+        from datetime import datetime, UTC
 
         # Create agent with specific LLM configuration
+        now = datetime.now(UTC)
         mock_agent = Agent(
+            id="agent-2",
             name="configured_agent",
-            description="Agent with custom LLM config",
+            display_name="Configured Agent",
+            agent_type=AgentType.MAKER,
+            role_description="Agent with custom LLM config",
             model="claude-3-sonnet",
+            capabilities={"coding": AgentCapability(skill="coding", proficiency=0.9)},
+            timeout_seconds=300,
+            max_retries=3,
             requires_docker=False,
             requires_dev_container=False,
             makes_code_changes=True,
             filesystem_write_allowed=True,
             mcp_servers=[],
             metadata={},
-            created_at=0.0,
-            updated_at=0.0,
+            created_at=now,
+            updated_at=now,
             temperature=0.5,
             max_tokens=2048,
             system_prompt="Custom system prompt",
         )
 
-        agent_repo = InMemoryAgentRepository([mock_agent])
+        # Create a synchronous mock repository
+        class SyncMockAgentRepository:
+            """Synchronous mock repository for testing sync code path."""
+
+            def __init__(self):
+                self._agents_by_name = {"configured_agent": mock_agent}
+
+            def get_all(self):
+                """Synchronous method - returns list of agents."""
+                return list(self._agents_by_name.values())
+
+            def get_by_name(self, name: str):
+                """Synchronous method - returns agent by name."""
+                if name not in self._agents_by_name:
+                    raise ResourceNotFoundError("Agent", name)
+                return self._agents_by_name[name]
+
+        agent_repo = SyncMockAgentRepository()
         resolver._resolved["agent_repository"] = agent_repo
 
         # Create the factory
@@ -1077,7 +1145,7 @@ class TestAgentLLMFactory:
     def test_resolve_repair_cycle_real_path_passes_llm_factory(self, factory, dependencies, adapter_config):
         """Test that resolve_repair_cycle real path passes llm_factory to adapter factory."""
         # Use a real adapter instead of mock
-        config = AdapterSelectionConfig(repair_cycle="testing")
+        config = AdapterSelectionConfig(repair_cycle="mock")
 
         resolver = AdapterResolver(config, factory, dependencies)
 
