@@ -327,7 +327,7 @@ class TestAgentConfigRouting:
     @pytest.mark.asyncio
     async def test_handle_warnings_routes_through_code_fix_agent(self):
         """handle_warnings routes through agent resolved for 'code_fix' sub-task."""
-        from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig, RepairTestWarning, RepairTestResult
+        from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig, RepairTestResult, RepairTestWarning
 
         agent_config = RepairCycleAgentConfig(
             test_execution="qa_test_executor",
