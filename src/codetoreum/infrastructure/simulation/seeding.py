@@ -1283,6 +1283,18 @@ class SimulationDataSeeder:
                     raise ValidationError(message)
                 await self._seed_external_data(ext, orch)
 
+        # If orchestrator config was seeded with placeholder project_id and we now have
+        # a real project, migrate workflows/agents from placeholder to the real project
+        if (
+            "orchestrator-default" in self._config_store.pipelines
+            and self._current_project_id is not None
+            and self._current_project_id != "orchestrator-default"
+        ):
+            logger.info(
+                f"Migrating orchestrator config from placeholder to actual project_id: {self._current_project_id}"
+            )
+            await self._migrate_orchestrator_config(self._current_project_id)
+
         logger.info(f"Scenario seeded successfully from {scenario_dir}")
         return self
 
@@ -1426,6 +1438,64 @@ class SimulationDataSeeder:
                     )
                 else:
                     logger.warning(f"Board placement: no work item found matching title '{placement.work_item_title}'")
+
+    async def _migrate_orchestrator_config(self, new_project_id: str) -> None:
+        """Migrate workflows and agents from orchestrator-default placeholder to actual project_id.
+
+        When split-directory scenarios are seeded, the orchestrator config (workflows, agents, board
+        policies) is applied before external projects are created. This creates pipelines and agents
+        under the "orchestrator-default" placeholder project_id. Once external projects are seeded,
+        we need to migrate these orchestrator-owned entities to the real project.
+
+        Args:
+            new_project_id: The actual project UUID to migrate to
+        """
+        from dataclasses import replace
+
+        placeholder_project_id = "orchestrator-default"
+
+        # Migrate pipelines
+        if placeholder_project_id in self._config_store.pipelines:
+            placeholder_pipelines = self._config_store.pipelines[placeholder_project_id]
+            if new_project_id not in self._config_store.pipelines:
+                self._config_store.pipelines[new_project_id] = {}
+
+            for pipeline_name, pipeline_config in placeholder_pipelines.items():
+                # Create new pipeline config with updated project_id
+                new_pipeline = replace(pipeline_config, project_id=new_project_id)
+                self._config_store.pipelines[new_project_id][pipeline_name] = new_pipeline
+                logger.info(f"Migrated pipeline '{pipeline_name}' to project {new_project_id}")
+
+            # Delete the placeholder project's pipelines
+            del self._config_store.pipelines[placeholder_project_id]
+
+        # Migrate agents
+        if placeholder_project_id in self._config_store.agents:
+            placeholder_agents = self._config_store.agents[placeholder_project_id]
+            if new_project_id not in self._config_store.agents:
+                self._config_store.agents[new_project_id] = {}
+
+            for agent_name, agent_config in placeholder_agents.items():
+                # Create new agent config with updated project_id
+                new_agent = replace(agent_config, project_id=new_project_id)
+                self._config_store.agents[new_project_id][agent_name] = new_agent
+                logger.info(f"Migrated agent '{agent_name}' to project {new_project_id}")
+
+            # Delete the placeholder project's agents
+            del self._config_store.agents[placeholder_project_id]
+
+        # Migrate board templates
+        if hasattr(self.adapters.workflow_config, "_templates"):
+            templates_to_migrate = []
+            for template_id, template in list(self.adapters.workflow_config._templates.items()):
+                if template.project_id == placeholder_project_id:
+                    templates_to_migrate.append((template_id, template))
+
+            for template_id, template in templates_to_migrate:
+                # Create new template with updated project_id
+                new_template = replace(template, project_id=new_project_id)
+                self.adapters.workflow_config._templates[template_id] = new_template
+                logger.info(f"Migrated board template '{template_id}' to project {new_project_id}")
 
     async def _seed_legacy_scenario(self, scenario: ScenarioModel) -> None:
         """Seed a legacy (flat) ScenarioModel — all data in one pass."""
