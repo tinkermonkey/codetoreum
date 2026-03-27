@@ -30,10 +30,12 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
     from codetoreum.infrastructure.resilience.interfaces import ICircuitBreaker
+    from codetoreum.ports.output.agent_repository import IAgentRepository
+    from codetoreum.ports.output.llm_provider import ILLMProvider
 
 from codetoreum.domain.events.repair_cycle_events import (
     RepairCycleCheckpointFailedEvent,
@@ -121,7 +123,8 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
     def __init__(
         self,
-        llm_provider: Any,
+        llm_factory: Callable[[str], ILLMProvider],
+        agent_repository: IAgentRepository | None = None,
         config: RepairCycleConfig = None,
         event_emitter: Any = None,
         checkpoint_store: IRepairCycleCheckpointStore = None,
@@ -130,17 +133,36 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         """Initialize production repair cycle adapter.
 
         Args:
-            llm_provider: ILLMProvider implementation (e.g., Claude Code adapter)
+            llm_factory: Callable that takes agent name and returns ILLMProvider
+            agent_repository: Optional agent repository for agent validation (unused in Phase 3)
             config: Optional RepairCycleConfig (uses defaults if not provided)
             event_emitter: Optional event emitter (uses null-object if not provided)
             checkpoint_store: Optional checkpoint store for resumable repairs
             circuit_breaker: Optional circuit breaker for LLM call protection
         """
-        self.llm_provider = llm_provider
+        self._llm_factory = llm_factory
+        self._agent_repository = agent_repository
         self.config = config or RepairCycleConfig()
         self.event_emitter = event_emitter or NullEventEmitter()
         self.checkpoint_store = checkpoint_store
         self.circuit_breaker = circuit_breaker
+
+    def _get_llm_for_subtask(self, sub_task: str, context: RepairCycleContext) -> ILLMProvider:
+        """Resolve the appropriate agent for a sub-task and return its LLM provider.
+
+        Args:
+            sub_task: Sub-task key (e.g., "test_execution", "code_fix")
+            context: Repair cycle context with agent configuration
+
+        Returns:
+            ILLMProvider instance for the resolved agent
+        """
+        agent_name = (
+            context.agent_config.resolve_agent(sub_task, context.agent_name)
+            if context.agent_config
+            else context.agent_name
+        )
+        return self._llm_factory(agent_name)
 
     async def execute(self, context: RepairCycleContext) -> RepairCycleResult:
         """Execute complete repair cycle for all configured test types.
@@ -274,6 +296,14 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         # Build test command based on framework detection
         test_command = self._detect_and_build_test_command(config)
 
+        # Resolve agent for test execution sub-task
+        llm = self._get_llm_for_subtask("test_execution", context)
+        resolved_agent_name = (
+            context.agent_config.resolve_agent("test_execution", context.agent_name)
+            if context.agent_config
+            else context.agent_name
+        )
+
         # Execute tests via LLM
         logger.info(
             "Executing tests",
@@ -282,6 +312,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 "test_type": config.test_type.value,
                 "command": test_command,
                 "timeout": config.timeout,
+                "agent_name": resolved_agent_name,
             },
             exc_info=False,
         )
@@ -291,13 +322,13 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             prompt = f"Execute the following test command and return results as JSON:\n\n{test_command}"
             if self.circuit_breaker:
                 agent_response = await self.circuit_breaker.call(
-                    self.llm_provider.execute,
+                    llm.execute,
                     "repair_cycle.run_tests",
                     prompt=prompt,
                     timeout=config.timeout,
                 )
             else:
-                agent_response = await self.llm_provider.execute(
+                agent_response = await llm.execute(
                     prompt=prompt,
                     timeout=config.timeout,
                 )
@@ -337,6 +368,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     warnings=result.warnings,
                     has_failures=(result.failed > 0),
                     failures=result.failures,
+                    agent_name=resolved_agent_name,
                     workflow_run_id=context.workflow_run_id,
                 )
             )
@@ -391,6 +423,14 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         Raises:
             CircuitBreakerOpenError: When circuit breaker is open
         """
+        # Resolve agent for code fix sub-task (once for all files)
+        llm = self._get_llm_for_subtask("code_fix", context)
+        resolved_agent_name = (
+            context.agent_config.resolve_agent("code_fix", context.agent_name)
+            if context.agent_config
+            else context.agent_name
+        )
+
         fixed = 0
 
         for file_path, failures in grouped_failures.items():
@@ -402,6 +442,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         "workflow_run_id": context.workflow_run_id,
                         "file": file_path,
                         "failures": len(failures),
+                        "agent_name": resolved_agent_name,
                     },
                     exc_info=False,
                 )
@@ -417,6 +458,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     test_file=file_path,
                     failure_count=len(failures),
                     test_type=config.test_type,
+                    agent_name=resolved_agent_name,
                     workflow_run_id=context.workflow_run_id,
                 )
             )
@@ -432,19 +474,20 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         "workflow_run_id": context.workflow_run_id,
                         "file": file_path,
                         "failure_count": len(failures),
+                        "agent_name": resolved_agent_name,
                     },
                     exc_info=False,
                 )
 
                 if self.circuit_breaker:
                     await self.circuit_breaker.call(
-                        self.llm_provider.execute,
+                        llm.execute,
                         "repair_cycle.fix_failures_by_file",
                         prompt=fix_prompt,
                         timeout=config.timeout,
                     )
                 else:
-                    await self.llm_provider.execute(
+                    await llm.execute(
                         prompt=fix_prompt,
                         timeout=config.timeout,
                     )
@@ -459,6 +502,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         failure_count=len(failures),
                         test_type=config.test_type,
                         success=True,
+                        agent_name=resolved_agent_name,
                         workflow_run_id=context.workflow_run_id,
                     )
                 )
@@ -496,6 +540,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         failure_count=len(failures),
                         test_type=config.test_type,
                         success=False,
+                        agent_name=resolved_agent_name,
                         workflow_run_id=context.workflow_run_id,
                     )
                 )
@@ -528,6 +573,14 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         if not test_result.warning_list or not config.review_warnings:
             return 0
 
+        # Resolve agent for code fix sub-task (warnings use same agent as code fixes)
+        llm = self._get_llm_for_subtask("code_fix", context)
+        resolved_agent_name = (
+            context.agent_config.resolve_agent("code_fix", context.agent_name)
+            if context.agent_config
+            else context.agent_name
+        )
+
         reviewed = 0
 
         for warning in test_result.warning_list:
@@ -538,6 +591,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     extra={
                         "workflow_run_id": context.workflow_run_id,
                         "file": warning.file,
+                        "agent_name": resolved_agent_name,
                     },
                     exc_info=False,
                 )
@@ -554,6 +608,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     warning_count=1,
                     test_type=config.test_type,
                     warnings=(warning,),
+                    agent_name=resolved_agent_name,
                     workflow_run_id=context.workflow_run_id,
                 )
             )
@@ -569,19 +624,20 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         "workflow_run_id": context.workflow_run_id,
                         "file": warning.file,
                         "warning": warning.message,
+                        "agent_name": resolved_agent_name,
                     },
                     exc_info=False,
                 )
 
                 if self.circuit_breaker:
                     await self.circuit_breaker.call(
-                        self.llm_provider.execute,
+                        llm.execute,
                         "repair_cycle.handle_warnings",
                         prompt=review_prompt,
                         timeout=config.timeout,
                     )
                 else:
-                    await self.llm_provider.execute(
+                    await llm.execute(
                         prompt=review_prompt,
                         timeout=config.timeout,
                     )
@@ -596,6 +652,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         warning_count=1,
                         test_type=config.test_type,
                         success=True,
+                        agent_name=resolved_agent_name,
                         workflow_run_id=context.workflow_run_id,
                     )
                 )

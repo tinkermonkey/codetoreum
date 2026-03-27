@@ -56,6 +56,7 @@ class _RepairCycleContext:
         self.agent_name = "test_agent"
         self.max_total_agent_calls = max_total_agent_calls
         self.checkpoint_interval = 5
+        self.agent_config = None  # No per-subtask agent config in tests
 
 
 def _make_adapter(
@@ -67,9 +68,11 @@ def _make_adapter(
     """Return (adapter, mock_llm) pre-wired for tests."""
     llm = AsyncMock()
     llm.execute.return_value = llm_response
+    # Create factory that returns the same mock LLM for any agent name
+    llm_factory = lambda agent_name: llm
     config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
     adapter = ProductionRepairCycleAdapter(
-        llm_provider=llm,
+        llm_factory=llm_factory,
         config=config,
         event_emitter=event_emitter,
         circuit_breaker=circuit_breaker,

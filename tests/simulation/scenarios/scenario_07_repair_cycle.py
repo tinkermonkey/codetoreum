@@ -1038,7 +1038,8 @@ async def test_scenario_16_json_parse_retry_logic():
 
     # Mock LLM that returns non-JSON
     mock_llm = Mock()
-    adapter = ProductionRepairCycleAdapter(llm_provider=mock_llm, config=config)
+    llm_factory = lambda agent_name: mock_llm
+    adapter = ProductionRepairCycleAdapter(llm_factory=llm_factory, config=config)
 
     start_time = time.time()
 
@@ -1068,7 +1069,8 @@ async def test_scenario_17_json_parse_success_after_retry():
 
     config = RepairCycleConfig(max_json_parse_retries=3)
     mock_llm = Mock()
-    adapter = ProductionRepairCycleAdapter(llm_provider=mock_llm, config=config)
+    llm_factory = lambda agent_name: mock_llm
+    adapter = ProductionRepairCycleAdapter(llm_factory=llm_factory, config=config)
 
     # Test with embedded JSON in mixed content
     mixed_content = """
@@ -1104,7 +1106,8 @@ async def test_scenario_18_json_parse_malformed_structure():
 
     config = RepairCycleConfig(max_json_parse_retries=2)
     mock_llm = Mock()
-    adapter = ProductionRepairCycleAdapter(llm_provider=mock_llm, config=config)
+    llm_factory = lambda agent_name: mock_llm
+    adapter = ProductionRepairCycleAdapter(llm_factory=llm_factory, config=config)
 
     # Test with malformed JSON (missing closing brace)
     malformed_json = '{"passed": 10, "failed": 0'
