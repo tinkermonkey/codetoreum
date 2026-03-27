@@ -28,6 +28,7 @@ import asyncio
 import json
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
@@ -62,7 +63,6 @@ from codetoreum.domain.repair_cycle_types import (
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.resilience.exceptions import CircuitBreakerOpenError
-from codetoreum.ports.output.llm_provider import AgentLLMFactory
 from codetoreum.ports.output.repair_cycle_checkpoint_store import (
     IRepairCycleCheckpointStore,
 )
@@ -107,16 +107,16 @@ class NullEventEmitter:
     All methods are silent, allowing the repair cycle to run without event infrastructure.
     """
 
-    def emit(self, event: object) -> None:
+    def emit(self, event: "CodetoreumEvent") -> None:
         """No-op emit - silently discards all events."""
 
-    def on(self, event_type: str, handler: object) -> None:
+    def on(self, event_type: str, handler: Callable) -> None:
         """No-op subscription - no handlers are registered."""
 
-    def off(self, event_type: str, handler: object) -> None:
+    def off(self, event_type: str, handler: Callable) -> None:
         """No-op unsubscription - no handlers to unregister."""
 
-    def once(self, event_type: str, handler: object) -> None:
+    def once(self, event_type: str, handler: Callable) -> None:
         """No-op single subscription - no handlers are registered."""
 
 
