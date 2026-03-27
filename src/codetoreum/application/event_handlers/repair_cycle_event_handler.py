@@ -22,6 +22,7 @@ from codetoreum.infrastructure.observability.instrumentation import (
 )
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle
+from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +74,7 @@ class RepairCycleEventHandler(EventHandler):
     def __init__(
         self,
         repair_cycle: IRepairCycle,
+        workflow_config: IWorkflowConfigService | None = None,
         clock: SimulationClock | None = None,
         event_bus: EventBus | None = None,
     ):
@@ -81,10 +83,12 @@ class RepairCycleEventHandler(EventHandler):
 
         Args:
             repair_cycle: Repair cycle adapter (usually MockRepairCycleAdapter)
+            workflow_config: Workflow config service to retrieve column templates
             clock: Optional simulation clock for deterministic test execution
             event_bus: Event bus for publishing events
         """
         self._repair_cycle = repair_cycle
+        self._workflow_config = workflow_config
         self._clock = clock
         self._event_bus = event_bus
 
@@ -172,6 +176,24 @@ class RepairCycleEventHandler(EventHandler):
         logger.info(f"Work item {work_item_id} entered configured repair cycle stage, initiating repair cycle")
 
         try:
+            # Retrieve column template to extract repair_cycle_agents if available
+            agent_config: RepairCycleAgentConfig | None = None
+            if self._workflow_config:
+                template = await self._workflow_config.get_board_workflow_template(board_id)
+                if template:
+                    column = template.get_column_config(to_column)
+                    if column and column.repair_cycle_agents:
+                        agent_config = column.repair_cycle_agents
+                        logger.info(
+                            f"Using specialized repair cycle agents for column '{to_column}': "
+                            f"test_execution={agent_config.test_execution}, "
+                            f"code_fix={agent_config.code_fix}, "
+                            f"systemic_analysis={agent_config.systemic_analysis}, "
+                            f"systemic_fix={agent_config.systemic_fix}, "
+                            f"env_rebuild={agent_config.env_rebuild}, "
+                            f"env_verification={agent_config.env_verification}"
+                        )
+
             # Create repair cycle context
             context = RepairCycleEventContext(
                 stage_name="Testing",
@@ -184,7 +206,7 @@ class RepairCycleEventHandler(EventHandler):
                 agent_name="senior_software_engineer",
                 max_total_agent_calls=100,
                 checkpoint_interval=5,
-                agent_config=None,
+                agent_config=agent_config,
             )
 
             # Execute repair cycle

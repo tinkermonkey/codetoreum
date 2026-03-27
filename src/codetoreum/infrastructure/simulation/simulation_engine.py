@@ -337,13 +337,15 @@ class SimulationEngine:
     def create_repair_cycle_event_handler(
         self,
         repair_cycle: object,
-        event_bus: object,
+        workflow_config: object | None = None,
+        event_bus: object | None = None,
     ) -> "RepairCycleEventHandler":
         """
         Create repair cycle event handler with injected clock.
 
         Args:
             repair_cycle: MockRepairCycleAdapter instance
+            workflow_config: WorkflowConfigService instance for retrieving column templates
             event_bus: EventBus instance
 
         Returns:
@@ -353,6 +355,7 @@ class SimulationEngine:
 
         handler = RepairCycleEventHandler(
             repair_cycle=repair_cycle,
+            workflow_config=workflow_config,
             clock=self._clock,
             event_bus=event_bus,
         )

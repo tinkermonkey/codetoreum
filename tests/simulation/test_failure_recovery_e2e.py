@@ -153,6 +153,7 @@ class _SimpleRepairContext:
     agent_name: str
     max_total_agent_calls: int
     checkpoint_interval: int
+    agent_config: Any = None  # Optional specialized agent configuration
 
 
 @pytest.mark.asyncio

@@ -658,6 +658,10 @@ class SimulationDataSeeder:
         columns: list[ColumnTemplate] = []
         for pos, cfg in enumerate(column_configs):
             col_type = ColumnType.AUTOMATED if cfg.type == "automated" else ColumnType.MANUAL
+            # Convert repair_cycle_agents to domain model if present
+            repair_cycle_agents = None
+            if cfg.repair_cycle_agents:
+                repair_cycle_agents = cfg.repair_cycle_agents.to_domain()
             columns.append(
                 ColumnTemplate(
                     name=cfg.name,
@@ -670,6 +674,7 @@ class SimulationDataSeeder:
                     sla_seconds=cfg.sla_seconds,
                     on_failure_column=cfg.on_failure_column,
                     sla_escalation_column=cfg.sla_escalation_column,
+                    repair_cycle_agents=repair_cycle_agents,
                 )
             )
 
