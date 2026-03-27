@@ -182,17 +182,36 @@ class RepairCycleEventHandler(EventHandler):
                 template = await self._workflow_config.get_board_workflow_template(board_id)
                 if template:
                     column = template.get_column_config(to_column)
-                    if column and column.repair_cycle_agents:
-                        agent_config = column.repair_cycle_agents
-                        logger.info(
-                            f"Using specialized repair cycle agents for column '{to_column}': "
-                            f"test_execution={agent_config.test_execution}, "
-                            f"code_fix={agent_config.code_fix}, "
-                            f"systemic_analysis={agent_config.systemic_analysis}, "
-                            f"systemic_fix={agent_config.systemic_fix}, "
-                            f"env_rebuild={agent_config.env_rebuild}, "
-                            f"env_verification={agent_config.env_verification}"
+                    if column:
+                        if column.repair_cycle_agents:
+                            agent_config = column.repair_cycle_agents
+                            logger.info(
+                                f"Using specialized repair cycle agents for column '{to_column}': "
+                                f"test_execution={agent_config.test_execution}, "
+                                f"code_fix={agent_config.code_fix}, "
+                                f"systemic_analysis={agent_config.systemic_analysis}, "
+                                f"systemic_fix={agent_config.systemic_fix}, "
+                                f"env_rebuild={agent_config.env_rebuild}, "
+                                f"env_verification={agent_config.env_verification}"
+                            )
+                        else:
+                            logger.debug(
+                                f"Column '{to_column}' in board '{board_id}' has no repair_cycle_agents configured, "
+                                f"will use default agent"
+                            )
+                    else:
+                        logger.warning(
+                            f"Column '{to_column}' not found in board workflow template for board '{board_id}', "
+                            f"will use default agent"
                         )
+                else:
+                    logger.debug(
+                        f"No workflow template configured for board '{board_id}', will use default agent"
+                    )
+            else:
+                logger.debug(
+                    "Workflow config service not provided, will use default agent for repair cycle"
+                )
 
             # Create repair cycle context
             context = RepairCycleEventContext(

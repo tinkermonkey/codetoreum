@@ -21,6 +21,7 @@ from codetoreum.infrastructure.simulation.simulation_clock import SimulationCloc
 from codetoreum.ports.output.repair_cycle_service import (
     RepairCycleContext,
 )
+from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 
 class MockRepairCycleAdapter:
@@ -577,3 +578,249 @@ class TestRepairCycleEventContext:
 
         assert context.test_configs == configs
         assert isinstance(context.test_configs, tuple)
+
+
+class TestAgentConfigExtraction:
+    """Tests for agent config extraction from workflow template.
+
+    These tests exercise the 4-level conditional chain in handle_column_change:
+    Level 1: workflow_config is not None
+    Level 2: template is not None
+    Level 3: column is not None
+    Level 4: column.repair_cycle_agents is not None
+    """
+
+    @pytest.fixture
+    def workflow_config_service(self):
+        """Create a mock workflow config service."""
+        return AsyncMock(spec=IWorkflowConfigService)
+
+    @pytest.fixture
+    def handler_with_workflow_config(self, repair_cycle_adapter, event_bus, workflow_config_service):
+        """Create a repair cycle event handler with workflow config service."""
+        return RepairCycleEventHandler(
+            repair_cycle=repair_cycle_adapter,
+            workflow_config=workflow_config_service,
+            event_bus=event_bus,
+        )
+
+    @pytest.mark.asyncio
+    async def test_no_workflow_config_service_uses_default_agent(
+        self, handler, repair_cycle_adapter, caplog
+    ):
+        """Test when workflow_config is None, uses default agent."""
+        import logging
+
+        caplog.set_level(logging.DEBUG)
+
+        event = WorkItemColumnChanged(
+            aggregate_id="item-1",
+            payload={
+                "work_item_id": "item-1",
+                "board_id": "board-1",
+                "project_id": "proj-1",
+                "from_column": "Code Review",
+                "to_column": "Testing",
+                "moved_by": "system",
+            },
+        )
+
+        await handler.handle_column_change(event)
+
+        # Context should have agent_config=None
+        assert repair_cycle_adapter.last_context.agent_config is None
+        # Should log that workflow_config is not provided
+        assert "workflow config service not provided" in caplog.text.lower()
+
+    @pytest.mark.asyncio
+    async def test_no_template_for_board_uses_default_agent(
+        self, handler_with_workflow_config, repair_cycle_adapter, workflow_config_service, caplog
+    ):
+        """Test when template is None (board not configured), uses default agent."""
+        import logging
+
+        caplog.set_level(logging.DEBUG)
+        workflow_config_service.get_board_workflow_template.return_value = None
+
+        event = WorkItemColumnChanged(
+            aggregate_id="item-1",
+            payload={
+                "work_item_id": "item-1",
+                "board_id": "board-1",
+                "project_id": "proj-1",
+                "from_column": "Code Review",
+                "to_column": "Testing",
+                "moved_by": "system",
+            },
+        )
+
+        await handler_with_workflow_config.handle_column_change(event)
+
+        # Context should have agent_config=None
+        assert repair_cycle_adapter.last_context.agent_config is None
+        # Should log that no template was found
+        assert "no workflow template configured for board" in caplog.text.lower()
+
+    @pytest.mark.asyncio
+    async def test_column_not_found_in_template_uses_default_agent(
+        self, handler_with_workflow_config, repair_cycle_adapter, workflow_config_service, caplog
+    ):
+        """Test when column is not found in template, uses default agent."""
+        import logging
+
+        from codetoreum.domain.board_workflow_template import BoardWorkflowTemplate, ColumnTemplate, ColumnType
+
+        caplog.set_level(logging.WARNING)
+
+        # Create a template with "Code Review" column but not "Testing"
+        template = BoardWorkflowTemplate(
+            id="template-1",
+            name="Test Workflow",
+            board_id="board-1",
+            project_id="proj-1",
+            columns=(
+                ColumnTemplate(
+                    name="Code Review",
+                    type=ColumnType.MANUAL,
+                    agent_id=None,
+                    is_pipeline_trigger=False,
+                    is_exit_column=False,
+                    position=0,
+                    auto_progress_on_completion=False,
+                ),
+            ),
+        )
+        workflow_config_service.get_board_workflow_template.return_value = template
+
+        event = WorkItemColumnChanged(
+            aggregate_id="item-1",
+            payload={
+                "work_item_id": "item-1",
+                "board_id": "board-1",
+                "project_id": "proj-1",
+                "from_column": "Code Review",
+                "to_column": "Testing",  # This column doesn't exist in template
+                "moved_by": "system",
+            },
+        )
+
+        await handler_with_workflow_config.handle_column_change(event)
+
+        # Context should have agent_config=None
+        assert repair_cycle_adapter.last_context.agent_config is None
+        # Should log warning that column not found
+        assert "column 'testing' not found" in caplog.text.lower()
+
+    @pytest.mark.asyncio
+    async def test_column_found_but_no_repair_cycle_agents_uses_default_agent(
+        self, handler_with_workflow_config, repair_cycle_adapter, workflow_config_service, caplog
+    ):
+        """Test when column exists but has no repair_cycle_agents, uses default agent."""
+        import logging
+
+        from codetoreum.domain.board_workflow_template import BoardWorkflowTemplate, ColumnTemplate, ColumnType
+
+        caplog.set_level(logging.DEBUG)
+
+        # Create a template with "Testing" column but without repair_cycle_agents
+        template = BoardWorkflowTemplate(
+            id="template-1",
+            name="Test Workflow",
+            board_id="board-1",
+            project_id="proj-1",
+            columns=(
+                ColumnTemplate(
+                    name="Testing",
+                    type=ColumnType.AUTOMATED,
+                    agent_id="default-agent",
+                    is_pipeline_trigger=False,
+                    is_exit_column=False,
+                    position=0,
+                    auto_progress_on_completion=False,
+                    repair_cycle_agents=None,  # Explicitly None
+                ),
+            ),
+        )
+        workflow_config_service.get_board_workflow_template.return_value = template
+
+        event = WorkItemColumnChanged(
+            aggregate_id="item-1",
+            payload={
+                "work_item_id": "item-1",
+                "board_id": "board-1",
+                "project_id": "proj-1",
+                "from_column": "Code Review",
+                "to_column": "Testing",
+                "moved_by": "system",
+            },
+        )
+
+        await handler_with_workflow_config.handle_column_change(event)
+
+        # Context should have agent_config=None
+        assert repair_cycle_adapter.last_context.agent_config is None
+        # Should log debug message about no repair_cycle_agents
+        assert "has no repair_cycle_agents configured" in caplog.text.lower()
+
+    @pytest.mark.asyncio
+    async def test_specialized_repair_cycle_agents_extracted(
+        self, handler_with_workflow_config, repair_cycle_adapter, workflow_config_service, caplog
+    ):
+        """Test when specialized repair_cycle_agents are found, they are extracted."""
+        import logging
+
+        from codetoreum.domain.board_workflow_template import BoardWorkflowTemplate, ColumnTemplate, ColumnType
+        from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig
+
+        caplog.set_level(logging.INFO)
+
+        # Create specialized agent config
+        agent_config_obj = RepairCycleAgentConfig(
+            test_execution="test_agent",
+            code_fix="fix_agent",
+            systemic_analysis="analysis_agent",
+            systemic_fix="systemic_fix_agent",
+            env_rebuild="env_agent",
+            env_verification="verify_agent",
+        )
+
+        # Create a template with "Testing" column with repair_cycle_agents
+        template = BoardWorkflowTemplate(
+            id="template-1",
+            name="Test Workflow",
+            board_id="board-1",
+            project_id="proj-1",
+            columns=(
+                ColumnTemplate(
+                    name="Testing",
+                    type=ColumnType.AUTOMATED,
+                    agent_id="default-agent",
+                    is_pipeline_trigger=False,
+                    is_exit_column=False,
+                    position=0,
+                    auto_progress_on_completion=False,
+                    repair_cycle_agents=agent_config_obj,
+                ),
+            ),
+        )
+        workflow_config_service.get_board_workflow_template.return_value = template
+
+        event = WorkItemColumnChanged(
+            aggregate_id="item-1",
+            payload={
+                "work_item_id": "item-1",
+                "board_id": "board-1",
+                "project_id": "proj-1",
+                "from_column": "Code Review",
+                "to_column": "Testing",
+                "moved_by": "system",
+            },
+        )
+
+        await handler_with_workflow_config.handle_column_change(event)
+
+        # Context should have the extracted agent_config
+        assert repair_cycle_adapter.last_context.agent_config is not None
+        assert repair_cycle_adapter.last_context.agent_config == agent_config_obj
+        # Should log info about specialized agents being used
+        assert "using specialized repair cycle agents" in caplog.text.lower()
