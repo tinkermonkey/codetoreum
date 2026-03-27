@@ -147,7 +147,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         self._handler_errors: list[dict[str, Any]] = []
         self._lock = threading.Lock()
 
-        # Agent selection tracking (Phase 5)
+        # Agent selection tracking
         self._subtask_agent_calls: list[dict[str, Any]] = []
 
     @property

@@ -546,10 +546,8 @@ class MockRepairCycleAgentConfig:
         return self.agent_map.get(sub_task, default)
 
 
-
-
 class TestAgentSelectionTracking:
-    """Tests for agent selection tracking in repair cycle (Phase 5)."""
+    """Tests for agent selection tracking in repair cycle."""
 
     @pytest.mark.asyncio
     async def test_get_subtask_agent_calls_empty_initially(self):
