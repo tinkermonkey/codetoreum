@@ -53,6 +53,7 @@ from codetoreum.ports.output.identity_service import (
     IIdentityService,
 )
 from codetoreum.ports.output.llm_provider import (
+    AgentLLMFactory,
     ExecutionContext,
     ExecutionResult,
     ILLMProvider,
@@ -162,6 +163,7 @@ __all__ = [
     "IIdentityService",
     "BotIdentityConfig",
     # LLM Provider
+    "AgentLLMFactory",
     "ILLMProvider",
     "ExecutionContext",
     "ExecutionResult",
