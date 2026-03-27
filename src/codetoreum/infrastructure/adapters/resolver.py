@@ -398,16 +398,28 @@ class AdapterResolver:
     def _create_agent_llm_factory(self) -> Callable[[str], ILLMProvider]:
         """Create a factory closure that resolves agents and returns LLM providers.
 
-        Uses a pre-populated cache of LLM providers keyed by agent name.
-        Cache is built synchronously at resolve time by using asyncio to run
-        the async agent repository methods.
+        Implements a dual-path strategy:
+        - For synchronous repositories (e.g., InMemoryAgentRepository):
+          Cache is pre-populated eagerly at resolve time by fetching all agents
+        - For asynchronous repositories: Cache is populated on-demand when the
+          factory is called with an agent name
+
+        The factory uses duck-typing to detect if get_all() and get_by_name() are
+        synchronous or asynchronous. This has inherent limitations: a sync wrapper
+        around an async method or a coroutine-returning method may fool the checks.
+        Callers should use IAgentRepository implementations that follow clear
+        sync/async contracts. For maximum clarity, consider using type hints or
+        explicit method naming (e.g., get_all_async).
 
         Returns:
-            Callable that takes agent_name (str) and returns ILLMProvider
+            Callable[[str], ILLMProvider] that takes agent_name and returns
+            an ILLMProvider configured for that agent
 
         Raises:
-            KeyError: If agent_repository not yet resolved
-            ResourceNotFoundError: When factory is called with unknown agent name
+            KeyError: If agent_repository not yet resolved when factory is created
+            RuntimeError: If factory is called from sync code but repository methods
+                          are async (indicates architectural mismatch)
+            ResourceNotFoundError: If factory is called with unknown agent name
         """
         # Guard check: agent_repository must be resolved before we create the factory
         agent_repo = self._resolved["agent_repository"]  # Use bracket access to fail fast
@@ -428,12 +440,18 @@ class AdapterResolver:
             get_all() and have synchronous implementations, we populate eagerly.
             For async repositories or those without get_all(), we fall back to
             on-demand population when the factory is called.
+
+            LIMITATION: Uses duck-typing (hasattr + asyncio.iscoroutinefunction)
+            to detect sync/async methods. This can be fooled by wrapper methods
+            or non-standard coroutine patterns. For clear contracts, ensure
+            repository implementations explicitly follow sync or async patterns.
             """
             try:
                 # Try to get all agents from the repository
                 # Different repository implementations may support this differently
                 if hasattr(agent_repo, "get_all"):
-                    # Check if it's a synchronous method
+                    # Check if it's a synchronous method using duck-typing
+                    # (see LIMITATION note in docstring above)
                     if not asyncio.iscoroutinefunction(agent_repo.get_all):
                         # Sync version - safe to call directly
                         agents = agent_repo.get_all()
@@ -466,8 +484,10 @@ class AdapterResolver:
         _populate_cache()
 
         def factory(agent_name: str) -> ILLMProvider:
-            """
-            Factory function that looks up an agent's LLM provider from cache.
+            """Factory function that looks up an agent's LLM provider.
+
+            Implements dual-path resolution: checks cache first, then falls back
+            to on-demand fetching from the repository for unknown agents.
 
             Args:
                 agent_name: Name of the agent to look up
@@ -476,7 +496,10 @@ class AdapterResolver:
                 ILLMProvider configured for the agent
 
             Raises:
-                ResourceNotFoundError: If agent with given name not found
+                RuntimeError: If agent_repo.get_by_name is async but factory
+                              is called from sync context
+                ResourceNotFoundError: If agent with given name not found in
+                                       repository
             """
             # Check cache first
             if agent_name in llm_provider_cache:
@@ -486,19 +509,20 @@ class AdapterResolver:
             try:
                 # Check if get_by_name is async
                 if asyncio.iscoroutinefunction(agent_repo.get_by_name):
-                    # Cannot use asyncio.run() from synchronous code in a context where
-                    # an event loop may already be running. This will be handled by the
-                    # production bootstrap that ensures proper async context handling.
-                    # For now, log and raise an error.
+                    # Async repository in sync context is an architectural error
                     logger.error(
-                        f"Agent repository get_by_name is async but factory is called from sync context: {agent_name}",
+                        f"Agent repository get_by_name is async but factory called from sync context: {agent_name}",
                         extra={
                             "agent_name": agent_name,
                             "repo_type": type(agent_repo).__name__,
-                            "error_id": "ERR_ASYNC_CONTEXT_MISMATCH",
+                            "error_id": "ERR_ASYNC_REPO_SYNC_CONTEXT",
                         },
                     )
-                    raise ResourceNotFoundError("Agent", agent_name)
+                    raise RuntimeError(
+                        f"Cannot resolve agent '{agent_name}': agent repository requires async context "
+                        f"but factory is called from synchronous code. This is an architectural mismatch. "
+                        f"Ensure factory is called from async context or use a synchronous repository implementation."
+                    )
 
                 # Sync call - safe to make
                 agent = agent_repo.get_by_name(agent_name)
@@ -511,19 +535,21 @@ class AdapterResolver:
                 llm_provider_cache[agent_name] = provider
                 return provider
 
-            except ResourceNotFoundError:
-                raise
-            except Exception as e:
+            except (KeyError, AttributeError, ResourceNotFoundError) as e:
+                # Expected exceptions from repository access or missing agents
+                if isinstance(e, ResourceNotFoundError):
+                    raise
+                # Log and convert other expected errors
                 logger.error(
-                    f"Failed to resolve LLM provider for agent '{agent_name}': {e}",
+                    f"Failed to resolve agent '{agent_name}': {e}",
                     extra={
                         "agent_name": agent_name,
                         "available_agents_in_cache": list(llm_provider_cache.keys()),
-                        "error_id": "ERR_AGENT_LLM_RESOLUTION_FAILED",
+                        "error_id": "ERR_AGENT_LOOKUP_FAILED",
                     },
                     exc_info=True,
                 )
-                raise ResourceNotFoundError("Agent", agent_name)
+                raise ResourceNotFoundError("Agent", agent_name) from e
 
         return factory
 
