@@ -115,7 +115,10 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
     Example:
         config = RepairCycleConfig()
-        adapter = ProductionRepairCycleAdapter(llm_provider, config=config)
+        adapter = ProductionRepairCycleAdapter(
+            llm_factory=lambda agent_name: llm_provider,
+            config=config
+        )
 
         context = RepairCycleContext(...)
         result = await adapter.execute(context)
@@ -134,7 +137,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
         Args:
             llm_factory: Callable that takes agent name and returns ILLMProvider
-            agent_repository: Optional agent repository for agent validation (unused in Phase 3)
+            agent_repository: Optional agent repository for agent validation
             config: Optional RepairCycleConfig (uses defaults if not provided)
             event_emitter: Optional event emitter (uses null-object if not provided)
             checkpoint_store: Optional checkpoint store for resumable repairs
@@ -147,22 +150,25 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         self.checkpoint_store = checkpoint_store
         self.circuit_breaker = circuit_breaker
 
-    def _get_llm_for_subtask(self, sub_task: str, context: RepairCycleContext) -> ILLMProvider:
+    def _get_llm_for_subtask(self, sub_task: str, context: RepairCycleContext) -> tuple[ILLMProvider, str]:
         """Resolve the appropriate agent for a sub-task and return its LLM provider.
+
+        Centralizes agent name resolution logic to prevent duplication across call
+        sites. Returns both the LLM provider and the resolved agent name.
 
         Args:
             sub_task: Sub-task key (e.g., "test_execution", "code_fix")
             context: Repair cycle context with agent configuration
 
         Returns:
-            ILLMProvider instance for the resolved agent
+            Tuple of (ILLMProvider instance for the resolved agent, resolved agent name)
         """
         agent_name = (
             context.agent_config.resolve_agent(sub_task, context.agent_name)
             if context.agent_config
             else context.agent_name
         )
-        return self._llm_factory(agent_name)
+        return self._llm_factory(agent_name), agent_name
 
     async def execute(self, context: RepairCycleContext) -> RepairCycleResult:
         """Execute complete repair cycle for all configured test types.
@@ -297,12 +303,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         test_command = self._detect_and_build_test_command(config)
 
         # Resolve agent for test execution sub-task
-        llm = self._get_llm_for_subtask("test_execution", context)
-        resolved_agent_name = (
-            context.agent_config.resolve_agent("test_execution", context.agent_name)
-            if context.agent_config
-            else context.agent_name
-        )
+        llm, resolved_agent_name = self._get_llm_for_subtask("test_execution", context)
 
         # Execute tests via LLM
         logger.info(
@@ -424,12 +425,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             CircuitBreakerOpenError: When circuit breaker is open
         """
         # Resolve agent for code fix sub-task (once for all files)
-        llm = self._get_llm_for_subtask("code_fix", context)
-        resolved_agent_name = (
-            context.agent_config.resolve_agent("code_fix", context.agent_name)
-            if context.agent_config
-            else context.agent_name
-        )
+        llm, resolved_agent_name = self._get_llm_for_subtask("code_fix", context)
 
         fixed = 0
 
@@ -574,12 +570,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             return 0
 
         # Resolve agent for code fix sub-task (warnings use same agent as code fixes)
-        llm = self._get_llm_for_subtask("code_fix", context)
-        resolved_agent_name = (
-            context.agent_config.resolve_agent("code_fix", context.agent_name)
-            if context.agent_config
-            else context.agent_name
-        )
+        llm, resolved_agent_name = self._get_llm_for_subtask("code_fix", context)
 
         reviewed = 0
 

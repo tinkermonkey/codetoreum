@@ -213,7 +213,7 @@ class RepairCycleTestExecutionCompletedEvent(CodetoreumEvent):
         warnings (int): Number of warnings found
         has_failures (bool): True if any tests failed
         failures (Tuple[RepairTestFailure, ...]): Details of each failure
-        agent_name (str): Name of agent that executed tests (Phase 3)
+        agent_name (str): Name of agent that executed tests
         workflow_run_id (str): ID of the workflow run
         timestamp (str): ISO 8601 timestamp when test execution completed
     """
@@ -433,7 +433,7 @@ class RepairCycleFileFixStartedEvent(CodetoreumEvent):
         test_file (str): Path to the test file with failures
         failure_count (int): Number of failures in this file
         test_type (RepairTestType): Type of test that failed
-        agent_name (str): Name of agent that will fix the file (Phase 3)
+        agent_name (str): Name of agent that will fix the file
         workflow_run_id (str): ID of the workflow run
         timestamp (str): ISO 8601 timestamp when file fix started
     """
@@ -518,7 +518,7 @@ class RepairCycleFileFixCompletedEvent(CodetoreumEvent):
         failure_count (int): Number of failures that were in this file
         test_type (RepairTestType): Type of test
         success (bool): True if fix was successful
-        agent_name (str): Name of agent that attempted to fix the file (Phase 3)
+        agent_name (str): Name of agent that attempted to fix the file
         workflow_run_id (str): ID of the workflow run
         timestamp (str): ISO 8601 timestamp when file fix completed
     """
@@ -606,7 +606,7 @@ class RepairCycleWarningReviewStartedEvent(CodetoreumEvent):
         warning_count (int): Number of warnings found in file
         test_type (RepairTestType): Type of test that found warnings
         warnings (Tuple[RepairTestWarning, ...]): Details of each warning
-        agent_name (str): Name of agent that will review warnings (Phase 3)
+        agent_name (str): Name of agent that will review warnings
         workflow_run_id (str): ID of the workflow run
         timestamp (str): ISO 8601 timestamp when warning review started
     """
@@ -701,7 +701,7 @@ class RepairCycleWarningReviewCompletedEvent(CodetoreumEvent):
         warning_count (int): Number of warnings that were reviewed
         test_type (RepairTestType): Type of test
         success (bool): True if warning review was successful
-        agent_name (str): Name of agent that reviewed warnings (Phase 3)
+        agent_name (str): Name of agent that reviewed warnings
         workflow_run_id (str): ID of the workflow run
         timestamp (str): ISO 8601 timestamp when warning review completed
     """
