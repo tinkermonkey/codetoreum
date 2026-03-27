@@ -75,9 +75,6 @@ class Agent:
     model: str  # LLM model (e.g., "claude-sonnet-4-5")
     timeout_seconds: int
     max_retries: int
-    temperature: float = 0.7  # LLM temperature (0.0-2.0)
-    max_tokens: int = 4096  # Maximum tokens for LLM responses
-    system_prompt: str = ""  # System prompt for the agent
 
     # Constraints (NO DEFAULTS - Required fields)
     requires_docker: bool
@@ -94,6 +91,11 @@ class Agent:
     # Timestamps (NO DEFAULTS - Required fields)
     created_at: datetime
     updated_at: datetime
+
+    # Configuration with defaults (must come after required fields)
+    temperature: float = 0.7  # LLM temperature (0.0-2.0)
+    max_tokens: int = 4096  # Maximum tokens for LLM responses
+    system_prompt: str = ""  # System prompt for the agent
 
     # Event tracking
     _events: list[DomainEvent] = field(default_factory=list, init=False, repr=False)
