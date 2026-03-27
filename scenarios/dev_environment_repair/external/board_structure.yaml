@@ -1,0 +1,12 @@
+# External data: Board structure for dev_environment_repair scenario
+#
+# Development board with stages: Backlog, Development, Testing, and Done
+
+boards:
+  - board_id: "dev-board-1"
+    board_name: "Development Board"
+    columns:
+      - "Backlog"
+      - "Development"
+      - "Testing"
+      - "Done"

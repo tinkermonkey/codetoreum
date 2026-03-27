@@ -1,0 +1,45 @@
+# Board policy with repair_cycle_agents configuration
+#
+# Derived from Switchyard pipeline run db1dbf2a
+# Each sub-task uses a specialist agent with the right tools and system prompt
+
+board_policies:
+  - board_id: "dev-board-1"
+    column_configs:
+      - name: "Backlog"
+        type: "manual"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: false
+
+      - name: "Development"
+        type: "manual"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: false
+        sla_seconds: 7200
+
+      - name: "Testing"
+        type: "automated"
+        agent_id: "qa_engineer"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: true
+        sla_seconds: 3600
+        on_failure_column: "Development"
+        sla_escalation_column: "Backlog"
+        # Repair cycle agent assignments — derived from Switchyard run db1dbf2a
+        # Each sub-task uses a specialist agent with the right tools and system prompt
+        repair_cycle_agents:
+          test_execution: "qa_engineer"             # runs tests, parses results
+          code_fix: "senior_software_engineer"      # fixes code-level failures
+          systemic_analysis: "senior_software_engineer"  # classifies root causes
+          systemic_fix: "senior_software_engineer"       # applies cross-cutting fixes
+          env_rebuild: "devops_engineer"            # rebuilds Docker environment
+          env_verification: "qa_engineer"           # verifies environment health
+
+      - name: "Done"
+        type: "manual"
+        is_pipeline_trigger: false
+        is_exit_column: true
+        auto_progress_on_completion: false
