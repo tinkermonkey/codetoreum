@@ -1239,3 +1239,39 @@ class TestRepairCycleAgentConfig:
         )
         assert config.resolve_agent("test_execution", "default") == "qa-engineer_v2.0"
         assert config.resolve_agent("code_fix", "default") == "senior.software.engineer"
+
+    def test_resolve_agent_validates_sub_task_name(self):
+        """Test resolve_agent raises ValueError for invalid sub_task name."""
+        config = RepairCycleAgentConfig()
+        with pytest.raises(ValueError, match="sub_task must be one of"):
+            config.resolve_agent("invalid_sub_task", "default")
+
+    def test_resolve_agent_validates_with_typo(self):
+        """Test resolve_agent catches typos in sub_task names."""
+        config = RepairCycleAgentConfig(test_execution="qa_engineer")
+        # Typo: "test_executions" instead of "test_execution"
+        with pytest.raises(ValueError, match="sub_task must be one of"):
+            config.resolve_agent("test_executions", "default")
+
+    def test_resolve_agent_validates_with_dunder_names(self):
+        """Test resolve_agent rejects dunder attributes."""
+        config = RepairCycleAgentConfig()
+        with pytest.raises(ValueError, match="sub_task must be one of"):
+            config.resolve_agent("__class__", "default")
+
+    def test_known_sub_tasks_constant_contains_all_fields(self):
+        """Test KNOWN_SUB_TASKS contains all configured sub-task fields."""
+        assert "test_execution" in RepairCycleAgentConfig.KNOWN_SUB_TASKS
+        assert "code_fix" in RepairCycleAgentConfig.KNOWN_SUB_TASKS
+        assert "systemic_analysis" in RepairCycleAgentConfig.KNOWN_SUB_TASKS
+        assert "systemic_fix" in RepairCycleAgentConfig.KNOWN_SUB_TASKS
+        assert "env_rebuild" in RepairCycleAgentConfig.KNOWN_SUB_TASKS
+        assert "env_verification" in RepairCycleAgentConfig.KNOWN_SUB_TASKS
+
+    def test_known_sub_tasks_constant_count(self):
+        """Test KNOWN_SUB_TASKS has exactly 6 sub-tasks."""
+        assert len(RepairCycleAgentConfig.KNOWN_SUB_TASKS) == 6
+
+    def test_known_sub_tasks_is_frozenset(self):
+        """Test KNOWN_SUB_TASKS is immutable."""
+        assert isinstance(RepairCycleAgentConfig.KNOWN_SUB_TASKS, frozenset)

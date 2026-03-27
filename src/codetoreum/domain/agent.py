@@ -115,6 +115,8 @@ class Agent:
         - Timeout must be positive
         - Max retries must be non-negative
         - Model must be specified
+        - Temperature must be between 0.0 and 2.0
+        - Max tokens must be positive
         """
         if not self.name or not self.name.strip():
             msg = "Agent must have a non-empty name"
@@ -134,6 +136,14 @@ class Agent:
 
         if not self.model:
             msg = "Agent must specify a model"
+            raise DomainError(msg)
+
+        if not 0.0 <= self.temperature <= 2.0:
+            msg = "Temperature must be between 0.0 and 2.0"
+            raise DomainError(msg)
+
+        if self.max_tokens <= 0:
+            msg = "Max tokens must be positive"
             raise DomainError(msg)
 
     @classmethod

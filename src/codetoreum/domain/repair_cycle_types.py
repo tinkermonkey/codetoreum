@@ -348,6 +348,16 @@ class RepairCycleAgentConfig:
         env_verification: Optional agent name for environment verification sub-task
     """
 
+    # Known sub-task names (canonical source for validation)
+    KNOWN_SUB_TASKS = frozenset([
+        "test_execution",
+        "code_fix",
+        "systemic_analysis",
+        "systemic_fix",
+        "env_rebuild",
+        "env_verification",
+    ])
+
     test_execution: str | None = None
     code_fix: str | None = None
     systemic_analysis: str | None = None
@@ -355,20 +365,33 @@ class RepairCycleAgentConfig:
     env_rebuild: str | None = None
     env_verification: str | None = None
 
+    def __post_init__(self) -> None:
+        """Validate configuration after initialization."""
+        # No validations needed: all fields are optional strings or None
+        # The resolve_agent method validates sub_task names at call time
+
     def resolve_agent(self, sub_task: str, default: str) -> str:
         """Return configured agent for sub_task, or default if not set.
 
         Implements the fallback chain for agent resolution:
-        1. If this config has a non-None value for the sub_task, return it
-        2. Otherwise, return the default (typically from RepairCycleStageConfig.agent_name)
+        1. Validates sub_task name against KNOWN_SUB_TASKS
+        2. If this config has a non-None value for the sub_task, return it
+        3. Otherwise, return the default (typically from RepairCycleStageConfig.agent_name)
 
         Args:
-            sub_task: Name of the repair cycle sub-task (e.g., "test_execution", "code_fix")
+            sub_task: Name of the repair cycle sub-task (must be one of KNOWN_SUB_TASKS)
             default: Fallback agent name if not configured for this sub-task
 
         Returns:
             The agent name to use for this sub-task
+
+        Raises:
+            ValueError: If sub_task is not a known sub-task name
         """
+        if sub_task not in self.KNOWN_SUB_TASKS:
+            msg = f"sub_task must be one of {sorted(self.KNOWN_SUB_TASKS)}, got '{sub_task}'"
+            raise ValueError(msg)
+
         agent = getattr(self, sub_task, None)
         return agent if agent is not None else default
 
