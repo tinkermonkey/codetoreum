@@ -337,8 +337,8 @@ class SimulationEngine:
     def create_repair_cycle_event_handler(
         self,
         repair_cycle: object,
+        event_bus: object,
         workflow_config: object | None = None,
-        event_bus: object | None = None,
     ) -> "RepairCycleEventHandler":
         """
         Create repair cycle event handler with injected clock.

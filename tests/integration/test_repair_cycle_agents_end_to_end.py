@@ -3,7 +3,6 @@
 import asyncio
 from pathlib import Path
 from typing import Any, cast
-from unittest.mock import AsyncMock
 
 import pytest
 
