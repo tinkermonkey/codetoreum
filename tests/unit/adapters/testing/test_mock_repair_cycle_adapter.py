@@ -17,6 +17,7 @@ from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
     MockRepairCycleAdapter,
 )
 from codetoreum.domain.repair_cycle_types import (
+    RepairCycleAgentConfig,
     RepairTestFailure,
     RepairTestResult,
     RepairTestRunConfig,
@@ -530,20 +531,6 @@ class TestFullExecutionFlow:
         assert len(result.test_results) == 1
 
 
-class MockRepairCycleAgentConfig:
-    """Mock implementation of RepairCycleAgentConfig for testing agent selection."""
-
-    def __init__(self, agent_map: dict[str, str] | None = None):
-        """Initialize with optional agent mapping for sub-tasks.
-
-        Args:
-            agent_map: Mapping of sub_task -> agent_name
-        """
-        self.agent_map = agent_map or {}
-
-    def resolve_agent(self, sub_task: str, default: str) -> str:
-        """Resolve agent for a sub-task, falling back to default."""
-        return self.agent_map.get(sub_task, default)
 
 
 class TestAgentSelectionTracking:
@@ -637,13 +624,15 @@ class TestAgentSelectionTracking:
 
     @pytest.mark.asyncio
     async def test_resolve_agent_with_config(self):
-        """Verify agent is resolved from config when available."""
+        """Verify agent is resolved from config when available (using real domain type)."""
         clock = SimulationClock(speed_multiplier=100.0)
         adapter = MockRepairCycleAdapter(clock)
         adapter.current_project = "proj-1"
 
-        agent_config = MockRepairCycleAgentConfig(
-            agent_map={"test_execution": "qa_engineer", "code_fix": "senior_software_engineer"}
+        # Use the real RepairCycleAgentConfig domain type (not a mock)
+        agent_config = RepairCycleAgentConfig(
+            test_execution="qa_engineer",
+            code_fix="senior_software_engineer"
         )
         context = MockRepairCycleContext(
             agent_config=agent_config, agent_name="default_agent"
@@ -796,8 +785,10 @@ class TestAgentSelectionTracking:
 
         adapter.set_test_result_sequence(RepairTestType.UNIT, [failure_result, success_result])
 
-        agent_config = MockRepairCycleAgentConfig(
-            agent_map={"test_execution": "qa_engineer", "code_fix": "senior_software_engineer"}
+        # Use the real RepairCycleAgentConfig domain type (not a mock)
+        agent_config = RepairCycleAgentConfig(
+            test_execution="qa_engineer",
+            code_fix="senior_software_engineer"
         )
         context = MockRepairCycleContext(agent_config=agent_config)
 

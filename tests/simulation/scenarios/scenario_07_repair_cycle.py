@@ -1122,6 +1122,184 @@ async def test_scenario_18_json_parse_malformed_structure():
     assert "Failed to parse test output after 2 attempts" in str(exc_info.value)
 
 
+async def test_scenario_19_agent_config_routing():
+    """Test repair cycle with agent config routing to specialized agents (issue #556).
+
+    Verifies the primary behavioral change: when RepairCycleAgentConfig is provided,
+    run_tests() routes through 'test_execution', fix_failures_by_file() through
+    'code_fix', and handle_warnings() through 'code_fix' sub-task agents.
+    """
+    from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig
+
+    config = create_config("scenario_19_agent_config_routing")
+    clock = SimulationClock(speed_multiplier=100.0)
+    adapter = MockRepairCycleAdapter(clock)
+    adapter.current_project = "test-proj"
+
+    # Configure specialized agents for sub-tasks
+    agent_config = RepairCycleAgentConfig(
+        test_execution="qa_engineer",  # Different from default
+        code_fix="senior_developer",   # Different from default
+    )
+
+    # Simple scenario: tests pass immediately
+    adapter.set_iterations_until_success(RepairTestType.UNIT, 1)
+
+    test_configs = (RepairTestRunConfig(test_type=RepairTestType.UNIT),)
+    context = create_repair_context(test_configs)
+    # Set agent config on context (PRIMARY TEST CHANGE)
+    context.agent_config = agent_config
+    context.agent_name = "default_repair_agent"
+
+    result = await adapter.execute(context)
+
+    # Assertions: verify execution succeeded
+    assert result.overall_success is True
+    assert len(result.test_results) == 1
+    assert result.test_results[0].passed is True
+
+    # NEW: Verify agent routing was recorded
+    # When agent_config is present, _get_llm_for_subtask should resolve agents
+    agent_calls = adapter.get_subtask_agent_calls()
+    assert len(agent_calls) > 0, "Expected agent calls to be recorded"
+
+    # Verify test_execution sub-task used the configured agent
+    test_execution_calls = [c for c in agent_calls if c["sub_task"] == "test_execution"]
+    assert len(test_execution_calls) > 0, "Expected test_execution sub-task to be recorded"
+    assert test_execution_calls[0]["agent_name"] == "qa_engineer", \
+        "test_execution should use configured 'qa_engineer' agent"
+
+    adapter.assert_test_type_passed(RepairTestType.UNIT)
+    adapter.assert_overall_success()
+
+
+async def test_scenario_20_agent_config_with_failures_and_fixes():
+    """Test agent config routing when failures trigger code_fix agent (issue #556).
+
+    Verifies that when tests fail and need fixing, the code_fix sub-task uses
+    the specialized agent from RepairCycleAgentConfig.
+    """
+    from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig
+
+    config = create_config("scenario_20_agent_config_with_failures")
+    clock = SimulationClock(speed_multiplier=100.0)
+    adapter = MockRepairCycleAdapter(clock)
+    adapter.current_project = "test-proj"
+
+    # Configure specialized agents
+    agent_config = RepairCycleAgentConfig(
+        test_execution="qa_specialist",
+        code_fix="code_repair_expert",
+    )
+
+    # Tests require 2 iterations (1st fails, 2nd passes)
+    adapter.set_iterations_until_success(RepairTestType.UNIT, 2)
+
+    test_configs = (RepairTestRunConfig(test_type=RepairTestType.UNIT),)
+    context = create_repair_context(test_configs)
+    context.agent_config = agent_config
+    context.agent_name = "default_agent"
+
+    result = await adapter.execute(context)
+
+    # Assertions
+    assert result.overall_success is True
+    assert result.test_results[0].iterations == 2
+
+    # Verify both test_execution and code_fix sub-tasks were called
+    agent_calls = adapter.get_subtask_agent_calls()
+    sub_tasks = {c["sub_task"] for c in agent_calls}
+    assert "test_execution" in sub_tasks, "Expected test_execution calls"
+    assert "code_fix" in sub_tasks, "Expected code_fix calls (from fix_failures_by_file)"
+
+    # Verify the specialized agents were used
+    code_fix_calls = [c for c in agent_calls if c["sub_task"] == "code_fix"]
+    assert len(code_fix_calls) > 0
+    assert all(c["agent_name"] == "code_repair_expert" for c in code_fix_calls), \
+        "All code_fix calls should use the configured agent"
+
+    adapter.assert_test_type_passed(RepairTestType.UNIT)
+    adapter.assert_overall_success()
+
+
+async def test_scenario_21_agent_config_with_warning_review():
+    """Test agent config routing for warning review (issue #556).
+
+    Verifies that when warnings are reviewed, the code_fix sub-task uses
+    the specialized agent from RepairCycleAgentConfig.
+    """
+    from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig
+
+    config = create_config("scenario_21_agent_config_with_warnings")
+    clock = SimulationClock(speed_multiplier=100.0)
+    adapter = MockRepairCycleAdapter(clock)
+    adapter.current_project = "test-proj"
+
+    # Configure specialized agents
+    agent_config = RepairCycleAgentConfig(
+        test_execution="qa_agent",
+        code_fix="warning_fixer",
+    )
+
+    # Configure warning list for first test result
+    warning_list = (
+        RepairTestWarning(file="config.py", message="Deprecated config format"),
+        RepairTestWarning(file="logger.py", message="Old logging API"),
+    )
+
+    adapter.set_test_result_sequence(
+        RepairTestType.UNIT,
+        [
+            # First run: tests pass with warnings
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=1,
+                passed=10,
+                failed=0,
+                warnings=2,
+                failures=(),
+                warning_list=warning_list,
+                raw_output="Tests passed but with warnings",
+                timestamp=clock.now().isoformat(),
+            ),
+            # After warning review: all clean
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=1,
+                passed=10,
+                failed=0,
+                warnings=0,
+                failures=(),
+                warning_list=(),
+                raw_output="All tests passed, no warnings",
+                timestamp=clock.now().isoformat(),
+            ),
+        ],
+    )
+
+    test_configs = (RepairTestRunConfig(test_type=RepairTestType.UNIT, review_warnings=True),)
+    context = create_repair_context(test_configs)
+    context.agent_config = agent_config
+    context.agent_name = "default_agent"
+
+    result = await adapter.execute(context)
+
+    # Assertions
+    assert result.overall_success is True
+    assert result.test_results[0].passed is True
+    assert result.test_results[0].warnings_reviewed == 2
+
+    # Verify code_fix agent was used for warning review
+    agent_calls = adapter.get_subtask_agent_calls()
+    code_fix_calls = [c for c in agent_calls if c["sub_task"] == "code_fix"]
+    assert len(code_fix_calls) > 0, "Expected code_fix calls for warning review"
+    assert all(c["agent_name"] == "warning_fixer" for c in code_fix_calls), \
+        "Warning review should use configured code_fix agent"
+
+    adapter.assert_test_type_passed(RepairTestType.UNIT)
+    adapter.assert_overall_success()
+
+
 @pytest.mark.asyncio
 async def test_repair_cycle_scenario():
     """Test complete repair cycle simulation scenario."""

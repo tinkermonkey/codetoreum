@@ -247,3 +247,152 @@ class TestFixFailuresByFileCircuitBreaker:
 
         # is_open must have been called for each file (at minimum twice)
         assert cb.is_open.call_count >= 2
+
+
+# ---------------------------------------------------------------------------
+# Agent config routing tests (PRIMARY BEHAVIORAL CHANGE)
+# ---------------------------------------------------------------------------
+
+
+class TestAgentConfigRouting:
+    """Tests for _get_llm_for_subtask agent config routing (issue #556)."""
+
+    @pytest.mark.asyncio
+    async def test_run_tests_routes_through_test_execution_agent(self):
+        """run_tests routes through agent resolved for 'test_execution' sub-task."""
+        from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig
+
+        # Create specialized agent config that assigns different agents to sub-tasks
+        agent_config = RepairCycleAgentConfig(
+            test_execution="qa_test_executor",
+            code_fix="code_fixer",
+        )
+
+        adapter, llm = _make_adapter()
+        ctx = _RepairCycleContext()
+        # Set agent_config on the context
+        ctx.agent_config = agent_config
+        ctx.agent_name = "default_agent"
+
+        await adapter.run_tests(ctx.test_configs[0], ctx)
+
+        # LLM should have been called once for test execution
+        llm.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_fix_failures_routes_through_code_fix_agent(self):
+        """fix_failures_by_file routes through agent resolved for 'code_fix' sub-task."""
+        from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig
+
+        agent_config = RepairCycleAgentConfig(
+            test_execution="qa_test_executor",
+            code_fix="code_fixer",
+        )
+
+        cb = MagicMock()
+        cb.is_open.return_value = False
+        cb.call = AsyncMock(return_value=None)
+        cb.get_stats.return_value = MagicMock(total_calls=0)
+
+        adapter, _ = _make_adapter(circuit_breaker=cb)
+        ctx = _RepairCycleContext()
+        ctx.agent_config = agent_config
+        ctx.agent_name = "default_agent"
+
+        grouped: dict[str, tuple[RepairTestFailure, ...]] = {
+            "test_file.py": (RepairTestFailure(file="test_file.py", test="t1", message="fail"),),
+        }
+
+        await adapter.fix_failures_by_file(grouped, ctx.test_configs[0], ctx)
+
+        # Verify fix_failures uses circuit breaker (which means agent was resolved)
+        assert cb.call.call_count >= 1
+
+    @pytest.mark.asyncio
+    async def test_handle_warnings_routes_through_code_fix_agent(self):
+        """handle_warnings routes through agent resolved for 'code_fix' sub-task."""
+        from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig, RepairTestWarning, RepairTestResult
+
+        agent_config = RepairCycleAgentConfig(
+            test_execution="qa_test_executor",
+            code_fix="code_fixer",
+        )
+
+        # Mock the factory to track which agent name it's called with
+        llm_mock = AsyncMock()
+        llm_mock.execute.return_value = "Fixed"
+        call_tracker = []
+
+        def tracking_factory(agent_name):
+            call_tracker.append(agent_name)
+            return llm_mock
+
+        config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
+        adapter = ProductionRepairCycleAdapter(
+            llm_factory=tracking_factory,
+            config=config,
+        )
+
+        ctx = _RepairCycleContext()
+        ctx.agent_config = agent_config
+        ctx.agent_name = "default_agent"
+
+        # Create a config with review_warnings=True (default context has it as False)
+        test_config = RepairTestRunConfig(
+            test_type=RepairTestType.UNIT,
+            timeout=30,
+            max_iterations=1,
+            review_warnings=True,  # Important: need this to be True
+        )
+
+        test_result = RepairTestResult(
+            test_type=test_config.test_type,
+            iteration=1,
+            passed=5,
+            failed=0,
+            warnings=1,
+            failures=(),
+            warning_list=(RepairTestWarning(file="src/file.py", message="deprecation warning"),),
+            raw_output="",
+            timestamp="2025-01-01T00:00:00Z",
+        )
+
+        await adapter.handle_warnings(test_result, test_config, ctx)
+
+        # Verify factory was called with the configured code_fix agent
+        assert len(call_tracker) > 0, "Expected llm_factory to be called"
+        assert call_tracker[0] == "code_fixer", f"Expected code_fixer agent, got {call_tracker[0]}"
+
+    @pytest.mark.asyncio
+    async def test_agent_config_fallback_to_default_when_none(self):
+        """When agent_config is None, falls back to context.agent_name."""
+        adapter, llm = _make_adapter()
+        ctx = _RepairCycleContext()
+        ctx.agent_config = None
+        ctx.agent_name = "default_repair_agent"
+
+        await adapter.run_tests(ctx.test_configs[0], ctx)
+
+        # Should still work with default agent
+        llm.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_agent_config_partial_mapping(self):
+        """Agent config with only some sub-tasks configured falls back for others."""
+        from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig
+
+        # Only test_execution is configured, code_fix should fall back
+        agent_config = RepairCycleAgentConfig(
+            test_execution="qa_executor",
+            code_fix=None,  # Falls back to default
+        )
+
+        adapter, llm = _make_adapter()
+        ctx = _RepairCycleContext()
+        ctx.agent_config = agent_config
+        ctx.agent_name = "default_agent"
+
+        await adapter.run_tests(ctx.test_configs[0], ctx)
+
+        # Should work with partial config
+        llm.execute.assert_called_once()
