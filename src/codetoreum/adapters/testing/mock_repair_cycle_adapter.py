@@ -147,6 +147,9 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         self._handler_errors: list[dict[str, Any]] = []
         self._lock = threading.Lock()
 
+        # Agent selection tracking (Phase 5)
+        self._subtask_agent_calls: list[dict[str, Any]] = []
+
     @property
     def clock(self) -> SimulationClock:
         """Private property for internal clock access.
@@ -658,6 +661,9 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         Returns:
             RepairTestResult with pass/fail counts and failure details
         """
+        # Resolve and record which agent is executing this sub-task
+        self._resolve_and_record_agent("test_execution", context)
+
         self.agent_call_count += 1
         self.total_agent_calls += 1
         await self.clock.advance(timedelta(seconds=30))
@@ -753,6 +759,9 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         fixed = 0
 
         for file_path, failures in grouped_failures.items():
+            # Resolve and record which agent is executing this sub-task
+            self._resolve_and_record_agent("code_fix", context)
+
             self.agent_call_count += 1
             self.total_agent_calls += 1
             await self.clock.advance(timedelta(minutes=2))
@@ -811,6 +820,9 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         reviewed = 0
 
         for warning in test_result.warning_list:
+            # Resolve and record which agent is executing this sub-task
+            self._resolve_and_record_agent("code_fix", context)
+
             self.agent_call_count += 1
             self.total_agent_calls += 1
             await self.clock.advance(timedelta(minutes=1))
@@ -1154,6 +1166,46 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         """
         return self.total_agent_calls or self.agent_call_count
 
+    def get_subtask_agent_calls(self) -> list[dict[str, Any]]:
+        """Get all recorded sub-task agent calls.
+
+        Returns a list of recorded agent selections for each sub-task invocation.
+        Each record contains the sub_task name, resolved agent_name, and timestamp.
+
+        Returns:
+            List of agent call records with keys: sub_task, agent_name, timestamp
+        """
+        with self._lock:
+            return list(self._subtask_agent_calls)
+
+    def assert_subtask_used_agent(self, sub_task: str, expected_agent: str) -> None:
+        """Assert that a sub-task used the specified agent.
+
+        Checks the most recent call for the specified sub-task and verifies
+        it used the expected agent. Raises AssertionError if no calls were
+        recorded for the sub-task or if the agent name doesn't match.
+
+        Args:
+            sub_task: The sub-task name to check
+            expected_agent: The expected agent name
+
+        Raises:
+            AssertionError: If no calls recorded or agent name doesn't match
+        """
+        with self._lock:
+            calls = [c for c in self._subtask_agent_calls if c["sub_task"] == sub_task]
+
+        if not calls:
+            msg = f"No calls recorded for sub_task '{sub_task}'"
+            raise AssertionError(msg)
+
+        actual = calls[-1]["agent_name"]  # Check most recent call
+        if actual != expected_agent:
+            msg = (
+                f"Sub-task '{sub_task}': expected agent '{expected_agent}', got '{actual}'"
+            )
+            raise AssertionError(msg)
+
     # Private helper methods
 
     async def _run_test_cycle(
@@ -1455,3 +1507,38 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         """Log event with timestamp (FR-11.9)."""
         event["timestamp"] = self.clock.now().isoformat()
         self.event_log.append(event)
+
+    def _resolve_and_record_agent(
+        self,
+        sub_task: str,
+        context: RepairCycleContext,
+    ) -> str:
+        """Resolve agent for a sub-task and record the selection.
+
+        Resolves the agent name based on agent_config if available, otherwise
+        uses the default context agent name. Records the selection in the
+        subtask agent calls log for later assertion.
+
+        Args:
+            sub_task: The sub-task name (e.g., "test_execution", "code_fix")
+            context: Repair cycle context with optional agent_config
+
+        Returns:
+            The resolved agent name
+        """
+        agent_name = (
+            context.agent_config.resolve_agent(sub_task, context.agent_name)
+            if context.agent_config
+            else context.agent_name
+        )
+
+        with self._lock:
+            self._subtask_agent_calls.append(
+                {
+                    "sub_task": sub_task,
+                    "agent_name": agent_name,
+                    "timestamp": self.clock.now().isoformat(),
+                }
+            )
+
+        return agent_name

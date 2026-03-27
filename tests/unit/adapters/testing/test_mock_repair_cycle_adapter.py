@@ -37,6 +37,7 @@ class MockRepairCycleContext:
         agent_name: str = "senior_software_engineer",
         max_total_agent_calls: int = 100,
         checkpoint_interval: int = 5,
+        agent_config=None,
     ):
         self.stage_name = stage_name
         self.workflow_run_id = workflow_run_id
@@ -51,6 +52,7 @@ class MockRepairCycleContext:
         self.agent_name = agent_name
         self.max_total_agent_calls = max_total_agent_calls
         self.checkpoint_interval = checkpoint_interval
+        self.agent_config = agent_config
 
 
 class TestSimulationClockIntegration:
@@ -526,3 +528,339 @@ class TestFullExecutionFlow:
         assert not result.overall_success
         # Only the first test type should have been executed
         assert len(result.test_results) == 1
+
+
+class MockRepairCycleAgentConfig:
+    """Mock implementation of RepairCycleAgentConfig for testing agent selection."""
+
+    def __init__(self, agent_map: dict[str, str] | None = None):
+        """Initialize with optional agent mapping for sub-tasks.
+
+        Args:
+            agent_map: Mapping of sub_task -> agent_name
+        """
+        self.agent_map = agent_map or {}
+
+    def resolve_agent(self, sub_task: str, default: str) -> str:
+        """Resolve agent for a sub-task, falling back to default."""
+        return self.agent_map.get(sub_task, default)
+
+
+
+
+class TestAgentSelectionTracking:
+    """Tests for agent selection tracking in repair cycle (Phase 5)."""
+
+    @pytest.mark.asyncio
+    async def test_get_subtask_agent_calls_empty_initially(self):
+        """Verify agent calls list is empty before execution."""
+        adapter = MockRepairCycleAdapter()
+        calls = adapter.get_subtask_agent_calls()
+        assert calls == []
+
+    @pytest.mark.asyncio
+    async def test_record_agent_for_test_execution(self):
+        """Verify agent is recorded when run_tests is called."""
+        clock = SimulationClock(speed_multiplier=100.0)
+        adapter = MockRepairCycleAdapter(clock)
+        adapter.current_project = "proj-1"
+
+        result = RepairTestResult(
+            test_type=RepairTestType.UNIT,
+            iteration=1,
+            passed=10,
+            failed=0,
+            warnings=0,
+            failures=(),
+            warning_list=(),
+            raw_output="",
+            timestamp=clock.now().isoformat(),
+        )
+        adapter.set_test_result_sequence(RepairTestType.UNIT, [result])
+
+        context = MockRepairCycleContext(agent_name="qa_engineer")
+        await adapter.run_tests(context.test_configs[0], context)
+
+        calls = adapter.get_subtask_agent_calls()
+        assert len(calls) == 1
+        assert calls[0]["sub_task"] == "test_execution"
+        assert calls[0]["agent_name"] == "qa_engineer"
+        assert "timestamp" in calls[0]
+
+    @pytest.mark.asyncio
+    async def test_record_agent_for_code_fix(self):
+        """Verify agent is recorded when fix_failures_by_file is called."""
+        clock = SimulationClock(speed_multiplier=100.0)
+        adapter = MockRepairCycleAdapter(clock)
+        adapter.current_project = "proj-1"
+
+        context = MockRepairCycleContext(agent_name="senior_software_engineer")
+        config = context.test_configs[0]
+
+        failures: dict[str, tuple[RepairTestFailure, ...]] = {
+            "test_file.py": (RepairTestFailure(file="test_file.py", test="test_1", message="Failed"),)
+        }
+
+        await adapter.fix_failures_by_file(failures, config, context)
+
+        calls = adapter.get_subtask_agent_calls()
+        assert len(calls) == 1
+        assert calls[0]["sub_task"] == "code_fix"
+        assert calls[0]["agent_name"] == "senior_software_engineer"
+
+    @pytest.mark.asyncio
+    async def test_record_agent_for_warning_review(self):
+        """Verify agent is recorded when handle_warnings is called."""
+        clock = SimulationClock(speed_multiplier=100.0)
+        adapter = MockRepairCycleAdapter(clock)
+        adapter.current_project = "proj-1"
+
+        context = MockRepairCycleContext(agent_name="code_reviewer")
+        config = context.test_configs[0]
+
+        test_result = RepairTestResult(
+            test_type=RepairTestType.UNIT,
+            iteration=1,
+            passed=10,
+            failed=0,
+            warnings=1,
+            failures=(),
+            warning_list=(RepairTestWarning(file="src/file.py", message="Warning"),),
+            raw_output="",
+            timestamp=clock.now().isoformat(),
+        )
+
+        await adapter.handle_warnings(test_result, config, context)
+
+        calls = adapter.get_subtask_agent_calls()
+        assert len(calls) == 1
+        assert calls[0]["sub_task"] == "code_fix"
+        assert calls[0]["agent_name"] == "code_reviewer"
+
+    @pytest.mark.asyncio
+    async def test_resolve_agent_with_config(self):
+        """Verify agent is resolved from config when available."""
+        clock = SimulationClock(speed_multiplier=100.0)
+        adapter = MockRepairCycleAdapter(clock)
+        adapter.current_project = "proj-1"
+
+        agent_config = MockRepairCycleAgentConfig(
+            agent_map={"test_execution": "qa_engineer", "code_fix": "senior_software_engineer"}
+        )
+        context = MockRepairCycleContext(
+            agent_config=agent_config, agent_name="default_agent"
+        )
+
+        result = RepairTestResult(
+            test_type=RepairTestType.UNIT,
+            iteration=1,
+            passed=10,
+            failed=0,
+            warnings=0,
+            failures=(),
+            warning_list=(),
+            raw_output="",
+            timestamp=clock.now().isoformat(),
+        )
+        adapter.set_test_result_sequence(RepairTestType.UNIT, [result])
+
+        await adapter.run_tests(context.test_configs[0], context)
+
+        calls = adapter.get_subtask_agent_calls()
+        assert len(calls) == 1
+        assert calls[0]["agent_name"] == "qa_engineer"
+
+    @pytest.mark.asyncio
+    async def test_fallback_to_default_agent_when_no_config(self):
+        """Verify default agent is used when config is None."""
+        clock = SimulationClock(speed_multiplier=100.0)
+        adapter = MockRepairCycleAdapter(clock)
+        adapter.current_project = "proj-1"
+
+        context = MockRepairCycleContext(agent_config=None, agent_name="default_agent")
+
+        result = RepairTestResult(
+            test_type=RepairTestType.UNIT,
+            iteration=1,
+            passed=10,
+            failed=0,
+            warnings=0,
+            failures=(),
+            warning_list=(),
+            raw_output="",
+            timestamp=clock.now().isoformat(),
+        )
+        adapter.set_test_result_sequence(RepairTestType.UNIT, [result])
+
+        await adapter.run_tests(context.test_configs[0], context)
+
+        calls = adapter.get_subtask_agent_calls()
+        assert len(calls) == 1
+        assert calls[0]["agent_name"] == "default_agent"
+
+    @pytest.mark.asyncio
+    async def test_assert_subtask_used_agent_success(self):
+        """Verify assert_subtask_used_agent succeeds on match."""
+        clock = SimulationClock(speed_multiplier=100.0)
+        adapter = MockRepairCycleAdapter(clock)
+        adapter.current_project = "proj-1"
+
+        context = MockRepairCycleContext(agent_name="qa_engineer")
+
+        result = RepairTestResult(
+            test_type=RepairTestType.UNIT,
+            iteration=1,
+            passed=10,
+            failed=0,
+            warnings=0,
+            failures=(),
+            warning_list=(),
+            raw_output="",
+            timestamp=clock.now().isoformat(),
+        )
+        adapter.set_test_result_sequence(RepairTestType.UNIT, [result])
+
+        await adapter.run_tests(context.test_configs[0], context)
+
+        # Should not raise
+        adapter.assert_subtask_used_agent("test_execution", "qa_engineer")
+
+    @pytest.mark.asyncio
+    async def test_assert_subtask_used_agent_fails_on_mismatch(self):
+        """Verify assert_subtask_used_agent fails on agent mismatch."""
+        clock = SimulationClock(speed_multiplier=100.0)
+        adapter = MockRepairCycleAdapter(clock)
+        adapter.current_project = "proj-1"
+
+        context = MockRepairCycleContext(agent_name="qa_engineer")
+
+        result = RepairTestResult(
+            test_type=RepairTestType.UNIT,
+            iteration=1,
+            passed=10,
+            failed=0,
+            warnings=0,
+            failures=(),
+            warning_list=(),
+            raw_output="",
+            timestamp=clock.now().isoformat(),
+        )
+        adapter.set_test_result_sequence(RepairTestType.UNIT, [result])
+
+        await adapter.run_tests(context.test_configs[0], context)
+
+        with pytest.raises(AssertionError, match="expected agent 'senior_software_engineer', got 'qa_engineer'"):
+            adapter.assert_subtask_used_agent("test_execution", "senior_software_engineer")
+
+    @pytest.mark.asyncio
+    async def test_assert_subtask_used_agent_fails_on_no_calls(self):
+        """Verify assert_subtask_used_agent fails when no calls recorded."""
+        adapter = MockRepairCycleAdapter()
+
+        with pytest.raises(AssertionError, match="No calls recorded for sub_task"):
+            adapter.assert_subtask_used_agent("test_execution", "qa_engineer")
+
+    @pytest.mark.asyncio
+    async def test_multiple_subtask_calls_track_independently(self):
+        """Verify multiple sub-task calls are tracked independently."""
+        clock = SimulationClock(speed_multiplier=100.0)
+        adapter = MockRepairCycleAdapter(clock)
+        adapter.current_project = "proj-1"
+
+        # Set up test results with failures
+        failure_result = RepairTestResult(
+            test_type=RepairTestType.UNIT,
+            iteration=1,
+            passed=7,
+            failed=3,
+            warnings=0,
+            failures=(
+                RepairTestFailure(file="test_file.py", test="test_1", message="Failed"),
+                RepairTestFailure(file="test_file.py", test="test_2", message="Failed"),
+                RepairTestFailure(file="test_file.py", test="test_3", message="Failed"),
+            ),
+            warning_list=(),
+            raw_output="",
+            timestamp=clock.now().isoformat(),
+        )
+
+        success_result = RepairTestResult(
+            test_type=RepairTestType.UNIT,
+            iteration=2,
+            passed=10,
+            failed=0,
+            warnings=0,
+            failures=(),
+            warning_list=(),
+            raw_output="",
+            timestamp=clock.now().isoformat(),
+        )
+
+        adapter.set_test_result_sequence(RepairTestType.UNIT, [failure_result, success_result])
+
+        agent_config = MockRepairCycleAgentConfig(
+            agent_map={"test_execution": "qa_engineer", "code_fix": "senior_software_engineer"}
+        )
+        context = MockRepairCycleContext(agent_config=agent_config)
+
+        # Run the full cycle
+        result = await adapter.execute(context)
+
+        # Should record test_execution, code_fix (for file), test_execution (retest)
+        calls = adapter.get_subtask_agent_calls()
+        assert len(calls) >= 3
+
+        # Verify agents by sub-task
+        test_execution_calls = [c for c in calls if c["sub_task"] == "test_execution"]
+        code_fix_calls = [c for c in calls if c["sub_task"] == "code_fix"]
+
+        assert all(c["agent_name"] == "qa_engineer" for c in test_execution_calls)
+        assert all(c["agent_name"] == "senior_software_engineer" for c in code_fix_calls)
+
+    @pytest.mark.asyncio
+    async def test_assert_subtask_used_agent_checks_most_recent_call(self):
+        """Verify assertion checks most recent call for multiple invocations."""
+        clock = SimulationClock(speed_multiplier=100.0)
+        adapter = MockRepairCycleAdapter(clock)
+        adapter.current_project = "proj-1"
+
+        # First call with agent_1
+        context1 = MockRepairCycleContext(agent_name="agent_1")
+        result1 = RepairTestResult(
+            test_type=RepairTestType.UNIT,
+            iteration=1,
+            passed=10,
+            failed=0,
+            warnings=0,
+            failures=(),
+            warning_list=(),
+            raw_output="",
+            timestamp=clock.now().isoformat(),
+        )
+        adapter.set_test_result_sequence(RepairTestType.UNIT, [result1])
+
+        await adapter.run_tests(context1.test_configs[0], context1)
+
+        # Second call with agent_2
+        context2 = MockRepairCycleContext(agent_name="agent_2")
+        result2 = RepairTestResult(
+            test_type=RepairTestType.UNIT,
+            iteration=2,
+            passed=10,
+            failed=0,
+            warnings=0,
+            failures=(),
+            warning_list=(),
+            raw_output="",
+            timestamp=clock.now().isoformat(),
+        )
+        adapter.set_test_result_sequence(RepairTestType.UNIT, [result1, result2])
+
+        await adapter.run_tests(context2.test_configs[0], context2)
+
+        # Assertion should check most recent (agent_2)
+        adapter.assert_subtask_used_agent("test_execution", "agent_2")
+
+        # And fail for the first one
+        with pytest.raises(AssertionError):
+            adapter.assert_subtask_used_agent("test_execution", "agent_1")
