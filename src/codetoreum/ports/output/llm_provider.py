@@ -597,8 +597,14 @@ class UsageStats:
             raise ValueError(msg)
 
 
-# Type alias for stream callback
+# Type aliases
 StreamCallback = Callable[[StreamChunk], Awaitable[None]]
+AgentLLMFactory = Callable[[str], "ILLMProvider"]
+"""Factory callable that creates a configured ILLMProvider for a given agent.
+
+Input:  agent_name (str) - e.g., "senior_software_engineer"
+Output: configured ILLMProvider with agent's model, temperature, system prompt, tools
+"""
 
 
 # ============================================================================

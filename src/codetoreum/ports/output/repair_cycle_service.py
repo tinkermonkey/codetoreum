@@ -20,6 +20,7 @@ For each test type:
 from typing import Protocol
 
 from codetoreum.domain.repair_cycle_types import (
+    RepairCycleAgentConfig,
     RepairCycleResult,
     RepairTestFailure,
     RepairTestResult,
@@ -41,6 +42,9 @@ class RepairCycleContext(Protocol):
         agent_name: Name of agent executing repairs
         max_total_agent_calls: Maximum total agent calls allowed (circuit breaker)
         checkpoint_interval: Iteration interval for checkpointing (e.g., every 5 iterations)
+        agent_config: Optional RepairCycleAgentConfig for agent specialization. None means
+                      fall back to stage's default agent (agent_name). Supports assigning
+                      specialized agents to specific repair cycle sub-tasks.
     """
 
     stage_name: str
@@ -49,6 +53,7 @@ class RepairCycleContext(Protocol):
     agent_name: str
     max_total_agent_calls: int
     checkpoint_interval: int
+    agent_config: RepairCycleAgentConfig | None
 
 
 class IRepairCycle(Protocol):
