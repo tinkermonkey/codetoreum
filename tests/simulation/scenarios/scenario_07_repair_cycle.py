@@ -1122,6 +1122,7 @@ async def test_scenario_18_json_parse_malformed_structure():
     assert "Failed to parse test output after 2 attempts" in str(exc_info.value)
 
 
+@pytest.mark.asyncio
 async def test_scenario_19_agent_config_routing():
     """Test repair cycle with agent config routing to specialized agents (issue #556).
 
@@ -1131,7 +1132,6 @@ async def test_scenario_19_agent_config_routing():
     """
     from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig
 
-    config = create_config("scenario_19_agent_config_routing")
     clock = SimulationClock(speed_multiplier=100.0)
     adapter = MockRepairCycleAdapter(clock)
     adapter.current_project = "test-proj"
@@ -1173,6 +1173,7 @@ async def test_scenario_19_agent_config_routing():
     adapter.assert_overall_success()
 
 
+@pytest.mark.asyncio
 async def test_scenario_20_agent_config_with_failures_and_fixes():
     """Test agent config routing when failures trigger code_fix agent (issue #556).
 
@@ -1181,7 +1182,6 @@ async def test_scenario_20_agent_config_with_failures_and_fixes():
     """
     from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig
 
-    config = create_config("scenario_20_agent_config_with_failures")
     clock = SimulationClock(speed_multiplier=100.0)
     adapter = MockRepairCycleAdapter(clock)
     adapter.current_project = "test-proj"
@@ -1222,6 +1222,7 @@ async def test_scenario_20_agent_config_with_failures_and_fixes():
     adapter.assert_overall_success()
 
 
+@pytest.mark.asyncio
 async def test_scenario_21_agent_config_with_warning_review():
     """Test agent config routing for warning review (issue #556).
 
@@ -1230,7 +1231,6 @@ async def test_scenario_21_agent_config_with_warning_review():
     """
     from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig
 
-    config = create_config("scenario_21_agent_config_with_warnings")
     clock = SimulationClock(speed_multiplier=100.0)
     adapter = MockRepairCycleAdapter(clock)
     adapter.current_project = "test-proj"
