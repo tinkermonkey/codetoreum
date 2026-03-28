@@ -338,16 +338,14 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     llm.execute,
                     "repair_cycle.run_tests",
                     prompt=prompt,
-                    timeout=config.timeout,
                 )
             else:
                 agent_response = await llm.execute(
                     prompt=prompt,
-                    timeout=config.timeout,
                 )
 
             # Parse test output with retry logic
-            test_output = await self._parse_test_output_with_retry(agent_response, config.test_type)
+            test_output = await self._parse_test_output_with_retry(agent_response.content, config.test_type)
 
             # Parse failures and warnings
             failures = self._extract_failures(test_output, config.test_type)
@@ -363,7 +361,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 warnings=len(warnings),
                 failures=tuple(failures),
                 warning_list=tuple(warnings),
-                raw_output=agent_response,
+                raw_output=agent_response.content,
                 timestamp=timestamp,
             )
 
@@ -492,12 +490,10 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         llm.execute,
                         "repair_cycle.fix_failures_by_file",
                         prompt=fix_prompt,
-                        timeout=config.timeout,
                     )
                 else:
                     await llm.execute(
                         prompt=fix_prompt,
-                        timeout=config.timeout,
                     )
 
                 # Emit file fix completed event (success)
@@ -637,12 +633,10 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         llm.execute,
                         "repair_cycle.handle_warnings",
                         prompt=review_prompt,
-                        timeout=config.timeout,
                     )
                 else:
                     await llm.execute(
                         prompt=review_prompt,
-                        timeout=config.timeout,
                     )
 
                 # Emit warning review completed event (success)
