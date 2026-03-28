@@ -130,7 +130,8 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         # Default factory returns MockLLMAdapter for any agent
         if llm_factory is None:
             _mock_llm = MockLLMAdapter()
-            llm_factory = lambda agent_name: _mock_llm
+            def llm_factory(agent_name):
+                return _mock_llm
         self._llm_factory = llm_factory
         self._clock = clock or SimulationClock()
         self._checkpoint_store = checkpoint_store

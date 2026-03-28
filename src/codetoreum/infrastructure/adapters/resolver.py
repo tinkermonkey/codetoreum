@@ -443,7 +443,7 @@ class AdapterResolver:
         # Attempt synchronous cache population at factory creation time
         # For InMemoryAgentRepository, use get_all_sync() directly
         if hasattr(agent_repo, "get_all_sync") and callable(
-            getattr(agent_repo, "get_all_sync")
+            agent_repo.get_all_sync
         ):
             try:
                 agents = agent_repo.get_all_sync()
@@ -496,7 +496,7 @@ class AdapterResolver:
 
                 # Prefer synchronous method if available (InMemoryAgentRepository)
                 if hasattr(agent_repo, "get_by_name_sync") and callable(
-                    getattr(agent_repo, "get_by_name_sync")
+                    agent_repo.get_by_name_sync
                 ):
                     agent = agent_repo.get_by_name_sync(agent_name)
                 # Check if get_by_name is async
