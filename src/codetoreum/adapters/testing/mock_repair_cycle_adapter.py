@@ -134,7 +134,10 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             async def llm_factory(agent_name):
                 return _mock_llm
         self._llm_factory = llm_factory
-        self._clock = clock or SimulationClock()
+        # Use a very fast clock by default (100,000x speed) to prevent test timeouts
+        # This ensures that await self.clock.advance() calls don't cause real delays
+        # Tests can override with their own clock if they need different behavior
+        self._clock = clock or SimulationClock(speed_multiplier=100_000.0)
         self._checkpoint_store = checkpoint_store
         self._container_adapter = container_adapter
         self._current_project: str | None = None

@@ -297,7 +297,7 @@ class TestFakeContainerAdapter:
         config = SimulationConfig.create_fast_config(
             "test",
             fidelity_level=FidelityLevel.MEDIUM,
-            ms_per_file_operation=100.0,  # Higher per-operation cost to make timing clearer
+            ms_per_file_operation=5.0,  # Reduced from 100.0 to prevent timeout in tests with real delays
             speed_multiplier=1.0,
         )
         adapter = FakeContainerAdapter(config=config)
