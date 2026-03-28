@@ -25,6 +25,7 @@ from codetoreum.domain.repair_cycle_types import (
 from codetoreum.infrastructure.resilience.exceptions import CircuitBreakerOpenError
 from codetoreum.infrastructure.resilience.interfaces import CircuitState
 from codetoreum.infrastructure.resilience.mocks import MockCircuitBreaker
+from codetoreum.ports.output.llm_provider import ExecutionResult
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -67,7 +68,7 @@ def _make_adapter(
 ) -> tuple[ProductionRepairCycleAdapter, AsyncMock]:
     """Return (adapter, mock_llm) pre-wired for tests."""
     llm = AsyncMock()
-    llm.execute.return_value = llm_response
+    llm.execute.return_value = ExecutionResult(content=llm_response)
     # Create factory that returns the same mock LLM for any agent name
     def llm_factory(agent_name):
         return llm
@@ -265,7 +266,7 @@ class TestAgentConfigRouting:
             """Factory that records the agent name requested."""
             resolved_agents.append(agent_name)
             llm = AsyncMock()
-            llm.execute.return_value = _VALID_JSON_RESPONSE
+            llm.execute.return_value = ExecutionResult(content=_VALID_JSON_RESPONSE)
             return llm
 
         config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
@@ -336,7 +337,7 @@ class TestAgentConfigRouting:
 
         # Mock the factory to track which agent name it's called with
         llm_mock = AsyncMock()
-        llm_mock.execute.return_value = "Fixed"
+        llm_mock.execute.return_value = ExecutionResult(content="Fixed")
         call_tracker = []
 
         def tracking_factory(agent_name):
