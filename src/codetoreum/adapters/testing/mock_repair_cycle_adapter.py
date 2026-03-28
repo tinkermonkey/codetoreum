@@ -20,6 +20,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
+from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
 
 if TYPE_CHECKING:
     from codetoreum.ports.output.llm_provider import ILLMProvider
@@ -106,7 +107,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
     def __init__(
         self,
-        llm_factory: "Callable[[str], ILLMProvider]",
+        llm_factory: "Callable[[str], ILLMProvider] | None" = None,
         clock: SimulationClock | None = None,
         checkpoint_store: IRepairCycleCheckpointStore | None = None,
         container_adapter: "Any | None" = None,
@@ -117,6 +118,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             llm_factory: Factory for creating LLM providers for agents. Takes agent name
                         and returns an ILLMProvider instance. Enables behavioral parity with
                         production adapter's agent selection and LLM instantiation.
+                        Defaults to a factory that returns MockLLMAdapter for any agent.
             clock: SimulationClock instance for deterministic time advancement
             checkpoint_store: Optional checkpoint store for recovery testing
             container_adapter: Optional container adapter for causal linking (FR-2/US-2.4).
@@ -125,6 +127,10 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                              between test execution and repair cycle decisions.
         """
         super().__init__()
+        # Default factory returns MockLLMAdapter for any agent
+        if llm_factory is None:
+            _mock_llm = MockLLMAdapter()
+            llm_factory = lambda agent_name: _mock_llm
         self._llm_factory = llm_factory
         self._clock = clock or SimulationClock()
         self._checkpoint_store = checkpoint_store

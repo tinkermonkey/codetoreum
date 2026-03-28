@@ -55,3 +55,11 @@ class IAgentRepository(ABC):
         Returns:
             List of Agent domain objects for the project
         """
+
+    @abstractmethod
+    async def get_all(self) -> list[Agent]:
+        """Get all agents in the repository.
+
+        Returns:
+            List of all Agent domain objects
+        """

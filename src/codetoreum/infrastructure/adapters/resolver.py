@@ -435,40 +435,45 @@ class AdapterResolver:
         llm_provider_cache: dict[str, ILLMProvider] = {}
         llm_provider_cache_lock = threading.Lock()
 
-        # For simulation adapters, agent_repo is synchronous (InMemoryAgentRepository).
+        # For simulation adapters, agent_repo has synchronous get_all() (InMemoryAgentRepository).
         # For production, agent_repo may have async methods. Since resolve_repair_cycle()
         # is called synchronously from resolve_all(), we cannot use asyncio.run() here.
-        # Instead, we'll populate the cache on-demand when the factory is called.
-        def _populate_cache() -> None:
-            """Populate the LLM provider cache by fetching all agents.
+        # Instead, we eagerly populate the cache by calling get_all() if available.
+        def _populate_cache_sync() -> None:
+            """Populate the LLM provider cache synchronously by fetching all agents.
 
-            Note: This is a best-effort operation. For repositories that support
-            get_all() and have synchronous implementations, we populate eagerly.
-            For async repositories or those without get_all(), we fall back to
-            on-demand population when the factory is called.
+            For simulation mode (InMemoryAgentRepository), get_all() is synchronous
+            and we call it directly. For production async repositories, this function
+            attempts to call get_all() synchronously and falls back to on-demand
+            population if that fails.
 
-            LIMITATION: Uses duck-typing (hasattr + asyncio.iscoroutinefunction)
-            to detect sync/async methods. This can be fooled by wrapper methods
-            or non-standard coroutine patterns. For clear contracts, ensure
-            repository implementations explicitly follow sync or async patterns.
+            This ensures that when the factory is later called from async contexts
+            (like during repair cycle execution), the cache is already populated
+            and we don't need to use asyncio.run() which would fail in an event loop.
             """
             try:
                 # Try to get all agents from the repository
-                # Different repository implementations may support this differently
+                # InMemoryAgentRepository.get_all() is a coroutine but synchronous internally
+                # so we need to check if we can call it
                 if hasattr(agent_repo, "get_all"):
-                    # Check if it's a synchronous method using duck-typing
-                    # (see LIMITATION note in docstring above)
-                    if not asyncio.iscoroutinefunction(agent_repo.get_all):
-                        # Sync version - safe to call directly
-                        agents = agent_repo.get_all()
+                    get_all_method = getattr(agent_repo, "get_all")
+                    # Check if it's async or sync using duck-typing
+                    if asyncio.iscoroutinefunction(get_all_method):
+                        # For async repositories, we cannot call from sync context
+                        # Log this and fall back to on-demand population
+                        logger.debug(
+                            "Agent repository.get_all() is async; cache will be populated on-demand when factory is called",
+                            extra={"repo_type": type(agent_repo).__name__},
+                        )
+                    else:
+                        # Sync version - safe to call directly (shouldn't happen as interface is async)
+                        agents = get_all_method()
                         with llm_provider_cache_lock:
                             for agent in agents:
                                 llm_provider_cache[agent.name] = self._build_llm_provider(agent)
-                    else:
-                        # Async version - cannot call from here, defer to on-demand
                         logger.debug(
-                            "Agent repository.get_all() is async; deferring cache population to on-demand",
-                            extra={"repo_type": type(agent_repo).__name__},
+                            f"Pre-populated LLM provider cache with {len(agents)} agents",
+                            extra={"agent_count": len(agents), "repo_type": type(agent_repo).__name__},
                         )
                 else:
                     logger.debug(
@@ -487,8 +492,31 @@ class AdapterResolver:
                 )
                 # Continue without pre-population; cache will be populated on-demand
 
-        # Populate cache at factory creation time
-        _populate_cache()
+        # Attempt synchronous cache population at factory creation time
+        # For InMemoryAgentRepository, we'll use get_all_sync() directly
+        if hasattr(agent_repo, "get_all_sync") and callable(getattr(agent_repo, "get_all_sync")):
+            try:
+                agents = agent_repo.get_all_sync()
+                with llm_provider_cache_lock:
+                    for agent in agents:
+                        llm_provider_cache[agent.name] = self._build_llm_provider(agent)
+                logger.debug(
+                    f"Pre-populated LLM provider cache with {len(agents)} agents",
+                    extra={"agent_count": len(agents), "repo_type": type(agent_repo).__name__},
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to pre-populate LLM provider cache using get_all_sync: {e}",
+                    extra={
+                        "error": str(e),
+                        "repo_type": type(agent_repo).__name__,
+                        "error_id": "ERR_CACHE_POPULATION_FAILED",
+                    },
+                    exc_info=True,
+                )
+        else:
+            # Fall back to attempting async get_all() or on-demand population
+            _populate_cache_sync()
 
         def factory(agent_name: str) -> ILLMProvider:
             """Factory function that looks up an agent's LLM provider.
@@ -518,8 +546,12 @@ class AdapterResolver:
             try:
                 agent = None
 
+                # Prefer synchronous method if available (InMemoryAgentRepository provides this)
+                if hasattr(agent_repo, "get_by_name_sync") and callable(getattr(agent_repo, "get_by_name_sync")):
+                    # Use sync method - InMemoryAgentRepository stores in-memory so this is safe
+                    agent = agent_repo.get_by_name_sync(agent_name)
                 # Check if get_by_name is async
-                if asyncio.iscoroutinefunction(agent_repo.get_by_name):
+                elif asyncio.iscoroutinefunction(agent_repo.get_by_name):
                     # Async repository: run the coroutine in a new event loop
                     # using asyncio.run(). This is safe because the factory is
                     # created synchronously during adapter resolution, before any
