@@ -684,7 +684,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         test_type: RepairTestType,
         iteration: int,
         context: RepairCycleContext,
-    ) -> bool:
+    ) -> None:
         """Save repair cycle state for resume after failures.
 
         Called at checkpoint_interval iterations. Saves sufficient state to
@@ -694,9 +694,6 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             test_type: Current test type being executed
             iteration: current iteration number
             context: Repair cycle context
-
-        Returns:
-            bool: True if checkpoint saved successfully, False otherwise
         """
         if not self.checkpoint_store:
             logger.debug(
@@ -708,7 +705,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 },
                 exc_info=False,
             )
-            return True
+            return
 
         try:
             # Create checkpoint with current state
@@ -742,7 +739,6 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 },
                 exc_info=False,
             )
-            return True
 
         except Exception as e:
             logger.error(
@@ -773,8 +769,6 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         checkpoint_store_type=type(self.checkpoint_store).__name__ if self.checkpoint_store else "none",
                     )
                 )
-
-            return False
 
     # Private helper methods
 
@@ -1175,12 +1169,7 @@ Return a JSON response with the status of fixes applied."""
 
                 # Checkpoint at interval
                 if iteration % context.checkpoint_interval == 0:
-                    success = await self.checkpoint(config.test_type, iteration, context)
-                    if not success:
-                        logger.warning(
-                            "Checkpoint save failed, continuing without checkpoint",
-                            extra={"workflow_run_id": context.workflow_run_id},
-                        )
+                    await self.checkpoint(config.test_type, iteration, context)
 
             except CircuitBreakerOpenError:
                 raise
