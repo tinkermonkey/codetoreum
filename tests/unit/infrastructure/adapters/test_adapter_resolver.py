@@ -390,6 +390,8 @@ class TestAdapterResolver:
         resolver._deps.engine.create_repair_cycle_adapter.return_value = mock_repair_cycle
 
         # Populate _resolved with required adapters
+        # agent_repository is needed for llm_factory creation in repair_cycle
+        resolver._resolved["agent_repository"] = resolver.resolve_agent_repository()
         # container depends on event_emitter, so resolve that first
         resolver._resolved["event_emitter"] = resolver.resolve_event_emitter()
         resolver._resolved["event_bus"] = resolver._deps.event_bus
@@ -402,6 +404,7 @@ class TestAdapterResolver:
         # Engine should have been called with the dependencies
         resolver._deps.engine.create_repair_cycle_adapter.assert_called_once()
         call_kwargs = resolver._deps.engine.create_repair_cycle_adapter.call_args[1]
+        assert "llm_factory" in call_kwargs  # llm_factory is now required
         assert "checkpoint_store" in call_kwargs
         assert "container_adapter" in call_kwargs
 
@@ -864,6 +867,9 @@ class TestAdapterResolver:
         # Mock the engine to return a proper IRepairCycle adapter (Protocol without @runtime_checkable)
         mock_repair_cycle = Mock(spec=IRepairCycle)
         resolver._deps.engine.create_repair_cycle_adapter.return_value = mock_repair_cycle
+
+        # Resolve agent_repository first (needed for llm_factory)
+        resolver._resolved["agent_repository"] = resolver.resolve_agent_repository()
 
         repair_cycle = resolver.resolve_repair_cycle()
 
