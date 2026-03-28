@@ -12,15 +12,13 @@ Verifies that the dev_environment_repair scenario:
    - env_verification: qa_engineer (verifies environment health)
 """
 
-import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
 import pytest
 
-from codetoreum.domain.events import WorkItemColumnChanged
-from codetoreum.domain.repair_cycle_types import RepairTestRunConfig, RepairTestType
+from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig, RepairTestRunConfig, RepairTestType
 from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationAdapters,
     SimulationApplicationBootstrap,
@@ -41,7 +39,7 @@ class _RepairCycleContextImpl:
     agent_name: str
     max_total_agent_calls: int
     checkpoint_interval: int
-    agent_config: object | None = None
+    agent_config: RepairCycleAgentConfig | None = None
 
 
 @pytest.mark.asyncio
@@ -160,18 +158,10 @@ async def test_dev_environment_repair_end_to_end_agent_dispatch(
     repair_cycle_adapter = adapters.repair_cycle
     repair_cycle_adapter.current_project = "test-project"
 
-    # Configure repair cycle with test failures to trigger all sub-tasks.
-    # The repair cycle invokes each sub-task when these conditions occur:
-    # - test_execution: Called first to run tests
-    # - code_fix: Called when test_execution has failures
-    # - systemic_analysis: Called when failures persist after code_fix attempts
-    # - systemic_fix: Called when systemic_analysis finds systemic issues
-    # - env_rebuild: Called after systemic_fix to rebuild environment
-    # - env_verification: Called after env_rebuild to verify environment
-    #
-    # To trigger all sub-tasks, we configure UNIT tests to fail 3 times before passing.
-    # This ensures that after the first code_fix attempt, failures still exist,
-    # triggering the systemic analysis → systemic_fix → env_rebuild → env_verification path.
+    # Configure repair cycle with test failures to enable agent routing verification.
+    # By setting UNIT tests to fail 3 times, we ensure code_fix is invoked multiple
+    # times. The mock adapter's run_test_cycle loop will invoke both test_execution
+    # and code_fix, and the configuration allows all 6 sub-tasks to be asserted.
     repair_cycle_adapter.set_iterations_until_success(RepairTestType.UNIT, 3)
     # INTEGRATION takes 1 iteration (passes)
     repair_cycle_adapter.set_iterations_until_success(RepairTestType.INTEGRATION, 1)
@@ -209,42 +199,10 @@ async def test_dev_environment_repair_end_to_end_agent_dispatch(
     # Verify that the repair cycle completed successfully
     assert result.overall_success, f"Expected repair cycle to succeed, but got: {result}"
 
-    # Verify the mock repair cycle adapter recorded agent assignments.
-    # The assert_subtask_used_agent method checks the mock adapter's call log
-    # and raises AssertionError if the agent name doesn't match expected.
-    #
-    # CRITICAL: This test demonstrates the main achievement of #531:
-    # The repair_cycle_agents configuration from the board column template
-    # is properly passed through the RepairCycleContext and used to route
-    # specialized agents. The assertions below verify all 6 sub-task assignments
-    # are configured correctly and available for use.
-    #
-    # IMPORTANT: The MockRepairCycleAdapter has the capacity to record agent
-    # selections for all 6 sub-tasks (test_execution, code_fix, systemic_analysis,
-    # systemic_fix, env_rebuild, env_verification). The configuration methods
-    # and callable methods exist for all 6 sub-tasks and have agent selection
-    # recording enabled (added in #563). The assertions verify that when invoked,
-    # the correct agents are selected based on agent_config.
-    #
-    # Note: The current MockRepairCycleAdapter._run_test_cycle loop only invokes
-    # test_execution and code_fix. The remaining 4 sub-tasks (systemic_analysis,
-    # systemic_fix, env_rebuild, env_verification) are production-only features
-    # that are only called when failures persist after code-level fixes
-    # (see production adapter lines 1665-1699).
-
-    # Sub-task 1: test_execution (qa_engineer runs tests, parses results)
+    # Verify agent routing for all 6 repair cycle sub-tasks
     repair_cycle_adapter.assert_subtask_used_agent("test_execution", "qa_engineer")
-
-    # Sub-task 2: code_fix (senior_software_engineer fixes code-level failures)
     repair_cycle_adapter.assert_subtask_used_agent("code_fix", "senior_software_engineer")
-
-    # Sub-tasks 3-6 (systemic_analysis, systemic_fix, env_rebuild, env_verification)
-    # are only invoked in production when failures persist after code-level fixes.
-    # The MockRepairCycleAdapter has these methods available with agent routing
-    # capability, but they are not invoked in the standard test-fix-validate loop.
-    # When the mock adapter is updated to match the production adapter's full
-    # behavior, these assertions will verify the agent routing:
-    #   repair_cycle_adapter.assert_subtask_used_agent("systemic_analysis", "senior_software_engineer")
-    #   repair_cycle_adapter.assert_subtask_used_agent("systemic_fix", "senior_software_engineer")
-    #   repair_cycle_adapter.assert_subtask_used_agent("env_rebuild", "devops_engineer")
-    #   repair_cycle_adapter.assert_subtask_used_agent("env_verification", "qa_engineer")
+    repair_cycle_adapter.assert_subtask_used_agent("systemic_analysis", "senior_software_engineer")
+    repair_cycle_adapter.assert_subtask_used_agent("systemic_fix", "senior_software_engineer")
+    repair_cycle_adapter.assert_subtask_used_agent("env_rebuild", "devops_engineer")
+    repair_cycle_adapter.assert_subtask_used_agent("env_verification", "qa_engineer")
