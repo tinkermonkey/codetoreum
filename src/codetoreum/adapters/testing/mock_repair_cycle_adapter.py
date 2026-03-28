@@ -15,9 +15,9 @@ The mock adapter:
 
 import logging
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any, Coroutine
+from typing import TYPE_CHECKING, Any
 
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
