@@ -1670,8 +1670,33 @@ Return a JSON response with the status of fixes applied."""
                                 fixed = await self.apply_systemic_fixes(analysis, retest_result, config, context)
                                 if fixed:
                                     # Rebuild and verify environment after systemic fixes
-                                    await self.rebuild_environment(config, context)
-                                    await self.verify_environment(config, context)
+                                    rebuild_success = await self.rebuild_environment(config, context)
+                                    if not rebuild_success:
+                                        logger.error(
+                                            "Environment rebuild failed; cannot continue with tests",
+                                            extra={
+                                                "workflow_run_id": context.workflow_run_id,
+                                                "test_type": config.test_type.value,
+                                                "iteration": iteration,
+                                                "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                                            },
+                                            exc_info=False,
+                                        )
+                                        break
+
+                                    env_ready = await self.verify_environment(config, context)
+                                    if not env_ready:
+                                        logger.error(
+                                            "Environment verification failed; environment not ready for testing",
+                                            extra={
+                                                "workflow_run_id": context.workflow_run_id,
+                                                "test_type": config.test_type.value,
+                                                "iteration": iteration,
+                                                "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                                            },
+                                            exc_info=False,
+                                        )
+                                        break
                         except Exception as e:
                             # Log systemic analysis failures but continue with regular retry
                             logger.warning(

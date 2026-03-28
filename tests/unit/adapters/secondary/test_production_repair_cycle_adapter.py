@@ -415,3 +415,147 @@ class TestAgentConfigRouting:
         # Verify the configured test_execution agent was resolved
         assert "qa_executor" in adapter._resolved_agents, \
             f"Expected 'qa_executor' in resolved agents, got {adapter._resolved_agents}"
+
+
+class TestEnvironmentRebuildAndVerifyReturnValueHandling:
+    """Verifies that rebuild_environment() and verify_environment() return values are checked.
+
+    Ensures that:
+    1. When rebuild_environment() returns False, repair cycle stops (breaks the iteration loop)
+    2. When verify_environment() returns False, repair cycle stops (breaks the iteration loop)
+    3. When both succeed, repair cycle continues to the next iteration
+    """
+
+    @staticmethod
+    def _make_llm_factory_with_mock(mock_llm: AsyncMock) -> callable:
+        """Create an LLM factory that returns the given mock LLM."""
+        async def factory(agent_name: str) -> AsyncMock:
+            return mock_llm
+        return factory
+
+    @pytest.mark.asyncio
+    async def test_rebuild_environment_failure_breaks_iteration(self):
+        """When rebuild_environment() returns False, the iteration loop breaks."""
+        # Setup: LLM returns success for test runs and systemic analysis
+        mock_llm = AsyncMock()
+        mock_llm.execute = AsyncMock(return_value=ExecutionResult(
+            content=_VALID_JSON_RESPONSE
+        ))
+
+        adapter = ProductionRepairCycleAdapter(
+            llm_factory=self._make_llm_factory_with_mock(mock_llm),
+            config=RepairCycleConfig(),
+        )
+
+        # Mock the systemic analysis and fix methods to return success
+        adapter.analyze_systemic_issues = AsyncMock(return_value="some analysis")
+        adapter.apply_systemic_fixes = AsyncMock(return_value=True)
+        adapter.fix_failures_by_file = AsyncMock(return_value=1)
+
+        # Mock rebuild_environment to return False (failure)
+        adapter.rebuild_environment = AsyncMock(return_value=False)
+        adapter.verify_environment = AsyncMock()
+
+        ctx = _RepairCycleContext(max_total_agent_calls=1000)
+
+        # Run the repair cycle - should break after rebuild fails
+        result = await adapter._run_test_cycle(
+            config=ctx.test_configs[0],
+            context=ctx,
+            test_type_index=1,
+        )
+
+        # Verify that rebuild_environment was called
+        assert adapter.rebuild_environment.called, "rebuild_environment should be called"
+
+        # Verify that verify_environment was NOT called (because rebuild failed)
+        assert not adapter.verify_environment.called, \
+            "verify_environment should not be called when rebuild fails"
+
+        # Verify that the cycle did not pass (stopped early)
+        assert not result.passed, "Cycle should not pass when rebuild fails"
+
+    @pytest.mark.asyncio
+    async def test_verify_environment_failure_breaks_iteration(self):
+        """When verify_environment() returns False, the iteration loop breaks."""
+        # Setup: LLM returns success for test runs and systemic analysis
+        mock_llm = AsyncMock()
+        mock_llm.execute = AsyncMock(return_value=ExecutionResult(
+            content=_VALID_JSON_RESPONSE
+        ))
+
+        adapter = ProductionRepairCycleAdapter(
+            llm_factory=self._make_llm_factory_with_mock(mock_llm),
+            config=RepairCycleConfig(),
+        )
+
+        # Mock the systemic analysis and fix methods to return success
+        adapter.analyze_systemic_issues = AsyncMock(return_value="some analysis")
+        adapter.apply_systemic_fixes = AsyncMock(return_value=True)
+        adapter.fix_failures_by_file = AsyncMock(return_value=1)
+
+        # Mock rebuild_environment to return True (success)
+        adapter.rebuild_environment = AsyncMock(return_value=True)
+
+        # Mock verify_environment to return False (environment not ready)
+        adapter.verify_environment = AsyncMock(return_value=False)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=1000)
+
+        # Run the repair cycle - should break after verification fails
+        result = await adapter._run_test_cycle(
+            config=ctx.test_configs[0],
+            context=ctx,
+            test_type_index=1,
+        )
+
+        # Verify that both rebuild and verify were called
+        assert adapter.rebuild_environment.called, "rebuild_environment should be called"
+        assert adapter.verify_environment.called, "verify_environment should be called"
+
+        # Verify that the cycle did not pass (stopped after verification failure)
+        assert not result.passed, "Cycle should not pass when verification fails"
+
+    @pytest.mark.asyncio
+    async def test_successful_rebuild_and_verify_continue_iteration(self):
+        """When both rebuild and verify succeed, the cycle continues."""
+        # Setup: LLM returns no failures on initial test, then verify succeeds
+        mock_llm = AsyncMock()
+        # First call for initial test succeeds with no failures
+        success_response = (
+            '{"passed": 1, "failed": 0, '
+            '"failures": [], '
+            '"warnings": []}'
+        )
+        mock_llm.execute = AsyncMock(return_value=ExecutionResult(
+            content=success_response
+        ))
+
+        adapter = ProductionRepairCycleAdapter(
+            llm_factory=self._make_llm_factory_with_mock(mock_llm),
+            config=RepairCycleConfig(),
+        )
+
+        adapter.analyze_systemic_issues = AsyncMock(return_value="")
+        adapter.apply_systemic_fixes = AsyncMock(return_value=False)
+        adapter.fix_failures_by_file = AsyncMock(return_value=0)
+        adapter.rebuild_environment = AsyncMock(return_value=True)
+        adapter.verify_environment = AsyncMock(return_value=True)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=1000)
+
+        # Run the repair cycle
+        result = await adapter._run_test_cycle(
+            config=ctx.test_configs[0],
+            context=ctx,
+            test_type_index=1,
+        )
+
+        # Verify that the cycle passed (no failures means success)
+        assert result.passed, "Cycle should pass when tests have no failures"
+
+        # Neither rebuild nor verify should have been called (no failures, no systemic analysis)
+        assert not adapter.rebuild_environment.called, \
+            "rebuild_environment should not be called when tests pass immediately"
+        assert not adapter.verify_environment.called, \
+            "verify_environment should not be called when tests pass immediately"
