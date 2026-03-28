@@ -220,7 +220,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 else llm.execute(prompt=prompt)
             )
             return await asyncio.wait_for(coro, timeout=config.timeout)
-        except asyncio.TimeoutError as e:
+        except TimeoutError as e:
             message_prefix = error_message or operation
             log_extra = {
                 "workflow_run_id": context.workflow_run_id,

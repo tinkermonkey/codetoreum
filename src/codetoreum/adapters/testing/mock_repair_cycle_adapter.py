@@ -1487,7 +1487,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                                 # Rebuild and verify environment after systemic fixes
                                 rebuild_success = await self.rebuild_environment(config, context)
                                 if rebuild_success:
-                                    env_ready = await self.verify_environment(config, context)
+                                    await self.verify_environment(config, context)
                                     # Continue loop to re-test after environment changes
                     except Exception as e:
                         # Log systemic analysis failures but continue with regular retry
