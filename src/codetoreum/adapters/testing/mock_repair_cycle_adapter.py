@@ -672,11 +672,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             RepairTestResult with pass/fail counts and failure details
         """
         # Resolve and record which agent is executing this sub-task
-        llm_provider, agent_name = self._resolve_and_record_agent("test_execution", context)
-
-        # Track the resolved provider for behavioral parity with production adapter
-        # The provider is stored in agent calls log for test assertions
-        _ = llm_provider
+        _, agent_name = self._resolve_and_record_agent("test_execution", context)
 
         self.agent_call_count += 1
         self.total_agent_calls += 1
@@ -775,11 +771,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
         for file_path, failures in grouped_failures.items():
             # Resolve and record which agent is executing this sub-task
-            llm_provider, agent_name = self._resolve_and_record_agent("code_fix", context)
-
-            # Track the resolved provider for behavioral parity with production adapter
-            # The provider is stored in agent calls log for test assertions
-            _ = llm_provider
+            _, agent_name = self._resolve_and_record_agent("code_fix", context)
 
             self.agent_call_count += 1
             self.total_agent_calls += 1
@@ -842,11 +834,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
         for warning in test_result.warning_list:
             # Resolve and record which agent is executing this sub-task
-            llm_provider, agent_name = self._resolve_and_record_agent("code_fix", context)
-
-            # Track the resolved provider for behavioral parity with production adapter
-            # The provider is stored in agent calls log for test assertions
-            _ = llm_provider
+            _, agent_name = self._resolve_and_record_agent("code_fix", context)
 
             self.agent_call_count += 1
             self.total_agent_calls += 1
