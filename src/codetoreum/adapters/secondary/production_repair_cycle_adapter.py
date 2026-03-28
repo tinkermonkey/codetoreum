@@ -762,7 +762,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         timestamp=datetime.now(UTC).isoformat(),
                         source="production_repair_cycle",
                         workflow_run_id=context.workflow_run_id,
-                        test_type=test_type.value,
+                        test_type=test_type,
                         iteration=iteration,
                         error_type=type(e).__name__,
                         error_message=str(e),
