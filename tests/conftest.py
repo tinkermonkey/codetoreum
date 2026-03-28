@@ -346,8 +346,8 @@ def _cleanup_opentelemetry() -> Generator[None, None, None]:
     try:
         from opentelemetry import trace
         from opentelemetry._logs import get_logger_provider
-        from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk._logs import LoggerProvider
+        from opentelemetry.sdk.trace import TracerProvider
 
         # Shut down the global TracerProvider
         try:
