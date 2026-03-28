@@ -69,8 +69,8 @@ def _make_adapter(
     """Return (adapter, mock_llm) pre-wired for tests."""
     llm = AsyncMock()
     llm.execute.return_value = ExecutionResult(content=llm_response)
-    # Create factory that returns the same mock LLM for any agent name
-    def llm_factory(agent_name):
+    # Create async factory that returns the same mock LLM for any agent name
+    async def llm_factory(agent_name):
         return llm
     config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
     adapter = ProductionRepairCycleAdapter(
@@ -262,8 +262,8 @@ class TestAgentConfigRouting:
         """Create adapter with LLM factory that tracks which agent names are resolved."""
         resolved_agents = []
 
-        def tracking_factory(agent_name: str):
-            """Factory that records the agent name requested."""
+        async def tracking_factory(agent_name: str):
+            """Async factory that records the agent name requested."""
             resolved_agents.append(agent_name)
             llm = AsyncMock()
             llm.execute.return_value = ExecutionResult(content=_VALID_JSON_RESPONSE)
@@ -340,7 +340,7 @@ class TestAgentConfigRouting:
         llm_mock.execute.return_value = ExecutionResult(content="Fixed")
         call_tracker = []
 
-        def tracking_factory(agent_name):
+        async def tracking_factory(agent_name):
             call_tracker.append(agent_name)
             return llm_mock
 

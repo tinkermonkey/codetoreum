@@ -30,10 +30,10 @@ from codetoreum.infrastructure.simulation.simulation_clock import SimulationCloc
 
 @pytest.fixture
 def llm_factory():
-    """Factory that returns a MockLLMAdapter regardless of agent name."""
+    """Async factory that returns a MockLLMAdapter regardless of agent name."""
     llm_adapter = MockLLMAdapter()
 
-    def factory(agent_name: str):
+    async def factory(agent_name: str):
         # Return the same mock adapter for all agents
         return llm_adapter
 

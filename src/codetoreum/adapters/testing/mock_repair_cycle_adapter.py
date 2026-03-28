@@ -678,7 +678,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             RepairTestResult with pass/fail counts and failure details
         """
         # Resolve and record which agent is executing this sub-task
-        _, agent_name = self._resolve_and_record_agent("test_execution", context)
+        _, agent_name = await self._resolve_and_record_agent("test_execution", context)
 
         self.agent_call_count += 1
         self.total_agent_calls += 1
@@ -777,7 +777,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
         for file_path, failures in grouped_failures.items():
             # Resolve and record which agent is executing this sub-task
-            _, agent_name = self._resolve_and_record_agent("code_fix", context)
+            _, agent_name = await self._resolve_and_record_agent("code_fix", context)
 
             self.agent_call_count += 1
             self.total_agent_calls += 1
@@ -840,7 +840,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
         for warning in test_result.warning_list:
             # Resolve and record which agent is executing this sub-task
-            _, agent_name = self._resolve_and_record_agent("code_fix", context)
+            _, agent_name = await self._resolve_and_record_agent("code_fix", context)
 
             self.agent_call_count += 1
             self.total_agent_calls += 1
@@ -1661,7 +1661,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         event["timestamp"] = self.clock.now().isoformat()
         self.event_log.append(event)
 
-    def _resolve_and_record_agent(
+    async def _resolve_and_record_agent(
         self,
         sub_task: str,
         context: RepairCycleContext,
@@ -1669,7 +1669,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         """Resolve agent for a sub-task and return its LLM provider.
 
         Resolves the agent name based on agent_config if available, otherwise
-        uses the default context agent name. Calls the llm_factory with the resolved
+        uses the default context agent name. Awaits the llm_factory with the resolved
         agent name to obtain the configured ILLMProvider, ensuring behavioral parity
         with the production adapter's agent selection and LLM instantiation.
         Records the selection in the subtask agent calls log for later assertion.
@@ -1679,7 +1679,8 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             context: Repair cycle context with optional agent_config
 
         Returns:
-            Tuple of (ILLMProvider instance for the resolved agent, resolved agent name)
+            Coroutine that resolves to a tuple of (ILLMProvider instance for the
+            resolved agent, resolved agent name)
         """
         agent_name = (
             context.agent_config.resolve_agent(sub_task, context.agent_name)
@@ -1687,10 +1688,10 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             else context.agent_name
         )
 
-        # Call factory to obtain ILLMProvider for the resolved agent.
+        # Await factory to obtain ILLMProvider for the resolved agent.
         # This enforces the contract that llm_factory returns ILLMProvider
         # and validates production wiring correctness.
-        llm_provider = self._llm_factory(agent_name)
+        llm_provider = await self._llm_factory(agent_name)
 
         with self._lock:
             self._subtask_agent_calls.append(

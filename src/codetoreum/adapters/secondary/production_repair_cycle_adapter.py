@@ -162,7 +162,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         self.checkpoint_store = checkpoint_store
         self.circuit_breaker = circuit_breaker
 
-    def _get_llm_for_subtask(self, sub_task: str, context: RepairCycleContext) -> tuple[ILLMProvider, str]:
+    async def _get_llm_for_subtask(self, sub_task: str, context: RepairCycleContext) -> tuple[ILLMProvider, str]:
         """Resolve the appropriate agent for a sub-task and return its LLM provider.
 
         Centralizes agent name resolution logic to prevent duplication across call
@@ -173,14 +173,15 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             context: Repair cycle context with agent configuration
 
         Returns:
-            Tuple of (ILLMProvider instance for the resolved agent, resolved agent name)
+            Coroutine that resolves to a tuple of (ILLMProvider instance for the
+            resolved agent, resolved agent name)
         """
         agent_name = (
             context.agent_config.resolve_agent(sub_task, context.agent_name)
             if context.agent_config
             else context.agent_name
         )
-        return self._llm_factory(agent_name), agent_name
+        return await self._llm_factory(agent_name), agent_name
 
     async def execute(self, context: RepairCycleContext) -> RepairCycleResult:
         """Execute complete repair cycle for all configured test types.
@@ -315,7 +316,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         test_command = self._detect_and_build_test_command(config)
 
         # Resolve agent for test execution sub-task
-        llm, resolved_agent_name = self._get_llm_for_subtask("test_execution", context)
+        llm, resolved_agent_name = await self._get_llm_for_subtask("test_execution", context)
 
         # Execute tests via LLM
         logger.info(
@@ -435,7 +436,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             CircuitBreakerOpenError: When circuit breaker is open
         """
         # Resolve agent for code fix sub-task (once for all files)
-        llm, resolved_agent_name = self._get_llm_for_subtask("code_fix", context)
+        llm, resolved_agent_name = await self._get_llm_for_subtask("code_fix", context)
 
         fixed = 0
 
@@ -590,7 +591,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             raise CircuitBreakerOpenError("Max agent calls reached; circuit breaker is open")
 
         # Resolve agent for systemic analysis sub-task
-        llm, resolved_agent_name = self._get_llm_for_subtask("systemic_analysis", context)
+        llm, resolved_agent_name = await self._get_llm_for_subtask("systemic_analysis", context)
 
         try:
             # Build analysis prompt with failure context
@@ -684,7 +685,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             raise CircuitBreakerOpenError("Max agent calls reached; circuit breaker is open")
 
         # Resolve agent for systemic fix sub-task
-        llm, resolved_agent_name = self._get_llm_for_subtask("systemic_fix", context)
+        llm, resolved_agent_name = await self._get_llm_for_subtask("systemic_fix", context)
 
         try:
             # Build fix prompt based on analysis
@@ -772,7 +773,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             raise CircuitBreakerOpenError("Max agent calls reached; circuit breaker is open")
 
         # Resolve agent for env rebuild sub-task
-        llm, resolved_agent_name = self._get_llm_for_subtask("env_rebuild", context)
+        llm, resolved_agent_name = await self._get_llm_for_subtask("env_rebuild", context)
 
         try:
             # Build environment rebuild prompt
@@ -859,7 +860,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             raise CircuitBreakerOpenError("Max agent calls reached; circuit breaker is open")
 
         # Resolve agent for env verification sub-task
-        llm, resolved_agent_name = self._get_llm_for_subtask("env_verification", context)
+        llm, resolved_agent_name = await self._get_llm_for_subtask("env_verification", context)
 
         try:
             # Build environment verification prompt
@@ -958,7 +959,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             return 0
 
         # Resolve agent for code fix sub-task (warnings use same agent as code fixes)
-        llm, resolved_agent_name = self._get_llm_for_subtask("code_fix", context)
+        llm, resolved_agent_name = await self._get_llm_for_subtask("code_fix", context)
 
         reviewed = 0
 

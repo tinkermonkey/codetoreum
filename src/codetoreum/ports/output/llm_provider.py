@@ -1,7 +1,7 @@
 """ILLMProvider output port interface."""
 
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
+from collections.abc import AsyncIterator, Awaitable, Callable, Coroutine, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -812,9 +812,14 @@ class ILLMProvider(ABC):
 # Type Aliases (defined after ILLMProvider for resolved references)
 # ============================================================================
 
-AgentLLMFactory = Callable[[str], ILLMProvider]
-"""Factory callable that creates a configured ILLMProvider for a given agent.
+AgentLLMFactory = Callable[[str], Coroutine[Any, Any, ILLMProvider]]
+"""Async factory callable that creates a configured ILLMProvider for a given agent.
 
 Input:  agent_name (str) - e.g., "senior_software_engineer"
-Output: configured ILLMProvider with agent's model, temperature, system prompt, tools
+Output: Coroutine that resolves to a configured ILLMProvider with agent's model,
+        temperature, system prompt, tools
+
+This factory is async-safe and can be called from both sync and async contexts
+(via 'await factory(agent_name)'). Pre-populated cache ensures most calls complete
+synchronously without actually needing async event loops.
 """

@@ -952,7 +952,8 @@ class TestAgentLLMFactory:
         # Should be callable
         assert callable(llm_factory)
 
-    def test_agent_llm_factory_populates_cache_for_sync_repo(self, factory, dependencies, adapter_config):
+    @pytest.mark.asyncio
+    async def test_agent_llm_factory_populates_cache_for_sync_repo(self, factory, dependencies, adapter_config):
         """Test that factory eagerly populates cache for synchronous repositories."""
         resolver = AdapterResolver(adapter_config, factory, dependencies)
 
@@ -1008,18 +1009,18 @@ class TestAgentLLMFactory:
         llm_factory = resolver._create_agent_llm_factory()
 
         # Cache should be populated - calling factory should return a provider
-        provider = llm_factory("test_agent")
+        provider = await llm_factory("test_agent")
         assert provider is not None
 
-    def test_agent_llm_factory_supports_async_repo_via_asyncio_run(
+    @pytest.mark.asyncio
+    async def test_agent_llm_factory_supports_async_repo_via_await(
         self, factory, dependencies, adapter_config
     ):
-        """Test that factory correctly handles async repositories by using asyncio.run().
+        """Test that factory correctly handles async repositories by awaiting them.
 
-        The factory can now handle both sync and async repositories. For async
-        repositories, it uses asyncio.run() to execute the coroutine from the
-        synchronous factory context. This is safe during adapter resolution
-        (before event loops are established).
+        The factory is now async-safe and handles both sync and async repositories.
+        For async repositories, it awaits the coroutine from async context, which is
+        safe because the factory is called from within async repair cycle methods.
         """
         from codetoreum.ports.exceptions import ResourceNotFoundError
 
@@ -1040,15 +1041,16 @@ class TestAgentLLMFactory:
         # Create the factory
         llm_factory = resolver._create_agent_llm_factory()
 
-        # Calling factory with unknown agent should raise ResourceNotFoundError
-        # (the async call is successfully executed via asyncio.run())
+        # Awaiting factory with unknown agent should raise ResourceNotFoundError
+        # (the async call is safely awaited within async context)
         with pytest.raises(ResourceNotFoundError) as exc_info:
-            llm_factory("unknown_agent")
+            await llm_factory("unknown_agent")
 
         assert "Agent" in str(exc_info.value)
         assert "unknown_agent" in str(exc_info.value)
 
-    def test_agent_llm_factory_unknown_agent_raises_resource_not_found_error(
+    @pytest.mark.asyncio
+    async def test_agent_llm_factory_unknown_agent_raises_resource_not_found_error(
         self, factory, dependencies, adapter_config
     ):
         """Test that factory raises ResourceNotFoundError for unknown agents."""
@@ -1081,12 +1083,13 @@ class TestAgentLLMFactory:
 
         # Should raise ResourceNotFoundError for unknown agent
         with pytest.raises(ResourceNotFoundError) as exc_info:
-            llm_factory("unknown_agent")
+            await llm_factory("unknown_agent")
 
         assert "Agent" in str(exc_info.value)
         assert "unknown_agent" in str(exc_info.value)
 
-    def test_agent_llm_factory_uses_agent_configuration(self, factory, dependencies, adapter_config):
+    @pytest.mark.asyncio
+    async def test_agent_llm_factory_uses_agent_configuration(self, factory, dependencies, adapter_config):
         """Test that factory correctly uses agent LLM configuration."""
         resolver = AdapterResolver(adapter_config, factory, dependencies)
 
@@ -1143,9 +1146,82 @@ class TestAgentLLMFactory:
         # Create the factory
         llm_factory = resolver._create_agent_llm_factory()
 
-        # Get provider for the agent
-        provider = llm_factory("configured_agent")
+        # Get provider for the agent (await the async factory)
+        provider = await llm_factory("configured_agent")
         assert provider is not None
+
+    @pytest.mark.asyncio
+    async def test_agent_llm_factory_safe_from_async_context_with_async_repo(
+        self, factory, dependencies, adapter_config
+    ):
+        """Test that factory is async-safe when called from async context with async repository.
+
+        This is the critical test for the fix: the factory must be safe to call from
+        within an existing event loop (like repair cycle execution). Previously, using
+        asyncio.run() would crash with RuntimeError. Now, the async factory properly
+        awaits async repository methods from async contexts.
+        """
+        from datetime import UTC, datetime
+
+        from codetoreum.domain.agent import Agent, AgentCapability, AgentType
+        from codetoreum.ports.exceptions import ResourceNotFoundError
+
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+
+        # Create an agent for testing
+        now = datetime.now(UTC)
+        mock_agent = Agent(
+            id="agent-3",
+            name="async_test_agent",
+            display_name="Async Test Agent",
+            agent_type=AgentType.MAKER,
+            role_description="Agent for async context testing",
+            model="claude-3-sonnet",
+            capabilities={"testing": AgentCapability(skill="testing", proficiency=0.9)},
+            timeout_seconds=300,
+            max_retries=3,
+            requires_docker=False,
+            requires_dev_container=False,
+            makes_code_changes=True,
+            filesystem_write_allowed=True,
+            mcp_servers=[],
+            metadata={},
+            created_at=now,
+            updated_at=now,
+        )
+
+        # Create an async repository (simulating production behavior)
+        class AsyncMockAgentRepository:
+            """Async repository simulating production agent repository."""
+
+            def __init__(self):
+                self._agents_by_name = {"async_test_agent": mock_agent}
+
+            async def get_all(self):
+                """Async method - returns list of agents."""
+                return list(self._agents_by_name.values())
+
+            async def get_by_name(self, name: str):
+                """Async method - returns agent by name."""
+                if name not in self._agents_by_name:
+                    return None
+                return self._agents_by_name[name]
+
+        async_repo = AsyncMockAgentRepository()
+        resolver._resolved["agent_repository"] = async_repo
+
+        # Create the factory
+        llm_factory = resolver._create_agent_llm_factory()
+
+        # Call factory from within async context (simulating repair cycle execution)
+        # This would crash with asyncio.run() error if not properly async-safe
+        provider = await llm_factory("async_test_agent")
+        assert provider is not None
+
+        # Also verify ResourceNotFoundError for unknown agent
+        with pytest.raises(ResourceNotFoundError) as exc_info:
+            await llm_factory("nonexistent_agent")
+        assert "nonexistent_agent" in str(exc_info.value)
 
     def test_agent_llm_factory_missing_agent_repository_raises_key_error(self, factory, dependencies, adapter_config):
         """Test that factory creation fails if agent_repository not resolved."""
