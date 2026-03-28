@@ -1540,7 +1540,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                     source="mock_repair_cycle",
                     test_type=config.test_type,
                     test_type_index=test_type_index,
-                    passed=1 if cycle_passed else 0,
+                    passed=cycle_passed,
                     test_cycle_iterations=iteration,
                     files_fixed=files_fixed,
                     warnings_reviewed=warnings_reviewed,
