@@ -868,21 +868,18 @@ class TestAdapterFactoryWithNewRegistries:
         assert isinstance(config_store, IConfigStore)
 
         # Repair cycle (needs llm_factory for mock)
-        try:
-            from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
+        from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
 
-            llm_adapter = MockLLMAdapter()
+        llm_adapter = MockLLMAdapter()
 
-            def llm_factory(agent_name: str):
-                return llm_adapter
+        def llm_factory(agent_name: str):
+            return llm_adapter
 
-            repair_cycle = factory.create_repair_cycle(
-                adapter_name="mock", llm_factory=llm_factory
-            )
-            assert repair_cycle is not None
-        except TypeError:
-            # Production adapter may need other parameters
-            pass
+        # Mock repair cycle should succeed with factory provided
+        repair_cycle = factory.create_repair_cycle(
+            adapter_name="mock", llm_factory=llm_factory
+        )
+        assert repair_cycle is not None
 
         # Review cycle
         review_cycle = factory.create_review_cycle_service()

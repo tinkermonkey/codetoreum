@@ -13,6 +13,7 @@ simulation-agnostic - they never receive or use a clock directly.
 """
 
 import logging
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -248,7 +249,7 @@ class SimulationEngine:
 
     def create_repair_cycle_adapter(
         self,
-        llm_factory: "callable[[str], ILLMProvider]",
+        llm_factory: "Callable[[str], ILLMProvider]",
         checkpoint_store: "IRepairCycleCheckpointStore | None" = None,
         container_adapter: "IContainer | None" = None,
     ) -> "MockRepairCycleAdapter":
