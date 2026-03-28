@@ -1731,7 +1731,7 @@ Return a JSON response with the status of fixes applied."""
             test_type=config.test_type,
             passed=cycle_passed,
             iterations=iteration,
-            final_result=None,
+            final_result=test_result if cycle_passed else None,
             error=error,
             files_fixed=files_fixed,
             warnings_reviewed=warnings_reviewed,
