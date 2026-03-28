@@ -212,14 +212,20 @@ class TestConfigurationMethods:
         adapter.set_iterations_until_success(RepairTestType.UNIT, 3)
 
         sequence = adapter.test_results[RepairTestType.UNIT]
-        assert len(sequence) == 3
+        # With systemic analysis, each iteration calls run_tests twice (initial + retest), so 2*N results
+        assert len(sequence) == 6
 
-        # First two should fail
+        # Iteration 1: initial (0) and retest (1) both fail
         assert sequence[0].failed == 3
         assert sequence[1].failed == 3
 
-        # Last should pass
-        assert sequence[2].failed == 0
+        # Iteration 2: initial (2) and retest (3) both fail
+        assert sequence[2].failed == 3
+        assert sequence[3].failed == 3
+
+        # Iteration 3: initial (4) fails, retest (5) passes
+        assert sequence[4].failed == 3
+        assert sequence[5].failed == 0
 
     def test_set_always_fail(self, llm_factory):
         """Test set_always_fail (FR-11.4)."""
@@ -229,9 +235,10 @@ class TestConfigurationMethods:
         adapter.set_always_fail(RepairTestType.UNIT, 5)
 
         sequence = adapter.test_results[RepairTestType.UNIT]
-        assert len(sequence) == 5
+        # With systemic analysis, each iteration calls run_tests twice (initial + retest), so 2*N results
+        assert len(sequence) == 10
 
-        # All should fail
+        # All should fail (both initial and retest)
         for result in sequence:
             assert result.failed == 3
 

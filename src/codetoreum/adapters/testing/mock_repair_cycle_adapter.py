@@ -207,6 +207,11 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         Shorthand for configuring a gradual convergence scenario where
         failures decrease until the final iteration passes.
 
+        With systemic analysis, each iteration calls run_tests twice (initial + retest after fix).
+        We generate 2*N results to accommodate:
+        - Iterations 1 to N-1: initial test fails, fix, retest fails
+        - Iteration N: initial test fails, fix, retest passes (then break)
+
         Args:
             test_type: Type of test (UNIT, INTEGRATION, E2E)
             iterations: Number of iterations until success
@@ -214,39 +219,44 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         results = []
         for i in range(1, iterations + 1):
             is_last = i == iterations
-            results.append(
-                RepairTestResult(
-                    test_type=test_type,
-                    iteration=i,
-                    passed=7 if is_last else 7,
-                    failed=0 if is_last else 3,
-                    warnings=0,
-                    failures=(
-                        ()
-                        if is_last
-                        else (
-                            RepairTestFailure(
-                                file="test_example.py",
-                                test=f"test_case_{i}_1",
-                                message="Simulated failure",
-                            ),
-                            RepairTestFailure(
-                                file="test_example.py",
-                                test=f"test_case_{i}_2",
-                                message="Simulated failure",
-                            ),
-                            RepairTestFailure(
-                                file="test_example.py",
-                                test=f"test_case_{i}_3",
-                                message="Simulated failure",
-                            ),
-                        )
-                    ),
-                    warning_list=(),
-                    raw_output="",
-                    timestamp=self.clock.now().isoformat(),
+            # Each iteration generates 2 run_tests calls: initial and retest
+            for call_in_iteration in range(1, 3):
+                call_is_retest = call_in_iteration == 2
+                passes_on_retest = is_last and call_is_retest
+
+                results.append(
+                    RepairTestResult(
+                        test_type=test_type,
+                        iteration=i,
+                        passed=7 if passes_on_retest else 7,
+                        failed=0 if passes_on_retest else 3,
+                        warnings=0,
+                        failures=(
+                            ()
+                            if passes_on_retest
+                            else (
+                                RepairTestFailure(
+                                    file="test_example.py",
+                                    test=f"test_case_{i}_1",
+                                    message="Simulated failure",
+                                ),
+                                RepairTestFailure(
+                                    file="test_example.py",
+                                    test=f"test_case_{i}_2",
+                                    message="Simulated failure",
+                                ),
+                                RepairTestFailure(
+                                    file="test_example.py",
+                                    test=f"test_case_{i}_3",
+                                    message="Simulated failure",
+                                ),
+                            )
+                        ),
+                        warning_list=(),
+                        raw_output="",
+                        timestamp=self.clock.now().isoformat(),
+                    )
                 )
-            )
         self.test_results[test_type] = results
 
     def set_always_fail(self, test_type: RepairTestType, max_iterations: int) -> None:
@@ -255,41 +265,47 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         Shorthand for configuring a scenario that never passes,
         simulating code that cannot be fixed within max iterations.
 
+        With systemic analysis, each iteration may call run_tests twice (initial + retest after fix).
+        We generate 2*max_iterations results to accommodate both calls.
+
         Args:
             test_type: Type of test (UNIT, INTEGRATION, E2E)
             max_iterations: Maximum iterations before failure
         """
         results = []
         for i in range(1, max_iterations + 1):
-            results.append(
-                RepairTestResult(
-                    test_type=test_type,
-                    iteration=i,
-                    passed=7,
-                    failed=3,
-                    warnings=0,
-                    failures=(
-                        RepairTestFailure(
-                            file="test_stubborn.py",
-                            test="test_always_fails_1",
-                            message="Cannot be fixed",
+            # Each iteration generates 2 run_tests calls: initial and retest
+            # Both always fail in this scenario
+            for _ in range(1, 3):
+                results.append(
+                    RepairTestResult(
+                        test_type=test_type,
+                        iteration=i,
+                        passed=7,
+                        failed=3,
+                        warnings=0,
+                        failures=(
+                            RepairTestFailure(
+                                file="test_stubborn.py",
+                                test="test_always_fails_1",
+                                message="Cannot be fixed",
+                            ),
+                            RepairTestFailure(
+                                file="test_stubborn.py",
+                                test="test_always_fails_2",
+                                message="Cannot be fixed",
+                            ),
+                            RepairTestFailure(
+                                file="test_stubborn.py",
+                                test="test_always_fails_3",
+                                message="Cannot be fixed",
+                            ),
                         ),
-                        RepairTestFailure(
-                            file="test_stubborn.py",
-                            test="test_always_fails_2",
-                            message="Cannot be fixed",
-                        ),
-                        RepairTestFailure(
-                            file="test_stubborn.py",
-                            test="test_always_fails_3",
-                            message="Cannot be fixed",
-                        ),
-                    ),
-                    warning_list=(),
-                    raw_output="",
-                    timestamp=self.clock.now().isoformat(),
+                        warning_list=(),
+                        raw_output="",
+                        timestamp=self.clock.now().isoformat(),
+                    )
                 )
-            )
         self.test_results[test_type] = results
 
     def set_checkpoint_store(self, store: IRepairCycleCheckpointStore) -> None:
@@ -1456,6 +1472,41 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             if not cycle_passed:
                 grouped = self._group_failures_by_file(test_result.failures)
                 files_fixed += await self.fix_failures_by_file(grouped, config, context)
+
+                # Re-test to determine if file-level fixes resolved issues
+                retest_result = await self.run_tests(config, context)
+
+                # Only proceed to systemic analysis if failures persist after fixes
+                if retest_result.failures:
+                    try:
+                        analysis = await self.analyze_systemic_issues(retest_result, config, context)
+                        if analysis:
+                            # Apply systemic fixes based on analysis
+                            fixed = await self.apply_systemic_fixes(analysis, retest_result, config, context)
+                            if fixed:
+                                # Rebuild and verify environment after systemic fixes
+                                rebuild_success = await self.rebuild_environment(config, context)
+                                if rebuild_success:
+                                    env_ready = await self.verify_environment(config, context)
+                                    # Continue loop to re-test after environment changes
+                    except Exception as e:
+                        # Log systemic analysis failures but continue with regular retry
+                        logger.warning(
+                            "Systemic analysis/fixes failed, continuing with standard retry",
+                            extra={
+                                "workflow_run_id": context.workflow_run_id,
+                                "test_type": config.test_type.value,
+                                "error": str(e),
+                            },
+                            exc_info=True,
+                        )
+                else:
+                    # File-level fixes resolved issues
+                    # In production, test_result is updated and loop continues for confirmation
+                    # In mock, we can break immediately since we're using pre-configured results
+                    cycle_passed = True
+                    last_test_result = retest_result
+                    break
 
             # Checkpoint at interval
             if iteration % context.checkpoint_interval == 0:
