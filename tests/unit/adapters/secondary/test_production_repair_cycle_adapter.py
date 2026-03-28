@@ -9,6 +9,7 @@ Verifies that:
 6. fix_failures_by_file checks is_open() before each file
 """
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -19,8 +20,10 @@ from codetoreum.adapters.secondary.production_repair_cycle_adapter import (
 )
 from codetoreum.domain.repair_cycle_types import (
     RepairTestFailure,
+    RepairTestResult,
     RepairTestRunConfig,
     RepairTestType,
+    RepairTestWarning,
 )
 from codetoreum.infrastructure.resilience.exceptions import CircuitBreakerOpenError
 from codetoreum.infrastructure.resilience.interfaces import CircuitState
@@ -559,3 +562,148 @@ class TestEnvironmentRebuildAndVerifyReturnValueHandling:
             "rebuild_environment should not be called when tests pass immediately"
         assert not adapter.verify_environment.called, \
             "verify_environment should not be called when tests pass immediately"
+
+
+# ---------------------------------------------------------------------------
+# Timeout handling tests (issue #566)
+# ---------------------------------------------------------------------------
+
+
+class TestTimeoutHandling:
+    """Tests for LLM call timeout enforcement via asyncio.wait_for()."""
+
+    def _make_slow_llm(self, delay_seconds: float) -> AsyncMock:
+        """Create an LLM mock that sleeps before returning."""
+        llm = AsyncMock()
+
+        async def slow_execute(**kwargs):
+            await asyncio.sleep(delay_seconds)
+            return ExecutionResult(content=_VALID_JSON_RESPONSE)
+
+        llm.execute = slow_execute
+        return llm
+
+    async def _make_factory_with_slow_llm(self, delay_seconds: float):
+        """Create a factory that returns a slow LLM."""
+        slow_llm = self._make_slow_llm(delay_seconds)
+
+        async def factory(agent_name: str):
+            return slow_llm
+
+        return factory
+
+    @pytest.mark.asyncio
+    async def test_run_tests_raises_timeout_error_when_llm_exceeds_timeout(self):
+        """run_tests raises TimeoutError when LLM takes longer than config.timeout."""
+        # Create a very short timeout (100ms) and LLM that sleeps 1s
+        factory = await self._make_factory_with_slow_llm(delay_seconds=1.0)
+        adapter = ProductionRepairCycleAdapter(
+            llm_factory=factory,
+            config=RepairCycleConfig(),
+        )
+
+        ctx = _RepairCycleContext()
+        config = RepairTestRunConfig(
+            test_type=RepairTestType.UNIT,
+            timeout=0.1,  # 100ms timeout
+            max_iterations=1,
+        )
+
+        with pytest.raises(TimeoutError) as exc_info:
+            await adapter.run_tests(config, ctx)
+
+        assert "Test execution exceeded timeout" in str(exc_info.value)
+        assert "0.1 seconds" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_fix_failures_by_file_raises_timeout_when_llm_exceeds_timeout(self):
+        """fix_failures_by_file raises TimeoutError when LLM times out."""
+        factory = await self._make_factory_with_slow_llm(delay_seconds=1.0)
+        adapter = ProductionRepairCycleAdapter(
+            llm_factory=factory,
+            config=RepairCycleConfig(),
+        )
+
+        ctx = _RepairCycleContext()
+        config = RepairTestRunConfig(
+            test_type=RepairTestType.UNIT,
+            timeout=0.1,  # 100ms timeout
+            max_iterations=1,
+        )
+
+        failures = {
+            "test_foo.py": (
+                RepairTestFailure(
+                    file="test_foo.py",
+                    test="test_bar",
+                    message="assertion failed",
+                ),
+            ),
+        }
+
+        with pytest.raises(TimeoutError) as exc_info:
+            await adapter.fix_failures_by_file(failures, config, ctx)
+
+        assert "Fix execution for test_foo.py exceeded timeout" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_handle_warnings_raises_timeout_when_llm_exceeds_timeout(self):
+        """handle_warnings raises TimeoutError when LLM times out."""
+        factory = await self._make_factory_with_slow_llm(delay_seconds=1.0)
+        adapter = ProductionRepairCycleAdapter(
+            llm_factory=factory,
+            config=RepairCycleConfig(),
+        )
+
+        ctx = _RepairCycleContext()
+        config = RepairTestRunConfig(
+            test_type=RepairTestType.UNIT,
+            timeout=0.1,  # 100ms timeout
+            max_iterations=1,
+            review_warnings=True,
+        )
+
+        test_result = RepairTestResult(
+            test_type=RepairTestType.UNIT,
+            iteration=1,
+            passed=1,
+            failed=0,
+            warnings=1,
+            failures=(),
+            warning_list=(
+                RepairTestWarning(
+                    file="test_foo.py",
+                    message="deprecation warning",
+                ),
+            ),
+            raw_output="{}",
+            timestamp="2024-01-01T00:00:00Z",
+        )
+
+        with pytest.raises(TimeoutError) as exc_info:
+            await adapter.handle_warnings(test_result, config, ctx)
+
+        assert "Warning review for test_foo.py exceeded timeout" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_timeout_respects_config_timeout_value(self):
+        """Timeout values from config are actually enforced."""
+        # Create LLM that delays 2 seconds
+        factory = await self._make_factory_with_slow_llm(delay_seconds=2.0)
+        adapter = ProductionRepairCycleAdapter(
+            llm_factory=factory,
+            config=RepairCycleConfig(),
+        )
+
+        ctx = _RepairCycleContext()
+
+        # Test with different timeout values
+        for timeout_seconds in [0.05, 0.1, 0.2]:
+            config = RepairTestRunConfig(
+                test_type=RepairTestType.UNIT,
+                timeout=timeout_seconds,
+                max_iterations=1,
+            )
+
+            with pytest.raises(TimeoutError):
+                await adapter.run_tests(config, ctx)
