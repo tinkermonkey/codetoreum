@@ -348,14 +348,15 @@ class AdapterResolver:
         Resolve repair cycle adapter.
 
         Special handling for SimulationEngine-coupled adapters:
-        - If mock variant selected: use engine to create time-aware mock
+        - If mock variant selected: use engine to create time-aware mock with llm_factory
         - If real variant: create directly without engine
         """
         if self._config.repair_cycle == "mock":
-            # Engine creates time-aware mock with optional dependencies
+            # Engine creates time-aware mock with llm_factory for contract enforcement
             checkpoint_store = self._resolved.get("checkpoint_store")
             container_adapter = self._resolved.get("container")
             return self._deps.engine.create_repair_cycle_adapter(
+                llm_factory=self._create_agent_llm_factory(),
                 checkpoint_store=checkpoint_store,
                 container_adapter=container_adapter,
             )

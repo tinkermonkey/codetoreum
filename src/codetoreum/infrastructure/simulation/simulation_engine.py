@@ -248,6 +248,7 @@ class SimulationEngine:
 
     def create_repair_cycle_adapter(
         self,
+        llm_factory: "callable[[str], ILLMProvider]",
         checkpoint_store: "IRepairCycleCheckpointStore | None" = None,
         container_adapter: "IContainer | None" = None,
     ) -> "MockRepairCycleAdapter":
@@ -255,6 +256,9 @@ class SimulationEngine:
         Create mock repair cycle adapter with injected clock.
 
         Args:
+            llm_factory: Factory callable that takes agent name and returns an ILLMProvider.
+                        Required to enforce behavioral parity with production adapter's
+                        agent selection and LLM instantiation for contract validation.
             checkpoint_store: Optional checkpoint store for recovery testing.
                             Stores recovery snapshots for repair cycle resumption.
             container_adapter: Optional container adapter for causal linking (FR-2/US-2.4).
@@ -271,6 +275,7 @@ class SimulationEngine:
         )
 
         adapter = MockRepairCycleAdapter(
+            llm_factory=llm_factory,
             clock=self._clock,
             checkpoint_store=checkpoint_store,
             container_adapter=container_adapter,

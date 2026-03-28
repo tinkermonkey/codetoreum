@@ -106,29 +106,29 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
     def __init__(
         self,
+        llm_factory: "Callable[[str], ILLMProvider]",
         clock: SimulationClock | None = None,
         checkpoint_store: IRepairCycleCheckpointStore | None = None,
         container_adapter: "Any | None" = None,
-        llm_factory: "Callable[[str], ILLMProvider] | None" = None,
     ) -> None:
         """Initialize the repair cycle adapter with SimulationClock.
 
         Args:
+            llm_factory: Factory for creating LLM providers for agents. Takes agent name
+                        and returns an ILLMProvider instance. Enables behavioral parity with
+                        production adapter's agent selection and LLM instantiation.
             clock: SimulationClock instance for deterministic time advancement
             checkpoint_store: Optional checkpoint store for recovery testing
             container_adapter: Optional container adapter for causal linking (FR-2/US-2.4).
                              If provided, the adapter will use actual container test results
                              instead of pre-configured sequences. This enables integration
                              between test execution and repair cycle decisions.
-            llm_factory: Optional factory for creating LLM providers for agents. Takes agent name
-                        and returns an ILLMProvider instance. Enables behavioral parity with
-                        production adapter's agent selection and LLM instantiation.
         """
         super().__init__()
+        self._llm_factory = llm_factory
         self._clock = clock or SimulationClock()
         self._checkpoint_store = checkpoint_store
         self._container_adapter = container_adapter
-        self._llm_factory = llm_factory
         self._current_project: str | None = None
         self._repair_state: dict[str, Any] = {}
         self._test_type_index: dict[str, int] = {}
@@ -672,7 +672,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             RepairTestResult with pass/fail counts and failure details
         """
         # Resolve and record which agent is executing this sub-task
-        agent_name = self._resolve_and_record_agent("test_execution", context)
+        _llm_provider, agent_name = self._resolve_and_record_agent("test_execution", context)
 
         self.agent_call_count += 1
         self.total_agent_calls += 1
@@ -771,7 +771,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
         for file_path, failures in grouped_failures.items():
             # Resolve and record which agent is executing this sub-task
-            agent_name = self._resolve_and_record_agent("code_fix", context)
+            _llm_provider, agent_name = self._resolve_and_record_agent("code_fix", context)
 
             self.agent_call_count += 1
             self.total_agent_calls += 1
@@ -834,7 +834,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
         for warning in test_result.warning_list:
             # Resolve and record which agent is executing this sub-task
-            agent_name = self._resolve_and_record_agent("code_fix", context)
+            _llm_provider, agent_name = self._resolve_and_record_agent("code_fix", context)
 
             self.agent_call_count += 1
             self.total_agent_calls += 1
@@ -1659,12 +1659,13 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         self,
         sub_task: str,
         context: RepairCycleContext,
-    ) -> str:
-        """Resolve agent for a sub-task and record the selection.
+    ) -> tuple["ILLMProvider", str]:
+        """Resolve agent for a sub-task and return its LLM provider.
 
         Resolves the agent name based on agent_config if available, otherwise
-        uses the default context agent name. If llm_factory is configured,
-        instantiates the LLM provider for behavioral parity with production adapter.
+        uses the default context agent name. Calls the llm_factory with the resolved
+        agent name to obtain the configured ILLMProvider, ensuring behavioral parity
+        with the production adapter's agent selection and LLM instantiation.
         Records the selection in the subtask agent calls log for later assertion.
 
         Args:
@@ -1672,7 +1673,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             context: Repair cycle context with optional agent_config
 
         Returns:
-            The resolved agent name
+            Tuple of (ILLMProvider instance for the resolved agent, resolved agent name)
         """
         agent_name = (
             context.agent_config.resolve_agent(sub_task, context.agent_name)
@@ -1680,10 +1681,10 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             else context.agent_name
         )
 
-        # If llm_factory is provided, call it to match production adapter behavior.
-        # Result is intentionally not used - we validate factory execution but don't need the provider.
-        if self._llm_factory:
-            self._llm_factory(agent_name)
+        # Call factory to obtain ILLMProvider for the resolved agent.
+        # This enforces the contract that llm_factory returns ILLMProvider
+        # and validates production wiring correctness.
+        llm_provider = self._llm_factory(agent_name)
 
         with self._lock:
             self._subtask_agent_calls.append(
@@ -1694,4 +1695,4 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 }
             )
 
-        return agent_name
+        return llm_provider, agent_name

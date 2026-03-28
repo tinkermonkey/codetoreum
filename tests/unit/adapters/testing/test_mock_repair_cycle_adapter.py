@@ -13,6 +13,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
     MockRepairCycleAdapter,
 )
@@ -25,6 +26,18 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestWarning,
 )
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
+
+
+@pytest.fixture
+def llm_factory():
+    """Factory that returns a MockLLMAdapter regardless of agent name."""
+    llm_adapter = MockLLMAdapter()
+
+    def factory(agent_name: str):
+        # Return the same mock adapter for all agents
+        return llm_adapter
+
+    return factory
 
 
 class MockRepairCycleContext:
@@ -60,21 +73,21 @@ class TestSimulationClockIntegration:
     """Tests for SimulationClock integration (FR-11.5)."""
 
     @pytest.mark.asyncio
-    async def test_clock_initialization(self):
+    async def test_clock_initialization(self, llm_factory):
         """Verify adapter initializes with clock."""
         clock = SimulationClock(speed_multiplier=100.0)
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
         assert adapter.clock is clock
         assert adapter.agent_call_count == 0
 
     @pytest.mark.asyncio
-    async def test_clock_time_advancement_on_test_run(self):
+    async def test_clock_time_advancement_on_test_run(self, llm_factory):
         """Verify clock advances 30 seconds per test (FR-11.6)."""
         clock = SimulationClock(speed_multiplier=100.0)
         start_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
         clock.start_at(start_time)
 
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
         adapter.current_project = "proj-1"
 
         result = RepairTestResult(
@@ -98,13 +111,13 @@ class TestSimulationClockIntegration:
         assert clock.now() == expected_time
 
     @pytest.mark.asyncio
-    async def test_clock_time_advancement_on_fix(self):
+    async def test_clock_time_advancement_on_fix(self, llm_factory):
         """Verify clock advances 2 minutes per file fix (FR-11.7)."""
         clock = SimulationClock(speed_multiplier=100.0)
         start_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
         clock.start_at(start_time)
 
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
         adapter.current_project = "proj-1"
 
         context = MockRepairCycleContext()
@@ -120,13 +133,13 @@ class TestSimulationClockIntegration:
         assert clock.now() == expected_time
 
     @pytest.mark.asyncio
-    async def test_clock_time_advancement_on_warning_review(self):
+    async def test_clock_time_advancement_on_warning_review(self, llm_factory):
         """Verify clock advances 1 minute per warning review (FR-11.8)."""
         clock = SimulationClock(speed_multiplier=100.0)
         start_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
         clock.start_at(start_time)
 
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
         adapter.current_project = "proj-1"
 
         context = MockRepairCycleContext()
@@ -157,10 +170,10 @@ class TestSimulationClockIntegration:
 class TestConfigurationMethods:
     """Tests for configuration methods (FR-11.2, FR-11.3, FR-11.4)."""
 
-    def test_set_test_result_sequence(self):
+    def test_set_test_result_sequence(self, llm_factory):
         """Test set_test_result_sequence (FR-11.2)."""
         clock = SimulationClock(speed_multiplier=100.0)
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
 
         result1 = RepairTestResult(
             test_type=RepairTestType.UNIT,
@@ -191,10 +204,10 @@ class TestConfigurationMethods:
         assert RepairTestType.UNIT in adapter.test_results
         assert len(adapter.test_results[RepairTestType.UNIT]) == 2
 
-    def test_set_iterations_until_success(self):
+    def test_set_iterations_until_success(self, llm_factory):
         """Test set_iterations_until_success (FR-11.3)."""
         clock = SimulationClock(speed_multiplier=100.0)
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
 
         adapter.set_iterations_until_success(RepairTestType.UNIT, 3)
 
@@ -208,10 +221,10 @@ class TestConfigurationMethods:
         # Last should pass
         assert sequence[2].failed == 0
 
-    def test_set_always_fail(self):
+    def test_set_always_fail(self, llm_factory):
         """Test set_always_fail (FR-11.4)."""
         clock = SimulationClock(speed_multiplier=100.0)
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
 
         adapter.set_always_fail(RepairTestType.UNIT, 5)
 
@@ -227,10 +240,10 @@ class TestEventLogging:
     """Tests for event logging and retrieval (FR-11.9, FR-11.10)."""
 
     @pytest.mark.asyncio
-    async def test_get_all_events(self):
+    async def test_get_all_events(self, llm_factory):
         """Test get_all_events method (FR-11.10)."""
         clock = SimulationClock(speed_multiplier=100.0)
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
         adapter.current_project = "proj-1"
 
         context = MockRepairCycleContext()
@@ -254,10 +267,10 @@ class TestEventLogging:
         assert all("timestamp" in e for e in events)
 
     @pytest.mark.asyncio
-    async def test_get_events_by_type(self):
+    async def test_get_events_by_type(self, llm_factory):
         """Test get_events_by_type method (FR-11.10)."""
         clock = SimulationClock(speed_multiplier=100.0)
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
         adapter.current_project = "proj-1"
 
         context = MockRepairCycleContext()
@@ -285,10 +298,10 @@ class TestAssertionHelpers:
     """Tests for assertion helper methods (FR-12.1-12.7)."""
 
     @pytest.mark.asyncio
-    async def test_assert_iteration_count(self):
+    async def test_assert_iteration_count(self, llm_factory):
         """Test assert_iteration_count (FR-12.1)."""
         clock = SimulationClock(speed_multiplier=100.0)
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
         adapter.current_project = "proj-1"
 
         adapter.set_iterations_until_success(RepairTestType.UNIT, 2)
@@ -304,10 +317,10 @@ class TestAssertionHelpers:
             adapter.assert_iteration_count(RepairTestType.UNIT, 3)
 
     @pytest.mark.asyncio
-    async def test_assert_test_type_passed(self):
+    async def test_assert_test_type_passed(self, llm_factory):
         """Test assert_test_type_passed (FR-12.2)."""
         clock = SimulationClock(speed_multiplier=100.0)
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
         adapter.current_project = "proj-1"
 
         result = RepairTestResult(
@@ -330,10 +343,10 @@ class TestAssertionHelpers:
         adapter.assert_test_type_passed(RepairTestType.UNIT)
 
     @pytest.mark.asyncio
-    async def test_assert_test_type_failed(self):
+    async def test_assert_test_type_failed(self, llm_factory):
         """Test assert_test_type_failed (FR-12.3)."""
         clock = SimulationClock(speed_multiplier=100.0)
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
         adapter.current_project = "proj-1"
 
         adapter.set_always_fail(RepairTestType.UNIT, 3)
@@ -345,10 +358,10 @@ class TestAssertionHelpers:
         adapter.assert_test_type_failed(RepairTestType.UNIT)
 
     @pytest.mark.asyncio
-    async def test_assert_overall_success(self):
+    async def test_assert_overall_success(self, llm_factory):
         """Test assert_overall_success (FR-12.5)."""
         clock = SimulationClock(speed_multiplier=100.0)
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
         adapter.current_project = "proj-1"
 
         result = RepairTestResult(
@@ -371,10 +384,10 @@ class TestAssertionHelpers:
         adapter.assert_overall_success()
 
     @pytest.mark.asyncio
-    async def test_assert_overall_failure(self):
+    async def test_assert_overall_failure(self, llm_factory):
         """Test assert_overall_failure (FR-12.6)."""
         clock = SimulationClock(speed_multiplier=100.0)
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
         adapter.current_project = "proj-1"
 
         adapter.set_always_fail(RepairTestType.UNIT, 3)
@@ -385,10 +398,10 @@ class TestAssertionHelpers:
         # Should not raise
         adapter.assert_overall_failure()
 
-    def test_get_agent_call_count(self):
+    def test_get_agent_call_count(self, llm_factory):
         """Test get_agent_call_count (FR-12.7)."""
         clock = SimulationClock(speed_multiplier=100.0)
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
 
         assert adapter.get_agent_call_count() == 0
 
@@ -400,10 +413,10 @@ class TestCircuitBreaker:
     """Tests for circuit breaker functionality (FR-7.1-7.5)."""
 
     @pytest.mark.asyncio
-    async def test_circuit_breaker_triggers(self):
+    async def test_circuit_breaker_triggers(self, llm_factory):
         """Verify circuit breaker prevents execution beyond max agent calls."""
         clock = SimulationClock(speed_multiplier=100.0)
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
         adapter.current_project = "proj-1"
 
         test_result = RepairTestResult(
@@ -432,10 +445,10 @@ class TestCircuitBreaker:
         assert cycle_result.total_agent_calls >= context.max_total_agent_calls
 
     @pytest.mark.asyncio
-    async def test_circuit_breaker_event_emitted(self):
+    async def test_circuit_breaker_event_emitted(self, llm_factory):
         """Verify circuit breaker emits fast-fail event."""
         clock = SimulationClock(speed_multiplier=100.0)
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
         adapter.current_project = "proj-1"
 
         result = RepairTestResult(
@@ -469,10 +482,10 @@ class TestFullExecutionFlow:
     """Tests for complete repair cycle execution."""
 
     @pytest.mark.asyncio
-    async def test_successful_repair_cycle(self):
+    async def test_successful_repair_cycle(self, llm_factory):
         """Test complete successful repair cycle."""
         clock = SimulationClock(speed_multiplier=100.0)
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
         adapter.current_project = "proj-1"
 
         adapter.set_iterations_until_success(RepairTestType.UNIT, 2)
@@ -484,10 +497,10 @@ class TestFullExecutionFlow:
         assert result.total_agent_calls >= 2
 
     @pytest.mark.asyncio
-    async def test_failed_repair_cycle(self):
+    async def test_failed_repair_cycle(self, llm_factory):
         """Test complete failed repair cycle."""
         clock = SimulationClock(speed_multiplier=100.0)
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
         adapter.current_project = "proj-1"
 
         adapter.set_always_fail(RepairTestType.UNIT, 3)
@@ -498,10 +511,10 @@ class TestFullExecutionFlow:
         assert not result.overall_success
 
     @pytest.mark.asyncio
-    async def test_fast_fail_on_first_test_type_failure(self):
+    async def test_fast_fail_on_first_test_type_failure(self, llm_factory):
         """Test that fast-fail stops when first test type fails."""
         clock = SimulationClock(speed_multiplier=100.0)
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
         adapter.current_project = "proj-1"
 
         adapter.set_always_fail(RepairTestType.UNIT, 3)
@@ -537,17 +550,17 @@ class TestAgentSelectionTracking:
     """Tests for agent selection tracking in repair cycle."""
 
     @pytest.mark.asyncio
-    async def test_get_subtask_agent_calls_empty_initially(self):
+    async def test_get_subtask_agent_calls_empty_initially(self, llm_factory):
         """Verify agent calls list is empty before execution."""
-        adapter = MockRepairCycleAdapter()
+        adapter = MockRepairCycleAdapter(llm_factory)
         calls = adapter.get_subtask_agent_calls()
         assert calls == []
 
     @pytest.mark.asyncio
-    async def test_record_agent_for_test_execution(self):
+    async def test_record_agent_for_test_execution(self, llm_factory):
         """Verify agent is recorded when run_tests is called."""
         clock = SimulationClock(speed_multiplier=100.0)
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
         adapter.current_project = "proj-1"
 
         result = RepairTestResult(
@@ -573,10 +586,10 @@ class TestAgentSelectionTracking:
         assert "timestamp" in calls[0]
 
     @pytest.mark.asyncio
-    async def test_record_agent_for_code_fix(self):
+    async def test_record_agent_for_code_fix(self, llm_factory):
         """Verify agent is recorded when fix_failures_by_file is called."""
         clock = SimulationClock(speed_multiplier=100.0)
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
         adapter.current_project = "proj-1"
 
         context = MockRepairCycleContext(agent_name="senior_software_engineer")
@@ -594,10 +607,10 @@ class TestAgentSelectionTracking:
         assert calls[0]["agent_name"] == "senior_software_engineer"
 
     @pytest.mark.asyncio
-    async def test_record_agent_for_warning_review(self):
+    async def test_record_agent_for_warning_review(self, llm_factory):
         """Verify agent is recorded when handle_warnings is called."""
         clock = SimulationClock(speed_multiplier=100.0)
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
         adapter.current_project = "proj-1"
 
         context = MockRepairCycleContext(agent_name="code_reviewer")
@@ -623,10 +636,10 @@ class TestAgentSelectionTracking:
         assert calls[0]["agent_name"] == "code_reviewer"
 
     @pytest.mark.asyncio
-    async def test_resolve_agent_with_config(self):
+    async def test_resolve_agent_with_config(self, llm_factory):
         """Verify agent is resolved from config when available (using real domain type)."""
         clock = SimulationClock(speed_multiplier=100.0)
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
         adapter.current_project = "proj-1"
 
         # Use the real RepairCycleAgentConfig domain type (not a mock)
@@ -658,10 +671,10 @@ class TestAgentSelectionTracking:
         assert calls[0]["agent_name"] == "qa_engineer"
 
     @pytest.mark.asyncio
-    async def test_fallback_to_default_agent_when_no_config(self):
+    async def test_fallback_to_default_agent_when_no_config(self, llm_factory):
         """Verify default agent is used when config is None."""
         clock = SimulationClock(speed_multiplier=100.0)
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
         adapter.current_project = "proj-1"
 
         context = MockRepairCycleContext(agent_config=None, agent_name="default_agent")
@@ -686,10 +699,10 @@ class TestAgentSelectionTracking:
         assert calls[0]["agent_name"] == "default_agent"
 
     @pytest.mark.asyncio
-    async def test_assert_subtask_used_agent_success(self):
+    async def test_assert_subtask_used_agent_success(self, llm_factory):
         """Verify assert_subtask_used_agent succeeds on match."""
         clock = SimulationClock(speed_multiplier=100.0)
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
         adapter.current_project = "proj-1"
 
         context = MockRepairCycleContext(agent_name="qa_engineer")
@@ -713,10 +726,10 @@ class TestAgentSelectionTracking:
         adapter.assert_subtask_used_agent("test_execution", "qa_engineer")
 
     @pytest.mark.asyncio
-    async def test_assert_subtask_used_agent_fails_on_mismatch(self):
+    async def test_assert_subtask_used_agent_fails_on_mismatch(self, llm_factory):
         """Verify assert_subtask_used_agent fails on agent mismatch."""
         clock = SimulationClock(speed_multiplier=100.0)
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
         adapter.current_project = "proj-1"
 
         context = MockRepairCycleContext(agent_name="qa_engineer")
@@ -740,18 +753,18 @@ class TestAgentSelectionTracking:
             adapter.assert_subtask_used_agent("test_execution", "senior_software_engineer")
 
     @pytest.mark.asyncio
-    async def test_assert_subtask_used_agent_fails_on_no_calls(self):
+    async def test_assert_subtask_used_agent_fails_on_no_calls(self, llm_factory):
         """Verify assert_subtask_used_agent fails when no calls recorded."""
-        adapter = MockRepairCycleAdapter()
+        adapter = MockRepairCycleAdapter(llm_factory)
 
         with pytest.raises(AssertionError, match="No calls recorded for sub_task"):
             adapter.assert_subtask_used_agent("test_execution", "qa_engineer")
 
     @pytest.mark.asyncio
-    async def test_multiple_subtask_calls_track_independently(self):
+    async def test_multiple_subtask_calls_track_independently(self, llm_factory):
         """Verify multiple sub-task calls are tracked independently."""
         clock = SimulationClock(speed_multiplier=100.0)
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
         adapter.current_project = "proj-1"
 
         # Set up test results with failures
@@ -807,10 +820,10 @@ class TestAgentSelectionTracking:
         assert all(c["agent_name"] == "senior_software_engineer" for c in code_fix_calls)
 
     @pytest.mark.asyncio
-    async def test_assert_subtask_used_agent_checks_most_recent_call(self):
+    async def test_assert_subtask_used_agent_checks_most_recent_call(self, llm_factory):
         """Verify assertion checks most recent call for multiple invocations."""
         clock = SimulationClock(speed_multiplier=100.0)
-        adapter = MockRepairCycleAdapter(clock)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
         adapter.current_project = "proj-1"
 
         # First call with agent_1
