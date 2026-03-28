@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from codetoreum.domain.events.adapter_events import CodetoreumEvent
     from codetoreum.infrastructure.resilience.interfaces import ICircuitBreaker
     from codetoreum.ports.output.event_emitter import IEventEmitter
-    from codetoreum.ports.output.llm_provider import AgentLLMFactory, ILLMProvider
+    from codetoreum.ports.output.llm_provider import AgentLLMFactory, ExecutionResult, ILLMProvider
 
 from codetoreum.domain.events.repair_cycle_events import (
     RepairCycleCheckpointFailedEvent,
@@ -182,6 +182,56 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             else context.agent_name
         )
         return await self._llm_factory(agent_name), agent_name
+
+    async def _execute_llm_with_timeout(
+        self,
+        llm: ILLMProvider,
+        prompt: str,
+        operation: str,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+        extra_log: dict | None = None,
+        error_message: str | None = None,
+    ) -> ExecutionResult:
+        """Execute an LLM call with timeout and optional circuit breaker.
+
+        Centralizes timeout enforcement and error handling for all LLM calls,
+        ensuring consistent timeout application and logging across the adapter.
+
+        Args:
+            llm: LLM provider to execute
+            prompt: Prompt to send to the LLM
+            operation: Operation name for circuit breaker (e.g., "repair_cycle.run_tests")
+            config: Test run configuration containing timeout value
+            context: Repair cycle context with workflow details
+            extra_log: Optional dict of additional logging context
+            error_message: Optional custom error message prefix (defaults to operation name)
+
+        Returns:
+            ExecutionResult from the LLM call
+
+        Raises:
+            TimeoutError: If the LLM call exceeds the configured timeout
+        """
+        try:
+            coro = (
+                self.circuit_breaker.call(llm.execute, operation, prompt=prompt)
+                if self.circuit_breaker
+                else llm.execute(prompt=prompt)
+            )
+            return await asyncio.wait_for(coro, timeout=config.timeout)
+        except asyncio.TimeoutError as e:
+            message_prefix = error_message or operation
+            log_extra = {
+                "workflow_run_id": context.workflow_run_id,
+                "timeout_seconds": config.timeout,
+                "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                **(extra_log or {}),
+            }
+            logger.error(f"{message_prefix} timed out", extra=log_extra, exc_info=True)
+            raise TimeoutError(
+                f"{message_prefix} exceeded timeout of {config.timeout} seconds"
+            ) from e
 
     async def execute(self, context: RepairCycleContext) -> RepairCycleResult:
         """Execute complete repair cycle for all configured test types.
@@ -334,37 +384,15 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         try:
             # Call LLM to execute tests (with circuit breaker if configured)
             prompt = f"Execute the following test command and return results as JSON:\n\n{test_command}"
-            try:
-                if self.circuit_breaker:
-                    agent_response = await asyncio.wait_for(
-                        self.circuit_breaker.call(
-                            llm.execute,
-                            "repair_cycle.run_tests",
-                            prompt=prompt,
-                        ),
-                        timeout=config.timeout,
-                    )
-                else:
-                    agent_response = await asyncio.wait_for(
-                        llm.execute(
-                            prompt=prompt,
-                        ),
-                        timeout=config.timeout,
-                    )
-            except asyncio.TimeoutError as e:
-                logger.error(
-                    "Test execution timed out",
-                    extra={
-                        "workflow_run_id": context.workflow_run_id,
-                        "test_type": config.test_type.value,
-                        "timeout_seconds": config.timeout,
-                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
-                    },
-                    exc_info=True,
-                )
-                raise TimeoutError(
-                    f"Test execution exceeded timeout of {config.timeout} seconds"
-                ) from e
+            agent_response = await self._execute_llm_with_timeout(
+                llm=llm,
+                prompt=prompt,
+                operation="repair_cycle.run_tests",
+                config=config,
+                context=context,
+                extra_log={"test_type": config.test_type.value},
+                error_message="Test execution",
+            )
 
             # Parse test output with retry logic
             test_output = await self._parse_test_output_with_retry(agent_response.content, config.test_type)
@@ -507,37 +535,15 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     exc_info=False,
                 )
 
-                try:
-                    if self.circuit_breaker:
-                        await asyncio.wait_for(
-                            self.circuit_breaker.call(
-                                llm.execute,
-                                "repair_cycle.fix_failures_by_file",
-                                prompt=fix_prompt,
-                            ),
-                            timeout=config.timeout,
-                        )
-                    else:
-                        await asyncio.wait_for(
-                            llm.execute(
-                                prompt=fix_prompt,
-                            ),
-                            timeout=config.timeout,
-                        )
-                except asyncio.TimeoutError as e:
-                    logger.error(
-                        "File fix execution timed out",
-                        extra={
-                            "workflow_run_id": context.workflow_run_id,
-                            "file": file_path,
-                            "timeout_seconds": config.timeout,
-                            "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
-                        },
-                        exc_info=True,
-                    )
-                    raise TimeoutError(
-                        f"Fix execution for {file_path} exceeded timeout of {config.timeout} seconds"
-                    ) from e
+                await self._execute_llm_with_timeout(
+                    llm=llm,
+                    prompt=fix_prompt,
+                    operation="repair_cycle.fix_failures_by_file",
+                    config=config,
+                    context=context,
+                    extra_log={"file": file_path},
+                    error_message=f"Fix execution for {file_path}",
+                )
 
                 # Emit file fix completed event (success)
                 self.event_emitter.emit(
@@ -654,37 +660,15 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             )
 
             # Call LLM to analyze systemic issues
-            try:
-                if self.circuit_breaker:
-                    agent_response = await asyncio.wait_for(
-                        self.circuit_breaker.call(
-                            llm.execute,
-                            "repair_cycle.analyze_systemic_issues",
-                            prompt=analysis_prompt,
-                        ),
-                        timeout=config.timeout,
-                    )
-                else:
-                    agent_response = await asyncio.wait_for(
-                        llm.execute(
-                            prompt=analysis_prompt,
-                        ),
-                        timeout=config.timeout,
-                    )
-            except asyncio.TimeoutError as e:
-                logger.error(
-                    "Systemic analysis execution timed out",
-                    extra={
-                        "workflow_run_id": context.workflow_run_id,
-                        "test_type": config.test_type.value,
-                        "timeout_seconds": config.timeout,
-                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
-                    },
-                    exc_info=True,
-                )
-                raise TimeoutError(
-                    f"Systemic analysis exceeded timeout of {config.timeout} seconds"
-                ) from e
+            agent_response = await self._execute_llm_with_timeout(
+                llm=llm,
+                prompt=analysis_prompt,
+                operation="repair_cycle.analyze_systemic_issues",
+                config=config,
+                context=context,
+                extra_log={"test_type": config.test_type.value},
+                error_message="Systemic analysis",
+            )
 
             logger.info(
                 "Systemic analysis completed",
@@ -768,37 +752,15 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             )
 
             # Call LLM to apply systemic fixes
-            try:
-                if self.circuit_breaker:
-                    agent_response = await asyncio.wait_for(
-                        self.circuit_breaker.call(
-                            llm.execute,
-                            "repair_cycle.apply_systemic_fixes",
-                            prompt=fix_prompt,
-                        ),
-                        timeout=config.timeout,
-                    )
-                else:
-                    agent_response = await asyncio.wait_for(
-                        llm.execute(
-                            prompt=fix_prompt,
-                        ),
-                        timeout=config.timeout,
-                    )
-            except asyncio.TimeoutError as e:
-                logger.error(
-                    "Systemic fix execution timed out",
-                    extra={
-                        "workflow_run_id": context.workflow_run_id,
-                        "test_type": config.test_type.value,
-                        "timeout_seconds": config.timeout,
-                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
-                    },
-                    exc_info=True,
-                )
-                raise TimeoutError(
-                    f"Systemic fix application exceeded timeout of {config.timeout} seconds"
-                ) from e
+            agent_response = await self._execute_llm_with_timeout(
+                llm=llm,
+                prompt=fix_prompt,
+                operation="repair_cycle.apply_systemic_fixes",
+                config=config,
+                context=context,
+                extra_log={"test_type": config.test_type.value},
+                error_message="Systemic fix application",
+            )
 
             # Log the response for audit trail
             logger.info(
@@ -877,37 +839,15 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             )
 
             # Call LLM to rebuild environment
-            try:
-                if self.circuit_breaker:
-                    agent_response = await asyncio.wait_for(
-                        self.circuit_breaker.call(
-                            llm.execute,
-                            "repair_cycle.rebuild_environment",
-                            prompt=rebuild_prompt,
-                        ),
-                        timeout=config.timeout,
-                    )
-                else:
-                    agent_response = await asyncio.wait_for(
-                        llm.execute(
-                            prompt=rebuild_prompt,
-                        ),
-                        timeout=config.timeout,
-                    )
-            except asyncio.TimeoutError as e:
-                logger.error(
-                    "Environment rebuild execution timed out",
-                    extra={
-                        "workflow_run_id": context.workflow_run_id,
-                        "test_type": config.test_type.value,
-                        "timeout_seconds": config.timeout,
-                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
-                    },
-                    exc_info=True,
-                )
-                raise TimeoutError(
-                    f"Environment rebuild exceeded timeout of {config.timeout} seconds"
-                ) from e
+            agent_response = await self._execute_llm_with_timeout(
+                llm=llm,
+                prompt=rebuild_prompt,
+                operation="repair_cycle.rebuild_environment",
+                config=config,
+                context=context,
+                extra_log={"test_type": config.test_type.value},
+                error_message="Environment rebuild",
+            )
 
             # Log the response for audit trail
             logger.info(
@@ -985,37 +925,15 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             )
 
             # Call LLM to verify environment
-            try:
-                if self.circuit_breaker:
-                    agent_response = await asyncio.wait_for(
-                        self.circuit_breaker.call(
-                            llm.execute,
-                            "repair_cycle.verify_environment",
-                            prompt=verification_prompt,
-                        ),
-                        timeout=config.timeout,
-                    )
-                else:
-                    agent_response = await asyncio.wait_for(
-                        llm.execute(
-                            prompt=verification_prompt,
-                        ),
-                        timeout=config.timeout,
-                    )
-            except asyncio.TimeoutError as e:
-                logger.error(
-                    "Environment verification execution timed out",
-                    extra={
-                        "workflow_run_id": context.workflow_run_id,
-                        "test_type": config.test_type.value,
-                        "timeout_seconds": config.timeout,
-                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
-                    },
-                    exc_info=True,
-                )
-                raise TimeoutError(
-                    f"Environment verification exceeded timeout of {config.timeout} seconds"
-                ) from e
+            agent_response = await self._execute_llm_with_timeout(
+                llm=llm,
+                prompt=verification_prompt,
+                operation="repair_cycle.verify_environment",
+                config=config,
+                context=context,
+                extra_log={"test_type": config.test_type.value},
+                error_message="Environment verification",
+            )
 
             # Parse response to extract verification status
             try:
@@ -1138,37 +1056,15 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     exc_info=False,
                 )
 
-                try:
-                    if self.circuit_breaker:
-                        await asyncio.wait_for(
-                            self.circuit_breaker.call(
-                                llm.execute,
-                                "repair_cycle.handle_warnings",
-                                prompt=review_prompt,
-                            ),
-                            timeout=config.timeout,
-                        )
-                    else:
-                        await asyncio.wait_for(
-                            llm.execute(
-                                prompt=review_prompt,
-                            ),
-                            timeout=config.timeout,
-                        )
-                except asyncio.TimeoutError as e:
-                    logger.error(
-                        "Warning review execution timed out",
-                        extra={
-                            "workflow_run_id": context.workflow_run_id,
-                            "file": warning.file,
-                            "timeout_seconds": config.timeout,
-                            "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
-                        },
-                        exc_info=True,
-                    )
-                    raise TimeoutError(
-                        f"Warning review for {warning.file} exceeded timeout of {config.timeout} seconds"
-                    ) from e
+                await self._execute_llm_with_timeout(
+                    llm=llm,
+                    prompt=review_prompt,
+                    operation="repair_cycle.handle_warnings",
+                    config=config,
+                    context=context,
+                    extra_log={"file": warning.file},
+                    error_message=f"Warning review for {warning.file}",
+                )
 
                 # Emit warning review completed event (success)
                 self.event_emitter.emit(

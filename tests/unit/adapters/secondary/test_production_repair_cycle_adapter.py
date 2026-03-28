@@ -686,24 +686,22 @@ class TestTimeoutHandling:
         assert "Warning review for test_foo.py exceeded timeout" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_timeout_respects_config_timeout_value(self):
+    @pytest.mark.parametrize("timeout_seconds", [0.01, 0.02, 0.05])
+    async def test_timeout_respects_config_timeout_value(self, timeout_seconds):
         """Timeout values from config are actually enforced."""
-        # Create LLM that delays 2 seconds
-        factory = await self._make_factory_with_slow_llm(delay_seconds=2.0)
+        # Create LLM that delays 0.5 seconds (much longer than any timeout)
+        factory = await self._make_factory_with_slow_llm(delay_seconds=0.5)
         adapter = ProductionRepairCycleAdapter(
             llm_factory=factory,
             config=RepairCycleConfig(),
         )
 
         ctx = _RepairCycleContext()
+        config = RepairTestRunConfig(
+            test_type=RepairTestType.UNIT,
+            timeout=timeout_seconds,
+            max_iterations=1,
+        )
 
-        # Test with different timeout values
-        for timeout_seconds in [0.05, 0.1, 0.2]:
-            config = RepairTestRunConfig(
-                test_type=RepairTestType.UNIT,
-                timeout=timeout_seconds,
-                max_iterations=1,
-            )
-
-            with pytest.raises(TimeoutError):
-                await adapter.run_tests(config, ctx)
+        with pytest.raises(TimeoutError):
+            await adapter.run_tests(config, ctx)
