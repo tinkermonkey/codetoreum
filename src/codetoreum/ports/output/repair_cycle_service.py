@@ -172,6 +172,102 @@ class IRepairCycle(Protocol):
         """
         ...
 
+    async def analyze_systemic_issues(
+        self,
+        test_result: RepairTestResult,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> str:
+        """Analyze failure root causes at systemic level.
+
+        Classifies test failures to identify systemic patterns that affect
+        multiple tests or require cross-cutting fixes.
+
+        Args:
+            test_result: Test result containing failures to analyze
+            config: Test run configuration
+            context: Repair cycle context
+
+        Returns:
+            Analysis summary from the agent
+
+        Raises:
+            CircuitBreakerOpenError: When circuit breaker is open
+        """
+        ...
+
+    async def apply_systemic_fixes(
+        self,
+        analysis_summary: str,
+        test_result: RepairTestResult,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> bool:
+        """Apply cross-cutting fixes based on systemic analysis.
+
+        Uses the systemic analysis to apply fixes that address root causes
+        affecting multiple tests. These are broader fixes beyond file-level
+        changes, such as architecture adjustments or dependency updates.
+
+        Args:
+            analysis_summary: Summary from systemic analysis
+            test_result: Test result that triggered the analysis
+            config: Test run configuration
+            context: Repair cycle context
+
+        Returns:
+            True if fixes were successfully applied
+
+        Raises:
+            CircuitBreakerOpenError: When circuit breaker is open
+        """
+        ...
+
+    async def rebuild_environment(
+        self,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> bool:
+        """Rebuild test environment after systemic fixes.
+
+        Coordinates with the env_rebuild agent to rebuild the test environment
+        after systemic fixes, ensuring dependencies and configuration are
+        properly updated.
+
+        Args:
+            config: Test run configuration
+            context: Repair cycle context
+
+        Returns:
+            True if environment was successfully rebuilt
+
+        Raises:
+            CircuitBreakerOpenError: When circuit breaker is open
+        """
+        ...
+
+    async def verify_environment(
+        self,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> bool:
+        """Verify that rebuilt environment is ready for testing.
+
+        Coordinates with the env_verification agent to verify that the
+        rebuilt environment is properly configured and ready for test execution.
+
+        Args:
+            config: Test run configuration
+            context: Repair cycle context
+
+        Returns:
+            True if environment verification passed
+
+        Raises:
+            CircuitBreakerOpenError: When circuit breaker is open
+        """
+        ...
+
     async def checkpoint(
         self,
         test_type: RepairTestType,

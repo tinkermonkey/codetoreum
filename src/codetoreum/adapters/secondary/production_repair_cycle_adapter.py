@@ -702,22 +702,24 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
             # Call LLM to apply systemic fixes
             if self.circuit_breaker:
-                await self.circuit_breaker.call(
+                agent_response = await self.circuit_breaker.call(
                     llm.execute,
                     "repair_cycle.apply_systemic_fixes",
                     prompt=fix_prompt,
                 )
             else:
-                await llm.execute(
+                agent_response = await llm.execute(
                     prompt=fix_prompt,
                 )
 
+            # Log the response for audit trail
             logger.info(
                 "Systemic fixes applied",
                 extra={
                     "workflow_run_id": context.workflow_run_id,
                     "test_type": config.test_type.value,
                     "agent_name": resolved_agent_name,
+                    "response_length": len(agent_response.content),
                 },
                 exc_info=False,
             )
@@ -788,22 +790,24 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
             # Call LLM to rebuild environment
             if self.circuit_breaker:
-                await self.circuit_breaker.call(
+                agent_response = await self.circuit_breaker.call(
                     llm.execute,
                     "repair_cycle.rebuild_environment",
                     prompt=rebuild_prompt,
                 )
             else:
-                await llm.execute(
+                agent_response = await llm.execute(
                     prompt=rebuild_prompt,
                 )
 
+            # Log the response for audit trail
             logger.info(
                 "Environment rebuild completed",
                 extra={
                     "workflow_run_id": context.workflow_run_id,
                     "test_type": config.test_type.value,
                     "agent_name": resolved_agent_name,
+                    "response_length": len(agent_response.content),
                 },
                 exc_info=False,
             )
@@ -883,17 +887,36 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     prompt=verification_prompt,
                 )
 
-            logger.info(
-                "Environment verification completed",
-                extra={
-                    "workflow_run_id": context.workflow_run_id,
-                    "test_type": config.test_type.value,
-                    "agent_name": resolved_agent_name,
-                },
-                exc_info=False,
-            )
+            # Parse response to extract verification status
+            try:
+                response_data = json.loads(agent_response.content)
+                verification_passed = response_data.get("ready", False)
 
-            return True
+                logger.info(
+                    "Environment verification completed",
+                    extra={
+                        "workflow_run_id": context.workflow_run_id,
+                        "test_type": config.test_type.value,
+                        "agent_name": resolved_agent_name,
+                        "ready": verification_passed,
+                    },
+                    exc_info=False,
+                )
+
+                return verification_passed
+            except (json.JSONDecodeError, KeyError) as e:
+                logger.error(
+                    "Failed to parse environment verification response",
+                    extra={
+                        "workflow_run_id": context.workflow_run_id,
+                        "test_type": config.test_type.value,
+                        "error": str(e),
+                        "response": agent_response.content,
+                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                    },
+                    exc_info=True,
+                )
+                return False
 
         except Exception as e:
             logger.error(
@@ -1623,14 +1646,27 @@ Return a JSON response with the status of fixes applied."""
                     grouped = self._group_failures_by_file(test_result.failures)
                     files_fixed += await self.fix_failures_by_file(grouped, config, context)
 
-                    # If file-level fixes didn't resolve issues, try systemic analysis
-                    # This runs after fix_failures_by_file to detect patterns the agent couldn't fix
-                    if test_result.failures:
+                    # Re-test to determine if file-level fixes resolved issues
+                    retest_result = await self.run_tests(config, context)
+                    retest_result = RepairTestResult(
+                        test_type=retest_result.test_type,
+                        iteration=iteration,
+                        passed=retest_result.passed,
+                        failed=retest_result.failed,
+                        warnings=retest_result.warnings,
+                        failures=retest_result.failures,
+                        warning_list=retest_result.warning_list,
+                        raw_output=retest_result.raw_output,
+                        timestamp=retest_result.timestamp,
+                    )
+
+                    # Only proceed to systemic analysis if failures persist after fixes
+                    if retest_result.failures:
                         try:
-                            analysis = await self.analyze_systemic_issues(test_result, config, context)
+                            analysis = await self.analyze_systemic_issues(retest_result, config, context)
                             if analysis:
                                 # Apply systemic fixes based on analysis
-                                fixed = await self.apply_systemic_fixes(analysis, test_result, config, context)
+                                fixed = await self.apply_systemic_fixes(analysis, retest_result, config, context)
                                 if fixed:
                                     # Rebuild and verify environment after systemic fixes
                                     await self.rebuild_environment(config, context)
@@ -1646,6 +1682,9 @@ Return a JSON response with the status of fixes applied."""
                                 },
                                 exc_info=True,
                             )
+                    else:
+                        # File-level fixes resolved issues, update test_result for the loop
+                        test_result = retest_result
 
                 # Checkpoint at interval
                 if iteration % context.checkpoint_interval == 0:

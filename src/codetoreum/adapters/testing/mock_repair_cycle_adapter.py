@@ -873,6 +873,138 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
         return reviewed
 
+    async def analyze_systemic_issues(
+        self,
+        test_result: RepairTestResult,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> str:
+        """Mock implementation: return simulated systemic analysis.
+
+        Args:
+            test_result: Test result containing failures to analyze
+            config: Test run configuration
+            context: Repair cycle context
+
+        Returns:
+            Analysis summary string
+        """
+        if not test_result.failures:
+            return ""
+
+        # Track agent call
+        self.agent_call_count += 1
+        self.total_agent_calls += 1
+
+        # Simulate analysis response
+        analysis = f"Systemic issues detected in {len(test_result.failures)} failures"
+
+        logger.info(
+            "Mock systemic analysis completed",
+            extra={
+                "workflow_run_id": context.workflow_run_id,
+                "failure_count": len(test_result.failures),
+            },
+            exc_info=False,
+        )
+
+        return analysis
+
+    async def apply_systemic_fixes(
+        self,
+        analysis_summary: str,
+        test_result: RepairTestResult,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> bool:
+        """Mock implementation: simulate systemic fix application.
+
+        Args:
+            analysis_summary: Summary from systemic analysis
+            test_result: Test result that triggered the analysis
+            config: Test run configuration
+            context: Repair cycle context
+
+        Returns:
+            True if fixes were successfully applied
+        """
+        if not analysis_summary:
+            return False
+
+        # Track agent call
+        self.agent_call_count += 1
+        self.total_agent_calls += 1
+
+        logger.info(
+            "Mock systemic fixes applied",
+            extra={
+                "workflow_run_id": context.workflow_run_id,
+                "test_type": config.test_type.value,
+            },
+            exc_info=False,
+        )
+
+        return True
+
+    async def rebuild_environment(
+        self,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> bool:
+        """Mock implementation: simulate environment rebuild.
+
+        Args:
+            config: Test run configuration
+            context: Repair cycle context
+
+        Returns:
+            True if environment was successfully rebuilt
+        """
+        # Track agent call
+        self.agent_call_count += 1
+        self.total_agent_calls += 1
+
+        logger.info(
+            "Mock environment rebuild completed",
+            extra={
+                "workflow_run_id": context.workflow_run_id,
+                "test_type": config.test_type.value,
+            },
+            exc_info=False,
+        )
+
+        return True
+
+    async def verify_environment(
+        self,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> bool:
+        """Mock implementation: simulate environment verification.
+
+        Args:
+            config: Test run configuration
+            context: Repair cycle context
+
+        Returns:
+            True if environment verification passed
+        """
+        # Track agent call
+        self.agent_call_count += 1
+        self.total_agent_calls += 1
+
+        logger.info(
+            "Mock environment verification completed",
+            extra={
+                "workflow_run_id": context.workflow_run_id,
+                "test_type": config.test_type.value,
+                "ready": True,
+            },
+            exc_info=False,
+        )
+
+        return True
+
     async def checkpoint(
         self,
         test_type: RepairTestType,
