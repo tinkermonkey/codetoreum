@@ -900,6 +900,9 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         if not test_result.failures:
             return ""
 
+        # Resolve and record which agent is executing this sub-task
+        _, agent_name = await self._resolve_and_record_agent("systemic_analysis", context)
+
         # Track agent call
         self.agent_call_count += 1
         self.total_agent_calls += 1
@@ -912,6 +915,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             extra={
                 "workflow_run_id": context.workflow_run_id,
                 "failure_count": len(test_result.failures),
+                "agent_name": agent_name,
             },
             exc_info=False,
         )
@@ -939,6 +943,9 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         if not analysis_summary:
             return False
 
+        # Resolve and record which agent is executing this sub-task
+        _, agent_name = await self._resolve_and_record_agent("systemic_fix", context)
+
         # Track agent call
         self.agent_call_count += 1
         self.total_agent_calls += 1
@@ -948,6 +955,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             extra={
                 "workflow_run_id": context.workflow_run_id,
                 "test_type": config.test_type.value,
+                "agent_name": agent_name,
             },
             exc_info=False,
         )
@@ -968,6 +976,9 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         Returns:
             True if environment was successfully rebuilt
         """
+        # Resolve and record which agent is executing this sub-task
+        _, agent_name = await self._resolve_and_record_agent("env_rebuild", context)
+
         # Track agent call
         self.agent_call_count += 1
         self.total_agent_calls += 1
@@ -977,6 +988,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             extra={
                 "workflow_run_id": context.workflow_run_id,
                 "test_type": config.test_type.value,
+                "agent_name": agent_name,
             },
             exc_info=False,
         )
@@ -997,6 +1009,9 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         Returns:
             True if environment verification passed
         """
+        # Resolve and record which agent is executing this sub-task
+        _, agent_name = await self._resolve_and_record_agent("env_verification", context)
+
         # Track agent call
         self.agent_call_count += 1
         self.total_agent_calls += 1
@@ -1006,6 +1021,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             extra={
                 "workflow_run_id": context.workflow_run_id,
                 "test_type": config.test_type.value,
+                "agent_name": agent_name,
                 "ready": True,
             },
             exc_info=False,

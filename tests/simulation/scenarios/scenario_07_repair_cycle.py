@@ -79,7 +79,7 @@ def llm_factory():
     """Factory that returns a MockLLMAdapter regardless of agent name."""
     llm_adapter = MockLLMAdapter()
 
-    def factory(agent_name: str):
+    async def factory(agent_name: str):
         return llm_adapter
 
     return factory
@@ -1014,7 +1014,7 @@ async def run_scenario(runner: SimulationRunner) -> None:
     # Create llm_factory for all scenarios
     llm_adapter = MockLLMAdapter()
 
-    def llm_factory(agent_name: str):
+    async def llm_factory(agent_name: str):
         return llm_adapter
 
     await test_scenario_01_happy_path_immediate_success(llm_factory)
