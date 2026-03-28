@@ -162,6 +162,12 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         self.checkpoint_store = checkpoint_store
         self.circuit_breaker = circuit_breaker
 
+        # Tracking state for checkpoint resumption
+        self._files_fixed = 0  # Number of files fixed in current cycle
+        self._warnings_reviewed = 0  # Number of warnings reviewed in current cycle
+        self._elapsed_time = 0.0  # Total time spent in current cycle (seconds)
+        self._cycle_results: list[CycleResult] = []  # Accumulated test results
+
     async def _get_llm_for_subtask(self, sub_task: str, context: RepairCycleContext) -> tuple[ILLMProvider, str]:
         """Resolve the appropriate agent for a sub-task and return its LLM provider.
 
@@ -255,6 +261,12 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             msg = "test_configs cannot be empty"
             raise ValueError(msg)
 
+        # Reset tracking state for this cycle
+        self._files_fixed = 0
+        self._warnings_reviewed = 0
+        self._elapsed_time = 0.0
+        self._cycle_results = []
+
         start_time = datetime.now(UTC)
         cycle_start_timestamp = start_time.isoformat()
 
@@ -306,6 +318,10 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
             test_results.append(cycle_result)
 
+            # Accumulate tracking state from this cycle result
+            self._files_fixed += cycle_result.files_fixed
+            self._warnings_reviewed += cycle_result.warnings_reviewed
+
             # If this test type failed, stop cycling through remaining types (fast-fail)
             if not cycle_result.passed:
                 overall_success = False
@@ -314,6 +330,10 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         # Emit cycle completed event
         end_time = datetime.now(UTC)
         duration_seconds = (end_time - start_time).total_seconds()
+
+        # Update accumulated tracking state
+        self._elapsed_time += duration_seconds
+        self._cycle_results = test_results
 
         total_agent_calls = self.circuit_breaker.get_stats().total_calls if self.circuit_breaker else 0
 
@@ -1246,10 +1266,10 @@ Return a JSON response with:
                 test_type=test_type,
                 iteration=iteration,
                 total_agent_calls=self.circuit_breaker.get_stats().total_calls if self.circuit_breaker else 0,
-                files_fixed=0,  # Would be tracked by application layer
-                warnings_reviewed=0,  # Would be tracked by application layer
-                elapsed_seconds=0.0,  # Would be tracked by application layer
-                test_results=(),  # Would contain completed test results
+                files_fixed=self._files_fixed,
+                warnings_reviewed=self._warnings_reviewed,
+                elapsed_seconds=self._elapsed_time,
+                test_results=tuple(self._cycle_results),
                 timestamp=now.isoformat(),
                 expires_at=expires_at,
             )
