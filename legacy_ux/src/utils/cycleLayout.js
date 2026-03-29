@@ -1120,10 +1120,9 @@ export function filterEdgesForCollapsedCycles(edges, cycles) {
  * Updates edges to connect to cycle bounding nodes when collapsed
  * @param {Array} edges - All edges
  * @param {Map} cycles - Map of cycles
- * @param {Map} nodesByCycle - Map of agent -> [nodes]
  * @returns {Array} Updated edges
  */
-export function updateEdgesForCycles(edges, cycles, nodesByCycle) {
+export function updateEdgesForCycles(edges, cycles) {
   const updatedEdges = []
 
   edges.forEach(edge => {

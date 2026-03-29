@@ -139,15 +139,7 @@ export const edgeRedirectionExample = () => {
     }],
   ])
 
-  const nodesByCycle = new Map([
-    ['software_architect', [
-      { id: 'agent-software_architect-0' },
-      { id: 'agent-software_architect-1' },
-      { id: 'agent-software_architect-2' },
-    ]],
-  ])
-
-  const updatedEdges = updateEdgesForCycles(edges, cycles, nodesByCycle)
+  const updatedEdges = updateEdgesForCycles(edges, cycles)
 
   console.log('Original edges:', edges.length)
   console.log('Updated edges:', updatedEdges.length)
@@ -254,7 +246,7 @@ function MyPipelineView() {
     })
 
     // Update edges for collapsed cycles
-    const updatedEdges = updateEdgesForCycles(rawEdges, cycles, agentExecutions)
+    const updatedEdges = updateEdgesForCycles(rawEdges, cycles)
 
     setNodes(finalNodes)
     setEdges(updatedEdges)

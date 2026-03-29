@@ -85,22 +85,15 @@ export default function AgentState() {
     // If we have an init timestamp, only accept data after it
     // If we don't have one yet, accept all data from current agent (fall back to original behavior)
     if (currentAgent) {
-      let logsChecked = 0
-      let logsFromAgent = 0
-      let logsAfterInit = 0
-
       for (let i = logs.length - 1; i >= 0; i--) {
         const log = logs[i]
         const event = log.event
-        logsChecked++
 
         // Check if this log is from the current agent and after initialization (if we have an init timestamp)
         const isCurrentAgent = log.agent === currentAgent
-        if (isCurrentAgent) logsFromAgent++
 
         const normalizedLogTimestamp = normalizeTimestamp(log.timestamp)
         const isAfterInit = agentInitTimestamp === null || (normalizedLogTimestamp && normalizedLogTimestamp >= agentInitTimestamp)
-        if (isCurrentAgent && isAfterInit) logsAfterInit++
 
         if (isCurrentAgent && isAfterInit && event?.type === 'assistant' && event?.message?.content) {
           const contents = Array.isArray(event.message.content)
