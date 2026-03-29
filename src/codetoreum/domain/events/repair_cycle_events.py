@@ -1342,3 +1342,142 @@ class RepairCycleCompletedEvent(CodetoreumEvent):
             duration_seconds=data.get("duration_seconds", 0.0),
             workflow_run_id=workflow_run_id,
         )
+
+
+@dataclass(frozen=True)
+class SystemicAnalysisStartedEvent(CodetoreumEvent):
+    """Emitted when systemic analysis of failures begins.
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Attempting to modify any field will raise `FrozenInstanceError`.
+
+    Attributes:
+        type (str): Fixed to "repair_cycle.systemic_analysis_started"
+        work_item_id (str): ID of the work item being analyzed
+        workflow_run_id (str): ID of the workflow run
+        failure_count (int): Number of failures that triggered analysis
+        timestamp (str): ISO 8601 timestamp when analysis started
+    """
+
+    work_item_id: str = ""
+    workflow_run_id: str = ""
+    failure_count: int = 0
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.work_item_id:
+            msg = "work_item_id is required"
+            raise ValueError(msg)
+        if not self.workflow_run_id:
+            msg = "workflow_run_id is required"
+            raise ValueError(msg)
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update(
+            {
+                "work_item_id": self.work_item_id,
+                "workflow_run_id": self.workflow_run_id,
+                "failure_count": self.failure_count,
+            }
+        )
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "SystemicAnalysisStartedEvent":
+        """Deserialize from dictionary with backward compatibility.
+
+        Raises:
+            ValueError: If required fields (work_item_id, workflow_run_id) are missing.
+        """
+        return cls(
+            type=data.get("type", "repair_cycle.systemic_analysis_started"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            work_item_id=data.get("work_item_id", ""),
+            workflow_run_id=data.get("workflow_run_id", ""),
+            failure_count=data.get("failure_count", 0),
+        )
+
+
+@dataclass(frozen=True)
+class SystemicAnalysisCompletedEvent(CodetoreumEvent):
+    """Emitted when systemic analysis of failures completes with classification.
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Attempting to modify any field will raise `FrozenInstanceError`.
+
+    Attributes:
+        type (str): Fixed to "repair_cycle.systemic_analysis_completed"
+        classification (str): Classification of root cause (stored as string value,
+                             e.g., "code_defect", "environment_issue")
+        confidence (float): Confidence level of classification (0.0 to 1.0)
+        reasoning (str): Explanation of the classification reasoning
+        recommended_action (str): Recommended action to resolve the issue
+        work_item_id (str): ID of the work item that was analyzed
+        workflow_run_id (str): ID of the workflow run
+        failure_count (int): Number of failures that were analyzed
+        timestamp (str): ISO 8601 timestamp when analysis completed
+    """
+
+    classification: str = ""
+    confidence: float = 0.0
+    reasoning: str = ""
+    recommended_action: str = ""
+    work_item_id: str = ""
+    workflow_run_id: str = ""
+    failure_count: int = 0
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.work_item_id:
+            msg = "work_item_id is required"
+            raise ValueError(msg)
+        if not self.workflow_run_id:
+            msg = "workflow_run_id is required"
+            raise ValueError(msg)
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update(
+            {
+                "classification": self.classification,
+                "confidence": self.confidence,
+                "reasoning": self.reasoning,
+                "recommended_action": self.recommended_action,
+                "work_item_id": self.work_item_id,
+                "workflow_run_id": self.workflow_run_id,
+                "failure_count": self.failure_count,
+            }
+        )
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "SystemicAnalysisCompletedEvent":
+        """Deserialize from dictionary with backward compatibility.
+
+        Raises:
+            ValueError: If required fields (work_item_id, workflow_run_id) are missing.
+        """
+        return cls(
+            type=data.get("type", "repair_cycle.systemic_analysis_completed"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            classification=data.get("classification", ""),
+            confidence=data.get("confidence", 0.0),
+            reasoning=data.get("reasoning", ""),
+            recommended_action=data.get("recommended_action", ""),
+            work_item_id=data.get("work_item_id", ""),
+            workflow_run_id=data.get("workflow_run_id", ""),
+            failure_count=data.get("failure_count", 0),
+        )
