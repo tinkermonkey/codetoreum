@@ -730,7 +730,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         timestamp=datetime.now(UTC).isoformat(),
                         source="production_repair_cycle",
                         workflow_run_id=context.workflow_run_id,
-                        test_type=test_type.value,
+                        test_type=test_type,
                         iteration=iteration,
                         error_type=type(e).__name__,
                         error_message=str(e),
@@ -1204,6 +1204,10 @@ Return a JSON response with the status of fixes applied."""
         cycle_passed = False
         error = None
         start_time = datetime.now(UTC)
+        prior_fix_attempts: list[str] = []  # Track descriptions of fix attempts
+        prior_classifications: list = []  # Track prior SystemicAnalysisResult objects
+        consecutive_transient_failures = 0  # Track consecutive TRANSIENT_FAILURE classifications
+        max_consecutive_transient = 2  # Escalate after 2 consecutive transient failures
 
         for iteration in range(1, config.max_iterations + 1):
             # Check circuit breaker
@@ -1262,16 +1266,18 @@ Return a JSON response with the status of fixes applied."""
                     if self._systemic_analysis_service is not None:
                         # Perform systemic analysis and dispatch based on classification
                         analysis_context = AnalysisContext(
-                            work_item_id=context.workflow_run_id,
+                            work_item_id=context.work_item_id,
                             iteration=iteration,
                             workflow_run_id=context.workflow_run_id,
+                            prior_fix_attempts=tuple(prior_fix_attempts),
+                            prior_classifications=tuple(prior_classifications),
                         )
                         self.event_emitter.emit(
                             SystemicAnalysisStartedEvent(
                                 type="repair_cycle.systemic_analysis_started",
                                 timestamp=datetime.now(UTC).isoformat(),
                                 source="production_repair_cycle",
-                                work_item_id=context.workflow_run_id,
+                                work_item_id=context.work_item_id,
                                 workflow_run_id=context.workflow_run_id,
                                 failure_count=len(test_result.failures),
                             )
@@ -1289,26 +1295,62 @@ Return a JSON response with the status of fixes applied."""
                                     confidence=classification.confidence,
                                     reasoning=classification.reasoning,
                                     recommended_action=classification.recommended_action,
-                                    work_item_id=context.workflow_run_id,
+                                    work_item_id=context.work_item_id,
                                     workflow_run_id=context.workflow_run_id,
                                     failure_count=len(test_result.failures),
                                 )
                             )
+
+                            # Track this classification for escalation support in future iterations
+                            prior_classifications.append(classification)
+
                             if classification.classification == FailureClassification.CODE_DEFECT:
+                                consecutive_transient_failures = 0  # Reset counter
                                 grouped = self._group_failures_by_file(test_result.failures)
                                 files_fixed += await self.fix_failures_by_file(grouped, config, context)
+                                prior_fix_attempts.append(
+                                    f"Iteration {iteration}: CODE_DEFECT classified, applied file-level fixes"
+                                )
                             elif classification.classification == FailureClassification.ENVIRONMENT_ISSUE:
+                                consecutive_transient_failures = 0  # Reset counter
                                 rebuild_success = await self.rebuild_environment(config, context)
                                 if rebuild_success:
                                     await self.verify_environment(config, context)
+                                prior_fix_attempts.append(
+                                    f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuilt and verified environment"
+                                )
                             elif classification.classification == FailureClassification.TRANSIENT_FAILURE:
-                                pass  # retry on next iteration — no fix action
+                                consecutive_transient_failures += 1
+                                if consecutive_transient_failures > max_consecutive_transient:
+                                    # Escalate: treat as code defect after repeated transient failures
+                                    logger.warning(
+                                        f"Escalating TRANSIENT_FAILURE after {consecutive_transient_failures} consecutive occurrences",
+                                        extra={
+                                            "workflow_run_id": context.workflow_run_id,
+                                            "iteration": iteration,
+                                            "consecutive_transient_count": consecutive_transient_failures,
+                                        },
+                                        exc_info=False,
+                                    )
+                                    grouped = self._group_failures_by_file(test_result.failures)
+                                    files_fixed += await self.fix_failures_by_file(grouped, config, context)
+                                    prior_fix_attempts.append(
+                                        f"Iteration {iteration}: TRANSIENT_FAILURE escalated to CODE_DEFECT (after {consecutive_transient_failures} consecutive), applied file-level fixes"
+                                    )
+                                else:
+                                    prior_fix_attempts.append(
+                                        f"Iteration {iteration}: TRANSIENT_FAILURE classified, retrying without fix (consecutive count: {consecutive_transient_failures})"
+                                    )
                             elif classification.classification in (
                                 FailureClassification.DEPENDENCY_ISSUE,
                                 FailureClassification.CONFIGURATION_ISSUE,
                             ):
+                                consecutive_transient_failures = 0  # Reset counter
                                 await self.apply_systemic_fixes(
                                     classification.reasoning, test_result, config, context
+                                )
+                                prior_fix_attempts.append(
+                                    f"Iteration {iteration}: {classification.classification.value} classified, applied systemic fixes"
                                 )
                         except Exception as e:
                             # Classifier failure: fall back to existing behavior to preserve repair cycle resilience

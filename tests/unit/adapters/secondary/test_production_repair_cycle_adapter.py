@@ -45,6 +45,7 @@ class _RepairCycleContext:
     def __init__(self, max_total_agent_calls: int = 100) -> None:
         self.stage_name = "fix_failures"
         self.workflow_run_id = "run-1"
+        self.work_item_id = "item-1"
         self.test_configs = (
             RepairTestRunConfig(
                 test_type=RepairTestType.UNIT,
