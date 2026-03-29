@@ -1055,56 +1055,93 @@ Return a JSON response with the status of fixes applied."""
 
         return {file: tuple(fs) for file, fs in grouped.items()}
 
-    def _infer_classification_from_reasoning(self, reasoning: str) -> FailureClassification:
-        """Infer the systemic failure classification from reasoning text.
+    async def _execute_llm_prompt(
+        self,
+        prompt: str,
+        operation_name: str,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> dict[str, Any]:
+        """Execute an LLM prompt and return the parsed response.
 
-        Examines the reasoning to determine whether the issue is DEPENDENCY_ISSUE
-        or CONFIGURATION_ISSUE. Falls back to DEPENDENCY_ISSUE if ambiguous.
+        Abstracts the common pattern of circuit-breaker-protected LLM execution
+        with response capture and error handling. Inspects the response to
+        distinguish success from failure.
 
         Args:
-            reasoning: Classification reasoning from systemic analysis
+            prompt: The prompt to send to the LLM
+            operation_name: Name of the operation (used in logging and circuit breaker)
+            config: Test run configuration
+            context: Repair cycle context
 
         Returns:
-            FailureClassification.DEPENDENCY_ISSUE or CONFIGURATION_ISSUE
+            Parsed LLM response as a dictionary
+
+        Raises:
+            Exception: If LLM execution fails or response indicates failure
         """
-        reasoning_lower = reasoning.lower()
+        try:
+            logger.info(
+                f"Executing LLM operation: {operation_name}",
+                extra={
+                    "workflow_run_id": context.workflow_run_id,
+                    "test_type": config.test_type.value,
+                    "operation": operation_name,
+                },
+                exc_info=False,
+            )
 
-        # Check for configuration-related keywords
-        config_keywords = [
-            "configuration",
-            "config",
-            "environment variable",
-            "env var",
-            ".env",
-            "settings",
-            "setup",
-            "misconfigured",
-        ]
-        if any(keyword in reasoning_lower for keyword in config_keywords):
-            return FailureClassification.CONFIGURATION_ISSUE
+            if self.circuit_breaker:
+                response = await self.circuit_breaker.call(
+                    self.llm_provider.execute,
+                    f"repair_cycle.{operation_name}",
+                    prompt=prompt,
+                    timeout=config.timeout,
+                )
+            else:
+                response = await self.llm_provider.execute(
+                    prompt=prompt,
+                    timeout=config.timeout,
+                )
 
-        # Check for dependency-related keywords
-        dependency_keywords = [
-            "dependency",
-            "dependencies",
-            "package",
-            "library",
-            "import",
-            "module",
-            "require",
-            "missing",
-            "not installed",
-            "pip install",
-            "npm install",
-            "cargo add",
-            "version mismatch",
-            "incompatible",
-        ]
-        if any(keyword in reasoning_lower for keyword in dependency_keywords):
-            return FailureClassification.DEPENDENCY_ISSUE
+            # Parse response if it's a string (JSON)
+            if isinstance(response, str):
+                try:
+                    response = json.loads(response)
+                except json.JSONDecodeError:
+                    # If not valid JSON, treat as plain response
+                    response = {"status": "success", "response": response}
 
-        # Default to dependency if ambiguous
-        return FailureClassification.DEPENDENCY_ISSUE
+            # Check for failure indicators in response
+            if isinstance(response, dict):
+                status = response.get("status", "").lower()
+                if status in ("failed", "error", "failure"):
+                    error_msg = response.get("error", response.get("message", "Unknown error"))
+                    raise ValueError(f"LLM operation returned failure status: {error_msg}")
+
+            logger.info(
+                f"LLM operation completed: {operation_name}",
+                extra={
+                    "workflow_run_id": context.workflow_run_id,
+                    "operation": operation_name,
+                    "response_keys": list(response.keys()) if isinstance(response, dict) else "non-dict",
+                },
+                exc_info=False,
+            )
+            return response if isinstance(response, dict) else {"response": response}
+
+        except Exception as e:
+            logger.error(
+                f"LLM operation failed: {operation_name}",
+                extra={
+                    "workflow_run_id": context.workflow_run_id,
+                    "operation": operation_name,
+                    "error": str(e),
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                },
+                exc_info=True,
+            )
+            raise
 
     def _build_environment_rebuild_prompt(
         self, config: RepairTestRunConfig
@@ -1180,50 +1217,11 @@ Return a JSON response with the verification status and any issues found."""
         """
         try:
             prompt = self._build_dependency_fix_prompt(reasoning, test_result)
-
-            logger.info(
-                "Applying dependency fixes",
-                extra={
-                    "workflow_run_id": context.workflow_run_id,
-                    "test_type": config.test_type.value,
-                    "failure_count": len(test_result.failures),
-                },
-                exc_info=False,
-            )
-
-            if self.circuit_breaker:
-                await self.circuit_breaker.call(
-                    self.llm_provider.execute,
-                    "repair_cycle.apply_dependency_fix",
-                    prompt=prompt,
-                    timeout=config.timeout,
-                )
-            else:
-                await self.llm_provider.execute(
-                    prompt=prompt,
-                    timeout=config.timeout,
-                )
-
-            logger.info(
-                "Dependency fixes applied successfully",
-                extra={
-                    "workflow_run_id": context.workflow_run_id,
-                    "test_type": config.test_type.value,
-                },
-                exc_info=False,
+            await self._execute_llm_prompt(
+                prompt, "apply_dependency_fix", config, context
             )
             return True
-
-        except Exception as e:
-            logger.error(
-                "Dependency fix failed",
-                extra={
-                    "workflow_run_id": context.workflow_run_id,
-                    "error": str(e),
-                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
-                },
-                exc_info=True,
-            )
+        except Exception:
             return False
 
     async def _apply_configuration_fix(
@@ -1249,50 +1247,11 @@ Return a JSON response with the verification status and any issues found."""
         """
         try:
             prompt = self._build_configuration_fix_prompt(reasoning, test_result)
-
-            logger.info(
-                "Applying configuration fixes",
-                extra={
-                    "workflow_run_id": context.workflow_run_id,
-                    "test_type": config.test_type.value,
-                    "failure_count": len(test_result.failures),
-                },
-                exc_info=False,
-            )
-
-            if self.circuit_breaker:
-                await self.circuit_breaker.call(
-                    self.llm_provider.execute,
-                    "repair_cycle.apply_configuration_fix",
-                    prompt=prompt,
-                    timeout=config.timeout,
-                )
-            else:
-                await self.llm_provider.execute(
-                    prompt=prompt,
-                    timeout=config.timeout,
-                )
-
-            logger.info(
-                "Configuration fixes applied successfully",
-                extra={
-                    "workflow_run_id": context.workflow_run_id,
-                    "test_type": config.test_type.value,
-                },
-                exc_info=False,
+            await self._execute_llm_prompt(
+                prompt, "apply_configuration_fix", config, context
             )
             return True
-
-        except Exception as e:
-            logger.error(
-                "Configuration fix failed",
-                extra={
-                    "workflow_run_id": context.workflow_run_id,
-                    "error": str(e),
-                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
-                },
-                exc_info=True,
-            )
+        except Exception:
             return False
 
     def _build_dependency_fix_prompt(
@@ -1376,50 +1335,12 @@ Return a JSON response with the status of configuration fixes applied."""
             True if environment rebuild succeeded, False otherwise
         """
         try:
-            # Build prompt for environment rebuild
             rebuild_prompt = self._build_environment_rebuild_prompt(config)
-
-            logger.info(
-                "Rebuilding test environment",
-                extra={
-                    "workflow_run_id": context.workflow_run_id,
-                    "test_type": config.test_type.value,
-                },
-                exc_info=False,
-            )
-
-            if self.circuit_breaker:
-                await self.circuit_breaker.call(
-                    self.llm_provider.execute,
-                    "repair_cycle.rebuild_environment",
-                    prompt=rebuild_prompt,
-                    timeout=config.timeout,
-                )
-            else:
-                await self.llm_provider.execute(
-                    prompt=rebuild_prompt,
-                    timeout=config.timeout,
-                )
-
-            logger.info(
-                "Environment rebuild completed successfully",
-                extra={
-                    "workflow_run_id": context.workflow_run_id,
-                    "test_type": config.test_type.value,
-                },
-                exc_info=False,
+            await self._execute_llm_prompt(
+                rebuild_prompt, "rebuild_environment", config, context
             )
             return True
-        except Exception as e:
-            logger.error(
-                "Environment rebuild failed",
-                extra={
-                    "workflow_run_id": context.workflow_run_id,
-                    "error": str(e),
-                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
-                },
-                exc_info=True,
-            )
+        except Exception:
             return False
 
     async def verify_environment(
@@ -1439,54 +1360,17 @@ Return a JSON response with the status of configuration fixes applied."""
             True if environment verification succeeded, False otherwise
         """
         try:
-            # Build prompt for environment verification
             verify_prompt = self._build_environment_verify_prompt(config)
-
-            logger.info(
-                "Verifying test environment",
-                extra={
-                    "workflow_run_id": context.workflow_run_id,
-                    "test_type": config.test_type.value,
-                },
-                exc_info=False,
-            )
-
-            if self.circuit_breaker:
-                await self.circuit_breaker.call(
-                    self.llm_provider.execute,
-                    "repair_cycle.verify_environment",
-                    prompt=verify_prompt,
-                    timeout=config.timeout,
-                )
-            else:
-                await self.llm_provider.execute(
-                    prompt=verify_prompt,
-                    timeout=config.timeout,
-                )
-
-            logger.info(
-                "Environment verification completed successfully",
-                extra={
-                    "workflow_run_id": context.workflow_run_id,
-                    "test_type": config.test_type.value,
-                },
-                exc_info=False,
+            await self._execute_llm_prompt(
+                verify_prompt, "verify_environment", config, context
             )
             return True
-        except Exception as e:
-            logger.error(
-                "Environment verification failed",
-                extra={
-                    "workflow_run_id": context.workflow_run_id,
-                    "error": str(e),
-                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
-                },
-                exc_info=True,
-            )
+        except Exception:
             return False
 
     async def apply_systemic_fixes(
         self,
+        classification: FailureClassification,
         reasoning: str,
         test_result: RepairTestResult,
         config: RepairTestRunConfig,
@@ -1499,6 +1383,7 @@ Return a JSON response with the status of configuration fixes applied."""
         Routes to differentiated fix strategies based on classification.
 
         Args:
+            classification: The systemic failure classification from analysis
             reasoning: Classification reasoning from systemic analysis
             test_result: Test result that triggered this fix
             config: Test run configuration
@@ -1508,10 +1393,6 @@ Return a JSON response with the status of configuration fixes applied."""
             True if systemic fixes were applied, False otherwise
         """
         try:
-            # Get the classification from the most recent analysis
-            # The reasoning should indicate whether this is dependency or configuration
-            classification = self._infer_classification_from_reasoning(reasoning)
-
             if classification == FailureClassification.DEPENDENCY_ISSUE:
                 return await self._apply_dependency_fix(
                     reasoning, test_result, config, context
@@ -1521,12 +1402,12 @@ Return a JSON response with the status of configuration fixes applied."""
                     reasoning, test_result, config, context
                 )
             else:
-                # Fallback to dependency fix if classification is ambiguous
+                # Fallback to dependency fix if classification is unknown
                 logger.warning(
-                    "Could not infer systemic fix classification from reasoning; defaulting to dependency fix",
+                    "Unknown systemic fix classification; defaulting to dependency fix",
                     extra={
                         "workflow_run_id": context.workflow_run_id,
-                        "reasoning_preview": reasoning[:100] if reasoning else "",
+                        "classification": classification.value if classification else "none",
                     },
                     exc_info=False,
                 )
@@ -1714,7 +1595,11 @@ Return a JSON response with the status of configuration fixes applied."""
                             ):
                                 consecutive_transient_failures = 0  # Reset counter
                                 await self.apply_systemic_fixes(
-                                    classification.reasoning, test_result, config, context
+                                    classification.classification,
+                                    classification.reasoning,
+                                    test_result,
+                                    config,
+                                    context,
                                 )
                                 prior_fix_attempts.append(
                                     f"Iteration {iteration}: {classification.classification.value} classified, applied systemic fixes"
