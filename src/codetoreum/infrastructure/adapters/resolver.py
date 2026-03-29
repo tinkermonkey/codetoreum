@@ -385,38 +385,40 @@ class AdapterResolver:
     def resolve_systemic_analysis_service(self) -> ISystemicAnalysisService:
         """Resolve systemic analysis service adapter.
 
-        Returns the appropriate adapter based on configuration:
-        - For production: LLMSystemicAnalysisAdapter with LLM provider
-        - For simulation: MockSystemicAnalysisAdapter for deterministic testing
-        - Falls back to default mock if not explicitly configured
+        Follows the standard resolver pattern: reads from own config key (`systemic_analysis`)
+        and delegates to factory method.
+
+        When the configured adapter requires dependencies (e.g., LLM provider for production):
+        - Ensures those dependencies are already resolved
+        - Passes them to the factory method
+        - Raises AdapterConfigurationError if dependencies are missing in production
 
         Returns:
             ISystemicAnalysisService implementation
+
+        Raises:
+            AdapterConfigurationError: If production adapter is configured but required
+                                        dependencies (llm_provider) are missing
         """
-        # In simulation, we'll use MockSystemicAnalysisAdapter
-        # In production, LLMSystemicAnalysisAdapter is created with the resolved LLM provider
-        if self._config.repair_cycle == "production":
+        # For "llm" adapter, we need the resolved LLM provider
+        if self._config.systemic_analysis == "llm":
             llm_provider = self._resolved.get("llm")
-            if llm_provider:
-                from codetoreum.adapters.secondary.llm_systemic_analysis_adapter import (
-                    LLMSystemicAnalysisAdapter,
+            if not llm_provider:
+                raise AdapterConfigurationError(
+                    [
+                        "systemic_analysis adapter set to 'llm' but llm_provider is not resolved. "
+                        "Ensure llm_provider is resolved before systemic_analysis service.",
+                    ]
                 )
+            return self._factory.create_systemic_analysis_service(
+                adapter_name=self._config.systemic_analysis,
+                llm_provider=llm_provider,
+            )
 
-                adapter = LLMSystemicAnalysisAdapter(llm_provider=llm_provider)
-                logger.info("Created LLMSystemicAnalysisAdapter for production systemic analysis")
-                return adapter
-            else:
-                logger.warning(
-                    "Production repair cycle configured but llm_provider is not resolved. "
-                    "Falling back to mock adapter for systemic analysis."
-                )
-
-        # Simulation or fallback: use mock adapter
-        from codetoreum.adapters.testing import MockSystemicAnalysisAdapter
-
-        adapter = MockSystemicAnalysisAdapter()
-        logger.info("Created MockSystemicAnalysisAdapter for systemic analysis")
-        return adapter
+        # For all other adapters (mock, in_memory, etc.), use factory with no extra args
+        return self._factory.create_systemic_analysis_service(
+            adapter_name=self._config.systemic_analysis,
+        )
 
     def resolve_repository(self) -> IRepository:
         """Resolve repository adapter.

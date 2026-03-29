@@ -52,6 +52,7 @@ class AdapterSelectionConfig:
     work_item_service: str = "mock"
     repository: str = "in_memory"
     container_recovery: str = "mock"
+    systemic_analysis: str = "mock"
 
     def __post_init__(self) -> None:
         """Validate that all adapter selections are non-empty strings."""
