@@ -86,9 +86,10 @@ class TestAdapterSelectionConfig:
             "work_item_service",
             "repository",
             "container_recovery",
+            "systemic_analysis",
         }
         assert field_names == expected_adapters
-        assert len(field_names) == 29
+        assert len(field_names) == 30
 
     def test_create_with_custom_values(self) -> None:
         """Test creating adapter selection config with custom values."""

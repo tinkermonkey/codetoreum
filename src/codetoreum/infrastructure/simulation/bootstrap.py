@@ -81,9 +81,6 @@ from codetoreum.adapters.secondary.failed_event_store_adapter import (
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
 )
-from codetoreum.adapters.secondary.production_repair_cycle_adapter import (
-    ProductionRepairCycleAdapter,
-)
 
 # Adapters
 from codetoreum.adapters.testing import (

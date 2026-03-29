@@ -1053,6 +1053,11 @@ class AdapterFactory:
         """Get the active workflow run registry."""
         return self._active_workflow_run_registry_registry
 
+    @property
+    def systemic_analysis_registry(self) -> SystemicAnalysisRegistry:
+        """Get the systemic analysis registry."""
+        return self._systemic_analysis_registry
+
     def get_registry(self, slot_name: str) -> Any:
         """
         Get the registry for a given adapter slot name.
@@ -1097,6 +1102,7 @@ class AdapterFactory:
             "branch_tracker": self._work_item_branch_tracker_registry,
             "work_item_service": self._work_item_service_registry,
             "repository": self._repository_registry,
+            "systemic_analysis": self._systemic_analysis_registry,
         }
 
         if slot_name not in registry_map:
