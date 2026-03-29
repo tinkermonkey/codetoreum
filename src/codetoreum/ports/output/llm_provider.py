@@ -600,6 +600,10 @@ class UsageStats:
 # Type alias for stream callback
 StreamCallback = Callable[[StreamChunk], Awaitable[None]]
 
+# Type alias for LLM provider factory
+# Takes an agent name and returns a configured ILLMProvider instance
+AgentLLMFactory = Callable[..., "ILLMProvider"]
+
 
 # ============================================================================
 # Port Interface

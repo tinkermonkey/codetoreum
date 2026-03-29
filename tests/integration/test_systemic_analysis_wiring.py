@@ -165,7 +165,7 @@ async def test_production_repair_cycle_accepts_systemic_analysis_service(
 
     llm_provider = MagicMock()
     adapter = ProductionRepairCycleAdapter(
-        llm_provider=llm_provider,
+        llm_factory=lambda: llm_provider,
         systemic_analysis_service=mock_systemic_analysis,
     )
 
@@ -185,7 +185,7 @@ async def test_systemic_analysis_service_property_setter(
 
     llm_provider = MagicMock()
     repair_adapter = ProductionRepairCycleAdapter(
-        llm_provider=llm_provider,
+        llm_factory=lambda: llm_provider,
     )
 
     # Initially None

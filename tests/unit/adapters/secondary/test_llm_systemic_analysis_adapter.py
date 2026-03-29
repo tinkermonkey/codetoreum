@@ -35,7 +35,7 @@ def _make_adapter(llm_response_content: str) -> tuple[LLMSystemicAnalysisAdapter
     llm = AsyncMock()
     result = ExecutionResult(content=llm_response_content)
     llm.execute.return_value = result
-    adapter = LLMSystemicAnalysisAdapter(llm)
+    adapter = LLMSystemicAnalysisAdapter(llm_factory=lambda: llm)
     return adapter, llm
 
 
@@ -72,16 +72,16 @@ def _make_failures(count: int = 1) -> list[RepairTestFailure]:
 
 
 class TestConstructor:
-    def test_init_with_valid_llm_provider(self):
-        """Constructor accepts valid ILLMProvider."""
+    def test_init_with_valid_llm_factory(self):
+        """Constructor accepts valid llm_factory callable."""
         llm = AsyncMock()
-        adapter = LLMSystemicAnalysisAdapter(llm)
-        assert adapter._llm_provider is llm
+        adapter = LLMSystemicAnalysisAdapter(llm_factory=lambda: llm)
+        assert adapter._llm_factory is not None
 
-    def test_init_rejects_none_provider(self):
-        """Constructor rejects None llm_provider."""
-        with pytest.raises(ValueError, match="llm_provider cannot be None"):
-            LLMSystemicAnalysisAdapter(None)
+    def test_init_rejects_none_factory(self):
+        """Constructor rejects None llm_factory."""
+        with pytest.raises(ValueError, match="llm_factory cannot be None"):
+            LLMSystemicAnalysisAdapter(llm_factory=None)
 
 
 # ---------------------------------------------------------------------------
@@ -294,7 +294,7 @@ class TestExceptionFallback:
         """LLM timeout exception is raised (not caught) for caller to handle."""
         llm = AsyncMock()
         llm.execute.side_effect = TimeoutError("LLM call timed out")
-        adapter = LLMSystemicAnalysisAdapter(llm)
+        adapter = LLMSystemicAnalysisAdapter(llm_factory=lambda: llm)
         context = _make_context()
         failures = _make_failures(1)
 
@@ -306,7 +306,7 @@ class TestExceptionFallback:
         """LLM connection error is raised (not caught) for caller to handle."""
         llm = AsyncMock()
         llm.execute.side_effect = ConnectionError("Failed to connect to LLM")
-        adapter = LLMSystemicAnalysisAdapter(llm)
+        adapter = LLMSystemicAnalysisAdapter(llm_factory=lambda: llm)
         context = _make_context()
         failures = _make_failures(1)
 

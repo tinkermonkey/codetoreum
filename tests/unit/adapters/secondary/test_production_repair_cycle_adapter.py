@@ -77,7 +77,7 @@ def _make_adapter(
     llm.execute.return_value = llm_response
     config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
     adapter = ProductionRepairCycleAdapter(
-        llm_provider=llm,
+        llm_factory=lambda: llm,
         config=config,
         event_emitter=event_emitter,
         circuit_breaker=circuit_breaker,
@@ -875,7 +875,7 @@ class TestEnvironmentHelperMethods:
 
         config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
         adapter = ProductionRepairCycleAdapter(
-            llm_provider=llm,
+            llm_factory=lambda: llm,
             config=config,
             event_emitter=event_emitter,
             circuit_breaker=None,
@@ -909,7 +909,7 @@ class TestEnvironmentHelperMethods:
 
         config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
         adapter = ProductionRepairCycleAdapter(
-            llm_provider=llm,
+            llm_factory=lambda: llm,
             config=config,
             event_emitter=event_emitter,
             circuit_breaker=None,
@@ -1140,7 +1140,7 @@ class TestApplyDependencyFix:
 
         config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
         adapter = ProductionRepairCycleAdapter(
-            llm_provider=llm,
+            llm_factory=lambda: llm,
             config=config,
             event_emitter=event_emitter,
             circuit_breaker=None,
@@ -1188,7 +1188,7 @@ class TestApplyConfigurationFix:
 
         config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
         adapter = ProductionRepairCycleAdapter(
-            llm_provider=llm,
+            llm_factory=lambda: llm,
             config=config,
             event_emitter=event_emitter,
             circuit_breaker=None,

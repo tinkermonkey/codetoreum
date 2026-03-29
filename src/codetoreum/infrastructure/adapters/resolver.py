@@ -412,7 +412,7 @@ class AdapterResolver:
                 )
             return self._factory.create_systemic_analysis_service(
                 adapter_name=self._config.systemic_analysis,
-                llm_provider=llm_provider,
+                llm_factory=lambda: llm_provider,
             )
 
         # For all other adapters (mock, in_memory, etc.), use factory with no extra args

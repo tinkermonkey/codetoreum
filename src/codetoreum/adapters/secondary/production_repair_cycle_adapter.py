@@ -29,10 +29,12 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from codetoreum.infrastructure.resilience.interfaces import ICircuitBreaker
+    from codetoreum.ports.output.event_emitter import IEventEmitter
+    from codetoreum.ports.output.llm_provider import AgentLLMFactory
 
 from codetoreum.domain.events.repair_cycle_events import (
     RepairCycleCheckpointFailedEvent,
@@ -64,6 +66,7 @@ from codetoreum.domain.repair_cycle_types import (
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.resilience.exceptions import CircuitBreakerOpenError
+from codetoreum.ports.output.llm_provider import AgentLLMFactory
 from codetoreum.ports.output.repair_cycle_checkpoint_store import (
     IRepairCycleCheckpointStore,
 )
@@ -103,10 +106,23 @@ class RepairCycleConfig:
 
 
 class NullEventEmitter:
-    """Null-object pattern for optional event emission."""
+    """Null-object pattern for optional event emission.
 
-    def emit(self, event: Any) -> None:
-        """No-op emit."""
+    Implements a no-op event emitter for use when event emission is not required.
+    All methods are silent, allowing the repair cycle to run without event infrastructure.
+    """
+
+    def emit(self, event: object) -> None:
+        """No-op emit - silently discards all events."""
+
+    def on(self, event_type: str, handler: object) -> None:
+        """No-op subscription - no handlers are registered."""
+
+    def off(self, event_type: str, handler: object) -> None:
+        """No-op unsubscription - no handlers to unregister."""
+
+    def once(self, event_type: str, handler: object) -> None:
+        """No-op single subscription - no handlers are registered."""
 
 
 class ProductionRepairCycleAdapter(IRepairCycle):
@@ -118,7 +134,10 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
     Example:
         config = RepairCycleConfig()
-        adapter = ProductionRepairCycleAdapter(llm_provider, config=config)
+        adapter = ProductionRepairCycleAdapter(
+            llm_factory=lambda: llm_provider,
+            config=config
+        )
 
         context = RepairCycleContext(...)
         result = await adapter.execute(context)
@@ -126,24 +145,24 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
     def __init__(
         self,
-        llm_provider: Any,
-        config: RepairCycleConfig = None,
-        event_emitter: Any = None,
-        checkpoint_store: IRepairCycleCheckpointStore = None,
+        llm_factory: AgentLLMFactory,
+        config: RepairCycleConfig | None = None,
+        event_emitter: IEventEmitter | None = None,
+        checkpoint_store: IRepairCycleCheckpointStore | None = None,
         circuit_breaker: ICircuitBreaker | None = None,
         systemic_analysis_service: ISystemicAnalysisService | None = None,
     ) -> None:
         """Initialize production repair cycle adapter.
 
         Args:
-            llm_provider: ILLMProvider implementation (e.g., Claude Code adapter)
+            llm_factory: Factory callable that takes agent name and returns configured ILLMProvider
             config: Optional RepairCycleConfig (uses defaults if not provided)
             event_emitter: Optional event emitter (uses null-object if not provided)
             checkpoint_store: Optional checkpoint store for resumable repairs
             circuit_breaker: Optional circuit breaker for LLM call protection
             systemic_analysis_service: Optional systemic analysis service for failure classification
         """
-        self.llm_provider = llm_provider
+        self._llm_factory = llm_factory
         self.config = config or RepairCycleConfig()
         self.event_emitter = event_emitter or NullEventEmitter()
         self.checkpoint_store = checkpoint_store
@@ -307,15 +326,16 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         try:
             # Call LLM to execute tests (with circuit breaker if configured)
             prompt = f"Execute the following test command and return results as JSON:\n\n{test_command}"
+            llm_provider = self._llm_factory()
             if self.circuit_breaker:
                 agent_response = await self.circuit_breaker.call(
-                    self.llm_provider.execute,
+                    llm_provider.execute,
                     "repair_cycle.run_tests",
                     prompt=prompt,
                     timeout=config.timeout,
                 )
             else:
-                agent_response = await self.llm_provider.execute(
+                agent_response = await llm_provider.execute(
                     prompt=prompt,
                     timeout=config.timeout,
                 )
@@ -454,15 +474,16 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     exc_info=False,
                 )
 
+                llm_provider = self._llm_factory()
                 if self.circuit_breaker:
                     await self.circuit_breaker.call(
-                        self.llm_provider.execute,
+                        llm_provider.execute,
                         "repair_cycle.fix_failures_by_file",
                         prompt=fix_prompt,
                         timeout=config.timeout,
                     )
                 else:
-                    await self.llm_provider.execute(
+                    await llm_provider.execute(
                         prompt=fix_prompt,
                         timeout=config.timeout,
                     )
@@ -591,15 +612,16 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     exc_info=False,
                 )
 
+                llm_provider = self._llm_factory()
                 if self.circuit_breaker:
                     await self.circuit_breaker.call(
-                        self.llm_provider.execute,
+                        llm_provider.execute,
                         "repair_cycle.handle_warnings",
                         prompt=review_prompt,
                         timeout=config.timeout,
                     )
                 else:
-                    await self.llm_provider.execute(
+                    await llm_provider.execute(
                         prompt=review_prompt,
                         timeout=config.timeout,
                     )
@@ -1081,15 +1103,16 @@ Return a JSON response with the status of fixes applied."""
                 exc_info=False,
             )
 
+            llm_provider = self._llm_factory()
             if self.circuit_breaker:
                 response = await self.circuit_breaker.call(
-                    self.llm_provider.execute,
+                    llm_provider.execute,
                     f"repair_cycle.{operation_name}",
                     prompt=prompt,
                     timeout=config.timeout,
                 )
             else:
-                response = await self.llm_provider.execute(
+                response = await llm_provider.execute(
                     prompt=prompt,
                     timeout=config.timeout,
                 )

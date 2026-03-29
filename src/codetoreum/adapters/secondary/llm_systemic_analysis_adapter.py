@@ -24,7 +24,7 @@ import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from codetoreum.ports.output.llm_provider import ExecutionContext, ExecutionResult, ILLMProvider
+    from codetoreum.ports.output.llm_provider import AgentLLMFactory, ExecutionContext, ExecutionResult, ILLMProvider
 
 from codetoreum.domain.repair_cycle_types import (
     AnalysisContext,
@@ -41,32 +41,32 @@ logger = logging.getLogger(__name__)
 class LLMSystemicAnalysisAdapter(ISystemicAnalysisService):
     """Production systemic analysis adapter using LLM for classification.
 
-    Analyzes test failures by delegating to Claude Code via the LLM provider,
+    Analyzes test failures by delegating to Claude Code via the LLM provider factory,
     constructing rich context prompts that include failure details, prior fix
     attempts, and iteration count.
 
     Example:
-        adapter = LLMSystemicAnalysisAdapter(llm_provider)
+        adapter = LLMSystemicAnalysisAdapter(llm_factory=lambda: llm_provider)
         result = await adapter.analyze(failures, context)
     """
 
-    def __init__(self, llm_provider: ILLMProvider, timeout_seconds: int = 300) -> None:
+    def __init__(self, llm_factory: AgentLLMFactory, timeout_seconds: int = 300) -> None:
         """Initialize production systemic analysis adapter.
 
         Args:
-            llm_provider: ILLMProvider implementation (e.g., Claude Code adapter)
+            llm_factory: Factory callable that returns configured ILLMProvider instance
             timeout_seconds: Timeout for LLM execution in seconds (default 300)
 
         Raises:
-            ValueError: If llm_provider is None or timeout_seconds is invalid
+            ValueError: If llm_factory is None or timeout_seconds is invalid
         """
-        if llm_provider is None:
-            msg = "llm_provider cannot be None"
+        if llm_factory is None:
+            msg = "llm_factory cannot be None"
             raise ValueError(msg)
         if timeout_seconds <= 0:
             msg = "timeout_seconds must be > 0"
             raise ValueError(msg)
-        self._llm_provider = llm_provider
+        self._llm_factory = llm_factory
         self._timeout_seconds = timeout_seconds
         self._logger = logging.getLogger(__name__)
 
@@ -208,8 +208,9 @@ Respond with JSON only (no markdown, no additional text):
             Exception: Any exception raised by the LLM provider
         """
         try:
+            llm_provider = self._llm_factory()
             return await asyncio.wait_for(
-                self._llm_provider.execute(prompt, context=execution_context),
+                llm_provider.execute(prompt, context=execution_context),
                 timeout=execution_context.timeout_seconds,
             )
         except TimeoutError as e:
