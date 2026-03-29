@@ -17,8 +17,10 @@ Architecture:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -30,6 +32,7 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestFailure,
     SystemicAnalysisResult,
 )
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.output.systemic_analysis_service import ISystemicAnalysisService
 
 logger = logging.getLogger(__name__)
@@ -47,19 +50,24 @@ class LLMSystemicAnalysisAdapter(ISystemicAnalysisService):
         result = await adapter.analyze(failures, context)
     """
 
-    def __init__(self, llm_provider: ILLMProvider) -> None:
+    def __init__(self, llm_provider: ILLMProvider, timeout_seconds: int = 300) -> None:
         """Initialize production systemic analysis adapter.
 
         Args:
             llm_provider: ILLMProvider implementation (e.g., Claude Code adapter)
+            timeout_seconds: Timeout for LLM execution in seconds (default 300)
 
         Raises:
-            ValueError: If llm_provider is None
+            ValueError: If llm_provider is None or timeout_seconds is invalid
         """
         if llm_provider is None:
             msg = "llm_provider cannot be None"
             raise ValueError(msg)
+        if timeout_seconds <= 0:
+            msg = "timeout_seconds must be > 0"
+            raise ValueError(msg)
         self._llm_provider = llm_provider
+        self._timeout_seconds = timeout_seconds
         self._logger = logging.getLogger(__name__)
 
     async def analyze(
@@ -87,7 +95,22 @@ class LLMSystemicAnalysisAdapter(ISystemicAnalysisService):
         """
         try:
             prompt = self._build_prompt(failures, context)
-            response = await self._llm_provider.execute(prompt)
+
+            # Import ExecutionContext here to avoid circular imports
+            from codetoreum.ports.output.llm_provider import ExecutionContext
+
+            # Execute LLM with timeout protection and agent specialization via metadata
+            execution_context = ExecutionContext(
+                timeout_seconds=self._timeout_seconds,
+                metadata={
+                    "subtask_name": "systemic_analysis",
+                    "workflow_run_id": context.workflow_run_id,
+                    "work_item_id": context.work_item_id,
+                    "iteration": context.iteration,
+                },
+            )
+
+            response = await self._execute_llm_with_timeout(prompt, execution_context, context)
             return self._parse_response(response.content, context)
         except Exception as e:
             self._logger.error(
@@ -97,6 +120,7 @@ class LLMSystemicAnalysisAdapter(ISystemicAnalysisService):
                     "work_item_id": context.work_item_id,
                     "iteration": context.iteration,
                     "error": str(e),
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
                 },
                 exc_info=True,
             )
@@ -152,6 +176,50 @@ Respond with JSON only (no markdown, no additional text):
   "recommended_action": "<action>"
 }}"""
 
+    async def _execute_llm_with_timeout(
+        self,
+        prompt: str,
+        execution_context: object,
+        analysis_context: AnalysisContext,
+    ) -> object:
+        """Execute LLM with timeout protection.
+
+        Wraps the LLM execution with asyncio timeout to prevent classification
+        calls from hanging indefinitely.
+
+        Args:
+            prompt: Prompt to send to LLM
+            execution_context: Execution context with timeout and metadata
+            analysis_context: Analysis context for logging
+
+        Returns:
+            LLM response object
+
+        Raises:
+            TimeoutError: If execution exceeds timeout
+            Exception: Any exception raised by the LLM provider
+        """
+        try:
+            return await asyncio.wait_for(
+                self._llm_provider.execute(prompt, context=execution_context),
+                timeout=execution_context.timeout_seconds,
+            )
+        except asyncio.TimeoutError as e:
+            self._logger.error(
+                "LLM systemic analysis execution timed out",
+                extra={
+                    "workflow_run_id": analysis_context.workflow_run_id,
+                    "work_item_id": analysis_context.work_item_id,
+                    "iteration": analysis_context.iteration,
+                    "timeout_seconds": execution_context.timeout_seconds,
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                },
+                exc_info=True,
+            )
+            raise TimeoutError(
+                f"Systemic analysis classification exceeded {execution_context.timeout_seconds}s timeout"
+            ) from e
+
     def _parse_response(
         self,
         response_text: str,
@@ -159,11 +227,12 @@ Respond with JSON only (no markdown, no additional text):
     ) -> SystemicAnalysisResult:
         """Parse LLM response into SystemicAnalysisResult.
 
+        Strips markdown code fences from response and extracts JSON.
         Validates JSON structure and enum values. On parse error or invalid enum,
         raises exception that will be caught by analyze() for fallback handling.
 
         Args:
-            response_text: Raw LLM response text
+            response_text: Raw LLM response text (may contain markdown fences)
             context: Analysis context for logging
 
         Returns:
@@ -174,8 +243,11 @@ Respond with JSON only (no markdown, no additional text):
             ValueError: If classification value is not a valid FailureClassification
             KeyError: If required JSON fields are missing
         """
+        # Extract JSON from markdown code fences or plain response
+        json_text = self._extract_json_from_response(response_text, context)
+
         # Parse JSON (may raise json.JSONDecodeError)
-        data = json.loads(response_text)
+        data = json.loads(json_text)
 
         # Validate classification enum (may raise ValueError)
         classification_str = data["classification"]
@@ -208,3 +280,56 @@ Respond with JSON only (no markdown, no additional text):
             affected_files=tuple(data.get("affected_files", [])),
             recommended_action=data["recommended_action"],
         )
+
+    def _extract_json_from_response(
+        self,
+        response_text: str,
+        context: AnalysisContext,
+    ) -> str:
+        """Extract JSON from response, stripping markdown code fences.
+
+        Attempts to extract JSON from markdown code blocks (```json ... ```),
+        falling back to finding JSON object in response if no fences found.
+
+        Args:
+            response_text: Raw response text from LLM
+            context: Analysis context for logging
+
+        Returns:
+            JSON string ready for parsing
+
+        Raises:
+            ValueError: If no valid JSON found in response
+        """
+        # Try to extract JSON from markdown code fence first
+        # Pattern: ```json ... ``` or ``` ... ```
+        json_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", response_text, re.DOTALL)
+        if json_match:
+            json_text = json_match.group(1).strip()
+            self._logger.debug(
+                "Extracted JSON from markdown code fence",
+                extra={
+                    "workflow_run_id": context.workflow_run_id,
+                    "work_item_id": context.work_item_id,
+                },
+                exc_info=False,
+            )
+            return json_text
+
+        # Fallback: try to find JSON object directly in response
+        json_object_match = re.search(r"\{.*\}", response_text, re.DOTALL)
+        if json_object_match:
+            json_text = json_object_match.group(0)
+            self._logger.debug(
+                "Extracted JSON object from response (no markdown fence)",
+                extra={
+                    "workflow_run_id": context.workflow_run_id,
+                    "work_item_id": context.work_item_id,
+                },
+                exc_info=False,
+            )
+            return json_text
+
+        # No JSON found
+        msg = f"No JSON found in LLM response: {response_text[:200]}"
+        raise ValueError(msg)
