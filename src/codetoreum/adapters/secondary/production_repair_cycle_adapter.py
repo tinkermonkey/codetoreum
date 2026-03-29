@@ -1653,15 +1653,16 @@ Return a JSON response with the status of configuration fixes applied."""
                                 FailureClassification.CONFIGURATION_ISSUE,
                             ):
                                 consecutive_transient_failures = 0  # Reset counter
-                                await self.apply_systemic_fixes(
+                                fix_success = await self.apply_systemic_fixes(
                                     classification.classification,
                                     classification.reasoning,
                                     test_result,
                                     config,
                                     context,
                                 )
+                                status = "applied" if fix_success else "attempted but failed"
                                 prior_fix_attempts.append(
-                                    f"Iteration {iteration}: {classification.classification.value} classified, applied systemic fixes"
+                                    f"Iteration {iteration}: {classification.classification.value} classified, {status} systemic fixes"
                                 )
                         except Exception as e:
                             # Classifier failure: emit failed event and fall back to existing behavior

@@ -709,6 +709,57 @@ class TestClassificationDispatchSystemicIssues:
 
         adapter.apply_systemic_fixes.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_systemic_fix_failure_reflected_in_prior_fix_attempts(self):
+        """Systemic fix failure (False return) is reflected in prior_fix_attempts.
+
+        Verifies that when apply_systemic_fixes() returns False (fix failed),
+        the prior_fix_attempts description reflects this with "attempted but failed"
+        instead of unconditionally saying "applied".
+        """
+        event_emitter = MagicMock()
+        systemic_service = AsyncMock()
+        systemic_service.analyze.return_value = MagicMock(
+            classification=FailureClassification.DEPENDENCY_ISSUE,
+            confidence=0.85,
+            reasoning="Missing dependency",
+            recommended_action="Install dependency",
+        )
+
+        adapter, _ = _make_adapter(event_emitter=event_emitter)
+        adapter._systemic_analysis_service = systemic_service
+        # First iteration: fix fails (returns False)
+        # Second iteration: fix succeeds (returns True)
+        adapter.apply_systemic_fixes = AsyncMock(side_effect=[False, True])
+        adapter.fix_failures_by_file = AsyncMock(return_value=0)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=100)
+        ctx.test_configs = (
+            RepairTestRunConfig(
+                test_type=RepairTestType.UNIT,
+                timeout=30,
+                max_iterations=2,
+                review_warnings=False,
+            ),
+        )
+
+        await adapter.execute(ctx)
+
+        # Verify analyze was called twice (two iterations)
+        assert systemic_service.analyze.call_count == 2
+
+        # First iteration: prior_fix_attempts should be empty
+        first_call_context = systemic_service.analyze.call_args_list[0][0][1]
+        assert len(first_call_context.prior_fix_attempts) == 0
+
+        # Second iteration: prior_fix_attempts should contain the first iteration's failure
+        second_call_context = systemic_service.analyze.call_args_list[1][0][1]
+        assert len(second_call_context.prior_fix_attempts) == 1
+        # Key assertion: the description must reflect that the fix failed
+        attempt_desc = second_call_context.prior_fix_attempts[0]
+        assert "attempted but failed" in attempt_desc
+        assert "dependency_issue" in attempt_desc.lower()
+
 
 # ---------------------------------------------------------------------------
 # Classifier Exception Handling (Fallback)
