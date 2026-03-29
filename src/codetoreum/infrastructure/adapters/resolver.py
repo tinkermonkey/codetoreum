@@ -346,9 +346,10 @@ class AdapterResolver:
         Special handling for SimulationEngine-coupled adapters:
         - If mock variant selected: use engine to create time-aware mock
         - If real variant: create directly without engine
+        - For production repair cycle: instantiate LLMSystemicAnalysisAdapter with llm_provider
 
-        Note: For production repair cycle, systemic_analysis_service is injected
-        by bootstrap post-processing (not by resolver) to avoid dual-instance bugs.
+        The resolver creates LLMSystemicAnalysisAdapter in production to avoid dual-instance
+        bugs and ensure proper dependency injection at construction time.
         """
         if self._config.repair_cycle == "mock":
             # Engine creates time-aware mock with optional dependencies
@@ -359,10 +360,22 @@ class AdapterResolver:
                 container_adapter=container_adapter,
             )
         # Real adapter: bypass engine, use factory directly
-        # systemic_analysis_service will be injected by bootstrap post-processing
+        # Instantiate systemic_analysis_service for production repair cycle
+        systemic_analysis_service = None
+        if self._config.repair_cycle == "production":
+            # LLM provider is already resolved at this point
+            llm_provider = self._resolved.get("llm")
+            if llm_provider:
+                from codetoreum.adapters.secondary.llm_systemic_analysis_adapter import (
+                    LLMSystemicAnalysisAdapter,
+                )
+
+                systemic_analysis_service = LLMSystemicAnalysisAdapter(llm_provider=llm_provider)
+                logger.info("Created LLMSystemicAnalysisAdapter for production repair cycle")
+
         return self._factory.create_repair_cycle(
             adapter_name=self._config.repair_cycle,
-            systemic_analysis_service=None,
+            systemic_analysis_service=systemic_analysis_service,
         )
 
     def resolve_code_review(self) -> ICodeReviewService:
