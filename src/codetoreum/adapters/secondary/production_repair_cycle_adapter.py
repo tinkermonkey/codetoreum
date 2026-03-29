@@ -1538,7 +1538,7 @@ Return a JSON response with the status of configuration fixes applied."""
                                     type="repair_cycle.systemic_analysis_completed",
                                     timestamp=datetime.now(UTC).isoformat(),
                                     source="production_repair_cycle",
-                                    classification=classification.classification.value,
+                                    classification=classification.classification,
                                     confidence=classification.confidence,
                                     reasoning=classification.reasoning,
                                     recommended_action=classification.recommended_action,
