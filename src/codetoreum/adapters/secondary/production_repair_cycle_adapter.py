@@ -1221,7 +1221,17 @@ Return a JSON response with the verification status and any issues found."""
                 prompt, "apply_dependency_fix", config, context
             )
             return True
-        except Exception:
+        except Exception as e:
+            logger.error(
+                "Dependency fix failed",
+                extra={
+                    "workflow_run_id": context.workflow_run_id,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                },
+                exc_info=True,
+            )
             return False
 
     async def _apply_configuration_fix(
@@ -1251,7 +1261,17 @@ Return a JSON response with the verification status and any issues found."""
                 prompt, "apply_configuration_fix", config, context
             )
             return True
-        except Exception:
+        except Exception as e:
+            logger.error(
+                "Configuration fix failed",
+                extra={
+                    "workflow_run_id": context.workflow_run_id,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                },
+                exc_info=True,
+            )
             return False
 
     def _build_dependency_fix_prompt(
@@ -1340,7 +1360,18 @@ Return a JSON response with the status of configuration fixes applied."""
                 rebuild_prompt, "rebuild_environment", config, context
             )
             return True
-        except Exception:
+        except Exception as e:
+            logger.error(
+                "Environment rebuild failed",
+                extra={
+                    "workflow_run_id": context.workflow_run_id,
+                    "test_type": config.test_type.value,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                },
+                exc_info=True,
+            )
             return False
 
     async def verify_environment(
@@ -1365,7 +1396,18 @@ Return a JSON response with the status of configuration fixes applied."""
                 verify_prompt, "verify_environment", config, context
             )
             return True
-        except Exception:
+        except Exception as e:
+            logger.error(
+                "Environment verification failed",
+                extra={
+                    "workflow_run_id": context.workflow_run_id,
+                    "test_type": config.test_type.value,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                },
+                exc_info=True,
+            )
             return False
 
     async def apply_systemic_fixes(
@@ -1415,11 +1457,15 @@ Return a JSON response with the status of configuration fixes applied."""
             )
 
         except Exception as e:
+            # Safety net for unexpected exceptions in routing logic. Inner fix methods
+            # catch and log their own exceptions, so this handler primarily catches
+            # errors from classification checks or unexpected routing failures.
             logger.error(
-                "Systemic fixes failed",
+                "Unexpected error in systemic fix routing",
                 extra={
                     "workflow_run_id": context.workflow_run_id,
                     "error": str(e),
+                    "error_type": type(e).__name__,
                     "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
                 },
                 exc_info=True,
