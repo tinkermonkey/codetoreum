@@ -1620,6 +1620,7 @@ Return a JSON response with the status of configuration fixes applied."""
                                     prior_fix_attempts.append(
                                         f"Iteration {iteration}: TRANSIENT_FAILURE escalated to CODE_DEFECT (after {consecutive_transient_failures} consecutive), applied file-level fixes"
                                     )
+                                    consecutive_transient_failures = 0  # Reset counter after escalation
                                 else:
                                     prior_fix_attempts.append(
                                         f"Iteration {iteration}: TRANSIENT_FAILURE classified, retrying without fix (consecutive count: {consecutive_transient_failures})"

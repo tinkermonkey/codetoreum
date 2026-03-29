@@ -570,6 +570,74 @@ class TestClassificationDispatchTransientFailure:
 
         systemic_service.analyze.assert_called()
 
+    @pytest.mark.asyncio
+    async def test_transient_failure_counter_resets_after_escalation(self):
+        """Counter is reset after escalating TRANSIENT_FAILURE to CODE_DEFECT.
+
+        Verifies that after escalation, the counter does not remain permanently
+        elevated. Subsequent TRANSIENT_FAILURE classifications should not
+        immediately escalate without reaching the threshold again.
+        """
+        event_emitter = MagicMock()
+        systemic_service = AsyncMock()
+
+        # Sequence: TRANSIENT_FAILURE twice (escalates on 3rd), then CODE_DEFECT
+        # (resets counter), then TRANSIENT_FAILURE again (should retry, not escalate)
+        systemic_service.analyze.side_effect = [
+            MagicMock(
+                classification=FailureClassification.TRANSIENT_FAILURE,
+                confidence=0.8,
+                reasoning="Flaky test 1",
+                recommended_action="Retry",
+            ),
+            MagicMock(
+                classification=FailureClassification.TRANSIENT_FAILURE,
+                confidence=0.8,
+                reasoning="Flaky test 2",
+                recommended_action="Retry",
+            ),
+            MagicMock(
+                classification=FailureClassification.CODE_DEFECT,
+                confidence=0.95,
+                reasoning="Code defect from escalation",
+                recommended_action="Fix the bug",
+            ),
+            MagicMock(
+                classification=FailureClassification.TRANSIENT_FAILURE,
+                confidence=0.8,
+                reasoning="Flaky test 3 (after escalation)",
+                recommended_action="Retry",
+            ),
+            MagicMock(
+                classification=FailureClassification.TRANSIENT_FAILURE,
+                confidence=0.8,
+                reasoning="Flaky test 4 (would escalate if counter not reset)",
+                recommended_action="Retry",
+            ),
+        ]
+
+        adapter, _ = _make_adapter(event_emitter=event_emitter)
+        adapter._systemic_analysis_service = systemic_service
+        adapter.fix_failures_by_file = AsyncMock(return_value=1)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=100)
+        ctx.test_configs = (
+            RepairTestRunConfig(
+                test_type=RepairTestType.UNIT,
+                timeout=30,
+                max_iterations=5,
+                review_warnings=False,
+            ),
+        )
+
+        await adapter.execute(ctx)
+
+        # fix_failures_by_file should be called exactly once (iteration 3 escalation)
+        # If counter was not reset, it would be called again on iteration 5 (after two more
+        # TRANSIENT_FAILURE classifications). With the counter reset after escalation,
+        # the two subsequent TRANSIENT_FAILUREs (iterations 4-5) should not escalate.
+        assert adapter.fix_failures_by_file.call_count == 1
+
 
 # ---------------------------------------------------------------------------
 # Classification Dispatch: DEPENDENCY_ISSUE and CONFIGURATION_ISSUE
