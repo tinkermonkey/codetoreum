@@ -300,6 +300,9 @@ Respond with JSON only (no markdown, no additional text):
         Attempts to extract JSON from markdown code blocks (```json ... ```),
         falling back to finding JSON object in response if no fences found.
 
+        Uses depth-tracking to find matching braces, avoiding greedy matching
+        that would capture trailing braces from commentary.
+
         Args:
             response_text: Raw response text from LLM
             context: Analysis context for logging
@@ -324,13 +327,12 @@ Respond with JSON only (no markdown, no additional text):
             )
             return json_text
 
-        # Fallback: try to find JSON object directly in response using greedy matching
-        # Use greedy match (.*) to capture complete JSON object across multiple lines
-        json_object_match = re.search(r"\{.*\}", response_text, re.DOTALL)
-        if json_object_match:
-            json_text = json_object_match.group(0)
+        # Fallback: find JSON object by tracking brace depth
+        # This avoids greedy matching (r"\{.*\}") which captures from first { to last }
+        json_text = self._find_json_by_depth(response_text)
+        if json_text:
             self._logger.debug(
-                "Extracted JSON object from response (no markdown fence)",
+                "Extracted JSON object from response using depth tracking",
                 extra={
                     "workflow_run_id": context.workflow_run_id,
                     "work_item_id": context.work_item_id,
@@ -341,3 +343,53 @@ Respond with JSON only (no markdown, no additional text):
         # No JSON found
         msg = f"No JSON found in LLM response: {response_text[:200]}"
         raise ValueError(msg)
+
+    def _find_json_by_depth(self, response_text: str) -> str | None:
+        """Find JSON object by tracking brace depth.
+
+        Locates the first opening brace and finds its matching closing brace
+        by tracking depth. This prevents capturing trailing braces from
+        commentary that would be included by greedy matching.
+
+        Args:
+            response_text: Text to search for JSON object
+
+        Returns:
+            JSON string if found, None otherwise
+        """
+        # Find the first opening brace
+        start_idx = response_text.find("{")
+        if start_idx == -1:
+            return None
+
+        # Track brace depth from the opening brace
+        depth = 0
+        in_string = False
+        escape_next = False
+
+        for idx in range(start_idx, len(response_text)):
+            char = response_text[idx]
+
+            # Handle string boundaries and escape sequences
+            if escape_next:
+                escape_next = False
+                continue
+            if char == "\\":
+                escape_next = True
+                continue
+            if char == '"':
+                in_string = not in_string
+                continue
+
+            # Only count braces outside strings
+            if not in_string:
+                if char == "{":
+                    depth += 1
+                elif char == "}":
+                    depth -= 1
+                    if depth == 0:
+                        # Found matching closing brace
+                        return response_text[start_idx : idx + 1]
+
+        # Unmatched braces
+        return None

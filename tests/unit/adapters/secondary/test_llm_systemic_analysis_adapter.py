@@ -691,3 +691,82 @@ class TestBoundaryConditions:
         assert "} inside string" in result.reasoning
         assert result.affected_files == ("requirements.txt", "setup.py")
         assert "Update dependencies" in result.recommended_action
+
+    @pytest.mark.asyncio
+    async def test_json_followed_by_trailing_commentary_with_braces(self):
+        """JSON followed by commentary with braces is parsed correctly.
+
+        Tests the fix for greedy regex issue where r"\{.*\}" would capture
+        from first { to last } in response, including commentary after JSON.
+        The depth-tracking parser should extract only the valid JSON object.
+
+        See issue #589: Greedy JSON Regex in Fallback Extraction May Capture Trailing Braces
+        """
+        # JSON followed by commentary containing braces
+        response = """{
+  "classification": "code_defect",
+  "confidence": 0.88,
+  "reasoning": "Variable initialization issue",
+  "affected_files": ["app.py"],
+  "recommended_action": "Initialize variables before use"
+}
+
+Additional analysis: The problem is in the try-except {block} where {error handling} is missing."""
+        adapter, _ = _make_adapter(response)
+        context = _make_context()
+        failures = _make_failures(1)
+
+        result = await adapter.analyze(failures, context)
+
+        # Should successfully parse the valid JSON object, not the trailing braces
+        assert result.classification == FailureClassification.CODE_DEFECT
+        assert result.confidence == 0.88
+        assert result.reasoning == "Variable initialization issue"
+        assert result.affected_files == ("app.py",)
+
+    @pytest.mark.asyncio
+    async def test_json_with_escaped_quotes_in_strings(self):
+        """JSON with escaped quotes in string values is parsed correctly.
+
+        Tests depth tracking properly handles escape sequences in strings
+        so quotes don't affect brace counting.
+        """
+        response = """{
+  "classification": "environment_issue",
+  "confidence": 0.91,
+  "reasoning": "Missing variable: expected \\"DATABASE_URL\\" in env",
+  "affected_files": ["config.py"],
+  "recommended_action": "Set DATABASE_URL=\\"postgres://...\\""
+}"""
+        adapter, _ = _make_adapter(response)
+        context = _make_context()
+        failures = _make_failures(1)
+
+        result = await adapter.analyze(failures, context)
+
+        assert result.classification == FailureClassification.ENVIRONMENT_ISSUE
+        assert 'DATABASE_URL' in result.reasoning
+        assert 'DATABASE_URL' in result.recommended_action
+
+    @pytest.mark.asyncio
+    async def test_nested_braces_in_reasoning_string(self):
+        """JSON with nested braces in string values is handled correctly.
+
+        Tests depth tracking properly ignores braces inside strings.
+        """
+        response = """{
+  "classification": "configuration_issue",
+  "confidence": 0.87,
+  "reasoning": "Config format error: expected {key: value} pairs",
+  "affected_files": ["config.yaml"],
+  "recommended_action": "Fix config to use {proper: syntax}"
+}"""
+        adapter, _ = _make_adapter(response)
+        context = _make_context()
+        failures = _make_failures(1)
+
+        result = await adapter.analyze(failures, context)
+
+        assert result.classification == FailureClassification.CONFIGURATION_ISSUE
+        assert "{key: value}" in result.reasoning
+        assert "{proper: syntax}" in result.recommended_action
