@@ -314,9 +314,9 @@ Respond with JSON only (no markdown, no additional text):
             )
             return json_text
 
-        # Fallback: try to find JSON object directly in response using lazy matching
-        # Use lazy match (.*?) to avoid greedy matching past the actual JSON object
-        json_object_match = re.search(r"\{.*?\}", response_text, re.DOTALL)
+        # Fallback: try to find JSON object directly in response using greedy matching
+        # Use greedy match (.*) to capture complete JSON object across multiple lines
+        json_object_match = re.search(r"\{.*\}", response_text, re.DOTALL)
         if json_object_match:
             json_text = json_object_match.group(0)
             self._logger.debug(

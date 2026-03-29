@@ -668,3 +668,31 @@ class TestBoundaryConditions:
 
         assert "expected 'value'" in result.reasoning
         assert "x == 'value'" in result.recommended_action
+
+    @pytest.mark.asyncio
+    async def test_multiline_json_without_markdown_fences(self):
+        """Multiline JSON without markdown fences is extracted correctly.
+
+        This test ensures the regex properly captures the full JSON object
+        across multiple lines, not just the first closing brace.
+        """
+        # Multi-line JSON without markdown fences - tests greedy vs lazy regex
+        response = """{
+  "classification": "dependency_issue",
+  "confidence": 0.92,
+  "reasoning": "The affected_files array shows a } inside string that should not truncate",
+  "affected_files": ["requirements.txt", "setup.py"],
+  "recommended_action": "Update dependencies"
+}"""
+        adapter, _ = _make_adapter(response)
+        context = _make_context()
+        failures = _make_failures(1)
+
+        result = await adapter.analyze(failures, context)
+
+        # Verify all fields are correctly extracted
+        assert result.classification == FailureClassification.DEPENDENCY_ISSUE
+        assert result.confidence == 0.92
+        assert "} inside string" in result.reasoning
+        assert result.affected_files == ("requirements.txt", "setup.py")
+        assert "Update dependencies" in result.recommended_action
