@@ -8,7 +8,7 @@ enabling the repair cycle to dispatch to the correct handling strategy (code fix
 environment rebuild, dependency fix, or transient retry).
 
 Architecture:
-- Dependency injection of ILLMProvider for testability
+- Factory injection of ILLMProvider for flexible provider selection
 - Prompt construction with comprehensive context (failures, prior attempts, iteration)
 - JSON parsing with fallback to CODE_DEFECT classification on parse errors
 - No event emission (caller's responsibility)
@@ -24,7 +24,7 @@ import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from codetoreum.ports.output.llm_provider import AgentLLMFactory, ExecutionContext, ExecutionResult, ILLMProvider
+    from codetoreum.ports.output.llm_provider import AgentLLMFactory, ExecutionContext, ExecutionResult
 
 from codetoreum.domain.repair_cycle_types import (
     AnalysisContext,
