@@ -103,7 +103,7 @@ class LLMSystemicAnalysisAdapter(ISystemicAnalysisService):
             return SystemicAnalysisResult(
                 classification=FailureClassification.CODE_DEFECT,
                 confidence=0.0,
-                reasoning=f"Parse failure: {str(e)}",
+                reasoning=f"Parse failure: {e}",
                 affected_files=(),
                 recommended_action="Fix code defects",
             )
@@ -183,7 +183,8 @@ Respond with JSON only (no markdown, no additional text):
             classification = FailureClassification(classification_str)
         except ValueError as e:
             self._logger.warning(
-                f"Unknown classification value: {classification_str}",
+                "Unknown classification value: %s",
+                classification_str,
                 extra={
                     "workflow_run_id": context.workflow_run_id,
                     "work_item_id": context.work_item_id,
