@@ -41,7 +41,6 @@ from codetoreum.ports.output.repair_cycle_service import IRepairCycle
 from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.review_cycle_service import IReviewCycle
 from codetoreum.ports.output.storage import IStorage
-from codetoreum.ports.output.systemic_analysis_service import ISystemicAnalysisService
 from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.version_control_service import IVersionControlService
 from codetoreum.ports.output.work_item_branch_tracker import IWorkItemBranchTracker
