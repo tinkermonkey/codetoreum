@@ -14,7 +14,6 @@ from codetoreum.domain.repair_cycle_types import (
 )
 from codetoreum.ports.output.systemic_analysis_service import ISystemicAnalysisService
 
-
 DEFAULT_RESULT = SystemicAnalysisResult(
     classification=FailureClassification.CODE_DEFECT,
     confidence=1.0,
