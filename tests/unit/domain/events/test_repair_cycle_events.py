@@ -20,6 +20,7 @@ from codetoreum.domain.events import (
 )
 from codetoreum.domain.repair_cycle_types import (
     CycleResult,
+    FailureClassification,
     RepairTestFailure,
     RepairTestResult,
     RepairTestType,
@@ -1016,7 +1017,7 @@ class TestSystemicAnalysisCompletedEvent:
             type="repair_cycle.systemic_analysis_completed",
             timestamp=timestamp,
             source="repair_cycle",
-            classification="code_defect",
+            classification=FailureClassification.CODE_DEFECT,
             confidence=0.95,
             reasoning="Consistent failure pattern in test file suggests code logic error",
             recommended_action="Apply code fix and re-run tests",
@@ -1025,7 +1026,7 @@ class TestSystemicAnalysisCompletedEvent:
             failure_count=5,
         )
 
-        assert event.classification == "code_defect"
+        assert event.classification == FailureClassification.CODE_DEFECT
         assert event.confidence == 0.95
         assert event.reasoning == "Consistent failure pattern in test file suggests code logic error"
         assert event.recommended_action == "Apply code fix and re-run tests"
@@ -1033,13 +1034,13 @@ class TestSystemicAnalysisCompletedEvent:
         assert event.workflow_run_id == "run-456"
         assert event.failure_count == 5
 
-    def test_classification_as_string(self):
-        """Test that classification is stored as string value, not enum."""
+    def test_classification_enum(self):
+        """Test that classification is a FailureClassification enum."""
         event = SystemicAnalysisCompletedEvent(
             type="repair_cycle.systemic_analysis_completed",
             timestamp=now_iso(),
             source="repair_cycle",
-            classification="environment_issue",
+            classification=FailureClassification.ENVIRONMENT_ISSUE,
             confidence=0.8,
             reasoning="Tests pass in local environment but fail in CI",
             recommended_action="Verify CI environment setup",
@@ -1048,8 +1049,8 @@ class TestSystemicAnalysisCompletedEvent:
             failure_count=3,
         )
 
-        assert isinstance(event.classification, str)
-        assert event.classification == "environment_issue"
+        assert isinstance(event.classification, FailureClassification)
+        assert event.classification == FailureClassification.ENVIRONMENT_ISSUE
 
     def test_missing_work_item_id(self):
         """Test that work_item_id is required."""
@@ -1058,7 +1059,7 @@ class TestSystemicAnalysisCompletedEvent:
                 type="repair_cycle.systemic_analysis_completed",
                 timestamp=now_iso(),
                 source="repair_cycle",
-                classification="code_defect",
+                classification=FailureClassification.CODE_DEFECT,
                 confidence=0.95,
                 reasoning="Some reason",
                 recommended_action="Some action",
@@ -1074,7 +1075,7 @@ class TestSystemicAnalysisCompletedEvent:
                 type="repair_cycle.systemic_analysis_completed",
                 timestamp=now_iso(),
                 source="repair_cycle",
-                classification="code_defect",
+                classification=FailureClassification.CODE_DEFECT,
                 confidence=0.95,
                 reasoning="Some reason",
                 recommended_action="Some action",
@@ -1093,7 +1094,7 @@ class TestSystemicAnalysisCompletedEvent:
             workflow_run_id="run-456",
         )
 
-        assert event.classification == ""
+        assert event.classification == FailureClassification.CODE_DEFECT
         assert event.confidence == 0.0
         assert event.reasoning == ""
         assert event.recommended_action == ""
@@ -1106,7 +1107,7 @@ class TestSystemicAnalysisCompletedEvent:
             type="repair_cycle.systemic_analysis_completed",
             timestamp=timestamp,
             source="repair_cycle",
-            classification="transient_failure",
+            classification=FailureClassification.TRANSIENT_FAILURE,
             confidence=0.6,
             reasoning="Intermittent failures suggest flaky test or transient resource issue",
             recommended_action="Retry execution or investigate resource contention",
@@ -1143,7 +1144,7 @@ class TestSystemicAnalysisCompletedEvent:
         }
 
         event = SystemicAnalysisCompletedEvent.from_dict(d)
-        assert event.classification == "dependency_issue"
+        assert event.classification == FailureClassification.DEPENDENCY_ISSUE
         assert event.confidence == 0.85
         assert event.reasoning == "Multiple dependencies fail to resolve"
         assert event.recommended_action == "Update dependency versions"
@@ -1162,7 +1163,7 @@ class TestSystemicAnalysisCompletedEvent:
         }
 
         event = SystemicAnalysisCompletedEvent.from_dict(d)
-        assert event.classification == ""
+        assert event.classification == FailureClassification.CODE_DEFECT
         assert event.confidence == 0.0
         assert event.reasoning == ""
         assert event.recommended_action == ""
@@ -1174,7 +1175,7 @@ class TestSystemicAnalysisCompletedEvent:
             type="repair_cycle.systemic_analysis_completed",
             timestamp=now_iso(),
             source="repair_cycle",
-            classification="configuration_issue",
+            classification=FailureClassification.CONFIGURATION_ISSUE,
             confidence=0.92,
             reasoning="Configuration mismatch between test environments",
             recommended_action="Standardize test configuration",
@@ -1196,13 +1197,13 @@ class TestSystemicAnalysisCompletedEvent:
         assert restored.timestamp == original.timestamp
 
     def test_confidence_boundary_values(self):
-        """Test that confidence can be any float value."""
+        """Test that confidence bounds are validated (0.0 to 1.0)."""
         # Test 0.0 (no confidence)
         event_zero = SystemicAnalysisCompletedEvent(
             type="repair_cycle.systemic_analysis_completed",
             timestamp=now_iso(),
             source="repair_cycle",
-            classification="unknown",
+            classification=FailureClassification.ENVIRONMENT_ISSUE,
             confidence=0.0,
             work_item_id="issue-123",
             workflow_run_id="run-456",
@@ -1214,7 +1215,7 @@ class TestSystemicAnalysisCompletedEvent:
             type="repair_cycle.systemic_analysis_completed",
             timestamp=now_iso(),
             source="repair_cycle",
-            classification="code_defect",
+            classification=FailureClassification.CODE_DEFECT,
             confidence=1.0,
             work_item_id="issue-123",
             workflow_run_id="run-456",
@@ -1226,7 +1227,7 @@ class TestSystemicAnalysisCompletedEvent:
             type="repair_cycle.systemic_analysis_completed",
             timestamp=now_iso(),
             source="repair_cycle",
-            classification="code_defect",
+            classification=FailureClassification.CODE_DEFECT,
             confidence=0.5,
             work_item_id="issue-123",
             workflow_run_id="run-456",
@@ -1239,7 +1240,7 @@ class TestSystemicAnalysisCompletedEvent:
             type="repair_cycle.systemic_analysis_completed",
             timestamp=now_iso(),
             source="repair_cycle",
-            classification="code_defect",
+            classification=FailureClassification.CODE_DEFECT,
             confidence=0.95,
             reasoning="Test failure analysis",
             recommended_action="Fix code issue",
@@ -1249,7 +1250,7 @@ class TestSystemicAnalysisCompletedEvent:
         )
 
         with pytest.raises(FrozenInstanceError):
-            event.classification = "environment_issue"  # type: ignore
+            event.classification = FailureClassification.ENVIRONMENT_ISSUE  # type: ignore
 
         with pytest.raises(FrozenInstanceError):
             event.confidence = 0.8  # type: ignore
@@ -1268,3 +1269,42 @@ class TestSystemicAnalysisCompletedEvent:
 
         with pytest.raises(FrozenInstanceError):
             event.failure_count = 10  # type: ignore
+
+    def test_invalid_classification(self):
+        """Test that invalid classification type raises ValueError."""
+        with pytest.raises(ValueError, match="classification must be a FailureClassification"):
+            SystemicAnalysisCompletedEvent(
+                type="repair_cycle.systemic_analysis_completed",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                classification="invalid_type",  # type: ignore
+                confidence=0.5,
+                work_item_id="issue-123",
+                workflow_run_id="run-456",
+            )
+
+    def test_confidence_above_one(self):
+        """Test that confidence > 1.0 raises ValueError."""
+        with pytest.raises(ValueError, match="confidence must be between 0.0 and 1.0"):
+            SystemicAnalysisCompletedEvent(
+                type="repair_cycle.systemic_analysis_completed",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                classification=FailureClassification.CODE_DEFECT,
+                confidence=1.5,
+                work_item_id="issue-123",
+                workflow_run_id="run-456",
+            )
+
+    def test_confidence_below_zero(self):
+        """Test that confidence < 0.0 raises ValueError."""
+        with pytest.raises(ValueError, match="confidence must be between 0.0 and 1.0"):
+            SystemicAnalysisCompletedEvent(
+                type="repair_cycle.systemic_analysis_completed",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                classification=FailureClassification.CODE_DEFECT,
+                confidence=-0.1,
+                work_item_id="issue-123",
+                workflow_run_id="run-456",
+            )

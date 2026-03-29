@@ -23,6 +23,7 @@ from uuid import uuid4
 
 from ..repair_cycle_types import (
     CycleResult,
+    FailureClassification,
     RepairTestFailure,
     RepairTestType,
     RepairTestWarning,
@@ -1415,8 +1416,7 @@ class SystemicAnalysisCompletedEvent(CodetoreumEvent):
 
     Attributes:
         type (str): Fixed to "repair_cycle.systemic_analysis_completed"
-        classification (str): Classification of root cause (stored as string value,
-                             e.g., "code_defect", "environment_issue")
+        classification (FailureClassification): Classification of root cause
         confidence (float): Confidence level of classification (0.0 to 1.0)
         reasoning (str): Explanation of the classification reasoning
         recommended_action (str): Recommended action to resolve the issue
@@ -1426,7 +1426,7 @@ class SystemicAnalysisCompletedEvent(CodetoreumEvent):
         timestamp (str): ISO 8601 timestamp when analysis completed
     """
 
-    classification: str = ""
+    classification: FailureClassification = FailureClassification.CODE_DEFECT
     confidence: float = 0.0
     reasoning: str = ""
     recommended_action: str = ""
@@ -1437,6 +1437,12 @@ class SystemicAnalysisCompletedEvent(CodetoreumEvent):
     def __post_init__(self) -> None:
         """Validate event after initialization."""
         super().__post_init__()
+        if not isinstance(self.classification, FailureClassification):
+            msg = "classification must be a FailureClassification"
+            raise ValueError(msg)
+        if not 0.0 <= self.confidence <= 1.0:
+            msg = "confidence must be between 0.0 and 1.0"
+            raise ValueError(msg)
         if not self.work_item_id:
             msg = "work_item_id is required"
             raise ValueError(msg)
@@ -1449,7 +1455,7 @@ class SystemicAnalysisCompletedEvent(CodetoreumEvent):
         d = super().to_dict()
         d.update(
             {
-                "classification": self.classification,
+                "classification": self.classification.value,
                 "confidence": self.confidence,
                 "reasoning": self.reasoning,
                 "recommended_action": self.recommended_action,
@@ -1465,15 +1471,24 @@ class SystemicAnalysisCompletedEvent(CodetoreumEvent):
         """Deserialize from dictionary with backward compatibility.
 
         Raises:
-            ValueError: If required fields (work_item_id, workflow_run_id) are missing.
+            ValueError: If required fields (work_item_id, workflow_run_id) are missing
+                       or if classification is not a valid FailureClassification.
         """
+        classification_value = data.get("classification")
+        if isinstance(classification_value, str):
+            classification = FailureClassification(classification_value)
+        elif isinstance(classification_value, FailureClassification):
+            classification = classification_value
+        else:
+            classification = FailureClassification.CODE_DEFECT
+
         return cls(
             type=data.get("type", "repair_cycle.systemic_analysis_completed"),
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
-            classification=data.get("classification", ""),
+            classification=classification,
             confidence=data.get("confidence", 0.0),
             reasoning=data.get("reasoning", ""),
             recommended_action=data.get("recommended_action", ""),
