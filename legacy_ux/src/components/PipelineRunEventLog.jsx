@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useSocket } from '../contexts/SocketContext'
+import { useSocket } from '../hooks/useSocket'
 import {
   Activity, AlertCircle, CheckCircle, XCircle, GitBranch, MessageSquare,
   PlayCircle, RotateCcw, AlertTriangle, Users, FileCode, Clock, ExternalLink

@@ -1,5 +1,5 @@
-import { useSocket } from '../contexts/SocketContext'
-import { useTheme } from '../contexts/ThemeContext'
+import { useSocket } from '../hooks/useSocket'
+import { useTheme } from '../hooks/useTheme'
 import { useSystemHealth } from '../hooks/useSystemHealth'
 import { useCircuitBreakers } from '../hooks/useCircuitBreakers'
 import { Sun, Moon, AlertTriangle, AlertCircle } from 'lucide-react'

@@ -1,7 +1,7 @@
 /**
  * Selector hook for project data
  */
-import { useProjectState } from '../contexts/ProjectStateContext'
+import { useProjectState } from '../hooks/useProjectState'
 
 export function useProjects() {
   const {

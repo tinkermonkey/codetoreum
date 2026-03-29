@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { AlertTriangle, XCircle, Activity } from 'lucide-react'
 import { useActiveAgents } from '../hooks/useActiveAgents'
 import { useAgentActions } from '../hooks/useAgentActions'
-import { useAgentState } from '../contexts/AgentStateContext'
+import { useAgentState } from '../hooks/useAgentState'
 import { formatDuration, getRuntimeMs } from '../utils/stateHelpers'
 
 /**
