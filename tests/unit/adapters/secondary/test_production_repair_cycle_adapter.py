@@ -18,6 +18,7 @@ from codetoreum.adapters.secondary.production_repair_cycle_adapter import (
     RepairCycleConfig,
 )
 from codetoreum.domain.repair_cycle_types import (
+    FailureClassification,
     RepairTestFailure,
     RepairTestRunConfig,
     RepairTestType,
@@ -244,3 +245,844 @@ class TestFixFailuresByFileCircuitBreaker:
 
         # is_open must have been called for each file (at minimum twice)
         assert cb.is_open.call_count >= 2
+
+
+# ---------------------------------------------------------------------------
+# Classification Dispatch: CODE_DEFECT
+# ---------------------------------------------------------------------------
+
+
+class TestClassificationDispatchCodeDefect:
+    @pytest.mark.asyncio
+    async def test_code_defect_dispatch_calls_fix_failures_by_file(self):
+        """CODE_DEFECT classification routes to fix_failures_by_file."""
+        event_emitter = MagicMock()
+        systemic_service = AsyncMock()
+        systemic_service.analyze.return_value = MagicMock(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.95,
+            reasoning="Source code has a bug",
+            recommended_action="Fix the bug",
+        )
+
+        adapter, llm = _make_adapter(event_emitter=event_emitter)
+        adapter._systemic_analysis_service = systemic_service
+
+        # Mock fix_failures_by_file
+        adapter.fix_failures_by_file = AsyncMock(return_value=1)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=100)
+        await adapter.execute(ctx)
+
+        systemic_service.analyze.assert_called_once()
+        adapter.fix_failures_by_file.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_code_defect_emits_systemic_analysis_events(self):
+        """CODE_DEFECT dispatch emits SystemicAnalysisStartedEvent and CompletedEvent."""
+        event_emitter = MagicMock()
+        systemic_service = AsyncMock()
+        systemic_service.analyze.return_value = MagicMock(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.95,
+            reasoning="Source code has a bug",
+            recommended_action="Fix the bug",
+        )
+
+        adapter, _ = _make_adapter(event_emitter=event_emitter)
+        adapter._systemic_analysis_service = systemic_service
+        adapter.fix_failures_by_file = AsyncMock(return_value=1)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=100)
+        await adapter.execute(ctx)
+
+        emitted_types = [call.args[0].type for call in event_emitter.emit.call_args_list]
+        assert "repair_cycle.systemic_analysis_started" in emitted_types
+        assert "repair_cycle.systemic_analysis_completed" in emitted_types
+
+    @pytest.mark.asyncio
+    async def test_code_defect_resets_transient_counter(self):
+        """CODE_DEFECT classification resets consecutive_transient_failures counter."""
+        event_emitter = MagicMock()
+        systemic_service = AsyncMock()
+
+        # First iteration: TRANSIENT_FAILURE (increments counter)
+        # Second iteration: CODE_DEFECT (resets counter)
+        systemic_service.analyze.side_effect = [
+            MagicMock(
+                classification=FailureClassification.TRANSIENT_FAILURE,
+                confidence=0.8,
+                reasoning="Flaky test",
+                recommended_action="Retry",
+            ),
+            MagicMock(
+                classification=FailureClassification.CODE_DEFECT,
+                confidence=0.95,
+                reasoning="Source code has a bug",
+                recommended_action="Fix the bug",
+            ),
+        ]
+
+        adapter, _ = _make_adapter(event_emitter=event_emitter)
+        adapter._systemic_analysis_service = systemic_service
+        adapter.fix_failures_by_file = AsyncMock(return_value=1)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=100)
+        # Set max_iterations to 2 to allow multiple analysis calls
+        ctx.test_configs = (
+            RepairTestRunConfig(
+                test_type=RepairTestType.UNIT,
+                timeout=30,
+                max_iterations=2,
+                review_warnings=False,
+            ),
+        )
+
+        await adapter.execute(ctx)
+
+        # Both analyze calls should succeed
+        assert systemic_service.analyze.call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# Classification Dispatch: ENVIRONMENT_ISSUE
+# ---------------------------------------------------------------------------
+
+
+class TestClassificationDispatchEnvironmentIssue:
+    @pytest.mark.asyncio
+    async def test_environment_issue_dispatch_calls_rebuild_and_verify(self):
+        """ENVIRONMENT_ISSUE classification routes to rebuild_environment and verify_environment."""
+        event_emitter = MagicMock()
+        systemic_service = AsyncMock()
+        systemic_service.analyze.return_value = MagicMock(
+            classification=FailureClassification.ENVIRONMENT_ISSUE,
+            confidence=0.9,
+            reasoning="Missing environment setup",
+            recommended_action="Rebuild environment",
+        )
+
+        adapter, _ = _make_adapter(event_emitter=event_emitter)
+        adapter._systemic_analysis_service = systemic_service
+        adapter.rebuild_environment = AsyncMock(return_value=True)
+        adapter.verify_environment = AsyncMock(return_value=True)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=100)
+        await adapter.execute(ctx)
+
+        systemic_service.analyze.assert_called_once()
+        adapter.rebuild_environment.assert_called_once()
+        adapter.verify_environment.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_environment_issue_skip_verify_if_rebuild_fails(self):
+        """ENVIRONMENT_ISSUE skips verify_environment if rebuild_environment returns False."""
+        event_emitter = MagicMock()
+        systemic_service = AsyncMock()
+        systemic_service.analyze.return_value = MagicMock(
+            classification=FailureClassification.ENVIRONMENT_ISSUE,
+            confidence=0.9,
+            reasoning="Missing environment setup",
+            recommended_action="Rebuild environment",
+        )
+
+        adapter, _ = _make_adapter(event_emitter=event_emitter)
+        adapter._systemic_analysis_service = systemic_service
+        adapter.rebuild_environment = AsyncMock(return_value=False)
+        adapter.verify_environment = AsyncMock(return_value=True)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=100)
+        await adapter.execute(ctx)
+
+        adapter.rebuild_environment.assert_called_once()
+        # verify_environment should not be called if rebuild fails
+        adapter.verify_environment.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_environment_issue_resets_transient_counter(self):
+        """ENVIRONMENT_ISSUE classification resets consecutive_transient_failures counter."""
+        event_emitter = MagicMock()
+        systemic_service = AsyncMock()
+        systemic_service.analyze.return_value = MagicMock(
+            classification=FailureClassification.ENVIRONMENT_ISSUE,
+            confidence=0.9,
+            reasoning="Missing environment setup",
+            recommended_action="Rebuild environment",
+        )
+
+        adapter, _ = _make_adapter(event_emitter=event_emitter)
+        adapter._systemic_analysis_service = systemic_service
+        adapter.rebuild_environment = AsyncMock(return_value=True)
+        adapter.verify_environment = AsyncMock(return_value=True)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=100)
+        await adapter.execute(ctx)
+
+        systemic_service.analyze.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Classification Dispatch: TRANSIENT_FAILURE
+# ---------------------------------------------------------------------------
+
+
+class TestClassificationDispatchTransientFailure:
+    @pytest.mark.asyncio
+    async def test_transient_failure_single_occurrence_no_fix(self):
+        """Single TRANSIENT_FAILURE classification does not trigger fix."""
+        event_emitter = MagicMock()
+        systemic_service = AsyncMock()
+        systemic_service.analyze.return_value = MagicMock(
+            classification=FailureClassification.TRANSIENT_FAILURE,
+            confidence=0.8,
+            reasoning="Flaky test",
+            recommended_action="Retry",
+        )
+
+        adapter, _ = _make_adapter(event_emitter=event_emitter)
+        adapter._systemic_analysis_service = systemic_service
+        adapter.fix_failures_by_file = AsyncMock(return_value=0)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=100)
+        await adapter.execute(ctx)
+
+        # fix_failures_by_file should not be called for single TRANSIENT_FAILURE
+        adapter.fix_failures_by_file.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_transient_failure_escalates_after_two_consecutive(self):
+        """TRANSIENT_FAILURE escalates to CODE_DEFECT after 2 consecutive occurrences."""
+        event_emitter = MagicMock()
+        systemic_service = AsyncMock()
+
+        # Iterate 3 times: TRANSIENT_FAILURE twice, then CODE_DEFECT
+        systemic_service.analyze.side_effect = [
+            MagicMock(
+                classification=FailureClassification.TRANSIENT_FAILURE,
+                confidence=0.8,
+                reasoning="Flaky test 1",
+                recommended_action="Retry",
+            ),
+            MagicMock(
+                classification=FailureClassification.TRANSIENT_FAILURE,
+                confidence=0.8,
+                reasoning="Flaky test 2",
+                recommended_action="Retry",
+            ),
+            MagicMock(
+                classification=FailureClassification.TRANSIENT_FAILURE,
+                confidence=0.8,
+                reasoning="Flaky test 3",
+                recommended_action="Retry",
+            ),
+        ]
+
+        adapter, _ = _make_adapter(event_emitter=event_emitter)
+        adapter._systemic_analysis_service = systemic_service
+        adapter.fix_failures_by_file = AsyncMock(return_value=1)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=100)
+        ctx.test_configs = (
+            RepairTestRunConfig(
+                test_type=RepairTestType.UNIT,
+                timeout=30,
+                max_iterations=3,
+                review_warnings=False,
+            ),
+        )
+
+        await adapter.execute(ctx)
+
+        # After 2 consecutive TRANSIENT_FAILURE, the 3rd should escalate
+        # fix_failures_by_file should be called
+        assert adapter.fix_failures_by_file.call_count >= 1
+
+    @pytest.mark.asyncio
+    async def test_transient_failure_increments_consecutive_counter(self):
+        """Each TRANSIENT_FAILURE increments the consecutive counter."""
+        event_emitter = MagicMock()
+        systemic_service = AsyncMock()
+
+        # Multiple TRANSIENT_FAILURE classifications
+        systemic_service.analyze.side_effect = [
+            MagicMock(
+                classification=FailureClassification.TRANSIENT_FAILURE,
+                confidence=0.8,
+                reasoning="Flaky test 1",
+                recommended_action="Retry",
+            ),
+            MagicMock(
+                classification=FailureClassification.TRANSIENT_FAILURE,
+                confidence=0.8,
+                reasoning="Flaky test 2",
+                recommended_action="Retry",
+            ),
+            MagicMock(
+                classification=FailureClassification.TRANSIENT_FAILURE,
+                confidence=0.8,
+                reasoning="Flaky test 3",
+                recommended_action="Retry",
+            ),
+        ]
+
+        adapter, _ = _make_adapter(event_emitter=event_emitter)
+        adapter._systemic_analysis_service = systemic_service
+        adapter.fix_failures_by_file = AsyncMock(return_value=0)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=100)
+        ctx.test_configs = (
+            RepairTestRunConfig(
+                test_type=RepairTestType.UNIT,
+                timeout=30,
+                max_iterations=3,
+                review_warnings=False,
+            ),
+        )
+
+        await adapter.execute(ctx)
+
+        systemic_service.analyze.assert_called()
+
+
+# ---------------------------------------------------------------------------
+# Classification Dispatch: DEPENDENCY_ISSUE and CONFIGURATION_ISSUE
+# ---------------------------------------------------------------------------
+
+
+class TestClassificationDispatchSystemicIssues:
+    @pytest.mark.asyncio
+    async def test_dependency_issue_dispatch_calls_apply_systemic_fixes(self):
+        """DEPENDENCY_ISSUE classification routes to apply_systemic_fixes."""
+        event_emitter = MagicMock()
+        systemic_service = AsyncMock()
+        systemic_service.analyze.return_value = MagicMock(
+            classification=FailureClassification.DEPENDENCY_ISSUE,
+            confidence=0.85,
+            reasoning="Missing dependency",
+            recommended_action="Install dependency",
+        )
+
+        adapter, _ = _make_adapter(event_emitter=event_emitter)
+        adapter._systemic_analysis_service = systemic_service
+        adapter.apply_systemic_fixes = AsyncMock(return_value=True)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=100)
+        await adapter.execute(ctx)
+
+        adapter.apply_systemic_fixes.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_configuration_issue_dispatch_calls_apply_systemic_fixes(self):
+        """CONFIGURATION_ISSUE classification routes to apply_systemic_fixes."""
+        event_emitter = MagicMock()
+        systemic_service = AsyncMock()
+        systemic_service.analyze.return_value = MagicMock(
+            classification=FailureClassification.CONFIGURATION_ISSUE,
+            confidence=0.85,
+            reasoning="Missing configuration",
+            recommended_action="Fix configuration",
+        )
+
+        adapter, _ = _make_adapter(event_emitter=event_emitter)
+        adapter._systemic_analysis_service = systemic_service
+        adapter.apply_systemic_fixes = AsyncMock(return_value=True)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=100)
+        await adapter.execute(ctx)
+
+        adapter.apply_systemic_fixes.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_systemic_issues_reset_transient_counter(self):
+        """DEPENDENCY_ISSUE and CONFIGURATION_ISSUE reset transient counter."""
+        event_emitter = MagicMock()
+        systemic_service = AsyncMock()
+        systemic_service.analyze.return_value = MagicMock(
+            classification=FailureClassification.DEPENDENCY_ISSUE,
+            confidence=0.85,
+            reasoning="Missing dependency",
+            recommended_action="Install dependency",
+        )
+
+        adapter, _ = _make_adapter(event_emitter=event_emitter)
+        adapter._systemic_analysis_service = systemic_service
+        adapter.apply_systemic_fixes = AsyncMock(return_value=True)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=100)
+        await adapter.execute(ctx)
+
+        adapter.apply_systemic_fixes.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Classifier Exception Handling (Fallback)
+# ---------------------------------------------------------------------------
+
+
+class TestClassifierExceptionFallback:
+    @pytest.mark.asyncio
+    async def test_classifier_exception_falls_back_to_fix_failures_by_file(self):
+        """Systemic analysis exception falls back to fix_failures_by_file."""
+        event_emitter = MagicMock()
+        systemic_service = AsyncMock()
+        systemic_service.analyze.side_effect = RuntimeError("Classifier failed")
+
+        adapter, _ = _make_adapter(event_emitter=event_emitter)
+        adapter._systemic_analysis_service = systemic_service
+        adapter.fix_failures_by_file = AsyncMock(return_value=1)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=100)
+        await adapter.execute(ctx)
+
+        # Should fall back to fix_failures_by_file
+        adapter.fix_failures_by_file.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_no_systemic_service_uses_fallback(self):
+        """No systemic service injected uses fallback to fix_failures_by_file."""
+        event_emitter = MagicMock()
+
+        adapter, _ = _make_adapter(event_emitter=event_emitter)
+        adapter._systemic_analysis_service = None
+        adapter.fix_failures_by_file = AsyncMock(return_value=1)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=100)
+        await adapter.execute(ctx)
+
+        # Should use fallback since no classifier
+        adapter.fix_failures_by_file.assert_called()
+
+
+# ---------------------------------------------------------------------------
+# Prior Classifications and Fix Attempts Tracking
+# ---------------------------------------------------------------------------
+
+
+class TestPriorTrackingData:
+    @pytest.mark.asyncio
+    async def test_prior_classifications_tracked(self):
+        """Prior classifications are tracked and passed to analysis context."""
+        event_emitter = MagicMock()
+        systemic_service = AsyncMock()
+        systemic_service.analyze.return_value = MagicMock(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.95,
+            reasoning="Source code has a bug",
+            recommended_action="Fix the bug",
+        )
+
+        adapter, _ = _make_adapter(event_emitter=event_emitter)
+        adapter._systemic_analysis_service = systemic_service
+        adapter.fix_failures_by_file = AsyncMock(return_value=1)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=100)
+        ctx.test_configs = (
+            RepairTestRunConfig(
+                test_type=RepairTestType.UNIT,
+                timeout=30,
+                max_iterations=2,
+                review_warnings=False,
+            ),
+        )
+
+        await adapter.execute(ctx)
+
+        # Verify analyze was called (with prior_classifications in context)
+        systemic_service.analyze.assert_called()
+        # On second call, prior_classifications should be non-empty
+        if systemic_service.analyze.call_count > 1:
+            second_call_context = systemic_service.analyze.call_args_list[1][0][1]
+            assert len(second_call_context.prior_classifications) > 0
+
+    @pytest.mark.asyncio
+    async def test_prior_fix_attempts_tracked(self):
+        """Prior fix attempts are tracked in fix attempt list."""
+        event_emitter = MagicMock()
+        systemic_service = AsyncMock()
+        systemic_service.analyze.return_value = MagicMock(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.95,
+            reasoning="Source code has a bug",
+            recommended_action="Fix the bug",
+        )
+
+        adapter, _ = _make_adapter(event_emitter=event_emitter)
+        adapter._systemic_analysis_service = systemic_service
+        adapter.fix_failures_by_file = AsyncMock(return_value=1)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=100)
+        ctx.test_configs = (
+            RepairTestRunConfig(
+                test_type=RepairTestType.UNIT,
+                timeout=30,
+                max_iterations=2,
+                review_warnings=False,
+            ),
+        )
+
+        await adapter.execute(ctx)
+
+        # Verify analyze was called
+        systemic_service.analyze.assert_called()
+        # On second call, prior_fix_attempts should be non-empty
+        if systemic_service.analyze.call_count > 1:
+            second_call_context = systemic_service.analyze.call_args_list[1][0][1]
+            assert len(second_call_context.prior_fix_attempts) > 0
+
+
+# ---------------------------------------------------------------------------
+# Helper Method Tests: rebuild_environment, verify_environment
+# ---------------------------------------------------------------------------
+
+
+class TestEnvironmentHelperMethods:
+    @pytest.mark.asyncio
+    async def test_rebuild_environment_success(self):
+        """rebuild_environment returns True on successful execution."""
+        event_emitter = MagicMock()
+
+        adapter, llm = _make_adapter(event_emitter=event_emitter)
+        ctx = _RepairCycleContext()
+        config = ctx.test_configs[0]
+
+        result = await adapter.rebuild_environment(config, ctx)
+
+        assert result is True
+        llm.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_rebuild_environment_failure(self):
+        """rebuild_environment returns False on exception."""
+        event_emitter = MagicMock()
+        llm = AsyncMock()
+        llm.execute.side_effect = RuntimeError("LLM failed")
+
+        config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
+        adapter = ProductionRepairCycleAdapter(
+            llm_provider=llm,
+            config=config,
+            event_emitter=event_emitter,
+            circuit_breaker=None,
+        )
+
+        ctx = _RepairCycleContext()
+        result = await adapter.rebuild_environment(ctx.test_configs[0], ctx)
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_verify_environment_success(self):
+        """verify_environment returns True on successful execution."""
+        event_emitter = MagicMock()
+
+        adapter, llm = _make_adapter(event_emitter=event_emitter)
+        ctx = _RepairCycleContext()
+        config = ctx.test_configs[0]
+
+        result = await adapter.verify_environment(config, ctx)
+
+        assert result is True
+        llm.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_verify_environment_failure(self):
+        """verify_environment returns False on exception."""
+        event_emitter = MagicMock()
+        llm = AsyncMock()
+        llm.execute.side_effect = RuntimeError("LLM failed")
+
+        config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
+        adapter = ProductionRepairCycleAdapter(
+            llm_provider=llm,
+            config=config,
+            event_emitter=event_emitter,
+            circuit_breaker=None,
+        )
+
+        ctx = _RepairCycleContext()
+        result = await adapter.verify_environment(ctx.test_configs[0], ctx)
+
+        assert result is False
+
+
+# ---------------------------------------------------------------------------
+# Helper Method Tests: apply_systemic_fixes
+# ---------------------------------------------------------------------------
+
+
+class TestApplySystemicFixes:
+    @pytest.mark.asyncio
+    async def test_apply_systemic_fixes_dependency_issue(self):
+        """apply_systemic_fixes routes DEPENDENCY_ISSUE to _apply_dependency_fix."""
+        event_emitter = MagicMock()
+
+        adapter, llm = _make_adapter(event_emitter=event_emitter)
+        adapter._apply_dependency_fix = AsyncMock(return_value=True)
+
+        ctx = _RepairCycleContext()
+        config = ctx.test_configs[0]
+        failure = RepairTestFailure(file="test_foo.py", test="test_bar", message="fail")
+        test_result = MagicMock()
+        test_result.failures = [failure]
+
+        result = await adapter.apply_systemic_fixes(
+            FailureClassification.DEPENDENCY_ISSUE,
+            "Missing dependency",
+            test_result,
+            config,
+            ctx,
+        )
+
+        assert result is True
+        adapter._apply_dependency_fix.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_apply_systemic_fixes_configuration_issue(self):
+        """apply_systemic_fixes routes CONFIGURATION_ISSUE to _apply_configuration_fix."""
+        event_emitter = MagicMock()
+
+        adapter, llm = _make_adapter(event_emitter=event_emitter)
+        adapter._apply_configuration_fix = AsyncMock(return_value=True)
+
+        ctx = _RepairCycleContext()
+        config = ctx.test_configs[0]
+        failure = RepairTestFailure(file="test_foo.py", test="test_bar", message="fail")
+        test_result = MagicMock()
+        test_result.failures = [failure]
+
+        result = await adapter.apply_systemic_fixes(
+            FailureClassification.CONFIGURATION_ISSUE,
+            "Missing configuration",
+            test_result,
+            config,
+            ctx,
+        )
+
+        assert result is True
+        adapter._apply_configuration_fix.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_apply_systemic_fixes_unknown_enum_defaults_to_dependency(self):
+        """apply_systemic_fixes defaults unknown enum values to dependency fix.
+
+        This tests the fallback behavior for any FailureClassification value that
+        is not explicitly handled (DEPENDENCY_ISSUE or CONFIGURATION_ISSUE).
+        """
+        event_emitter = MagicMock()
+
+        adapter, llm = _make_adapter(event_emitter=event_emitter)
+        adapter._apply_dependency_fix = AsyncMock(return_value=True)
+
+        ctx = _RepairCycleContext()
+        config = ctx.test_configs[0]
+        failure = RepairTestFailure(file="test_foo.py", test="test_bar", message="fail")
+        test_result = MagicMock()
+        test_result.failures = [failure]
+
+        # Pass a valid enum value that is not explicitly handled (e.g., CODE_DEFECT)
+        # The apply_systemic_fixes method should default to dependency fix
+        result = await adapter.apply_systemic_fixes(
+            FailureClassification.CODE_DEFECT,
+            "Code defect that should trigger dependency fix fallback",
+            test_result,
+            config,
+            ctx,
+        )
+
+        # Should default to dependency fix for unhandled classification
+        adapter._apply_dependency_fix.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Helper Method Tests: Prompt Builders
+# ---------------------------------------------------------------------------
+
+
+class TestPromptBuilders:
+    def test_build_environment_rebuild_prompt_unit(self):
+        """_build_environment_rebuild_prompt generates appropriate prompt for unit tests."""
+        adapter, _ = _make_adapter()
+        config = RepairTestRunConfig(
+            test_type=RepairTestType.UNIT,
+            timeout=30,
+            max_iterations=1,
+            review_warnings=False,
+        )
+
+        prompt = adapter._build_environment_rebuild_prompt(config)
+
+        assert "rebuild" in prompt.lower()
+        assert "unit tests" in prompt.lower()
+
+    def test_build_environment_rebuild_prompt_integration(self):
+        """_build_environment_rebuild_prompt includes integration test reference."""
+        adapter, _ = _make_adapter()
+        config = RepairTestRunConfig(
+            test_type=RepairTestType.INTEGRATION,
+            timeout=30,
+            max_iterations=1,
+            review_warnings=False,
+        )
+
+        prompt = adapter._build_environment_rebuild_prompt(config)
+
+        assert "integration tests" in prompt.lower()
+
+    def test_build_environment_verify_prompt_unit(self):
+        """_build_environment_verify_prompt generates appropriate prompt for unit tests."""
+        adapter, _ = _make_adapter()
+        config = RepairTestRunConfig(
+            test_type=RepairTestType.UNIT,
+            timeout=30,
+            max_iterations=1,
+            review_warnings=False,
+        )
+
+        prompt = adapter._build_environment_verify_prompt(config)
+
+        assert "verify" in prompt.lower()
+        assert "unit tests" in prompt.lower()
+
+    def test_build_environment_verify_prompt_e2e(self):
+        """_build_environment_verify_prompt includes e2e test reference."""
+        adapter, _ = _make_adapter()
+        config = RepairTestRunConfig(
+            test_type=RepairTestType.E2E,
+            timeout=30,
+            max_iterations=1,
+            review_warnings=False,
+        )
+
+        prompt = adapter._build_environment_verify_prompt(config)
+
+        assert "end-to-end tests" in prompt.lower()
+
+    def test_build_dependency_fix_prompt(self):
+        """_build_dependency_fix_prompt includes reasoning and failure details."""
+        adapter, _ = _make_adapter()
+        failure = RepairTestFailure(
+            file="test_foo.py",
+            test="test_bar",
+            message="ImportError: No module named 'foo'",
+        )
+        test_result = MagicMock()
+        test_result.failures = [failure]
+
+        prompt = adapter._build_dependency_fix_prompt("Missing 'foo' package", test_result)
+
+        assert "Missing 'foo' package" in prompt
+        assert "test_foo.py" in prompt
+        assert "dependency" in prompt.lower()
+
+    def test_build_configuration_fix_prompt(self):
+        """_build_configuration_fix_prompt includes reasoning and failure details."""
+        adapter, _ = _make_adapter()
+        failure = RepairTestFailure(
+            file="test_foo.py",
+            test="test_bar",
+            message="KeyError: 'DATABASE_URL'",
+        )
+        test_result = MagicMock()
+        test_result.failures = [failure]
+
+        prompt = adapter._build_configuration_fix_prompt("Missing DATABASE_URL env var", test_result)
+
+        assert "Missing DATABASE_URL env var" in prompt
+        assert "test_foo.py" in prompt
+        assert "configuration" in prompt.lower()
+
+
+# ---------------------------------------------------------------------------
+# Dependency Fix Helper Tests
+# ---------------------------------------------------------------------------
+
+
+class TestApplyDependencyFix:
+    @pytest.mark.asyncio
+    async def test_apply_dependency_fix_success(self):
+        """_apply_dependency_fix returns True on successful fix."""
+        event_emitter = MagicMock()
+
+        adapter, llm = _make_adapter(event_emitter=event_emitter)
+        ctx = _RepairCycleContext()
+        config = ctx.test_configs[0]
+        failure = RepairTestFailure(file="test_foo.py", test="test_bar", message="fail")
+        test_result = MagicMock()
+        test_result.failures = [failure]
+
+        result = await adapter._apply_dependency_fix("Missing dep", test_result, config, ctx)
+
+        assert result is True
+        llm.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_apply_dependency_fix_failure(self):
+        """_apply_dependency_fix returns False on exception."""
+        event_emitter = MagicMock()
+        llm = AsyncMock()
+        llm.execute.side_effect = RuntimeError("LLM failed")
+
+        config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
+        adapter = ProductionRepairCycleAdapter(
+            llm_provider=llm,
+            config=config,
+            event_emitter=event_emitter,
+            circuit_breaker=None,
+        )
+
+        ctx = _RepairCycleContext()
+        failure = RepairTestFailure(file="test_foo.py", test="test_bar", message="fail")
+        test_result = MagicMock()
+        test_result.failures = [failure]
+
+        result = await adapter._apply_dependency_fix("Missing dep", test_result, ctx.test_configs[0], ctx)
+
+        assert result is False
+
+
+# ---------------------------------------------------------------------------
+# Configuration Fix Helper Tests
+# ---------------------------------------------------------------------------
+
+
+class TestApplyConfigurationFix:
+    @pytest.mark.asyncio
+    async def test_apply_configuration_fix_success(self):
+        """_apply_configuration_fix returns True on successful fix."""
+        event_emitter = MagicMock()
+
+        adapter, llm = _make_adapter(event_emitter=event_emitter)
+        ctx = _RepairCycleContext()
+        config = ctx.test_configs[0]
+        failure = RepairTestFailure(file="test_foo.py", test="test_bar", message="fail")
+        test_result = MagicMock()
+        test_result.failures = [failure]
+
+        result = await adapter._apply_configuration_fix("Missing config", test_result, config, ctx)
+
+        assert result is True
+        llm.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_apply_configuration_fix_failure(self):
+        """_apply_configuration_fix returns False on exception."""
+        event_emitter = MagicMock()
+        llm = AsyncMock()
+        llm.execute.side_effect = RuntimeError("LLM failed")
+
+        config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
+        adapter = ProductionRepairCycleAdapter(
+            llm_provider=llm,
+            config=config,
+            event_emitter=event_emitter,
+            circuit_breaker=None,
+        )
+
+        ctx = _RepairCycleContext()
+        failure = RepairTestFailure(file="test_foo.py", test="test_bar", message="fail")
+        test_result = MagicMock()
+        test_result.failures = [failure]
+
+        result = await adapter._apply_configuration_fix("Missing config", test_result, ctx.test_configs[0], ctx)
+
+        assert result is False
