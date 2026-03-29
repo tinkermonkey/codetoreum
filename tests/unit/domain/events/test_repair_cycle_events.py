@@ -1059,7 +1059,7 @@ class TestSystemicAnalysisCompletedEvent:
                 type="repair_cycle.systemic_analysis_completed",
                 timestamp=now_iso(),
                 source="repair_cycle",
-                classification=FailureClassification.CODE_DEFECT,
+                classification=FailureClassification.CODE_DEFECT.value,
                 confidence=0.95,
                 reasoning="Some reason",
                 recommended_action="Some action",
@@ -1075,7 +1075,7 @@ class TestSystemicAnalysisCompletedEvent:
                 type="repair_cycle.systemic_analysis_completed",
                 timestamp=now_iso(),
                 source="repair_cycle",
-                classification=FailureClassification.CODE_DEFECT,
+                classification=FailureClassification.CODE_DEFECT.value,
                 confidence=0.95,
                 reasoning="Some reason",
                 recommended_action="Some action",
@@ -1144,7 +1144,7 @@ class TestSystemicAnalysisCompletedEvent:
         }
 
         event = SystemicAnalysisCompletedEvent.from_dict(d)
-        assert event.classification == FailureClassification.DEPENDENCY_ISSUE
+        assert event.classification == FailureClassification.DEPENDENCY_ISSUE.value
         assert event.confidence == 0.85
         assert event.reasoning == "Multiple dependencies fail to resolve"
         assert event.recommended_action == "Update dependency versions"
@@ -1163,7 +1163,7 @@ class TestSystemicAnalysisCompletedEvent:
         }
 
         event = SystemicAnalysisCompletedEvent.from_dict(d)
-        assert event.classification == FailureClassification.CODE_DEFECT
+        assert event.classification == FailureClassification.CODE_DEFECT.value
         assert event.confidence == 0.0
         assert event.reasoning == ""
         assert event.recommended_action == ""
@@ -1175,7 +1175,7 @@ class TestSystemicAnalysisCompletedEvent:
             type="repair_cycle.systemic_analysis_completed",
             timestamp=now_iso(),
             source="repair_cycle",
-            classification=FailureClassification.CONFIGURATION_ISSUE,
+            classification=FailureClassification.CONFIGURATION_ISSUE.value,
             confidence=0.92,
             reasoning="Configuration mismatch between test environments",
             recommended_action="Standardize test configuration",
@@ -1203,7 +1203,7 @@ class TestSystemicAnalysisCompletedEvent:
             type="repair_cycle.systemic_analysis_completed",
             timestamp=now_iso(),
             source="repair_cycle",
-            classification=FailureClassification.ENVIRONMENT_ISSUE,
+            classification=FailureClassification.ENVIRONMENT_ISSUE.value,
             confidence=0.0,
             work_item_id="issue-123",
             workflow_run_id="run-456",
@@ -1215,7 +1215,7 @@ class TestSystemicAnalysisCompletedEvent:
             type="repair_cycle.systemic_analysis_completed",
             timestamp=now_iso(),
             source="repair_cycle",
-            classification=FailureClassification.CODE_DEFECT,
+            classification=FailureClassification.CODE_DEFECT.value,
             confidence=1.0,
             work_item_id="issue-123",
             workflow_run_id="run-456",
@@ -1227,7 +1227,7 @@ class TestSystemicAnalysisCompletedEvent:
             type="repair_cycle.systemic_analysis_completed",
             timestamp=now_iso(),
             source="repair_cycle",
-            classification=FailureClassification.CODE_DEFECT,
+            classification=FailureClassification.CODE_DEFECT.value,
             confidence=0.5,
             work_item_id="issue-123",
             workflow_run_id="run-456",
@@ -1240,7 +1240,7 @@ class TestSystemicAnalysisCompletedEvent:
             type="repair_cycle.systemic_analysis_completed",
             timestamp=now_iso(),
             source="repair_cycle",
-            classification=FailureClassification.CODE_DEFECT,
+            classification=FailureClassification.CODE_DEFECT.value,
             confidence=0.95,
             reasoning="Test failure analysis",
             recommended_action="Fix code issue",
@@ -1290,7 +1290,7 @@ class TestSystemicAnalysisCompletedEvent:
                 type="repair_cycle.systemic_analysis_completed",
                 timestamp=now_iso(),
                 source="repair_cycle",
-                classification=FailureClassification.CODE_DEFECT,
+                classification=FailureClassification.CODE_DEFECT.value,
                 confidence=1.5,
                 work_item_id="issue-123",
                 workflow_run_id="run-456",
@@ -1303,7 +1303,7 @@ class TestSystemicAnalysisCompletedEvent:
                 type="repair_cycle.systemic_analysis_completed",
                 timestamp=now_iso(),
                 source="repair_cycle",
-                classification=FailureClassification.CODE_DEFECT,
+                classification=FailureClassification.CODE_DEFECT.value,
                 confidence=-0.1,
                 work_item_id="issue-123",
                 workflow_run_id="run-456",

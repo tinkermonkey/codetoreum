@@ -1437,7 +1437,7 @@ class SystemicAnalysisCompletedEvent(CodetoreumEvent):
     def __post_init__(self) -> None:
         """Validate event after initialization."""
         super().__post_init__()
-        if not isinstance(self.classification, str):
+        if type(self.classification) is not str:
             msg = "classification must be a string"
             raise ValueError(msg)
         # Validate that classification is a valid FailureClassification value
