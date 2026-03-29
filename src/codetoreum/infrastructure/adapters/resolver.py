@@ -372,6 +372,11 @@ class AdapterResolver:
 
                 systemic_analysis_service = LLMSystemicAnalysisAdapter(llm_provider=llm_provider)
                 logger.info("Created LLMSystemicAnalysisAdapter for production repair cycle")
+            else:
+                logger.warning(
+                    "Production repair cycle configured but llm_provider is not resolved. "
+                    "Systemic analysis service will be None. Check that llm provider is properly configured."
+                )
 
         return self._factory.create_repair_cycle(
             adapter_name=self._config.repair_cycle,
