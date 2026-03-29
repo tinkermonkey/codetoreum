@@ -1471,12 +1471,21 @@ class SystemicAnalysisCompletedEvent(CodetoreumEvent):
         """Deserialize from dictionary with backward compatibility.
 
         Raises:
-            ValueError: If required fields (work_item_id, workflow_run_id) are missing
-                       or if classification is not a valid FailureClassification.
+            ValueError: If required fields (work_item_id, workflow_run_id) are missing.
         """
         classification_value = data.get("classification")
         if isinstance(classification_value, str):
-            classification = FailureClassification(classification_value)
+            try:
+                classification = FailureClassification(classification_value)
+            except ValueError:
+                # Invalid or unknown classification string (e.g., corrupted event store,
+                # future enum value) - safely default to CODE_DEFECT
+                logger.warning(
+                    "Invalid classification value during deserialization: %s. "
+                    "Defaulting to CODE_DEFECT.",
+                    classification_value,
+                )
+                classification = FailureClassification.CODE_DEFECT
         elif isinstance(classification_value, FailureClassification):
             classification = classification_value
         else:

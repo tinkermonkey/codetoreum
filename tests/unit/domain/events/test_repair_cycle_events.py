@@ -1308,3 +1308,37 @@ class TestSystemicAnalysisCompletedEvent:
                 work_item_id="issue-123",
                 workflow_run_id="run-456",
             )
+
+    def test_deserialization_invalid_classification_string(self):
+        """Test that invalid classification string defaults to CODE_DEFECT."""
+        d = {
+            "type": "repair_cycle.systemic_analysis_completed",
+            "timestamp": now_iso(),
+            "source": "repair_cycle",
+            "classification": "invalid_classification",
+            "confidence": 0.5,
+            "reasoning": "Some reasoning",
+            "recommended_action": "Some action",
+            "work_item_id": "issue-123",
+            "workflow_run_id": "run-456",
+            "failure_count": 3,
+        }
+
+        event = SystemicAnalysisCompletedEvent.from_dict(d)
+        # Should default to CODE_DEFECT instead of raising ValueError
+        assert event.classification == FailureClassification.CODE_DEFECT
+
+    def test_deserialization_future_enum_value(self):
+        """Test that future/unknown enum values default to CODE_DEFECT."""
+        d = {
+            "type": "repair_cycle.systemic_analysis_completed",
+            "timestamp": now_iso(),
+            "source": "repair_cycle",
+            "classification": "future_classification_type",
+            "work_item_id": "issue-123",
+            "workflow_run_id": "run-456",
+        }
+
+        event = SystemicAnalysisCompletedEvent.from_dict(d)
+        # Should default to CODE_DEFECT for unknown enum values
+        assert event.classification == FailureClassification.CODE_DEFECT
