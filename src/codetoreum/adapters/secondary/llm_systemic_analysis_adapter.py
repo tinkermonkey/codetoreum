@@ -203,7 +203,7 @@ Respond with JSON only (no markdown, no additional text):
                 self._llm_provider.execute(prompt, context=execution_context),
                 timeout=execution_context.timeout_seconds,
             )
-        except asyncio.TimeoutError as e:
+        except TimeoutError as e:
             self._logger.error(
                 "LLM systemic analysis execution timed out",
                 extra={
