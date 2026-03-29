@@ -733,6 +733,22 @@ class TestClassifierExceptionFallback:
         # Should fall back to fix_failures_by_file
         adapter.fix_failures_by_file.assert_called()
 
+        # Verify both SystemicAnalysisStartedEvent and CompletedEvent are emitted
+        # to maintain event lifecycle consistency
+        emitted_types = [call.args[0].type for call in event_emitter.emit.call_args_list]
+        assert "repair_cycle.systemic_analysis_started" in emitted_types
+        assert "repair_cycle.systemic_analysis_completed" in emitted_types
+
+        # Verify the completed event indicates failure (confidence=0.0)
+        completed_events = [
+            call.args[0]
+            for call in event_emitter.emit.call_args_list
+            if call.args[0].type == "repair_cycle.systemic_analysis_completed"
+        ]
+        assert len(completed_events) >= 1
+        # At least one completed event should have zero confidence (the failed one)
+        assert any(evt.confidence == 0.0 for evt in completed_events)
+
     @pytest.mark.asyncio
     async def test_no_systemic_service_uses_fallback(self):
         """No systemic service injected uses fallback to fix_failures_by_file."""

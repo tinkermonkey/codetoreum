@@ -1664,15 +1664,31 @@ Return a JSON response with the status of configuration fixes applied."""
                                     f"Iteration {iteration}: {classification.classification.value} classified, applied systemic fixes"
                                 )
                         except Exception as e:
-                            # Classifier failure: fall back to existing behavior to preserve repair cycle resilience
+                            # Classifier failure: emit failed event and fall back to existing behavior
+                            error_msg = str(e)
                             logger.warning(
                                 "Systemic analysis failed; falling back to fix_failures_by_file()",
                                 extra={
                                     "workflow_run_id": context.workflow_run_id,
                                     "iteration": iteration,
-                                    "error": str(e),
+                                    "error": error_msg,
                                 },
                                 exc_info=True,
+                            )
+                            # Emit failed completion event to close out the started event
+                            self.event_emitter.emit(
+                                SystemicAnalysisCompletedEvent(
+                                    type="repair_cycle.systemic_analysis_completed",
+                                    timestamp=datetime.now(UTC).isoformat(),
+                                    source="production_repair_cycle",
+                                    classification=FailureClassification.CODE_DEFECT,
+                                    confidence=0.0,  # Zero confidence indicates failure
+                                    reasoning=f"Analysis failed with error: {error_msg}",
+                                    recommended_action="Fell back to fix_failures_by_file() due to analysis error",
+                                    work_item_id=context.work_item_id,
+                                    workflow_run_id=context.workflow_run_id,
+                                    failure_count=len(test_result.failures),
+                                )
                             )
                             grouped = self._group_failures_by_file(test_result.failures)
                             files_fixed += await self.fix_failures_by_file(grouped, config, context)
