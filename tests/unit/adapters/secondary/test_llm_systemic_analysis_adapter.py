@@ -694,7 +694,7 @@ class TestBoundaryConditions:
 
     @pytest.mark.asyncio
     async def test_json_followed_by_trailing_commentary_with_braces(self):
-        """JSON followed by commentary with braces is parsed correctly.
+        r"""JSON followed by commentary with braces is parsed correctly.
 
         Tests the fix for greedy regex issue where r"\{.*\}" would capture
         from first { to last } in response, including commentary after JSON.
@@ -745,8 +745,8 @@ Additional analysis: The problem is in the try-except {block} where {error handl
         result = await adapter.analyze(failures, context)
 
         assert result.classification == FailureClassification.ENVIRONMENT_ISSUE
-        assert 'DATABASE_URL' in result.reasoning
-        assert 'DATABASE_URL' in result.recommended_action
+        assert "DATABASE_URL" in result.reasoning
+        assert "DATABASE_URL" in result.recommended_action
 
     @pytest.mark.asyncio
     async def test_nested_braces_in_reasoning_string(self):
