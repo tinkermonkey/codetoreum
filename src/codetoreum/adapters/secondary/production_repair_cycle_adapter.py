@@ -1397,23 +1397,22 @@ Return a JSON response with the status of configuration fixes applied."""
                 return await self._apply_dependency_fix(
                     reasoning, test_result, config, context
                 )
-            elif classification == FailureClassification.CONFIGURATION_ISSUE:
+            if classification == FailureClassification.CONFIGURATION_ISSUE:
                 return await self._apply_configuration_fix(
                     reasoning, test_result, config, context
                 )
-            else:
-                # Fallback to dependency fix if classification is unknown
-                logger.warning(
-                    "Unknown systemic fix classification; defaulting to dependency fix",
-                    extra={
-                        "workflow_run_id": context.workflow_run_id,
-                        "classification": classification.value if classification else "none",
-                    },
-                    exc_info=False,
-                )
-                return await self._apply_dependency_fix(
-                    reasoning, test_result, config, context
-                )
+            # Fallback to dependency fix if classification is unknown
+            logger.warning(
+                "Unknown systemic fix classification; defaulting to dependency fix",
+                extra={
+                    "workflow_run_id": context.workflow_run_id,
+                    "classification": classification.value if classification else "none",
+                },
+                exc_info=False,
+            )
+            return await self._apply_dependency_fix(
+                reasoning, test_result, config, context
+            )
 
         except Exception as e:
             logger.error(
