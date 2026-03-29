@@ -25,7 +25,6 @@ from codetoreum.domain.repair_cycle_types import (
 )
 from codetoreum.ports.output.llm_provider import ExecutionResult
 
-
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------

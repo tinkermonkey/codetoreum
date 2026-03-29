@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from codetoreum.ports.output.llm_provider import ILLMProvider
