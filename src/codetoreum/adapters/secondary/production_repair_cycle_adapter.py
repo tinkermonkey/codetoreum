@@ -1636,7 +1636,7 @@ Return a JSON response with the status of configuration fixes applied."""
                                     type="repair_cycle.systemic_analysis_completed",
                                     timestamp=datetime.now(UTC).isoformat(),
                                     source="production_repair_cycle",
-                                    classification=classification.classification,
+                                    classification=classification.classification.value,
                                     confidence=classification.confidence,
                                     reasoning=classification.reasoning,
                                     recommended_action=classification.recommended_action,
@@ -1721,7 +1721,7 @@ Return a JSON response with the status of configuration fixes applied."""
                                     type="repair_cycle.systemic_analysis_completed",
                                     timestamp=datetime.now(UTC).isoformat(),
                                     source="production_repair_cycle",
-                                    classification=FailureClassification.CODE_DEFECT,
+                                    classification=FailureClassification.CODE_DEFECT.value,
                                     confidence=0.0,  # Zero confidence indicates failure
                                     reasoning=f"Analysis failed with error: {error_msg}",
                                     recommended_action="Fell back to fix_failures_by_file() due to analysis error",

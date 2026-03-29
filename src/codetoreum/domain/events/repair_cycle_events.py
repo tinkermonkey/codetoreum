@@ -1416,7 +1416,7 @@ class SystemicAnalysisCompletedEvent(CodetoreumEvent):
 
     Attributes:
         type (str): Fixed to "repair_cycle.systemic_analysis_completed"
-        classification (FailureClassification): Classification of root cause
+        classification (str): Classification of root cause (FailureClassification enum value)
         confidence (float): Confidence level of classification (0.0 to 1.0)
         reasoning (str): Explanation of the classification reasoning
         recommended_action (str): Recommended action to resolve the issue
@@ -1426,7 +1426,7 @@ class SystemicAnalysisCompletedEvent(CodetoreumEvent):
         timestamp (str): ISO 8601 timestamp when analysis completed
     """
 
-    classification: FailureClassification = FailureClassification.CODE_DEFECT
+    classification: str = FailureClassification.CODE_DEFECT.value
     confidence: float = 0.0
     reasoning: str = ""
     recommended_action: str = ""
@@ -1437,8 +1437,13 @@ class SystemicAnalysisCompletedEvent(CodetoreumEvent):
     def __post_init__(self) -> None:
         """Validate event after initialization."""
         super().__post_init__()
-        if not isinstance(self.classification, FailureClassification):
-            msg = "classification must be a FailureClassification"
+        if not isinstance(self.classification, str):
+            msg = "classification must be a string"
+            raise ValueError(msg)
+        # Validate that classification is a valid FailureClassification value
+        valid_values = {fc.value for fc in FailureClassification}
+        if self.classification not in valid_values:
+            msg = f"classification '{self.classification}' is not a valid FailureClassification"
             raise ValueError(msg)
         if not 0.0 <= self.confidence <= 1.0:
             msg = "confidence must be between 0.0 and 1.0"
@@ -1455,7 +1460,7 @@ class SystemicAnalysisCompletedEvent(CodetoreumEvent):
         d = super().to_dict()
         d.update(
             {
-                "classification": self.classification.value,
+                "classification": self.classification,
                 "confidence": self.confidence,
                 "reasoning": self.reasoning,
                 "recommended_action": self.recommended_action,
@@ -1475,8 +1480,11 @@ class SystemicAnalysisCompletedEvent(CodetoreumEvent):
         """
         classification_value = data.get("classification")
         if isinstance(classification_value, str):
+            # Validate that the string is a valid FailureClassification value
             try:
-                classification = FailureClassification(classification_value)
+                # Attempt to construct the enum to validate the value exists
+                FailureClassification(classification_value)
+                classification = classification_value
             except ValueError:
                 # Invalid or unknown classification string (e.g., corrupted event store,
                 # future enum value) - safely default to CODE_DEFECT
@@ -1485,11 +1493,12 @@ class SystemicAnalysisCompletedEvent(CodetoreumEvent):
                     "Defaulting to CODE_DEFECT.",
                     classification_value,
                 )
-                classification = FailureClassification.CODE_DEFECT
+                classification = FailureClassification.CODE_DEFECT.value
         elif isinstance(classification_value, FailureClassification):
-            classification = classification_value
+            # Handle migration from old enum format
+            classification = classification_value.value
         else:
-            classification = FailureClassification.CODE_DEFECT
+            classification = FailureClassification.CODE_DEFECT.value
 
         return cls(
             type=data.get("type", "repair_cycle.systemic_analysis_completed"),

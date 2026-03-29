@@ -1017,7 +1017,7 @@ class TestSystemicAnalysisCompletedEvent:
             type="repair_cycle.systemic_analysis_completed",
             timestamp=timestamp,
             source="repair_cycle",
-            classification=FailureClassification.CODE_DEFECT,
+            classification=FailureClassification.CODE_DEFECT.value,
             confidence=0.95,
             reasoning="Consistent failure pattern in test file suggests code logic error",
             recommended_action="Apply code fix and re-run tests",
@@ -1026,7 +1026,7 @@ class TestSystemicAnalysisCompletedEvent:
             failure_count=5,
         )
 
-        assert event.classification == FailureClassification.CODE_DEFECT
+        assert event.classification == "code_defect"
         assert event.confidence == 0.95
         assert event.reasoning == "Consistent failure pattern in test file suggests code logic error"
         assert event.recommended_action == "Apply code fix and re-run tests"
@@ -1034,13 +1034,13 @@ class TestSystemicAnalysisCompletedEvent:
         assert event.workflow_run_id == "run-456"
         assert event.failure_count == 5
 
-    def test_classification_enum(self):
-        """Test that classification is a FailureClassification enum."""
+    def test_classification_string(self):
+        """Test that classification is stored as a string."""
         event = SystemicAnalysisCompletedEvent(
             type="repair_cycle.systemic_analysis_completed",
             timestamp=now_iso(),
             source="repair_cycle",
-            classification=FailureClassification.ENVIRONMENT_ISSUE,
+            classification=FailureClassification.ENVIRONMENT_ISSUE.value,
             confidence=0.8,
             reasoning="Tests pass in local environment but fail in CI",
             recommended_action="Verify CI environment setup",
@@ -1049,8 +1049,8 @@ class TestSystemicAnalysisCompletedEvent:
             failure_count=3,
         )
 
-        assert isinstance(event.classification, FailureClassification)
-        assert event.classification == FailureClassification.ENVIRONMENT_ISSUE
+        assert isinstance(event.classification, str)
+        assert event.classification == "environment_issue"
 
     def test_missing_work_item_id(self):
         """Test that work_item_id is required."""
@@ -1094,7 +1094,7 @@ class TestSystemicAnalysisCompletedEvent:
             workflow_run_id="run-456",
         )
 
-        assert event.classification == FailureClassification.CODE_DEFECT
+        assert event.classification == "code_defect"
         assert event.confidence == 0.0
         assert event.reasoning == ""
         assert event.recommended_action == ""
@@ -1107,7 +1107,7 @@ class TestSystemicAnalysisCompletedEvent:
             type="repair_cycle.systemic_analysis_completed",
             timestamp=timestamp,
             source="repair_cycle",
-            classification=FailureClassification.TRANSIENT_FAILURE,
+            classification=FailureClassification.TRANSIENT_FAILURE.value,
             confidence=0.6,
             reasoning="Intermittent failures suggest flaky test or transient resource issue",
             recommended_action="Retry execution or investigate resource contention",
@@ -1271,8 +1271,8 @@ class TestSystemicAnalysisCompletedEvent:
             event.failure_count = 10  # type: ignore
 
     def test_invalid_classification(self):
-        """Test that invalid classification type raises ValueError."""
-        with pytest.raises(ValueError, match="classification must be a FailureClassification"):
+        """Test that invalid classification value raises ValueError."""
+        with pytest.raises(ValueError, match="is not a valid FailureClassification"):
             SystemicAnalysisCompletedEvent(
                 type="repair_cycle.systemic_analysis_completed",
                 timestamp=now_iso(),
