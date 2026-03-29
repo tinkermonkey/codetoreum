@@ -581,8 +581,9 @@ class TestClassificationDispatchTransientFailure:
         event_emitter = MagicMock()
         systemic_service = AsyncMock()
 
-        # Sequence: TRANSIENT_FAILURE twice (escalates on 3rd), then CODE_DEFECT
-        # (resets counter), then TRANSIENT_FAILURE again (should retry, not escalate)
+        # Sequence: 3 consecutive TRANSIENT_FAILURE classifications trigger escalation
+        # (counter reaches 3 > max_consecutive_transient=2), then counter resets.
+        # Subsequent TRANSIENT_FAILURE classifications restart counting without escalating.
         systemic_service.analyze.side_effect = [
             MagicMock(
                 classification=FailureClassification.TRANSIENT_FAILURE,
@@ -597,21 +598,21 @@ class TestClassificationDispatchTransientFailure:
                 recommended_action="Retry",
             ),
             MagicMock(
-                classification=FailureClassification.CODE_DEFECT,
-                confidence=0.95,
-                reasoning="Code defect from escalation",
-                recommended_action="Fix the bug",
-            ),
-            MagicMock(
                 classification=FailureClassification.TRANSIENT_FAILURE,
                 confidence=0.8,
-                reasoning="Flaky test 3 (after escalation)",
+                reasoning="Flaky test 3 (escalation triggers on 3rd consecutive)",
                 recommended_action="Retry",
             ),
             MagicMock(
                 classification=FailureClassification.TRANSIENT_FAILURE,
                 confidence=0.8,
-                reasoning="Flaky test 4 (would escalate if counter not reset)",
+                reasoning="Flaky test 4 (counter resets to 1 after escalation)",
+                recommended_action="Retry",
+            ),
+            MagicMock(
+                classification=FailureClassification.TRANSIENT_FAILURE,
+                confidence=0.8,
+                reasoning="Flaky test 5 (counter at 2, below escalation threshold)",
                 recommended_action="Retry",
             ),
         ]
