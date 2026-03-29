@@ -61,6 +61,7 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestRunConfig,
     RepairTestType,
     RepairTestWarning,
+    SystemicAnalysisResult,
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.resilience.exceptions import CircuitBreakerOpenError
@@ -1205,7 +1206,7 @@ Return a JSON response with the status of fixes applied."""
         error = None
         start_time = datetime.now(UTC)
         prior_fix_attempts: list[str] = []  # Track descriptions of fix attempts
-        prior_classifications: list = []  # Track prior SystemicAnalysisResult objects
+        prior_classifications: list[SystemicAnalysisResult] = []  # Track prior SystemicAnalysisResult objects
         consecutive_transient_failures = 0  # Track consecutive TRANSIENT_FAILURE classifications
         max_consecutive_transient = 2  # Escalate after 2 consecutive transient failures
 

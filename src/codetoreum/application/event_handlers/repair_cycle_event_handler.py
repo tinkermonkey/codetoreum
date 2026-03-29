@@ -174,7 +174,7 @@ class RepairCycleEventHandler(EventHandler):
             # Create repair cycle context
             context = RepairCycleEventContext(
                 stage_name="Testing",
-                workflow_run_id=work_item_id,
+                workflow_run_id=work_item_id,  # TODO: derive actual workflow_run_id once pipeline run tracking is available
                 work_item_id=work_item_id,
                 test_configs=(
                     RepairTestRunConfig(test_type=RepairTestType.UNIT),
