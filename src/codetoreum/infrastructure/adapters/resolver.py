@@ -41,6 +41,7 @@ from codetoreum.ports.output.repair_cycle_service import IRepairCycle
 from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.review_cycle_service import IReviewCycle
 from codetoreum.ports.output.storage import IStorage
+from codetoreum.ports.output.systemic_analysis_service import ISystemicAnalysisService
 from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.version_control_service import IVersionControlService
 from codetoreum.ports.output.work_item_branch_tracker import IWorkItemBranchTracker
@@ -345,10 +346,10 @@ class AdapterResolver:
         Special handling for SimulationEngine-coupled adapters:
         - If mock variant selected: use engine to create time-aware mock
         - If real variant: create directly without engine
-        - For production repair cycle: instantiate LLMSystemicAnalysisAdapter with llm_provider
 
-        The resolver creates LLMSystemicAnalysisAdapter in production to avoid dual-instance
-        bugs and ensure proper dependency injection at construction time.
+        The systemic_analysis_service is resolved separately in resolve_all() before
+        repair_cycle creation to ensure centralized adapter resolution and proper
+        dependency injection at construction time.
         """
         if self._config.repair_cycle == "mock":
             # Engine creates time-aware mock with optional dependencies
@@ -359,23 +360,8 @@ class AdapterResolver:
                 container_adapter=container_adapter,
             )
         # Real adapter: bypass engine, use factory directly
-        # Instantiate systemic_analysis_service for production repair cycle
-        systemic_analysis_service = None
-        if self._config.repair_cycle == "production":
-            # LLM provider is already resolved at this point
-            llm_provider = self._resolved.get("llm")
-            if llm_provider:
-                from codetoreum.adapters.secondary.llm_systemic_analysis_adapter import (
-                    LLMSystemicAnalysisAdapter,
-                )
-
-                systemic_analysis_service = LLMSystemicAnalysisAdapter(llm_provider=llm_provider)
-                logger.info("Created LLMSystemicAnalysisAdapter for production repair cycle")
-            else:
-                logger.warning(
-                    "Production repair cycle configured but llm_provider is not resolved. "
-                    "Systemic analysis service will be None. Check that llm provider is properly configured."
-                )
+        # Use the pre-resolved systemic_analysis_service (resolved in phase 9)
+        systemic_analysis_service = self._resolved.get("systemic_analysis_service")
 
         return self._factory.create_repair_cycle(
             adapter_name=self._config.repair_cycle,
@@ -395,6 +381,42 @@ class AdapterResolver:
             adapter_name=self._config.container_recovery,
             time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
         )
+
+    def resolve_systemic_analysis_service(self) -> ISystemicAnalysisService:
+        """Resolve systemic analysis service adapter.
+
+        Returns the appropriate adapter based on configuration:
+        - For production: LLMSystemicAnalysisAdapter with LLM provider
+        - For simulation: MockSystemicAnalysisAdapter for deterministic testing
+        - Falls back to default mock if not explicitly configured
+
+        Returns:
+            ISystemicAnalysisService implementation
+        """
+        # In simulation, we'll use MockSystemicAnalysisAdapter
+        # In production, LLMSystemicAnalysisAdapter is created with the resolved LLM provider
+        if self._config.repair_cycle == "production":
+            llm_provider = self._resolved.get("llm")
+            if llm_provider:
+                from codetoreum.adapters.secondary.llm_systemic_analysis_adapter import (
+                    LLMSystemicAnalysisAdapter,
+                )
+
+                adapter = LLMSystemicAnalysisAdapter(llm_provider=llm_provider)
+                logger.info("Created LLMSystemicAnalysisAdapter for production systemic analysis")
+                return adapter
+            else:
+                logger.warning(
+                    "Production repair cycle configured but llm_provider is not resolved. "
+                    "Falling back to mock adapter for systemic analysis."
+                )
+
+        # Simulation or fallback: use mock adapter
+        from codetoreum.adapters.testing import MockSystemicAnalysisAdapter
+
+        adapter = MockSystemicAnalysisAdapter()
+        logger.info("Created MockSystemicAnalysisAdapter for systemic analysis")
+        return adapter
 
     def resolve_repository(self) -> IRepository:
         """Resolve repository adapter.
@@ -468,13 +490,15 @@ class AdapterResolver:
         # 8. Repository adapter (depends on event_emitter)
         self._resolved["repository"] = self.resolve_repository()
 
-        # 9. Review and repair cycles depend on previously resolved adapters
-        # (review_cycle depends on llm, repair_cycle depends on checkpoint_store and container)
-        # Note: systemic_analysis_service is wired by bootstrap post-processing
+        # 9. Systemic analysis service (depends on llm, used by repair_cycle)
+        self._resolved["systemic_analysis_service"] = self.resolve_systemic_analysis_service()
+
+        # 10. Review and repair cycles depend on previously resolved adapters
+        # (review_cycle depends on llm, repair_cycle depends on checkpoint_store, container, and systemic_analysis_service)
         self._resolved["review_cycle"] = self.resolve_review_cycle()
         self._resolved["repair_cycle"] = self.resolve_repair_cycle()
 
-        # 10. Code review and container recovery adapters
+        # 11. Code review and container recovery adapters
         self._resolved["code_review"] = self.resolve_code_review()
         self._resolved["container_recovery"] = self.resolve_container_recovery()
 
@@ -522,6 +546,6 @@ class AdapterResolver:
             work_item_service=self._resolved["work_item_service"],
             # Container recovery
             container_recovery=self._resolved["container_recovery"],
-            # Systemic analysis service (injected by bootstrap post-processing)
-            systemic_analysis_service=None,
+            # Systemic analysis service (resolved in phase 9)
+            systemic_analysis_service=self._resolved["systemic_analysis_service"],
         )
