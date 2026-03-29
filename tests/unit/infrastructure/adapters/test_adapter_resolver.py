@@ -265,7 +265,8 @@ class TestAdapterResolver:
         # All adapter fields should be non-None (except optional ones)
         import dataclasses
 
-        optional_fields = {"agent_executor", "audit_store", "tracer"}
+        # Optional fields are injected by bootstrap post-processing
+        optional_fields = {"agent_executor", "audit_store", "tracer", "systemic_analysis_service"}
         for field in dataclasses.fields(result):
             adapter = getattr(result, field.name)
             if field.name not in optional_fields:
@@ -280,8 +281,8 @@ class TestAdapterResolver:
 
         # result is a SimulationAdapters dataclass, not a dict
         assert isinstance(result, SimulationAdapters)
-        # The internal _resolved dict should have 30 entries (29 via AdapterResolver + systemic_analysis_service)
-        assert len(resolver._resolved) == 30
+        # The internal _resolved dict should have 29 entries (systemic_analysis_service is injected by bootstrap post-processing)
+        assert len(resolver._resolved) == 29
 
     def test_resolve_all_respects_dependency_order(self, factory, dependencies, adapter_config):
         """Test that adapters are resolved in dependency order."""
@@ -900,7 +901,8 @@ class TestAdapterResolverIntegration:
         assert isinstance(result, SimulationAdapters)
         import dataclasses
 
-        optional_fields = {"agent_executor", "audit_store", "tracer"}
+        # Optional fields are injected by bootstrap post-processing
+        optional_fields = {"agent_executor", "audit_store", "tracer", "systemic_analysis_service"}
         for field in dataclasses.fields(result):
             adapter = getattr(result, field.name)
             if field.name not in optional_fields:

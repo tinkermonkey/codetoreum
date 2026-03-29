@@ -5,7 +5,7 @@ Wires up the entire application stack in simulation mode through 6 phases:
 
 **Phase 0**: Create simulation engine (encapsulates clock and timing)
 **Phase 1**: Create infrastructure (event bus, logger, error registry) - EARLY for event subscriptions
-**Phase 2**: Create adapters (30 adapters: 29 via AdapterResolver + MockSystemicAnalysisAdapter)
+**Phase 2**: Create adapters (30 adapters: 29 via AdapterResolver + systemic_analysis_service injected in post-processing)
            Includes: ticket system, LLM, container, repository, event store, metrics, storage, config,
            notifier, encryption, board, repair cycle, project manager, lock service, workflow config,
            agent executor, version control, message broker, discussion, review cycle, identity service,
@@ -80,6 +80,9 @@ from codetoreum.adapters.secondary.failed_event_store_adapter import (
 )
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
+)
+from codetoreum.adapters.secondary.production_repair_cycle_adapter import (
+    ProductionRepairCycleAdapter,
 )
 
 # Adapters
@@ -1240,6 +1243,11 @@ class SimulationApplicationBootstrap:
         # This is the 30th adapter, providing deterministic failure classification in simulation
         systemic_analysis_adapter = MockSystemicAnalysisAdapter()
         resolved.systemic_analysis_service = systemic_analysis_adapter
+
+        # Inject systemic_analysis_service into repair cycle adapter
+        # ProductionRepairCycleAdapter requires this for failure classification
+        if isinstance(resolved.repair_cycle, ProductionRepairCycleAdapter):
+            resolved.repair_cycle.systemic_analysis_service = systemic_analysis_adapter
 
         # Post-process identity service: set bot username
         if isinstance(resolved.identity_service, ConfigurableIdentityService):

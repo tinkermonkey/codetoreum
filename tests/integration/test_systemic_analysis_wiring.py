@@ -1,40 +1,28 @@
-"""Integration test for Phase 7: Bootstrap wiring for systemic analysis service.
+"""Integration test for systemic analysis service wiring.
 
 Tests that MockSystemicAnalysisAdapter is properly wired in simulation bootstrap
 and that LLMSystemicAnalysisAdapter is properly wired in production bootstrap.
 
-Verifies the complete dependency injection chain for ISystemicAnalysisService.
+Verifies the complete dependency injection chain for ISystemicAnalysisService
+through both direct mock adapter usage and end-to-end repair cycle integration.
 """
-
-from dataclasses import dataclass
 
 import pytest
 
 from codetoreum.adapters.testing.mock_systemic_analysis_adapter import (
     MockSystemicAnalysisAdapter,
 )
+from codetoreum.adapters.secondary.production_repair_cycle_adapter import (
+    ProductionRepairCycleAdapter,
+)
 from codetoreum.domain.repair_cycle_types import (
     AnalysisContext,
     FailureClassification,
     RepairTestFailure,
-    RepairTestRunConfig,
-    RepairTestType,
     SystemicAnalysisResult,
 )
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
-
-
-@dataclass
-class RepairCycleTestContext:
-    """Test implementation of RepairCycleContext protocol."""
-
-    stage_name: str
-    workflow_run_id: str
-    test_configs: tuple[RepairTestRunConfig, ...]
-    agent_name: str
-    max_total_agent_calls: int
-    checkpoint_interval: int
 
 
 @pytest.mark.asyncio
@@ -131,7 +119,13 @@ async def test_systemic_analysis_defaults_to_code_defect():
 
 @pytest.mark.asyncio
 async def test_repair_cycle_adapter_wired_with_systemic_analysis_in_simulation():
-    """Test that systemic_analysis_service is properly wired in simulation bootstrap."""
+    """Test that systemic_analysis_service is properly wired in bootstrap post-processing.
+
+    This test verifies that the mock systemic analysis adapter is:
+    1. Created in bootstrap post-processing
+    2. Injected into ProductionRepairCycleAdapter if used
+    3. Accessible and configurable by test authors
+    """
     config = SimulationConfig.create_fast_config("test_repair_with_analysis", speed_multiplier=100.0)
 
     bootstrap = SimulationApplicationBootstrap(config)
@@ -140,9 +134,10 @@ async def test_repair_cycle_adapter_wired_with_systemic_analysis_in_simulation()
     # Verify repair_cycle adapter exists
     assert bootstrap.adapters.repair_cycle is not None
 
-    # Verify systemic_analysis_service is injected and accessible
+    # Verify systemic_analysis_service is accessible
+    assert bootstrap.adapters.systemic_analysis_service is not None
     mock_adapter = bootstrap.adapters.systemic_analysis_as_mock()
-    assert mock_adapter is not None
+    assert isinstance(mock_adapter, MockSystemicAnalysisAdapter)
 
     # Preconfigure the mock to return ENVIRONMENT_ISSUE
     environment_result = SystemicAnalysisResult(
@@ -154,7 +149,7 @@ async def test_repair_cycle_adapter_wired_with_systemic_analysis_in_simulation()
     )
     mock_adapter._results = [environment_result]
 
-    # Verify the mock was called when analyzing failures
+    # Verify the mock can be used for failure analysis
     failures = [
         RepairTestFailure(
             file="integration_test.py",

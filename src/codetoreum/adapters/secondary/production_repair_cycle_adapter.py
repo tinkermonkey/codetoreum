@@ -150,6 +150,16 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         self.circuit_breaker = circuit_breaker
         self._systemic_analysis_service = systemic_analysis_service
 
+    @property
+    def systemic_analysis_service(self) -> ISystemicAnalysisService | None:
+        """Get the systemic analysis service."""
+        return self._systemic_analysis_service
+
+    @systemic_analysis_service.setter
+    def systemic_analysis_service(self, service: ISystemicAnalysisService | None) -> None:
+        """Set the systemic analysis service."""
+        self._systemic_analysis_service = service
+
     async def execute(self, context: RepairCycleContext) -> RepairCycleResult:
         """Execute complete repair cycle for all configured test types.
 
