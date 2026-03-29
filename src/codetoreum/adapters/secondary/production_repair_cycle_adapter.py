@@ -1485,6 +1485,45 @@ Return a JSON response with the status of configuration fixes applied."""
             )
             return False
 
+    async def analyze_systemic_issues(
+        self,
+        failures: tuple[RepairTestFailure, ...],
+    ) -> str:
+        """Analyze systemic issues in test failures.
+
+        Backward-compatible method that delegates to ISystemicAnalysisService
+        for failure classification. Returns the reasoning string from the
+        analysis result.
+
+        Args:
+            failures: Tuple of test failures to analyze
+
+        Returns:
+            Reasoning string from the systemic analysis result
+
+        Raises:
+            ValueError: If no systemic analysis service is configured
+        """
+        if self._systemic_analysis_service is None:
+            msg = "Cannot analyze systemic issues: ISystemicAnalysisService is not configured"
+            raise ValueError(msg)
+
+        # Create a minimal AnalysisContext for the analysis
+        # Note: work_item_id, iteration, and workflow_run_id would ideally come from caller context,
+        # but for backward compatibility, we use placeholder values.
+        analysis_context = AnalysisContext(
+            work_item_id="unknown",
+            iteration=0,
+            workflow_run_id="unknown",
+            prior_fix_attempts=(),
+            prior_classifications=(),
+        )
+
+        result = await self._systemic_analysis_service.analyze(
+            list(failures), analysis_context
+        )
+        return result.reasoning
+
     async def _run_test_cycle(
         self,
         config: RepairTestRunConfig,

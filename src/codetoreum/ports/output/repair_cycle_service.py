@@ -186,3 +186,26 @@ class IRepairCycle(Protocol):
             context: Repair cycle context
         """
         ...
+
+    async def analyze_systemic_issues(
+        self,
+        failures: tuple[RepairTestFailure, ...],
+    ) -> str:
+        """Analyze systemic issues in test failures.
+
+        Backward-compatible method that delegates to ISystemicAnalysisService
+        for failure classification. Returns the reasoning string from the
+        analysis result.
+
+        Args:
+            failures: Tuple of test failures to analyze
+
+        Returns:
+            Reasoning string from the systemic analysis result
+
+        Note:
+            This method provides backward compatibility with existing code
+            that may call analyze_systemic_issues(). The implementation
+            delegates internally to ISystemicAnalysisService.analyze().
+        """
+        ...

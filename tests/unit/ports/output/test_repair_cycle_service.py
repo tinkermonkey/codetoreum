@@ -171,6 +171,13 @@ class MockRepairCycle:
         """Save repair cycle state for resume after failures."""
         return
 
+    async def analyze_systemic_issues(
+        self,
+        failures: tuple[RepairTestFailure, ...],
+    ) -> str:
+        """Analyze systemic issues in test failures."""
+        return "Mock analysis result"
+
 
 class TestIRepairCycleProtocol:
     """Tests for IRepairCycle Protocol."""
@@ -195,16 +202,21 @@ class TestIRepairCycleProtocol:
         """Test that IRepairCycle Protocol has checkpoint method."""
         assert hasattr(IRepairCycle, "checkpoint")
 
-    def test_protocol_has_exactly_five_methods(self) -> None:
-        """Test that IRepairCycle Protocol has exactly 5 methods."""
+    def test_protocol_has_analyze_systemic_issues_method(self) -> None:
+        """Test that IRepairCycle Protocol has analyze_systemic_issues method (backward compatibility)."""
+        assert hasattr(IRepairCycle, "analyze_systemic_issues")
+
+    def test_protocol_has_exactly_six_methods(self) -> None:
+        """Test that IRepairCycle Protocol has exactly 6 methods."""
         methods = [m for m in dir(IRepairCycle) if not m.startswith("_") and callable(getattr(IRepairCycle, m))]
-        assert len(methods) == 5
+        assert len(methods) == 6
         assert set(methods) == {
             "execute",
             "run_tests",
             "fix_failures_by_file",
             "handle_warnings",
             "checkpoint",
+            "analyze_systemic_issues",
         }
 
     @pytest.mark.asyncio

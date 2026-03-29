@@ -921,6 +921,27 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             )
             self._emit_event("repair_cycle.checkpoint_failed", checkpoint_failed_event)
 
+    async def analyze_systemic_issues(
+        self,
+        failures: tuple[RepairTestFailure, ...],
+    ) -> str:
+        """Analyze systemic issues in test failures.
+
+        Mock implementation that returns a simple reasoning string.
+        In production, this would delegate to ISystemicAnalysisService.
+
+        Args:
+            failures: Tuple of test failures to analyze
+
+        Returns:
+            Reasoning string describing the analysis result
+        """
+        if not failures:
+            return "No failures to analyze"
+
+        # Mock analysis: simple reasoning based on failure count
+        return f"Analyzed {len(failures)} failure(s) in mock adapter; recommend code defect fixes"
+
     # Event log retrieval (FR-11.10)
 
     def get_all_events_log(self) -> list[dict[str, Any]]:
