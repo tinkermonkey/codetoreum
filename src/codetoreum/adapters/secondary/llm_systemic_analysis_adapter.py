@@ -92,8 +92,13 @@ class LLMSystemicAnalysisAdapter(ISystemicAnalysisService):
 
         Raises:
             TimeoutError: If LLM execution exceeds timeout
-            Exception: If LLM provider fails (network, provider error, etc.)
-            ValueError: If response parsing fails (invalid JSON, bad structure)
+            ConnectionError: If LLM provider is unreachable
+            Exception: Other LLM provider failures (propagated for caller fallback)
+
+        Note:
+            Response parsing errors (json.JSONDecodeError, ValueError, KeyError) are
+            caught internally and result in a CODE_DEFECT fallback response rather than
+            propagating to the caller.
         """
         prompt = self._build_prompt(failures, context)
 
