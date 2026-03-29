@@ -24,7 +24,7 @@ import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from codetoreum.ports.output.llm_provider import ILLMProvider
+    from codetoreum.ports.output.llm_provider import ExecutionContext, ExecutionResult, ILLMProvider
 
 from codetoreum.domain.repair_cycle_types import (
     AnalysisContext,
@@ -96,11 +96,10 @@ class LLMSystemicAnalysisAdapter(ISystemicAnalysisService):
         try:
             prompt = self._build_prompt(failures, context)
 
-            # Import ExecutionContext here to avoid circular imports
-            from codetoreum.ports.output.llm_provider import ExecutionContext
+            # Create execution context with timeout and agent specialization metadata
+            from codetoreum.ports.output.llm_provider import ExecutionContext as ExecutionContextImpl
 
-            # Execute LLM with timeout protection and agent specialization via metadata
-            execution_context = ExecutionContext(
+            execution_context = ExecutionContextImpl(
                 timeout_seconds=self._timeout_seconds,
                 metadata={
                     "subtask_name": "systemic_analysis",
@@ -179,9 +178,9 @@ Respond with JSON only (no markdown, no additional text):
     async def _execute_llm_with_timeout(
         self,
         prompt: str,
-        execution_context: object,
+        execution_context: ExecutionContext,
         analysis_context: AnalysisContext,
-    ) -> object:
+    ) -> ExecutionResult:
         """Execute LLM with timeout protection.
 
         Wraps the LLM execution with asyncio timeout to prevent classification
@@ -312,12 +311,12 @@ Respond with JSON only (no markdown, no additional text):
                     "workflow_run_id": context.workflow_run_id,
                     "work_item_id": context.work_item_id,
                 },
-                exc_info=False,
             )
             return json_text
 
-        # Fallback: try to find JSON object directly in response
-        json_object_match = re.search(r"\{.*\}", response_text, re.DOTALL)
+        # Fallback: try to find JSON object directly in response using lazy matching
+        # Use lazy match (.*?) to avoid greedy matching past the actual JSON object
+        json_object_match = re.search(r"\{.*?\}", response_text, re.DOTALL)
         if json_object_match:
             json_text = json_object_match.group(0)
             self._logger.debug(
@@ -326,7 +325,6 @@ Respond with JSON only (no markdown, no additional text):
                     "workflow_run_id": context.workflow_run_id,
                     "work_item_id": context.work_item_id,
                 },
-                exc_info=False,
             )
             return json_text
 
