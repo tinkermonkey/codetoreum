@@ -41,6 +41,7 @@ from codetoreum.ports.output.repair_cycle_service import IRepairCycle
 from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.review_cycle_service import IReviewCycle
 from codetoreum.ports.output.storage import IStorage
+from codetoreum.ports.output.systemic_analysis_service import ISystemicAnalysisService
 from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.version_control_service import IVersionControlService
 from codetoreum.ports.output.work_item_branch_tracker import IWorkItemBranchTracker
@@ -345,6 +346,8 @@ class AdapterResolver:
         Special handling for SimulationEngine-coupled adapters:
         - If mock variant selected: use engine to create time-aware mock
         - If real variant: create directly without engine
+
+        For production repair cycle, injects systemic_analysis_service for failure classification.
         """
         if self._config.repair_cycle == "mock":
             # Engine creates time-aware mock with optional dependencies
@@ -355,7 +358,12 @@ class AdapterResolver:
                 container_adapter=container_adapter,
             )
         # Real adapter: bypass engine, use factory directly
-        return self._factory.create_repair_cycle(adapter_name=self._config.repair_cycle)
+        # For ProductionRepairCycleAdapter, inject systemic_analysis_service (pre-resolved)
+        systemic_analysis = self._resolved.get("systemic_analysis")
+        return self._factory.create_repair_cycle(
+            adapter_name=self._config.repair_cycle,
+            systemic_analysis_service=systemic_analysis,
+        )
 
     def resolve_code_review(self) -> ICodeReviewService:
         """Resolve code review service adapter."""
@@ -383,6 +391,44 @@ class AdapterResolver:
             time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
         )
 
+    def resolve_systemic_analysis_service(self) -> ISystemicAnalysisService:
+        """Resolve systemic analysis service adapter.
+
+        In production, creates LLMSystemicAnalysisAdapter with the LLM provider.
+        In simulation, the bootstrap creates MockSystemicAnalysisAdapter separately.
+
+        For production use, this is called when resolving ProductionRepairCycleAdapter
+        to inject the systemic analysis service for failure classification.
+        """
+        # Check if we're using a production repair cycle in simulation
+        # (i.e., repair_cycle is configured to use the production variant for integration testing)
+        if self._config.repair_cycle == "production":
+            # For production repair cycle in simulation, use a mock (will be overridden by bootstrap)
+            # Return a simple mock that defers classification
+            try:
+                from codetoreum.adapters.testing.mock_systemic_analysis_adapter import (
+                    MockSystemicAnalysisAdapter,
+                )
+                return MockSystemicAnalysisAdapter()
+            except ImportError:
+                msg = "Failed to import MockSystemicAnalysisAdapter for simulation"
+                raise RuntimeError(msg)
+
+        # For production mode (OperationMode.PRODUCTION), create real LLM-based adapter
+        # This will be used when ProductionRepairCycleAdapter is instantiated
+        try:
+            from codetoreum.adapters.secondary.llm_systemic_analysis_adapter import (
+                LLMSystemicAnalysisAdapter,
+            )
+            llm_adapter = self._resolved.get("llm")
+            if llm_adapter is None:
+                msg = "LLM adapter must be resolved before systemic analysis service"
+                raise RuntimeError(msg)
+            return LLMSystemicAnalysisAdapter(llm_provider=llm_adapter)
+        except ImportError:
+            msg = "Failed to import LLMSystemicAnalysisAdapter for production"
+            raise RuntimeError(msg)
+
     def resolve_all(self) -> "SimulationAdapters":
         """
         Resolve all adapters in dependency order.
@@ -392,7 +438,7 @@ class AdapterResolver:
         are constructed after their dependencies.
 
         Returns:
-            SimulationAdapters instance with all 29 adapters fully typed
+            SimulationAdapters instance with all 30 adapters fully typed (includes systemic_analysis_service)
 
         Raises:
             AdapterConfigurationError: If credentials are missing/invalid
@@ -442,12 +488,16 @@ class AdapterResolver:
         # 8. Repository adapter (depends on event_emitter)
         self._resolved["repository"] = self.resolve_repository()
 
-        # 9. Review and repair cycles depend on previously resolved adapters
-        # (review_cycle depends on llm, repair_cycle depends on checkpoint_store and container)
+        # 9. Systemic analysis service (may be used by repair_cycle)
+        self._resolved["systemic_analysis"] = self.resolve_systemic_analysis_service()
+
+        # 10. Review and repair cycles depend on previously resolved adapters
+        # (review_cycle depends on llm, repair_cycle depends on checkpoint_store and container,
+        #  repair_cycle also uses systemic_analysis_service)
         self._resolved["review_cycle"] = self.resolve_review_cycle()
         self._resolved["repair_cycle"] = self.resolve_repair_cycle()
 
-        # 10. Code review and container recovery adapters
+        # 11. Code review and container recovery adapters
         self._resolved["code_review"] = self.resolve_code_review()
         self._resolved["container_recovery"] = self.resolve_container_recovery()
 
@@ -495,4 +545,6 @@ class AdapterResolver:
             work_item_service=self._resolved["work_item_service"],
             # Container recovery
             container_recovery=self._resolved["container_recovery"],
+            # Systemic analysis service (for failure classification)
+            systemic_analysis_service=self._resolved["systemic_analysis"],
         )

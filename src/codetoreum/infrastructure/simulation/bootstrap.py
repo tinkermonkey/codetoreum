@@ -5,10 +5,13 @@ Wires up the entire application stack in simulation mode through 6 phases:
 
 **Phase 0**: Create simulation engine (encapsulates clock and timing)
 **Phase 1**: Create infrastructure (event bus, logger, error registry) - EARLY for event subscriptions
-**Phase 2**: Create adapters (24 mock adapters: ticket system, LLM, container, repository,
-           event store, metrics, storage, config, notifier, encryption, board, repair cycle,
-           project manager, lock service, workflow config, agent executor, version control,
-           message broker, discussion, review cycle, identity service, checkpoint store, queue service, event emitter)
+**Phase 2**: Create adapters (30 adapters: 29 via AdapterResolver + MockSystemicAnalysisAdapter)
+           Includes: ticket system, LLM, container, repository, event store, metrics, storage, config,
+           notifier, encryption, board, repair cycle, project manager, lock service, workflow config,
+           agent executor, version control, message broker, discussion, review cycle, identity service,
+           checkpoint store, queue service, event emitter, code review, container recovery, work item
+           service, agent repository, active workflow run registry, work item branch tracker, audit store,
+           and systemic analysis service
 **Phase 3**: Create services (11 application services with their dependencies: workflow orchestrator,
            execution service, agent scheduler, pipeline manager, review service, feedback processor,
            workspace router, configuration service, work item service, multi-project orchestrator,
@@ -109,6 +112,9 @@ from codetoreum.adapters.testing.execution_service_agent_executor import (
     ExecutionServiceAgentExecutor,
 )
 from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
+from codetoreum.adapters.testing.mock_systemic_analysis_adapter import (
+    MockSystemicAnalysisAdapter,
+)
 from codetoreum.adapters.testing.mock_work_item_service import MockWorkItemService
 
 # Application Services
@@ -224,6 +230,7 @@ from codetoreum.ports.output.repair_cycle_service import IRepairCycle
 from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.review_cycle_service import IReviewCycle
 from codetoreum.ports.output.storage import IStorage
+from codetoreum.ports.output.systemic_analysis_service import ISystemicAnalysisService
 from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.version_control_service import IVersionControlService
 from codetoreum.ports.output.work_item_branch_tracker import IWorkItemBranchTracker
@@ -342,6 +349,9 @@ class SimulationAdapters:
 
     # Container recovery adapter
     container_recovery: IAgentContainerRecoveryService
+
+    # Systemic analysis service (for failure classification in repair cycle)
+    systemic_analysis_service: ISystemicAnalysisService
 
     # Fields with defaults (must come after fields without defaults)
     agent_executor: IAgentExecutor | None = None
@@ -629,6 +639,24 @@ class SimulationAdapters:
             raise TypeError(msg)
         return cast("InMemoryTracer", self.tracer)
 
+    def systemic_analysis_as_mock(self) -> "MockSystemicAnalysisAdapter":
+        """Get systemic analysis as MockSystemicAnalysisAdapter.
+
+        Raises TypeError if systemic_analysis_service is not MockSystemicAnalysisAdapter.
+        """
+        try:
+            from codetoreum.adapters.testing.mock_systemic_analysis_adapter import (
+                MockSystemicAnalysisAdapter,
+            )
+
+            if not isinstance(self.systemic_analysis_service, MockSystemicAnalysisAdapter):
+                msg = f"systemic_analysis_service is {type(self.systemic_analysis_service).__name__}, not MockSystemicAnalysisAdapter"
+                raise TypeError(msg)
+            return cast("MockSystemicAnalysisAdapter", self.systemic_analysis_service)
+        except ImportError as e:
+            msg = f"Failed to import MockSystemicAnalysisAdapter: {e}"
+            raise TypeError(msg) from e
+
 
 @dataclass
 class SimulationServices:
@@ -814,8 +842,8 @@ class SimulationApplicationBootstrap:
             logger.info("Phase 1: Creating infrastructure...")
             self.infrastructure = self._create_infrastructure()
 
-            # Phase 2: Create adapters (24 total) with event bus subscriptions
-            logger.info("Phase 2: Creating 24 adapters...")
+            # Phase 2: Create adapters (30 total: 29 via resolver + systemic_analysis) with event bus subscriptions
+            logger.info("Phase 2: Creating 30 adapters...")
             self.adapters = await self._create_adapters()
 
             # Register causal links between adapters and domain events
@@ -1142,6 +1170,7 @@ class SimulationApplicationBootstrap:
         8. Repository: (depends on event_emitter)
         9. Engine-coupled: review_cycle, repair_cycle (use SimulationEngine for clock injection)
         10. Additional services: code_review, container_recovery
+        11. Manual post-processing: systemic_analysis_service (30th adapter)
 
         AdapterResolver validates credentials before construction and raises aggregated
         configuration errors if any adapter is misconfigured.
@@ -1207,6 +1236,11 @@ class SimulationApplicationBootstrap:
         if isinstance(resolved.message_broker, InMemoryMessageBroker):
             await resolved.message_broker.initialize()
 
+        # Create systemic analysis adapter (not provided by resolver)
+        # This is the 30th adapter, providing deterministic failure classification in simulation
+        systemic_analysis_adapter = MockSystemicAnalysisAdapter()
+        resolved.systemic_analysis_service = systemic_analysis_adapter
+
         # Post-process identity service: set bot username
         if isinstance(resolved.identity_service, ConfigurableIdentityService):
             resolved.identity_service.set_bot_username("codetoreum-bot")
@@ -1219,7 +1253,7 @@ class SimulationApplicationBootstrap:
         # Create audit store (not provided by resolver)
         audit_store = InMemoryAuditStore()
 
-        logger.info("Created 29 simulation adapters via AdapterResolver")
+        logger.info("Created 30 simulation adapters (29 via AdapterResolver + systemic_analysis)")
 
         # Update audit_store in resolved adapters
         resolved.audit_store = audit_store
