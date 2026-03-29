@@ -806,7 +806,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
             return parsed
 
-        except (json.JSONDecodeError, JSONParseError) as e:
+        except json.JSONDecodeError as e:
             logger.error(
                 "Failed to parse test output",
                 extra={
