@@ -770,9 +770,12 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         return test_command
 
     async def _parse_test_output_with_retry(self, agent_response: str, test_type: RepairTestType) -> dict[str, Any]:
-        """Parse test output with retry logic for JSON parsing.
+        """Parse test output from agent response.
 
-        Attempts to parse agent response as JSON up to max_json_parse_retries times.
+        Attempts to extract and parse JSON from the agent response. Unlike transient network errors,
+        JSON parsing and regex extraction are deterministic operations—if parsing fails on the first
+        attempt, retrying the exact same input will always fail identically. Therefore, no retry logic
+        is needed; failures are due to invalid input and should fail fast.
 
         Args:
             agent_response: Raw response from agent
@@ -782,50 +785,38 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             Parsed test output as dictionary
 
         Raises:
-            JSONParseError: If JSON parsing fails after all retries
+            JSONParseError: If JSON cannot be extracted or parsed from the response
         """
-        last_error = None
+        try:
+            # Try to extract JSON from response
+            json_match = re.search(r"\{.*\}", agent_response, re.DOTALL)
+            if not json_match:
+                msg = "No JSON found in agent response"
+                raise JSONParseError(msg) from None
 
-        for attempt in range(1, self.config.max_json_parse_retries + 1):
-            try:
-                # Try to extract JSON from response
-                json_match = re.search(r"\{.*\}", agent_response, re.DOTALL)
-                if not json_match:
-                    msg = "No JSON found in agent response"
-                    raise JSONParseError(msg)
+            parsed = json.loads(json_match.group())
 
-                parsed = json.loads(json_match.group())
+            logger.info(
+                "Test output parsed successfully",
+                extra={
+                    "test_type": test_type.value,
+                },
+                exc_info=False,
+            )
 
-                logger.info(
-                    "Test output parsed successfully",
-                    extra={
-                        "test_type": test_type.value,
-                        "attempt": attempt,
-                    },
-                    exc_info=False,
-                )
+            return parsed
 
-                return parsed
-
-            except (json.JSONDecodeError, JSONParseError) as e:
-                last_error = e
-                logger.warning(
-                    "Failed to parse test output",
-                    extra={
-                        "test_type": test_type.value,
-                        "attempt": attempt,
-                        "max_attempts": self.config.max_json_parse_retries,
-                        "error": str(e),
-                    },
-                    exc_info=True,
-                )
-
-                if attempt < self.config.max_json_parse_retries:
-                    # Wait before retry with configured delay
-                    await asyncio.sleep(self.config.json_parse_retry_delay_ms / 1000.0)
-
-        msg = f"Failed to parse test output after {self.config.max_json_parse_retries} attempts: {last_error}"
-        raise JSONParseError(msg)
+        except (json.JSONDecodeError, JSONParseError) as e:
+            logger.error(
+                "Failed to parse test output",
+                extra={
+                    "test_type": test_type.value,
+                    "error_type": type(e).__name__,
+                    "error": str(e),
+                },
+                exc_info=True,
+            )
+            raise JSONParseError(f"Failed to parse test output: {e}") from e
 
     def _extract_failures(self, test_output: dict[str, Any], test_type: RepairTestType) -> list[RepairTestFailure]:
         """Extract test failures from parsed test output.
