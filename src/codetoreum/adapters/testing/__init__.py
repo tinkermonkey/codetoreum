@@ -56,6 +56,9 @@ from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
     MockRepairCycleAdapter,
 )
 from codetoreum.adapters.testing.mock_review_cycle_adapter import MockReviewCycleAdapter
+from codetoreum.adapters.testing.mock_systemic_analysis_adapter import (
+    MockSystemicAnalysisAdapter,
+)
 from codetoreum.adapters.testing.mock_work_item_service import MockWorkItemService
 from codetoreum.adapters.testing.simple_encryption_adapter import (
     SimpleEncryptionAdapter,
@@ -91,6 +94,7 @@ __all__ = [
     "MockProjectManagerAdapter",
     "MockReviewCycleAdapter",
     "MockRepairCycleAdapter",
+    "MockSystemicAnalysisAdapter",
     "MockWorkItemService",
     "MovementEvent",
     "SimpleEncryptionAdapter",
