@@ -61,7 +61,6 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestRunConfig,
     RepairTestType,
     RepairTestWarning,
-    SystemicAnalysisResult,
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.resilience.exceptions import CircuitBreakerOpenError
@@ -1063,8 +1062,8 @@ Return a JSON response with the status of fixes applied."""
             True if environment rebuild succeeded, False otherwise
         """
         try:
-            logger.info(
-                "Rebuilding environment for ENVIRONMENT_ISSUE",
+            logger.warning(
+                "rebuild_environment() not yet implemented; skipping ENVIRONMENT_ISSUE fix",
                 extra={
                     "workflow_run_id": context.workflow_run_id,
                     "test_type": config.test_type.value,
@@ -1103,8 +1102,8 @@ Return a JSON response with the status of fixes applied."""
             True if environment verification succeeded, False otherwise
         """
         try:
-            logger.info(
-                "Verifying environment after rebuild",
+            logger.warning(
+                "verify_environment() not yet implemented; skipping environment verification",
                 extra={
                     "workflow_run_id": context.workflow_run_id,
                     "test_type": config.test_type.value,
@@ -1147,8 +1146,8 @@ Return a JSON response with the status of fixes applied."""
             True if systemic fixes were applied, False otherwise
         """
         try:
-            logger.info(
-                "Applying systemic fixes based on classification reasoning",
+            logger.warning(
+                "apply_systemic_fixes() not yet implemented; skipping systemic fix attempt",
                 extra={
                     "workflow_run_id": context.workflow_run_id,
                     "test_type": config.test_type.value,
@@ -1267,39 +1266,53 @@ Return a JSON response with the status of fixes applied."""
                                 failure_count=len(test_result.failures),
                             )
                         )
-                        classification = await self._systemic_analysis_service.analyze(
-                            list(test_result.failures), analysis_context
-                        )
-                        self.event_emitter.emit(
-                            SystemicAnalysisCompletedEvent(
-                                type="repair_cycle.systemic_analysis_completed",
-                                timestamp=datetime.now(UTC).isoformat(),
-                                source="production_repair_cycle",
-                                classification=classification.classification.value,
-                                confidence=classification.confidence,
-                                reasoning=classification.reasoning,
-                                recommended_action=classification.recommended_action,
-                                work_item_id=context.workflow_run_id,
-                                workflow_run_id=context.workflow_run_id,
-                                failure_count=len(test_result.failures),
+                        try:
+                            classification = await self._systemic_analysis_service.analyze(
+                                list(test_result.failures), analysis_context
                             )
-                        )
-                        if classification.classification == FailureClassification.CODE_DEFECT:
+                            self.event_emitter.emit(
+                                SystemicAnalysisCompletedEvent(
+                                    type="repair_cycle.systemic_analysis_completed",
+                                    timestamp=datetime.now(UTC).isoformat(),
+                                    source="production_repair_cycle",
+                                    classification=classification.classification.value,
+                                    confidence=classification.confidence,
+                                    reasoning=classification.reasoning,
+                                    recommended_action=classification.recommended_action,
+                                    work_item_id=context.workflow_run_id,
+                                    workflow_run_id=context.workflow_run_id,
+                                    failure_count=len(test_result.failures),
+                                )
+                            )
+                            if classification.classification == FailureClassification.CODE_DEFECT:
+                                grouped = self._group_failures_by_file(test_result.failures)
+                                files_fixed += await self.fix_failures_by_file(grouped, config, context)
+                            elif classification.classification == FailureClassification.ENVIRONMENT_ISSUE:
+                                rebuild_success = await self.rebuild_environment(config, context)
+                                if rebuild_success:
+                                    await self.verify_environment(config, context)
+                            elif classification.classification == FailureClassification.TRANSIENT_FAILURE:
+                                pass  # retry on next iteration — no fix action
+                            elif classification.classification in (
+                                FailureClassification.DEPENDENCY_ISSUE,
+                                FailureClassification.CONFIGURATION_ISSUE,
+                            ):
+                                await self.apply_systemic_fixes(
+                                    classification.reasoning, test_result, config, context
+                                )
+                        except Exception as e:
+                            # Classifier failure: fall back to existing behavior to preserve repair cycle resilience
+                            logger.warning(
+                                "Systemic analysis failed; falling back to fix_failures_by_file()",
+                                extra={
+                                    "workflow_run_id": context.workflow_run_id,
+                                    "iteration": iteration,
+                                    "error": str(e),
+                                },
+                                exc_info=True,
+                            )
                             grouped = self._group_failures_by_file(test_result.failures)
                             files_fixed += await self.fix_failures_by_file(grouped, config, context)
-                        elif classification.classification == FailureClassification.ENVIRONMENT_ISSUE:
-                            rebuild_success = await self.rebuild_environment(config, context)
-                            if rebuild_success:
-                                await self.verify_environment(config, context)
-                        elif classification.classification == FailureClassification.TRANSIENT_FAILURE:
-                            pass  # retry on next iteration — no fix action
-                        elif classification.classification in (
-                            FailureClassification.DEPENDENCY_ISSUE,
-                            FailureClassification.CONFIGURATION_ISSUE,
-                        ):
-                            await self.apply_systemic_fixes(
-                                classification.reasoning, test_result, config, context
-                            )
                     else:
                         # Backward-compatible fallback: no classifier injected
                         grouped = self._group_failures_by_file(test_result.failures)
