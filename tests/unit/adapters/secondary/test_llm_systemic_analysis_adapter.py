@@ -290,33 +290,28 @@ class TestParseFailureFallback:
 
 class TestExceptionFallback:
     @pytest.mark.asyncio
-    async def test_llm_execute_timeout_returns_code_defect(self):
-        """LLM timeout exception falls back to CODE_DEFECT."""
+    async def test_llm_execute_timeout_raises_exception(self):
+        """LLM timeout exception is raised (not caught) for caller to handle."""
         llm = AsyncMock()
         llm.execute.side_effect = TimeoutError("LLM call timed out")
         adapter = LLMSystemicAnalysisAdapter(llm)
         context = _make_context()
         failures = _make_failures(1)
 
-        result = await adapter.analyze(failures, context)
-
-        assert result.classification == FailureClassification.CODE_DEFECT
-        assert result.confidence == 0.0
-        assert "Parse failure" in result.reasoning
+        with pytest.raises(TimeoutError):
+            await adapter.analyze(failures, context)
 
     @pytest.mark.asyncio
-    async def test_llm_execute_connection_error_returns_code_defect(self):
-        """LLM connection error falls back to CODE_DEFECT."""
+    async def test_llm_execute_connection_error_raises_exception(self):
+        """LLM connection error is raised (not caught) for caller to handle."""
         llm = AsyncMock()
         llm.execute.side_effect = ConnectionError("Failed to connect to LLM")
         adapter = LLMSystemicAnalysisAdapter(llm)
         context = _make_context()
         failures = _make_failures(1)
 
-        result = await adapter.analyze(failures, context)
-
-        assert result.classification == FailureClassification.CODE_DEFECT
-        assert result.confidence == 0.0
+        with pytest.raises(ConnectionError):
+            await adapter.analyze(failures, context)
 
 
 # ---------------------------------------------------------------------------

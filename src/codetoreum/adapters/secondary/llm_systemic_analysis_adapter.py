@@ -91,27 +91,31 @@ class LLMSystemicAnalysisAdapter(ISystemicAnalysisService):
             affected files, and recommended action.
 
         Raises:
-            None - always returns a result, even on parse errors (fallback to CODE_DEFECT)
+            TimeoutError: If LLM execution exceeds timeout
+            Exception: If LLM provider fails (network, provider error, etc.)
+            ValueError: If response parsing fails (invalid JSON, bad structure)
         """
+        prompt = self._build_prompt(failures, context)
+
+        # Create execution context with timeout and agent specialization metadata
+        from codetoreum.ports.output.llm_provider import ExecutionContext as ExecutionContextImpl
+
+        execution_context = ExecutionContextImpl(
+            timeout_seconds=self._timeout_seconds,
+            metadata={
+                "subtask_name": "systemic_analysis",
+                "workflow_run_id": context.workflow_run_id,
+                "work_item_id": context.work_item_id,
+                "iteration": context.iteration,
+            },
+        )
+
+        response = await self._execute_llm_with_timeout(prompt, execution_context, context)
         try:
-            prompt = self._build_prompt(failures, context)
-
-            # Create execution context with timeout and agent specialization metadata
-            from codetoreum.ports.output.llm_provider import ExecutionContext as ExecutionContextImpl
-
-            execution_context = ExecutionContextImpl(
-                timeout_seconds=self._timeout_seconds,
-                metadata={
-                    "subtask_name": "systemic_analysis",
-                    "workflow_run_id": context.workflow_run_id,
-                    "work_item_id": context.work_item_id,
-                    "iteration": context.iteration,
-                },
-            )
-
-            response = await self._execute_llm_with_timeout(prompt, execution_context, context)
             return self._parse_response(response.content, context)
-        except Exception as e:
+        except (json.JSONDecodeError, ValueError, KeyError) as e:
+            # Parse error: response received but couldn't parse/validate it
+            # Fall back to CODE_DEFECT for malformed responses
             self._logger.error(
                 "Failed to parse systemic analysis response, defaulting to code_defect",
                 extra={
