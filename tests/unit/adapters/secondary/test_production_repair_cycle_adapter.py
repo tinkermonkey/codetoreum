@@ -279,6 +279,7 @@ class TestClassificationDispatchCodeDefect:
             confidence=0.95,
             reasoning="Source code has a bug",
             recommended_action="Fix the bug",
+            cross_cutting=False,
         )
 
         adapter, llm = _make_adapter(event_emitter=event_emitter)
@@ -303,6 +304,7 @@ class TestClassificationDispatchCodeDefect:
             confidence=0.95,
             reasoning="Source code has a bug",
             recommended_action="Fix the bug",
+            cross_cutting=False,
         )
 
         adapter, _ = _make_adapter(event_emitter=event_emitter)
@@ -330,12 +332,14 @@ class TestClassificationDispatchCodeDefect:
                 confidence=0.8,
                 reasoning="Flaky test",
                 recommended_action="Retry",
+            cross_cutting=False,
             ),
             MagicMock(
                 classification=FailureClassification.CODE_DEFECT,
                 confidence=0.95,
                 reasoning="Source code has a bug",
                 recommended_action="Fix the bug",
+            cross_cutting=False,
             ),
         ]
 
@@ -376,6 +380,7 @@ class TestClassificationDispatchEnvironmentIssue:
             confidence=0.9,
             reasoning="Missing environment setup",
             recommended_action="Rebuild environment",
+            cross_cutting=False,
         )
 
         adapter, _ = _make_adapter(event_emitter=event_emitter)
@@ -400,6 +405,7 @@ class TestClassificationDispatchEnvironmentIssue:
             confidence=0.9,
             reasoning="Missing environment setup",
             recommended_action="Rebuild environment",
+            cross_cutting=False,
         )
 
         adapter, _ = _make_adapter(event_emitter=event_emitter)
@@ -424,6 +430,7 @@ class TestClassificationDispatchEnvironmentIssue:
             confidence=0.9,
             reasoning="Missing environment setup",
             recommended_action="Rebuild environment",
+            cross_cutting=False,
         )
 
         adapter, _ = _make_adapter(event_emitter=event_emitter)
@@ -457,6 +464,7 @@ class TestClassificationDispatchTransientFailure:
             confidence=0.8,
             reasoning="Flaky test",
             recommended_action="Retry",
+            cross_cutting=False,
         )
 
         adapter, _ = _make_adapter(event_emitter=event_emitter)
@@ -499,18 +507,21 @@ class TestClassificationDispatchTransientFailure:
                 confidence=0.8,
                 reasoning="Flaky test 1",
                 recommended_action="Retry",
+            cross_cutting=False,
             ),
             MagicMock(
                 classification=FailureClassification.TRANSIENT_FAILURE,
                 confidence=0.8,
                 reasoning="Flaky test 2",
                 recommended_action="Retry",
+            cross_cutting=False,
             ),
             MagicMock(
                 classification=FailureClassification.CODE_DEFECT,
                 confidence=0.95,
                 reasoning="Code defect from escalation",
                 recommended_action="Fix the bug",
+            cross_cutting=False,
             ),
         ]
 
@@ -547,18 +558,21 @@ class TestClassificationDispatchTransientFailure:
                 confidence=0.8,
                 reasoning="Flaky test 1",
                 recommended_action="Retry",
+            cross_cutting=False,
             ),
             MagicMock(
                 classification=FailureClassification.TRANSIENT_FAILURE,
                 confidence=0.8,
                 reasoning="Flaky test 2",
                 recommended_action="Retry",
+            cross_cutting=False,
             ),
             MagicMock(
                 classification=FailureClassification.TRANSIENT_FAILURE,
                 confidence=0.8,
                 reasoning="Flaky test 3",
                 recommended_action="Retry",
+            cross_cutting=False,
             ),
         ]
 
@@ -600,30 +614,35 @@ class TestClassificationDispatchTransientFailure:
                 confidence=0.8,
                 reasoning="Flaky test 1",
                 recommended_action="Retry",
+            cross_cutting=False,
             ),
             MagicMock(
                 classification=FailureClassification.TRANSIENT_FAILURE,
                 confidence=0.8,
                 reasoning="Flaky test 2",
                 recommended_action="Retry",
+            cross_cutting=False,
             ),
             MagicMock(
                 classification=FailureClassification.TRANSIENT_FAILURE,
                 confidence=0.8,
                 reasoning="Flaky test 3 (escalation triggers on 3rd consecutive)",
                 recommended_action="Retry",
+            cross_cutting=False,
             ),
             MagicMock(
                 classification=FailureClassification.TRANSIENT_FAILURE,
                 confidence=0.8,
                 reasoning="Flaky test 4 (counter resets to 1 after escalation)",
                 recommended_action="Retry",
+            cross_cutting=False,
             ),
             MagicMock(
                 classification=FailureClassification.TRANSIENT_FAILURE,
                 confidence=0.8,
                 reasoning="Flaky test 5 (counter at 2, below escalation threshold)",
                 recommended_action="Retry",
+            cross_cutting=False,
             ),
         ]
 
@@ -666,6 +685,7 @@ class TestClassificationDispatchSystemicIssues:
             confidence=0.85,
             reasoning="Missing dependency",
             recommended_action="Install dependency",
+            cross_cutting=False,
         )
 
         adapter, _ = _make_adapter(event_emitter=event_emitter)
@@ -687,6 +707,7 @@ class TestClassificationDispatchSystemicIssues:
             confidence=0.85,
             reasoning="Missing configuration",
             recommended_action="Fix configuration",
+            cross_cutting=False,
         )
 
         adapter, _ = _make_adapter(event_emitter=event_emitter)
@@ -708,6 +729,7 @@ class TestClassificationDispatchSystemicIssues:
             confidence=0.85,
             reasoning="Missing dependency",
             recommended_action="Install dependency",
+            cross_cutting=False,
         )
 
         adapter, _ = _make_adapter(event_emitter=event_emitter)
@@ -734,6 +756,7 @@ class TestClassificationDispatchSystemicIssues:
             confidence=0.85,
             reasoning="Missing dependency",
             recommended_action="Install dependency",
+            cross_cutting=False,
         )
 
         adapter, _ = _make_adapter(event_emitter=event_emitter)
@@ -848,6 +871,7 @@ class TestPriorTrackingData:
             confidence=0.95,
             reasoning="Source code has a bug",
             recommended_action="Fix the bug",
+            cross_cutting=False,
         )
 
         adapter, _ = _make_adapter(event_emitter=event_emitter)
@@ -893,6 +917,7 @@ class TestPriorTrackingData:
             confidence=0.95,
             reasoning="Source code has a bug",
             recommended_action="Fix the bug",
+            cross_cutting=False,
         )
 
         adapter, _ = _make_adapter(event_emitter=event_emitter)
@@ -1489,6 +1514,7 @@ class TestEnvironmentRebuildAndVerifyReturnValueHandling:
             confidence=0.9,
             reasoning="Environment issue detected",
             recommended_action="Rebuild environment",
+            cross_cutting=False,
         )
         adapter._systemic_analysis_service = systemic_service
 
@@ -1536,6 +1562,7 @@ class TestEnvironmentRebuildAndVerifyReturnValueHandling:
             confidence=0.9,
             reasoning="Environment issue detected",
             recommended_action="Rebuild environment",
+            cross_cutting=False,
         )
         adapter._systemic_analysis_service = systemic_service
 
@@ -1799,6 +1826,7 @@ class TestFixFailuresSystemically:
             reasoning="Shared interface broken",
             recommended_action="Fix interface",
             affected_files=("a.py", "b.py"),
+            cross_cutting=False,
         )
 
         await adapter.fix_failures_systemically(
@@ -1825,6 +1853,7 @@ class TestFixFailuresSystemically:
             reasoning="Shared interface broken",
             recommended_action="Fix interface",
             affected_files=("a.py", "b.py"),
+            cross_cutting=False,
         )
 
         result = await adapter.fix_failures_systemically(
@@ -1853,6 +1882,7 @@ class TestFixFailuresSystemically:
             reasoning="Shared interface broken",
             recommended_action="Fix interface",
             affected_files=("a.py",),
+            cross_cutting=False,
         )
 
         result = await adapter.fix_failures_systemically(
@@ -1877,6 +1907,7 @@ class TestFixFailuresSystemically:
             reasoning="Shared interface broken",
             recommended_action="Fix interface",
             affected_files=("a.py",),
+            cross_cutting=False,
         )
 
         result = await adapter.fix_failures_systemically(
