@@ -181,6 +181,22 @@ class MockRepairCycle:
         """Apply cross-cutting fixes based on systemic analysis."""
         return True
 
+    async def fix_failures_systemically(
+        self,
+        failures: tuple[RepairTestFailure, ...],
+        analysis_result,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ):
+        """Apply a coordinated holistic fix addressing the root cause across all affected files."""
+        from codetoreum.domain.repair_cycle_types import SystemicFixResult
+        return SystemicFixResult(
+            success=True,
+            files_modified=0,
+            agent_calls_used=0,
+            summary="Systemic fix completed",
+        )
+
     async def rebuild_environment(
         self,
         config: RepairTestRunConfig,
@@ -235,9 +251,9 @@ class TestIRepairCycleProtocol:
         assert hasattr(IRepairCycle, "analyze_systemic_issues")
 
     def test_protocol_has_expected_method_count(self) -> None:
-        """Test that IRepairCycle Protocol has exactly 9 methods."""
+        """Test that IRepairCycle Protocol has exactly 10 methods."""
         methods = [m for m in dir(IRepairCycle) if not m.startswith("_") and callable(getattr(IRepairCycle, m))]
-        assert len(methods) == 9
+        assert len(methods) == 10
         assert set(methods) == {
             "execute",
             "run_tests",
@@ -245,6 +261,7 @@ class TestIRepairCycleProtocol:
             "handle_warnings",
             "analyze_systemic_issues",
             "apply_systemic_fixes",
+            "fix_failures_systemically",
             "rebuild_environment",
             "verify_environment",
             "checkpoint",
