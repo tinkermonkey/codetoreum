@@ -20,6 +20,7 @@ DEFAULT_RESULT = SystemicAnalysisResult(
     reasoning="Default classification",
     affected_files=(),
     recommended_action="Fix code defects",
+    cross_cutting=False,
 )
 
 

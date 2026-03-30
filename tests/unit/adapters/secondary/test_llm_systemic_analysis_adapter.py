@@ -770,3 +770,112 @@ Additional analysis: The problem is in the try-except {block} where {error handl
         assert result.classification == FailureClassification.CONFIGURATION_ISSUE
         assert "{key: value}" in result.reasoning
         assert "{proper: syntax}" in result.recommended_action
+
+
+# ---------------------------------------------------------------------------
+# Cross-cutting field handling
+# ---------------------------------------------------------------------------
+
+
+class TestCrossCuttingField:
+    @pytest.mark.asyncio
+    async def test_parse_cross_cutting_true(self):
+        """Parses cross_cutting=true from JSON response."""
+        response = """{
+            "classification": "code_defect",
+            "confidence": 0.95,
+            "reasoning": "Renamed method impacts multiple files",
+            "affected_files": ["auth.py", "login.py", "user.py"],
+            "recommended_action": "Update method calls in all files",
+            "cross_cutting": true
+        }"""
+        adapter, _ = _make_adapter(response)
+        context = _make_context()
+        failures = _make_failures(1)
+
+        result = await adapter.analyze(failures, context)
+
+        assert result.cross_cutting is True
+        assert result.classification == FailureClassification.CODE_DEFECT
+        assert result.confidence == 0.95
+
+    @pytest.mark.asyncio
+    async def test_parse_cross_cutting_false(self):
+        """Parses cross_cutting=false from JSON response."""
+        response = """{
+            "classification": "code_defect",
+            "confidence": 0.85,
+            "reasoning": "Independent bugs in different modules",
+            "affected_files": ["module_a.py", "module_b.py"],
+            "recommended_action": "Fix each module independently",
+            "cross_cutting": false
+        }"""
+        adapter, _ = _make_adapter(response)
+        context = _make_context()
+        failures = _make_failures(1)
+
+        result = await adapter.analyze(failures, context)
+
+        assert result.cross_cutting is False
+        assert result.classification == FailureClassification.CODE_DEFECT
+
+    @pytest.mark.asyncio
+    async def test_cross_cutting_absent_defaults_to_false(self):
+        """Missing cross_cutting field defaults to False (backward-compatible)."""
+        response = """{
+            "classification": "code_defect",
+            "confidence": 0.85,
+            "reasoning": "Some issue",
+            "affected_files": ["file.py"],
+            "recommended_action": "Fix the issue"
+        }"""
+        adapter, _ = _make_adapter(response)
+        context = _make_context()
+        failures = _make_failures(1)
+
+        result = await adapter.analyze(failures, context)
+
+        assert result.cross_cutting is False
+        assert result.classification == FailureClassification.CODE_DEFECT
+
+    @pytest.mark.asyncio
+    async def test_malformed_json_returns_fallback_with_cross_cutting_false(self):
+        """Malformed JSON returns fallback result with cross_cutting=False."""
+        adapter, _ = _make_adapter("completely invalid json response")
+        context = _make_context()
+        failures = _make_failures(1)
+
+        result = await adapter.analyze(failures, context)
+
+        assert result.classification == FailureClassification.CODE_DEFECT
+        assert result.confidence == 0.0
+        assert result.cross_cutting is False
+
+    @pytest.mark.asyncio
+    async def test_cross_cutting_with_all_classifications(self):
+        """cross_cutting field works with all classification types."""
+        classifications = [
+            ("code_defect", FailureClassification.CODE_DEFECT),
+            ("environment_issue", FailureClassification.ENVIRONMENT_ISSUE),
+            ("transient_failure", FailureClassification.TRANSIENT_FAILURE),
+            ("dependency_issue", FailureClassification.DEPENDENCY_ISSUE),
+            ("configuration_issue", FailureClassification.CONFIGURATION_ISSUE),
+        ]
+
+        for class_str, class_enum in classifications:
+            response = f"""{{
+                "classification": "{class_str}",
+                "confidence": 0.80,
+                "reasoning": "Cross-cutting issue",
+                "affected_files": ["file1.py", "file2.py"],
+                "recommended_action": "Fix the root cause",
+                "cross_cutting": true
+            }}"""
+            adapter, _ = _make_adapter(response)
+            context = _make_context()
+            failures = _make_failures(1)
+
+            result = await adapter.analyze(failures, context)
+
+            assert result.cross_cutting is True
+            assert result.classification == class_enum
