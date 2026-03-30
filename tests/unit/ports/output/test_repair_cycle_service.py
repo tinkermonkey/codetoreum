@@ -33,6 +33,7 @@ class MockRepairCycleContext:
         self,
         stage_name: str = "fix_failures",
         workflow_run_id: str = "pipeline-123",
+        work_item_id: str = "item-1",
         test_configs: tuple[RepairTestRunConfig, ...] = (),
         agent_name: str = "repair-agent",
         max_total_agent_calls: int = 100,
@@ -40,6 +41,7 @@ class MockRepairCycleContext:
     ):
         self.stage_name = stage_name
         self.workflow_run_id = workflow_run_id
+        self.work_item_id = work_item_id
         self.test_configs = test_configs
         self.agent_name = agent_name
         self.max_total_agent_calls = max_total_agent_calls
@@ -228,7 +230,11 @@ class TestIRepairCycleProtocol:
         """Test that IRepairCycle Protocol has checkpoint method."""
         assert hasattr(IRepairCycle, "checkpoint")
 
-    def test_protocol_has_exactly_five_methods(self) -> None:
+    def test_protocol_has_analyze_systemic_issues_method(self) -> None:
+        """Test that IRepairCycle Protocol has analyze_systemic_issues method."""
+        assert hasattr(IRepairCycle, "analyze_systemic_issues")
+
+    def test_protocol_has_expected_method_count(self) -> None:
         """Test that IRepairCycle Protocol has exactly 9 methods."""
         methods = [m for m in dir(IRepairCycle) if not m.startswith("_") and callable(getattr(IRepairCycle, m))]
         assert len(methods) == 9

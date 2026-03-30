@@ -33,6 +33,7 @@ class RepairCycleEventContext:
 
     stage_name: str
     workflow_run_id: str
+    work_item_id: str
     test_configs: tuple[RepairTestRunConfig, ...]
     agent_name: str
     max_total_agent_calls: int
@@ -205,18 +206,15 @@ class RepairCycleEventHandler(EventHandler):
                             f"will use default agent"
                         )
                 else:
-                    logger.debug(
-                        f"No workflow template configured for board '{board_id}', will use default agent"
-                    )
+                    logger.debug(f"No workflow template configured for board '{board_id}', will use default agent")
             else:
-                logger.debug(
-                    "Workflow config service not provided, will use default agent for repair cycle"
-                )
+                logger.debug("Workflow config service not provided, will use default agent for repair cycle")
 
             # Create repair cycle context
             context = RepairCycleEventContext(
                 stage_name="Testing",
-                workflow_run_id=work_item_id,
+                workflow_run_id=work_item_id,  # TODO: derive actual workflow_run_id once pipeline run tracking is available
+                work_item_id=work_item_id,
                 test_configs=(
                     RepairTestRunConfig(test_type=RepairTestType.UNIT),
                     RepairTestRunConfig(test_type=RepairTestType.INTEGRATION),

@@ -1,4 +1,4 @@
-import { useSocket } from '../contexts/SocketContext'
+import { useSocket } from '../hooks/useSocket'
 
 export default function StatsCards() {
   const { stats } = useSocket()

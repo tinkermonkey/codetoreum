@@ -600,6 +600,8 @@ class UsageStats:
 # Type aliases
 StreamCallback = Callable[[StreamChunk], Awaitable[None]]
 
+# AgentLLMFactory is defined after ILLMProvider for resolved references
+
 
 # ============================================================================
 # Port Interface

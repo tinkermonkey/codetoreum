@@ -12,7 +12,9 @@ except ImportError:
     FrozenInstanceError = AttributeError  # type: ignore
 
 from codetoreum.domain.repair_cycle_types import (
+    AnalysisContext,
     CycleResult,
+    FailureClassification,
     RepairCycleAgentConfig,
     RepairCycleResult,
     RepairCycleStageConfig,
@@ -21,6 +23,7 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestRunConfig,
     RepairTestType,
     RepairTestWarning,
+    SystemicAnalysisResult,
 )
 
 # ============================================================================
@@ -1014,6 +1017,414 @@ class TestRepairCycleStageConfig:
                 test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
                 checkpoint_interval=0,
             )
+
+
+# ============================================================================
+# FailureClassification Enum Tests
+# ============================================================================
+
+
+class TestFailureClassification:
+    """Test FailureClassification enum."""
+
+    def test_all_five_values_exist(self):
+        """Test that all five required classification values exist."""
+        assert FailureClassification.CODE_DEFECT.value == "code_defect"
+        assert FailureClassification.ENVIRONMENT_ISSUE.value == "environment_issue"
+        assert FailureClassification.TRANSIENT_FAILURE.value == "transient_failure"
+        assert FailureClassification.DEPENDENCY_ISSUE.value == "dependency_issue"
+        assert FailureClassification.CONFIGURATION_ISSUE.value == "configuration_issue"
+
+    def test_enum_count(self):
+        """Test that exactly five enum values exist."""
+        values = list(FailureClassification)
+        assert len(values) == 5
+
+    def test_enum_is_str(self):
+        """Test that enum values are strings (inherits from str)."""
+        assert isinstance(FailureClassification.CODE_DEFECT, str)
+        assert isinstance(FailureClassification.ENVIRONMENT_ISSUE, str)
+        assert FailureClassification.CODE_DEFECT == "code_defect"
+
+    def test_enum_equality(self):
+        """Test enum equality."""
+        assert FailureClassification.CODE_DEFECT == FailureClassification.CODE_DEFECT
+        assert FailureClassification.CODE_DEFECT != FailureClassification.ENVIRONMENT_ISSUE
+
+
+# ============================================================================
+# SystemicAnalysisResult Immutability Tests
+# ============================================================================
+
+
+class TestSystemicAnalysisResult:
+    """Test SystemicAnalysisResult value object."""
+
+    def test_create_result_with_valid_data(self):
+        """Test creating a systemic analysis result with valid data."""
+        result = SystemicAnalysisResult(
+            classification=FailureClassification.ENVIRONMENT_ISSUE,
+            confidence=0.75,
+            reasoning="Environment setup misconfiguration detected",
+            affected_files=("setup.sh", "docker-compose.yml"),
+            recommended_action="Rebuild environment",
+        )
+        assert result.classification == FailureClassification.ENVIRONMENT_ISSUE
+        assert result.confidence == 0.75
+        assert result.reasoning == "Environment setup misconfiguration detected"
+        assert result.affected_files == ("setup.sh", "docker-compose.yml")
+        assert result.recommended_action == "Rebuild environment"
+
+    def test_create_result_with_empty_affected_files(self):
+        """Test creating a result with empty affected_files tuple."""
+        result = SystemicAnalysisResult(
+            classification=FailureClassification.TRANSIENT_FAILURE,
+            confidence=0.5,
+            reasoning="Likely transient network issue",
+            affected_files=(),
+            recommended_action="Retry without fix",
+        )
+        assert result.affected_files == ()
+
+    def test_result_immutability_raises_frozen_error(self):
+        """Test that frozen dataclass prevents modification."""
+        result = SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.9,
+            reasoning="Code defect found",
+            affected_files=("main.py",),
+            recommended_action="Fix code",
+        )
+        with pytest.raises(FrozenInstanceError):
+            result.classification = FailureClassification.ENVIRONMENT_ISSUE  # type: ignore[misc]
+
+        with pytest.raises(FrozenInstanceError):
+            result.confidence = 0.95  # type: ignore[misc]
+
+        with pytest.raises(FrozenInstanceError):
+            result.reasoning = "Different reasoning"  # type: ignore[misc]
+
+        with pytest.raises(FrozenInstanceError):
+            result.recommended_action = "Different action"  # type: ignore[misc]
+
+    def test_confidence_boundary_0_0_passes(self):
+        """Test that confidence=0.0 is valid."""
+        result = SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.0,
+            reasoning="Unknown classification",
+            affected_files=(),
+            recommended_action="Default action",
+        )
+        assert result.confidence == 0.0
+
+    def test_confidence_boundary_1_0_passes(self):
+        """Test that confidence=1.0 is valid."""
+        result = SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=1.0,
+            reasoning="Definite classification",
+            affected_files=(),
+            recommended_action="Action",
+        )
+        assert result.confidence == 1.0
+
+    def test_confidence_boundary_0_5_passes(self):
+        """Test that confidence=0.5 is valid."""
+        result = SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.5,
+            reasoning="Moderate confidence",
+            affected_files=(),
+            recommended_action="Action",
+        )
+        assert result.confidence == 0.5
+
+    def test_confidence_below_0_raises_error(self):
+        """Test that confidence < 0.0 raises ValueError."""
+        with pytest.raises(ValueError, match="confidence must be between 0.0 and 1.0"):
+            SystemicAnalysisResult(
+                classification=FailureClassification.CODE_DEFECT,
+                confidence=-0.1,
+                reasoning="Valid reasoning",
+                affected_files=(),
+                recommended_action="Action",
+            )
+
+    def test_confidence_above_1_raises_error(self):
+        """Test that confidence > 1.0 raises ValueError."""
+        with pytest.raises(ValueError, match="confidence must be between 0.0 and 1.0"):
+            SystemicAnalysisResult(
+                classification=FailureClassification.CODE_DEFECT,
+                confidence=1.1,
+                reasoning="Valid reasoning",
+                affected_files=(),
+                recommended_action="Action",
+            )
+
+    def test_invalid_classification_raises_error(self):
+        """Test that non-FailureClassification value raises ValueError."""
+        with pytest.raises(ValueError, match="classification must be a FailureClassification"):
+            SystemicAnalysisResult(
+                classification="invalid",  # type: ignore[arg-type]
+                confidence=0.5,
+                reasoning="Valid reasoning",
+                affected_files=(),
+                recommended_action="Action",
+            )
+
+    def test_empty_reasoning_raises_error(self):
+        """Test that empty reasoning raises ValueError."""
+        with pytest.raises(ValueError, match="reasoning is required"):
+            SystemicAnalysisResult(
+                classification=FailureClassification.CODE_DEFECT,
+                confidence=0.5,
+                reasoning="",
+                affected_files=(),
+                recommended_action="Action",
+            )
+
+    def test_empty_recommended_action_raises_error(self):
+        """Test that empty recommended_action raises ValueError."""
+        with pytest.raises(ValueError, match="recommended_action is required"):
+            SystemicAnalysisResult(
+                classification=FailureClassification.CODE_DEFECT,
+                confidence=0.5,
+                reasoning="Valid reasoning",
+                affected_files=(),
+                recommended_action="",
+            )
+
+    def test_affected_files_tuple_immutable(self):
+        """Test that affected_files tuple is immutable."""
+        result = SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.9,
+            reasoning="Code defect",
+            affected_files=("file1.py", "file2.py"),
+            recommended_action="Fix code",
+        )
+        with pytest.raises((TypeError, AttributeError)):
+            result.affected_files.append("file3.py")  # type: ignore[attr-defined]
+
+    def test_equality(self):
+        """Test value object equality."""
+        result1 = SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.9,
+            reasoning="Code defect",
+            affected_files=("file.py",),
+            recommended_action="Fix code",
+        )
+        result2 = SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.9,
+            reasoning="Code defect",
+            affected_files=("file.py",),
+            recommended_action="Fix code",
+        )
+        assert result1 == result2
+
+    def test_inequality_different_classification(self):
+        """Test value object inequality with different classification."""
+        result1 = SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.9,
+            reasoning="Code defect",
+            affected_files=("file.py",),
+            recommended_action="Fix code",
+        )
+        result2 = SystemicAnalysisResult(
+            classification=FailureClassification.ENVIRONMENT_ISSUE,
+            confidence=0.9,
+            reasoning="Code defect",
+            affected_files=("file.py",),
+            recommended_action="Fix code",
+        )
+        assert result1 != result2
+
+
+# ============================================================================
+# AnalysisContext Immutability Tests
+# ============================================================================
+
+
+class TestAnalysisContext:
+    """Test AnalysisContext value object."""
+
+    def test_create_context_with_required_fields_only(self):
+        """Test creating analysis context with only required fields."""
+        context = AnalysisContext(
+            work_item_id="WI-123",
+            iteration=2,
+            workflow_run_id="WR-456",
+        )
+        assert context.work_item_id == "WI-123"
+        assert context.iteration == 2
+        assert context.workflow_run_id == "WR-456"
+        assert context.prior_fix_attempts == ()
+        assert context.prior_classifications == ()
+
+    def test_create_context_with_all_fields(self):
+        """Test creating analysis context with all fields."""
+        result1 = SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.9,
+            reasoning="Previous classification",
+            affected_files=(),
+            recommended_action="Previous action",
+        )
+        context = AnalysisContext(
+            work_item_id="WI-123",
+            iteration=3,
+            workflow_run_id="WR-456",
+            prior_fix_attempts=("Applied file fix", "Rebuilt environment"),
+            prior_classifications=(result1,),
+        )
+        assert context.work_item_id == "WI-123"
+        assert context.iteration == 3
+        assert context.workflow_run_id == "WR-456"
+        assert len(context.prior_fix_attempts) == 2
+        assert len(context.prior_classifications) == 1
+        assert context.prior_classifications[0] == result1
+
+    def test_context_immutability_raises_frozen_error(self):
+        """Test that frozen dataclass prevents modification."""
+        context = AnalysisContext(
+            work_item_id="WI-123",
+            iteration=1,
+            workflow_run_id="WR-456",
+        )
+        with pytest.raises(FrozenInstanceError):
+            context.work_item_id = "WI-999"  # type: ignore[misc]
+
+        with pytest.raises(FrozenInstanceError):
+            context.iteration = 5  # type: ignore[misc]
+
+        with pytest.raises(FrozenInstanceError):
+            context.workflow_run_id = "WR-999"  # type: ignore[misc]
+
+    def test_empty_work_item_id_raises_error(self):
+        """Test that empty work_item_id raises ValueError."""
+        with pytest.raises(ValueError, match="work_item_id is required"):
+            AnalysisContext(
+                work_item_id="",
+                iteration=1,
+                workflow_run_id="WR-456",
+            )
+
+    def test_empty_workflow_run_id_raises_error(self):
+        """Test that empty workflow_run_id raises ValueError."""
+        with pytest.raises(ValueError, match="workflow_run_id is required"):
+            AnalysisContext(
+                work_item_id="WI-123",
+                iteration=1,
+                workflow_run_id="",
+            )
+
+    def test_negative_iteration_raises_error(self):
+        """Test that negative iteration raises ValueError."""
+        with pytest.raises(ValueError, match="iteration must be non-negative"):
+            AnalysisContext(
+                work_item_id="WI-123",
+                iteration=-1,
+                workflow_run_id="WR-456",
+            )
+
+    def test_zero_iteration_passes(self):
+        """Test that iteration=0 is valid."""
+        context = AnalysisContext(
+            work_item_id="WI-123",
+            iteration=0,
+            workflow_run_id="WR-456",
+        )
+        assert context.iteration == 0
+
+    def test_prior_fix_attempts_tuple_immutable(self):
+        """Test that prior_fix_attempts tuple is immutable."""
+        context = AnalysisContext(
+            work_item_id="WI-123",
+            iteration=1,
+            workflow_run_id="WR-456",
+            prior_fix_attempts=("Attempt 1", "Attempt 2"),
+        )
+        with pytest.raises((TypeError, AttributeError)):
+            context.prior_fix_attempts.append("Attempt 3")  # type: ignore[attr-defined]
+
+    def test_prior_classifications_tuple_immutable(self):
+        """Test that prior_classifications tuple is immutable."""
+        result = SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.9,
+            reasoning="Previous",
+            affected_files=(),
+            recommended_action="Action",
+        )
+        context = AnalysisContext(
+            work_item_id="WI-123",
+            iteration=1,
+            workflow_run_id="WR-456",
+            prior_classifications=(result,),
+        )
+        with pytest.raises((TypeError, AttributeError)):
+            context.prior_classifications.append(result)  # type: ignore[attr-defined]
+
+    def test_equality(self):
+        """Test value object equality."""
+        context1 = AnalysisContext(
+            work_item_id="WI-123",
+            iteration=2,
+            workflow_run_id="WR-456",
+        )
+        context2 = AnalysisContext(
+            work_item_id="WI-123",
+            iteration=2,
+            workflow_run_id="WR-456",
+        )
+        assert context1 == context2
+
+    def test_inequality_different_iteration(self):
+        """Test value object inequality with different iteration."""
+        context1 = AnalysisContext(
+            work_item_id="WI-123",
+            iteration=1,
+            workflow_run_id="WR-456",
+        )
+        context2 = AnalysisContext(
+            work_item_id="WI-123",
+            iteration=2,
+            workflow_run_id="WR-456",
+        )
+        assert context1 != context2
+
+    def test_escalation_support_with_multiple_classifications(self):
+        """Test that prior_classifications supports escalation scenarios."""
+        # Simulate escalation: first classification, then second based on failed attempt
+        result1 = SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.6,
+            reasoning="Initial guess: code defect",
+            affected_files=("main.py",),
+            recommended_action="Fix code",
+        )
+        result2 = SystemicAnalysisResult(
+            classification=FailureClassification.ENVIRONMENT_ISSUE,
+            confidence=0.95,
+            reasoning="Escalated: environment issue after code fix failed",
+            affected_files=(),
+            recommended_action="Rebuild environment",
+        )
+        context = AnalysisContext(
+            work_item_id="WI-123",
+            iteration=2,
+            workflow_run_id="WR-456",
+            prior_fix_attempts=("Applied file fix to main.py",),
+            prior_classifications=(result1, result2),
+        )
+        assert len(context.prior_classifications) == 2
+        assert context.prior_classifications[0].confidence == 0.6
+        assert context.prior_classifications[1].confidence == 0.95
+        assert context.prior_classifications[1].classification == FailureClassification.ENVIRONMENT_ISSUE
 
 
 # ============================================================================

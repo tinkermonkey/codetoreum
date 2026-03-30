@@ -32,7 +32,7 @@ def llm_factory():
     """Factory that returns a MockLLMAdapter regardless of agent name."""
     llm_adapter = MockLLMAdapter()
 
-    def factory(agent_name: str):
+    async def factory(agent_name: str):
         return llm_adapter
 
     return factory
@@ -113,6 +113,7 @@ class TestScenario06SDLCPipelineWithRepair:
         repair_context = RepairCycleEventContext(
             stage_name="Testing",
             workflow_run_id="work-item-1",
+            work_item_id="work-item-1",
             test_configs=(
                 RepairTestRunConfig(test_type=RepairTestType.UNIT),
                 RepairTestRunConfig(test_type=RepairTestType.INTEGRATION),
@@ -185,6 +186,7 @@ class TestScenario06SDLCPipelineWithRepair:
         repair_context = RepairCycleEventContext(
             stage_name="Testing",
             workflow_run_id="work-item-2",
+            work_item_id="work-item-2",
             test_configs=(
                 RepairTestRunConfig(test_type=RepairTestType.UNIT),
                 RepairTestRunConfig(test_type=RepairTestType.INTEGRATION),
@@ -260,6 +262,7 @@ class TestScenario06SDLCPipelineWithRepair:
         repair_context = RepairCycleEventContext(
             stage_name="Testing",
             workflow_run_id="work-item-10",
+            work_item_id="work-item-10",
             test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
             agent_name="senior_software_engineer",
             max_total_agent_calls=5,  # Limited to force failure
@@ -373,6 +376,7 @@ class TestScenario06SDLCPipelineWithRepair:
         repair_context = RepairCycleEventContext(
             stage_name="Testing",
             workflow_run_id="perf-test",
+            work_item_id="perf-test",
             test_configs=(
                 RepairTestRunConfig(test_type=RepairTestType.UNIT),
                 RepairTestRunConfig(test_type=RepairTestType.INTEGRATION),

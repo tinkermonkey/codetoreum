@@ -106,6 +106,9 @@ from codetoreum.ports.output.repository import (
     RepositoryStatus,
 )
 from codetoreum.ports.output.storage import IStorage, StorageObject
+from codetoreum.ports.output.systemic_analysis_service import (
+    ISystemicAnalysisService,
+)
 from codetoreum.ports.output.ticket_system import Comment, ITicketSystem
 from codetoreum.ports.output.version_control_service import (
     IVersionControlService,
@@ -206,6 +209,8 @@ __all__ = [
     "IRepairCycle",
     "RepairCycleContext",
     "IRepairCycleCheckpointStore",
+    # Systemic Analysis Service
+    "ISystemicAnalysisService",
     # Repository
     "IRepository",
     "MergeResult",

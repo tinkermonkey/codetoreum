@@ -31,6 +31,30 @@ from enum import Enum
 logger = logging.getLogger(__name__)
 
 
+class FailureClassification(str, Enum):
+    """Classification of the root cause of test failures.
+
+    Enables systemic analysis to categorize failures and dispatch to appropriate
+    handling strategy without wasting agent calls on unfixable problems.
+
+    **Enum Values:**
+    - CODE_DEFECT: Issue is in the source code (traditional fix path)
+    - ENVIRONMENT_ISSUE: Environment setup problem (rebuild/verify path)
+    - TRANSIENT_FAILURE: Temporary failure, likely to pass on retry (no fix)
+    - DEPENDENCY_ISSUE: External dependency problem (systemic fix path)
+    - CONFIGURATION_ISSUE: Configuration error (systemic fix path)
+
+    **Serialization**: Inherits from `str, Enum` for direct JSON serialization
+    without `.value` access.
+    """
+
+    CODE_DEFECT = "code_defect"
+    ENVIRONMENT_ISSUE = "environment_issue"
+    TRANSIENT_FAILURE = "transient_failure"
+    DEPENDENCY_ISSUE = "dependency_issue"
+    CONFIGURATION_ISSUE = "configuration_issue"
+
+
 class RepairTestType(Enum):
     """Test types in execution order.
 
@@ -349,14 +373,16 @@ class RepairCycleAgentConfig:
     """
 
     # Known sub-task names (canonical source for validation)
-    KNOWN_SUB_TASKS = frozenset([
-        "test_execution",
-        "code_fix",
-        "systemic_analysis",
-        "systemic_fix",
-        "env_rebuild",
-        "env_verification",
-    ])
+    KNOWN_SUB_TASKS = frozenset(
+        [
+            "test_execution",
+            "code_fix",
+            "systemic_analysis",
+            "systemic_fix",
+            "env_rebuild",
+            "env_verification",
+        ]
+    )
 
     test_execution: str | None = None
     code_fix: str | None = None
@@ -500,4 +526,83 @@ class RepairCycleStageConfig:
             raise ValueError(msg)
         if self.checkpoint_interval <= 0:
             msg = "checkpoint_interval must be > 0"
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True)
+class SystemicAnalysisResult:
+    """Result of systemic analysis classifying the root cause of test failures.
+
+    Immutable record of failure classification, enabling repair cycle orchestration
+    to dispatch to the correct handling strategy (code fix, environment rebuild,
+    dependency fix, or transient retry).
+
+    **Immutability**: Frozen dataclass - all fields read-only after construction.
+    Attempting to modify any field raises FrozenInstanceError.
+
+    Attributes:
+        classification: Root cause category (FailureClassification enum)
+        confidence: Confidence in classification (0.0–1.0)
+        reasoning: Explanation of classification decision
+        affected_files: Immutable tuple of file names affected by the issue
+        recommended_action: Recommended remediation step for this classification
+    """
+
+    classification: FailureClassification
+    confidence: float
+    reasoning: str
+    affected_files: tuple[str, ...]  # Immutable tuple
+    recommended_action: str
+
+    def __post_init__(self) -> None:
+        """Validate analysis result after initialization."""
+        if not isinstance(self.classification, FailureClassification):
+            msg = "classification must be a FailureClassification"
+            raise ValueError(msg)
+        if not 0.0 <= self.confidence <= 1.0:
+            msg = "confidence must be between 0.0 and 1.0"
+            raise ValueError(msg)
+        if not self.reasoning:
+            msg = "reasoning is required"
+            raise ValueError(msg)
+        if not self.recommended_action:
+            msg = "recommended_action is required"
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True)
+class AnalysisContext:
+    """Context for systemic failure analysis.
+
+    Immutable record of context needed to classify failures, including prior
+    attempts and classifications for escalation support.
+
+    **Immutability**: Frozen dataclass - all fields read-only after construction.
+    Collections stored as immutable Tuples instead of Lists.
+
+    Attributes:
+        work_item_id: Identifier of the work item being repaired
+        iteration: Current iteration number in the repair cycle
+        workflow_run_id: Identifier of the workflow run
+        prior_fix_attempts: Immutable tuple of descriptions of prior fix attempts
+        prior_classifications: Immutable tuple of prior classification results
+                              (for escalation and re-classification)
+    """
+
+    work_item_id: str
+    iteration: int
+    workflow_run_id: str
+    prior_fix_attempts: tuple[str, ...] = ()  # Immutable tuple
+    prior_classifications: tuple[SystemicAnalysisResult, ...] = ()  # Immutable tuple
+
+    def __post_init__(self) -> None:
+        """Validate analysis context after initialization."""
+        if not self.work_item_id:
+            msg = "work_item_id is required"
+            raise ValueError(msg)
+        if not self.workflow_run_id:
+            msg = "workflow_run_id is required"
+            raise ValueError(msg)
+        if self.iteration < 0:
+            msg = "iteration must be non-negative"
             raise ValueError(msg)

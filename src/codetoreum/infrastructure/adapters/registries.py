@@ -38,6 +38,7 @@ from codetoreum.ports.output.repair_cycle_service import IRepairCycle
 from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.review_cycle_service import IReviewCycle
 from codetoreum.ports.output.storage import IStorage
+from codetoreum.ports.output.systemic_analysis_service import ISystemicAnalysisService
 from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.version_control_service import IVersionControlService
 from codetoreum.ports.output.work_item_branch_tracker import IWorkItemBranchTracker
@@ -700,4 +701,16 @@ class ActiveWorkflowRunRegistryRegistry(AdapterRegistry[IActiveWorkflowRunRegist
 
     def _is_valid_adapter(self, adapter_type: type[IActiveWorkflowRunRegistry]) -> bool:
         """Validate that an adapter implements IActiveWorkflowRunRegistry."""
+        return _validate_adapter_implements_interface(adapter_type, self._port_interface)
+
+
+class SystemicAnalysisRegistry(AdapterRegistry[ISystemicAnalysisService]):
+    """Registry for ISystemicAnalysisService adapter implementations."""
+
+    def __init__(self):
+        """Initialize the systemic analysis service registry."""
+        super().__init__(ISystemicAnalysisService)
+
+    def _is_valid_adapter(self, adapter_type: type[ISystemicAnalysisService]) -> bool:
+        """Validate that an adapter implements ISystemicAnalysisService."""
         return _validate_adapter_implements_interface(adapter_type, self._port_interface)

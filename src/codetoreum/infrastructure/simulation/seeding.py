@@ -1261,8 +1261,13 @@ class SimulationDataSeeder:
         return self
 
     async def _seed_from_split_dir(self, scenario_dir: Path) -> "SimulationDataSeeder":
-        """Two-pass seeding from a split orchestrator/ + external/ directory."""
-        # Pass 1: always — orchestrator config
+        """Three-pass seeding from a split orchestrator/ + external/ directory.
+
+        Pass 1: Seed external projects first (to establish project context)
+        Pass 2: Apply orchestrator config (workflows, agents, board policies)
+        Pass 3: Seed remaining external data (work items, boards, placements)
+        """
+        # Load orchestrator config (needed for validation and later passes)
         orch_data = _merge_yaml_dir(scenario_dir / "orchestrator")
         if not orch_data:
             message = f"Empty orchestrator config in {scenario_dir / 'orchestrator'}"
@@ -1274,9 +1279,9 @@ class SimulationDataSeeder:
             raise ValidationError(message)
 
         logger.info(f"Loaded orchestrator config: {orch.name} (version {orch.version})")
-        await self._apply_orchestrator_config(orch)
 
-        # Pass 2: simulation only — external seed data
+        # Load external data (needed for all passes)
+        ext = None
         external_dir = scenario_dir / "external"
         if external_dir.is_dir():
             ext_data = _merge_yaml_dir(external_dir)
@@ -1286,7 +1291,24 @@ class SimulationDataSeeder:
                 except Exception as e:
                     message = f"External seed data validation failed: {e}"
                     raise ValidationError(message)
-                await self._seed_external_data(ext, orch)
+
+        # Pass 1: Seed external projects first to establish project context
+        if ext and ext.projects:
+            for project_model in ext.projects:
+                await self.create_project(
+                    name=project_model.name,
+                    description=project_model.description,
+                    repository_url=project_model.repository_url,
+                    default_branch=project_model.default_branch,
+                    metadata=project_model.metadata,
+                )
+
+        # Pass 2: Apply orchestrator config (with project context now available)
+        await self._apply_orchestrator_config(orch)
+
+        # Pass 3: Seed remaining external data
+        if ext:
+            await self._seed_external_data(ext, orch)
 
         # If orchestrator config was seeded with placeholder project_id and we now have
         # a real project, migrate workflows/agents from placeholder to the real project
@@ -1367,17 +1389,11 @@ class SimulationDataSeeder:
             )
 
     async def _seed_external_data(self, ext: ExternalSeedModel, orch: OrchestratorConfigModel) -> None:
-        """Seed external-system data: projects, work items, board structures, placements."""
-        # Seed projects
-        for project_model in ext.projects:
-            await self.create_project(
-                name=project_model.name,
-                description=project_model.description,
-                repository_url=project_model.repository_url,
-                default_branch=project_model.default_branch,
-                metadata=project_model.metadata,
-            )
+        """Seed external-system data: work items, board structures, placements.
 
+        Note: Projects are seeded separately in _seed_from_split_dir as Pass 1
+        to establish the project context for orchestrator config in Pass 2.
+        """
         # Seed work items
         priority_map = {
             "low": WorkItemPriority.LOW,

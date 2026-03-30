@@ -546,6 +546,7 @@ class TestRepairCycleEventContext:
         context = RepairCycleEventContext(
             stage_name="Testing",
             workflow_run_id="item-1",
+            work_item_id="issue-123",
             test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
             agent_name="senior_software_engineer",
             max_total_agent_calls=100,
@@ -555,6 +556,7 @@ class TestRepairCycleEventContext:
 
         assert context.stage_name == "Testing"
         assert context.workflow_run_id == "item-1"
+        assert context.work_item_id == "issue-123"
         assert context.agent_name == "senior_software_engineer"
         assert context.max_total_agent_calls == 100
         assert context.checkpoint_interval == 5
@@ -569,6 +571,7 @@ class TestRepairCycleEventContext:
         context = RepairCycleEventContext(
             stage_name="Testing",
             workflow_run_id="item-1",
+            work_item_id="issue-123",
             test_configs=configs,
             agent_name="senior_software_engineer",
             max_total_agent_calls=100,
@@ -605,9 +608,7 @@ class TestAgentConfigExtraction:
         )
 
     @pytest.mark.asyncio
-    async def test_no_workflow_config_service_uses_default_agent(
-        self, handler, repair_cycle_adapter, caplog
-    ):
+    async def test_no_workflow_config_service_uses_default_agent(self, handler, repair_cycle_adapter, caplog):
         """Test when workflow_config is None, uses default agent."""
         import logging
 

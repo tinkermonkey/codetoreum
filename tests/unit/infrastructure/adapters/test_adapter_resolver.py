@@ -265,7 +265,8 @@ class TestAdapterResolver:
         # All adapter fields should be non-None (except optional ones)
         import dataclasses
 
-        optional_fields = {"agent_executor", "audit_store", "tracer"}
+        # Optional fields are injected by bootstrap post-processing
+        optional_fields = {"agent_executor", "audit_store", "tracer", "systemic_analysis_service"}
         for field in dataclasses.fields(result):
             adapter = getattr(result, field.name)
             if field.name not in optional_fields:
@@ -280,8 +281,8 @@ class TestAdapterResolver:
 
         # result is a SimulationAdapters dataclass, not a dict
         assert isinstance(result, SimulationAdapters)
-        # The internal _resolved dict should have 29 entries (all except audit_store which is optional)
-        assert len(resolver._resolved) == 29
+        # The internal _resolved dict should have 30 entries (includes systemic_analysis_service)
+        assert len(resolver._resolved) == 30
 
     def test_resolve_all_respects_dependency_order(self, factory, dependencies, adapter_config):
         """Test that adapters are resolved in dependency order."""
@@ -906,7 +907,8 @@ class TestAdapterResolverIntegration:
         assert isinstance(result, SimulationAdapters)
         import dataclasses
 
-        optional_fields = {"agent_executor", "audit_store", "tracer"}
+        # Optional fields are injected by bootstrap post-processing
+        optional_fields = {"agent_executor", "audit_store", "tracer", "systemic_analysis_service"}
         for field in dataclasses.fields(result):
             adapter = getattr(result, field.name)
             if field.name not in optional_fields:
@@ -1013,9 +1015,7 @@ class TestAgentLLMFactory:
         assert provider is not None
 
     @pytest.mark.asyncio
-    async def test_agent_llm_factory_supports_async_repo_via_await(
-        self, factory, dependencies, adapter_config
-    ):
+    async def test_agent_llm_factory_supports_async_repo_via_await(self, factory, dependencies, adapter_config):
         """Test that factory correctly handles async repositories by awaiting them.
 
         The factory is now async-safe and handles both sync and async repositories.

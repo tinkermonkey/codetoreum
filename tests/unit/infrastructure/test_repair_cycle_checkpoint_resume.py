@@ -28,6 +28,7 @@ class _RepairCycleContextImpl:
 
     stage_name: str
     workflow_run_id: str
+    work_item_id: str
     test_configs: tuple[RepairTestRunConfig, ...]
     agent_name: str
     max_total_agent_calls: int
@@ -39,6 +40,7 @@ def _create_repair_cycle_context(**kwargs: Any) -> _RepairCycleContextImpl:
     defaults: dict[str, Any] = {
         "stage_name": "code_review",
         "workflow_run_id": "run-123",
+        "work_item_id": "item-1",
         "test_configs": (),
         "agent_name": "reviewer",
         "max_total_agent_calls": 10,

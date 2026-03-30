@@ -47,6 +47,7 @@ class MockRepairCycleContext:
         self,
         stage_name: str = "fix_failures",
         workflow_run_id: str = "pipeline_123",
+        work_item_id: str = "item-1",
         test_configs: tuple | None = None,
         agent_name: str = "senior_software_engineer",
         max_total_agent_calls: int = 100,
@@ -55,6 +56,7 @@ class MockRepairCycleContext:
     ):
         self.stage_name = stage_name
         self.workflow_run_id = workflow_run_id
+        self.work_item_id = work_item_id
         self.test_configs = test_configs or (
             RepairTestRunConfig(
                 test_type=RepairTestType.UNIT,
@@ -551,8 +553,6 @@ class TestFullExecutionFlow:
         assert len(result.test_results) == 1
 
 
-
-
 class TestAgentSelectionTracking:
     """Tests for agent selection tracking in repair cycle."""
 
@@ -650,13 +650,8 @@ class TestAgentSelectionTracking:
         adapter.current_project = "proj-1"
 
         # Use the real RepairCycleAgentConfig domain type (not a mock)
-        agent_config = RepairCycleAgentConfig(
-            test_execution="qa_engineer",
-            code_fix="senior_software_engineer"
-        )
-        context = MockRepairCycleContext(
-            agent_config=agent_config, agent_name="default_agent"
-        )
+        agent_config = RepairCycleAgentConfig(test_execution="qa_engineer", code_fix="senior_software_engineer")
+        context = MockRepairCycleContext(agent_config=agent_config, agent_name="default_agent")
 
         result = RepairTestResult(
             test_type=RepairTestType.UNIT,
@@ -806,10 +801,7 @@ class TestAgentSelectionTracking:
         adapter.set_test_result_sequence(RepairTestType.UNIT, [failure_result, success_result])
 
         # Use the real RepairCycleAgentConfig domain type (not a mock)
-        agent_config = RepairCycleAgentConfig(
-            test_execution="qa_engineer",
-            code_fix="senior_software_engineer"
-        )
+        agent_config = RepairCycleAgentConfig(test_execution="qa_engineer", code_fix="senior_software_engineer")
         context = MockRepairCycleContext(agent_config=agent_config)
 
         # Run the full cycle

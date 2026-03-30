@@ -59,6 +59,7 @@ from codetoreum.adapters.testing import (
     MockProjectManagerAdapter,
     MockRepairCycleAdapter,
     MockReviewCycleAdapter,
+    MockSystemicAnalysisAdapter,
     MockWorkItemService,
     SimpleEncryptionAdapter,
 )
@@ -137,6 +138,18 @@ except ImportError:
     )
     ProductionRepairCycleAdapter = None  # type: ignore
 
+try:
+    from codetoreum.adapters.secondary.llm_systemic_analysis_adapter import (
+        LLMSystemicAnalysisAdapter,
+    )
+except ImportError:
+    logger.warning(
+        "Optional adapter LLMSystemicAnalysisAdapter not available, skipping registration",
+        exc_info=True,
+        extra={"adapter": "LLMSystemicAnalysisAdapter"},
+    )
+    LLMSystemicAnalysisAdapter = None  # type: ignore
+
 from codetoreum.infrastructure.adapters.registries import (
     ActiveWorkflowRunRegistryRegistry,
     AgentExecutorRegistry,
@@ -163,6 +176,7 @@ from codetoreum.infrastructure.adapters.registries import (
     RepositoryRegistry,
     ReviewCycleServiceRegistry,
     StorageRegistry,
+    SystemicAnalysisRegistry,
     TicketSystemRegistry,
     VersionControlServiceRegistry,
     WorkflowConfigServiceRegistry,
@@ -207,6 +221,7 @@ from codetoreum.ports.output.repair_cycle_service import IRepairCycle
 from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.review_cycle_service import IReviewCycle
 from codetoreum.ports.output.storage import IStorage
+from codetoreum.ports.output.systemic_analysis_service import ISystemicAnalysisService
 from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.version_control_service import IVersionControlService
 from codetoreum.ports.output.work_item_branch_tracker import IWorkItemBranchTracker
@@ -282,6 +297,7 @@ class AdapterFactory:
         self._work_item_service_registry = WorkItemServiceRegistry()
         self._repair_cycle_checkpoint_registry = RepairCycleCheckpointStoreRegistry()
         self._active_workflow_run_registry_registry = ActiveWorkflowRunRegistryRegistry()
+        self._systemic_analysis_registry = SystemicAnalysisRegistry()
 
         # Dependency injection container
         self._dependencies: dict[str, Any] = {}
@@ -863,6 +879,28 @@ class AdapterFactory:
             set_as_default=True,
         )
 
+        # Systemic Analysis Service Adapters
+        self._systemic_analysis_registry.register(
+            name="mock",
+            adapter_type=MockSystemicAnalysisAdapter,
+            description="Mock systemic analysis for testing",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
+            set_as_default=True,
+        )
+        if LLMSystemicAnalysisAdapter:
+            self._systemic_analysis_registry.register(
+                name="llm",
+                adapter_type=LLMSystemicAnalysisAdapter,
+                description="LLM-based systemic analysis for production",
+                version="1.0.0",
+                tags=["production", "llm"],
+            )
+
     # Registry access methods
 
     @property
@@ -1015,6 +1053,11 @@ class AdapterFactory:
         """Get the active workflow run registry."""
         return self._active_workflow_run_registry_registry
 
+    @property
+    def systemic_analysis_registry(self) -> SystemicAnalysisRegistry:
+        """Get the systemic analysis registry."""
+        return self._systemic_analysis_registry
+
     def get_registry(self, slot_name: str) -> Any:
         """
         Get the registry for a given adapter slot name.
@@ -1059,6 +1102,7 @@ class AdapterFactory:
             "branch_tracker": self._work_item_branch_tracker_registry,
             "work_item_service": self._work_item_service_registry,
             "repository": self._repository_registry,
+            "systemic_analysis": self._systemic_analysis_registry,
         }
 
         if slot_name not in registry_map:
@@ -1460,6 +1504,12 @@ class AdapterFactory:
         """Create an active workflow run registry adapter instance."""
         return self._create_adapter(
             self._active_workflow_run_registry_registry, adapter_name, "active workflow run registry", **kwargs
+        )
+
+    def create_systemic_analysis_service(self, adapter_name: str | None = None, **kwargs) -> ISystemicAnalysisService:
+        """Create a systemic analysis service adapter instance."""
+        return self._create_adapter(
+            self._systemic_analysis_registry, adapter_name, "systemic analysis service", **kwargs
         )
 
     def _apply_resilience_wrapper(

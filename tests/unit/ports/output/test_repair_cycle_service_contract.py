@@ -41,6 +41,7 @@ class MockRepairCycleContext:
         self,
         stage_name: str = "fix_failures",
         workflow_run_id: str = "pipeline-123",
+        work_item_id: str = "item-1",
         test_configs: tuple[RepairTestRunConfig, ...] = (),
         agent_name: str = "repair-agent",
         max_total_agent_calls: int = 100,
@@ -49,6 +50,7 @@ class MockRepairCycleContext:
     ):
         self.stage_name = stage_name
         self.workflow_run_id = workflow_run_id
+        self.work_item_id = work_item_id
         self.test_configs = test_configs
         self.agent_name = agent_name
         self.max_total_agent_calls = max_total_agent_calls

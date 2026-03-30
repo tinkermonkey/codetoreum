@@ -46,6 +46,7 @@ from codetoreum.ports.output.repair_cycle_service import IRepairCycle
 from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.review_cycle_service import IReviewCycle
 from codetoreum.ports.output.storage import IStorage
+from codetoreum.ports.output.systemic_analysis_service import ISystemicAnalysisService
 from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.version_control_service import IVersionControlService
 from codetoreum.ports.output.work_item_branch_tracker import IWorkItemBranchTracker
@@ -350,6 +351,10 @@ class AdapterResolver:
         Special handling for SimulationEngine-coupled adapters:
         - If mock variant selected: use engine to create time-aware mock with llm_factory
         - If real variant: create directly without engine
+
+        The systemic_analysis_service is resolved separately in resolve_all() before
+        repair_cycle creation to ensure centralized adapter resolution and proper
+        dependency injection at construction time.
         """
         if self._config.repair_cycle == "mock":
             # Engine creates time-aware mock with llm_factory for contract enforcement
@@ -361,10 +366,14 @@ class AdapterResolver:
                 container_adapter=container_adapter,
             )
         # Real adapter: inject agent-aware factory
+        # Use the pre-resolved systemic_analysis_service (resolved in phase 9)
+        systemic_analysis_service = self._resolved.get("systemic_analysis_service")
+
         return self._factory.create_repair_cycle(
             adapter_name=self._config.repair_cycle,
             llm_factory=self._create_agent_llm_factory(),
             agent_repository=self._resolved["agent_repository"],
+            systemic_analysis_service=systemic_analysis_service,
         )
 
     def resolve_code_review(self) -> ICodeReviewService:
@@ -379,6 +388,44 @@ class AdapterResolver:
         return self._factory.create_container_recovery(
             adapter_name=self._config.container_recovery,
             time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
+        )
+
+    def resolve_systemic_analysis_service(self) -> ISystemicAnalysisService:
+        """Resolve systemic analysis service adapter.
+
+        Follows the standard resolver pattern: reads from own config key (`systemic_analysis`)
+        and delegates to factory method.
+
+        When the configured adapter requires dependencies (e.g., LLM provider for production):
+        - Ensures those dependencies are already resolved
+        - Passes them to the factory method
+        - Raises AdapterConfigurationError if dependencies are missing in production
+
+        Returns:
+            ISystemicAnalysisService implementation
+
+        Raises:
+            AdapterConfigurationError: If production adapter is configured but required
+                                        dependencies (llm_provider) are missing
+        """
+        # For "llm" adapter, we need the resolved LLM provider
+        if self._config.systemic_analysis == "llm":
+            llm_provider = self._resolved.get("llm")
+            if not llm_provider:
+                raise AdapterConfigurationError(
+                    [
+                        "systemic_analysis adapter set to 'llm' but llm_provider is not resolved. "
+                        "Ensure llm_provider is resolved before systemic_analysis service.",
+                    ]
+                )
+            return self._factory.create_systemic_analysis_service(
+                adapter_name=self._config.systemic_analysis,
+                llm_factory=lambda: llm_provider,
+            )
+
+        # For all other adapters (mock, in_memory, etc.), use factory with no extra args
+        return self._factory.create_systemic_analysis_service(
+            adapter_name=self._config.systemic_analysis,
         )
 
     def resolve_repository(self) -> IRepository:
@@ -442,16 +489,12 @@ class AdapterResolver:
 
         # Attempt synchronous cache population at factory creation time
         # For InMemoryAgentRepository, use get_all_sync() directly
-        if hasattr(agent_repo, "get_all_sync") and callable(
-            agent_repo.get_all_sync
-        ):
+        if hasattr(agent_repo, "get_all_sync") and callable(agent_repo.get_all_sync):
             try:
                 agents = agent_repo.get_all_sync()
                 with llm_provider_cache_lock:
                     for agent in agents:
-                        llm_provider_cache[agent.name] = (
-                            self._build_llm_provider(agent)
-                        )
+                        llm_provider_cache[agent.name] = self._build_llm_provider(agent)
                 logger.debug(
                     f"Pre-populated LLM provider cache with {len(agents)} agents",
                     extra={
@@ -495,9 +538,7 @@ class AdapterResolver:
                 agent = None
 
                 # Prefer synchronous method if available (InMemoryAgentRepository)
-                if hasattr(agent_repo, "get_by_name_sync") and callable(
-                    agent_repo.get_by_name_sync
-                ):
+                if hasattr(agent_repo, "get_by_name_sync") and callable(agent_repo.get_by_name_sync):
                     agent = agent_repo.get_by_name_sync(agent_name)
                 # Check if get_by_name is async
                 elif asyncio.iscoroutinefunction(agent_repo.get_by_name):
@@ -579,7 +620,7 @@ class AdapterResolver:
         are constructed after their dependencies.
 
         Returns:
-            SimulationAdapters instance with all 29 adapters fully typed
+            SimulationAdapters instance with all 30 adapters fully typed (includes systemic_analysis_service)
 
         Raises:
             AdapterConfigurationError: If credentials are missing/invalid
@@ -629,12 +670,15 @@ class AdapterResolver:
         # 8. Repository adapter (depends on event_emitter)
         self._resolved["repository"] = self.resolve_repository()
 
-        # 9. Review and repair cycles depend on previously resolved adapters
-        # (review_cycle depends on llm, repair_cycle depends on checkpoint_store and container)
+        # 9. Systemic analysis service (depends on llm, used by repair_cycle)
+        self._resolved["systemic_analysis_service"] = self.resolve_systemic_analysis_service()
+
+        # 10. Review and repair cycles depend on previously resolved adapters
+        # (review_cycle depends on llm, repair_cycle depends on checkpoint_store, container, and systemic_analysis_service)
         self._resolved["review_cycle"] = self.resolve_review_cycle()
         self._resolved["repair_cycle"] = self.resolve_repair_cycle()
 
-        # 10. Code review and container recovery adapters
+        # 11. Code review and container recovery adapters
         self._resolved["code_review"] = self.resolve_code_review()
         self._resolved["container_recovery"] = self.resolve_container_recovery()
 
@@ -682,4 +726,6 @@ class AdapterResolver:
             work_item_service=self._resolved["work_item_service"],
             # Container recovery
             container_recovery=self._resolved["container_recovery"],
+            # Systemic analysis service (resolved in phase 9)
+            systemic_analysis_service=self._resolved["systemic_analysis_service"],
         )

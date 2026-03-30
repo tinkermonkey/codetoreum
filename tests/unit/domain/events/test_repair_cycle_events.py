@@ -14,10 +14,13 @@ from codetoreum.domain.events import (
     RepairCycleTestExecutionStartedEvent,
     RepairCycleWarningReviewCompletedEvent,
     RepairCycleWarningReviewStartedEvent,
+    SystemicAnalysisCompletedEvent,
+    SystemicAnalysisStartedEvent,
     now_iso,
 )
 from codetoreum.domain.repair_cycle_types import (
     CycleResult,
+    FailureClassification,
     RepairTestFailure,
     RepairTestResult,
     RepairTestType,
@@ -954,3 +957,485 @@ class TestDeprecationWarnings:
         with pytest.warns(DeprecationWarning, match="pipeline_run_id.*deprecated"):
             event = RepairCycleCompletedEvent.from_dict(data)
             assert event.workflow_run_id == "run-completed"
+
+
+class TestSystemicAnalysisStartedEvent:
+    """Test SystemicAnalysisStartedEvent."""
+
+    def test_create_valid_event(self):
+        """Test creating a valid systemic analysis started event."""
+        timestamp = now_iso()
+        event = SystemicAnalysisStartedEvent(
+            type="repair_cycle.systemic_analysis_started",
+            timestamp=timestamp,
+            source="repair_cycle",
+            work_item_id="issue-123",
+            workflow_run_id="run-456",
+            failure_count=5,
+        )
+
+        assert event.work_item_id == "issue-123"
+        assert event.workflow_run_id == "run-456"
+        assert event.failure_count == 5
+        assert event.type == "repair_cycle.systemic_analysis_started"
+
+    def test_missing_work_item_id(self):
+        """Test that work_item_id is required."""
+        with pytest.raises(ValueError, match="work_item_id"):
+            SystemicAnalysisStartedEvent(
+                type="repair_cycle.systemic_analysis_started",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                work_item_id="",
+                workflow_run_id="run-456",
+                failure_count=5,
+            )
+
+    def test_missing_workflow_run_id(self):
+        """Test that workflow_run_id is required."""
+        with pytest.raises(ValueError, match="workflow_run_id"):
+            SystemicAnalysisStartedEvent(
+                type="repair_cycle.systemic_analysis_started",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                work_item_id="issue-123",
+                workflow_run_id="",
+                failure_count=5,
+            )
+
+    def test_default_failure_count(self):
+        """Test that failure_count defaults to 0."""
+        event = SystemicAnalysisStartedEvent(
+            type="repair_cycle.systemic_analysis_started",
+            timestamp=now_iso(),
+            source="repair_cycle",
+            work_item_id="issue-123",
+            workflow_run_id="run-456",
+        )
+        assert event.failure_count == 0
+
+    def test_serialization(self):
+        """Test SystemicAnalysisStartedEvent serialization."""
+        timestamp = now_iso()
+        event = SystemicAnalysisStartedEvent(
+            type="repair_cycle.systemic_analysis_started",
+            timestamp=timestamp,
+            source="repair_cycle",
+            work_item_id="issue-123",
+            workflow_run_id="run-456",
+            failure_count=5,
+        )
+
+        d = event.to_dict()
+        assert d["work_item_id"] == "issue-123"
+        assert d["workflow_run_id"] == "run-456"
+        assert d["failure_count"] == 5
+        assert d["type"] == "repair_cycle.systemic_analysis_started"
+        assert d["timestamp"] == timestamp
+
+    def test_deserialization(self):
+        """Test SystemicAnalysisStartedEvent deserialization."""
+        timestamp = now_iso()
+        d = {
+            "type": "repair_cycle.systemic_analysis_started",
+            "timestamp": timestamp,
+            "source": "repair_cycle",
+            "work_item_id": "issue-123",
+            "workflow_run_id": "run-456",
+            "failure_count": 5,
+        }
+
+        event = SystemicAnalysisStartedEvent.from_dict(d)
+        assert event.work_item_id == "issue-123"
+        assert event.workflow_run_id == "run-456"
+        assert event.failure_count == 5
+        assert event.timestamp == timestamp
+
+    def test_deserialization_missing_optional_fields(self):
+        """Test deserialization with missing optional fields uses defaults."""
+        d = {
+            "type": "repair_cycle.systemic_analysis_started",
+            "timestamp": now_iso(),
+            "source": "repair_cycle",
+            "work_item_id": "issue-123",
+            "workflow_run_id": "run-456",
+        }
+
+        event = SystemicAnalysisStartedEvent.from_dict(d)
+        assert event.failure_count == 0
+
+    def test_round_trip_serialization(self):
+        """Test that serialization round-trips through deserialization."""
+        original = SystemicAnalysisStartedEvent(
+            type="repair_cycle.systemic_analysis_started",
+            timestamp=now_iso(),
+            source="repair_cycle",
+            work_item_id="issue-789",
+            workflow_run_id="run-999",
+            failure_count=10,
+        )
+
+        d = original.to_dict()
+        restored = SystemicAnalysisStartedEvent.from_dict(d)
+
+        assert restored.work_item_id == original.work_item_id
+        assert restored.workflow_run_id == original.workflow_run_id
+        assert restored.failure_count == original.failure_count
+        assert restored.timestamp == original.timestamp
+
+    def test_immutability(self):
+        """Test that SystemicAnalysisStartedEvent is immutable."""
+        event = SystemicAnalysisStartedEvent(
+            type="repair_cycle.systemic_analysis_started",
+            timestamp=now_iso(),
+            source="repair_cycle",
+            work_item_id="issue-123",
+            workflow_run_id="run-456",
+            failure_count=5,
+        )
+
+        with pytest.raises(FrozenInstanceError):
+            event.work_item_id = "issue-999"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.workflow_run_id = "run-999"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.failure_count = 10  # type: ignore
+
+
+class TestSystemicAnalysisCompletedEvent:
+    """Test SystemicAnalysisCompletedEvent."""
+
+    def test_create_valid_event(self):
+        """Test creating a valid systemic analysis completed event."""
+        timestamp = now_iso()
+        event = SystemicAnalysisCompletedEvent(
+            type="repair_cycle.systemic_analysis_completed",
+            timestamp=timestamp,
+            source="repair_cycle",
+            classification=FailureClassification.CODE_DEFECT.value,
+            confidence=0.95,
+            reasoning="Consistent failure pattern in test file suggests code logic error",
+            recommended_action="Apply code fix and re-run tests",
+            work_item_id="issue-123",
+            workflow_run_id="run-456",
+            failure_count=5,
+        )
+
+        assert event.classification == "code_defect"
+        assert event.confidence == 0.95
+        assert event.reasoning == "Consistent failure pattern in test file suggests code logic error"
+        assert event.recommended_action == "Apply code fix and re-run tests"
+        assert event.work_item_id == "issue-123"
+        assert event.workflow_run_id == "run-456"
+        assert event.failure_count == 5
+
+    def test_classification_string(self):
+        """Test that classification is stored as a string."""
+        event = SystemicAnalysisCompletedEvent(
+            type="repair_cycle.systemic_analysis_completed",
+            timestamp=now_iso(),
+            source="repair_cycle",
+            classification=FailureClassification.ENVIRONMENT_ISSUE.value,
+            confidence=0.8,
+            reasoning="Tests pass in local environment but fail in CI",
+            recommended_action="Verify CI environment setup",
+            work_item_id="issue-123",
+            workflow_run_id="run-456",
+            failure_count=3,
+        )
+
+        assert isinstance(event.classification, str)
+        assert event.classification == "environment_issue"
+
+    def test_missing_work_item_id(self):
+        """Test that work_item_id is required."""
+        with pytest.raises(ValueError, match="work_item_id"):
+            SystemicAnalysisCompletedEvent(
+                type="repair_cycle.systemic_analysis_completed",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                classification=FailureClassification.CODE_DEFECT.value,
+                confidence=0.95,
+                reasoning="Some reason",
+                recommended_action="Some action",
+                work_item_id="",
+                workflow_run_id="run-456",
+                failure_count=5,
+            )
+
+    def test_missing_workflow_run_id(self):
+        """Test that workflow_run_id is required."""
+        with pytest.raises(ValueError, match="workflow_run_id"):
+            SystemicAnalysisCompletedEvent(
+                type="repair_cycle.systemic_analysis_completed",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                classification=FailureClassification.CODE_DEFECT.value,
+                confidence=0.95,
+                reasoning="Some reason",
+                recommended_action="Some action",
+                work_item_id="issue-123",
+                workflow_run_id="",
+                failure_count=5,
+            )
+
+    def test_default_values(self):
+        """Test that fields have appropriate defaults."""
+        event = SystemicAnalysisCompletedEvent(
+            type="repair_cycle.systemic_analysis_completed",
+            timestamp=now_iso(),
+            source="repair_cycle",
+            work_item_id="issue-123",
+            workflow_run_id="run-456",
+        )
+
+        assert event.classification == "code_defect"
+        assert event.confidence == 0.0
+        assert event.reasoning == ""
+        assert event.recommended_action == ""
+        assert event.failure_count == 0
+
+    def test_serialization(self):
+        """Test SystemicAnalysisCompletedEvent serialization."""
+        timestamp = now_iso()
+        event = SystemicAnalysisCompletedEvent(
+            type="repair_cycle.systemic_analysis_completed",
+            timestamp=timestamp,
+            source="repair_cycle",
+            classification=FailureClassification.TRANSIENT_FAILURE.value,
+            confidence=0.6,
+            reasoning="Intermittent failures suggest flaky test or transient resource issue",
+            recommended_action="Retry execution or investigate resource contention",
+            work_item_id="issue-456",
+            workflow_run_id="run-789",
+            failure_count=7,
+        )
+
+        d = event.to_dict()
+        assert d["classification"] == "transient_failure"
+        assert d["confidence"] == 0.6
+        assert d["reasoning"] == "Intermittent failures suggest flaky test or transient resource issue"
+        assert d["recommended_action"] == "Retry execution or investigate resource contention"
+        assert d["work_item_id"] == "issue-456"
+        assert d["workflow_run_id"] == "run-789"
+        assert d["failure_count"] == 7
+        assert d["type"] == "repair_cycle.systemic_analysis_completed"
+        assert d["timestamp"] == timestamp
+
+    def test_deserialization(self):
+        """Test SystemicAnalysisCompletedEvent deserialization."""
+        timestamp = now_iso()
+        d = {
+            "type": "repair_cycle.systemic_analysis_completed",
+            "timestamp": timestamp,
+            "source": "repair_cycle",
+            "classification": "dependency_issue",
+            "confidence": 0.85,
+            "reasoning": "Multiple dependencies fail to resolve",
+            "recommended_action": "Update dependency versions",
+            "work_item_id": "issue-789",
+            "workflow_run_id": "run-111",
+            "failure_count": 4,
+        }
+
+        event = SystemicAnalysisCompletedEvent.from_dict(d)
+        assert event.classification == FailureClassification.DEPENDENCY_ISSUE.value
+        assert event.confidence == 0.85
+        assert event.reasoning == "Multiple dependencies fail to resolve"
+        assert event.recommended_action == "Update dependency versions"
+        assert event.work_item_id == "issue-789"
+        assert event.workflow_run_id == "run-111"
+        assert event.failure_count == 4
+
+    def test_deserialization_missing_optional_fields(self):
+        """Test deserialization with missing optional fields uses defaults."""
+        d = {
+            "type": "repair_cycle.systemic_analysis_completed",
+            "timestamp": now_iso(),
+            "source": "repair_cycle",
+            "work_item_id": "issue-123",
+            "workflow_run_id": "run-456",
+        }
+
+        event = SystemicAnalysisCompletedEvent.from_dict(d)
+        assert event.classification == FailureClassification.CODE_DEFECT.value
+        assert event.confidence == 0.0
+        assert event.reasoning == ""
+        assert event.recommended_action == ""
+        assert event.failure_count == 0
+
+    def test_round_trip_serialization(self):
+        """Test that serialization round-trips through deserialization."""
+        original = SystemicAnalysisCompletedEvent(
+            type="repair_cycle.systemic_analysis_completed",
+            timestamp=now_iso(),
+            source="repair_cycle",
+            classification=FailureClassification.CONFIGURATION_ISSUE.value,
+            confidence=0.92,
+            reasoning="Configuration mismatch between test environments",
+            recommended_action="Standardize test configuration",
+            work_item_id="issue-999",
+            workflow_run_id="run-555",
+            failure_count=8,
+        )
+
+        d = original.to_dict()
+        restored = SystemicAnalysisCompletedEvent.from_dict(d)
+
+        assert restored.classification == original.classification
+        assert restored.confidence == original.confidence
+        assert restored.reasoning == original.reasoning
+        assert restored.recommended_action == original.recommended_action
+        assert restored.work_item_id == original.work_item_id
+        assert restored.workflow_run_id == original.workflow_run_id
+        assert restored.failure_count == original.failure_count
+        assert restored.timestamp == original.timestamp
+
+    def test_confidence_boundary_values(self):
+        """Test that confidence bounds are validated (0.0 to 1.0)."""
+        # Test 0.0 (no confidence)
+        event_zero = SystemicAnalysisCompletedEvent(
+            type="repair_cycle.systemic_analysis_completed",
+            timestamp=now_iso(),
+            source="repair_cycle",
+            classification=FailureClassification.ENVIRONMENT_ISSUE.value,
+            confidence=0.0,
+            work_item_id="issue-123",
+            workflow_run_id="run-456",
+        )
+        assert event_zero.confidence == 0.0
+
+        # Test 1.0 (full confidence)
+        event_full = SystemicAnalysisCompletedEvent(
+            type="repair_cycle.systemic_analysis_completed",
+            timestamp=now_iso(),
+            source="repair_cycle",
+            classification=FailureClassification.CODE_DEFECT.value,
+            confidence=1.0,
+            work_item_id="issue-123",
+            workflow_run_id="run-456",
+        )
+        assert event_full.confidence == 1.0
+
+        # Test intermediate value
+        event_mid = SystemicAnalysisCompletedEvent(
+            type="repair_cycle.systemic_analysis_completed",
+            timestamp=now_iso(),
+            source="repair_cycle",
+            classification=FailureClassification.CODE_DEFECT.value,
+            confidence=0.5,
+            work_item_id="issue-123",
+            workflow_run_id="run-456",
+        )
+        assert event_mid.confidence == 0.5
+
+    def test_immutability(self):
+        """Test that SystemicAnalysisCompletedEvent is immutable."""
+        event = SystemicAnalysisCompletedEvent(
+            type="repair_cycle.systemic_analysis_completed",
+            timestamp=now_iso(),
+            source="repair_cycle",
+            classification=FailureClassification.CODE_DEFECT.value,
+            confidence=0.95,
+            reasoning="Test failure analysis",
+            recommended_action="Fix code issue",
+            work_item_id="issue-123",
+            workflow_run_id="run-456",
+            failure_count=5,
+        )
+
+        with pytest.raises(FrozenInstanceError):
+            event.classification = FailureClassification.ENVIRONMENT_ISSUE  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.confidence = 0.8  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.reasoning = "Different reasoning"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.recommended_action = "Different action"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.work_item_id = "issue-999"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.workflow_run_id = "run-999"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.failure_count = 10  # type: ignore
+
+    def test_invalid_classification(self):
+        """Test that invalid classification value raises ValueError."""
+        with pytest.raises(ValueError, match="is not a valid FailureClassification"):
+            SystemicAnalysisCompletedEvent(
+                type="repair_cycle.systemic_analysis_completed",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                classification="invalid_type",  # type: ignore
+                confidence=0.5,
+                work_item_id="issue-123",
+                workflow_run_id="run-456",
+            )
+
+    def test_confidence_above_one(self):
+        """Test that confidence > 1.0 raises ValueError."""
+        with pytest.raises(ValueError, match="confidence must be between 0.0 and 1.0"):
+            SystemicAnalysisCompletedEvent(
+                type="repair_cycle.systemic_analysis_completed",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                classification=FailureClassification.CODE_DEFECT.value,
+                confidence=1.5,
+                work_item_id="issue-123",
+                workflow_run_id="run-456",
+            )
+
+    def test_confidence_below_zero(self):
+        """Test that confidence < 0.0 raises ValueError."""
+        with pytest.raises(ValueError, match="confidence must be between 0.0 and 1.0"):
+            SystemicAnalysisCompletedEvent(
+                type="repair_cycle.systemic_analysis_completed",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                classification=FailureClassification.CODE_DEFECT.value,
+                confidence=-0.1,
+                work_item_id="issue-123",
+                workflow_run_id="run-456",
+            )
+
+    def test_deserialization_invalid_classification_string(self):
+        """Test that invalid classification string defaults to CODE_DEFECT."""
+        d = {
+            "type": "repair_cycle.systemic_analysis_completed",
+            "timestamp": now_iso(),
+            "source": "repair_cycle",
+            "classification": "invalid_classification",
+            "confidence": 0.5,
+            "reasoning": "Some reasoning",
+            "recommended_action": "Some action",
+            "work_item_id": "issue-123",
+            "workflow_run_id": "run-456",
+            "failure_count": 3,
+        }
+
+        event = SystemicAnalysisCompletedEvent.from_dict(d)
+        # Should default to CODE_DEFECT instead of raising ValueError
+        assert event.classification == FailureClassification.CODE_DEFECT
+
+    def test_deserialization_future_enum_value(self):
+        """Test that future/unknown enum values default to CODE_DEFECT."""
+        d = {
+            "type": "repair_cycle.systemic_analysis_completed",
+            "timestamp": now_iso(),
+            "source": "repair_cycle",
+            "classification": "future_classification_type",
+            "work_item_id": "issue-123",
+            "workflow_run_id": "run-456",
+        }
+
+        event = SystemicAnalysisCompletedEvent.from_dict(d)
+        # Should default to CODE_DEFECT for unknown enum values
+        assert event.classification == FailureClassification.CODE_DEFECT
