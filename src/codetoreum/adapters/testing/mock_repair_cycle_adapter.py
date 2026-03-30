@@ -37,6 +37,8 @@ from codetoreum.domain.events.repair_cycle_events import (
     RepairCycleTestExecutionCompletedEvent,
     RepairCycleWarningReviewCompletedEvent,
     RepairCycleWarningReviewStartedEvent,
+    SystemicFixCompletedEvent,
+    SystemicFixStartedEvent,
 )
 from codetoreum.domain.repair_cycle_types import (
     CycleResult,
@@ -172,6 +174,14 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
         # Agent selection tracking
         self._subtask_agent_calls: list[dict[str, Any]] = []
+
+        # Systemic fix configuration
+        self._systemic_fix_results: list[SystemicFixResult] = []
+        self._systemic_fix_call_count: int = 0
+        self._systemic_fix_clock_advance: timedelta = timedelta(minutes=3)
+
+        # Per-file fix call count for assertion purposes
+        self._file_fix_call_count: int = 0
 
     @property
     def clock(self) -> SimulationClock:
@@ -312,6 +322,24 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                     )
                 )
         self.test_results[test_type] = results
+
+    def set_systemic_fix_result(
+        self,
+        result: SystemicFixResult | list[SystemicFixResult],
+        clock_advance: timedelta | None = None,
+    ) -> None:
+        """Configure systemic fix outcomes for simulation.
+
+        Args:
+            result: Single result (reused each call) or sequence (consumed in order).
+            clock_advance: Simulation time to advance per call. Defaults to 3 minutes.
+        """
+        if isinstance(result, list):
+            self._systemic_fix_results = result
+        else:
+            self._systemic_fix_results = [result]
+        if clock_advance is not None:
+            self._systemic_fix_clock_advance = clock_advance
 
     def set_checkpoint_store(self, store: IRepairCycleCheckpointStore) -> None:
         """Set the checkpoint store (for testing)."""
@@ -799,6 +827,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         fixed = 0
 
         for file_path, failures in grouped_failures.items():
+            self._file_fix_call_count += 1
             # Resolve and record which agent is executing this sub-task
             _, agent_name = await self._resolve_and_record_agent("code_fix", context)
 
@@ -990,7 +1019,14 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         config: RepairTestRunConfig,
         context: RepairCycleContext,
     ) -> SystemicFixResult:
-        """Mock implementation: simulate holistic systemic fix.
+        """Mock implementation: simulate holistic systemic fix with configurable outcomes.
+
+        Supports configurable SystemicFixResult outcomes via set_systemic_fix_result()
+        shorthand. Default behavior (no pre-configured result): return SystemicFixResult
+        with success=True and empty files_modified.
+
+        Clock advances by configured amount per call (default ~3 minutes to reflect
+        observed Switchyard data: 5m16s and 47s range).
 
         Args:
             failures: Immutable tuple of test failures to address
@@ -1021,13 +1057,61 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
         # Resolve and record which agent is executing this sub-task
         _, agent_name = await self._resolve_and_record_agent("systemic_fix", context)
+        self._systemic_fix_call_count += 1
 
         # Track agent call
         self.agent_call_count += 1
         self.total_agent_calls += 1
 
-        # Advance clock for systemic fix (2 minutes)
-        await self.clock.advance(timedelta(minutes=2))
+        # Advance simulation clock
+        await self.clock.advance(self._systemic_fix_clock_advance)
+
+        # Emit start event
+        if self._current_project is not None:
+            self.emit(
+                SystemicFixStartedEvent(
+                    type="repair_cycle.systemic_fix_started",
+                    timestamp=self.clock.now().isoformat(),
+                    source="mock_repair_cycle",
+                    work_item_id=context.work_item_id,
+                    workflow_run_id=context.workflow_run_id,
+                    root_cause_classification=analysis_result.classification.value,
+                    confidence=analysis_result.confidence,
+                    affected_file_count=len(analysis_result.affected_files),
+                    failure_count=len(failures),
+                )
+            )
+
+        # Return configured result (sequence or single) or safe default
+        if self._systemic_fix_results:
+            if len(self._systemic_fix_results) == 1:
+                result = self._systemic_fix_results[0]
+            else:
+                idx = min(self._systemic_fix_call_count - 1, len(self._systemic_fix_results) - 1)
+                result = self._systemic_fix_results[idx]
+        else:
+            result = SystemicFixResult(
+                success=True,
+                files_modified=(),
+                root_cause_addressed=analysis_result.reasoning,
+                duration_seconds=self._systemic_fix_clock_advance.total_seconds(),
+            )
+
+        # Emit completed event
+        if self._current_project is not None:
+            self.emit(
+                SystemicFixCompletedEvent(
+                    type="repair_cycle.systemic_fix_completed",
+                    timestamp=self.clock.now().isoformat(),
+                    source="mock_repair_cycle",
+                    work_item_id=context.work_item_id,
+                    workflow_run_id=context.workflow_run_id,
+                    success=result.success,
+                    files_modified=result.files_modified,
+                    root_cause_addressed=result.root_cause_addressed,
+                    duration_seconds=result.duration_seconds,
+                )
+            )
 
         logger.info(
             "Mock systemic fix applied",
@@ -1036,17 +1120,13 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 "test_type": config.test_type.value,
                 "agent_name": agent_name,
                 "affected_files": ",".join(analysis_result.affected_files),
+                "success": result.success,
+                "files_modified": ",".join(result.files_modified),
             },
             exc_info=False,
         )
 
-        # Return success with all affected files modified
-        return SystemicFixResult(
-            success=True,
-            files_modified=analysis_result.affected_files,
-            root_cause_addressed=analysis_result.reasoning,
-            duration_seconds=120.0,
-        )
+        return result
 
     async def rebuild_environment(
         self,
@@ -1422,6 +1502,30 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             Total number of agent calls
         """
         return self.total_agent_calls or self.agent_call_count
+
+    @property
+    def systemic_fix_call_count(self) -> int:
+        """Track invocation count for systemic fix separately from per-file fix.
+
+        Enables test assertions on dispatch decisions (whether systemic fix
+        was called vs. per-file fix).
+
+        Returns:
+            Number of times fix_failures_systemically() has been called
+        """
+        return self._systemic_fix_call_count
+
+    @property
+    def file_fix_call_count(self) -> int:
+        """Track invocation count for per-file fix.
+
+        Enables test assertions on dispatch decisions (whether per-file fix
+        was called vs. systemic fix).
+
+        Returns:
+            Number of times fix_failures_by_file() has been called
+        """
+        return self._file_fix_call_count
 
     def get_subtask_agent_calls(self) -> list[dict[str, Any]]:
         """Get all recorded sub-task agent calls.
