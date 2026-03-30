@@ -53,6 +53,8 @@ from codetoreum.domain.events.repair_cycle_events import (
     RepairCycleWarningReviewStartedEvent,
     SystemicAnalysisCompletedEvent,
     SystemicAnalysisStartedEvent,
+    SystemicFixCompletedEvent,
+    SystemicFixStartedEvent,
 )
 from codetoreum.domain.exceptions import TestOutputParseError
 from codetoreum.domain.repair_cycle_types import (
@@ -775,7 +777,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         Raises:
             CircuitBreakerOpenError: When circuit breaker is open
         """
-        start_time = time.time()
+        start_time = datetime.now(UTC)
 
         # Circuit breaker check
         if self.circuit_breaker and self.circuit_breaker.is_open():
@@ -789,6 +791,21 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 exc_info=False,
             )
             raise CircuitBreakerOpenError("Circuit breaker is open")
+
+        # Emit systemic fix started event
+        self.event_emitter.emit(
+            SystemicFixStartedEvent(
+                type="repair_cycle.systemic_fix_started",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="production_repair_cycle",
+                work_item_id=context.work_item_id,
+                workflow_run_id=context.workflow_run_id,
+                root_cause_classification=analysis_result.classification.value,
+                confidence=analysis_result.confidence,
+                affected_file_count=len(analysis_result.affected_files),
+                failure_count=len(failures),
+            )
+        )
 
         try:
             logger.info(
@@ -807,44 +824,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             llm_provider, resolved_agent_name = await self._get_llm_for_subtask("systemic_fix", context)
 
             # Build prompt with failure details and root cause context
-            failures_summary = "\n".join([
-                f"- {f.file}::{f.test}: {f.message}"
-                for f in failures
-            ])
-
-            prompt = f"""You are a specialized repair agent addressing a cross-cutting root cause issue.
-
-## Root Cause Analysis
-**Classification**: {analysis_result.classification.value}
-**Confidence**: {analysis_result.confidence:.1%}
-**Reasoning**: {analysis_result.reasoning}
-**Recommended Action**: {analysis_result.recommended_action}
-
-## Affected Files
-{', '.join(analysis_result.affected_files)}
-
-## All Failures to Address
-{failures_summary}
-
-## Your Task
-Apply a holistic fix that addresses the root cause across all affected files. This may involve:
-- Updating dependencies or configuration
-- Fixing shared interfaces or contracts
-- Updating build/environment configuration
-- Or other systemic changes
-
-After making changes:
-1. Summarize what root cause you addressed
-2. List all files you modified
-3. Explain how your changes fix all the failures above
-
-Respond with JSON:
-{{
-    "root_cause_addressed": "description of what was fixed",
-    "files_modified": ["file1", "file2", ...],
-    "explanation": "how this addresses all failures"
-}}
-"""
+            prompt = self._build_systemic_fix_prompt(failures, analysis_result)
 
             # Execute LLM call
             execution_result = await self._execute_llm_with_timeout(
@@ -856,38 +836,16 @@ Respond with JSON:
                 error_message="Systemic fix execution",
             )
 
-            if not execution_result.success:
-                logger.error(
-                    "Systemic fix agent execution failed",
-                    extra={
-                        "workflow_run_id": context.workflow_run_id,
-                        "work_item_id": context.work_item_id,
-                        "error": execution_result.error or "Unknown error",
-                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
-                    },
-                    exc_info=False,
-                )
-                duration_seconds = time.time() - start_time
-                return SystemicFixResult(
-                    success=False,
-                    files_modified=(),
-                    root_cause_addressed="",
-                    duration_seconds=duration_seconds,
-                )
+            files_modified = ()
+            root_cause_addressed = ""
+            success = False
 
             # Parse agent response
             try:
-                response_json = json.loads(execution_result.output or "{}")
+                response_json = json.loads(execution_result.content or "{}")
                 files_modified = tuple(response_json.get("files_modified", []))
                 root_cause_addressed = response_json.get("root_cause_addressed", "")
-
-                duration_seconds = time.time() - start_time
-                result = SystemicFixResult(
-                    success=True,
-                    files_modified=files_modified,
-                    root_cause_addressed=root_cause_addressed,
-                    duration_seconds=duration_seconds,
-                )
+                success = True
 
                 logger.info(
                     "Systemic fix completed successfully",
@@ -895,12 +853,9 @@ Respond with JSON:
                         "workflow_run_id": context.workflow_run_id,
                         "work_item_id": context.work_item_id,
                         "files_modified_count": len(files_modified),
-                        "duration_seconds": duration_seconds,
                     },
                     exc_info=False,
                 )
-
-                return result
 
             except (json.JSONDecodeError, KeyError, TypeError) as e:
                 logger.error(
@@ -913,13 +868,30 @@ Respond with JSON:
                     },
                     exc_info=True,
                 )
-                duration_seconds = time.time() - start_time
-                return SystemicFixResult(
-                    success=False,
-                    files_modified=(),
-                    root_cause_addressed="",
-                    duration_seconds=duration_seconds,
+
+            duration = (datetime.now(UTC) - start_time).total_seconds()
+
+            # Emit systemic fix completed event
+            self.event_emitter.emit(
+                SystemicFixCompletedEvent(
+                    type="repair_cycle.systemic_fix_completed",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    source="production_repair_cycle",
+                    work_item_id=context.work_item_id,
+                    workflow_run_id=context.workflow_run_id,
+                    success=success,
+                    files_modified=files_modified,
+                    root_cause_addressed=root_cause_addressed,
+                    duration_seconds=duration,
                 )
+            )
+
+            return SystemicFixResult(
+                success=success,
+                files_modified=files_modified,
+                root_cause_addressed=root_cause_addressed,
+                duration_seconds=duration,
+            )
 
         except Exception as e:
             logger.error(
@@ -933,12 +905,28 @@ Respond with JSON:
                 },
                 exc_info=True,
             )
-            duration_seconds = time.time() - start_time
+            duration = (datetime.now(UTC) - start_time).total_seconds()
+
+            # Emit failed completion event
+            self.event_emitter.emit(
+                SystemicFixCompletedEvent(
+                    type="repair_cycle.systemic_fix_completed",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    source="production_repair_cycle",
+                    work_item_id=context.work_item_id,
+                    workflow_run_id=context.workflow_run_id,
+                    success=False,
+                    files_modified=(),
+                    root_cause_addressed="",
+                    duration_seconds=duration,
+                )
+            )
+
             return SystemicFixResult(
                 success=False,
                 files_modified=(),
                 root_cause_addressed="",
-                duration_seconds=duration_seconds,
+                duration_seconds=duration,
             )
 
     async def checkpoint(
@@ -1323,6 +1311,67 @@ Return a JSON response with the status of fixes applied."""
 
 Analyze the warning, understand its root cause, and make targeted fixes.
 Return a JSON response with the status of fixes applied."""
+
+    def _build_systemic_fix_prompt(
+        self,
+        failures: tuple[RepairTestFailure, ...],
+        analysis_result: SystemicAnalysisResult,
+    ) -> str:
+        """Build prompt for LLM to apply a coordinated systemic fix across all affected files.
+
+        Groups failures by file and includes comprehensive root cause analysis context.
+
+        Args:
+            failures: All failures to address (up to 50)
+            analysis_result: Systemic analysis result with root cause and affected files
+
+        Returns:
+            Prompt for LLM agent
+        """
+        # Group failures by file
+        grouped_failures: dict[str, list[RepairTestFailure]] = {}
+        for failure in failures:
+            if failure.file not in grouped_failures:
+                grouped_failures[failure.file] = []
+            grouped_failures[failure.file].append(failure)
+
+        # Build failures section grouped by file
+        failures_by_file_text = ""
+        for file_path in sorted(grouped_failures.keys()):
+            failures_in_file = grouped_failures[file_path]
+            failures_by_file_text += f"\n{file_path}\n"
+            for failure in failures_in_file:
+                failures_by_file_text += f"  - {failure.test}: {failure.message}\n"
+
+        return f"""You are a specialized repair agent addressing a cross-cutting root cause issue.
+
+## Root Cause Analysis
+**Classification**: {analysis_result.classification.value}
+**Confidence**: {analysis_result.confidence:.0%}
+**Reasoning**: {analysis_result.reasoning}
+**Recommended Action**: {analysis_result.recommended_action}
+**Affected Files**: {', '.join(analysis_result.affected_files)}
+
+## All Failures by File ({len(failures)} total)
+{failures_by_file_text}
+
+## Your Task
+Apply a COORDINATED fix across all listed files in a single pass.
+Do not fix files independently — the root cause is shared and changes may need to be consistent across files.
+
+This may involve:
+- Updating dependencies or configuration
+- Fixing shared interfaces or contracts
+- Updating build/environment configuration
+- Or other systemic changes
+
+After making changes, respond with JSON:
+{{
+    "root_cause_addressed": "description of what was fixed",
+    "files_modified": ["file1", "file2", ...],
+    "explanation": "how this addresses all failures"
+}}
+"""
 
     def _group_failures_by_file(
         self, failures: tuple[RepairTestFailure, ...]
@@ -1896,11 +1945,23 @@ Return a JSON response with the status of configuration fixes applied."""
 
                             if classification.classification == FailureClassification.CODE_DEFECT:
                                 consecutive_transient_failures = 0  # Reset counter
-                                grouped = self._group_failures_by_file(test_result.failures)
-                                files_fixed += await self.fix_failures_by_file(grouped, config, context)
-                                prior_fix_attempts.append(
-                                    f"Iteration {iteration}: CODE_DEFECT classified, applied file-level fixes"
-                                )
+                                # Check if cross-cutting root cause with <= 50 failures
+                                if classification.cross_cutting and len(test_result.failures) <= 50:
+                                    systemic_result = await self.fix_failures_systemically(
+                                        test_result.failures, classification, config, context
+                                    )
+                                    files_fixed += len(systemic_result.files_modified)
+                                    prior_fix_attempts.append(
+                                        f"Iteration {iteration}: CODE_DEFECT (cross-cutting), systemic fix applied to "
+                                        f"{len(systemic_result.files_modified)} files"
+                                    )
+                                else:
+                                    # cross_cutting=False OR failure count > 50 (fallback to file-level fix)
+                                    grouped = self._group_failures_by_file(test_result.failures)
+                                    files_fixed += await self.fix_failures_by_file(grouped, config, context)
+                                    prior_fix_attempts.append(
+                                        f"Iteration {iteration}: CODE_DEFECT classified, applied file-level fixes"
+                                    )
                             elif classification.classification == FailureClassification.ENVIRONMENT_ISSUE:
                                 consecutive_transient_failures = 0  # Reset counter
                                 rebuild_success = await self.rebuild_environment(config, context)

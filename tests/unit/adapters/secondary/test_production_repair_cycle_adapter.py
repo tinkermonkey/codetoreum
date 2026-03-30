@@ -1744,3 +1744,261 @@ class TestTimeoutHandling:
 
         with pytest.raises(TimeoutError):
             await adapter.run_tests(config, ctx)
+
+
+# ---------------------------------------------------------------------------
+# Systemic Fix: fix_failures_systemically()
+# ---------------------------------------------------------------------------
+
+
+class TestFixFailuresSystemically:
+    @pytest.mark.asyncio
+    async def test_fix_failures_systemically_emits_events(self):
+        """fix_failures_systemically emits SystemicFixStartedEvent and SystemicFixCompletedEvent."""
+        event_emitter = MagicMock()
+        llm_response = '{"root_cause_addressed": "Fixed shared interface", "files_modified": ["file1.py", "file2.py"]}'
+        adapter, _ = _make_adapter(llm_response=llm_response, event_emitter=event_emitter)
+        ctx = _RepairCycleContext()
+
+        failures = (
+            RepairTestFailure(file="test_a.py", test="test_1", message="fail"),
+            RepairTestFailure(file="test_b.py", test="test_2", message="fail"),
+        )
+        analysis_result = MagicMock(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.95,
+            reasoning="Shared interface broken",
+            recommended_action="Fix interface",
+            affected_files=("a.py", "b.py"),
+            cross_cutting=True,
+        )
+
+        result = await adapter.fix_failures_systemically(
+            failures, analysis_result, ctx.test_configs[0], ctx
+        )
+
+        # Verify events were emitted
+        emitted_types = [call.args[0].type for call in event_emitter.emit.call_args_list]
+        assert "repair_cycle.systemic_fix_started" in emitted_types
+        assert "repair_cycle.systemic_fix_completed" in emitted_types
+
+    @pytest.mark.asyncio
+    async def test_fix_failures_systemically_single_llm_invocation(self):
+        """fix_failures_systemically makes exactly one LLM invocation."""
+        llm_response = '{"root_cause_addressed": "Fixed shared interface", "files_modified": ["file1.py"]}'
+        adapter, llm = _make_adapter(llm_response=llm_response)
+        ctx = _RepairCycleContext()
+
+        failures = (
+            RepairTestFailure(file="test_a.py", test="test_1", message="fail"),
+            RepairTestFailure(file="test_b.py", test="test_2", message="fail"),
+        )
+        analysis_result = MagicMock(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.95,
+            reasoning="Shared interface broken",
+            recommended_action="Fix interface",
+            affected_files=("a.py", "b.py"),
+        )
+
+        await adapter.fix_failures_systemically(
+            failures, analysis_result, ctx.test_configs[0], ctx
+        )
+
+        # Verify exactly one LLM call was made
+        assert llm.execute.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_fix_failures_systemically_returns_success_with_files(self):
+        """fix_failures_systemically returns SystemicFixResult with success=True and files_modified."""
+        llm_response = '{"root_cause_addressed": "Fixed shared interface", "files_modified": ["file1.py", "file2.py"]}'
+        adapter, _ = _make_adapter(llm_response=llm_response)
+        ctx = _RepairCycleContext()
+
+        failures = (
+            RepairTestFailure(file="test_a.py", test="test_1", message="fail"),
+            RepairTestFailure(file="test_b.py", test="test_2", message="fail"),
+        )
+        analysis_result = MagicMock(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.95,
+            reasoning="Shared interface broken",
+            recommended_action="Fix interface",
+            affected_files=("a.py", "b.py"),
+        )
+
+        result = await adapter.fix_failures_systemically(
+            failures, analysis_result, ctx.test_configs[0], ctx
+        )
+
+        assert result.success is True
+        assert len(result.files_modified) == 2
+        assert "file1.py" in result.files_modified
+        assert "file2.py" in result.files_modified
+
+    @pytest.mark.asyncio
+    async def test_fix_failures_systemically_failure_returns_false(self):
+        """fix_failures_systemically returns success=False on LLM error."""
+        adapter, llm = _make_adapter()
+        # Simulate LLM failure
+        llm.execute.side_effect = Exception("LLM error")
+        ctx = _RepairCycleContext()
+
+        failures = (
+            RepairTestFailure(file="test_a.py", test="test_1", message="fail"),
+        )
+        analysis_result = MagicMock(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.95,
+            reasoning="Shared interface broken",
+            recommended_action="Fix interface",
+            affected_files=("a.py",),
+        )
+
+        result = await adapter.fix_failures_systemically(
+            failures, analysis_result, ctx.test_configs[0], ctx
+        )
+
+        assert result.success is False
+        assert len(result.files_modified) == 0
+
+    @pytest.mark.asyncio
+    async def test_fix_failures_systemically_parse_error_returns_false(self):
+        """fix_failures_systemically handles JSON parse errors gracefully."""
+        adapter, _ = _make_adapter(llm_response="invalid json")
+        ctx = _RepairCycleContext()
+
+        failures = (
+            RepairTestFailure(file="test_a.py", test="test_1", message="fail"),
+        )
+        analysis_result = MagicMock(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.95,
+            reasoning="Shared interface broken",
+            recommended_action="Fix interface",
+            affected_files=("a.py",),
+        )
+
+        result = await adapter.fix_failures_systemically(
+            failures, analysis_result, ctx.test_configs[0], ctx
+        )
+
+        assert result.success is False
+
+
+# ---------------------------------------------------------------------------
+# Classification Dispatch: CODE_DEFECT with cross_cutting
+# ---------------------------------------------------------------------------
+
+
+class TestClassificationDispatchCodeDefectWithCrossCutting:
+    @pytest.mark.asyncio
+    async def test_code_defect_cross_cutting_calls_systemic_fix(self):
+        """CODE_DEFECT with cross_cutting=True calls fix_failures_systemically."""
+        event_emitter = MagicMock()
+        systemic_service = AsyncMock()
+        systemic_service.analyze.return_value = MagicMock(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.95,
+            reasoning="Shared interface issue",
+            recommended_action="Fix interface",
+            affected_files=("a.py", "b.py"),
+            cross_cutting=True,
+        )
+
+        adapter, _ = _make_adapter(event_emitter=event_emitter)
+        adapter._systemic_analysis_service = systemic_service
+
+        # Mock fix_failures_systemically
+        adapter.fix_failures_systemically = AsyncMock(
+            return_value=MagicMock(success=True, files_modified=("file1.py", "file2.py"))
+        )
+
+        ctx = _RepairCycleContext(max_total_agent_calls=100)
+        await adapter.execute(ctx)
+
+        # Verify systemic fix was called
+        adapter.fix_failures_systemically.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_code_defect_non_cross_cutting_calls_fix_by_file(self):
+        """CODE_DEFECT with cross_cutting=False calls fix_failures_by_file."""
+        event_emitter = MagicMock()
+        systemic_service = AsyncMock()
+        systemic_service.analyze.return_value = MagicMock(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.95,
+            reasoning="File-specific issue",
+            recommended_action="Fix file",
+            affected_files=("a.py",),
+            cross_cutting=False,
+        )
+
+        adapter, _ = _make_adapter(event_emitter=event_emitter)
+        adapter._systemic_analysis_service = systemic_service
+
+        # Mock fix_failures_by_file
+        adapter.fix_failures_by_file = AsyncMock(return_value=1)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=100)
+        await adapter.execute(ctx)
+
+        # Verify file-level fix was called, not systemic
+        adapter.fix_failures_by_file.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_code_defect_cross_cutting_exceeds_50_failures_fallback(self):
+        """CODE_DEFECT with cross_cutting=True but > 50 failures falls back to fix_failures_by_file."""
+        event_emitter = MagicMock()
+        systemic_service = AsyncMock()
+
+        # Create 51 failures
+        failures = tuple(
+            RepairTestFailure(file=f"test_{i}.py", test=f"test_{i}", message="fail")
+            for i in range(51)
+        )
+
+        systemic_service.analyze.return_value = MagicMock(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.95,
+            reasoning="Shared interface issue",
+            recommended_action="Fix interface",
+            affected_files=("a.py", "b.py"),
+            cross_cutting=True,  # cross_cutting but > 50 failures
+        )
+
+        adapter, _ = _make_adapter(event_emitter=event_emitter)
+        adapter._systemic_analysis_service = systemic_service
+
+        # Mock both methods
+        adapter.fix_failures_systemically = AsyncMock()
+        adapter.fix_failures_by_file = AsyncMock(return_value=5)
+
+        # Manually call _run_test_cycle since execute uses run_tests mock
+        config = RepairTestRunConfig(
+            test_type=RepairTestType.UNIT,
+            timeout=30,
+            max_iterations=1,
+            review_warnings=False,
+        )
+        ctx = _RepairCycleContext(max_total_agent_calls=100)
+
+        test_result = RepairTestResult(
+            test_type=RepairTestType.UNIT,
+            iteration=1,
+            passed=0,
+            failed=51,
+            warnings=0,
+            failures=failures,
+            warning_list=(),
+            raw_output="{}",
+            timestamp="2024-01-01T00:00:00Z",
+        )
+
+        adapter.run_tests = AsyncMock(return_value=test_result)
+
+        await adapter.execute(ctx)
+
+        # Should fallback to fix_failures_by_file instead of systemic
+        adapter.fix_failures_systemically.assert_not_called()
+        adapter.fix_failures_by_file.assert_called_once()
