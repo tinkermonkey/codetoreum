@@ -1903,6 +1903,7 @@ class SimulationApplicationBootstrap:
 
         handler = self._engine.create_repair_cycle_event_handler(
             repair_cycle=self.adapters.repair_cycle,
+            workflow_config=self.adapters.workflow_config,
             event_bus=self.infrastructure.event_bus,
         )
 

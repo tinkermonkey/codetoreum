@@ -21,6 +21,7 @@ import pytest
 
 from codetoreum.domain.repair_cycle_types import (
     CycleResult,
+    RepairCycleAgentConfig,
     RepairCycleResult,
     RepairTestFailure,
     RepairTestResult,
@@ -44,6 +45,7 @@ class MockRepairCycleContext:
         agent_name: str = "repair-agent",
         max_total_agent_calls: int = 100,
         checkpoint_interval: int = 5,
+        agent_config: RepairCycleAgentConfig | None = None,
     ):
         self.stage_name = stage_name
         self.workflow_run_id = workflow_run_id
@@ -51,6 +53,7 @@ class MockRepairCycleContext:
         self.agent_name = agent_name
         self.max_total_agent_calls = max_total_agent_calls
         self.checkpoint_interval = checkpoint_interval
+        self.agent_config = agent_config
 
 
 class TestRepairCycleDomainTypesContract(ABC):

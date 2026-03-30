@@ -390,6 +390,8 @@ class TestAdapterResolver:
         resolver._deps.engine.create_repair_cycle_adapter.return_value = mock_repair_cycle
 
         # Populate _resolved with required adapters
+        # agent_repository is needed for llm_factory creation in repair_cycle
+        resolver._resolved["agent_repository"] = resolver.resolve_agent_repository()
         # container depends on event_emitter, so resolve that first
         resolver._resolved["event_emitter"] = resolver.resolve_event_emitter()
         resolver._resolved["event_bus"] = resolver._deps.event_bus
@@ -402,6 +404,7 @@ class TestAdapterResolver:
         # Engine should have been called with the dependencies
         resolver._deps.engine.create_repair_cycle_adapter.assert_called_once()
         call_kwargs = resolver._deps.engine.create_repair_cycle_adapter.call_args[1]
+        assert "llm_factory" in call_kwargs  # llm_factory is now required
         assert "checkpoint_store" in call_kwargs
         assert "container_adapter" in call_kwargs
 
@@ -865,6 +868,9 @@ class TestAdapterResolver:
         mock_repair_cycle = Mock(spec=IRepairCycle)
         resolver._deps.engine.create_repair_cycle_adapter.return_value = mock_repair_cycle
 
+        # Resolve agent_repository first (needed for llm_factory)
+        resolver._resolved["agent_repository"] = resolver.resolve_agent_repository()
+
         repair_cycle = resolver.resolve_repair_cycle()
 
         assert repair_cycle is not None
@@ -905,3 +911,362 @@ class TestAdapterResolverIntegration:
             adapter = getattr(result, field.name)
             if field.name not in optional_fields:
                 assert adapter is not None, f"{field.name} is None"
+
+
+class TestAgentLLMFactory:
+    """Tests for _create_agent_llm_factory() and agent LLM provider resolution."""
+
+    @pytest.fixture
+    def factory(self):
+        """Create a test AdapterFactory."""
+        return AdapterFactory(config=AdapterFactoryConfig())
+
+    @pytest.fixture
+    def dependencies(self):
+        """Create mock AdapterDependencies."""
+        config = SimulationConfig.create_fast_config("test")
+        return AdapterDependencies(
+            event_bus=Mock(),
+            event_emitter=Mock(),
+            logger=logging.getLogger(__name__),
+            engine=Mock(),
+            config=config,
+        )
+
+    @pytest.fixture
+    def adapter_config(self):
+        """Create default AdapterSelectionConfig."""
+        return AdapterSelectionConfig()
+
+    def test_create_agent_llm_factory_returns_callable(self, factory, dependencies, adapter_config):
+        """Test that _create_agent_llm_factory returns a callable factory function."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+
+        # Resolve agent_repository first
+        agent_repo = resolver.resolve_agent_repository()
+        resolver._resolved["agent_repository"] = agent_repo
+
+        # Create the factory
+        llm_factory = resolver._create_agent_llm_factory()
+
+        # Should be callable
+        assert callable(llm_factory)
+
+    @pytest.mark.asyncio
+    async def test_agent_llm_factory_populates_cache_for_sync_repo(self, factory, dependencies, adapter_config):
+        """Test that factory eagerly populates cache for synchronous repositories."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+
+        # Create a mock SYNC repository (for testing the sync code path)
+        from datetime import UTC, datetime
+
+        from codetoreum.domain.agent import Agent, AgentCapability, AgentType
+        from codetoreum.ports.exceptions import ResourceNotFoundError
+        from codetoreum.ports.output.agent_repository import IAgentRepository
+
+        now = datetime.now(UTC)
+        mock_agent = Agent(
+            id="agent-1",
+            name="test_agent",
+            display_name="Test Agent",
+            agent_type=AgentType.MAKER,
+            role_description="Test agent for testing",
+            model="claude-3-sonnet",
+            capabilities={"testing": AgentCapability(skill="testing", proficiency=0.9)},
+            timeout_seconds=300,
+            max_retries=3,
+            requires_docker=False,
+            requires_dev_container=False,
+            makes_code_changes=True,
+            filesystem_write_allowed=True,
+            mcp_servers=[],
+            metadata={},
+            created_at=now,
+            updated_at=now,
+        )
+
+        # Create a synchronous mock repository
+        class SyncMockAgentRepository:
+            """Synchronous mock repository for testing sync code path."""
+
+            def __init__(self):
+                self._agents_by_name = {"test_agent": mock_agent}
+
+            def get_all(self):
+                """Synchronous method - returns list of agents."""
+                return list(self._agents_by_name.values())
+
+            def get_by_name(self, name: str):
+                """Synchronous method - returns agent by name."""
+                if name not in self._agents_by_name:
+                    raise ResourceNotFoundError("Agent", name)
+                return self._agents_by_name[name]
+
+        agent_repo = SyncMockAgentRepository()
+        resolver._resolved["agent_repository"] = agent_repo
+
+        # Create the factory
+        llm_factory = resolver._create_agent_llm_factory()
+
+        # Cache should be populated - calling factory should return a provider
+        provider = await llm_factory("test_agent")
+        assert provider is not None
+
+    @pytest.mark.asyncio
+    async def test_agent_llm_factory_supports_async_repo_via_await(
+        self, factory, dependencies, adapter_config
+    ):
+        """Test that factory correctly handles async repositories by awaiting them.
+
+        The factory is now async-safe and handles both sync and async repositories.
+        For async repositories, it awaits the coroutine from async context, which is
+        safe because the factory is called from within async repair cycle methods.
+        """
+        from codetoreum.ports.exceptions import ResourceNotFoundError
+
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+
+        # Create a mock async repository
+        class AsyncMockAgentRepository:
+            async def get_all(self):
+                return []
+
+            async def get_by_name(self, name: str):
+                # Return None for unknown agents (simulating not found)
+                return None
+
+        async_repo = AsyncMockAgentRepository()
+        resolver._resolved["agent_repository"] = async_repo
+
+        # Create the factory
+        llm_factory = resolver._create_agent_llm_factory()
+
+        # Awaiting factory with unknown agent should raise ResourceNotFoundError
+        # (the async call is safely awaited within async context)
+        with pytest.raises(ResourceNotFoundError) as exc_info:
+            await llm_factory("unknown_agent")
+
+        assert "Agent" in str(exc_info.value)
+        assert "unknown_agent" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_agent_llm_factory_unknown_agent_raises_resource_not_found_error(
+        self, factory, dependencies, adapter_config
+    ):
+        """Test that factory raises ResourceNotFoundError for unknown agents."""
+        from codetoreum.ports.exceptions import ResourceNotFoundError
+
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+
+        # Create a synchronous mock repository (with no agents)
+        class SyncMockAgentRepository:
+            """Synchronous mock repository for testing sync code path."""
+
+            def __init__(self):
+                self._agents_by_name = {}
+
+            def get_all(self):
+                """Synchronous method - returns list of agents."""
+                return list(self._agents_by_name.values())
+
+            def get_by_name(self, name: str):
+                """Synchronous method - returns agent by name."""
+                if name not in self._agents_by_name:
+                    raise ResourceNotFoundError("Agent", name)
+                return self._agents_by_name[name]
+
+        agent_repo = SyncMockAgentRepository()
+        resolver._resolved["agent_repository"] = agent_repo
+
+        # Create the factory
+        llm_factory = resolver._create_agent_llm_factory()
+
+        # Should raise ResourceNotFoundError for unknown agent
+        with pytest.raises(ResourceNotFoundError) as exc_info:
+            await llm_factory("unknown_agent")
+
+        assert "Agent" in str(exc_info.value)
+        assert "unknown_agent" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_agent_llm_factory_uses_agent_configuration(self, factory, dependencies, adapter_config):
+        """Test that factory correctly uses agent LLM configuration."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+
+        from datetime import UTC, datetime
+
+        from codetoreum.domain.agent import Agent, AgentCapability, AgentType
+        from codetoreum.ports.exceptions import ResourceNotFoundError
+
+        # Create agent with specific LLM configuration
+        now = datetime.now(UTC)
+        mock_agent = Agent(
+            id="agent-2",
+            name="configured_agent",
+            display_name="Configured Agent",
+            agent_type=AgentType.MAKER,
+            role_description="Agent with custom LLM config",
+            model="claude-3-sonnet",
+            capabilities={"coding": AgentCapability(skill="coding", proficiency=0.9)},
+            timeout_seconds=300,
+            max_retries=3,
+            requires_docker=False,
+            requires_dev_container=False,
+            makes_code_changes=True,
+            filesystem_write_allowed=True,
+            mcp_servers=[],
+            metadata={},
+            created_at=now,
+            updated_at=now,
+            temperature=0.5,
+            max_tokens=2048,
+            system_prompt="Custom system prompt",
+        )
+
+        # Create a synchronous mock repository
+        class SyncMockAgentRepository:
+            """Synchronous mock repository for testing sync code path."""
+
+            def __init__(self):
+                self._agents_by_name = {"configured_agent": mock_agent}
+
+            def get_all(self):
+                """Synchronous method - returns list of agents."""
+                return list(self._agents_by_name.values())
+
+            def get_by_name(self, name: str):
+                """Synchronous method - returns agent by name."""
+                if name not in self._agents_by_name:
+                    raise ResourceNotFoundError("Agent", name)
+                return self._agents_by_name[name]
+
+        agent_repo = SyncMockAgentRepository()
+        resolver._resolved["agent_repository"] = agent_repo
+
+        # Create the factory
+        llm_factory = resolver._create_agent_llm_factory()
+
+        # Get provider for the agent (await the async factory)
+        provider = await llm_factory("configured_agent")
+        assert provider is not None
+
+    @pytest.mark.asyncio
+    async def test_agent_llm_factory_safe_from_async_context_with_async_repo(
+        self, factory, dependencies, adapter_config
+    ):
+        """Test that factory is async-safe when called from async context with async repository.
+
+        This is the critical test for the fix: the factory must be safe to call from
+        within an existing event loop (like repair cycle execution). Previously, using
+        asyncio.run() would crash with RuntimeError. Now, the async factory properly
+        awaits async repository methods from async contexts.
+        """
+        from datetime import UTC, datetime
+
+        from codetoreum.domain.agent import Agent, AgentCapability, AgentType
+        from codetoreum.ports.exceptions import ResourceNotFoundError
+
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+
+        # Create an agent for testing
+        now = datetime.now(UTC)
+        mock_agent = Agent(
+            id="agent-3",
+            name="async_test_agent",
+            display_name="Async Test Agent",
+            agent_type=AgentType.MAKER,
+            role_description="Agent for async context testing",
+            model="claude-3-sonnet",
+            capabilities={"testing": AgentCapability(skill="testing", proficiency=0.9)},
+            timeout_seconds=300,
+            max_retries=3,
+            requires_docker=False,
+            requires_dev_container=False,
+            makes_code_changes=True,
+            filesystem_write_allowed=True,
+            mcp_servers=[],
+            metadata={},
+            created_at=now,
+            updated_at=now,
+        )
+
+        # Create an async repository (simulating production behavior)
+        class AsyncMockAgentRepository:
+            """Async repository simulating production agent repository."""
+
+            def __init__(self):
+                self._agents_by_name = {"async_test_agent": mock_agent}
+
+            async def get_all(self):
+                """Async method - returns list of agents."""
+                return list(self._agents_by_name.values())
+
+            async def get_by_name(self, name: str):
+                """Async method - returns agent by name."""
+                if name not in self._agents_by_name:
+                    return None
+                return self._agents_by_name[name]
+
+        async_repo = AsyncMockAgentRepository()
+        resolver._resolved["agent_repository"] = async_repo
+
+        # Create the factory
+        llm_factory = resolver._create_agent_llm_factory()
+
+        # Call factory from within async context (simulating repair cycle execution)
+        # This would crash with asyncio.run() error if not properly async-safe
+        provider = await llm_factory("async_test_agent")
+        assert provider is not None
+
+        # Also verify ResourceNotFoundError for unknown agent
+        with pytest.raises(ResourceNotFoundError) as exc_info:
+            await llm_factory("nonexistent_agent")
+        assert "nonexistent_agent" in str(exc_info.value)
+
+    def test_agent_llm_factory_missing_agent_repository_raises_key_error(self, factory, dependencies, adapter_config):
+        """Test that factory creation fails if agent_repository not resolved."""
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+
+        # Don't resolve agent_repository - _resolved is empty
+
+        # Should raise KeyError
+        with pytest.raises(KeyError) as exc_info:
+            resolver._create_agent_llm_factory()
+
+        assert "agent_repository" in str(exc_info.value)
+
+    def test_resolve_repair_cycle_real_path_passes_llm_factory(self, factory, dependencies, adapter_config):
+        """Test that resolve_repair_cycle real path passes llm_factory to adapter factory."""
+        # Use a real adapter instead of mock
+        config = AdapterSelectionConfig(repair_cycle="mock")
+
+        resolver = AdapterResolver(config, factory, dependencies)
+
+        # Resolve required dependencies
+        resolver._resolved["event_emitter"] = resolver.resolve_event_emitter()
+        resolver._resolved["event_bus"] = resolver._deps.event_bus
+        resolver._resolved["checkpoint_store"] = resolver.resolve_checkpoint_store()
+        resolver._resolved["container"] = resolver.resolve_container()
+        resolver._resolved["agent_repository"] = resolver.resolve_agent_repository()
+
+        # Resolve repair_cycle with real path
+        repair_cycle = resolver.resolve_repair_cycle()
+
+        # Should not raise and should return an adapter
+        assert repair_cycle is not None
+
+    def test_resolve_all_with_llm_factory(self, factory, dependencies, adapter_config):
+        """Test full resolve_all with LLM factory integration."""
+        from codetoreum.infrastructure.simulation.bootstrap import SimulationAdapters
+
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+
+        # Mock engine methods
+        resolver._deps.engine.create_review_cycle_adapter.return_value = Mock()
+        resolver._deps.engine.create_repair_cycle_adapter.return_value = Mock()
+
+        # resolve_all should work without errors
+        result = resolver.resolve_all()
+
+        assert isinstance(result, SimulationAdapters)
+        assert result.repair_cycle is not None

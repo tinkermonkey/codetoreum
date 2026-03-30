@@ -1,0 +1,9 @@
+# External data: Board structure for repair cycle test
+
+boards:
+  - board_id: "test-board-1"
+    board_name: "Test Board 1"
+    columns:
+      - "Backlog"
+      - "Testing"
+      - "Done"

@@ -1,0 +1,10 @@
+# Test Scenario: Development Environment Repair
+#
+# Verifies repair_cycle_agents field in column_configs for the Testing column
+# Tests the six sub-task agent assignments derived from Switchyard run db1dbf2a
+
+name: "dev_environment_repair"
+description: "Scenario for testing development environment repair with specialized agents"
+version: "1.0"
+speed_multiplier: 100.0
+auto_advance: false

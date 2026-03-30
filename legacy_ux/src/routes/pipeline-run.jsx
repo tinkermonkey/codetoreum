@@ -627,7 +627,7 @@ function PipelineRunView() {
     }
 
     // Apply custom cycle layout
-    const { nodes: layoutedNodes, cycleNodes } = applyCycleLayout(
+    const { nodes: layoutedNodes } = applyCycleLayout(
       newNodes,
       newEdges,
       updatedCycles,
@@ -642,7 +642,7 @@ function PipelineRunView() {
     )
 
     // Update edges for collapsed cycles
-    const updatedEdges = updateEdgesForCycles(newEdges, updatedCycles, agentExecutions)
+    const updatedEdges = updateEdgesForCycles(newEdges, updatedCycles)
 
     // Add toggle callback to cycle nodes
     const finalNodes = layoutedNodes.map(node => {
@@ -659,7 +659,6 @@ function PipelineRunView() {
     })
 
     // Calculate chart dimensions based on layout
-    const maxX = Math.max(...finalNodes.map(n => n.position.x + (n.style?.width || 250)))
     const maxY = Math.max(...finalNodes.map(n => n.position.y + (n.style?.height || 80)))
     setChartHeight(Math.max(600, maxY + 100))
 

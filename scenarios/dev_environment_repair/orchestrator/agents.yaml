@@ -1,0 +1,28 @@
+# Agents for dev_environment_repair scenario
+#
+# Four specialist agents matched to their repair cycle sub-tasks
+
+agents:
+  - name: "qa_engineer"
+    agent_type: "testing"
+    description: "QA engineer for test execution and environment verification"
+    capabilities: ["testing"]
+    enabled: true
+
+  - name: "senior_software_engineer"
+    agent_type: "developer"
+    description: "Senior developer for code fixes and systemic analysis"
+    capabilities: ["code_generation", "code_review"]
+    enabled: true
+
+  - name: "devops_engineer"
+    agent_type: "infrastructure"
+    description: "DevOps engineer for environment rebuild (Docker/Dockerfile)"
+    capabilities: ["code_generation"]
+    enabled: true
+
+  - name: "code_reviewer"
+    agent_type: "reviewer"
+    description: "Code reviewer for peer review (not used in repair cycle)"
+    capabilities: ["code_review"]
+    enabled: true

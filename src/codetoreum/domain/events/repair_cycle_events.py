@@ -213,6 +213,7 @@ class RepairCycleTestExecutionCompletedEvent(CodetoreumEvent):
         warnings (int): Number of warnings found
         has_failures (bool): True if any tests failed
         failures (Tuple[RepairTestFailure, ...]): Details of each failure
+        agent_name (str): Name of agent that executed tests
         workflow_run_id (str): ID of the workflow run
         timestamp (str): ISO 8601 timestamp when test execution completed
     """
@@ -225,6 +226,7 @@ class RepairCycleTestExecutionCompletedEvent(CodetoreumEvent):
     warnings: int = 0
     has_failures: bool = False
     failures: tuple[RepairTestFailure, ...] = ()
+    agent_name: str = ""
     workflow_run_id: str = ""
 
     def __post_init__(self) -> None:
@@ -244,6 +246,9 @@ class RepairCycleTestExecutionCompletedEvent(CodetoreumEvent):
             raise ValueError(msg)
         if self.warnings < 0:
             msg = "warnings must be >= 0"
+            raise ValueError(msg)
+        if not self.agent_name:
+            msg = "agent_name is required"
             raise ValueError(msg)
         if not self.workflow_run_id:
             msg = "workflow_run_id is required"
@@ -272,6 +277,7 @@ class RepairCycleTestExecutionCompletedEvent(CodetoreumEvent):
                 "warnings": self.warnings,
                 "has_failures": self.has_failures,
                 "failures": [{"file": f.file, "test": f.test, "message": f.message} for f in self.failures],
+                "agent_name": self.agent_name,
                 "workflow_run_id": self.workflow_run_id,
             }
         )
@@ -318,6 +324,7 @@ class RepairCycleTestExecutionCompletedEvent(CodetoreumEvent):
             warnings=data.get("warnings", 0),
             has_failures=data.get("has_failures", False),
             failures=failures,
+            agent_name=data.get("agent_name", ""),
             workflow_run_id=workflow_run_id,
         )
 
@@ -429,6 +436,7 @@ class RepairCycleFileFixStartedEvent(CodetoreumEvent):
         test_file (str): Path to the test file with failures
         failure_count (int): Number of failures in this file
         test_type (RepairTestType): Type of test that failed
+        agent_name (str): Name of agent that will fix the file
         workflow_run_id (str): ID of the workflow run
         timestamp (str): ISO 8601 timestamp when file fix started
     """
@@ -436,6 +444,7 @@ class RepairCycleFileFixStartedEvent(CodetoreumEvent):
     test_file: str = ""
     failure_count: int = 0
     test_type: RepairTestType = RepairTestType.UNIT
+    agent_name: str = ""
     workflow_run_id: str = ""
 
     def __post_init__(self) -> None:
@@ -446,6 +455,9 @@ class RepairCycleFileFixStartedEvent(CodetoreumEvent):
             raise ValueError(msg)
         if self.failure_count < 1:
             msg = "failure_count must be >= 1"
+            raise ValueError(msg)
+        if not self.agent_name:
+            msg = "agent_name is required"
             raise ValueError(msg)
         if not self.workflow_run_id:
             msg = "workflow_run_id is required"
@@ -459,6 +471,7 @@ class RepairCycleFileFixStartedEvent(CodetoreumEvent):
                 "test_file": self.test_file,
                 "failure_count": self.failure_count,
                 "test_type": self.test_type.value,
+                "agent_name": self.agent_name,
                 "workflow_run_id": self.workflow_run_id,
             }
         )
@@ -492,6 +505,7 @@ class RepairCycleFileFixStartedEvent(CodetoreumEvent):
             test_file=data["test_file"],
             failure_count=data["failure_count"],
             test_type=test_type,
+            agent_name=data.get("agent_name", ""),
             workflow_run_id=workflow_run_id,
         )
 
@@ -510,6 +524,7 @@ class RepairCycleFileFixCompletedEvent(CodetoreumEvent):
         failure_count (int): Number of failures that were in this file
         test_type (RepairTestType): Type of test
         success (bool): True if fix was successful
+        agent_name (str): Name of agent that attempted to fix the file
         workflow_run_id (str): ID of the workflow run
         timestamp (str): ISO 8601 timestamp when file fix completed
     """
@@ -518,6 +533,7 @@ class RepairCycleFileFixCompletedEvent(CodetoreumEvent):
     failure_count: int = 0
     test_type: RepairTestType = RepairTestType.UNIT
     success: bool = False
+    agent_name: str = ""
     workflow_run_id: str = ""
 
     def __post_init__(self) -> None:
@@ -528,6 +544,9 @@ class RepairCycleFileFixCompletedEvent(CodetoreumEvent):
             raise ValueError(msg)
         if self.failure_count < 1:
             msg = "failure_count must be >= 1"
+            raise ValueError(msg)
+        if not self.agent_name:
+            msg = "agent_name is required"
             raise ValueError(msg)
         if not self.workflow_run_id:
             msg = "workflow_run_id is required"
@@ -542,6 +561,7 @@ class RepairCycleFileFixCompletedEvent(CodetoreumEvent):
                 "failure_count": self.failure_count,
                 "test_type": self.test_type.value,
                 "success": self.success,
+                "agent_name": self.agent_name,
                 "workflow_run_id": self.workflow_run_id,
             }
         )
@@ -576,6 +596,7 @@ class RepairCycleFileFixCompletedEvent(CodetoreumEvent):
             failure_count=data["failure_count"],
             test_type=test_type,
             success=data.get("success", False),
+            agent_name=data.get("agent_name", ""),
             workflow_run_id=workflow_run_id,
         )
 
@@ -594,6 +615,7 @@ class RepairCycleWarningReviewStartedEvent(CodetoreumEvent):
         warning_count (int): Number of warnings found in file
         test_type (RepairTestType): Type of test that found warnings
         warnings (Tuple[RepairTestWarning, ...]): Details of each warning
+        agent_name (str): Name of agent that will review warnings
         workflow_run_id (str): ID of the workflow run
         timestamp (str): ISO 8601 timestamp when warning review started
     """
@@ -602,6 +624,7 @@ class RepairCycleWarningReviewStartedEvent(CodetoreumEvent):
     warning_count: int = 0
     test_type: RepairTestType = RepairTestType.UNIT
     warnings: tuple[RepairTestWarning, ...] = ()
+    agent_name: str = ""
     workflow_run_id: str = ""
 
     def __post_init__(self) -> None:
@@ -612,6 +635,9 @@ class RepairCycleWarningReviewStartedEvent(CodetoreumEvent):
             raise ValueError(msg)
         if self.warning_count < 1:
             msg = "warning_count must be >= 1"
+            raise ValueError(msg)
+        if not self.agent_name:
+            msg = "agent_name is required"
             raise ValueError(msg)
         if not self.workflow_run_id:
             msg = "workflow_run_id is required"
@@ -626,6 +652,7 @@ class RepairCycleWarningReviewStartedEvent(CodetoreumEvent):
                 "warning_count": self.warning_count,
                 "test_type": self.test_type.value,
                 "warnings": [{"file": w.file, "message": w.message} for w in self.warnings],
+                "agent_name": self.agent_name,
                 "workflow_run_id": self.workflow_run_id,
             }
         )
@@ -667,6 +694,7 @@ class RepairCycleWarningReviewStartedEvent(CodetoreumEvent):
             warning_count=data["warning_count"],
             test_type=test_type,
             warnings=warnings_list,
+            agent_name=data.get("agent_name", ""),
             workflow_run_id=workflow_run_id,
         )
 
@@ -685,6 +713,7 @@ class RepairCycleWarningReviewCompletedEvent(CodetoreumEvent):
         warning_count (int): Number of warnings that were reviewed
         test_type (RepairTestType): Type of test
         success (bool): True if warning review was successful
+        agent_name (str): Name of agent that reviewed warnings
         workflow_run_id (str): ID of the workflow run
         timestamp (str): ISO 8601 timestamp when warning review completed
     """
@@ -693,6 +722,7 @@ class RepairCycleWarningReviewCompletedEvent(CodetoreumEvent):
     warning_count: int = 0
     test_type: RepairTestType = RepairTestType.UNIT
     success: bool = False
+    agent_name: str = ""
     workflow_run_id: str = ""
 
     def __post_init__(self) -> None:
@@ -703,6 +733,9 @@ class RepairCycleWarningReviewCompletedEvent(CodetoreumEvent):
             raise ValueError(msg)
         if self.warning_count < 1:
             msg = "warning_count must be >= 1"
+            raise ValueError(msg)
+        if not self.agent_name:
+            msg = "agent_name is required"
             raise ValueError(msg)
         if not self.workflow_run_id:
             msg = "workflow_run_id is required"
@@ -717,6 +750,7 @@ class RepairCycleWarningReviewCompletedEvent(CodetoreumEvent):
                 "warning_count": self.warning_count,
                 "test_type": self.test_type.value,
                 "success": self.success,
+                "agent_name": self.agent_name,
                 "workflow_run_id": self.workflow_run_id,
             }
         )
@@ -751,6 +785,7 @@ class RepairCycleWarningReviewCompletedEvent(CodetoreumEvent):
             warning_count=data["warning_count"],
             test_type=test_type,
             success=data.get("success", False),
+            agent_name=data.get("agent_name", ""),
             workflow_run_id=workflow_run_id,
         )
 

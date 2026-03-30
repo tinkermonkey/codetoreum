@@ -153,6 +153,7 @@ class _SimpleRepairContext:
     agent_name: str
     max_total_agent_calls: int
     checkpoint_interval: int
+    agent_config: Any = None  # Optional specialized agent configuration
 
 
 @pytest.mark.asyncio
@@ -188,7 +189,7 @@ async def test_repair_cycle_emits_started_and_completed_events(
                 review_warnings=False,
             ),
         ),
-        agent_name="repair-agent",
+        agent_name="tester",
         max_total_agent_calls=20,
         checkpoint_interval=5,
     )
@@ -251,7 +252,7 @@ async def test_repair_cycle_emits_fast_fail_on_persistent_failure(
                 review_warnings=False,
             ),
         ),
-        agent_name="repair-agent",
+        agent_name="tester",
         max_total_agent_calls=20,
         checkpoint_interval=5,
     )

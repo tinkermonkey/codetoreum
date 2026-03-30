@@ -15,10 +15,16 @@ The mock adapter:
 
 import logging
 import threading
+from collections.abc import Callable, Coroutine
 from datetime import timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
+from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
+
+if TYPE_CHECKING:
+    from codetoreum.ports.output.llm_provider import ILLMProvider
+
 from codetoreum.domain.events.repair_cycle_events import (
     RepairCycleCheckpointFailedEvent,
     RepairCycleCompletedEvent,
@@ -101,6 +107,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
     def __init__(
         self,
+        llm_factory: "Callable[[str], Coroutine[Any, Any, ILLMProvider]] | None" = None,
         clock: SimulationClock | None = None,
         checkpoint_store: IRepairCycleCheckpointStore | None = None,
         container_adapter: "Any | None" = None,
@@ -108,6 +115,11 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         """Initialize the repair cycle adapter with SimulationClock.
 
         Args:
+            llm_factory: Async factory for creating LLM providers for agents. Takes agent name
+                        and returns a coroutine that yields an ILLMProvider instance. Enables
+                        behavioral parity with production adapter's agent selection and LLM
+                        instantiation. Defaults to an async factory that returns MockLLMAdapter
+                        for any agent.
             clock: SimulationClock instance for deterministic time advancement
             checkpoint_store: Optional checkpoint store for recovery testing
             container_adapter: Optional container adapter for causal linking (FR-2/US-2.4).
@@ -116,7 +128,16 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                              between test execution and repair cycle decisions.
         """
         super().__init__()
-        self._clock = clock or SimulationClock()
+        # Default factory returns MockLLMAdapter for any agent
+        if llm_factory is None:
+            _mock_llm = MockLLMAdapter()
+            async def llm_factory(agent_name):
+                return _mock_llm
+        self._llm_factory = llm_factory
+        # Use a very fast clock by default (100,000x speed) to prevent test timeouts
+        # This ensures that await self.clock.advance() calls don't cause real delays
+        # Tests can override with their own clock if they need different behavior
+        self._clock = clock or SimulationClock(speed_multiplier=100_000.0)
         self._checkpoint_store = checkpoint_store
         self._container_adapter = container_adapter
         self._current_project: str | None = None
@@ -146,6 +167,9 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         self._monitoring: dict[str, MonitoringStatus] = {}
         self._handler_errors: list[dict[str, Any]] = []
         self._lock = threading.Lock()
+
+        # Agent selection tracking
+        self._subtask_agent_calls: list[dict[str, Any]] = []
 
     @property
     def clock(self) -> SimulationClock:
@@ -186,6 +210,11 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         Shorthand for configuring a gradual convergence scenario where
         failures decrease until the final iteration passes.
 
+        With systemic analysis, each iteration calls run_tests twice (initial + retest after fix).
+        We generate 2*N results to accommodate:
+        - Iterations 1 to N-1: initial test fails, fix, retest fails
+        - Iteration N: initial test fails, fix, retest passes (then break)
+
         Args:
             test_type: Type of test (UNIT, INTEGRATION, E2E)
             iterations: Number of iterations until success
@@ -193,39 +222,44 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         results = []
         for i in range(1, iterations + 1):
             is_last = i == iterations
-            results.append(
-                RepairTestResult(
-                    test_type=test_type,
-                    iteration=i,
-                    passed=7 if is_last else 7,
-                    failed=0 if is_last else 3,
-                    warnings=0,
-                    failures=(
-                        ()
-                        if is_last
-                        else (
-                            RepairTestFailure(
-                                file="test_example.py",
-                                test=f"test_case_{i}_1",
-                                message="Simulated failure",
-                            ),
-                            RepairTestFailure(
-                                file="test_example.py",
-                                test=f"test_case_{i}_2",
-                                message="Simulated failure",
-                            ),
-                            RepairTestFailure(
-                                file="test_example.py",
-                                test=f"test_case_{i}_3",
-                                message="Simulated failure",
-                            ),
-                        )
-                    ),
-                    warning_list=(),
-                    raw_output="",
-                    timestamp=self.clock.now().isoformat(),
+            # Each iteration generates 2 run_tests calls: initial and retest
+            for call_in_iteration in range(1, 3):
+                call_is_retest = call_in_iteration == 2
+                passes_on_retest = is_last and call_is_retest
+
+                results.append(
+                    RepairTestResult(
+                        test_type=test_type,
+                        iteration=i,
+                        passed=7 if passes_on_retest else 7,
+                        failed=0 if passes_on_retest else 3,
+                        warnings=0,
+                        failures=(
+                            ()
+                            if passes_on_retest
+                            else (
+                                RepairTestFailure(
+                                    file="test_example.py",
+                                    test=f"test_case_{i}_1",
+                                    message="Simulated failure",
+                                ),
+                                RepairTestFailure(
+                                    file="test_example.py",
+                                    test=f"test_case_{i}_2",
+                                    message="Simulated failure",
+                                ),
+                                RepairTestFailure(
+                                    file="test_example.py",
+                                    test=f"test_case_{i}_3",
+                                    message="Simulated failure",
+                                ),
+                            )
+                        ),
+                        warning_list=(),
+                        raw_output="",
+                        timestamp=self.clock.now().isoformat(),
+                    )
                 )
-            )
         self.test_results[test_type] = results
 
     def set_always_fail(self, test_type: RepairTestType, max_iterations: int) -> None:
@@ -234,41 +268,47 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         Shorthand for configuring a scenario that never passes,
         simulating code that cannot be fixed within max iterations.
 
+        With systemic analysis, each iteration may call run_tests twice (initial + retest after fix).
+        We generate 2*max_iterations results to accommodate both calls.
+
         Args:
             test_type: Type of test (UNIT, INTEGRATION, E2E)
             max_iterations: Maximum iterations before failure
         """
         results = []
         for i in range(1, max_iterations + 1):
-            results.append(
-                RepairTestResult(
-                    test_type=test_type,
-                    iteration=i,
-                    passed=7,
-                    failed=3,
-                    warnings=0,
-                    failures=(
-                        RepairTestFailure(
-                            file="test_stubborn.py",
-                            test="test_always_fails_1",
-                            message="Cannot be fixed",
+            # Each iteration generates 2 run_tests calls: initial and retest
+            # Both always fail in this scenario
+            for _ in range(1, 3):
+                results.append(
+                    RepairTestResult(
+                        test_type=test_type,
+                        iteration=i,
+                        passed=7,
+                        failed=3,
+                        warnings=0,
+                        failures=(
+                            RepairTestFailure(
+                                file="test_stubborn.py",
+                                test="test_always_fails_1",
+                                message="Cannot be fixed",
+                            ),
+                            RepairTestFailure(
+                                file="test_stubborn.py",
+                                test="test_always_fails_2",
+                                message="Cannot be fixed",
+                            ),
+                            RepairTestFailure(
+                                file="test_stubborn.py",
+                                test="test_always_fails_3",
+                                message="Cannot be fixed",
+                            ),
                         ),
-                        RepairTestFailure(
-                            file="test_stubborn.py",
-                            test="test_always_fails_2",
-                            message="Cannot be fixed",
-                        ),
-                        RepairTestFailure(
-                            file="test_stubborn.py",
-                            test="test_always_fails_3",
-                            message="Cannot be fixed",
-                        ),
-                    ),
-                    warning_list=(),
-                    raw_output="",
-                    timestamp=self.clock.now().isoformat(),
+                        warning_list=(),
+                        raw_output="",
+                        timestamp=self.clock.now().isoformat(),
+                    )
                 )
-            )
         self.test_results[test_type] = results
 
     def set_checkpoint_store(self, store: IRepairCycleCheckpointStore) -> None:
@@ -658,6 +698,9 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         Returns:
             RepairTestResult with pass/fail counts and failure details
         """
+        # Resolve and record which agent is executing this sub-task
+        _, agent_name = await self._resolve_and_record_agent("test_execution", context)
+
         self.agent_call_count += 1
         self.total_agent_calls += 1
         await self.clock.advance(timedelta(seconds=30))
@@ -726,6 +769,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                     warnings=result.warnings,
                     has_failures=(result.failed > 0),
                     failures=result.failures,
+                    agent_name=agent_name,
                     workflow_run_id=context.workflow_run_id,
                 )
             )
@@ -753,6 +797,9 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         fixed = 0
 
         for file_path, failures in grouped_failures.items():
+            # Resolve and record which agent is executing this sub-task
+            _, agent_name = await self._resolve_and_record_agent("code_fix", context)
+
             self.agent_call_count += 1
             self.total_agent_calls += 1
             await self.clock.advance(timedelta(minutes=2))
@@ -766,6 +813,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                         test_file=file_path,
                         failure_count=len(failures),
                         test_type=config.test_type,
+                        agent_name=agent_name,
                         workflow_run_id=context.workflow_run_id,
                     )
                 )
@@ -778,6 +826,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                         test_file=file_path,
                         failure_count=len(failures),
                         test_type=config.test_type,
+                        agent_name=agent_name,
                         success=True,
                         workflow_run_id=context.workflow_run_id,
                     )
@@ -811,6 +860,9 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         reviewed = 0
 
         for warning in test_result.warning_list:
+            # Resolve and record which agent is executing this sub-task
+            _, agent_name = await self._resolve_and_record_agent("code_fix", context)
+
             self.agent_call_count += 1
             self.total_agent_calls += 1
             await self.clock.advance(timedelta(minutes=1))
@@ -825,6 +877,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                         warning_count=1,
                         test_type=config.test_type,
                         warnings=(warning,),
+                        agent_name=agent_name,
                         workflow_run_id=context.workflow_run_id,
                     )
                 )
@@ -837,6 +890,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                         source_file=warning.file,
                         warning_count=1,
                         test_type=config.test_type,
+                        agent_name=agent_name,
                         success=True,
                         workflow_run_id=context.workflow_run_id,
                     )
@@ -845,6 +899,154 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             reviewed += 1
 
         return reviewed
+
+    async def analyze_systemic_issues(
+        self,
+        test_result: RepairTestResult,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> str:
+        """Mock implementation: return simulated systemic analysis.
+
+        Args:
+            test_result: Test result containing failures to analyze
+            config: Test run configuration
+            context: Repair cycle context
+
+        Returns:
+            Analysis summary string
+        """
+        if not test_result.failures:
+            return ""
+
+        # Resolve and record which agent is executing this sub-task
+        _, agent_name = await self._resolve_and_record_agent("systemic_analysis", context)
+
+        # Track agent call
+        self.agent_call_count += 1
+        self.total_agent_calls += 1
+
+        # Simulate analysis response
+        analysis = f"Systemic issues detected in {len(test_result.failures)} failures"
+
+        logger.info(
+            "Mock systemic analysis completed",
+            extra={
+                "workflow_run_id": context.workflow_run_id,
+                "failure_count": len(test_result.failures),
+                "agent_name": agent_name,
+            },
+            exc_info=False,
+        )
+
+        return analysis
+
+    async def apply_systemic_fixes(
+        self,
+        analysis_summary: str,
+        test_result: RepairTestResult,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> bool:
+        """Mock implementation: simulate systemic fix application.
+
+        Args:
+            analysis_summary: Summary from systemic analysis
+            test_result: Test result that triggered the analysis
+            config: Test run configuration
+            context: Repair cycle context
+
+        Returns:
+            True if fixes were successfully applied
+        """
+        if not analysis_summary:
+            return False
+
+        # Resolve and record which agent is executing this sub-task
+        _, agent_name = await self._resolve_and_record_agent("systemic_fix", context)
+
+        # Track agent call
+        self.agent_call_count += 1
+        self.total_agent_calls += 1
+
+        logger.info(
+            "Mock systemic fixes applied",
+            extra={
+                "workflow_run_id": context.workflow_run_id,
+                "test_type": config.test_type.value,
+                "agent_name": agent_name,
+            },
+            exc_info=False,
+        )
+
+        return True
+
+    async def rebuild_environment(
+        self,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> bool:
+        """Mock implementation: simulate environment rebuild.
+
+        Args:
+            config: Test run configuration
+            context: Repair cycle context
+
+        Returns:
+            True if environment was successfully rebuilt
+        """
+        # Resolve and record which agent is executing this sub-task
+        _, agent_name = await self._resolve_and_record_agent("env_rebuild", context)
+
+        # Track agent call
+        self.agent_call_count += 1
+        self.total_agent_calls += 1
+
+        logger.info(
+            "Mock environment rebuild completed",
+            extra={
+                "workflow_run_id": context.workflow_run_id,
+                "test_type": config.test_type.value,
+                "agent_name": agent_name,
+            },
+            exc_info=False,
+        )
+
+        return True
+
+    async def verify_environment(
+        self,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> bool:
+        """Mock implementation: simulate environment verification.
+
+        Args:
+            config: Test run configuration
+            context: Repair cycle context
+
+        Returns:
+            True if environment verification passed
+        """
+        # Resolve and record which agent is executing this sub-task
+        _, agent_name = await self._resolve_and_record_agent("env_verification", context)
+
+        # Track agent call
+        self.agent_call_count += 1
+        self.total_agent_calls += 1
+
+        logger.info(
+            "Mock environment verification completed",
+            extra={
+                "workflow_run_id": context.workflow_run_id,
+                "test_type": config.test_type.value,
+                "agent_name": agent_name,
+                "ready": True,
+            },
+            exc_info=False,
+        )
+
+        return True
 
     async def checkpoint(
         self,
@@ -913,7 +1115,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 timestamp=self.clock.now().isoformat(),
                 source="mock_repair_cycle",
                 workflow_run_id=context.workflow_run_id,
-                test_type=test_type.value,
+                test_type=test_type,
                 iteration=iteration,
                 error_type=type(e).__name__,
                 error_message=str(e),
@@ -1154,6 +1356,46 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         """
         return self.total_agent_calls or self.agent_call_count
 
+    def get_subtask_agent_calls(self) -> list[dict[str, Any]]:
+        """Get all recorded sub-task agent calls.
+
+        Returns a list of recorded agent selections for each sub-task invocation.
+        Each record contains the sub_task name, resolved agent_name, and timestamp.
+
+        Returns:
+            List of agent call records with keys: sub_task, agent_name, timestamp
+        """
+        with self._lock:
+            return list(self._subtask_agent_calls)
+
+    def assert_subtask_used_agent(self, sub_task: str, expected_agent: str) -> None:
+        """Assert that a sub-task used the specified agent.
+
+        Checks the most recent call for the specified sub-task and verifies
+        it used the expected agent. Raises AssertionError if no calls were
+        recorded for the sub-task or if the agent name doesn't match.
+
+        Args:
+            sub_task: The sub-task name to check
+            expected_agent: The expected agent name
+
+        Raises:
+            AssertionError: If no calls recorded or agent name doesn't match
+        """
+        with self._lock:
+            calls = [c for c in self._subtask_agent_calls if c["sub_task"] == sub_task]
+
+        if not calls:
+            msg = f"No calls recorded for sub_task '{sub_task}'"
+            raise AssertionError(msg)
+
+        actual = calls[-1]["agent_name"]  # Check most recent call
+        if actual != expected_agent:
+            msg = (
+                f"Sub-task '{sub_task}': expected agent '{expected_agent}', got '{actual}'"
+            )
+            raise AssertionError(msg)
+
     # Private helper methods
 
     async def _run_test_cycle(
@@ -1234,6 +1476,41 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 grouped = self._group_failures_by_file(test_result.failures)
                 files_fixed += await self.fix_failures_by_file(grouped, config, context)
 
+                # Re-test to determine if file-level fixes resolved issues
+                retest_result = await self.run_tests(config, context)
+
+                # Only proceed to systemic analysis if failures persist after fixes
+                if retest_result.failures:
+                    try:
+                        analysis = await self.analyze_systemic_issues(retest_result, config, context)
+                        if analysis:
+                            # Apply systemic fixes based on analysis
+                            fixed = await self.apply_systemic_fixes(analysis, retest_result, config, context)
+                            if fixed:
+                                # Rebuild and verify environment after systemic fixes
+                                rebuild_success = await self.rebuild_environment(config, context)
+                                if rebuild_success:
+                                    await self.verify_environment(config, context)
+                                    # Continue loop to re-test after environment changes
+                    except Exception as e:
+                        # Log systemic analysis failures but continue with regular retry
+                        logger.warning(
+                            "Systemic analysis/fixes failed, continuing with standard retry",
+                            extra={
+                                "workflow_run_id": context.workflow_run_id,
+                                "test_type": config.test_type.value,
+                                "error": str(e),
+                            },
+                            exc_info=True,
+                        )
+                else:
+                    # File-level fixes resolved issues
+                    # In production, test_result is updated and loop continues for confirmation
+                    # In mock, we can break immediately since we're using pre-configured results
+                    cycle_passed = True
+                    last_test_result = retest_result
+                    break
+
             # Checkpoint at interval
             if iteration % context.checkpoint_interval == 0:
                 await self.checkpoint(config.test_type, iteration, context)
@@ -1263,7 +1540,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                     source="mock_repair_cycle",
                     test_type=config.test_type,
                     test_type_index=test_type_index,
-                    passed=1 if cycle_passed else 0,
+                    passed=cycle_passed,
                     test_cycle_iterations=iteration,
                     files_fixed=files_fixed,
                     warnings_reviewed=warnings_reviewed,
@@ -1455,3 +1732,47 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         """Log event with timestamp (FR-11.9)."""
         event["timestamp"] = self.clock.now().isoformat()
         self.event_log.append(event)
+
+    async def _resolve_and_record_agent(
+        self,
+        sub_task: str,
+        context: RepairCycleContext,
+    ) -> tuple["ILLMProvider", str]:
+        """Resolve agent for a sub-task and return its LLM provider.
+
+        Resolves the agent name based on agent_config if available, otherwise
+        uses the default context agent name. Awaits the llm_factory with the resolved
+        agent name to obtain the configured ILLMProvider, ensuring behavioral parity
+        with the production adapter's agent selection and LLM instantiation.
+        Records the selection in the subtask agent calls log for later assertion.
+
+        Args:
+            sub_task: The sub-task name (e.g., "test_execution", "code_fix")
+            context: Repair cycle context with optional agent_config
+
+        Returns:
+            Coroutine that resolves to a tuple of (ILLMProvider instance for the
+            resolved agent, resolved agent name)
+        """
+        agent_name = (
+            context.agent_config.resolve_agent(sub_task, context.agent_name)
+            if context.agent_config
+            else context.agent_name
+        )
+
+        # Await factory to obtain ILLMProvider for the resolved agent.
+        # This enforces the contract that llm_factory returns ILLMProvider
+        # and validates production wiring correctness.
+        llm_provider = await self._llm_factory(agent_name)
+
+        with self._lock:
+            self._subtask_agent_calls.append(
+                {
+                    "sub_task": sub_task,
+                    "agent_name": agent_name,
+                    "llm_provider": llm_provider,
+                    "timestamp": self.clock.now().isoformat(),
+                }
+            )
+
+        return llm_provider, agent_name

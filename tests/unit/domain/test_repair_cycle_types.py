@@ -13,6 +13,7 @@ except ImportError:
 
 from codetoreum.domain.repair_cycle_types import (
     CycleResult,
+    RepairCycleAgentConfig,
     RepairCycleResult,
     RepairCycleStageConfig,
     RepairTestFailure,
@@ -1013,3 +1014,264 @@ class TestRepairCycleStageConfig:
                 test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
                 checkpoint_interval=0,
             )
+
+
+# ============================================================================
+# RepairCycleAgentConfig Tests
+# ============================================================================
+
+
+class TestRepairCycleAgentConfig:
+    """Test RepairCycleAgentConfig value object."""
+
+    def test_create_empty_config(self):
+        """Test creating config with all fields None (default)."""
+        config = RepairCycleAgentConfig()
+        assert config.test_execution is None
+        assert config.code_fix is None
+        assert config.systemic_analysis is None
+        assert config.systemic_fix is None
+        assert config.env_rebuild is None
+        assert config.env_verification is None
+
+    def test_create_with_test_execution_agent(self):
+        """Test creating config with test_execution agent set."""
+        config = RepairCycleAgentConfig(test_execution="qa_engineer")
+        assert config.test_execution == "qa_engineer"
+        assert config.code_fix is None
+        assert config.systemic_analysis is None
+        assert config.systemic_fix is None
+        assert config.env_rebuild is None
+        assert config.env_verification is None
+
+    def test_create_with_code_fix_agent(self):
+        """Test creating config with code_fix agent set."""
+        config = RepairCycleAgentConfig(code_fix="senior_software_engineer")
+        assert config.test_execution is None
+        assert config.code_fix == "senior_software_engineer"
+        assert config.systemic_analysis is None
+        assert config.systemic_fix is None
+        assert config.env_rebuild is None
+        assert config.env_verification is None
+
+    def test_create_with_systemic_analysis_agent(self):
+        """Test creating config with systemic_analysis agent set."""
+        config = RepairCycleAgentConfig(systemic_analysis="architect")
+        assert config.test_execution is None
+        assert config.code_fix is None
+        assert config.systemic_analysis == "architect"
+        assert config.systemic_fix is None
+        assert config.env_rebuild is None
+        assert config.env_verification is None
+
+    def test_create_with_systemic_fix_agent(self):
+        """Test creating config with systemic_fix agent set."""
+        config = RepairCycleAgentConfig(systemic_fix="architect")
+        assert config.test_execution is None
+        assert config.code_fix is None
+        assert config.systemic_analysis is None
+        assert config.systemic_fix == "architect"
+        assert config.env_rebuild is None
+        assert config.env_verification is None
+
+    def test_create_with_env_rebuild_agent(self):
+        """Test creating config with env_rebuild agent set."""
+        config = RepairCycleAgentConfig(env_rebuild="devops_engineer")
+        assert config.test_execution is None
+        assert config.code_fix is None
+        assert config.systemic_analysis is None
+        assert config.systemic_fix is None
+        assert config.env_rebuild == "devops_engineer"
+        assert config.env_verification is None
+
+    def test_create_with_env_verification_agent(self):
+        """Test creating config with env_verification agent set."""
+        config = RepairCycleAgentConfig(env_verification="qa_engineer")
+        assert config.test_execution is None
+        assert config.code_fix is None
+        assert config.systemic_analysis is None
+        assert config.systemic_fix is None
+        assert config.env_rebuild is None
+        assert config.env_verification == "qa_engineer"
+
+    def test_create_with_all_agents(self):
+        """Test creating config with all agents set."""
+        config = RepairCycleAgentConfig(
+            test_execution="qa_engineer",
+            code_fix="senior_software_engineer",
+            systemic_analysis="architect",
+            systemic_fix="architect",
+            env_rebuild="devops_engineer",
+            env_verification="qa_engineer",
+        )
+        assert config.test_execution == "qa_engineer"
+        assert config.code_fix == "senior_software_engineer"
+        assert config.systemic_analysis == "architect"
+        assert config.systemic_fix == "architect"
+        assert config.env_rebuild == "devops_engineer"
+        assert config.env_verification == "qa_engineer"
+
+    def test_config_immutability_raises_frozen_error(self):
+        """Test that frozen dataclass prevents modification."""
+        config = RepairCycleAgentConfig(test_execution="qa_engineer")
+        with pytest.raises(FrozenInstanceError):
+            config.test_execution = "senior_software_engineer"  # type: ignore[misc]
+
+        with pytest.raises(FrozenInstanceError):
+            config.code_fix = "senior_software_engineer"  # type: ignore[misc]
+
+        with pytest.raises(FrozenInstanceError):
+            config.env_rebuild = "devops_engineer"  # type: ignore[misc]
+
+    def test_resolve_agent_returns_configured_value(self):
+        """Test resolve_agent returns configured value when set."""
+        config = RepairCycleAgentConfig(test_execution="qa_engineer")
+        agent = config.resolve_agent("test_execution", "default_agent")
+        assert agent == "qa_engineer"
+
+    def test_resolve_agent_returns_default_when_none(self):
+        """Test resolve_agent returns default when field is None."""
+        config = RepairCycleAgentConfig()
+        agent = config.resolve_agent("test_execution", "senior_software_engineer")
+        assert agent == "senior_software_engineer"
+
+    def test_resolve_agent_all_subtasks(self):
+        """Test resolve_agent for all sub-task types."""
+        config = RepairCycleAgentConfig(
+            test_execution="qa_engineer",
+            code_fix="senior_software_engineer",
+            systemic_analysis="architect",
+            systemic_fix="architect",
+            env_rebuild="devops_engineer",
+            env_verification="qa_engineer",
+        )
+        default = "default_agent"
+
+        # When configured, returns configured agent
+        assert config.resolve_agent("test_execution", default) == "qa_engineer"
+        assert config.resolve_agent("code_fix", default) == "senior_software_engineer"
+        assert config.resolve_agent("systemic_analysis", default) == "architect"
+        assert config.resolve_agent("systemic_fix", default) == "architect"
+        assert config.resolve_agent("env_rebuild", default) == "devops_engineer"
+        assert config.resolve_agent("env_verification", default) == "qa_engineer"
+
+    def test_resolve_agent_fallback_chain(self):
+        """Test resolve_agent fallback chain with partial config."""
+        config = RepairCycleAgentConfig(
+            test_execution="qa_engineer",
+            code_fix="senior_software_engineer",
+        )
+        default = "stage_default_agent"
+
+        # Configured tasks return their agent
+        assert config.resolve_agent("test_execution", default) == "qa_engineer"
+        assert config.resolve_agent("code_fix", default) == "senior_software_engineer"
+
+        # Unconfigured tasks return default
+        assert config.resolve_agent("systemic_analysis", default) == "stage_default_agent"
+        assert config.resolve_agent("systemic_fix", default) == "stage_default_agent"
+        assert config.resolve_agent("env_rebuild", default) == "stage_default_agent"
+        assert config.resolve_agent("env_verification", default) == "stage_default_agent"
+
+    def test_resolve_agent_with_different_defaults(self):
+        """Test resolve_agent with different default values."""
+        config = RepairCycleAgentConfig(code_fix="senior_software_engineer")
+
+        # Same field, different defaults
+        assert config.resolve_agent("test_execution", "default1") == "default1"
+        assert config.resolve_agent("test_execution", "default2") == "default2"
+        assert config.resolve_agent("test_execution", "default3") == "default3"
+
+        # Configured field always returns configured value regardless of default
+        assert config.resolve_agent("code_fix", "ignored_default") == "senior_software_engineer"
+
+    def test_equality(self):
+        """Test value object equality."""
+        config1 = RepairCycleAgentConfig(
+            test_execution="qa_engineer",
+            code_fix="senior_software_engineer",
+        )
+        config2 = RepairCycleAgentConfig(
+            test_execution="qa_engineer",
+            code_fix="senior_software_engineer",
+        )
+        assert config1 == config2
+
+    def test_inequality_different_test_execution(self):
+        """Test inequality when test_execution differs."""
+        config1 = RepairCycleAgentConfig(test_execution="qa_engineer")
+        config2 = RepairCycleAgentConfig(test_execution="different_engineer")
+        assert config1 != config2
+
+    def test_inequality_different_code_fix(self):
+        """Test inequality when code_fix differs."""
+        config1 = RepairCycleAgentConfig(code_fix="senior_software_engineer")
+        config2 = RepairCycleAgentConfig(code_fix="junior_software_engineer")
+        assert config1 != config2
+
+    def test_inequality_one_empty_one_set(self):
+        """Test inequality when one config is empty and other is set."""
+        config1 = RepairCycleAgentConfig()
+        config2 = RepairCycleAgentConfig(test_execution="qa_engineer")
+        assert config1 != config2
+
+    def test_hashable(self):
+        """Test that frozen config is hashable."""
+        config1 = RepairCycleAgentConfig(test_execution="qa_engineer")
+        config2 = RepairCycleAgentConfig(test_execution="qa_engineer")
+        config_set = {config1, config2}
+        # Both configs are equal, so set should contain only 1 element
+        assert len(config_set) == 1
+
+    def test_resolve_agent_empty_string_default(self):
+        """Test resolve_agent with empty string as default."""
+        config = RepairCycleAgentConfig(test_execution="qa_engineer")
+        # Configured value takes precedence
+        assert config.resolve_agent("test_execution", "") == "qa_engineer"
+        # Unconfigured returns empty string default
+        assert config.resolve_agent("code_fix", "") == ""
+
+    def test_resolve_agent_preserves_special_characters(self):
+        """Test resolve_agent preserves agent names with special characters."""
+        config = RepairCycleAgentConfig(
+            test_execution="qa-engineer_v2.0",
+            code_fix="senior.software.engineer",
+        )
+        assert config.resolve_agent("test_execution", "default") == "qa-engineer_v2.0"
+        assert config.resolve_agent("code_fix", "default") == "senior.software.engineer"
+
+    def test_resolve_agent_validates_sub_task_name(self):
+        """Test resolve_agent raises ValueError for invalid sub_task name."""
+        config = RepairCycleAgentConfig()
+        with pytest.raises(ValueError, match="sub_task must be one of"):
+            config.resolve_agent("invalid_sub_task", "default")
+
+    def test_resolve_agent_validates_with_typo(self):
+        """Test resolve_agent catches typos in sub_task names."""
+        config = RepairCycleAgentConfig(test_execution="qa_engineer")
+        # Typo: "test_executions" instead of "test_execution"
+        with pytest.raises(ValueError, match="sub_task must be one of"):
+            config.resolve_agent("test_executions", "default")
+
+    def test_resolve_agent_validates_with_dunder_names(self):
+        """Test resolve_agent rejects dunder attributes."""
+        config = RepairCycleAgentConfig()
+        with pytest.raises(ValueError, match="sub_task must be one of"):
+            config.resolve_agent("__class__", "default")
+
+    def test_known_sub_tasks_constant_contains_all_fields(self):
+        """Test KNOWN_SUB_TASKS contains all configured sub-task fields."""
+        assert "test_execution" in RepairCycleAgentConfig.KNOWN_SUB_TASKS
+        assert "code_fix" in RepairCycleAgentConfig.KNOWN_SUB_TASKS
+        assert "systemic_analysis" in RepairCycleAgentConfig.KNOWN_SUB_TASKS
+        assert "systemic_fix" in RepairCycleAgentConfig.KNOWN_SUB_TASKS
+        assert "env_rebuild" in RepairCycleAgentConfig.KNOWN_SUB_TASKS
+        assert "env_verification" in RepairCycleAgentConfig.KNOWN_SUB_TASKS
+
+    def test_known_sub_tasks_constant_count(self):
+        """Test KNOWN_SUB_TASKS has exactly 6 sub-tasks."""
+        assert len(RepairCycleAgentConfig.KNOWN_SUB_TASKS) == 6
+
+    def test_known_sub_tasks_is_frozenset(self):
+        """Test KNOWN_SUB_TASKS is immutable."""
+        assert isinstance(RepairCycleAgentConfig.KNOWN_SUB_TASKS, frozenset)

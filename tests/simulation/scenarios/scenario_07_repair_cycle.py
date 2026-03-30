@@ -18,6 +18,7 @@ from dataclasses import dataclass
 
 import pytest
 
+from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
 from codetoreum.domain.repair_cycle_types import (
     RepairTestFailure,
@@ -41,6 +42,7 @@ class RepairCycleTestContext:
     agent_name: str
     max_total_agent_calls: int
     checkpoint_interval: int
+    agent_config: object | None = None  # Optional specialized agent configuration
 
 
 def create_config(scenario_name: str = "scenario_07_repair_cycle") -> SimulationConfig:
@@ -72,11 +74,22 @@ def create_repair_context(
     )
 
 
-async def test_scenario_01_happy_path_immediate_success():
+@pytest.fixture
+def llm_factory():
+    """Factory that returns a MockLLMAdapter regardless of agent name."""
+    llm_adapter = MockLLMAdapter()
+
+    async def factory(agent_name: str):
+        return llm_adapter
+
+    return factory
+
+
+async def test_scenario_01_happy_path_immediate_success(llm_factory):
     """Test repair cycle with immediate success (1 iteration per test type)."""
     config = create_config("scenario_01_happy_path")
     clock = SimulationClock(speed_multiplier=100.0)
-    adapter = MockRepairCycleAdapter(clock)
+    adapter = MockRepairCycleAdapter(llm_factory, clock)
     adapter.current_project = "test-proj"
 
     # Configure: both test types pass immediately
@@ -111,11 +124,11 @@ async def test_scenario_01_happy_path_immediate_success():
     assert result.duration_seconds < 180
 
 
-async def test_scenario_02_multiple_iterations_success():
+async def test_scenario_02_multiple_iterations_success(llm_factory):
     """Test repair cycle requiring multiple iterations to converge."""
     config = create_config("scenario_02_multiple_iterations")
     clock = SimulationClock(speed_multiplier=100.0)
-    adapter = MockRepairCycleAdapter(clock)
+    adapter = MockRepairCycleAdapter(llm_factory, clock)
     adapter.current_project = "test-proj"
 
     # Configure: UNIT takes 3 iterations, INTEGRATION takes 1
@@ -143,11 +156,11 @@ async def test_scenario_02_multiple_iterations_success():
     adapter.assert_overall_success()
 
 
-async def test_scenario_03_max_iterations_failure():
+async def test_scenario_03_max_iterations_failure(llm_factory):
     """Test repair cycle hitting max iterations (test type fails)."""
     config = create_config("scenario_03_max_iterations")
     clock = SimulationClock(speed_multiplier=100.0)
-    adapter = MockRepairCycleAdapter(clock)
+    adapter = MockRepairCycleAdapter(llm_factory, clock)
     adapter.current_project = "test-proj"
 
     # Configure: UNIT always fails (5 iterations), INTEGRATION not run
@@ -172,11 +185,11 @@ async def test_scenario_03_max_iterations_failure():
     adapter.assert_overall_failure()
 
 
-async def test_scenario_04_fast_fail_integration():
+async def test_scenario_04_fast_fail_integration(llm_factory):
     """Test fast-fail when INTEGRATION fails after UNIT succeeds."""
     config = create_config("scenario_04_fast_fail_integration")
     clock = SimulationClock(speed_multiplier=100.0)
-    adapter = MockRepairCycleAdapter(clock)
+    adapter = MockRepairCycleAdapter(llm_factory, clock)
     adapter.current_project = "test-proj"
 
     # Configure: UNIT passes, INTEGRATION fails, E2E not run
@@ -207,7 +220,7 @@ async def test_scenario_04_fast_fail_integration():
     assert not e2e_started
 
 
-async def test_scenario_05_warning_review():
+async def test_scenario_05_warning_review(llm_factory):
     """Test warning review after tests pass.
 
     Tests the warning review flow:
@@ -216,7 +229,7 @@ async def test_scenario_05_warning_review():
     - Re-test passes without warnings
     """
     clock = SimulationClock(speed_multiplier=100.0)
-    adapter = MockRepairCycleAdapter(clock)
+    adapter = MockRepairCycleAdapter(llm_factory, clock)
     adapter.current_project = "test-proj"
 
     # Configure: Tests pass immediately but with warnings
@@ -289,11 +302,11 @@ async def test_scenario_05_warning_review():
     assert result.total_agent_calls == 4, f"Expected 4 agent calls, got {result.total_agent_calls}"
 
 
-async def test_scenario_06_circuit_breaker():
+async def test_scenario_06_circuit_breaker(llm_factory):
     """Test circuit breaker triggers when max agent calls exceeded."""
     config = create_config("scenario_06_circuit_breaker")
     clock = SimulationClock(speed_multiplier=100.0)
-    adapter = MockRepairCycleAdapter(clock)
+    adapter = MockRepairCycleAdapter(llm_factory, clock)
     adapter.current_project = "test-proj"
 
     # Configure: UNIT takes many iterations, circuit breaker at 10 calls
@@ -311,11 +324,11 @@ async def test_scenario_06_circuit_breaker():
     adapter.assert_overall_failure()
 
 
-async def test_scenario_07_all_three_test_types():
+async def test_scenario_07_all_three_test_types(llm_factory):
     """Test full UNIT → INTEGRATION → E2E sequence with all passing."""
     config = create_config("scenario_07_all_test_types")
     clock = SimulationClock(speed_multiplier=100.0)
-    adapter = MockRepairCycleAdapter(clock)
+    adapter = MockRepairCycleAdapter(llm_factory, clock)
     adapter.current_project = "test-proj"
 
     # Configure: all three types pass, some with multiple iterations
@@ -347,14 +360,14 @@ async def test_scenario_07_all_three_test_types():
     adapter.assert_overall_success()
 
 
-async def test_scenario_08_warning_regression_detection():
+async def test_scenario_08_warning_regression_detection(llm_factory):
     """Test successful warning fix without regression (happy path).
 
     Tests that when warnings are found and then fixed successfully,
     the system properly completes the warning review cycle without regression.
     """
     clock = SimulationClock(speed_multiplier=100.0)
-    adapter = MockRepairCycleAdapter(clock)
+    adapter = MockRepairCycleAdapter(llm_factory, clock)
     adapter.current_project = "test-proj"
 
     # Configure: Tests pass with warnings, agent fixes them successfully
@@ -414,14 +427,14 @@ async def test_scenario_08_warning_regression_detection():
     adapter.assert_overall_success()
 
 
-async def test_scenario_09_partial_warning_fix():
+async def test_scenario_09_partial_warning_fix(llm_factory):
     """Test handling of partial warning fixes across iterations.
 
     Tests that when an agent only fixes some warnings in the first pass,
     the system continues to review remaining warnings until all are addressed.
     """
     clock = SimulationClock(speed_multiplier=100.0)
-    adapter = MockRepairCycleAdapter(clock)
+    adapter = MockRepairCycleAdapter(llm_factory, clock)
     adapter.current_project = "test-proj"
 
     warnings_batch_1 = (
@@ -489,14 +502,14 @@ async def test_scenario_09_partial_warning_fix():
     adapter.assert_test_type_passed(RepairTestType.INTEGRATION)
 
 
-async def test_scenario_10_warning_and_failure_mix():
+async def test_scenario_10_warning_and_failure_mix(llm_factory):
     """Test repair cycle handling both failures and warnings together.
 
     Tests that the system handles mixed scenarios where tests fail AND have warnings,
     requiring both failure fixes and warning reviews.
     """
     clock = SimulationClock(speed_multiplier=100.0)
-    adapter = MockRepairCycleAdapter(clock)
+    adapter = MockRepairCycleAdapter(llm_factory, clock)
     adapter.current_project = "test-proj"
 
     warnings_list = (RepairTestWarning(file="helpers.py", message="Performance warning"),)
@@ -564,14 +577,14 @@ async def test_scenario_10_warning_and_failure_mix():
     adapter.assert_test_type_passed(RepairTestType.E2E)
 
 
-async def test_scenario_11_multiple_test_types_with_warnings():
+async def test_scenario_11_multiple_test_types_with_warnings(llm_factory):
     """Test warning review across multiple test types with different warnings.
 
     Tests that each test type's warnings are reviewed independently without
     cross-contamination between test type results.
     """
     clock = SimulationClock(speed_multiplier=100.0)
-    adapter = MockRepairCycleAdapter(clock)
+    adapter = MockRepairCycleAdapter(llm_factory, clock)
     adapter.current_project = "test-proj"
 
     unit_warnings = (RepairTestWarning(file="types.py", message="Type annotation warning"),)
@@ -655,14 +668,14 @@ async def test_scenario_11_multiple_test_types_with_warnings():
     adapter.assert_warnings_reviewed_count(RepairTestType.INTEGRATION, 2)
 
 
-async def test_scenario_12_warnings_without_review_enabled():
+async def test_scenario_12_warnings_without_review_enabled(llm_factory):
     """Test that warnings are detected but not reviewed when review_warnings=False.
 
     Tests that the system correctly handles scenarios where warnings exist
     but the repair cycle is not configured to review them.
     """
     clock = SimulationClock(speed_multiplier=100.0)
-    adapter = MockRepairCycleAdapter(clock)
+    adapter = MockRepairCycleAdapter(llm_factory, clock)
     adapter.current_project = "test-proj"
 
     warnings_list = (
@@ -705,7 +718,7 @@ async def test_scenario_12_warnings_without_review_enabled():
     adapter.assert_test_type_passed(RepairTestType.UNIT)
 
 
-async def test_scenario_13_warning_fixes_break_tests():
+async def test_scenario_13_warning_fixes_break_tests(llm_factory):
     """Test when warning fixes introduce new test failures (Edge Case #6).
 
     Edge Case #6 from issue #88: Warning fixes break tests, system handles
@@ -720,7 +733,7 @@ async def test_scenario_13_warning_fixes_break_tests():
     5. System verifies warnings were reviewed despite temporary regression
     """
     clock = SimulationClock(speed_multiplier=100.0)
-    adapter = MockRepairCycleAdapter(clock)
+    adapter = MockRepairCycleAdapter(llm_factory, clock)
     adapter.current_project = "test-proj"
 
     original_warnings = (
@@ -795,7 +808,7 @@ async def test_scenario_13_warning_fixes_break_tests():
     adapter.assert_test_type_passed(RepairTestType.UNIT)
 
 
-async def test_scenario_14_warning_review_max_iterations():
+async def test_scenario_14_warning_review_max_iterations(llm_factory):
     """Test max iterations prevent infinite loops when warning fixes break tests.
 
     Scenario:
@@ -806,7 +819,7 @@ async def test_scenario_14_warning_review_max_iterations():
     5. Verify appropriate failure status is returned
     """
     clock = SimulationClock(speed_multiplier=100.0)
-    adapter = MockRepairCycleAdapter(clock)
+    adapter = MockRepairCycleAdapter(llm_factory, clock)
     adapter.current_project = "test-proj"
 
     original_warnings = (RepairTestWarning(file="api.py", message="Deprecated API endpoint"),)
@@ -910,7 +923,7 @@ async def test_scenario_14_warning_review_max_iterations():
     assert adapter.get_agent_call_count() <= 15
 
 
-async def test_scenario_15_multiple_warning_review_attempts():
+async def test_scenario_15_multiple_warning_review_attempts(llm_factory):
     """Test multiple warning review attempts with iteration tracking (Complex Case).
 
     Scenario:
@@ -922,7 +935,7 @@ async def test_scenario_15_multiple_warning_review_attempts():
     by immediate retests that may temporarily fail but then recover successfully.
     """
     clock = SimulationClock(speed_multiplier=100.0)
-    adapter = MockRepairCycleAdapter(clock)
+    adapter = MockRepairCycleAdapter(llm_factory, clock)
     adapter.current_project = "test-proj"
 
     warnings_batch_1 = (RepairTestWarning(file="auth.py", message="Deprecated auth method"),)
@@ -998,25 +1011,31 @@ async def test_scenario_15_multiple_warning_review_attempts():
 # Main runner
 async def run_scenario(runner: SimulationRunner) -> None:
     """Execute all repair cycle scenarios."""
-    await test_scenario_01_happy_path_immediate_success()
-    await test_scenario_02_multiple_iterations_success()
-    await test_scenario_03_max_iterations_failure()
-    await test_scenario_04_fast_fail_integration()
-    await test_scenario_05_warning_review()
-    await test_scenario_06_circuit_breaker()
-    await test_scenario_07_all_three_test_types()
-    await test_scenario_08_warning_regression_detection()
-    await test_scenario_09_partial_warning_fix()
-    await test_scenario_10_warning_and_failure_mix()
-    await test_scenario_11_multiple_test_types_with_warnings()
-    await test_scenario_12_warnings_without_review_enabled()
-    await test_scenario_13_warning_fixes_break_tests()
-    await test_scenario_14_warning_review_max_iterations()
-    await test_scenario_15_multiple_warning_review_attempts()
+    # Create llm_factory for all scenarios
+    llm_adapter = MockLLMAdapter()
+
+    async def llm_factory(agent_name: str):
+        return llm_adapter
+
+    await test_scenario_01_happy_path_immediate_success(llm_factory)
+    await test_scenario_02_multiple_iterations_success(llm_factory)
+    await test_scenario_03_max_iterations_failure(llm_factory)
+    await test_scenario_04_fast_fail_integration(llm_factory)
+    await test_scenario_05_warning_review(llm_factory)
+    await test_scenario_06_circuit_breaker(llm_factory)
+    await test_scenario_07_all_three_test_types(llm_factory)
+    await test_scenario_08_warning_regression_detection(llm_factory)
+    await test_scenario_09_partial_warning_fix(llm_factory)
+    await test_scenario_10_warning_and_failure_mix(llm_factory)
+    await test_scenario_11_multiple_test_types_with_warnings(llm_factory)
+    await test_scenario_12_warnings_without_review_enabled(llm_factory)
+    await test_scenario_13_warning_fixes_break_tests(llm_factory)
+    await test_scenario_14_warning_review_max_iterations(llm_factory)
+    await test_scenario_15_multiple_warning_review_attempts(llm_factory)
 
 
 @pytest.mark.asyncio
-async def test_scenario_16_json_parse_retry_logic():
+async def test_scenario_16_json_parse_retry_logic(llm_factory):
     """Test JSON parse error with retry logic.
 
     Edge Case #8 from issue #88: Agent returns invalid JSON,
@@ -1038,7 +1057,9 @@ async def test_scenario_16_json_parse_retry_logic():
 
     # Mock LLM that returns non-JSON
     mock_llm = Mock()
-    adapter = ProductionRepairCycleAdapter(llm_provider=mock_llm, config=config)
+    def llm_factory(agent_name):
+        return mock_llm
+    adapter = ProductionRepairCycleAdapter(llm_factory=llm_factory, config=config)
 
     start_time = time.time()
 
@@ -1053,7 +1074,7 @@ async def test_scenario_16_json_parse_retry_logic():
 
 
 @pytest.mark.asyncio
-async def test_scenario_17_json_parse_success_after_retry():
+async def test_scenario_17_json_parse_success_after_retry(llm_factory):
     """Test successful JSON extraction from mixed content.
 
     Tests that embedded JSON is found and parsed correctly
@@ -1068,7 +1089,9 @@ async def test_scenario_17_json_parse_success_after_retry():
 
     config = RepairCycleConfig(max_json_parse_retries=3)
     mock_llm = Mock()
-    adapter = ProductionRepairCycleAdapter(llm_provider=mock_llm, config=config)
+    def llm_factory(agent_name):
+        return mock_llm
+    adapter = ProductionRepairCycleAdapter(llm_factory=llm_factory, config=config)
 
     # Test with embedded JSON in mixed content
     mixed_content = """
@@ -1088,7 +1111,7 @@ async def test_scenario_17_json_parse_success_after_retry():
 
 
 @pytest.mark.asyncio
-async def test_scenario_18_json_parse_malformed_structure():
+async def test_scenario_18_json_parse_malformed_structure(llm_factory):
     """Test that structurally invalid JSON fails gracefully.
 
     Tests partial/malformed JSON (missing closing braces, etc.)
@@ -1104,7 +1127,9 @@ async def test_scenario_18_json_parse_malformed_structure():
 
     config = RepairCycleConfig(max_json_parse_retries=2)
     mock_llm = Mock()
-    adapter = ProductionRepairCycleAdapter(llm_provider=mock_llm, config=config)
+    def llm_factory(agent_name):
+        return mock_llm
+    adapter = ProductionRepairCycleAdapter(llm_factory=llm_factory, config=config)
 
     # Test with malformed JSON (missing closing brace)
     malformed_json = '{"passed": 10, "failed": 0'
@@ -1113,6 +1138,184 @@ async def test_scenario_18_json_parse_malformed_structure():
         await adapter._parse_test_output_with_retry(malformed_json, RepairTestType.UNIT)
 
     assert "Failed to parse test output after 2 attempts" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_scenario_19_agent_config_routing(llm_factory):
+    """Test repair cycle with agent config routing to specialized agents (issue #556).
+
+    Verifies the primary behavioral change: when RepairCycleAgentConfig is provided,
+    run_tests() routes through 'test_execution', fix_failures_by_file() through
+    'code_fix', and handle_warnings() through 'code_fix' sub-task agents.
+    """
+    from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig
+
+    clock = SimulationClock(speed_multiplier=100.0)
+    adapter = MockRepairCycleAdapter(llm_factory, clock)
+    adapter.current_project = "test-proj"
+
+    # Configure specialized agents for sub-tasks
+    agent_config = RepairCycleAgentConfig(
+        test_execution="qa_engineer",  # Different from default
+        code_fix="senior_developer",   # Different from default
+    )
+
+    # Simple scenario: tests pass immediately
+    adapter.set_iterations_until_success(RepairTestType.UNIT, 1)
+
+    test_configs = (RepairTestRunConfig(test_type=RepairTestType.UNIT),)
+    context = create_repair_context(test_configs)
+    # Set agent config on context (PRIMARY TEST CHANGE)
+    context.agent_config = agent_config
+    context.agent_name = "default_repair_agent"
+
+    result = await adapter.execute(context)
+
+    # Assertions: verify execution succeeded
+    assert result.overall_success is True
+    assert len(result.test_results) == 1
+    assert result.test_results[0].passed is True
+
+    # NEW: Verify agent routing was recorded
+    # When agent_config is present, _get_llm_for_subtask should resolve agents
+    agent_calls = adapter.get_subtask_agent_calls()
+    assert len(agent_calls) > 0, "Expected agent calls to be recorded"
+
+    # Verify test_execution sub-task used the configured agent
+    test_execution_calls = [c for c in agent_calls if c["sub_task"] == "test_execution"]
+    assert len(test_execution_calls) > 0, "Expected test_execution sub-task to be recorded"
+    assert test_execution_calls[0]["agent_name"] == "qa_engineer", \
+        "test_execution should use configured 'qa_engineer' agent"
+
+    adapter.assert_test_type_passed(RepairTestType.UNIT)
+    adapter.assert_overall_success()
+
+
+@pytest.mark.asyncio
+async def test_scenario_20_agent_config_with_failures_and_fixes(llm_factory):
+    """Test agent config routing when failures trigger code_fix agent (issue #556).
+
+    Verifies that when tests fail and need fixing, the code_fix sub-task uses
+    the specialized agent from RepairCycleAgentConfig.
+    """
+    from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig
+
+    clock = SimulationClock(speed_multiplier=100.0)
+    adapter = MockRepairCycleAdapter(llm_factory, clock)
+    adapter.current_project = "test-proj"
+
+    # Configure specialized agents
+    agent_config = RepairCycleAgentConfig(
+        test_execution="qa_specialist",
+        code_fix="code_repair_expert",
+    )
+
+    # Tests require 2 iterations (1st fails, 2nd passes)
+    adapter.set_iterations_until_success(RepairTestType.UNIT, 2)
+
+    test_configs = (RepairTestRunConfig(test_type=RepairTestType.UNIT),)
+    context = create_repair_context(test_configs)
+    context.agent_config = agent_config
+    context.agent_name = "default_agent"
+
+    result = await adapter.execute(context)
+
+    # Assertions
+    assert result.overall_success is True
+    assert result.test_results[0].iterations == 2
+
+    # Verify both test_execution and code_fix sub-tasks were called
+    agent_calls = adapter.get_subtask_agent_calls()
+    sub_tasks = {c["sub_task"] for c in agent_calls}
+    assert "test_execution" in sub_tasks, "Expected test_execution calls"
+    assert "code_fix" in sub_tasks, "Expected code_fix calls (from fix_failures_by_file)"
+
+    # Verify the specialized agents were used
+    code_fix_calls = [c for c in agent_calls if c["sub_task"] == "code_fix"]
+    assert len(code_fix_calls) > 0
+    assert all(c["agent_name"] == "code_repair_expert" for c in code_fix_calls), \
+        "All code_fix calls should use the configured agent"
+
+    adapter.assert_test_type_passed(RepairTestType.UNIT)
+    adapter.assert_overall_success()
+
+
+@pytest.mark.asyncio
+async def test_scenario_21_agent_config_with_warning_review(llm_factory):
+    """Test agent config routing for warning review (issue #556).
+
+    Verifies that when warnings are reviewed, the code_fix sub-task uses
+    the specialized agent from RepairCycleAgentConfig.
+    """
+    from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig
+
+    clock = SimulationClock(speed_multiplier=100.0)
+    adapter = MockRepairCycleAdapter(llm_factory, clock)
+    adapter.current_project = "test-proj"
+
+    # Configure specialized agents
+    agent_config = RepairCycleAgentConfig(
+        test_execution="qa_agent",
+        code_fix="warning_fixer",
+    )
+
+    # Configure warning list for first test result
+    warning_list = (
+        RepairTestWarning(file="config.py", message="Deprecated config format"),
+        RepairTestWarning(file="logger.py", message="Old logging API"),
+    )
+
+    adapter.set_test_result_sequence(
+        RepairTestType.UNIT,
+        [
+            # First run: tests pass with warnings
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=1,
+                passed=10,
+                failed=0,
+                warnings=2,
+                failures=(),
+                warning_list=warning_list,
+                raw_output="Tests passed but with warnings",
+                timestamp=clock.now().isoformat(),
+            ),
+            # After warning review: all clean
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=1,
+                passed=10,
+                failed=0,
+                warnings=0,
+                failures=(),
+                warning_list=(),
+                raw_output="All tests passed, no warnings",
+                timestamp=clock.now().isoformat(),
+            ),
+        ],
+    )
+
+    test_configs = (RepairTestRunConfig(test_type=RepairTestType.UNIT, review_warnings=True),)
+    context = create_repair_context(test_configs)
+    context.agent_config = agent_config
+    context.agent_name = "default_agent"
+
+    result = await adapter.execute(context)
+
+    # Assertions
+    assert result.overall_success is True
+    assert result.test_results[0].passed is True
+    assert result.test_results[0].warnings_reviewed == 2
+
+    # Verify code_fix agent was used for warning review
+    agent_calls = adapter.get_subtask_agent_calls()
+    code_fix_calls = [c for c in agent_calls if c["sub_task"] == "code_fix"]
+    assert len(code_fix_calls) > 0, "Expected code_fix calls for warning review"
+    assert all(c["agent_name"] == "warning_fixer" for c in code_fix_calls), \
+        "Warning review should use configured code_fix agent"
+
+    adapter.assert_test_type_passed(RepairTestType.UNIT)
+    adapter.assert_overall_success()
 
 
 @pytest.mark.asyncio

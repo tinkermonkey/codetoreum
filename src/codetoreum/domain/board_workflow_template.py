@@ -4,9 +4,13 @@ This module defines the domain models for column-based workflow orchestration,
 where board position (not labels) determines workflow state and agent triggers.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+
+from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig
 
 
 class ColumnType(Enum):
@@ -39,6 +43,9 @@ class ColumnTemplate:
         sla_escalation_column: Name of the column to move the work item to when
                                 the SLA expires. None means only an event is emitted
                                 (no automatic move). Validated against parent columns.
+        repair_cycle_agents: Optional specialized agent configuration for repair cycle
+                           stages on this column. When set, maps sub-task types to
+                           specific agents. None means use default stage agent.
     """
 
     name: str
@@ -51,6 +58,7 @@ class ColumnTemplate:
     sla_seconds: int | None = None
     on_failure_column: str | None = None
     sla_escalation_column: str | None = None
+    repair_cycle_agents: RepairCycleAgentConfig | None = None
 
     def __post_init__(self) -> None:
         """Validate column template invariants."""
