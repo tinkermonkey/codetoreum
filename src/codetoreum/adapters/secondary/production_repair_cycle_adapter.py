@@ -28,6 +28,7 @@ import asyncio
 import json
 import logging
 import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -774,12 +775,10 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         Raises:
             CircuitBreakerOpenError: When circuit breaker is open
         """
-        import time
-
         start_time = time.time()
 
         # Circuit breaker check
-        if self.circuit_breaker.is_open():
+        if self.circuit_breaker and self.circuit_breaker.is_open():
             logger.error(
                 "Circuit breaker open; cannot apply systemic fixes",
                 extra={
@@ -805,7 +804,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             )
 
             # Get LLM provider for the fix agent
-            llm_provider = self.llm_factory(context.agent_name)
+            llm_provider, resolved_agent_name = await self._get_llm_for_subtask("systemic_fix", context)
 
             # Build prompt with failure details and root cause context
             failures_summary = "\n".join([
@@ -848,10 +847,13 @@ Respond with JSON:
 """
 
             # Execute LLM call
-            execution_result = await llm_provider.execute_agent(
-                agent_name=context.agent_name,
-                instruction=prompt,
-                context_files=None,
+            execution_result = await self._execute_llm_with_timeout(
+                llm=llm_provider,
+                prompt=prompt,
+                operation="repair_cycle.fix_failures_systemically",
+                config=config,
+                context=context,
+                error_message="Systemic fix execution",
             )
 
             if not execution_result.success:

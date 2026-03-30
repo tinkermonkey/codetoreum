@@ -1001,6 +1001,24 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         Returns:
             SystemicFixResult indicating success and modified files
         """
+        # Check circuit breaker
+        if self.total_agent_calls >= context.max_total_agent_calls:
+            logger.warning(
+                "Circuit breaker triggered; cannot apply systemic fixes",
+                extra={
+                    "workflow_run_id": context.workflow_run_id,
+                    "total_agent_calls": self.total_agent_calls,
+                    "max_total_agent_calls": context.max_total_agent_calls,
+                },
+                exc_info=False,
+            )
+            return SystemicFixResult(
+                success=False,
+                files_modified=(),
+                root_cause_addressed="Circuit breaker triggered",
+                duration_seconds=0.0,
+            )
+
         # Resolve and record which agent is executing this sub-task
         _, agent_name = await self._resolve_and_record_agent("systemic_fix", context)
 
