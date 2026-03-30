@@ -86,3 +86,43 @@ class InMemoryAgentRepository(IAgentRepository):
             agent: Agent domain object to persist
         """
         await self.save(agent, project_id)
+
+    async def get_all(self) -> list[Agent]:
+        """Get all agents in the repository.
+
+        Returns:
+            List of all Agent domain objects
+        """
+        return list(self._agents_by_id.values())
+
+    def get_all_sync(self) -> list[Agent]:
+        """Get all agents in the repository synchronously.
+
+        This is a synchronous version of get_all() for use during adapter
+        initialization when we need to populate caches without async/await.
+        InMemoryAgentRepository stores agents in memory, so this is safe.
+
+        Returns:
+            List of all Agent domain objects
+        """
+        return list(self._agents_by_id.values())
+
+    def get_by_name_sync(self, name: str) -> Agent:
+        """Get agent by name synchronously.
+
+        This is a synchronous version of get_by_name() for use in contexts
+        where async/await is not available. InMemoryAgentRepository stores
+        agents in memory, so this is safe to call synchronously.
+
+        Args:
+            name: Agent name
+
+        Returns:
+            Agent domain object
+
+        Raises:
+            ResourceNotFoundError: If agent not found
+        """
+        if name not in self._agents_by_name:
+            raise ResourceNotFoundError("Agent", name)
+        return self._agents_by_name[name]

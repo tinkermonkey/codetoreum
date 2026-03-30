@@ -1,0 +1,7 @@
+# External data: Projects for dev_environment_repair scenario
+#
+# Represents a development project with environment that may need repair
+
+projects:
+  - name: "dev_environment_repair_project"
+    description: "Project for testing development environment repair workflows"

@@ -13,6 +13,7 @@ simulation-agnostic - they never receive or use a clock directly.
 """
 
 import logging
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -248,6 +249,7 @@ class SimulationEngine:
 
     def create_repair_cycle_adapter(
         self,
+        llm_factory: "Callable[[str], ILLMProvider]",
         checkpoint_store: "IRepairCycleCheckpointStore | None" = None,
         container_adapter: "IContainer | None" = None,
     ) -> "MockRepairCycleAdapter":
@@ -255,6 +257,9 @@ class SimulationEngine:
         Create mock repair cycle adapter with injected clock.
 
         Args:
+            llm_factory: Factory callable that takes agent name and returns an ILLMProvider.
+                        Required to enforce behavioral parity with production adapter's
+                        agent selection and LLM instantiation for contract validation.
             checkpoint_store: Optional checkpoint store for recovery testing.
                             Stores recovery snapshots for repair cycle resumption.
             container_adapter: Optional container adapter for causal linking (FR-2/US-2.4).
@@ -271,6 +276,7 @@ class SimulationEngine:
         )
 
         adapter = MockRepairCycleAdapter(
+            llm_factory=llm_factory,
             clock=self._clock,
             checkpoint_store=checkpoint_store,
             container_adapter=container_adapter,
@@ -338,12 +344,14 @@ class SimulationEngine:
         self,
         repair_cycle: object,
         event_bus: object,
+        workflow_config: object | None = None,
     ) -> "RepairCycleEventHandler":
         """
         Create repair cycle event handler with injected clock.
 
         Args:
             repair_cycle: MockRepairCycleAdapter instance
+            workflow_config: WorkflowConfigService instance for retrieving column templates
             event_bus: EventBus instance
 
         Returns:
@@ -353,6 +361,7 @@ class SimulationEngine:
 
         handler = RepairCycleEventHandler(
             repair_cycle=repair_cycle,
+            workflow_config=workflow_config,
             clock=self._clock,
             event_bus=event_bus,
         )

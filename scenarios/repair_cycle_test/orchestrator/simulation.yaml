@@ -1,0 +1,9 @@
+# Test Scenario: Repair Cycle Agents Configuration
+#
+# Verifies repair_cycle_agents field in column_configs
+
+name: "repair_cycle_test"
+description: "Test scenario for repair_cycle_agents feature"
+version: "1.0"
+speed_multiplier: 100.0
+auto_advance: false

@@ -1239,6 +1239,10 @@ class AdapterFactory:
         if adapter_config is not None:
             kwargs["config"] = adapter_config
 
+        # Map 'model' parameter to 'model_name' for backward compatibility with adapters
+        if "model" in kwargs:
+            kwargs["model_name"] = kwargs.pop("model")
+
         adapter = self._llm_provider_registry.create_instance(adapter_name, **kwargs)
 
         # Apply resilience if enabled

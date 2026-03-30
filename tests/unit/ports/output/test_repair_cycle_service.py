@@ -162,6 +162,41 @@ class MockRepairCycle:
         """Review and fix warnings from test execution."""
         return 0
 
+    async def analyze_systemic_issues(
+        self,
+        test_result: RepairTestResult,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> str:
+        """Analyze failure root causes at systemic level."""
+        return "No systemic issues detected"
+
+    async def apply_systemic_fixes(
+        self,
+        analysis_summary: str,
+        test_result: RepairTestResult,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> bool:
+        """Apply cross-cutting fixes based on systemic analysis."""
+        return True
+
+    async def rebuild_environment(
+        self,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> bool:
+        """Rebuild test environment after systemic fixes."""
+        return True
+
+    async def verify_environment(
+        self,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> bool:
+        """Verify that rebuilt environment is ready for testing."""
+        return True
+
     async def checkpoint(
         self,
         test_type: RepairTestType,
@@ -170,13 +205,6 @@ class MockRepairCycle:
     ) -> None:
         """Save repair cycle state for resume after failures."""
         return
-
-    async def analyze_systemic_issues(
-        self,
-        failures: tuple[RepairTestFailure, ...],
-    ) -> str:
-        """Analyze systemic issues in test failures."""
-        return "Mock analysis result"
 
 
 class TestIRepairCycleProtocol:
@@ -203,20 +231,23 @@ class TestIRepairCycleProtocol:
         assert hasattr(IRepairCycle, "checkpoint")
 
     def test_protocol_has_analyze_systemic_issues_method(self) -> None:
-        """Test that IRepairCycle Protocol has analyze_systemic_issues method (backward compatibility)."""
+        """Test that IRepairCycle Protocol has analyze_systemic_issues method."""
         assert hasattr(IRepairCycle, "analyze_systemic_issues")
 
-    def test_protocol_has_exactly_six_methods(self) -> None:
-        """Test that IRepairCycle Protocol has exactly 6 methods."""
+    def test_protocol_has_expected_method_count(self) -> None:
+        """Test that IRepairCycle Protocol has exactly 9 methods."""
         methods = [m for m in dir(IRepairCycle) if not m.startswith("_") and callable(getattr(IRepairCycle, m))]
-        assert len(methods) == 6
+        assert len(methods) == 9
         assert set(methods) == {
             "execute",
             "run_tests",
             "fix_failures_by_file",
             "handle_warnings",
-            "checkpoint",
             "analyze_systemic_issues",
+            "apply_systemic_fixes",
+            "rebuild_environment",
+            "verify_environment",
+            "checkpoint",
         }
 
     @pytest.mark.asyncio

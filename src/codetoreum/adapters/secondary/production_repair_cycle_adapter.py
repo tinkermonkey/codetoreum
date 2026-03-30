@@ -24,6 +24,7 @@ Architecture:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -33,8 +34,10 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from codetoreum.domain.events.adapter_events import CodetoreumEvent
     from codetoreum.infrastructure.resilience.interfaces import ICircuitBreaker
-    from codetoreum.ports.output.llm_provider import AgentLLMFactory
+    from codetoreum.ports.output.event_emitter import IEventEmitter
+    from codetoreum.ports.output.llm_provider import AgentLLMFactory, ExecutionResult, ILLMProvider
 
 from codetoreum.domain.events.repair_cycle_events import (
     RepairCycleCheckpointFailedEvent,
@@ -112,7 +115,7 @@ class NullEventEmitter(IEventEmitter):
     All methods are silent, allowing the repair cycle to run without event infrastructure.
     """
 
-    def emit(self, event: object) -> None:
+    def emit(self, event: CodetoreumEvent) -> None:
         """No-op emit - silently discards all events."""
 
     def on(self, event_type: str, handler: Callable) -> None:
@@ -135,7 +138,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
     Example:
         config = RepairCycleConfig()
         adapter = ProductionRepairCycleAdapter(
-            llm_factory=lambda: llm_provider,
+            llm_factory=lambda agent_name: llm_provider,
             config=config
         )
 
@@ -178,6 +181,81 @@ class ProductionRepairCycleAdapter(IRepairCycle):
     def systemic_analysis_service(self, service: ISystemicAnalysisService | None) -> None:
         """Set the systemic analysis service."""
         self._systemic_analysis_service = service
+
+        # Tracking state for checkpoint resumption
+        self._files_fixed = 0  # Number of files fixed in current cycle
+        self._warnings_reviewed = 0  # Number of warnings reviewed in current cycle
+        self._elapsed_time = 0.0  # Total time spent in current cycle (seconds)
+        self._cycle_results: list[CycleResult] = []  # Accumulated test results
+
+    async def _get_llm_for_subtask(self, sub_task: str, context: RepairCycleContext) -> tuple[ILLMProvider, str]:
+        """Resolve the appropriate agent for a sub-task and return its LLM provider.
+
+        Centralizes agent name resolution logic to prevent duplication across call
+        sites. Returns both the LLM provider and the resolved agent name.
+
+        Args:
+            sub_task: Sub-task key (e.g., "test_execution", "code_fix")
+            context: Repair cycle context with agent configuration
+
+        Returns:
+            Coroutine that resolves to a tuple of (ILLMProvider instance for the
+            resolved agent, resolved agent name)
+        """
+        agent_name = (
+            context.agent_config.resolve_agent(sub_task, context.agent_name)
+            if context.agent_config
+            else context.agent_name
+        )
+        return await self._llm_factory(agent_name), agent_name
+
+    async def _execute_llm_with_timeout(
+        self,
+        llm: ILLMProvider,
+        prompt: str,
+        operation: str,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+        extra_log: dict | None = None,
+        error_message: str | None = None,
+    ) -> ExecutionResult:
+        """Execute an LLM call with timeout and optional circuit breaker.
+
+        Centralizes timeout enforcement and error handling for all LLM calls,
+        ensuring consistent timeout application and logging across the adapter.
+
+        Args:
+            llm: LLM provider to execute
+            prompt: Prompt to send to the LLM
+            operation: Operation name for circuit breaker (e.g., "repair_cycle.run_tests")
+            config: Test run configuration containing timeout value
+            context: Repair cycle context with workflow details
+            extra_log: Optional dict of additional logging context
+            error_message: Optional custom error message prefix (defaults to operation name)
+
+        Returns:
+            ExecutionResult from the LLM call
+
+        Raises:
+            TimeoutError: If the LLM call exceeds the configured timeout
+        """
+        try:
+            coro = (
+                self.circuit_breaker.call(llm.execute, operation, prompt=prompt)
+                if self.circuit_breaker
+                else llm.execute(prompt=prompt)
+            )
+            return await asyncio.wait_for(coro, timeout=config.timeout)
+        except TimeoutError as e:
+            message_prefix = error_message or operation
+            log_extra = {
+                "workflow_run_id": context.workflow_run_id,
+                "timeout_seconds": config.timeout,
+                "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                **(extra_log or {}),
+            }
+            logger.error(f"{message_prefix} timed out", extra=log_extra, exc_info=True)
+            raise TimeoutError(f"{message_prefix} exceeded timeout of {config.timeout} seconds") from e
 
     async def execute(self, context: RepairCycleContext) -> RepairCycleResult:
         """Execute complete repair cycle for all configured test types.
@@ -311,6 +389,9 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         # Build test command based on framework detection
         test_command = self._detect_and_build_test_command(config)
 
+        # Resolve agent for test execution sub-task
+        llm, resolved_agent_name = await self._get_llm_for_subtask("test_execution", context)
+
         # Execute tests via LLM
         logger.info(
             "Executing tests",
@@ -319,6 +400,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 "test_type": config.test_type.value,
                 "command": test_command,
                 "timeout": config.timeout,
+                "agent_name": resolved_agent_name,
             },
             exc_info=False,
         )
@@ -326,22 +408,18 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         try:
             # Call LLM to execute tests (with circuit breaker if configured)
             prompt = f"Execute the following test command and return results as JSON:\n\n{test_command}"
-            llm_provider = self._llm_factory()
-            if self.circuit_breaker:
-                agent_response = await self.circuit_breaker.call(
-                    llm_provider.execute,
-                    "repair_cycle.run_tests",
-                    prompt=prompt,
-                    timeout=config.timeout,
-                )
-            else:
-                agent_response = await llm_provider.execute(
-                    prompt=prompt,
-                    timeout=config.timeout,
-                )
+            agent_response = await self._execute_llm_with_timeout(
+                llm=llm,
+                prompt=prompt,
+                operation="repair_cycle.run_tests",
+                config=config,
+                context=context,
+                extra_log={"test_type": config.test_type.value},
+                error_message="Test execution",
+            )
 
             # Parse test output with retry logic
-            test_output = await self._parse_test_output_with_retry(agent_response, config.test_type)
+            test_output = await self._parse_test_output_with_retry(agent_response.content, config.test_type)
 
             # Parse failures and warnings
             failures = self._extract_failures(test_output, config.test_type)
@@ -357,7 +435,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 warnings=len(warnings),
                 failures=tuple(failures),
                 warning_list=tuple(warnings),
-                raw_output=agent_response,
+                raw_output=agent_response.content,
                 timestamp=timestamp,
             )
 
@@ -375,6 +453,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     warnings=result.warnings,
                     has_failures=(result.failed > 0),
                     failures=result.failures,
+                    agent_name=resolved_agent_name,
                     workflow_run_id=context.workflow_run_id,
                 )
             )
@@ -431,6 +510,9 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         """
         fixed = 0
 
+        # Resolve agent for code fix sub-task
+        llm, resolved_agent_name = await self._get_llm_for_subtask("code_fix", context)
+
         for file_path, failures in grouped_failures.items():
             # Check circuit breaker
             if self.circuit_breaker and self.circuit_breaker.is_open():
@@ -455,6 +537,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     test_file=file_path,
                     failure_count=len(failures),
                     test_type=config.test_type,
+                    agent_name=resolved_agent_name,
                     workflow_run_id=context.workflow_run_id,
                 )
             )
@@ -474,19 +557,15 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     exc_info=False,
                 )
 
-                llm_provider = self._llm_factory()
-                if self.circuit_breaker:
-                    await self.circuit_breaker.call(
-                        llm_provider.execute,
-                        "repair_cycle.fix_failures_by_file",
-                        prompt=fix_prompt,
-                        timeout=config.timeout,
-                    )
-                else:
-                    await llm_provider.execute(
-                        prompt=fix_prompt,
-                        timeout=config.timeout,
-                    )
+                await self._execute_llm_with_timeout(
+                    llm=llm,
+                    prompt=fix_prompt,
+                    operation="repair_cycle.fix_failures_by_file",
+                    config=config,
+                    context=context,
+                    extra_log={"file": file_path},
+                    error_message=f"Fix execution for {file_path}",
+                )
 
                 # Emit file fix completed event (success)
                 self.event_emitter.emit(
@@ -498,6 +577,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         failure_count=len(failures),
                         test_type=config.test_type,
                         success=True,
+                        agent_name=resolved_agent_name,
                         workflow_run_id=context.workflow_run_id,
                     )
                 )
@@ -535,6 +615,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         failure_count=len(failures),
                         test_type=config.test_type,
                         success=False,
+                        agent_name=resolved_agent_name,
                         workflow_run_id=context.workflow_run_id,
                     )
                 )
@@ -569,6 +650,9 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
         reviewed = 0
 
+        # Resolve agent for warning review sub-task (uses code_fix agent)
+        llm, resolved_agent_name = await self._get_llm_for_subtask("code_fix", context)
+
         for warning in test_result.warning_list:
             # Check circuit breaker
             if self.circuit_breaker and self.circuit_breaker.is_open():
@@ -593,6 +677,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     warning_count=1,
                     test_type=config.test_type,
                     warnings=(warning,),
+                    agent_name=resolved_agent_name,
                     workflow_run_id=context.workflow_run_id,
                 )
             )
@@ -612,19 +697,15 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     exc_info=False,
                 )
 
-                llm_provider = self._llm_factory()
-                if self.circuit_breaker:
-                    await self.circuit_breaker.call(
-                        llm_provider.execute,
-                        "repair_cycle.handle_warnings",
-                        prompt=review_prompt,
-                        timeout=config.timeout,
-                    )
-                else:
-                    await llm_provider.execute(
-                        prompt=review_prompt,
-                        timeout=config.timeout,
-                    )
+                await self._execute_llm_with_timeout(
+                    llm=llm,
+                    prompt=review_prompt,
+                    operation="repair_cycle.handle_warnings",
+                    config=config,
+                    context=context,
+                    extra_log={"file": warning.file},
+                    error_message=f"Warning review for {warning.file}",
+                )
 
                 # Emit warning review completed event (success)
                 self.event_emitter.emit(
@@ -636,6 +717,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         warning_count=1,
                         test_type=config.test_type,
                         success=True,
+                        agent_name=resolved_agent_name,
                         workflow_run_id=context.workflow_run_id,
                     )
                 )
@@ -1103,19 +1185,16 @@ Return a JSON response with the status of fixes applied."""
                 exc_info=False,
             )
 
-            llm_provider = self._llm_factory()
-            if self.circuit_breaker:
-                response = await self.circuit_breaker.call(
-                    llm_provider.execute,
-                    f"repair_cycle.{operation_name}",
-                    prompt=prompt,
-                    timeout=config.timeout,
-                )
-            else:
-                response = await llm_provider.execute(
-                    prompt=prompt,
-                    timeout=config.timeout,
-                )
+            llm, _ = await self._get_llm_for_subtask(operation_name, context)
+            result = await self._execute_llm_with_timeout(
+                llm=llm,
+                prompt=prompt,
+                operation=f"repair_cycle.{operation_name}",
+                config=config,
+                context=context,
+                error_message=f"LLM operation {operation_name}",
+            )
+            response = result.content
 
             # Parse response if it's a string (JSON)
             if isinstance(response, str):
@@ -1156,9 +1235,7 @@ Return a JSON response with the status of fixes applied."""
             )
             raise
 
-    def _build_environment_rebuild_prompt(
-        self, config: RepairTestRunConfig
-    ) -> str:
+    def _build_environment_rebuild_prompt(self, config: RepairTestRunConfig) -> str:
         """Build prompt for LLM to rebuild the test environment.
 
         Args:
@@ -1182,9 +1259,7 @@ Return a JSON response with the status of fixes applied."""
 After completing these steps, the environment should be ready to run tests successfully.
 Return a JSON response with the status of the environment rebuild."""
 
-    def _build_environment_verify_prompt(
-        self, config: RepairTestRunConfig
-    ) -> str:
+    def _build_environment_verify_prompt(self, config: RepairTestRunConfig) -> str:
         """Build prompt for LLM to verify the test environment.
 
         Args:
@@ -1230,9 +1305,7 @@ Return a JSON response with the verification status and any issues found."""
         """
         try:
             prompt = self._build_dependency_fix_prompt(reasoning, test_result)
-            await self._execute_llm_prompt(
-                prompt, "apply_dependency_fix", config, context
-            )
+            await self._execute_llm_prompt(prompt, "apply_dependency_fix", config, context)
             return True
         except Exception as e:
             logger.error(
@@ -1270,9 +1343,7 @@ Return a JSON response with the verification status and any issues found."""
         """
         try:
             prompt = self._build_configuration_fix_prompt(reasoning, test_result)
-            await self._execute_llm_prompt(
-                prompt, "apply_configuration_fix", config, context
-            )
+            await self._execute_llm_prompt(prompt, "apply_configuration_fix", config, context)
             return True
         except Exception as e:
             logger.error(
@@ -1287,9 +1358,7 @@ Return a JSON response with the verification status and any issues found."""
             )
             return False
 
-    def _build_dependency_fix_prompt(
-        self, reasoning: str, test_result: RepairTestResult
-    ) -> str:
+    def _build_dependency_fix_prompt(self, reasoning: str, test_result: RepairTestResult) -> str:
         """Build prompt for LLM to fix dependency issues.
 
         Args:
@@ -1299,9 +1368,7 @@ Return a JSON response with the verification status and any issues found."""
         Returns:
             Prompt for LLM agent
         """
-        failure_details = "\n".join(
-            [f"- {f.file}::{f.test}: {f.message}" for f in test_result.failures]
-        )
+        failure_details = "\n".join([f"- {f.file}::{f.test}: {f.message}" for f in test_result.failures])
 
         return f"""The failures are classified as DEPENDENCY_ISSUE based on the following analysis:
 
@@ -1318,9 +1385,7 @@ Please identify and resolve the missing or incompatible dependencies. This may i
 
 Return a JSON response with the status of dependency fixes applied."""
 
-    def _build_configuration_fix_prompt(
-        self, reasoning: str, test_result: RepairTestResult
-    ) -> str:
+    def _build_configuration_fix_prompt(self, reasoning: str, test_result: RepairTestResult) -> str:
         """Build prompt for LLM to fix configuration issues.
 
         Args:
@@ -1330,9 +1395,7 @@ Return a JSON response with the status of dependency fixes applied."""
         Returns:
             Prompt for LLM agent
         """
-        failure_details = "\n".join(
-            [f"- {f.file}::{f.test}: {f.message}" for f in test_result.failures]
-        )
+        failure_details = "\n".join([f"- {f.file}::{f.test}: {f.message}" for f in test_result.failures])
 
         return f"""The failures are classified as CONFIGURATION_ISSUE based on the following analysis:
 
@@ -1369,9 +1432,7 @@ Return a JSON response with the status of configuration fixes applied."""
         """
         try:
             rebuild_prompt = self._build_environment_rebuild_prompt(config)
-            await self._execute_llm_prompt(
-                rebuild_prompt, "rebuild_environment", config, context
-            )
+            await self._execute_llm_prompt(rebuild_prompt, "rebuild_environment", config, context)
             return True
         except Exception as e:
             logger.error(
@@ -1405,9 +1466,7 @@ Return a JSON response with the status of configuration fixes applied."""
         """
         try:
             verify_prompt = self._build_environment_verify_prompt(config)
-            await self._execute_llm_prompt(
-                verify_prompt, "verify_environment", config, context
-            )
+            await self._execute_llm_prompt(verify_prompt, "verify_environment", config, context)
             return True
         except Exception as e:
             logger.error(
@@ -1449,13 +1508,9 @@ Return a JSON response with the status of configuration fixes applied."""
         """
         try:
             if classification == FailureClassification.DEPENDENCY_ISSUE:
-                return await self._apply_dependency_fix(
-                    reasoning, test_result, config, context
-                )
+                return await self._apply_dependency_fix(reasoning, test_result, config, context)
             if classification == FailureClassification.CONFIGURATION_ISSUE:
-                return await self._apply_configuration_fix(
-                    reasoning, test_result, config, context
-                )
+                return await self._apply_configuration_fix(reasoning, test_result, config, context)
             # Fallback to dependency fix if classification is unknown
             logger.warning(
                 "Unknown systemic fix classification; defaulting to dependency fix",
@@ -1465,9 +1520,7 @@ Return a JSON response with the status of configuration fixes applied."""
                 },
                 exc_info=False,
             )
-            return await self._apply_dependency_fix(
-                reasoning, test_result, config, context
-            )
+            return await self._apply_dependency_fix(reasoning, test_result, config, context)
 
         except Exception as e:
             # Safety net for unexpected exceptions in routing logic. Inner fix methods
@@ -1519,9 +1572,7 @@ Return a JSON response with the status of configuration fixes applied."""
             prior_classifications=(),
         )
 
-        result = await self._systemic_analysis_service.analyze(
-            list(failures), analysis_context
-        )
+        result = await self._systemic_analysis_service.analyze(list(failures), analysis_context)
         return result.reasoning
 
     async def _run_test_cycle(

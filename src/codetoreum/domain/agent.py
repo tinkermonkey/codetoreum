@@ -76,21 +76,26 @@ class Agent:
     timeout_seconds: int
     max_retries: int
 
-    # Constraints
+    # Constraints (NO DEFAULTS - Required fields)
     requires_docker: bool
     requires_dev_container: bool
     makes_code_changes: bool
     filesystem_write_allowed: bool
 
-    # MCP servers
+    # MCP servers (NO DEFAULT - Required field)
     mcp_servers: list[str]
 
-    # Metadata
+    # Metadata (NO DEFAULT - Required field)
     metadata: dict[str, Any]
 
-    # Timestamps
+    # Timestamps (NO DEFAULTS - Required fields)
     created_at: datetime
     updated_at: datetime
+
+    # Configuration with defaults (must come after required fields)
+    temperature: float = 0.7  # LLM temperature (0.0-2.0)
+    max_tokens: int = 4096  # Maximum tokens for LLM responses
+    system_prompt: str = ""  # System prompt for the agent
 
     # Event tracking
     _events: list[DomainEvent] = field(default_factory=list, init=False, repr=False)
@@ -110,6 +115,8 @@ class Agent:
         - Timeout must be positive
         - Max retries must be non-negative
         - Model must be specified
+        - Temperature must be between 0.0 and 2.0
+        - Max tokens must be positive
         """
         if not self.name or not self.name.strip():
             msg = "Agent must have a non-empty name"
@@ -131,6 +138,14 @@ class Agent:
             msg = "Agent must specify a model"
             raise DomainError(msg)
 
+        if not 0.0 <= self.temperature <= 2.0:
+            msg = "Temperature must be between 0.0 and 2.0"
+            raise DomainError(msg)
+
+        if self.max_tokens <= 0:
+            msg = "Max tokens must be positive"
+            raise DomainError(msg)
+
     @classmethod
     def create(
         cls,
@@ -140,6 +155,9 @@ class Agent:
         role_description: str,
         model: str,
         capabilities: dict[str, AgentCapability],
+        temperature: float = 0.7,
+        max_tokens: int = 4096,
+        system_prompt: str = "",
         timeout_seconds: int = 300,
         max_retries: int = 3,
         requires_docker: bool = True,
@@ -158,6 +176,9 @@ class Agent:
             role_description: Description of agent's role
             model: LLM model to use
             capabilities: Dictionary of agent capabilities
+            temperature: LLM temperature (0.0-2.0, default: 0.7)
+            max_tokens: Maximum tokens for responses (default: 4096)
+            system_prompt: System prompt for the agent (default: "")
             timeout_seconds: Execution timeout (default: 300)
             max_retries: Maximum retry attempts (default: 3)
             requires_docker: Whether agent requires Docker (default: True)
@@ -181,6 +202,9 @@ class Agent:
             model=model,
             timeout_seconds=timeout_seconds,
             max_retries=max_retries,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            system_prompt=system_prompt,
             requires_docker=requires_docker,
             requires_dev_container=requires_dev_container,
             makes_code_changes=makes_code_changes,

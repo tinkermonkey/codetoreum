@@ -342,6 +342,87 @@ class RepairTestRunConfig:
 
 
 @dataclass(frozen=True)
+class RepairCycleAgentConfig:
+    """Maps repair cycle sub-tasks to specific agents.
+
+    Immutable configuration that optionally assigns specialized agents to repair cycle
+    sub-tasks. All fields are optional; None means fall back to the stage's default
+    agent (specified in RepairCycleStageConfig).
+
+    Sub-task names correspond to the operations performed by ProductionRepairCycleAdapter:
+    - test_execution: Runs tests and parses results
+    - code_fix: Fixes code-level test failures
+    - systemic_analysis: Classifies failure root causes
+    - systemic_fix: Applies cross-cutting fixes
+    - env_rebuild: Rebuilds test environment
+    - env_verification: Verifies rebuilt environment
+
+    **Immutability**: Frozen dataclass - all fields read-only after construction.
+    Attempting to modify any field raises FrozenInstanceError.
+
+    **Backward Compatibility**: All fields default to None. When a RepairCycleAgentConfig
+    is absent or a specific sub-task is None, the stage's agent_name is used as fallback.
+
+    Attributes:
+        test_execution: Optional agent name for test execution sub-task
+        code_fix: Optional agent name for code fixing sub-task
+        systemic_analysis: Optional agent name for systemic analysis sub-task
+        systemic_fix: Optional agent name for systemic fix sub-task
+        env_rebuild: Optional agent name for environment rebuild sub-task
+        env_verification: Optional agent name for environment verification sub-task
+    """
+
+    # Known sub-task names (canonical source for validation)
+    KNOWN_SUB_TASKS = frozenset(
+        [
+            "test_execution",
+            "code_fix",
+            "systemic_analysis",
+            "systemic_fix",
+            "env_rebuild",
+            "env_verification",
+        ]
+    )
+
+    test_execution: str | None = None
+    code_fix: str | None = None
+    systemic_analysis: str | None = None
+    systemic_fix: str | None = None
+    env_rebuild: str | None = None
+    env_verification: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate configuration after initialization."""
+        # No validations needed: all fields are optional strings or None
+        # The resolve_agent method validates sub_task names at call time
+
+    def resolve_agent(self, sub_task: str, default: str) -> str:
+        """Return configured agent for sub_task, or default if not set.
+
+        Implements the fallback chain for agent resolution:
+        1. Validates sub_task name against KNOWN_SUB_TASKS
+        2. If this config has a non-None value for the sub_task, return it
+        3. Otherwise, return the default (typically from RepairCycleStageConfig.agent_name)
+
+        Args:
+            sub_task: Name of the repair cycle sub-task (must be one of KNOWN_SUB_TASKS)
+            default: Fallback agent name if not configured for this sub-task
+
+        Returns:
+            The agent name to use for this sub-task
+
+        Raises:
+            ValueError: If sub_task is not a known sub-task name
+        """
+        if sub_task not in self.KNOWN_SUB_TASKS:
+            msg = f"sub_task must be one of {sorted(self.KNOWN_SUB_TASKS)}, got '{sub_task}'"
+            raise ValueError(msg)
+
+        agent = getattr(self, sub_task, None)
+        return agent if agent is not None else default
+
+
+@dataclass(frozen=True)
 class RepairCycleCheckpoint:
     """Checkpoint state for repair cycle recovery.
 
@@ -408,6 +489,7 @@ class RepairCycleStageConfig:
     - Which test types to run (and in what order)
     - Overall constraints and circuit breakers
     - Checkpointing strategy for long-running cycles
+    - Optional specialized agent assignments
 
     **Immutability**: Frozen dataclass - all fields read-only after construction.
     Collections stored as immutable Tuples instead of Lists.
@@ -419,6 +501,9 @@ class RepairCycleStageConfig:
         agent_name: Name of agent to use (default "senior_software_engineer")
         max_total_agent_calls: Circuit breaker - abort cycle if exceeded
         checkpoint_interval: Save state every N iterations for resumability
+        agent_config: Optional RepairCycleAgentConfig for agent specialization. None means
+                      fall back to agent_name. Supports assigning specialized agents to
+                      specific repair cycle sub-tasks.
     """
 
     name: str
@@ -426,6 +511,7 @@ class RepairCycleStageConfig:
     agent_name: str = "senior_software_engineer"
     max_total_agent_calls: int = 100  # Circuit breaker
     checkpoint_interval: int = 5  # Save state every N iterations
+    agent_config: RepairCycleAgentConfig | None = None  # Optional specialized agents
 
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""

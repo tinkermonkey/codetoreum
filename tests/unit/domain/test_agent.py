@@ -191,6 +191,98 @@ class TestAgentCreation:
             )
         assert "non-negative" in str(exc.value)
 
+    def test_create_with_invalid_temperature_below_minimum_raises_error(self):
+        """Test that temperature < 0.0 raises error."""
+        capabilities = {"python": AgentCapability("python", 0.9)}
+
+        with pytest.raises(DomainError) as exc:
+            Agent.create(
+                name="engineer",
+                display_name="Engineer",
+                agent_type=AgentType.MAKER,
+                role_description="Codes",
+                model="claude-sonnet-4-5",
+                capabilities=capabilities,
+                temperature=-0.1,
+            )
+        assert "between 0.0 and 2.0" in str(exc.value)
+
+    def test_create_with_invalid_temperature_above_maximum_raises_error(self):
+        """Test that temperature > 2.0 raises error."""
+        capabilities = {"python": AgentCapability("python", 0.9)}
+
+        with pytest.raises(DomainError) as exc:
+            Agent.create(
+                name="engineer",
+                display_name="Engineer",
+                agent_type=AgentType.MAKER,
+                role_description="Codes",
+                model="claude-sonnet-4-5",
+                capabilities=capabilities,
+                temperature=2.1,
+            )
+        assert "between 0.0 and 2.0" in str(exc.value)
+
+    def test_create_with_valid_temperature_boundaries(self):
+        """Test that valid temperature boundaries are accepted."""
+        capabilities = {"python": AgentCapability("python", 0.9)}
+
+        # Test minimum boundary
+        agent_min = Agent.create(
+            name="engineer",
+            display_name="Engineer",
+            agent_type=AgentType.MAKER,
+            role_description="Codes",
+            model="claude-sonnet-4-5",
+            capabilities=capabilities,
+            temperature=0.0,
+        )
+        assert agent_min.temperature == 0.0
+
+        # Test maximum boundary
+        agent_max = Agent.create(
+            name="engineer",
+            display_name="Engineer",
+            agent_type=AgentType.MAKER,
+            role_description="Codes",
+            model="claude-sonnet-4-5",
+            capabilities=capabilities,
+            temperature=2.0,
+        )
+        assert agent_max.temperature == 2.0
+
+    def test_create_with_zero_max_tokens_raises_error(self):
+        """Test that max_tokens <= 0 raises error."""
+        capabilities = {"python": AgentCapability("python", 0.9)}
+
+        with pytest.raises(DomainError) as exc:
+            Agent.create(
+                name="engineer",
+                display_name="Engineer",
+                agent_type=AgentType.MAKER,
+                role_description="Codes",
+                model="claude-sonnet-4-5",
+                capabilities=capabilities,
+                max_tokens=0,
+            )
+        assert "Max tokens must be positive" in str(exc.value)
+
+    def test_create_with_negative_max_tokens_raises_error(self):
+        """Test that max_tokens < 0 raises error."""
+        capabilities = {"python": AgentCapability("python", 0.9)}
+
+        with pytest.raises(DomainError) as exc:
+            Agent.create(
+                name="engineer",
+                display_name="Engineer",
+                agent_type=AgentType.MAKER,
+                role_description="Codes",
+                model="claude-sonnet-4-5",
+                capabilities=capabilities,
+                max_tokens=-1024,
+            )
+        assert "Max tokens must be positive" in str(exc.value)
+
 
 class TestAgentCapabilityManagement:
     """Test capability management methods."""

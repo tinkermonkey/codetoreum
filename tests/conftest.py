@@ -1,6 +1,7 @@
 """Test configuration and shared fixtures."""
 
 import asyncio
+import os
 import time
 from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 
@@ -8,6 +9,11 @@ import docker
 import pytest
 from testcontainers.core.container import DockerContainer
 from testcontainers.core.wait_strategies import HttpWaitStrategy, PortWaitStrategy
+
+# Disable OpenTelemetry for tests to prevent daemon threads from hanging event loops
+# This must happen before any codetoreum imports that trigger fastapi_app import
+os.environ.setdefault("OTEL_ENABLED", "false")
+os.environ.setdefault("OTEL_TRACES_ENABLED", "false")
 
 from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
@@ -321,6 +327,53 @@ class ModernRedisContainer(DockerContainer):
             self.with_command(f"redis-server --requirepass {self.password}")
         # Use PortWaitStrategy instead of deprecated @wait_container_is_ready decorator
         self.waiting_for(PortWaitStrategy(self.port))
+
+
+@pytest.fixture(scope="function", autouse=True)
+def _cleanup_opentelemetry() -> Generator[None, None, None]:
+    """Ensure OpenTelemetry BatchSpanProcessor daemon threads are shut down after each test.
+
+    BatchSpanProcessor starts a background thread with threading.Event() that waits
+    indefinitely. If not properly shut down, this thread prevents the event loop from
+    closing and causes pytest-timeout to hang.
+
+    This fixture forces shutdown of all TracerProvider and LoggerProvider instances
+    by calling force_flush() and shutdown() on their span/log processors.
+    """
+    yield
+
+    # After test completes, shut down OpenTelemetry processors
+    try:
+        from opentelemetry import trace
+        from opentelemetry._logs import get_logger_provider
+        from opentelemetry.sdk._logs import LoggerProvider
+        from opentelemetry.sdk.trace import TracerProvider
+
+        # Shut down the global TracerProvider
+        try:
+            tracer_provider = trace.get_tracer_provider()
+            # Check if it's a real TracerProvider (not a Proxy)
+            if isinstance(tracer_provider, TracerProvider):
+                tracer_provider.force_flush(timeout_millis=1000)
+                tracer_provider.shutdown()
+        except Exception:
+            pass
+
+        # Shut down the global LoggerProvider
+        try:
+            logger_provider = get_logger_provider()
+            # Check if it's a real LoggerProvider (not a Proxy)
+            if isinstance(logger_provider, LoggerProvider):
+                logger_provider.force_flush(timeout_millis=1000)
+                logger_provider.shutdown()
+        except Exception:
+            pass
+    except ImportError:
+        # OpenTelemetry not installed, nothing to clean up
+        pass
+    except Exception:
+        # Ignore any errors during cleanup
+        pass
 
 
 @pytest.fixture(scope="function", autouse=True)

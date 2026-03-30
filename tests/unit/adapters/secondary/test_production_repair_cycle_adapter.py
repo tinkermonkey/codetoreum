@@ -15,6 +15,7 @@ Verifies that:
 12. Environment rebuild/verify, apply_systemic_fixes, and prompt builders work correctly
 """
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -26,12 +27,15 @@ from codetoreum.adapters.secondary.production_repair_cycle_adapter import (
 from codetoreum.domain.repair_cycle_types import (
     FailureClassification,
     RepairTestFailure,
+    RepairTestResult,
     RepairTestRunConfig,
     RepairTestType,
+    RepairTestWarning,
 )
 from codetoreum.infrastructure.resilience.exceptions import CircuitBreakerOpenError
 from codetoreum.infrastructure.resilience.interfaces import CircuitState
 from codetoreum.infrastructure.resilience.mocks import MockCircuitBreaker
+from codetoreum.ports.output.llm_provider import ExecutionResult
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -64,6 +68,7 @@ class _RepairCycleContext:
         self.agent_name = "test_agent"
         self.max_total_agent_calls = max_total_agent_calls
         self.checkpoint_interval = 5
+        self.agent_config = None  # No per-subtask agent config in tests
 
 
 def _make_adapter(
@@ -74,10 +79,15 @@ def _make_adapter(
 ) -> tuple[ProductionRepairCycleAdapter, AsyncMock]:
     """Return (adapter, mock_llm) pre-wired for tests."""
     llm = AsyncMock()
-    llm.execute.return_value = llm_response
+    llm.execute.return_value = ExecutionResult(content=llm_response)
+
+    # Create async factory that returns the same mock LLM for any agent name
+    async def llm_factory(agent_name):
+        return llm
+
     config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
     adapter = ProductionRepairCycleAdapter(
-        llm_factory=lambda: llm,
+        llm_factory=llm_factory,
         config=config,
         event_emitter=event_emitter,
         circuit_breaker=circuit_breaker,
@@ -1269,3 +1279,468 @@ class TestApplyConfigurationFix:
         result = await adapter._apply_configuration_fix("Missing config", test_result, ctx.test_configs[0], ctx)
 
         assert result is False
+
+
+# ---------------------------------------------------------------------------
+# Agent config routing tests (PRIMARY BEHAVIORAL CHANGE)
+# ---------------------------------------------------------------------------
+
+
+class TestAgentConfigRouting:
+    """Tests for _get_llm_for_subtask agent config routing (issue #556)."""
+
+    def _make_tracking_adapter(self):
+        """Create adapter with LLM factory that tracks which agent names are resolved."""
+        resolved_agents = []
+
+        async def tracking_factory(agent_name: str):
+            """Async factory that records the agent name requested."""
+            resolved_agents.append(agent_name)
+            llm = AsyncMock()
+            llm.execute.return_value = ExecutionResult(content=_VALID_JSON_RESPONSE)
+            return llm
+
+        config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
+        adapter = ProductionRepairCycleAdapter(
+            llm_factory=tracking_factory,
+            config=config,
+        )
+        adapter._resolved_agents = resolved_agents
+        return adapter
+
+    @pytest.mark.asyncio
+    async def test_run_tests_routes_through_test_execution_agent(self):
+        """run_tests routes through agent resolved for 'test_execution' sub-task."""
+        from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig
+
+        # Create specialized agent config that assigns different agents to sub-tasks
+        agent_config = RepairCycleAgentConfig(
+            test_execution="qa_test_executor",
+            code_fix="code_fixer",
+        )
+
+        adapter = self._make_tracking_adapter()
+        ctx = _RepairCycleContext()
+        # Set agent_config on the context
+        ctx.agent_config = agent_config
+        ctx.agent_name = "default_agent"
+
+        await adapter.run_tests(ctx.test_configs[0], ctx)
+
+        # Verify the test_execution agent was resolved
+        assert (
+            "qa_test_executor" in adapter._resolved_agents
+        ), f"Expected 'qa_test_executor' in resolved agents, got {adapter._resolved_agents}"
+
+    @pytest.mark.asyncio
+    async def test_fix_failures_routes_through_code_fix_agent(self):
+        """fix_failures_by_file routes through agent resolved for 'code_fix' sub-task."""
+        from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig
+
+        agent_config = RepairCycleAgentConfig(
+            test_execution="qa_test_executor",
+            code_fix="code_fixer",
+        )
+
+        adapter = self._make_tracking_adapter()
+        ctx = _RepairCycleContext()
+        ctx.agent_config = agent_config
+        ctx.agent_name = "default_agent"
+
+        grouped: dict[str, tuple[RepairTestFailure, ...]] = {
+            "test_file.py": (RepairTestFailure(file="test_file.py", test="t1", message="fail"),),
+        }
+
+        await adapter.fix_failures_by_file(grouped, ctx.test_configs[0], ctx)
+
+        # Verify the code_fix agent was resolved
+        assert (
+            "code_fixer" in adapter._resolved_agents
+        ), f"Expected 'code_fixer' in resolved agents, got {adapter._resolved_agents}"
+
+    @pytest.mark.asyncio
+    async def test_handle_warnings_routes_through_code_fix_agent(self):
+        """handle_warnings routes through agent resolved for 'code_fix' sub-task."""
+        from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig, RepairTestResult, RepairTestWarning
+
+        agent_config = RepairCycleAgentConfig(
+            test_execution="qa_test_executor",
+            code_fix="code_fixer",
+        )
+
+        # Mock the factory to track which agent name it's called with
+        llm_mock = AsyncMock()
+        llm_mock.execute.return_value = ExecutionResult(content="Fixed")
+        call_tracker = []
+
+        async def tracking_factory(agent_name):
+            call_tracker.append(agent_name)
+            return llm_mock
+
+        config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
+        adapter = ProductionRepairCycleAdapter(
+            llm_factory=tracking_factory,
+            config=config,
+        )
+
+        ctx = _RepairCycleContext()
+        ctx.agent_config = agent_config
+        ctx.agent_name = "default_agent"
+
+        # Create a config with review_warnings=True (default context has it as False)
+        test_config = RepairTestRunConfig(
+            test_type=RepairTestType.UNIT,
+            timeout=30,
+            max_iterations=1,
+            review_warnings=True,  # Important: need this to be True
+        )
+
+        test_result = RepairTestResult(
+            test_type=test_config.test_type,
+            iteration=1,
+            passed=5,
+            failed=0,
+            warnings=1,
+            failures=(),
+            warning_list=(RepairTestWarning(file="src/file.py", message="deprecation warning"),),
+            raw_output="",
+            timestamp="2025-01-01T00:00:00Z",
+        )
+
+        await adapter.handle_warnings(test_result, test_config, ctx)
+
+        # Verify factory was called with the configured code_fix agent
+        assert len(call_tracker) > 0, "Expected llm_factory to be called"
+        assert call_tracker[0] == "code_fixer", f"Expected code_fixer agent, got {call_tracker[0]}"
+
+    @pytest.mark.asyncio
+    async def test_agent_config_fallback_to_default_when_none(self):
+        """When agent_config is None, falls back to context.agent_name."""
+        adapter = self._make_tracking_adapter()
+        ctx = _RepairCycleContext()
+        ctx.agent_config = None
+        ctx.agent_name = "default_repair_agent"
+
+        await adapter.run_tests(ctx.test_configs[0], ctx)
+
+        # Verify the default agent was resolved
+        assert (
+            "default_repair_agent" in adapter._resolved_agents
+        ), f"Expected 'default_repair_agent' in resolved agents, got {adapter._resolved_agents}"
+
+    @pytest.mark.asyncio
+    async def test_agent_config_partial_mapping(self):
+        """Agent config with only some sub-tasks configured falls back for others."""
+        from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig
+
+        # Only test_execution is configured, code_fix should fall back
+        agent_config = RepairCycleAgentConfig(
+            test_execution="qa_executor",
+            code_fix=None,  # Falls back to default
+        )
+
+        adapter = self._make_tracking_adapter()
+        ctx = _RepairCycleContext()
+        ctx.agent_config = agent_config
+        ctx.agent_name = "default_agent"
+
+        await adapter.run_tests(ctx.test_configs[0], ctx)
+
+        # Verify the configured test_execution agent was resolved
+        assert (
+            "qa_executor" in adapter._resolved_agents
+        ), f"Expected 'qa_executor' in resolved agents, got {adapter._resolved_agents}"
+
+
+class TestEnvironmentRebuildAndVerifyReturnValueHandling:
+    """Verifies that rebuild_environment() and verify_environment() return values are checked.
+
+    Ensures that:
+    1. When rebuild_environment() returns False, repair cycle stops (breaks the iteration loop)
+    2. When verify_environment() returns False, repair cycle stops (breaks the iteration loop)
+    3. When both succeed, repair cycle continues to the next iteration
+    """
+
+    @staticmethod
+    def _make_llm_factory_with_mock(mock_llm: AsyncMock) -> callable:
+        """Create an LLM factory that returns the given mock LLM."""
+
+        async def factory(agent_name: str) -> AsyncMock:
+            return mock_llm
+
+        return factory
+
+    @pytest.mark.asyncio
+    async def test_rebuild_environment_failure_breaks_iteration(self):
+        """When rebuild_environment() returns False, the iteration loop breaks."""
+        # Setup: LLM returns success for test runs and systemic analysis
+        mock_llm = AsyncMock()
+        mock_llm.execute = AsyncMock(return_value=ExecutionResult(content=_VALID_JSON_RESPONSE))
+
+        adapter = ProductionRepairCycleAdapter(
+            llm_factory=self._make_llm_factory_with_mock(mock_llm),
+            config=RepairCycleConfig(),
+        )
+
+        # Setup systemic analysis service to return ENVIRONMENT_ISSUE classification
+        systemic_service = AsyncMock()
+        systemic_service.analyze.return_value = MagicMock(
+            classification=FailureClassification.ENVIRONMENT_ISSUE,
+            confidence=0.9,
+            reasoning="Environment issue detected",
+            recommended_action="Rebuild environment",
+        )
+        adapter._systemic_analysis_service = systemic_service
+
+        # Mock fix methods
+        adapter.fix_failures_by_file = AsyncMock(return_value=1)
+
+        # Mock rebuild_environment to return False (failure)
+        adapter.rebuild_environment = AsyncMock(return_value=False)
+        adapter.verify_environment = AsyncMock()
+
+        ctx = _RepairCycleContext(max_total_agent_calls=1000)
+
+        # Run the repair cycle - should break after rebuild fails
+        result = await adapter._run_test_cycle(
+            config=ctx.test_configs[0],
+            context=ctx,
+            test_type_index=1,
+        )
+
+        # Verify that rebuild_environment was called
+        assert adapter.rebuild_environment.called, "rebuild_environment should be called"
+
+        # Verify that verify_environment was NOT called (because rebuild failed)
+        assert not adapter.verify_environment.called, "verify_environment should not be called when rebuild fails"
+
+        # Verify that the cycle did not pass (stopped early)
+        assert not result.passed, "Cycle should not pass when rebuild fails"
+
+    @pytest.mark.asyncio
+    async def test_verify_environment_failure_breaks_iteration(self):
+        """When verify_environment() returns False, the iteration loop breaks."""
+        # Setup: LLM returns success for test runs and systemic analysis
+        mock_llm = AsyncMock()
+        mock_llm.execute = AsyncMock(return_value=ExecutionResult(content=_VALID_JSON_RESPONSE))
+
+        adapter = ProductionRepairCycleAdapter(
+            llm_factory=self._make_llm_factory_with_mock(mock_llm),
+            config=RepairCycleConfig(),
+        )
+
+        # Setup systemic analysis service to return ENVIRONMENT_ISSUE classification
+        systemic_service = AsyncMock()
+        systemic_service.analyze.return_value = MagicMock(
+            classification=FailureClassification.ENVIRONMENT_ISSUE,
+            confidence=0.9,
+            reasoning="Environment issue detected",
+            recommended_action="Rebuild environment",
+        )
+        adapter._systemic_analysis_service = systemic_service
+
+        # Mock fix methods
+        adapter.fix_failures_by_file = AsyncMock(return_value=1)
+
+        # Mock rebuild_environment to return True (success)
+        adapter.rebuild_environment = AsyncMock(return_value=True)
+
+        # Mock verify_environment to return False (environment not ready)
+        adapter.verify_environment = AsyncMock(return_value=False)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=1000)
+
+        # Run the repair cycle - should break after verification fails
+        result = await adapter._run_test_cycle(
+            config=ctx.test_configs[0],
+            context=ctx,
+            test_type_index=1,
+        )
+
+        # Verify that both rebuild and verify were called
+        assert adapter.rebuild_environment.called, "rebuild_environment should be called"
+        assert adapter.verify_environment.called, "verify_environment should be called"
+
+        # Verify that the cycle did not pass (stopped after verification failure)
+        assert not result.passed, "Cycle should not pass when verification fails"
+
+    @pytest.mark.asyncio
+    async def test_successful_rebuild_and_verify_continue_iteration(self):
+        """When both rebuild and verify succeed, the cycle continues."""
+        # Setup: LLM returns no failures on initial test, then verify succeeds
+        mock_llm = AsyncMock()
+        # First call for initial test succeeds with no failures
+        success_response = '{"passed": 1, "failed": 0, ' '"failures": [], ' '"warnings": []}'
+        mock_llm.execute = AsyncMock(return_value=ExecutionResult(content=success_response))
+
+        adapter = ProductionRepairCycleAdapter(
+            llm_factory=self._make_llm_factory_with_mock(mock_llm),
+            config=RepairCycleConfig(),
+        )
+
+        adapter.analyze_systemic_issues = AsyncMock(return_value="")
+        adapter.apply_systemic_fixes = AsyncMock(return_value=False)
+        adapter.fix_failures_by_file = AsyncMock(return_value=0)
+        adapter.rebuild_environment = AsyncMock(return_value=True)
+        adapter.verify_environment = AsyncMock(return_value=True)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=1000)
+
+        # Run the repair cycle
+        result = await adapter._run_test_cycle(
+            config=ctx.test_configs[0],
+            context=ctx,
+            test_type_index=1,
+        )
+
+        # Verify that the cycle passed (no failures means success)
+        assert result.passed, "Cycle should pass when tests have no failures"
+
+        # Neither rebuild nor verify should have been called (no failures, no systemic analysis)
+        assert (
+            not adapter.rebuild_environment.called
+        ), "rebuild_environment should not be called when tests pass immediately"
+        assert (
+            not adapter.verify_environment.called
+        ), "verify_environment should not be called when tests pass immediately"
+
+
+# ---------------------------------------------------------------------------
+# Timeout handling tests (issue #566)
+# ---------------------------------------------------------------------------
+
+
+class TestTimeoutHandling:
+    """Tests for LLM call timeout enforcement via asyncio.wait_for()."""
+
+    def _make_slow_llm(self, delay_seconds: float) -> AsyncMock:
+        """Create an LLM mock that sleeps before returning."""
+        llm = AsyncMock()
+
+        async def slow_execute(**kwargs):
+            await asyncio.sleep(delay_seconds)
+            return ExecutionResult(content=_VALID_JSON_RESPONSE)
+
+        llm.execute = slow_execute
+        return llm
+
+    async def _make_factory_with_slow_llm(self, delay_seconds: float):
+        """Create a factory that returns a slow LLM."""
+        slow_llm = self._make_slow_llm(delay_seconds)
+
+        async def factory(agent_name: str):
+            return slow_llm
+
+        return factory
+
+    @pytest.mark.asyncio
+    async def test_run_tests_raises_timeout_error_when_llm_exceeds_timeout(self):
+        """run_tests raises TimeoutError when LLM takes longer than config.timeout."""
+        # Create a very short timeout (100ms) and LLM that sleeps 1s
+        factory = await self._make_factory_with_slow_llm(delay_seconds=1.0)
+        adapter = ProductionRepairCycleAdapter(
+            llm_factory=factory,
+            config=RepairCycleConfig(),
+        )
+
+        ctx = _RepairCycleContext()
+        config = RepairTestRunConfig(
+            test_type=RepairTestType.UNIT,
+            timeout=0.1,  # 100ms timeout
+            max_iterations=1,
+        )
+
+        with pytest.raises(TimeoutError) as exc_info:
+            await adapter.run_tests(config, ctx)
+
+        assert "Test execution exceeded timeout" in str(exc_info.value)
+        assert "0.1 seconds" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_fix_failures_by_file_handles_timeout_gracefully(self):
+        """fix_failures_by_file catches TimeoutError and returns 0 files fixed."""
+        factory = await self._make_factory_with_slow_llm(delay_seconds=1.0)
+        adapter = ProductionRepairCycleAdapter(
+            llm_factory=factory,
+            config=RepairCycleConfig(),
+        )
+
+        ctx = _RepairCycleContext()
+        config = RepairTestRunConfig(
+            test_type=RepairTestType.UNIT,
+            timeout=0.1,  # 100ms timeout
+            max_iterations=1,
+        )
+
+        failures = {
+            "test_foo.py": (
+                RepairTestFailure(
+                    file="test_foo.py",
+                    test="test_bar",
+                    message="assertion failed",
+                ),
+            ),
+        }
+
+        # fix_failures_by_file catches TimeoutError and emits failure event
+        result = await adapter.fix_failures_by_file(failures, config, ctx)
+        assert result == 0  # No files fixed due to timeout
+
+    @pytest.mark.asyncio
+    async def test_handle_warnings_handles_timeout_gracefully(self):
+        """handle_warnings catches TimeoutError and returns 0 warnings reviewed."""
+        factory = await self._make_factory_with_slow_llm(delay_seconds=1.0)
+        adapter = ProductionRepairCycleAdapter(
+            llm_factory=factory,
+            config=RepairCycleConfig(),
+        )
+
+        ctx = _RepairCycleContext()
+        config = RepairTestRunConfig(
+            test_type=RepairTestType.UNIT,
+            timeout=0.1,  # 100ms timeout
+            max_iterations=1,
+            review_warnings=True,
+        )
+
+        test_result = RepairTestResult(
+            test_type=RepairTestType.UNIT,
+            iteration=1,
+            passed=1,
+            failed=0,
+            warnings=1,
+            failures=(),
+            warning_list=(
+                RepairTestWarning(
+                    file="test_foo.py",
+                    message="deprecation warning",
+                ),
+            ),
+            raw_output="{}",
+            timestamp="2024-01-01T00:00:00Z",
+        )
+
+        # handle_warnings catches TimeoutError and continues
+        result = await adapter.handle_warnings(test_result, config, ctx)
+        assert result == 0  # No warnings reviewed due to timeout
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("timeout_seconds", [0.01, 0.02, 0.05])
+    async def test_timeout_respects_config_timeout_value(self, timeout_seconds):
+        """Timeout values from config are actually enforced."""
+        # Create LLM that delays 0.5 seconds (much longer than any timeout)
+        factory = await self._make_factory_with_slow_llm(delay_seconds=0.5)
+        adapter = ProductionRepairCycleAdapter(
+            llm_factory=factory,
+            config=RepairCycleConfig(),
+        )
+
+        ctx = _RepairCycleContext()
+        config = RepairTestRunConfig(
+            test_type=RepairTestType.UNIT,
+            timeout=timeout_seconds,
+            max_iterations=1,
+        )
+
+        with pytest.raises(TimeoutError):
+            await adapter.run_tests(config, ctx)
