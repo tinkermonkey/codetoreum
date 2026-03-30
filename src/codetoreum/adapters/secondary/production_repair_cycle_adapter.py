@@ -66,6 +66,7 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestType,
     RepairTestWarning,
     SystemicAnalysisResult,
+    SystemicFixResult,
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.resilience.exceptions import CircuitBreakerOpenError
@@ -746,6 +747,197 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 )
 
         return reviewed
+
+    async def fix_failures_systemically(
+        self,
+        failures: tuple[RepairTestFailure, ...],
+        analysis_result: SystemicAnalysisResult,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> SystemicFixResult:
+        """Apply a coordinated holistic fix addressing the root cause across all affected files.
+
+        Issues a single agent invocation presenting all failures together with the root cause
+        context from systemic analysis. This is the primary contract for cross-cutting fixes
+        that affect multiple files with a shared root cause.
+
+        Args:
+            failures: Immutable tuple of test failures to address
+            analysis_result: Systemic analysis result with root cause and affected files
+            config: Test run configuration
+            context: Repair cycle context
+
+        Returns:
+            SystemicFixResult indicating whether the holistic fix succeeded and which
+            files were modified
+
+        Raises:
+            CircuitBreakerOpenError: When circuit breaker is open
+        """
+        import time
+
+        start_time = time.time()
+
+        # Circuit breaker check
+        if self.circuit_breaker.is_open():
+            logger.error(
+                "Circuit breaker open; cannot apply systemic fixes",
+                extra={
+                    "workflow_run_id": context.workflow_run_id,
+                    "work_item_id": context.work_item_id,
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_CIRCUIT_BREAKER_OPEN,
+                },
+                exc_info=False,
+            )
+            raise CircuitBreakerOpenError("Circuit breaker is open")
+
+        try:
+            logger.info(
+                "Starting systemic fix for cross-cutting root cause",
+                extra={
+                    "workflow_run_id": context.workflow_run_id,
+                    "work_item_id": context.work_item_id,
+                    "failure_count": len(failures),
+                    "classification": analysis_result.classification.value,
+                    "affected_files": ",".join(analysis_result.affected_files),
+                },
+                exc_info=False,
+            )
+
+            # Get LLM provider for the fix agent
+            llm_provider = self.llm_factory(context.agent_name)
+
+            # Build prompt with failure details and root cause context
+            failures_summary = "\n".join([
+                f"- {f.file}::{f.test}: {f.message}"
+                for f in failures
+            ])
+
+            prompt = f"""You are a specialized repair agent addressing a cross-cutting root cause issue.
+
+## Root Cause Analysis
+**Classification**: {analysis_result.classification.value}
+**Confidence**: {analysis_result.confidence:.1%}
+**Reasoning**: {analysis_result.reasoning}
+**Recommended Action**: {analysis_result.recommended_action}
+
+## Affected Files
+{', '.join(analysis_result.affected_files)}
+
+## All Failures to Address
+{failures_summary}
+
+## Your Task
+Apply a holistic fix that addresses the root cause across all affected files. This may involve:
+- Updating dependencies or configuration
+- Fixing shared interfaces or contracts
+- Updating build/environment configuration
+- Or other systemic changes
+
+After making changes:
+1. Summarize what root cause you addressed
+2. List all files you modified
+3. Explain how your changes fix all the failures above
+
+Respond with JSON:
+{{
+    "root_cause_addressed": "description of what was fixed",
+    "files_modified": ["file1", "file2", ...],
+    "explanation": "how this addresses all failures"
+}}
+"""
+
+            # Execute LLM call
+            execution_result = await llm_provider.execute_agent(
+                agent_name=context.agent_name,
+                instruction=prompt,
+                context_files=None,
+            )
+
+            if not execution_result.success:
+                logger.error(
+                    "Systemic fix agent execution failed",
+                    extra={
+                        "workflow_run_id": context.workflow_run_id,
+                        "work_item_id": context.work_item_id,
+                        "error": execution_result.error or "Unknown error",
+                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                    },
+                    exc_info=False,
+                )
+                duration_seconds = time.time() - start_time
+                return SystemicFixResult(
+                    success=False,
+                    files_modified=(),
+                    root_cause_addressed="",
+                    duration_seconds=duration_seconds,
+                )
+
+            # Parse agent response
+            try:
+                response_json = json.loads(execution_result.output or "{}")
+                files_modified = tuple(response_json.get("files_modified", []))
+                root_cause_addressed = response_json.get("root_cause_addressed", "")
+
+                duration_seconds = time.time() - start_time
+                result = SystemicFixResult(
+                    success=True,
+                    files_modified=files_modified,
+                    root_cause_addressed=root_cause_addressed,
+                    duration_seconds=duration_seconds,
+                )
+
+                logger.info(
+                    "Systemic fix completed successfully",
+                    extra={
+                        "workflow_run_id": context.workflow_run_id,
+                        "work_item_id": context.work_item_id,
+                        "files_modified_count": len(files_modified),
+                        "duration_seconds": duration_seconds,
+                    },
+                    exc_info=False,
+                )
+
+                return result
+
+            except (json.JSONDecodeError, KeyError, TypeError) as e:
+                logger.error(
+                    "Failed to parse systemic fix response",
+                    extra={
+                        "workflow_run_id": context.workflow_run_id,
+                        "work_item_id": context.work_item_id,
+                        "error": str(e),
+                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                    },
+                    exc_info=True,
+                )
+                duration_seconds = time.time() - start_time
+                return SystemicFixResult(
+                    success=False,
+                    files_modified=(),
+                    root_cause_addressed="",
+                    duration_seconds=duration_seconds,
+                )
+
+        except Exception as e:
+            logger.error(
+                "Unexpected error in systemic fix",
+                extra={
+                    "workflow_run_id": context.workflow_run_id,
+                    "work_item_id": context.work_item_id,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                },
+                exc_info=True,
+            )
+            duration_seconds = time.time() - start_time
+            return SystemicFixResult(
+                success=False,
+                files_modified=(),
+                root_cause_addressed="",
+                duration_seconds=duration_seconds,
+            )
 
     async def checkpoint(
         self,

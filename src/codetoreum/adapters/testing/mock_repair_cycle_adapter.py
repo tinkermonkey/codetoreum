@@ -47,6 +47,8 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestRunConfig,
     RepairTestType,
     RepairTestWarning,
+    SystemicAnalysisResult,
+    SystemicFixResult,
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
@@ -980,6 +982,53 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         )
 
         return True
+
+    async def fix_failures_systemically(
+        self,
+        failures: tuple[RepairTestFailure, ...],
+        analysis_result: SystemicAnalysisResult,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> SystemicFixResult:
+        """Mock implementation: simulate holistic systemic fix.
+
+        Args:
+            failures: Immutable tuple of test failures to address
+            analysis_result: Systemic analysis result with root cause and affected files
+            config: Test run configuration
+            context: Repair cycle context
+
+        Returns:
+            SystemicFixResult indicating success and modified files
+        """
+        # Resolve and record which agent is executing this sub-task
+        _, agent_name = await self._resolve_and_record_agent("systemic_fix", context)
+
+        # Track agent call
+        self.agent_call_count += 1
+        self.total_agent_calls += 1
+
+        # Advance clock for systemic fix (2 minutes)
+        await self.clock.advance(timedelta(minutes=2))
+
+        logger.info(
+            "Mock systemic fix applied",
+            extra={
+                "workflow_run_id": context.workflow_run_id,
+                "test_type": config.test_type.value,
+                "agent_name": agent_name,
+                "affected_files": ",".join(analysis_result.affected_files),
+            },
+            exc_info=False,
+        )
+
+        # Return success with all affected files modified
+        return SystemicFixResult(
+            success=True,
+            files_modified=analysis_result.affected_files,
+            root_cause_addressed=analysis_result.reasoning,
+            duration_seconds=120.0,
+        )
 
     async def rebuild_environment(
         self,

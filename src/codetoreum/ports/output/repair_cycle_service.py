@@ -26,6 +26,8 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestResult,
     RepairTestRunConfig,
     RepairTestType,
+    SystemicAnalysisResult,
+    SystemicFixResult,
 )
 
 
@@ -219,6 +221,34 @@ class IRepairCycle(Protocol):
 
         Returns:
             True if fixes were successfully applied
+
+        Raises:
+            CircuitBreakerOpenError: When circuit breaker is open
+        """
+        ...
+
+    async def fix_failures_systemically(
+        self,
+        failures: tuple[RepairTestFailure, ...],
+        analysis_result: SystemicAnalysisResult,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> SystemicFixResult:
+        """Apply a coordinated holistic fix addressing the root cause across all affected files.
+
+        Unlike fix_failures_by_file(), this method issues a single agent invocation
+        presenting all failures together with the root cause context from systemic analysis.
+        Use when analysis_result.cross_cutting is True.
+
+        Args:
+            failures: Immutable tuple of test failures to address
+            analysis_result: Systemic analysis result with root cause and affected files
+            config: Test run configuration
+            context: Repair cycle context
+
+        Returns:
+            SystemicFixResult indicating whether the holistic fix succeeded and which
+            files were modified
 
         Raises:
             CircuitBreakerOpenError: When circuit breaker is open
