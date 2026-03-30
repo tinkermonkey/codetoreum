@@ -24,6 +24,7 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestType,
     RepairTestWarning,
     SystemicAnalysisResult,
+    SystemicFixResult,
 )
 
 # ============================================================================
@@ -1243,6 +1244,42 @@ class TestSystemicAnalysisResult:
         )
         assert result1 != result2
 
+    def test_cross_cutting_default_false(self):
+        """Test that cross_cutting defaults to False for backward compatibility."""
+        result = SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.9,
+            reasoning="Code defect",
+            affected_files=("file.py",),
+            recommended_action="Fix code",
+        )
+        assert result.cross_cutting is False
+
+    def test_cross_cutting_true(self):
+        """Test creating result with cross_cutting=True."""
+        result = SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.9,
+            reasoning="Cross-cutting code defect",
+            affected_files=("file1.py", "file2.py", "file3.py"),
+            recommended_action="Fix code systematically",
+            cross_cutting=True,
+        )
+        assert result.cross_cutting is True
+
+    def test_cross_cutting_immutable(self):
+        """Test that cross_cutting is immutable."""
+        result = SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.9,
+            reasoning="Code defect",
+            affected_files=("file.py",),
+            recommended_action="Fix code",
+            cross_cutting=True,
+        )
+        with pytest.raises(FrozenInstanceError):
+            result.cross_cutting = False  # type: ignore[misc]
+
 
 # ============================================================================
 # AnalysisContext Immutability Tests
@@ -1686,3 +1723,169 @@ class TestRepairCycleAgentConfig:
     def test_known_sub_tasks_is_frozenset(self):
         """Test KNOWN_SUB_TASKS is immutable."""
         assert isinstance(RepairCycleAgentConfig.KNOWN_SUB_TASKS, frozenset)
+
+
+# ============================================================================
+# SystemicFixResult Immutability Tests
+# ============================================================================
+
+
+class TestSystemicFixResult:
+    """Test SystemicFixResult value object."""
+
+    def test_create_result_with_valid_data(self):
+        """Test creating a systemic fix result with valid data."""
+        result = SystemicFixResult(
+            success=True,
+            files_modified=("auth.py", "utils.py"),
+            root_cause_addressed="API contract change required database schema update",
+            duration_seconds=180.5,
+        )
+        assert result.success is True
+        assert result.files_modified == ("auth.py", "utils.py")
+        assert result.root_cause_addressed == "API contract change required database schema update"
+        assert result.duration_seconds == 180.5
+
+    def test_create_result_with_empty_files(self):
+        """Test creating a result with empty files_modified tuple."""
+        result = SystemicFixResult(
+            success=False,
+            files_modified=(),
+            root_cause_addressed="Fix attempt failed",
+            duration_seconds=45.0,
+        )
+        assert result.files_modified == ()
+        assert result.success is False
+
+    def test_files_modified_coerced_to_tuple(self):
+        """Test that files_modified list is coerced to tuple."""
+        result = SystemicFixResult(
+            success=True,
+            files_modified=["file1.py", "file2.py"],  # type: ignore[arg-type]
+            root_cause_addressed="Root cause addressed",
+            duration_seconds=60.0,
+        )
+        assert isinstance(result.files_modified, tuple)
+        assert result.files_modified == ("file1.py", "file2.py")
+
+    def test_result_immutability_raises_frozen_error(self):
+        """Test that frozen dataclass prevents modification."""
+        result = SystemicFixResult(
+            success=True,
+            files_modified=("file.py",),
+            root_cause_addressed="Root cause",
+            duration_seconds=100.0,
+        )
+        with pytest.raises(FrozenInstanceError):
+            result.success = False  # type: ignore[misc]
+
+        with pytest.raises(FrozenInstanceError):
+            result.duration_seconds = 200.0  # type: ignore[misc]
+
+        with pytest.raises(FrozenInstanceError):
+            result.root_cause_addressed = "Different cause"  # type: ignore[misc]
+
+    def test_negative_duration_raises_error(self):
+        """Test that negative duration_seconds raises ValueError."""
+        with pytest.raises(ValueError, match="duration_seconds must be non-negative"):
+            SystemicFixResult(
+                success=True,
+                files_modified=("file.py",),
+                root_cause_addressed="Root cause",
+                duration_seconds=-10.0,
+            )
+
+    def test_zero_duration_passes(self):
+        """Test that duration_seconds=0.0 is valid."""
+        result = SystemicFixResult(
+            success=True,
+            files_modified=("file.py",),
+            root_cause_addressed="Root cause",
+            duration_seconds=0.0,
+        )
+        assert result.duration_seconds == 0.0
+
+    def test_large_duration_passes(self):
+        """Test that large duration_seconds values are valid."""
+        result = SystemicFixResult(
+            success=True,
+            files_modified=("file.py",),
+            root_cause_addressed="Root cause",
+            duration_seconds=3600.5,
+        )
+        assert result.duration_seconds == 3600.5
+
+    def test_files_modified_immutable(self):
+        """Test that files_modified tuple is immutable."""
+        result = SystemicFixResult(
+            success=True,
+            files_modified=("file1.py", "file2.py"),
+            root_cause_addressed="Root cause",
+            duration_seconds=100.0,
+        )
+        with pytest.raises((TypeError, AttributeError)):
+            result.files_modified.append("file3.py")  # type: ignore[attr-defined]
+
+    def test_equality(self):
+        """Test value object equality."""
+        result1 = SystemicFixResult(
+            success=True,
+            files_modified=("file.py",),
+            root_cause_addressed="Root cause",
+            duration_seconds=100.0,
+        )
+        result2 = SystemicFixResult(
+            success=True,
+            files_modified=("file.py",),
+            root_cause_addressed="Root cause",
+            duration_seconds=100.0,
+        )
+        assert result1 == result2
+
+    def test_inequality_different_success(self):
+        """Test inequality when success differs."""
+        result1 = SystemicFixResult(
+            success=True,
+            files_modified=("file.py",),
+            root_cause_addressed="Root cause",
+            duration_seconds=100.0,
+        )
+        result2 = SystemicFixResult(
+            success=False,
+            files_modified=("file.py",),
+            root_cause_addressed="Root cause",
+            duration_seconds=100.0,
+        )
+        assert result1 != result2
+
+    def test_inequality_different_files(self):
+        """Test inequality when files_modified differs."""
+        result1 = SystemicFixResult(
+            success=True,
+            files_modified=("file1.py",),
+            root_cause_addressed="Root cause",
+            duration_seconds=100.0,
+        )
+        result2 = SystemicFixResult(
+            success=True,
+            files_modified=("file2.py",),
+            root_cause_addressed="Root cause",
+            duration_seconds=100.0,
+        )
+        assert result1 != result2
+
+    def test_inequality_different_duration(self):
+        """Test inequality when duration_seconds differs."""
+        result1 = SystemicFixResult(
+            success=True,
+            files_modified=("file.py",),
+            root_cause_addressed="Root cause",
+            duration_seconds=100.0,
+        )
+        result2 = SystemicFixResult(
+            success=True,
+            files_modified=("file.py",),
+            root_cause_addressed="Root cause",
+            duration_seconds=200.0,
+        )
+        assert result1 != result2

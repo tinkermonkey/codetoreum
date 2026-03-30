@@ -1548,3 +1548,193 @@ class SystemicAnalysisCompletedEvent(CodetoreumEvent):
             workflow_run_id=data.get("workflow_run_id", ""),
             failure_count=data.get("failure_count", 0),
         )
+
+
+@dataclass(frozen=True)
+class SystemicFixStartedEvent(CodetoreumEvent):
+    """Emitted when a systemic fix operation begins.
+
+    Signals the start of a holistic fix attempt that addresses a cross-cutting
+    root cause affecting multiple files identified by systemic analysis.
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Attempting to modify any field will raise `FrozenInstanceError`.
+
+    Attributes:
+        type (str): Fixed to "repair_cycle.systemic_fix_started"
+        work_item_id (str): ID of the work item being fixed
+        workflow_run_id (str): ID of the workflow run
+        root_cause_classification (str): Classification of the root cause (FailureClassification enum value)
+        confidence (float): Confidence in the classification (0.0 to 1.0)
+        affected_file_count (int): Number of files affected by the issue
+        failure_count (int): Number of failures being addressed
+        timestamp (str): ISO 8601 timestamp when systemic fix started
+    """
+
+    work_item_id: str = ""
+    workflow_run_id: str = ""
+    root_cause_classification: str = FailureClassification.CODE_DEFECT.value
+    confidence: float = 0.0
+    affected_file_count: int = 0
+    failure_count: int = 0
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.work_item_id:
+            msg = "work_item_id is required"
+            raise ValueError(msg)
+        if not self.workflow_run_id:
+            msg = "workflow_run_id is required"
+            raise ValueError(msg)
+        # Validate that root_cause_classification is a string
+        if not isinstance(self.root_cause_classification, str):
+            msg = "root_cause_classification must be a string"
+            raise ValueError(msg)
+        # Validate classification value
+        valid_values = {fc.value for fc in FailureClassification}
+        if self.root_cause_classification not in valid_values:
+            msg = f"root_cause_classification '{self.root_cause_classification}' is not a valid FailureClassification"
+            raise ValueError(msg)
+        if not 0.0 <= self.confidence <= 1.0:
+            msg = "confidence must be between 0.0 and 1.0"
+            raise ValueError(msg)
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update(
+            {
+                "work_item_id": self.work_item_id,
+                "workflow_run_id": self.workflow_run_id,
+                "root_cause_classification": self.root_cause_classification,
+                "confidence": self.confidence,
+                "affected_file_count": self.affected_file_count,
+                "failure_count": self.failure_count,
+            }
+        )
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "SystemicFixStartedEvent":
+        """Deserialize from dictionary with backward compatibility.
+
+        Raises:
+            ValueError: If required fields are missing.
+        """
+        classification_value = data.get("root_cause_classification")
+        if isinstance(classification_value, str):
+            # Validate that the string is a valid FailureClassification value
+            try:
+                # Attempt to construct the enum to validate the value exists
+                FailureClassification(classification_value)
+                root_cause_classification = classification_value
+            except ValueError:
+                # Invalid or unknown classification string - safely default to CODE_DEFECT
+                logger.warning(
+                    "Invalid classification value during deserialization: %s. Defaulting to CODE_DEFECT.",
+                    classification_value,
+                )
+                root_cause_classification = FailureClassification.CODE_DEFECT.value
+        elif isinstance(classification_value, FailureClassification):
+            # Handle migration from old enum format
+            root_cause_classification = classification_value.value
+        else:
+            root_cause_classification = FailureClassification.CODE_DEFECT.value
+
+        return cls(
+            type=data.get("type", "repair_cycle.systemic_fix_started"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            work_item_id=data.get("work_item_id", ""),
+            workflow_run_id=data.get("workflow_run_id", ""),
+            root_cause_classification=root_cause_classification,
+            confidence=data.get("confidence", 0.0),
+            affected_file_count=data.get("affected_file_count", 0),
+            failure_count=data.get("failure_count", 0),
+        )
+
+
+@dataclass(frozen=True)
+class SystemicFixCompletedEvent(CodetoreumEvent):
+    """Emitted when a systemic fix operation completes.
+
+    Signals completion of a holistic fix attempt that addressed a cross-cutting
+    root cause. Records which files were modified and whether the fix succeeded.
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Attempting to modify any field will raise `FrozenInstanceError`.
+
+    Attributes:
+        type (str): Fixed to "repair_cycle.systemic_fix_completed"
+        work_item_id (str): ID of the work item that was fixed
+        workflow_run_id (str): ID of the workflow run
+        success (bool): Whether the systemic fix successfully addressed the root cause
+        files_modified (tuple[str, ...]): Files modified by the systemic fix
+        root_cause_addressed (str): Description of what root cause was addressed
+        duration_seconds (float): Time taken to apply the systemic fix
+        timestamp (str): ISO 8601 timestamp when systemic fix completed
+    """
+
+    work_item_id: str = ""
+    workflow_run_id: str = ""
+    success: bool = False
+    files_modified: tuple[str, ...] = ()
+    root_cause_addressed: str = ""
+    duration_seconds: float = 0.0
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.work_item_id:
+            msg = "work_item_id is required"
+            raise ValueError(msg)
+        if not self.workflow_run_id:
+            msg = "workflow_run_id is required"
+            raise ValueError(msg)
+        # Coerce list to tuple for files_modified
+        if not isinstance(self.files_modified, tuple):
+            object.__setattr__(self, "files_modified", tuple(self.files_modified))
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update(
+            {
+                "work_item_id": self.work_item_id,
+                "workflow_run_id": self.workflow_run_id,
+                "success": self.success,
+                "files_modified": list(self.files_modified),  # Serialize as list for JSON compatibility
+                "root_cause_addressed": self.root_cause_addressed,
+                "duration_seconds": self.duration_seconds,
+            }
+        )
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "SystemicFixCompletedEvent":
+        """Deserialize from dictionary with backward compatibility.
+
+        Raises:
+            ValueError: If required fields are missing.
+        """
+        files_modified = data.get("files_modified", [])
+        if not isinstance(files_modified, (list, tuple)):
+            files_modified = []
+        return cls(
+            type=data.get("type", "repair_cycle.systemic_fix_completed"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            work_item_id=data.get("work_item_id", ""),
+            workflow_run_id=data.get("workflow_run_id", ""),
+            success=data.get("success", False),
+            files_modified=tuple(files_modified),
+            root_cause_addressed=data.get("root_cause_addressed", ""),
+            duration_seconds=data.get("duration_seconds", 0.0),
+        )

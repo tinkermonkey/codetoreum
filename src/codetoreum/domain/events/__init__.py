@@ -174,6 +174,8 @@ from .repair_cycle_events import (
     RepairCycleWarningReviewStartedEvent,
     SystemicAnalysisCompletedEvent,
     SystemicAnalysisStartedEvent,
+    SystemicFixCompletedEvent,
+    SystemicFixStartedEvent,
 )
 
 # Repository events
@@ -332,6 +334,8 @@ __all__ = [
     "RepairCycleCompletedEvent",
     "SystemicAnalysisStartedEvent",
     "SystemicAnalysisCompletedEvent",
+    "SystemicFixCompletedEvent",
+    "SystemicFixStartedEvent",
     # Review cycle events
     "ReviewCycleStartedEvent",
     "ReviewCycleIterationCompletedEvent",

@@ -546,6 +546,8 @@ class SystemicAnalysisResult:
         reasoning: Explanation of classification decision
         affected_files: Immutable tuple of file names affected by the issue
         recommended_action: Recommended remediation step for this classification
+        cross_cutting: Whether the failure indicates a cross-cutting root cause
+                      (default False for backward compatibility)
     """
 
     classification: FailureClassification
@@ -553,6 +555,7 @@ class SystemicAnalysisResult:
     reasoning: str
     affected_files: tuple[str, ...]  # Immutable tuple
     recommended_action: str
+    cross_cutting: bool = False
 
     def __post_init__(self) -> None:
         """Validate analysis result after initialization."""
@@ -605,4 +608,36 @@ class AnalysisContext:
             raise ValueError(msg)
         if self.iteration < 0:
             msg = "iteration must be non-negative"
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True)
+class SystemicFixResult:
+    """Result of a systemic fix operation addressing a cross-cutting root cause.
+
+    Immutable record of a holistic fix attempt that addresses a failure pattern
+    affecting multiple files with a shared root cause (e.g., API contract change,
+    configuration update, dependency version bump).
+
+    **Immutability**: Frozen dataclass - all fields read-only after construction.
+    Attempting to modify any field raises FrozenInstanceError.
+
+    Attributes:
+        success: Whether the systemic fix successfully addressed the root cause
+        files_modified: Immutable tuple of file paths modified by the systemic fix
+        root_cause_addressed: Description of what root cause was addressed
+        duration_seconds: Time taken to apply the systemic fix (non-negative)
+    """
+
+    success: bool
+    files_modified: tuple[str, ...]
+    root_cause_addressed: str
+    duration_seconds: float
+
+    def __post_init__(self) -> None:
+        """Validate systemic fix result after initialization."""
+        if not isinstance(self.files_modified, tuple):
+            object.__setattr__(self, "files_modified", tuple(self.files_modified))
+        if self.duration_seconds < 0:
+            msg = "duration_seconds must be non-negative"
             raise ValueError(msg)
