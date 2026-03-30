@@ -188,7 +188,7 @@ Respond with JSON only (no markdown, no additional text):
 
 Field definitions:
 - classification: The root cause category of the failures
-- confidence: Your confidence in the classification (0.0–1.0)
+- confidence: Your confidence in the classification (0.0-1.0)
 - reasoning: Explanation of why you chose this classification
 - affected_files: List of files involved in the failures
 - recommended_action: What action should be taken to fix this issue

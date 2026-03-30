@@ -4,7 +4,7 @@ Exercises the full fire-and-forget cascade through the bootstrap's plumbing:
 human move → event bridge → handler → agent execution → completion callback →
 auto-progress → repeat.
 
-Unlike scenario tests A–E which manually call handle_column_change() and
+Unlike scenario tests A-E which manually call handle_column_change() and
 handle_agent_completion() at each step, this test uses SimulationApplicationBootstrap
 and SimulationDataSeeder to prove the wiring actually works end-to-end.
 """

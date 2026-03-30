@@ -542,7 +542,7 @@ class SystemicAnalysisResult:
 
     Attributes:
         classification: Root cause category (FailureClassification enum)
-        confidence: Confidence in classification (0.0–1.0)
+        confidence: Confidence in classification (0.0-1.0)
         reasoning: Explanation of classification decision
         affected_files: Immutable tuple of file names affected by the issue
         recommended_action: Recommended remediation step for this classification

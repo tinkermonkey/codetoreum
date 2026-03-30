@@ -1,9 +1,9 @@
 """End-to-end failure recovery and resilience tests.
 
 Phase 4 of the E2E simulation roadmap:
-  4a – Agent failure with EventStore assertions (WorkflowFailed / NOT WorkflowCompleted)
-  4b – Repair cycle: direct adapter invocation emits the expected lifecycle events
-  4c – Review rejection cycle: request-changes-then-approve path emits iteration events
+  4a - Agent failure with EventStore assertions (WorkflowFailed / NOT WorkflowCompleted)
+  4b - Repair cycle: direct adapter invocation emits the expected lifecycle events
+  4c - Review rejection cycle: request-changes-then-approve path emits iteration events
 """
 
 import asyncio
