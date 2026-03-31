@@ -11,8 +11,7 @@ Verifies:
 - Multiple sequential systemic fix calls
 - Integration with event emission
 
-NOTE: These tests are currently skipped because they require a fully configured
-agent repository. Alternative coverage for systemic fix fallback paths is provided in:
+Complementary coverage for systemic fix fallback paths (production adapter behavior):
 - tests/unit/adapters/secondary/test_production_repair_cycle_adapter.py::TestSystemicAnalysisExceptionFallback
 - tests/unit/adapters/secondary/test_production_repair_cycle_adapter.py::TestBackwardCompatibleNoClassifierFallback
 

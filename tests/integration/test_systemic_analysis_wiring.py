@@ -59,9 +59,9 @@ async def test_systemic_analysis_configuration_in_scenario(
     )
     mock_adapter.set_results([result])
 
-    # Verify the configuration
-    assert mock_adapter.call_count == 0  # No calls yet
-    assert len(mock_adapter.calls) == 0  # Verify call index was reset
+    # Verify the configuration is set and no calls have been made yet
+    assert mock_adapter.call_count == 0  # No calls made to adapter yet
+    assert len(mock_adapter.calls) == 0  # No call history before any analyze() invocation
 
 
 @pytest.mark.asyncio
@@ -228,10 +228,10 @@ async def test_mock_adapter_can_be_configured_with_environment_issue(
     )
     mock_adapter.set_results([result_config])
 
-    # Verify call index was reset (set_results side effect)
+    # Verify no calls have been made yet (call_count tracks analyze() invocations)
     assert mock_adapter.call_count == 0
 
-    # Verify configuration by actually calling analyze()
+    # Verify configuration by actually calling analyze() and checking the result
     failures = [
         RepairTestFailure(
             file="test.py",
