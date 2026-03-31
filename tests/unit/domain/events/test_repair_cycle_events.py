@@ -1464,3 +1464,152 @@ class TestSystemicFixCompletedEvent:
 
         event = SystemicFixCompletedEvent.from_dict(d)
         assert event.files_modified == ()
+
+
+# ============================================================================
+# SystemicFixStartedEvent Edge Cases and Round-Trip Tests
+# ============================================================================
+
+
+class TestSystemicFixStartedEventEdgeCases:
+    """Test edge cases and round-trip serialization for SystemicFixStartedEvent."""
+
+    def test_round_trip_with_all_fields(self):
+        """Test complete round-trip with all fields populated."""
+        timestamp = now_iso()
+        original = SystemicFixStartedEvent(
+            type="repair_cycle.systemic_fix_started",
+            timestamp=timestamp,
+            source="repair_cycle",
+            work_item_id="WI-123",
+            workflow_run_id="WR-456",
+            root_cause_classification=FailureClassification.CODE_DEFECT.value,
+            confidence=0.85,
+            affected_file_count=7,
+            failure_count=5,
+        )
+
+        d = original.to_dict()
+        restored = SystemicFixStartedEvent.from_dict(d)
+
+        assert restored == original
+        assert restored.work_item_id == "WI-123"
+        assert restored.workflow_run_id == "WR-456"
+        assert restored.root_cause_classification == FailureClassification.CODE_DEFECT.value
+        assert restored.confidence == 0.85
+        assert restored.affected_file_count == 7
+        assert restored.failure_count == 5
+
+    def test_round_trip_immutability(self):
+        """Test that deserialized event is immutable."""
+        d = {
+            "type": "repair_cycle.systemic_fix_started",
+            "timestamp": now_iso(),
+            "source": "repair_cycle",
+            "work_item_id": "WI-123",
+            "workflow_run_id": "WR-456",
+            "root_cause_classification": FailureClassification.CODE_DEFECT.value,
+            "confidence": 0.9,
+            "affected_file_count": 3,
+            "failure_count": 2,
+        }
+
+        event = SystemicFixStartedEvent.from_dict(d)
+
+        with pytest.raises(FrozenInstanceError):
+            event.work_item_id = "WI-999"  # type: ignore[misc]
+
+
+# ============================================================================
+# SystemicFixCompletedEvent Edge Cases and Round-Trip Tests
+# ============================================================================
+
+
+class TestSystemicFixCompletedEventEdgeCases:
+    """Test edge cases and round-trip serialization for SystemicFixCompletedEvent."""
+
+    def test_round_trip_with_multiple_files(self):
+        """Test round-trip with multiple files modified."""
+        timestamp = now_iso()
+        files = ("src/api.py", "src/models.py", "src/services.py", "src/utils.py")
+        original = SystemicFixCompletedEvent(
+            type="repair_cycle.systemic_fix_completed",
+            timestamp=timestamp,
+            source="repair_cycle",
+            work_item_id="WI-123",
+            workflow_run_id="WR-456",
+            success=True,
+            files_modified=files,
+            root_cause_addressed="API contract changed across multiple modules",
+            duration_seconds=256.75,
+        )
+
+        d = original.to_dict()
+        assert d["files_modified"] == list(files)
+
+        restored = SystemicFixCompletedEvent.from_dict(d)
+        assert restored.files_modified == files
+        assert isinstance(restored.files_modified, tuple)
+
+    def test_round_trip_failed_fix(self):
+        """Test round-trip with failed systemic fix."""
+        timestamp = now_iso()
+        original = SystemicFixCompletedEvent(
+            type="repair_cycle.systemic_fix_completed",
+            timestamp=timestamp,
+            source="repair_cycle",
+            work_item_id="WI-123",
+            workflow_run_id="WR-456",
+            success=False,
+            files_modified=(),
+            root_cause_addressed="Attempted to apply fix but validation failed",
+            duration_seconds=180.0,
+        )
+
+        d = original.to_dict()
+        restored = SystemicFixCompletedEvent.from_dict(d)
+
+        assert restored.success is False
+        assert restored.files_modified == ()
+
+    def test_round_trip_zero_duration(self):
+        """Test round-trip with zero duration."""
+        timestamp = now_iso()
+        original = SystemicFixCompletedEvent(
+            type="repair_cycle.systemic_fix_completed",
+            timestamp=timestamp,
+            source="repair_cycle",
+            work_item_id="WI-123",
+            workflow_run_id="WR-456",
+            success=False,
+            files_modified=(),
+            root_cause_addressed="Quick failure",
+            duration_seconds=0.0,
+        )
+
+        d = original.to_dict()
+        restored = SystemicFixCompletedEvent.from_dict(d)
+
+        assert restored.duration_seconds == 0.0
+
+    def test_immutability_after_deserialization(self):
+        """Test that deserialized event is immutable."""
+        d = {
+            "type": "repair_cycle.systemic_fix_completed",
+            "timestamp": now_iso(),
+            "source": "repair_cycle",
+            "work_item_id": "WI-123",
+            "workflow_run_id": "WR-456",
+            "success": True,
+            "files_modified": ["src/api.py"],
+            "root_cause_addressed": "Root cause",
+            "duration_seconds": 100.0,
+        }
+
+        event = SystemicFixCompletedEvent.from_dict(d)
+
+        with pytest.raises(FrozenInstanceError):
+            event.success = False  # type: ignore[misc]
+
+        with pytest.raises(FrozenInstanceError):
+            event.root_cause_addressed = "Different cause"  # type: ignore[misc]

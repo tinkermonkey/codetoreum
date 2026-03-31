@@ -1280,6 +1280,78 @@ class TestSystemicAnalysisResult:
         with pytest.raises(FrozenInstanceError):
             result.cross_cutting = False  # type: ignore[misc]
 
+    def test_cross_cutting_false_explicit(self):
+        """Test explicitly setting cross_cutting=False."""
+        result = SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.9,
+            reasoning="Code defect",
+            affected_files=("file.py",),
+            recommended_action="Fix code",
+            cross_cutting=False,
+        )
+        assert result.cross_cutting is False
+
+    def test_cross_cutting_equality_both_false(self):
+        """Test equality when both results have cross_cutting=False."""
+        result1 = SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.9,
+            reasoning="Code defect",
+            affected_files=("file.py",),
+            recommended_action="Fix code",
+            cross_cutting=False,
+        )
+        result2 = SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.9,
+            reasoning="Code defect",
+            affected_files=("file.py",),
+            recommended_action="Fix code",
+            cross_cutting=False,
+        )
+        assert result1 == result2
+
+    def test_cross_cutting_equality_both_true(self):
+        """Test equality when both results have cross_cutting=True."""
+        result1 = SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.9,
+            reasoning="Code defect",
+            affected_files=("file.py",),
+            recommended_action="Fix code",
+            cross_cutting=True,
+        )
+        result2 = SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.9,
+            reasoning="Code defect",
+            affected_files=("file.py",),
+            recommended_action="Fix code",
+            cross_cutting=True,
+        )
+        assert result1 == result2
+
+    def test_cross_cutting_inequality_different_values(self):
+        """Test inequality when cross_cutting differs."""
+        result1 = SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.9,
+            reasoning="Code defect",
+            affected_files=("file.py",),
+            recommended_action="Fix code",
+            cross_cutting=True,
+        )
+        result2 = SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.9,
+            reasoning="Code defect",
+            affected_files=("file.py",),
+            recommended_action="Fix code",
+            cross_cutting=False,
+        )
+        assert result1 != result2
+
 
 # ============================================================================
 # AnalysisContext Immutability Tests
@@ -1889,3 +1961,21 @@ class TestSystemicFixResult:
             duration_seconds=200.0,
         )
         assert result1 != result2
+
+    def test_hashable(self):
+        """Test that frozen result is hashable."""
+        result1 = SystemicFixResult(
+            success=True,
+            files_modified=("file.py",),
+            root_cause_addressed="Root cause",
+            duration_seconds=100.0,
+        )
+        result2 = SystemicFixResult(
+            success=True,
+            files_modified=("file.py",),
+            root_cause_addressed="Root cause",
+            duration_seconds=100.0,
+        )
+        result_set = {result1, result2}
+        # Both results are equal, so set should contain only 1 element
+        assert len(result_set) == 1
