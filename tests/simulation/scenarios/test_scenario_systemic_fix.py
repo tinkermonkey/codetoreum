@@ -499,7 +499,6 @@ async def test_scenario_systemic_fix_with_event_emission(
 
     # Verify audit trail: check that expected domain events were emitted
     events = event_store.get_events()
-    event_types = [type(event).__name__ for event in events]
 
     # Verify the expected event sequence is present in the audit trail
     assert any(isinstance(e, SystemicAnalysisCompletedEvent) for e in events), \
