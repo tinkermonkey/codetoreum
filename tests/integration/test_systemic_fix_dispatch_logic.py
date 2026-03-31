@@ -579,13 +579,19 @@ async def test_systemic_fix_result_with_no_files_modified(
 
 
 @pytest.mark.asyncio
-async def test_dispatch_respects_max_total_agent_calls_limit(
+async def test_dispatch_systemic_fix_with_sufficient_budget(
     seeded_simulation_bootstrap,
 ):
-    """Test that dispatch respects max_total_agent_calls circuit breaker.
+    """Test that systemic fixes are attempted when budget is sufficient.
 
-    When approaching the circuit breaker limit, the repair cycle should
-    attempt systemic fixes before falling back to per-file fixes.
+    This test verifies the dispatch logic routes to systemic fix when:
+    1. Analysis classifies as cross_cutting=True
+    2. max_total_agent_calls budget is sufficient
+
+    NOTE: Testing that the circuit breaker PREVENTS fixes when limit is
+    reached requires production adapter integration tests with actual call
+    counting. The mock adapter does not track call budgets, so this test
+    only verifies the dispatch occurs with sufficient budget.
     """
     # Setup
     mock_repair = seeded_simulation_bootstrap.adapters.repair_cycle_as_mock()
@@ -602,7 +608,7 @@ async def test_dispatch_respects_max_total_agent_calls_limit(
             cross_cutting=True,
         ),
     ])
-    # Test sequence
+    # Test sequence: fail → pass
     mock_repair.set_test_result_sequence(
         RepairTestType.UNIT,
         [
@@ -644,7 +650,7 @@ async def test_dispatch_respects_max_total_agent_calls_limit(
         ),
     ])
 
-    # Create test context
+    # Create test context with sufficient budget
     context = SimpleRepairCycleContext(
         work_item_id="WI-123",
         workflow_run_id="WR-456",
@@ -656,8 +662,10 @@ async def test_dispatch_respects_max_total_agent_calls_limit(
     # Execute repair cycle
     result = await mock_repair.execute(context)
 
-    # Verify systemic fix was attempted
-    assert mock_repair.systemic_fix_call_count >= 1
+    # Verify systemic fix was attempted (dispatch to systemic path works)
+    assert mock_repair.systemic_fix_call_count == 1, (
+        "When cross_cutting=True, systemic fix should be attempted"
+    )
     # Verify success
     assert result.overall_success is True
 
@@ -734,64 +742,51 @@ async def test_dispatch_transient_failure_without_escalation(
 
 
 @pytest.mark.asyncio
-async def test_dispatch_transient_failure_with_escalation(
+async def test_dispatch_transient_failure_with_retries_only(
     seeded_simulation_bootstrap,
 ):
-    """Test TRANSIENT_FAILURE escalation after max consecutive occurrences.
+    """Test TRANSIENT_FAILURE behavior with retries (no escalation in mock).
 
-    Scenario: TRANSIENT_FAILURE occurs 3 times in a row (max_consecutive_transient=2),
-    triggering escalation to file-level fixes when consecutive_count > 2.
+    NOTE: Escalation behavior (TRANSIENT_FAILURE -> file-level fixes after max consecutive
+    count) is implemented in the production adapter logic, NOT in the mock adapter. This test
+    verifies that TRANSIENT_FAILURE classifications are retried without applying code fixes.
 
-    The key behavior to test is that after escalation, the transient failure counter
-    is reset and the cycle continues with code-level fixes being attempted.
+    The production adapter's escalation logic (consecutive_transient_failures > threshold)
+    should be tested via production adapter unit tests or integration tests with production
+    adapter initialization, not via mock adapter.
 
-    Flow:
-    - Iteration 1: Classify as TRANSIENT, count = 1, retry only
-    - Iteration 2: Classify as TRANSIENT, count = 2, retry only (at threshold)
-    - Iteration 3: Classify as TRANSIENT, count = 3, triggers escalation (count > 2)
-                   fix_failures_by_file is called, counter resets to 0
-    - Iteration 4: Tests pass after file fix
+    This test documents the current mock behavior: TRANSIENT_FAILURE triggers retries only.
     """
     # Setup
     mock_repair = seeded_simulation_bootstrap.adapters.repair_cycle_as_mock()
     mock_analysis = seeded_simulation_bootstrap.adapters.systemic_analysis_as_mock()
 
-    # Configure three TRANSIENT classifications to test escalation and reset
+    # Configure TRANSIENT classifications to verify retry behavior
     mock_analysis.set_results([
-        # Iteration 1: First transient failure (consecutive_count becomes 1)
+        # All iterations classify as TRANSIENT
         SystemicAnalysisResult(
             classification=FailureClassification.TRANSIENT_FAILURE,
             confidence=0.9,
-            reasoning="First transient failure: network timeout",
+            reasoning="Transient network timeout",
             affected_files=("client.py",),
             recommended_action="Retry",
             cross_cutting=False,
         ),
-        # Iteration 2: Second transient failure (consecutive_count becomes 2, at threshold)
         SystemicAnalysisResult(
             classification=FailureClassification.TRANSIENT_FAILURE,
             confidence=0.9,
-            reasoning="Second transient failure: timeout again",
+            reasoning="Transient timeout again",
             affected_files=("client.py",),
             recommended_action="Retry",
-            cross_cutting=False,
-        ),
-        # Iteration 3: Third consecutive TRANSIENT escalates (consecutive_count = 3 > 2)
-        SystemicAnalysisResult(
-            classification=FailureClassification.TRANSIENT_FAILURE,
-            confidence=0.85,
-            reasoning="Third consecutive transient failure: escalating to code fix",
-            affected_files=("client.py",),
-            recommended_action="Apply code-level fixes",
             cross_cutting=False,
         ),
     ])
 
-    # Test sequence: fail → fail → fail → pass
+    # Test sequence: fail → fail → pass (via retry success, not code fix)
     mock_repair.set_test_result_sequence(
         RepairTestType.UNIT,
         [
-            # Iteration 1: First failure (transient, no fix applied)
+            # Iteration 1: First transient failure (retry only)
             RepairTestResult(
                 test_type=RepairTestType.UNIT,
                 iteration=1,
@@ -806,7 +801,7 @@ async def test_dispatch_transient_failure_with_escalation(
                 raw_output="Network timeout",
                 timestamp="2025-03-31T10:00:00Z",
             ),
-            # Iteration 2: Second failure (transient, no fix, count = 2)
+            # Iteration 2: Second transient failure (retry only)
             RepairTestResult(
                 test_type=RepairTestType.UNIT,
                 iteration=2,
@@ -821,37 +816,22 @@ async def test_dispatch_transient_failure_with_escalation(
                 raw_output="Network timeout again",
                 timestamp="2025-03-31T10:01:00Z",
             ),
-            # Iteration 3: Third failure (count becomes 3 > 2, escalates and applies file fix)
+            # Iteration 3: Transient failure resolved via retry
             RepairTestResult(
                 test_type=RepairTestType.UNIT,
                 iteration=3,
-                passed=8,
-                failed=2,
-                warnings=0,
-                failures=(
-                    RepairTestFailure("test_client.py", "test_fetch", "Timeout"),
-                    RepairTestFailure("test_client.py", "test_stream", "Connection reset"),
-                ),
-                warning_list=(),
-                raw_output="Third timeout: escalating to code fix",
-                timestamp="2025-03-31T10:02:00Z",
-            ),
-            # Iteration 4: After file-level fix applied by escalation
-            RepairTestResult(
-                test_type=RepairTestType.UNIT,
-                iteration=4,
                 passed=10,
                 failed=0,
                 warnings=0,
                 failures=(),
                 warning_list=(),
-                raw_output="All tests passed after escalated file-level fix",
-                timestamp="2025-03-31T10:03:00Z",
+                raw_output="All tests passed after retries",
+                timestamp="2025-03-31T10:02:00Z",
             ),
         ],
     )
 
-    # Create test context with high max_iterations to allow escalation
+    # Create test context
     context = SimpleRepairCycleContext(
         work_item_id="WI-123",
         workflow_run_id="WR-456",
@@ -862,21 +842,16 @@ async def test_dispatch_transient_failure_with_escalation(
     # Execute repair cycle
     result = await mock_repair.execute(context)
 
-    # Verify no systemic fixes were applied (transient failures should never use systemic path)
+    # Verify no systemic or file-level fixes were applied (pure retry behavior)
     assert mock_repair.systemic_fix_call_count == 0, (
-        "TRANSIENT_FAILURE should not use systemic fixes"
+        "TRANSIENT_FAILURE should not trigger systemic fixes"
     )
-    # Note: The mock adapter's _run_test_cycle does not implement consecutive transient escalation
-    # tracking (that logic is in the production adapter). The mock simply retries TRANSIENT_FAILURE
-    # without fixing. In a real scenario, after consecutive_transient_failures > 2, the production
-    # adapter would escalate to file-level fixes. The test validates that the cycle continues
-    # through multiple iterations and eventually succeeds via retries.
+    assert mock_repair.file_fix_call_count == 0, (
+        "TRANSIENT_FAILURE should not trigger file-level fixes in mock (retries only)"
+    )
 
-    # Verify success (cycle should eventually pass via retries or escalation)
-    assert result.overall_success is True, "Transient failures should eventually resolve via retries"
-    # Verify the cycle ran through multiple iterations
-    if result.test_results:
-        assert result.test_results[0].iterations >= 3, "Should have run at least 3 iterations for escalation scenario"
+    # Verify success via retries
+    assert result.overall_success is True, "Transient failures should resolve via retries"
 
 
 @pytest.mark.asyncio

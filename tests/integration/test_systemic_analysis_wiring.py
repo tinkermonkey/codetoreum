@@ -49,21 +49,19 @@ async def test_systemic_analysis_configuration_in_scenario(
     """Test configuring MockSystemicAnalysisAdapter to return specific classification."""
     # Pre-configure mock adapter to return ENVIRONMENT_ISSUE classification
     mock_adapter = simulation_bootstrap.adapters.systemic_analysis_as_mock()
-    mock_adapter._results = [
-        SystemicAnalysisResult(
-            classification=FailureClassification.ENVIRONMENT_ISSUE,
-            confidence=0.95,
-            reasoning="Stale Docker image detected",
-            affected_files=(),
-            recommended_action="Rebuild environment and retry",
-            cross_cutting=False,
-        ),
-    ]
+    result = SystemicAnalysisResult(
+        classification=FailureClassification.ENVIRONMENT_ISSUE,
+        confidence=0.95,
+        reasoning="Stale Docker image detected",
+        affected_files=(),
+        recommended_action="Rebuild environment and retry",
+        cross_cutting=False,
+    )
+    mock_adapter.set_results([result])
 
     # Verify the configuration
-    assert len(mock_adapter._results) == 1
-    assert mock_adapter._results[0].classification == FailureClassification.ENVIRONMENT_ISSUE
-    assert mock_adapter._results[0].confidence == 0.95
+    assert mock_adapter.call_count == 0  # No calls yet
+    assert len(mock_adapter.calls) == 0  # Verify call index was reset
 
 
 @pytest.mark.asyncio
@@ -72,7 +70,7 @@ async def test_systemic_analysis_call_recording(
 ):
     """Test that mock adapter records all analyze() calls for inspection."""
     mock_adapter = simulation_bootstrap.adapters.systemic_analysis_as_mock()
-    mock_adapter._results = [
+    mock_adapter.set_results([
         SystemicAnalysisResult(
             classification=FailureClassification.CODE_DEFECT,
             confidence=1.0,
@@ -81,7 +79,7 @@ async def test_systemic_analysis_call_recording(
             recommended_action="Fix code defects",
             cross_cutting=False,
         ),
-    ]
+    ])
 
     # Simulate calling the adapter (as repair cycle would)
     failures = [
@@ -121,7 +119,7 @@ async def test_systemic_analysis_default_result(
     mock_adapter = simulation_bootstrap.adapters.systemic_analysis_as_mock()
 
     # Configure with empty sequence (or sequence exhausted)
-    mock_adapter._results = []
+    mock_adapter.set_results([])
 
     failures = [
         RepairTestFailure(
@@ -212,7 +210,7 @@ async def test_mock_adapter_can_be_configured_with_environment_issue(
 
     This test verifies that the mock adapter's configuration interface works correctly.
     It pre-configures the mock to return an ENVIRONMENT_ISSUE classification, then
-    validates the configuration was applied.
+    validates the configuration was applied via actual analysis call.
 
     Note: Testing that this classification actually prevents fix_failures_by_file calls
     requires end-to-end repair cycle testing which is out of scope for this unit test.
@@ -220,21 +218,35 @@ async def test_mock_adapter_can_be_configured_with_environment_issue(
     mock_adapter = simulation_bootstrap.adapters.systemic_analysis_as_mock()
 
     # Pre-configure to return ENVIRONMENT_ISSUE
-    mock_adapter._results = [
-        SystemicAnalysisResult(
-            classification=FailureClassification.ENVIRONMENT_ISSUE,
-            confidence=0.9,
-            reasoning="Docker image cache stale",
-            affected_files=(),
-            recommended_action="Rebuild environment",
-            cross_cutting=False,
+    result_config = SystemicAnalysisResult(
+        classification=FailureClassification.ENVIRONMENT_ISSUE,
+        confidence=0.9,
+        reasoning="Docker image cache stale",
+        affected_files=(),
+        recommended_action="Rebuild environment",
+        cross_cutting=False,
+    )
+    mock_adapter.set_results([result_config])
+
+    # Verify call index was reset (set_results side effect)
+    assert mock_adapter.call_count == 0
+
+    # Verify configuration by actually calling analyze()
+    failures = [
+        RepairTestFailure(
+            file="test.py",
+            test="test_example",
+            message="Test failed",
         ),
     ]
+    context = AnalysisContext(
+        work_item_id="work-123",
+        iteration=1,
+        workflow_run_id="run-456",
+    )
 
-    # Verify configuration is correct
-    assert len(mock_adapter._results) == 1
-    result_config = mock_adapter._results[0]
-    assert result_config.classification == FailureClassification.ENVIRONMENT_ISSUE
-    assert result_config.confidence == 0.9
-    assert result_config.reasoning == "Docker image cache stale"
-    assert "Rebuild environment" in result_config.recommended_action
+    result = await mock_adapter.analyze(failures, context)
+    assert result.classification == FailureClassification.ENVIRONMENT_ISSUE
+    assert result.confidence == 0.9
+    assert result.reasoning == "Docker image cache stale"
+    assert "Rebuild environment" in result.recommended_action

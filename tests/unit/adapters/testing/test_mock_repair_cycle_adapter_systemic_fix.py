@@ -24,11 +24,6 @@ from dataclasses import dataclass
 
 import pytest
 
-# Skip entire module - MockRepairCycleAdapter.execute() requires fully seeded agent repository
-pytestmark = pytest.mark.skip(
-    reason="MockRepairCycleAdapter tests require agent seeding via simulation_seeder.seed_default_scenario(). "
-    "Systemic fix fallback paths are covered in production adapter tests and SystemicFixResult domain tests."
-)
 
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
 from codetoreum.domain.repair_cycle_types import (
