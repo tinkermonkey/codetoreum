@@ -24,6 +24,7 @@ from codetoreum.adapters.secondary.production_repair_cycle_adapter import (
     ProductionRepairCycleAdapter,
     RepairCycleConfig,
 )
+from codetoreum.domain.events.repair_cycle_events import SystemicAnalysisCompletedEvent
 from codetoreum.domain.repair_cycle_types import (
     FailureClassification,
     RepairTestFailure,
@@ -2046,8 +2047,6 @@ class TestSystemicAnalysisExceptionFallback:
     @pytest.mark.asyncio
     async def test_systemic_analysis_exception_emits_failed_event_and_falls_back(self):
         """When systemic_analysis.analyze() raises, emit failed event and fall back to fix_failures_by_file."""
-        from codetoreum.domain.events.repair_cycle_events import SystemicAnalysisCompletedEvent
-
         event_emitter = MagicMock()
         systemic_service = AsyncMock()
 
@@ -2063,6 +2062,10 @@ class TestSystemicAnalysisExceptionFallback:
         # Execute should not raise; it should handle gracefully
         result = await adapter.execute(ctx)
 
+        # Verify result indicates fallback was taken
+        assert result is not None
+        assert result > 0, "Expected fallback to return positive count"
+
         # Verify that fallback was taken
         adapter.fix_failures_by_file.assert_called_once()
 
@@ -2077,8 +2080,8 @@ class TestSystemicAnalysisExceptionFallback:
         assert "failed" in failed_event.reasoning.lower() or "error" in failed_event.reasoning.lower()
 
     @pytest.mark.asyncio
-    async def test_systemic_analysis_exception_with_dependency_issue_still_falls_back(self):
-        """Even with DEPENDENCY_ISSUE classification, exception causes fallback."""
+    async def test_systemic_analysis_value_error_still_falls_back(self):
+        """When systemic_analysis.analyze() raises ValueError, fallback to fix_failures_by_file."""
         event_emitter = MagicMock()
         systemic_service = AsyncMock()
 
@@ -2091,6 +2094,10 @@ class TestSystemicAnalysisExceptionFallback:
 
         ctx = _RepairCycleContext(max_total_agent_calls=100)
         result = await adapter.execute(ctx)
+
+        # Verify result is valid
+        assert result is not None
+        assert result >= 0, "Expected fallback to return valid count"
 
         # Should still use fallback
         adapter.fix_failures_by_file.assert_called_once()
@@ -2120,6 +2127,10 @@ class TestBackwardCompatibleNoClassifierFallback:
         ctx = _RepairCycleContext(max_total_agent_calls=100)
         result = await adapter.execute(ctx)
 
+        # Verify result
+        assert result is not None
+        assert result == 4, "Expected fallback return value"
+
         # Should call fix_failures_by_file (fallback)
         adapter.fix_failures_by_file.assert_called_once()
 
@@ -2134,8 +2145,22 @@ class TestBackwardCompatibleNoClassifierFallback:
         # Mock fix_failures_by_file
         adapter.fix_failures_by_file = AsyncMock(return_value=10)
 
+        # Create context with multiple failures to test actual multi-failure behavior
         ctx = _RepairCycleContext(max_total_agent_calls=100)
+        # Simulate multiple failures in the context
+        ctx.failures = [
+            MagicMock(file="file1.py", error="Error 1"),
+            MagicMock(file="file2.py", error="Error 2"),
+            MagicMock(file="file3.py", error="Error 3"),
+            MagicMock(file="file4.py", error="Error 4"),
+            MagicMock(file="file5.py", error="Error 5"),
+        ]
+
         result = await adapter.execute(ctx)
+
+        # Verify result reflects multi-failure handling
+        assert result is not None
+        assert result == 10, "Expected fallback return value for multiple failures"
 
         # Should use fallback, not attempt classification
         adapter.fix_failures_by_file.assert_called_once()
