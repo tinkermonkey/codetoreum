@@ -753,6 +753,21 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     exc_info=True,
                 )
 
+                # Emit warning review completed event (failure)
+                self.event_emitter.emit(
+                    RepairCycleWarningReviewCompletedEvent(
+                        type="repair_cycle.warning_review_completed",
+                        timestamp=datetime.now(UTC).isoformat(),
+                        source="production_repair_cycle",
+                        source_file=warning.file,
+                        warning_count=1,
+                        test_type=config.test_type,
+                        success=False,
+                        agent_name=resolved_agent_name,
+                        workflow_run_id=context.workflow_run_id,
+                    )
+                )
+
         return reviewed
 
     async def fix_failures_systemically(
@@ -1462,7 +1477,17 @@ After making changes, respond with JSON:
             if isinstance(response, str):
                 try:
                     response = json.loads(response)
-                except json.JSONDecodeError:
+                except json.JSONDecodeError as e:
+                    # Log the parse error before falling back
+                    logger.warning(
+                        "LLM response was not valid JSON, falling back to plain response wrapper",
+                        extra={
+                            "workflow_run_id": context.workflow_run_id,
+                            "operation": operation_name,
+                            "raw_response": response[:500],  # Limit response length in logs
+                        },
+                        exc_info=True,
+                    )
                     # If not valid JSON, treat as plain response
                     response = {"status": "success", "response": response}
 

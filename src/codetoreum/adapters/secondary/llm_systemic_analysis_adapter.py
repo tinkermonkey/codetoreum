@@ -283,7 +283,7 @@ Field definitions:
                     "work_item_id": context.work_item_id,
                     "iteration": context.iteration,
                 },
-                exc_info=False,
+                exc_info=True,
             )
             raise ValueError(f"Invalid classification value: {classification_str}") from e
 
