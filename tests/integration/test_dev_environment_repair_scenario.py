@@ -158,6 +158,32 @@ async def test_dev_environment_repair_end_to_end_agent_dispatch(
     repair_cycle_adapter = adapters.repair_cycle
     repair_cycle_adapter.current_project = "test-project"
 
+    # Configure systemic analysis to trigger both CODE_DEFECT (systemic fix) and ENVIRONMENT_ISSUE (env rebuild/verify)
+    # This ensures all 6 sub-tasks are invoked: test_execution, code_fix, systemic_analysis,
+    # systemic_fix (from CODE_DEFECT), env_rebuild, env_verification (from ENVIRONMENT_ISSUE)
+    from codetoreum.domain.repair_cycle_types import FailureClassification, SystemicAnalysisResult
+    mock_analysis = adapters.systemic_analysis_service_as_mock()
+    mock_analysis.set_results([
+        # Iteration 1: CODE_DEFECT with cross_cutting=True triggers systemic_fix
+        SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.9,
+            reasoning="Cross-cutting architectural issue",
+            affected_files=("api.py", "models.py", "services.py"),
+            recommended_action="Update API contract consistently",
+            cross_cutting=True,
+        ),
+        # Iteration 2: ENVIRONMENT_ISSUE triggers env_rebuild and env_verification
+        SystemicAnalysisResult(
+            classification=FailureClassification.ENVIRONMENT_ISSUE,
+            confidence=0.9,
+            reasoning="Environment misconfiguration after code changes",
+            affected_files=(),
+            recommended_action="Rebuild and verify environment",
+            cross_cutting=True,  # Also mark as cross_cutting since it affects the whole system
+        ),
+    ])
+
     # Configure repair cycle with test failures to enable agent routing verification.
     # By setting UNIT tests to fail 3 times, we ensure code_fix is invoked multiple
     # times. The mock adapter's run_test_cycle loop will invoke both test_execution

@@ -115,6 +115,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         clock: SimulationClock | None = None,
         checkpoint_store: IRepairCycleCheckpointStore | None = None,
         container_adapter: "Any | None" = None,
+        systemic_analysis_service: "Any | None" = None,
     ) -> None:
         """Initialize the repair cycle adapter with SimulationClock.
 
@@ -130,6 +131,9 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                              If provided, the adapter will use actual container test results
                              instead of pre-configured sequences. This enables integration
                              between test execution and repair cycle decisions.
+            systemic_analysis_service: Optional systemic analysis service for test dispatch logic.
+                                      If provided, enables systemic fix dispatch based on cross_cutting
+                                      field from analysis results.
         """
         super().__init__()
         # Default factory returns MockLLMAdapter for any agent
@@ -144,6 +148,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         self._clock = clock or SimulationClock(speed_multiplier=100_000.0)
         self._checkpoint_store = checkpoint_store
         self._container_adapter = container_adapter
+        self._systemic_analysis_service = systemic_analysis_service
         self._current_project: str | None = None
         self._repair_state: dict[str, Any] = {}
         self._test_type_index: dict[str, int] = {}
@@ -344,6 +349,14 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
     def set_checkpoint_store(self, store: IRepairCycleCheckpointStore) -> None:
         """Set the checkpoint store (for testing)."""
         self._checkpoint_store = store
+
+    def set_systemic_analysis_service(self, service: "Any") -> None:
+        """Set the systemic analysis service (for testing).
+
+        Args:
+            service: ISystemicAnalysisService instance for analysis dispatch logic
+        """
+        self._systemic_analysis_service = service
 
     @property
     def current_project(self) -> str | None:
@@ -1617,8 +1630,14 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 error = "Circuit breaker: max agent calls reached"
                 break
 
-            # Run tests
-            test_result = await self.run_tests(config, context)
+            # Run tests (at start of iteration) unless we already have a result from the previous retest
+            if last_test_result is None:
+                test_result = await self.run_tests(config, context)
+            else:
+                # Use the retest result from previous iteration's failed attempt
+                test_result = last_test_result
+                last_test_result = None  # Reset for next iteration
+
             last_test_result = test_result
 
             # Check for success
@@ -1635,7 +1654,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                     if retest.failed > 0:
                         # Warning fixes broke something, continue fixing
                         cycle_passed = False
-                        # Fall through to fix failures again
+                        test_result = retest  # Use retest result for next fix attempt
                     else:
                         # Warnings fixed, success
                         break
@@ -1645,29 +1664,58 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
             # Fix failures
             if not cycle_passed:
-                grouped = self._group_failures_by_file(test_result.failures)
-                files_fixed += await self.fix_failures_by_file(grouped, config, context)
+                # Perform systemic analysis to determine fix strategy
+                from codetoreum.domain.repair_cycle_types import FailureClassification
 
-                # Re-test to determine if file-level fixes resolved issues
-                retest_result = await self.run_tests(config, context)
+                # Resolve and record which agent is executing systemic analysis (even if not used)
+                _, agent_name = await self._resolve_and_record_agent("systemic_analysis", context)
 
-                # Only proceed to systemic analysis if failures persist after fixes
-                if retest_result.failures:
+                # Try systemic analysis and dispatch if available
+                if self._systemic_analysis_service and test_result.failures:
                     try:
-                        analysis = await self.analyze_systemic_issues(retest_result, config, context)
-                        if analysis:
-                            # Apply systemic fixes based on analysis
-                            fixed = await self.apply_systemic_fixes(analysis, retest_result, config, context)
-                            if fixed:
-                                # Rebuild and verify environment after systemic fixes
+                        analysis_context = {
+                            "failures": list(test_result.failures),
+                            "test_type": config.test_type.value,
+                            "iteration": iteration,
+                        }
+                        classification = await self._systemic_analysis_service.analyze(
+                            list(test_result.failures), analysis_context
+                        )
+
+                        # Dispatch based on cross_cutting and failure count
+                        # If cross_cutting=True and <= 50 failures, use systemic fix (works for any classification)
+                        # Otherwise, use file-level fixes (or other classification-specific fixes)
+                        if classification.cross_cutting and len(test_result.failures) <= 50:
+                            # Systemic fix: address root cause across all affected files
+                            systemic_result = await self.fix_failures_systemically(
+                                test_result.failures, classification, config, context
+                            )
+                            files_fixed += len(systemic_result.files_modified)
+                            # After systemic fix, rebuild and verify environment
+                            if systemic_result.success:
                                 rebuild_success = await self.rebuild_environment(config, context)
                                 if rebuild_success:
                                     await self.verify_environment(config, context)
-                                    # Continue loop to re-test after environment changes
+                        elif classification.classification == FailureClassification.CODE_DEFECT:
+                            # File-level fix: fix failures grouped by file
+                            grouped = self._group_failures_by_file(test_result.failures)
+                            files_fixed += await self.fix_failures_by_file(grouped, config, context)
+                        elif classification.classification == FailureClassification.ENVIRONMENT_ISSUE:
+                            # Environment fix
+                            rebuild_success = await self.rebuild_environment(config, context)
+                            if rebuild_success:
+                                await self.verify_environment(config, context)
+                        elif classification.classification == FailureClassification.TRANSIENT_FAILURE:
+                            # For transient failures, just re-test without fixing
+                            pass
+                        else:
+                            # Default: use file-level fixes
+                            grouped = self._group_failures_by_file(test_result.failures)
+                            files_fixed += await self.fix_failures_by_file(grouped, config, context)
                     except Exception as e:
-                        # Log systemic analysis failures but continue with regular retry
+                        # If analysis fails, fall back to file-level fixes
                         logger.warning(
-                            "Systemic analysis/fixes failed, continuing with standard retry",
+                            "Systemic analysis failed, falling back to file-level fixes",
                             extra={
                                 "workflow_run_id": context.workflow_run_id,
                                 "test_type": config.test_type.value,
@@ -1675,13 +1723,24 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                             },
                             exc_info=True,
                         )
+                        grouped = self._group_failures_by_file(test_result.failures)
+                        files_fixed += await self.fix_failures_by_file(grouped, config, context)
                 else:
-                    # File-level fixes resolved issues
-                    # In production, test_result is updated and loop continues for confirmation
-                    # In mock, we can break immediately since we're using pre-configured results
+                    # No systemic analysis service, use file-level fixes
+                    grouped = self._group_failures_by_file(test_result.failures)
+                    files_fixed += await self.fix_failures_by_file(grouped, config, context)
+
+                # Re-test to determine if fixes resolved issues
+                retest_result = await self.run_tests(config, context)
+
+                if retest_result.failed == 0:
+                    # All tests passed
                     cycle_passed = True
                     last_test_result = retest_result
                     break
+                else:
+                    # Tests still failing, save for next iteration without calling run_tests
+                    last_test_result = retest_result
 
             # Checkpoint at interval
             if iteration % context.checkpoint_interval == 0:

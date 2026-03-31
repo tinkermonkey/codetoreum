@@ -49,12 +49,12 @@ class SimpleRepairCycleContext:
 
 @pytest.mark.asyncio
 async def test_dispatch_to_systemic_fix_when_cross_cutting_true(
-    simulation_bootstrap: SimulationApplicationBootstrap,
+    seeded_simulation_bootstrap,
 ):
     """Test that systemic fix is called when cross_cutting=True and failures <= 50."""
     # Setup
-    mock_repair = simulation_bootstrap.adapters.repair_cycle_as_mock()
-    mock_analysis = simulation_bootstrap.adapters.systemic_analysis_as_mock()
+    mock_repair = seeded_simulation_bootstrap.adapters.repair_cycle_as_mock()
+    mock_analysis = seeded_simulation_bootstrap.adapters.systemic_analysis_as_mock()
 
     # Pre-configure mock analysis to return cross_cutting=True
     mock_analysis.set_results([
@@ -132,12 +132,12 @@ async def test_dispatch_to_systemic_fix_when_cross_cutting_true(
 
 @pytest.mark.asyncio
 async def test_dispatch_to_file_fix_when_cross_cutting_false(
-    simulation_bootstrap: SimulationApplicationBootstrap,
+    seeded_simulation_bootstrap,
 ):
     """Test that file fix is called when cross_cutting=False."""
     # Setup
-    mock_repair = simulation_bootstrap.adapters.repair_cycle_as_mock()
-    mock_analysis = simulation_bootstrap.adapters.systemic_analysis_as_mock()
+    mock_repair = seeded_simulation_bootstrap.adapters.repair_cycle_as_mock()
+    mock_analysis = seeded_simulation_bootstrap.adapters.systemic_analysis_as_mock()
 
     # Pre-configure mock analysis to return cross_cutting=False
     mock_analysis.set_results([
@@ -204,12 +204,12 @@ async def test_dispatch_to_file_fix_when_cross_cutting_false(
 
 @pytest.mark.asyncio
 async def test_fallback_to_file_fix_when_failure_count_exceeds_50(
-    simulation_bootstrap: SimulationApplicationBootstrap,
+    seeded_simulation_bootstrap,
 ):
     """Test fallback to file fix when cross_cutting=True but failure_count > 50."""
     # Setup
-    mock_repair = simulation_bootstrap.adapters.repair_cycle_as_mock()
-    mock_analysis = simulation_bootstrap.adapters.systemic_analysis_as_mock()
+    mock_repair = seeded_simulation_bootstrap.adapters.repair_cycle_as_mock()
+    mock_analysis = seeded_simulation_bootstrap.adapters.systemic_analysis_as_mock()
 
     # Create 51 failures (exceeds the 50-failure threshold)
     failures = tuple(
@@ -280,15 +280,15 @@ async def test_fallback_to_file_fix_when_failure_count_exceeds_50(
 
 @pytest.mark.asyncio
 async def test_multiple_systemic_fix_iterations(
-    simulation_bootstrap: SimulationApplicationBootstrap,
+    seeded_simulation_bootstrap,
 ):
     """Test that multiple systemic fix iterations can occur within one repair cycle.
 
     Scenario: First systemic fix attempt fails tests, second attempt succeeds.
     """
     # Setup
-    mock_repair = simulation_bootstrap.adapters.repair_cycle_as_mock()
-    mock_analysis = simulation_bootstrap.adapters.systemic_analysis_as_mock()
+    mock_repair = seeded_simulation_bootstrap.adapters.repair_cycle_as_mock()
+    mock_analysis = seeded_simulation_bootstrap.adapters.systemic_analysis_as_mock()
 
     # Both analyses return cross_cutting=True (for both iterations)
     mock_analysis.set_results([
@@ -399,7 +399,7 @@ async def test_multiple_systemic_fix_iterations(
 
 @pytest.mark.asyncio
 async def test_systemic_fix_result_with_no_files_modified(
-    simulation_bootstrap: SimulationApplicationBootstrap,
+    seeded_simulation_bootstrap,
 ):
     """Test handling of systemic fix that succeeds but modifies no files.
 
@@ -407,8 +407,8 @@ async def test_systemic_fix_result_with_no_files_modified(
     or when files are outside the workspace.
     """
     # Setup
-    mock_repair = simulation_bootstrap.adapters.repair_cycle_as_mock()
-    mock_analysis = simulation_bootstrap.adapters.systemic_analysis_as_mock()
+    mock_repair = seeded_simulation_bootstrap.adapters.repair_cycle_as_mock()
+    mock_analysis = seeded_simulation_bootstrap.adapters.systemic_analysis_as_mock()
 
     # Configure cross_cutting analysis
     mock_analysis.set_results([
@@ -482,7 +482,7 @@ async def test_systemic_fix_result_with_no_files_modified(
 
 @pytest.mark.asyncio
 async def test_dispatch_respects_max_total_agent_calls_limit(
-    simulation_bootstrap: SimulationApplicationBootstrap,
+    seeded_simulation_bootstrap,
 ):
     """Test that dispatch respects max_total_agent_calls circuit breaker.
 
@@ -490,8 +490,8 @@ async def test_dispatch_respects_max_total_agent_calls_limit(
     attempt systemic fixes before falling back to per-file fixes.
     """
     # Setup
-    mock_repair = simulation_bootstrap.adapters.repair_cycle_as_mock()
-    mock_analysis = simulation_bootstrap.adapters.systemic_analysis_as_mock()
+    mock_repair = seeded_simulation_bootstrap.adapters.repair_cycle_as_mock()
+    mock_analysis = seeded_simulation_bootstrap.adapters.systemic_analysis_as_mock()
 
     # Configure cross_cutting analysis
     mock_analysis.set_results([
