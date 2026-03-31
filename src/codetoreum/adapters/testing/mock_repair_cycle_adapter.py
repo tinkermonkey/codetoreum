@@ -947,26 +947,31 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
     async def analyze_systemic_issues(
         self,
-        failures: tuple[RepairTestFailure, ...],
+        test_result: RepairTestResult,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
     ) -> str:
         """Mock implementation: return simulated systemic analysis.
 
         Args:
-            failures: Tuple of test failures to analyze
+            test_result: Test result containing failures to analyze
+            config: Test run configuration
+            context: Repair cycle context
 
         Returns:
-            Analysis reasoning summary string
+            Analysis summary string
         """
-        if not failures:
+        if not test_result.failures:
             return ""
 
         # Simulate analysis response
-        analysis = f"Systemic issues detected in {len(failures)} failures"
+        analysis = f"Systemic issues detected in {len(test_result.failures)} failures"
 
         logger.info(
             "Mock systemic analysis completed",
             extra={
-                "failure_count": len(failures),
+                "failure_count": len(test_result.failures),
+                "workflow_run_id": context.workflow_run_id,
             },
             exc_info=False,
         )
@@ -975,8 +980,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
     async def apply_systemic_fixes(
         self,
-        classification: FailureClassification,
-        reasoning: str,
+        analysis_summary: str,
         test_result: RepairTestResult,
         config: RepairTestRunConfig,
         context: RepairCycleContext,
@@ -984,8 +988,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         """Mock implementation: simulate systemic fix application.
 
         Args:
-            classification: Root cause category (FailureClassification enum)
-            reasoning: Explanation of classification decision from systemic analysis
+            analysis_summary: Summary from systemic analysis
             test_result: Test result that triggered the analysis
             config: Test run configuration
             context: Repair cycle context
@@ -993,7 +996,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         Returns:
             True if fixes were successfully applied
         """
-        if not reasoning:
+        if not analysis_summary:
             return False
 
         # Resolve and record which agent is executing this sub-task
@@ -1008,7 +1011,6 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             extra={
                 "workflow_run_id": context.workflow_run_id,
                 "test_type": config.test_type.value,
-                "classification": classification.value if classification else "unknown",
                 "agent_name": agent_name,
             },
             exc_info=False,
@@ -1206,20 +1208,23 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         test_type: RepairTestType,
         iteration: int,
         context: RepairCycleContext,
-    ) -> None:
+    ) -> bool:
         """Save repair cycle state for resume after failures.
 
         Args:
             test_type: Current test type being executed
             iteration: Current iteration number
             context: Repair cycle context
+
+        Returns:
+            True if checkpoint saved successfully, False otherwise
         """
         if not self._checkpoint_store:
             logger.debug(
                 f"Checkpoint: project={context.workflow_run_id}, "
                 f"test_type={test_type}, iteration={iteration} (no store configured)"
             )
-            return
+            return True
 
         try:
             # Calculate expiration time (24 hours from now)
@@ -1248,6 +1253,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 f"test_type={test_type}, iteration={iteration}, "
                 f"agent_calls={self.total_agent_calls}"
             )
+            return True
         except Exception as e:
             logger.error(
                 "Failed to save checkpoint - repair cycle may not be resumable",
@@ -1275,6 +1281,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 checkpoint_store_type=type(self._checkpoint_store).__name__ if self._checkpoint_store else "none",
             )
             self._emit_event("repair_cycle.checkpoint_failed", checkpoint_failed_event)
+            return False
 
     # Event log retrieval (FR-11.10)
 

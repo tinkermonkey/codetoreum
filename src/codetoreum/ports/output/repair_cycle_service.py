@@ -179,7 +179,9 @@ class IRepairCycle(Protocol):
 
     async def analyze_systemic_issues(
         self,
-        failures: tuple[RepairTestFailure, ...],
+        test_result: RepairTestResult,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
     ) -> str:
         """Analyze failure root causes at systemic level.
 
@@ -187,34 +189,33 @@ class IRepairCycle(Protocol):
         multiple tests or require cross-cutting fixes.
 
         Args:
-            failures: Tuple of test failures to analyze
+            test_result: Test result containing failures to analyze
+            config: Test run configuration
+            context: Repair cycle context
 
         Returns:
-            Analysis reasoning summary from the systemic analysis
+            Analysis summary from the agent
 
         Raises:
-            ValueError: If systemic analysis service is not configured
+            CircuitBreakerOpenError: When circuit breaker is open
         """
         ...
 
     async def apply_systemic_fixes(
         self,
-        classification: FailureClassification,
-        reasoning: str,
+        analysis_summary: str,
         test_result: RepairTestResult,
         config: RepairTestRunConfig,
         context: RepairCycleContext,
     ) -> bool:
         """Apply cross-cutting fixes based on systemic analysis.
 
-        Uses the systemic analysis classification and reasoning to apply fixes
-        that address root causes affecting multiple tests. Routes to different
-        fix strategies based on classification (e.g., DEPENDENCY_ISSUE vs
-        CONFIGURATION_ISSUE).
+        Uses the systemic analysis to apply fixes that address root causes
+        affecting multiple tests. These are broader fixes beyond file-level
+        changes, such as architecture adjustments or dependency updates.
 
         Args:
-            classification: Root cause category (FailureClassification enum)
-            reasoning: Explanation of classification decision from systemic analysis
+            analysis_summary: Summary from systemic analysis
             test_result: Test result that triggered the analysis
             config: Test run configuration
             context: Repair cycle context
@@ -305,7 +306,7 @@ class IRepairCycle(Protocol):
         test_type: RepairTestType,
         iteration: int,
         context: RepairCycleContext,
-    ) -> None:
+    ) -> bool:
         """Save repair cycle state for resume after failures.
 
         Called at checkpoint_interval iterations (e.g., every 5 iterations).
@@ -315,5 +316,8 @@ class IRepairCycle(Protocol):
             test_type: Current test type being executed
             iteration: Current iteration number
             context: Repair cycle context
+
+        Returns:
+            True if checkpoint saved successfully, False otherwise
         """
         ...

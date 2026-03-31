@@ -1745,50 +1745,40 @@ Return a JSON response with the status of configuration fixes applied."""
 
     async def apply_systemic_fixes(
         self,
-        classification: FailureClassification,
-        reasoning: str,
+        analysis_summary: str,
         test_result: RepairTestResult,
         config: RepairTestRunConfig,
         context: RepairCycleContext,
     ) -> bool:
-        """Apply systemic fixes for DEPENDENCY_ISSUE or CONFIGURATION_ISSUE.
+        """Apply cross-cutting fixes based on systemic analysis.
 
-        Coordinates with the LLM provider to identify and implement fixes for
-        systemic issues like dependency problems or configuration errors.
-        Routes to differentiated fix strategies based on classification.
+        Uses the systemic analysis summary to apply fixes that address root
+        causes affecting multiple tests. These are broader fixes beyond
+        file-level changes, such as architecture adjustments or dependency
+        updates.
 
         Args:
-            classification: The systemic failure classification from analysis
-            reasoning: Classification reasoning from systemic analysis
-            test_result: Test result that triggered this fix
+            analysis_summary: Summary from systemic analysis
+            test_result: Test result that triggered the analysis
             config: Test run configuration
             context: Repair cycle context
 
         Returns:
-            True if systemic fixes were applied, False otherwise
+            True if fixes were successfully applied
+
+        Raises:
+            CircuitBreakerOpenError: When circuit breaker is open
         """
         try:
-            if classification == FailureClassification.DEPENDENCY_ISSUE:
-                return await self._apply_dependency_fix(reasoning, test_result, config, context)
-            if classification == FailureClassification.CONFIGURATION_ISSUE:
-                return await self._apply_configuration_fix(reasoning, test_result, config, context)
-            # Fallback to dependency fix if classification is unknown
-            logger.warning(
-                "Unknown systemic fix classification; defaulting to dependency fix",
-                extra={
-                    "workflow_run_id": context.workflow_run_id,
-                    "classification": classification.value if classification else "none",
-                },
-                exc_info=False,
-            )
-            return await self._apply_dependency_fix(reasoning, test_result, config, context)
+            # Default strategy: attempt dependency fix with analysis summary
+            return await self._apply_dependency_fix(analysis_summary, test_result, config, context)
 
         except Exception as e:
             # Safety net for unexpected exceptions in routing logic. Inner fix methods
             # catch and log their own exceptions, so this handler primarily catches
             # errors from classification checks or unexpected routing failures.
             logger.error(
-                "Unexpected error in systemic fix routing",
+                "Unexpected error in systemic fix",
                 extra={
                     "workflow_run_id": context.workflow_run_id,
                     "error": str(e),
@@ -1801,39 +1791,42 @@ Return a JSON response with the status of configuration fixes applied."""
 
     async def analyze_systemic_issues(
         self,
-        failures: tuple[RepairTestFailure, ...],
+        test_result: RepairTestResult,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
     ) -> str:
-        """Analyze systemic issues in test failures.
+        """Analyze failure root causes at systemic level.
 
-        Backward-compatible method that delegates to ISystemicAnalysisService
-        for failure classification. Returns the reasoning string from the
-        analysis result.
+        Delegates to ISystemicAnalysisService for failure classification.
+        Returns the analysis summary string.
 
         Args:
-            failures: Tuple of test failures to analyze
+            test_result: Test result containing failures to analyze
+            config: Test run configuration
+            context: Repair cycle context
 
         Returns:
-            Reasoning string from the systemic analysis result
+            Analysis summary from the agent
 
         Raises:
-            ValueError: If no systemic analysis service is configured
+            CircuitBreakerOpenError: When circuit breaker is open
         """
         if self._systemic_analysis_service is None:
             msg = "Cannot analyze systemic issues: ISystemicAnalysisService is not configured"
             raise ValueError(msg)
 
-        # Create a minimal AnalysisContext for the analysis
-        # Note: work_item_id, iteration, and workflow_run_id would ideally come from caller context,
-        # but for backward compatibility, we use placeholder values.
+        # Create analysis context from repair cycle context
         analysis_context = AnalysisContext(
-            work_item_id="unknown",
-            iteration=0,
-            workflow_run_id="unknown",
-            prior_fix_attempts=(),
-            prior_classifications=(),
+            work_item_id=context.work_item_id,
+            iteration=getattr(context, "iteration", 0),
+            workflow_run_id=context.workflow_run_id,
+            prior_fix_attempts=getattr(context, "prior_fix_attempts", ()),
+            prior_classifications=getattr(context, "prior_classifications", ()),
         )
 
-        result = await self._systemic_analysis_service.analyze(list(failures), analysis_context)
+        result = await self._systemic_analysis_service.analyze(
+            list(test_result.failures), analysis_context
+        )
         return result.reasoning
 
     async def _run_test_cycle(
@@ -2017,7 +2010,6 @@ Return a JSON response with the status of configuration fixes applied."""
                             ):
                                 consecutive_transient_failures = 0  # Reset counter
                                 fix_success = await self.apply_systemic_fixes(
-                                    classification.classification,
                                     classification.reasoning,
                                     test_result,
                                     config,
