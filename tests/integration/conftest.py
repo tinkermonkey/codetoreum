@@ -2,7 +2,6 @@
 
 import pytest
 
-
 # Set default timeout for all integration tests to prevent hanging
 pytestmark = pytest.mark.timeout(30)
 
@@ -42,4 +41,4 @@ async def seeded_simulation_bootstrap(simulation_bootstrap, simulation_seeder):
         simulation_bootstrap.adapters.systemic_analysis_service
     )
 
-    yield simulation_bootstrap
+    return simulation_bootstrap

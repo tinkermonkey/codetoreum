@@ -1729,9 +1729,8 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                     cycle_passed = True
                     last_test_result = retest_result
                     break
-                else:
-                    # Tests still failing, save for next iteration without calling run_tests
-                    last_test_result = retest_result
+                # Tests still failing, save for next iteration without calling run_tests
+                last_test_result = retest_result
 
             # Checkpoint at interval
             if iteration % context.checkpoint_interval == 0:
