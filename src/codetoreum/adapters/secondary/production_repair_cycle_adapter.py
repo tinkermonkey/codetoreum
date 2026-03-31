@@ -1978,9 +1978,17 @@ Return a JSON response with the status of dependency fixes applied."""
                                             },
                                             exc_info=False,
                                         )
-                                prior_fix_attempts.append(
-                                    f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuilt and verified environment"
-                                )
+                                        prior_fix_attempts.append(
+                                            f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuilt environment but verification failed"
+                                        )
+                                    else:
+                                        prior_fix_attempts.append(
+                                            f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuilt and verified environment"
+                                        )
+                                else:
+                                    prior_fix_attempts.append(
+                                        f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuild failed"
+                                    )
                             elif classification.classification == FailureClassification.TRANSIENT_FAILURE:
                                 consecutive_transient_failures += 1
                                 if consecutive_transient_failures > max_consecutive_transient:

@@ -1755,7 +1755,18 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                             # Environment issue (cross_cutting value doesn't matter)
                             rebuild_success = await self.rebuild_environment(config, context)
                             if rebuild_success:
-                                await self.verify_environment(config, context)
+                                verify_success = await self.verify_environment(config, context)
+                                if not verify_success:
+                                    logger.error(
+                                        "Environment verification failed after rebuild",
+                                        extra={
+                                            "workflow_run_id": context.workflow_run_id,
+                                            "test_type": config.test_type.value,
+                                            "iteration": iteration,
+                                            "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                                        },
+                                        exc_info=False,
+                                    )
                         elif classification.classification == FailureClassification.TRANSIENT_FAILURE:
                             # For transient failures, just re-test without fixing
                             pass
