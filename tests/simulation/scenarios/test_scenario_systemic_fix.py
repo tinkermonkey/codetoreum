@@ -174,8 +174,7 @@ async def test_scenario_systemic_fix_non_cross_cutting_dispatches_to_files(
             recommended_action="Fix the isolated parsing bug",
             cross_cutting=False,
         ),
-    ]
-
+    ])
     # Configure test failures and recovery
     mock_repair.set_test_result_sequence(
         RepairTestType.UNIT,
@@ -268,8 +267,7 @@ async def test_scenario_systemic_fix_multiple_iterations(
             recommended_action="Update models and database layer",
             cross_cutting=True,
         ),
-    ]
-
+    ])
     # Configure test sequence: fail → fail → pass
     mock_repair.set_test_result_sequence(
         RepairTestType.UNIT,
@@ -389,8 +387,7 @@ async def test_scenario_systemic_fix_large_failure_count_fallback(
             recommended_action="Fix systematically",
             cross_cutting=True,
         ),
-    ]
-
+    ])
     # Configure test sequence
     mock_repair.set_test_result_sequence(
         RepairTestType.UNIT,
@@ -470,8 +467,7 @@ async def test_scenario_systemic_fix_with_event_emission(
             recommended_action="Update contract",
             cross_cutting=True,
         ),
-    ]
-
+    ])
     # Configure test sequence
     mock_repair.set_test_result_sequence(
         RepairTestType.UNIT,

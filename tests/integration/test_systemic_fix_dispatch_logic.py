@@ -312,7 +312,7 @@ async def test_multiple_systemic_fix_iterations(
             recommended_action="Update database schema",
             cross_cutting=True,
         ),
-    ]
+    ])
 
     # Test sequence: fail → fail → pass (two systemic fixes needed)
     mock_repair.set_test_result_sequence(
@@ -431,8 +431,7 @@ async def test_systemic_fix_result_with_no_files_modified(
             recommended_action="Set correct environment variables",
             cross_cutting=True,
         ),
-    ]
-
+    ])
     # Test that passes after environment configuration
     mock_repair.set_test_result_sequence(
         RepairTestType.UNIT,
@@ -522,8 +521,7 @@ async def test_dispatch_respects_max_total_agent_calls_limit(
             recommended_action="Fix root cause systematically",
             cross_cutting=True,
         ),
-    ]
-
+    ])
     # Test sequence
     mock_repair.set_test_result_sequence(
         RepairTestType.UNIT,
