@@ -8,7 +8,8 @@ enabling the repair cycle to dispatch to the correct handling strategy (code fix
 environment rebuild, dependency fix, or transient retry).
 
 Architecture:
-- Factory injection of ILLMProvider for flexible provider selection
+- Async factory injection for agent-based LLM provider resolution
+- Factory resolves providers by agent name (e.g., "systemic_analysis")
 - Prompt construction with comprehensive context (failures, prior attempts, iteration)
 - JSON parsing with fallback to CODE_DEFECT classification on parse errors
 - No event emission (caller's responsibility)
@@ -46,7 +47,7 @@ class LLMSystemicAnalysisAdapter(ISystemicAnalysisService):
     attempts, and iteration count.
 
     Example:
-        adapter = LLMSystemicAnalysisAdapter(llm_factory=lambda: llm_provider)
+        adapter = LLMSystemicAnalysisAdapter(llm_factory=lambda agent_name: provider_coro)
         result = await adapter.analyze(failures, context)
     """
 
@@ -54,7 +55,8 @@ class LLMSystemicAnalysisAdapter(ISystemicAnalysisService):
         """Initialize production systemic analysis adapter.
 
         Args:
-            llm_factory: Factory callable that returns configured ILLMProvider instance
+            llm_factory: Factory callable that takes agent name (str) and returns coroutine
+                        resolving to configured ILLMProvider instance
             timeout_seconds: Timeout for LLM execution in seconds (default 300)
 
         Raises:
@@ -218,7 +220,7 @@ Field definitions:
             Exception: Any exception raised by the LLM provider
         """
         try:
-            llm_provider = self._llm_factory()
+            llm_provider = await self._llm_factory("systemic_analysis")
             return await asyncio.wait_for(
                 llm_provider.execute(prompt, context=execution_context),
                 timeout=execution_context.timeout_seconds,

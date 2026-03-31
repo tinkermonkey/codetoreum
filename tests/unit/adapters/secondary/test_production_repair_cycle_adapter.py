@@ -72,6 +72,13 @@ class _RepairCycleContext:
         self.agent_config = None  # No per-subtask agent config in tests
 
 
+def _make_async_factory(llm):
+    """Create an async factory that returns the given LLM for any agent name."""
+    async def factory(agent_name):
+        return llm
+    return factory
+
+
 def _make_adapter(
     *,
     llm_response: str = _VALID_JSON_RESPONSE,
@@ -83,8 +90,7 @@ def _make_adapter(
     llm.execute.return_value = ExecutionResult(content=llm_response)
 
     # Create async factory that returns the same mock LLM for any agent name
-    async def llm_factory(agent_name):
-        return llm
+    llm_factory = _make_async_factory(llm)
 
     config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
     adapter = ProductionRepairCycleAdapter(
@@ -978,7 +984,7 @@ class TestEnvironmentHelperMethods:
 
         config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
         adapter = ProductionRepairCycleAdapter(
-            llm_factory=lambda: llm,
+            llm_factory=_make_async_factory(llm),
             config=config,
             event_emitter=event_emitter,
             circuit_breaker=None,
@@ -1012,7 +1018,7 @@ class TestEnvironmentHelperMethods:
 
         config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
         adapter = ProductionRepairCycleAdapter(
-            llm_factory=lambda: llm,
+            llm_factory=_make_async_factory(llm),
             config=config,
             event_emitter=event_emitter,
             circuit_breaker=None,
@@ -1243,7 +1249,7 @@ class TestApplyDependencyFix:
 
         config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
         adapter = ProductionRepairCycleAdapter(
-            llm_factory=lambda: llm,
+            llm_factory=_make_async_factory(llm),
             config=config,
             event_emitter=event_emitter,
             circuit_breaker=None,
@@ -1291,7 +1297,7 @@ class TestApplyConfigurationFix:
 
         config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
         adapter = ProductionRepairCycleAdapter(
-            llm_factory=lambda: llm,
+            llm_factory=_make_async_factory(llm),
             config=config,
             event_emitter=event_emitter,
             circuit_breaker=None,
