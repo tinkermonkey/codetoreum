@@ -20,11 +20,12 @@ The SystemicFixResult domain type has comprehensive unit test coverage in:
 """
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import pytest
 
-
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
+from codetoreum.domain.agent import Agent, AgentCapability, AgentType
 from codetoreum.domain.repair_cycle_types import (
     AnalysisContext,
     RepairCycleAgentConfig,
@@ -53,12 +54,52 @@ class SimpleRepairCycleContext:
     agent_config: RepairCycleAgentConfig | None = None
 
 
+@pytest.fixture
+async def seeded_bootstrap(simulation_bootstrap: SimulationApplicationBootstrap) -> SimulationApplicationBootstrap:
+    """Provide a bootstrap with seeded agent repository.
+
+    Seeds the agent repository with the "senior_software_engineer" agent
+    so tests can resolve agents without failures.
+    """
+    # Create the senior_software_engineer agent
+    agent = Agent.create(
+        name="senior_software_engineer",
+        display_name="Senior Software Engineer",
+        agent_type=AgentType.MAKER,
+        role_description="Expert software engineer for complex fixes",
+        model="claude-sonnet-4-5",
+        capabilities={
+            "code_analysis": AgentCapability(
+                skill="code_analysis",
+                proficiency=0.95,
+                description="Analyze code for issues",
+            ),
+            "code_fixing": AgentCapability(
+                skill="code_fixing",
+                proficiency=0.95,
+                description="Fix code defects",
+            ),
+        },
+        timeout_seconds=900,
+        max_retries=3,
+        requires_docker=True,
+        requires_dev_container=False,
+        makes_code_changes=True,
+        filesystem_write_allowed=True,
+    )
+
+    # Seed the agent repository
+    await simulation_bootstrap.adapters.agent_repository.save(agent)
+
+    return simulation_bootstrap
+
+
 @pytest.mark.asyncio
 async def test_mock_adapter_configurable_systemic_fix_success(
-    simulation_bootstrap: SimulationApplicationBootstrap,
+    seeded_bootstrap: SimulationApplicationBootstrap,
 ):
     """Test configuring mock adapter with successful systemic fix result."""
-    mock_adapter = simulation_bootstrap.adapters.repair_cycle_as_mock()
+    mock_adapter = seeded_bootstrap.adapters.repair_cycle_as_mock()
 
     # Configure a successful systemic fix
     mock_adapter.set_systemic_fix_result([
@@ -119,10 +160,10 @@ async def test_mock_adapter_configurable_systemic_fix_success(
 
 @pytest.mark.asyncio
 async def test_mock_adapter_configurable_systemic_fix_failure(
-    simulation_bootstrap: SimulationApplicationBootstrap,
+    seeded_bootstrap: SimulationApplicationBootstrap,
 ):
     """Test configuring mock adapter with failed systemic fix result."""
-    mock_adapter = simulation_bootstrap.adapters.repair_cycle_as_mock()
+    mock_adapter = seeded_bootstrap.adapters.repair_cycle_as_mock()
 
     # Configure a failed systemic fix (should trigger fallback to file-level fix)
     mock_adapter.set_systemic_fix_result([
@@ -181,10 +222,10 @@ async def test_mock_adapter_configurable_systemic_fix_failure(
 
 @pytest.mark.asyncio
 async def test_mock_adapter_multiple_systemic_fix_sequence(
-    simulation_bootstrap: SimulationApplicationBootstrap,
+    seeded_bootstrap: SimulationApplicationBootstrap,
 ):
     """Test configuring mock adapter with multiple sequential systemic fixes."""
-    mock_adapter = simulation_bootstrap.adapters.repair_cycle_as_mock()
+    mock_adapter = seeded_bootstrap.adapters.repair_cycle_as_mock()
 
     # Configure two systemic fix results (for two iterations)
     mock_adapter.set_systemic_fix_result([
@@ -264,10 +305,10 @@ async def test_mock_adapter_multiple_systemic_fix_sequence(
 
 @pytest.mark.asyncio
 async def test_mock_adapter_systemic_fix_no_files_modified(
-    simulation_bootstrap: SimulationApplicationBootstrap,
+    seeded_bootstrap: SimulationApplicationBootstrap,
 ):
     """Test systemic fix that succeeds but modifies no files."""
-    mock_adapter = simulation_bootstrap.adapters.repair_cycle_as_mock()
+    mock_adapter = seeded_bootstrap.adapters.repair_cycle_as_mock()
 
     # Configure systemic fix with no file modifications
     mock_adapter.set_systemic_fix_result([
@@ -327,10 +368,10 @@ async def test_mock_adapter_systemic_fix_no_files_modified(
 
 @pytest.mark.asyncio
 async def test_mock_adapter_systemic_fix_with_clock_advancement(
-    simulation_bootstrap: SimulationApplicationBootstrap,
+    seeded_bootstrap: SimulationApplicationBootstrap,
 ):
     """Test that systemic fix result can include clock advancement duration."""
-    mock_adapter = simulation_bootstrap.adapters.repair_cycle_as_mock()
+    mock_adapter = seeded_bootstrap.adapters.repair_cycle_as_mock()
 
     # Get initial clock time
     initial_time = mock_adapter.clock.now()
@@ -397,10 +438,10 @@ async def test_mock_adapter_systemic_fix_with_clock_advancement(
 
 @pytest.mark.asyncio
 async def test_mock_adapter_assert_systemic_fix_call_count(
-    simulation_bootstrap: SimulationApplicationBootstrap,
+    seeded_bootstrap: SimulationApplicationBootstrap,
 ):
     """Test that mock adapter provides assertion helpers for systemic fix calls."""
-    mock_adapter = simulation_bootstrap.adapters.repair_cycle_as_mock()
+    mock_adapter = seeded_bootstrap.adapters.repair_cycle_as_mock()
 
     # Configure single systemic fix
     mock_adapter.set_systemic_fix_result([
@@ -465,13 +506,13 @@ async def test_mock_adapter_assert_systemic_fix_call_count(
 
 @pytest.mark.asyncio
 async def test_mock_adapter_systemic_fix_exhausts_results_queue(
-    simulation_bootstrap: SimulationApplicationBootstrap,
+    seeded_bootstrap: SimulationApplicationBootstrap,
 ):
     """Test mock adapter behavior when systemic fix result queue is exhausted.
 
     When configured results are exhausted, subsequent calls should fail gracefully.
     """
-    mock_adapter = simulation_bootstrap.adapters.repair_cycle_as_mock()
+    mock_adapter = seeded_bootstrap.adapters.repair_cycle_as_mock()
 
     # Configure only ONE systemic fix result
     mock_adapter.set_systemic_fix_result([
@@ -545,10 +586,10 @@ async def test_mock_adapter_systemic_fix_exhausts_results_queue(
 
 @pytest.mark.asyncio
 async def test_mock_adapter_systemic_fix_result_immutable(
-    simulation_bootstrap: SimulationApplicationBootstrap,
+    seeded_bootstrap: SimulationApplicationBootstrap,
 ):
     """Test that configured systemic fix results are immutable."""
-    mock_adapter = simulation_bootstrap.adapters.repair_cycle_as_mock()
+    mock_adapter = seeded_bootstrap.adapters.repair_cycle_as_mock()
 
     fix_result = SystemicFixResult(
         success=True,

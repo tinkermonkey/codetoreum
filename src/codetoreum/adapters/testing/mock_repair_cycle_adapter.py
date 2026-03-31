@@ -339,6 +339,9 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
     ) -> None:
         """Configure systemic fix outcomes for simulation.
 
+        Automatically configures a mock systemic analysis service that returns
+        CODE_DEFECT with cross_cutting=True to enable systemic fix dispatch.
+
         Args:
             result: Single result (reused each call) or sequence (consumed in order).
             clock_advance: Simulation time to advance per call. Defaults to 3 minutes.
@@ -349,6 +352,31 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             self._systemic_fix_results = [result]
         if clock_advance is not None:
             self._systemic_fix_clock_advance = clock_advance
+
+        # Auto-configure systemic analysis service to enable systemic fix dispatch
+        # This ensures tests can call set_systemic_fix_result() without manually
+        # configuring the analysis service. Always reconfigure to ensure the
+        # correct classification with cross_cutting=True is used.
+        from codetoreum.adapters.testing.mock_systemic_analysis_adapter import (
+            MockSystemicAnalysisAdapter,
+        )
+        from codetoreum.domain.repair_cycle_types import FailureClassification
+
+        # Create a mock analysis service with results matching the number of systemic fix results
+        # This enables tests to configure multiple sequential systemic fix calls
+        analysis_results = [
+            SystemicAnalysisResult(
+                classification=FailureClassification.CODE_DEFECT,
+                confidence=1.0,
+                reasoning="Systemic code defect detected",
+                affected_files=(),
+                recommended_action="Apply systemic fix",
+                cross_cutting=True,
+            )
+            for _ in self._systemic_fix_results
+        ]
+        mock_analysis = MockSystemicAnalysisAdapter(results=analysis_results)
+        self._systemic_analysis_service = mock_analysis
 
     def set_checkpoint_store(self, store: IRepairCycleCheckpointStore) -> None:
         """Set the checkpoint store (for testing)."""
