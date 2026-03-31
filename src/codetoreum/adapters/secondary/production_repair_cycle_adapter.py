@@ -69,6 +69,7 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestWarning,
     SystemicAnalysisResult,
     SystemicFixResult,
+    SYSTEMIC_FIX_FAILURE_CEILING,
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.resilience.exceptions import CircuitBreakerOpenError
@@ -1889,13 +1890,11 @@ Return a JSON response with the status of dependency fixes applied."""
                             prior_classifications.append(classification)
 
                             # Dispatch based on spec: CODE_DEFECT + cross_cutting=True routes to systemic fix
-                            # with practical ceiling (50 failures) to prevent overwhelming the agent
-                            failure_count_ceiling = 50
-
+                            # with practical ceiling to prevent overwhelming the agent
                             if (
                                 classification.classification == FailureClassification.CODE_DEFECT
                                 and classification.cross_cutting
-                                and len(test_result.failures) <= failure_count_ceiling
+                                and len(test_result.failures) <= SYSTEMIC_FIX_FAILURE_CEILING
                             ):
                                 # CODE_DEFECT + cross_cutting + within ceiling → systemic fix
                                 consecutive_transient_failures = 0  # Reset counter
@@ -1910,25 +1909,24 @@ Return a JSON response with the status of dependency fixes applied."""
                             elif (
                                 classification.classification == FailureClassification.CODE_DEFECT
                                 and classification.cross_cutting
-                                and len(test_result.failures) > failure_count_ceiling
+                                and len(test_result.failures) > SYSTEMIC_FIX_FAILURE_CEILING
                             ):
                                 # CODE_DEFECT + cross_cutting but EXCEEDS ceiling → fallback to file-level fix
                                 consecutive_transient_failures = 0  # Reset counter
                                 logger.info(
-                                    f"Failure count ({len(test_result.failures)}) exceeds ceiling ({failure_count_ceiling}), "
+                                    f"Failure count ({len(test_result.failures)}) exceeds ceiling ({SYSTEMIC_FIX_FAILURE_CEILING}), "
                                     f"falling back to file-level fixes",
                                     extra={
                                         "workflow_run_id": context.workflow_run_id,
                                         "iteration": iteration,
                                         "failure_count": len(test_result.failures),
-                                        "ceiling": failure_count_ceiling,
+                                        "ceiling": SYSTEMIC_FIX_FAILURE_CEILING,
                                     },
-                                    exc_info=False,
                                 )
                                 grouped = self._group_failures_by_file(test_result.failures)
                                 files_fixed += await self.fix_failures_by_file(grouped, config, context)
                                 prior_fix_attempts.append(
-                                    f"Iteration {iteration}: CODE_DEFECT (cross-cutting, {len(test_result.failures)} failures > {failure_count_ceiling} ceiling), "
+                                    f"Iteration {iteration}: CODE_DEFECT (cross-cutting, {len(test_result.failures)} failures > {SYSTEMIC_FIX_FAILURE_CEILING} ceiling), "
                                     f"fell back to file-level fixes"
                                 )
                             elif classification.classification == FailureClassification.CODE_DEFECT:

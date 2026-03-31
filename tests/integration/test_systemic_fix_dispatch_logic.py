@@ -953,6 +953,10 @@ async def test_dispatch_dependency_issue(
     assert mock_repair.file_fix_call_count == 0, (
         "DEPENDENCY_ISSUE should not use file-level fixes"
     )
+    # Verify apply_systemic_fixes WAS called (positive path assertion)
+    assert mock_repair.apply_systemic_fixes_call_count == 1, (
+        "apply_systemic_fixes() should be called once for DEPENDENCY_ISSUE"
+    )
     # Verify overall success
     assert result.overall_success is True
     # Verify tests completed
@@ -1031,6 +1035,10 @@ async def test_dispatch_configuration_issue(
     # Verify file fix was NOT called (CONFIGURATION_ISSUE uses apply_systemic_fixes)
     assert mock_repair.file_fix_call_count == 0, (
         "CONFIGURATION_ISSUE should not use file-level fixes"
+    )
+    # Verify apply_systemic_fixes WAS called (positive path assertion)
+    assert mock_repair.apply_systemic_fixes_call_count == 1, (
+        "apply_systemic_fixes() should be called once for CONFIGURATION_ISSUE"
     )
     # Verify overall success
     assert result.overall_success is True

@@ -30,6 +30,11 @@ from enum import Enum
 
 logger = logging.getLogger(__name__)
 
+# Systemic fix dispatch threshold: maximum failures before falling back to file-level fixes.
+# When CODE_DEFECT + cross_cutting=True has more than this many failures, the repair cycle
+# falls back to fix_failures_by_file() to prevent overwhelming the systemic fix agent.
+SYSTEMIC_FIX_FAILURE_CEILING = 50
+
 
 class FailureClassification(str, Enum):
     """Classification of the root cause of test failures.

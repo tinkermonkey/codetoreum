@@ -42,6 +42,7 @@ from codetoreum.domain.events.repair_cycle_events import (
 )
 from codetoreum.domain.repair_cycle_types import (
     CycleResult,
+    FailureClassification,
     RepairCycleCheckpoint,
     RepairCycleResult,
     RepairTestFailure,
@@ -51,6 +52,7 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestWarning,
     SystemicAnalysisResult,
     SystemicFixResult,
+    SYSTEMIC_FIX_FAILURE_CEILING,
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
@@ -187,6 +189,9 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
         # Per-file fix call count for assertion purposes
         self._file_fix_call_count: int = 0
+
+        # Systemic fixes tracker (for DEPENDENCY_ISSUE and CONFIGURATION_ISSUE)
+        self._apply_systemic_fixes_call_count: int = 0
 
     @property
     def clock(self) -> SimulationClock:
@@ -1004,6 +1009,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         # Track agent call
         self.agent_call_count += 1
         self.total_agent_calls += 1
+        self._apply_systemic_fixes_call_count += 1
 
         logger.info(
             "Mock systemic fixes applied",
@@ -1012,7 +1018,6 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 "test_type": config.test_type.value,
                 "agent_name": agent_name,
             },
-            exc_info=False,
         )
 
         return True
@@ -1540,6 +1545,19 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         """
         return self._file_fix_call_count
 
+    @property
+    def apply_systemic_fixes_call_count(self) -> int:
+        """Track invocation count for apply_systemic_fixes method.
+
+        Counts the number of times apply_systemic_fixes() has been called for
+        DEPENDENCY_ISSUE and CONFIGURATION_ISSUE classifications. Enables test
+        assertions on dispatch decisions.
+
+        Returns:
+            Number of times apply_systemic_fixes() has been called
+        """
+        return self._apply_systemic_fixes_call_count
+
     def get_subtask_agent_calls(self) -> list[dict[str, Any]]:
         """Get all recorded sub-task agent calls.
 
@@ -1685,13 +1703,11 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                         )
 
                         # Dispatch based on spec: CODE_DEFECT + cross_cutting=True routes to systemic fix
-                        # with practical ceiling (50 failures) to prevent overwhelming the agent
-                        failure_count_ceiling = 50
-
+                        # with practical ceiling to prevent overwhelming the agent
                         if (
                             classification.classification == FailureClassification.CODE_DEFECT
                             and classification.cross_cutting
-                            and len(test_result.failures) <= failure_count_ceiling
+                            and len(test_result.failures) <= SYSTEMIC_FIX_FAILURE_CEILING
                         ):
                             # CODE_DEFECT + cross_cutting + within ceiling → systemic fix
                             systemic_result = await self.fix_failures_systemically(
@@ -1706,19 +1722,18 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                         elif (
                             classification.classification == FailureClassification.CODE_DEFECT
                             and classification.cross_cutting
-                            and len(test_result.failures) > failure_count_ceiling
+                            and len(test_result.failures) > SYSTEMIC_FIX_FAILURE_CEILING
                         ):
                             # CODE_DEFECT + cross_cutting but EXCEEDS ceiling → fallback to file-level fix
                             logger.info(
-                                f"Failure count ({len(test_result.failures)}) exceeds ceiling ({failure_count_ceiling}), "
+                                f"Failure count ({len(test_result.failures)}) exceeds ceiling ({SYSTEMIC_FIX_FAILURE_CEILING}), "
                                 f"falling back to file-level fixes",
                                 extra={
                                     "workflow_run_id": context.workflow_run_id,
                                     "iteration": iteration,
                                     "failure_count": len(test_result.failures),
-                                    "ceiling": failure_count_ceiling,
+                                    "ceiling": SYSTEMIC_FIX_FAILURE_CEILING,
                                 },
-                                exc_info=False,
                             )
                             grouped = self._group_failures_by_file(test_result.failures)
                             files_fixed += await self.fix_failures_by_file(grouped, config, context)
