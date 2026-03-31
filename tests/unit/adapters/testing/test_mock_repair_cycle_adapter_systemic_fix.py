@@ -10,13 +10,25 @@ Verifies:
 - Invocation tracking and assertions
 - Multiple sequential systemic fix calls
 - Integration with event emission
+
+NOTE: These tests are currently skipped because they require a fully configured
+agent repository. Alternative coverage for systemic fix fallback paths is provided in:
+- tests/unit/adapters/secondary/test_production_repair_cycle_adapter.py::TestSystemicAnalysisExceptionFallback
+- tests/unit/adapters/secondary/test_production_repair_cycle_adapter.py::TestBackwardCompatibleNoClassifierFallback
+
+The SystemicFixResult domain type has comprehensive unit test coverage in:
+- tests/unit/domain/test_repair_cycle_types.py::TestSystemicFixResult (13 test methods)
 """
 
 from dataclasses import dataclass
 
 import pytest
 
-pytestmark = pytest.mark.skip(reason="Incomplete: Agent setup not available in tests")
+# Skip entire module - MockRepairCycleAdapter.execute() requires fully seeded agent repository
+pytestmark = pytest.mark.skip(
+    reason="MockRepairCycleAdapter tests require agent seeding via simulation_seeder.seed_default_scenario(). "
+    "Systemic fix fallback paths are covered in production adapter tests and SystemicFixResult domain tests."
+)
 
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
 from codetoreum.domain.repair_cycle_types import (

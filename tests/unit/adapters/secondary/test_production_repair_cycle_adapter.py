@@ -2033,3 +2033,139 @@ class TestClassificationDispatchCodeDefectWithCrossCutting:
         # Should fallback to fix_failures_by_file instead of systemic
         adapter.fix_failures_systemically.assert_not_called()
         adapter.fix_failures_by_file.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Systemic Analysis Exception Fallback
+# ---------------------------------------------------------------------------
+
+
+class TestSystemicAnalysisExceptionFallback:
+    """Test fallback when systemic analysis service raises an exception."""
+
+    @pytest.mark.asyncio
+    async def test_systemic_analysis_exception_emits_failed_event_and_falls_back(self):
+        """When systemic_analysis.analyze() raises, emit failed event and fall back to fix_failures_by_file."""
+        from codetoreum.domain.events.repair_cycle_events import SystemicAnalysisCompletedEvent
+
+        event_emitter = MagicMock()
+        systemic_service = AsyncMock()
+
+        # Configure service to raise an exception
+        systemic_service.analyze.side_effect = RuntimeError("Classifier service failed")
+
+        adapter, _ = _make_adapter(event_emitter=event_emitter)
+        adapter._systemic_analysis_service = systemic_service
+        adapter.fix_failures_by_file = AsyncMock(return_value=3)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=100)
+
+        # Execute should not raise; it should handle gracefully
+        result = await adapter.execute(ctx)
+
+        # Verify that fallback was taken
+        adapter.fix_failures_by_file.assert_called_once()
+
+        # Verify that SystemicAnalysisCompletedEvent was emitted with confidence=0.0
+        emitted_events = [call[0][0] for call in event_emitter.emit.call_args_list]
+        analysis_completed_events = [
+            e for e in emitted_events if isinstance(e, SystemicAnalysisCompletedEvent)
+        ]
+        assert len(analysis_completed_events) > 0
+        failed_event = analysis_completed_events[0]
+        assert failed_event.confidence == 0.0
+        assert "failed" in failed_event.reasoning.lower() or "error" in failed_event.reasoning.lower()
+
+    @pytest.mark.asyncio
+    async def test_systemic_analysis_exception_with_dependency_issue_still_falls_back(self):
+        """Even with DEPENDENCY_ISSUE classification, exception causes fallback."""
+        event_emitter = MagicMock()
+        systemic_service = AsyncMock()
+
+        # Service fails before returning a classification
+        systemic_service.analyze.side_effect = ValueError("Invalid analysis context")
+
+        adapter, _ = _make_adapter(event_emitter=event_emitter)
+        adapter._systemic_analysis_service = systemic_service
+        adapter.fix_failures_by_file = AsyncMock(return_value=2)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=100)
+        result = await adapter.execute(ctx)
+
+        # Should still use fallback
+        adapter.fix_failures_by_file.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Backward-Compatible Fallback (No Systemic Analysis Service Injected)
+# ---------------------------------------------------------------------------
+
+
+class TestBackwardCompatibleNoClassifierFallback:
+    """Test fallback when no systemic analysis service is injected."""
+
+    @pytest.mark.asyncio
+    async def test_no_classifier_injected_uses_fix_by_file(self):
+        """When systemic_analysis_service is None, fall back to fix_failures_by_file."""
+        event_emitter = MagicMock()
+
+        # Create adapter WITHOUT injecting a systemic analysis service
+        adapter, _ = _make_adapter(event_emitter=event_emitter)
+        # Verify it's None (default state)
+        assert adapter._systemic_analysis_service is None
+
+        # Mock fix_failures_by_file
+        adapter.fix_failures_by_file = AsyncMock(return_value=4)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=100)
+        result = await adapter.execute(ctx)
+
+        # Should call fix_failures_by_file (fallback)
+        adapter.fix_failures_by_file.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_no_classifier_with_multiple_failures_still_uses_by_file(self):
+        """Even with multiple failures, no classifier means use fix_by_file."""
+        event_emitter = MagicMock()
+
+        adapter, _ = _make_adapter(event_emitter=event_emitter)
+        assert adapter._systemic_analysis_service is None
+
+        # Mock fix_failures_by_file
+        adapter.fix_failures_by_file = AsyncMock(return_value=10)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=100)
+        result = await adapter.execute(ctx)
+
+        # Should use fallback, not attempt classification
+        adapter.fix_failures_by_file.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_classifier_injected_after_init_is_used(self):
+        """When classifier is injected after init, it should be used."""
+        event_emitter = MagicMock()
+        systemic_service = AsyncMock()
+
+        # Configure a valid response
+        systemic_service.analyze.return_value = MagicMock(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.95,
+            reasoning="Code defect",
+            recommended_action="Fix code",
+            affected_files=("file.py",),
+            cross_cutting=False,
+        )
+
+        adapter, _ = _make_adapter(event_emitter=event_emitter)
+        # Initially None
+        assert adapter._systemic_analysis_service is None
+
+        # Inject after init (simulating dynamic configuration)
+        adapter._systemic_analysis_service = systemic_service
+        adapter.fix_failures_by_file = AsyncMock(return_value=1)
+
+        ctx = _RepairCycleContext(max_total_agent_calls=100)
+        await adapter.execute(ctx)
+
+        # Now that classifier is set, it should be called
+        systemic_service.analyze.assert_called_once()
