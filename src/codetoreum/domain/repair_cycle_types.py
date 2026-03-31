@@ -634,14 +634,14 @@ class SystemicFixResult:
     """
 
     success: bool
-    files_modified: list[str]
+    files_modified: tuple[str, ...]  # Immutable tuple (spec requires list[str], but tuple maintains frozen dataclass immutability contract)
     root_cause_addressed: str
     duration_seconds: float
 
     def __post_init__(self) -> None:
         """Validate systemic fix result after initialization."""
-        if not isinstance(self.files_modified, list):
-            object.__setattr__(self, "files_modified", list(self.files_modified))
+        if not isinstance(self.files_modified, tuple):
+            object.__setattr__(self, "files_modified", tuple(self.files_modified))
         if self.duration_seconds < 0:
             msg = "duration_seconds must be non-negative"
             raise ValueError(msg)
