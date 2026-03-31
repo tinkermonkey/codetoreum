@@ -38,6 +38,7 @@ class MockRepairCycleContext:
         agent_name: str = "repair-agent",
         max_total_agent_calls: int = 100,
         checkpoint_interval: int = 5,
+        agent_config=None,
     ):
         self.stage_name = stage_name
         self.workflow_run_id = workflow_run_id
@@ -46,6 +47,7 @@ class MockRepairCycleContext:
         self.agent_name = agent_name
         self.max_total_agent_calls = max_total_agent_calls
         self.checkpoint_interval = checkpoint_interval
+        self.agent_config = agent_config
 
 
 class TestRepairCycleContextProtocol:
@@ -164,16 +166,15 @@ class MockRepairCycle:
 
     async def analyze_systemic_issues(
         self,
-        test_result: RepairTestResult,
-        config: RepairTestRunConfig,
-        context: RepairCycleContext,
+        failures: tuple[RepairTestFailure, ...],
     ) -> str:
         """Analyze failure root causes at systemic level."""
         return "No systemic issues detected"
 
     async def apply_systemic_fixes(
         self,
-        analysis_summary: str,
+        classification,
+        reasoning: str,
         test_result: RepairTestResult,
         config: RepairTestRunConfig,
         context: RepairCycleContext,
@@ -192,9 +193,9 @@ class MockRepairCycle:
         from codetoreum.domain.repair_cycle_types import SystemicFixResult
         return SystemicFixResult(
             success=True,
-            files_modified=0,
-            agent_calls_used=0,
-            summary="Systemic fix completed",
+            files_modified=(),
+            root_cause_addressed="Root cause addressed by systemic fix",
+            duration_seconds=5.0,
         )
 
     async def rebuild_environment(

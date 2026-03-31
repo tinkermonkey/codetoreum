@@ -20,6 +20,7 @@ For each test type:
 from typing import Protocol
 
 from codetoreum.domain.repair_cycle_types import (
+    FailureClassification,
     RepairCycleAgentConfig,
     RepairCycleResult,
     RepairTestFailure,
@@ -178,9 +179,7 @@ class IRepairCycle(Protocol):
 
     async def analyze_systemic_issues(
         self,
-        test_result: RepairTestResult,
-        config: RepairTestRunConfig,
-        context: RepairCycleContext,
+        failures: tuple[RepairTestFailure, ...],
     ) -> str:
         """Analyze failure root causes at systemic level.
 
@@ -188,33 +187,34 @@ class IRepairCycle(Protocol):
         multiple tests or require cross-cutting fixes.
 
         Args:
-            test_result: Test result containing failures to analyze
-            config: Test run configuration
-            context: Repair cycle context
+            failures: Tuple of test failures to analyze
 
         Returns:
-            Analysis summary from the agent
+            Analysis reasoning summary from the systemic analysis
 
         Raises:
-            CircuitBreakerOpenError: When circuit breaker is open
+            ValueError: If systemic analysis service is not configured
         """
         ...
 
     async def apply_systemic_fixes(
         self,
-        analysis_summary: str,
+        classification: FailureClassification,
+        reasoning: str,
         test_result: RepairTestResult,
         config: RepairTestRunConfig,
         context: RepairCycleContext,
     ) -> bool:
         """Apply cross-cutting fixes based on systemic analysis.
 
-        Uses the systemic analysis to apply fixes that address root causes
-        affecting multiple tests. These are broader fixes beyond file-level
-        changes, such as architecture adjustments or dependency updates.
+        Uses the systemic analysis classification and reasoning to apply fixes
+        that address root causes affecting multiple tests. Routes to different
+        fix strategies based on classification (e.g., DEPENDENCY_ISSUE vs
+        CONFIGURATION_ISSUE).
 
         Args:
-            analysis_summary: Summary from systemic analysis
+            classification: Root cause category (FailureClassification enum)
+            reasoning: Explanation of classification decision from systemic analysis
             test_result: Test result that triggered the analysis
             config: Test run configuration
             context: Repair cycle context

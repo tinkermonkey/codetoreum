@@ -42,6 +42,7 @@ from codetoreum.domain.events.repair_cycle_events import (
 )
 from codetoreum.domain.repair_cycle_types import (
     CycleResult,
+    FailureClassification,
     RepairCycleCheckpoint,
     RepairCycleResult,
     RepairTestFailure,
@@ -946,39 +947,26 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
     async def analyze_systemic_issues(
         self,
-        test_result: RepairTestResult,
-        config: RepairTestRunConfig,
-        context: RepairCycleContext,
+        failures: tuple[RepairTestFailure, ...],
     ) -> str:
         """Mock implementation: return simulated systemic analysis.
 
         Args:
-            test_result: Test result containing failures to analyze
-            config: Test run configuration
-            context: Repair cycle context
+            failures: Tuple of test failures to analyze
 
         Returns:
-            Analysis summary string
+            Analysis reasoning summary string
         """
-        if not test_result.failures:
+        if not failures:
             return ""
 
-        # Resolve and record which agent is executing this sub-task
-        _, agent_name = await self._resolve_and_record_agent("systemic_analysis", context)
-
-        # Track agent call
-        self.agent_call_count += 1
-        self.total_agent_calls += 1
-
         # Simulate analysis response
-        analysis = f"Systemic issues detected in {len(test_result.failures)} failures"
+        analysis = f"Systemic issues detected in {len(failures)} failures"
 
         logger.info(
             "Mock systemic analysis completed",
             extra={
-                "workflow_run_id": context.workflow_run_id,
-                "failure_count": len(test_result.failures),
-                "agent_name": agent_name,
+                "failure_count": len(failures),
             },
             exc_info=False,
         )
@@ -987,7 +975,8 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
     async def apply_systemic_fixes(
         self,
-        analysis_summary: str,
+        classification: FailureClassification,
+        reasoning: str,
         test_result: RepairTestResult,
         config: RepairTestRunConfig,
         context: RepairCycleContext,
@@ -995,7 +984,8 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         """Mock implementation: simulate systemic fix application.
 
         Args:
-            analysis_summary: Summary from systemic analysis
+            classification: Root cause category (FailureClassification enum)
+            reasoning: Explanation of classification decision from systemic analysis
             test_result: Test result that triggered the analysis
             config: Test run configuration
             context: Repair cycle context
@@ -1003,7 +993,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         Returns:
             True if fixes were successfully applied
         """
-        if not analysis_summary:
+        if not reasoning:
             return False
 
         # Resolve and record which agent is executing this sub-task
@@ -1018,6 +1008,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             extra={
                 "workflow_run_id": context.workflow_run_id,
                 "test_type": config.test_type.value,
+                "classification": classification.value if classification else "unknown",
                 "agent_name": agent_name,
             },
             exc_info=False,
