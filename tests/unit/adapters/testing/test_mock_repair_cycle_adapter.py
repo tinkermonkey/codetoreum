@@ -1076,7 +1076,7 @@ class TestSystemicFixConfiguration:
 
     @pytest.mark.asyncio
     async def test_systemic_fix_emits_events(self, llm_factory):
-        """Test SystemicFixStartedEvent and SystemicFixCompletedEvent emission."""
+        """Test SystemicFixStartedEvent and SystemicFixCompletedEvent emission with field verification."""
         clock = SimulationClock(speed_multiplier=100.0)
         adapter = MockRepairCycleAdapter(llm_factory, clock)
         adapter.current_project = "proj-1"
@@ -1099,10 +1099,24 @@ class TestSystemicFixConfiguration:
             context,
         )
 
-        # Check events were emitted
+        # Check events were emitted with correct field values
         events = adapter.get_all_events()
-        assert any(e["type"] == "repair_cycle.systemic_fix_started" for e in events)
-        assert any(e["type"] == "repair_cycle.systemic_fix_completed" for e in events)
+
+        started_event_dict = next((e for e in events if e["type"] == "repair_cycle.systemic_fix_started"), None)
+        assert started_event_dict is not None
+        started_event = started_event_dict["event"]
+        assert started_event.root_cause_classification == FailureClassification.DEPENDENCY_ISSUE.value
+        assert started_event.confidence == 0.85
+        assert started_event.affected_file_count == 2  # src/api.py, src/client.py
+        assert started_event.failure_count == 1
+
+        completed_event_dict = next((e for e in events if e["type"] == "repair_cycle.systemic_fix_completed"), None)
+        assert completed_event_dict is not None
+        completed_event = completed_event_dict["event"]
+        assert completed_event.success is True
+        assert completed_event.files_modified == ()
+        assert completed_event.root_cause_addressed == "Dependency API changed"
+        assert completed_event.duration_seconds == 180.0  # 3 minutes default
 
     @pytest.mark.asyncio
     async def test_systemic_fix_clock_advance_default(self, llm_factory):

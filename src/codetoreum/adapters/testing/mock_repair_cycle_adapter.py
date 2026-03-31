@@ -824,10 +824,10 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         Returns:
             Number of files fixed
         """
+        self._file_fix_call_count += 1
         fixed = 0
 
         for file_path, failures in grouped_failures.items():
-            self._file_fix_call_count += 1
             # Resolve and record which agent is executing this sub-task
             _, agent_name = await self._resolve_and_record_agent("code_fix", context)
 
@@ -1517,10 +1517,11 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
     @property
     def file_fix_call_count(self) -> int:
-        """Track invocation count for per-file fix.
+        """Track invocation count for per-file fix method.
 
-        Enables test assertions on dispatch decisions (whether per-file fix
-        was called vs. systemic fix).
+        Counts the number of times fix_failures_by_file() has been called,
+        not the number of individual files fixed. Enables test assertions on
+        dispatch decisions (whether per-file fix was called vs. systemic fix).
 
         Returns:
             Number of times fix_failures_by_file() has been called
