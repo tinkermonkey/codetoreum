@@ -23,7 +23,11 @@ from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
 
 if TYPE_CHECKING:
+    from codetoreum.ports.output.container import IContainer
     from codetoreum.ports.output.llm_provider import ILLMProvider
+    from codetoreum.ports.output.systemic_analysis_service import (
+        ISystemicAnalysisService,
+    )
 
 from codetoreum.domain.events.repair_cycle_events import (
     RepairCycleCheckpointFailedEvent,
@@ -115,8 +119,8 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         llm_factory: "Callable[[str], Coroutine[Any, Any, ILLMProvider]] | None" = None,
         clock: SimulationClock | None = None,
         checkpoint_store: IRepairCycleCheckpointStore | None = None,
-        container_adapter: "Any | None" = None,
-        systemic_analysis_service: "Any | None" = None,
+        container_adapter: "IContainer | None" = None,
+        systemic_analysis_service: "ISystemicAnalysisService | None" = None,
     ) -> None:
         """Initialize the repair cycle adapter with SimulationClock.
 
@@ -252,7 +256,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                     RepairTestResult(
                         test_type=test_type,
                         iteration=i,
-                        passed=7 if passes_on_retest else 7,
+                        passed=7 if passes_on_retest else 4,
                         failed=0 if passes_on_retest else 3,
                         warnings=0,
                         failures=(
@@ -1709,10 +1713,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             # Fix failures
             if not cycle_passed:
                 # Perform systemic analysis to determine fix strategy
-                from codetoreum.domain.repair_cycle_types import (
-                    AnalysisContext,
-                    FailureClassification,
-                )
+                from codetoreum.domain.repair_cycle_types import AnalysisContext
 
                 # Resolve and record which agent is executing systemic analysis (even if not used)
                 _, agent_name = await self._resolve_and_record_agent("systemic_analysis", context)
