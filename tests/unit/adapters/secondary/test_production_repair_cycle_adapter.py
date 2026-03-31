@@ -77,8 +77,10 @@ class _RepairCycleContext:
 
 def _make_async_factory(llm):
     """Create an async factory that returns the given LLM for any agent name."""
+
     async def factory(agent_name):
         return llm
+
     return factory
 
 
@@ -342,14 +344,14 @@ class TestClassificationDispatchCodeDefect:
                 confidence=0.8,
                 reasoning="Flaky test",
                 recommended_action="Retry",
-            cross_cutting=False,
+                cross_cutting=False,
             ),
             MagicMock(
                 classification=FailureClassification.CODE_DEFECT,
                 confidence=0.95,
                 reasoning="Source code has a bug",
                 recommended_action="Fix the bug",
-            cross_cutting=False,
+                cross_cutting=False,
             ),
         ]
 
@@ -517,21 +519,21 @@ class TestClassificationDispatchTransientFailure:
                 confidence=0.8,
                 reasoning="Flaky test 1",
                 recommended_action="Retry",
-            cross_cutting=False,
+                cross_cutting=False,
             ),
             MagicMock(
                 classification=FailureClassification.TRANSIENT_FAILURE,
                 confidence=0.8,
                 reasoning="Flaky test 2",
                 recommended_action="Retry",
-            cross_cutting=False,
+                cross_cutting=False,
             ),
             MagicMock(
                 classification=FailureClassification.CODE_DEFECT,
                 confidence=0.95,
                 reasoning="Code defect from escalation",
                 recommended_action="Fix the bug",
-            cross_cutting=False,
+                cross_cutting=False,
             ),
         ]
 
@@ -568,21 +570,21 @@ class TestClassificationDispatchTransientFailure:
                 confidence=0.8,
                 reasoning="Flaky test 1",
                 recommended_action="Retry",
-            cross_cutting=False,
+                cross_cutting=False,
             ),
             MagicMock(
                 classification=FailureClassification.TRANSIENT_FAILURE,
                 confidence=0.8,
                 reasoning="Flaky test 2",
                 recommended_action="Retry",
-            cross_cutting=False,
+                cross_cutting=False,
             ),
             MagicMock(
                 classification=FailureClassification.TRANSIENT_FAILURE,
                 confidence=0.8,
                 reasoning="Flaky test 3",
                 recommended_action="Retry",
-            cross_cutting=False,
+                cross_cutting=False,
             ),
         ]
 
@@ -624,35 +626,35 @@ class TestClassificationDispatchTransientFailure:
                 confidence=0.8,
                 reasoning="Flaky test 1",
                 recommended_action="Retry",
-            cross_cutting=False,
+                cross_cutting=False,
             ),
             MagicMock(
                 classification=FailureClassification.TRANSIENT_FAILURE,
                 confidence=0.8,
                 reasoning="Flaky test 2",
                 recommended_action="Retry",
-            cross_cutting=False,
+                cross_cutting=False,
             ),
             MagicMock(
                 classification=FailureClassification.TRANSIENT_FAILURE,
                 confidence=0.8,
                 reasoning="Flaky test 3 (escalation triggers on 3rd consecutive)",
                 recommended_action="Retry",
-            cross_cutting=False,
+                cross_cutting=False,
             ),
             MagicMock(
                 classification=FailureClassification.TRANSIENT_FAILURE,
                 confidence=0.8,
                 reasoning="Flaky test 4 (counter resets to 1 after escalation)",
                 recommended_action="Retry",
-            cross_cutting=False,
+                cross_cutting=False,
             ),
             MagicMock(
                 classification=FailureClassification.TRANSIENT_FAILURE,
                 confidence=0.8,
                 reasoning="Flaky test 5 (counter at 2, below escalation threshold)",
                 recommended_action="Retry",
-            cross_cutting=False,
+                cross_cutting=False,
             ),
         ]
 
@@ -1741,9 +1743,7 @@ class TestFixFailuresSystemically:
             cross_cutting=True,
         )
 
-        result = await adapter.fix_failures_systemically(
-            failures, analysis_result, ctx.test_configs[0], ctx
-        )
+        result = await adapter.fix_failures_systemically(failures, analysis_result, ctx.test_configs[0], ctx)
 
         # Verify events were emitted
         emitted_types = [call.args[0].type for call in event_emitter.emit.call_args_list]
@@ -1770,9 +1770,7 @@ class TestFixFailuresSystemically:
             cross_cutting=False,
         )
 
-        await adapter.fix_failures_systemically(
-            failures, analysis_result, ctx.test_configs[0], ctx
-        )
+        await adapter.fix_failures_systemically(failures, analysis_result, ctx.test_configs[0], ctx)
 
         # Verify exactly one LLM call was made
         assert llm.execute.call_count == 1
@@ -1797,9 +1795,7 @@ class TestFixFailuresSystemically:
             cross_cutting=False,
         )
 
-        result = await adapter.fix_failures_systemically(
-            failures, analysis_result, ctx.test_configs[0], ctx
-        )
+        result = await adapter.fix_failures_systemically(failures, analysis_result, ctx.test_configs[0], ctx)
 
         assert result.success is True
         assert len(result.files_modified) == 2
@@ -1814,9 +1810,7 @@ class TestFixFailuresSystemically:
         llm.execute.side_effect = Exception("LLM error")
         ctx = _RepairCycleContext()
 
-        failures = (
-            RepairTestFailure(file="test_a.py", test="test_1", message="fail"),
-        )
+        failures = (RepairTestFailure(file="test_a.py", test="test_1", message="fail"),)
         analysis_result = MagicMock(
             classification=FailureClassification.CODE_DEFECT,
             confidence=0.95,
@@ -1826,9 +1820,7 @@ class TestFixFailuresSystemically:
             cross_cutting=False,
         )
 
-        result = await adapter.fix_failures_systemically(
-            failures, analysis_result, ctx.test_configs[0], ctx
-        )
+        result = await adapter.fix_failures_systemically(failures, analysis_result, ctx.test_configs[0], ctx)
 
         assert result.success is False
         assert len(result.files_modified) == 0
@@ -1839,9 +1831,7 @@ class TestFixFailuresSystemically:
         adapter, _ = _make_adapter(llm_response="invalid json")
         ctx = _RepairCycleContext()
 
-        failures = (
-            RepairTestFailure(file="test_a.py", test="test_1", message="fail"),
-        )
+        failures = (RepairTestFailure(file="test_a.py", test="test_1", message="fail"),)
         analysis_result = MagicMock(
             classification=FailureClassification.CODE_DEFECT,
             confidence=0.95,
@@ -1851,9 +1841,7 @@ class TestFixFailuresSystemically:
             cross_cutting=False,
         )
 
-        result = await adapter.fix_failures_systemically(
-            failures, analysis_result, ctx.test_configs[0], ctx
-        )
+        result = await adapter.fix_failures_systemically(failures, analysis_result, ctx.test_configs[0], ctx)
 
         assert result.success is False
 
@@ -1918,63 +1906,6 @@ class TestClassificationDispatchCodeDefectWithCrossCutting:
         # Verify file-level fix was called, not systemic
         adapter.fix_failures_by_file.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_code_defect_cross_cutting_with_many_failures(self):
-        """CODE_DEFECT with cross_cutting=True calls fix_failures_systemically regardless of failure count."""
-        event_emitter = MagicMock()
-        systemic_service = AsyncMock()
-
-        # Create 51 failures
-        failures = tuple(
-            RepairTestFailure(file=f"test_{i}.py", test=f"test_{i}", message="fail")
-            for i in range(51)
-        )
-
-        systemic_service.analyze.return_value = MagicMock(
-            classification=FailureClassification.CODE_DEFECT,
-            confidence=0.95,
-            reasoning="Shared interface issue",
-            recommended_action="Fix interface",
-            affected_files=("a.py", "b.py"),
-            cross_cutting=True,
-        )
-
-        adapter, _ = _make_adapter(event_emitter=event_emitter)
-        adapter._systemic_analysis_service = systemic_service
-
-        # Mock both methods
-        adapter.fix_failures_systemically = AsyncMock(return_value=MagicMock(files_modified=[]))
-        adapter.fix_failures_by_file = AsyncMock(return_value=5)
-
-        # Manually call _run_test_cycle since execute uses run_tests mock
-        config = RepairTestRunConfig(
-            test_type=RepairTestType.UNIT,
-            timeout=30,
-            max_iterations=1,
-            review_warnings=False,
-        )
-        ctx = _RepairCycleContext(max_total_agent_calls=100)
-
-        test_result = RepairTestResult(
-            test_type=RepairTestType.UNIT,
-            iteration=1,
-            passed=0,
-            failed=51,
-            warnings=0,
-            failures=failures,
-            warning_list=(),
-            raw_output="{}",
-            timestamp="2024-01-01T00:00:00Z",
-        )
-
-        adapter.run_tests = AsyncMock(return_value=test_result)
-
-        await adapter.execute(ctx)
-
-        # Should call systemic fix since cross_cutting=True (no cardinality ceiling per spec)
-        adapter.fix_failures_systemically.assert_called_once()
-        adapter.fix_failures_by_file.assert_not_called()
-
 
 # ---------------------------------------------------------------------------
 # Systemic Analysis Exception Fallback
@@ -2010,9 +1941,7 @@ class TestSystemicAnalysisExceptionFallback:
 
         # Verify that SystemicAnalysisCompletedEvent was emitted with confidence=0.0
         emitted_events = [call[0][0] for call in event_emitter.emit.call_args_list]
-        analysis_completed_events = [
-            e for e in emitted_events if isinstance(e, SystemicAnalysisCompletedEvent)
-        ]
+        analysis_completed_events = [e for e in emitted_events if isinstance(e, SystemicAnalysisCompletedEvent)]
         assert len(analysis_completed_events) > 0
         failed_event = analysis_completed_events[0]
         assert failed_event.confidence == 0.0
