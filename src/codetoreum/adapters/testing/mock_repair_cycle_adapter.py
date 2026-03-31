@@ -1752,6 +1752,10 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 )
                 raise InterruptedError(msg)
 
+        # Use the iteration count from the test result, not the loop counter
+        # This handles the case where pre-configured test results are reused
+        actual_iteration = last_test_result.iteration if last_test_result else iteration
+
         # Emit test cycle completed
         if self._current_project is not None:
             self.emit(
@@ -1762,7 +1766,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                     test_type=config.test_type,
                     test_type_index=test_type_index,
                     passed=cycle_passed,
-                    test_cycle_iterations=iteration,
+                    test_cycle_iterations=actual_iteration,
                     files_fixed=files_fixed,
                     warnings_reviewed=warnings_reviewed,
                     error=error,
@@ -1776,7 +1780,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 "type": "TEST_CYCLE_COMPLETED",
                 "test_type": config.test_type.value,
                 "passed": cycle_passed,
-                "iterations": iteration,
+                "iterations": actual_iteration,
                 "warnings_reviewed": warnings_reviewed,
                 "final_warnings": last_test_result.warnings if last_test_result else 0,
                 "warning_list": last_test_result.warning_list if last_test_result else (),
@@ -1790,7 +1794,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         result = CycleResult(
             test_type=config.test_type,
             passed=cycle_passed,
-            iterations=iteration,
+            iterations=actual_iteration,
             final_result=last_test_result if cycle_passed else None,
             error=error,
             files_fixed=files_fixed,
