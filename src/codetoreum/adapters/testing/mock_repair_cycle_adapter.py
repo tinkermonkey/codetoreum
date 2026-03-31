@@ -1713,7 +1713,10 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             # Fix failures
             if not cycle_passed:
                 # Perform systemic analysis to determine fix strategy
-                from codetoreum.domain.repair_cycle_types import AnalysisContext
+                from codetoreum.domain.repair_cycle_types import (
+                    AnalysisContext,
+                    FailureClassification,
+                )
 
                 # Resolve and record which agent is executing systemic analysis (even if not used)
                 _, agent_name = await self._resolve_and_record_agent("systemic_analysis", context)
