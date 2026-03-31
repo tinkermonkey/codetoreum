@@ -1581,44 +1581,6 @@ Return a JSON response with the verification status and any issues found."""
             )
             return False
 
-    async def _apply_configuration_fix(
-        self,
-        reasoning: str,
-        test_result: RepairTestResult,
-        config: RepairTestRunConfig,
-        context: RepairCycleContext,
-    ) -> bool:
-        """Apply fixes for configuration-related issues.
-
-        Routes configuration issue fixes through the LLM to identify and resolve
-        configuration problems or missing environment setup.
-
-        Args:
-            reasoning: Classification reasoning from systemic analysis
-            test_result: Test result that triggered this fix
-            config: Test run configuration
-            context: Repair cycle context
-
-        Returns:
-            True if configuration fixes were applied, False otherwise
-        """
-        try:
-            prompt = self._build_configuration_fix_prompt(reasoning, test_result)
-            await self._execute_llm_prompt(prompt, "systemic_fix", config, context)
-            return True
-        except Exception as e:
-            logger.error(
-                "Configuration fix failed",
-                extra={
-                    "workflow_run_id": context.workflow_run_id,
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
-                },
-                exc_info=True,
-            )
-            return False
-
     def _build_dependency_fix_prompt(self, reasoning: str, test_result: RepairTestResult) -> str:
         """Build prompt for LLM to fix dependency issues.
 
@@ -1645,34 +1607,6 @@ Please identify and resolve the missing or incompatible dependencies. This may i
 4. Updating package manifests (package.json, requirements.txt, Cargo.toml, etc.)
 
 Return a JSON response with the status of dependency fixes applied."""
-
-    def _build_configuration_fix_prompt(self, reasoning: str, test_result: RepairTestResult) -> str:
-        """Build prompt for LLM to fix configuration issues.
-
-        Args:
-            reasoning: Classification reasoning from systemic analysis
-            test_result: Test result containing failure details
-
-        Returns:
-            Prompt for LLM agent
-        """
-        failure_details = "\n".join([f"- {f.file}::{f.test}: {f.message}" for f in test_result.failures])
-
-        return f"""The failures are classified as CONFIGURATION_ISSUE based on the following analysis:
-
-Reasoning: {reasoning}
-
-Test failures:
-{failure_details}
-
-Please identify and resolve the configuration problems. This may involve:
-1. Adding or modifying environment variables
-2. Creating or updating configuration files
-3. Adjusting service configurations
-4. Setting up required credentials or API keys
-5. Configuring test fixtures or test databases
-
-Return a JSON response with the status of configuration fixes applied."""
 
     async def rebuild_environment(
         self,
@@ -1818,10 +1752,10 @@ Return a JSON response with the status of configuration fixes applied."""
         # Create analysis context from repair cycle context
         analysis_context = AnalysisContext(
             work_item_id=context.work_item_id,
-            iteration=getattr(context, "iteration", 0),
+            iteration=context.iteration,
             workflow_run_id=context.workflow_run_id,
-            prior_fix_attempts=getattr(context, "prior_fix_attempts", ()),
-            prior_classifications=getattr(context, "prior_classifications", ()),
+            prior_fix_attempts=context.prior_fix_attempts,
+            prior_classifications=context.prior_classifications,
         )
 
         result = await self._systemic_analysis_service.analyze(

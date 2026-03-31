@@ -167,15 +167,16 @@ class MockRepairCycle:
 
     async def analyze_systemic_issues(
         self,
-        failures: tuple[RepairTestFailure, ...],
+        test_result: RepairTestResult,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
     ) -> str:
         """Analyze failure root causes at systemic level."""
         return "No systemic issues detected"
 
     async def apply_systemic_fixes(
         self,
-        classification: FailureClassification,
-        reasoning: str,
+        analysis_summary: str,
         test_result: RepairTestResult,
         config: RepairTestRunConfig,
         context: RepairCycleContext,

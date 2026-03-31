@@ -49,6 +49,11 @@ class RepairCycleContext(Protocol):
         agent_config: Optional RepairCycleAgentConfig for agent specialization. None means
                       fall back to stage's default agent (agent_name). Supports assigning
                       specialized agents to specific repair cycle sub-tasks.
+        iteration: Current iteration number in the repair cycle (for analysis context)
+        prior_fix_attempts: Immutable tuple of descriptions of prior fix attempts
+                           (for escalation and re-classification)
+        prior_classifications: Immutable tuple of prior classification results
+                              (for escalation and re-classification)
     """
 
     stage_name: str
@@ -59,6 +64,9 @@ class RepairCycleContext(Protocol):
     max_total_agent_calls: int
     checkpoint_interval: int
     agent_config: RepairCycleAgentConfig | None
+    iteration: int
+    prior_fix_attempts: tuple[str, ...]
+    prior_classifications: tuple
 
 
 class IRepairCycle(Protocol):

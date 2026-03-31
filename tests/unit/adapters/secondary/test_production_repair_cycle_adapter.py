@@ -70,6 +70,9 @@ class _RepairCycleContext:
         self.max_total_agent_calls = max_total_agent_calls
         self.checkpoint_interval = 5
         self.agent_config = None  # No per-subtask agent config in tests
+        self.iteration = 0
+        self.prior_fix_attempts = ()
+        self.prior_classifications = ()
 
 
 def _make_async_factory(llm):
@@ -1038,7 +1041,7 @@ class TestEnvironmentHelperMethods:
 class TestApplySystemicFixes:
     @pytest.mark.asyncio
     async def test_apply_systemic_fixes_dependency_issue(self):
-        """apply_systemic_fixes routes DEPENDENCY_ISSUE to _apply_dependency_fix."""
+        """apply_systemic_fixes applies fixes based on analysis summary."""
         event_emitter = MagicMock()
 
         adapter, llm = _make_adapter(event_emitter=event_emitter)
@@ -1051,8 +1054,7 @@ class TestApplySystemicFixes:
         test_result.failures = [failure]
 
         result = await adapter.apply_systemic_fixes(
-            FailureClassification.DEPENDENCY_ISSUE,
-            "Missing dependency",
+            "Missing dependency detected",
             test_result,
             config,
             ctx,
@@ -1062,37 +1064,8 @@ class TestApplySystemicFixes:
         adapter._apply_dependency_fix.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_apply_systemic_fixes_configuration_issue(self):
-        """apply_systemic_fixes routes CONFIGURATION_ISSUE to _apply_configuration_fix."""
-        event_emitter = MagicMock()
-
-        adapter, llm = _make_adapter(event_emitter=event_emitter)
-        adapter._apply_configuration_fix = AsyncMock(return_value=True)
-
-        ctx = _RepairCycleContext()
-        config = ctx.test_configs[0]
-        failure = RepairTestFailure(file="test_foo.py", test="test_bar", message="fail")
-        test_result = MagicMock()
-        test_result.failures = [failure]
-
-        result = await adapter.apply_systemic_fixes(
-            FailureClassification.CONFIGURATION_ISSUE,
-            "Missing configuration",
-            test_result,
-            config,
-            ctx,
-        )
-
-        assert result is True
-        adapter._apply_configuration_fix.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_apply_systemic_fixes_unknown_enum_defaults_to_dependency(self):
-        """apply_systemic_fixes defaults unknown enum values to dependency fix.
-
-        This tests the fallback behavior for any FailureClassification value that
-        is not explicitly handled (DEPENDENCY_ISSUE or CONFIGURATION_ISSUE).
-        """
+    async def test_apply_systemic_fixes_with_analysis_summary(self):
+        """apply_systemic_fixes accepts and uses analysis summary."""
         event_emitter = MagicMock()
 
         adapter, llm = _make_adapter(event_emitter=event_emitter)
@@ -1104,17 +1077,38 @@ class TestApplySystemicFixes:
         test_result = MagicMock()
         test_result.failures = [failure]
 
-        # Pass a valid enum value that is not explicitly handled (e.g., CODE_DEFECT)
-        # The apply_systemic_fixes method should default to dependency fix
         result = await adapter.apply_systemic_fixes(
-            FailureClassification.CODE_DEFECT,
-            "Code defect that should trigger dependency fix fallback",
+            "Missing configuration detected",
             test_result,
             config,
             ctx,
         )
 
-        # Should default to dependency fix for unhandled classification
+        assert result is True
+        adapter._apply_dependency_fix.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_apply_systemic_fixes_returns_success(self):
+        """apply_systemic_fixes returns success status."""
+        event_emitter = MagicMock()
+
+        adapter, llm = _make_adapter(event_emitter=event_emitter)
+        adapter._apply_dependency_fix = AsyncMock(return_value=True)
+
+        ctx = _RepairCycleContext()
+        config = ctx.test_configs[0]
+        failure = RepairTestFailure(file="test_foo.py", test="test_bar", message="fail")
+        test_result = MagicMock()
+        test_result.failures = [failure]
+
+        result = await adapter.apply_systemic_fixes(
+            "Code defect analysis",
+            test_result,
+            config,
+            ctx,
+        )
+
+        assert result is True
         adapter._apply_dependency_fix.assert_called_once()
 
 
