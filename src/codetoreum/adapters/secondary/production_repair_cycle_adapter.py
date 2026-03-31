@@ -1966,7 +1966,18 @@ Return a JSON response with the status of dependency fixes applied."""
                                 consecutive_transient_failures = 0  # Reset counter
                                 rebuild_success = await self.rebuild_environment(config, context)
                                 if rebuild_success:
-                                    await self.verify_environment(config, context)
+                                    verify_success = await self.verify_environment(config, context)
+                                    if not verify_success:
+                                        logger.error(
+                                            "Environment verification failed after rebuild",
+                                            extra={
+                                                "workflow_run_id": context.workflow_run_id,
+                                                "test_type": config.test_type.value,
+                                                "iteration": iteration,
+                                                "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                                            },
+                                            exc_info=False,
+                                        )
                                 prior_fix_attempts.append(
                                     f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuilt and verified environment"
                                 )
