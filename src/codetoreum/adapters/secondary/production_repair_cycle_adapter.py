@@ -1961,25 +1961,25 @@ Return a JSON response with the status of configuration fixes applied."""
                             # Track this classification for escalation support in future iterations
                             prior_classifications.append(classification)
 
-                            if classification.classification == FailureClassification.CODE_DEFECT:
+                            # Check if cross-cutting root cause with <= 50 failures (applies to any classification)
+                            if classification.cross_cutting and len(test_result.failures) <= 50:
                                 consecutive_transient_failures = 0  # Reset counter
-                                # Check if cross-cutting root cause with <= 50 failures
-                                if classification.cross_cutting and len(test_result.failures) <= 50:
-                                    systemic_result = await self.fix_failures_systemically(
-                                        test_result.failures, classification, config, context
-                                    )
-                                    files_fixed += len(systemic_result.files_modified)
-                                    prior_fix_attempts.append(
-                                        f"Iteration {iteration}: CODE_DEFECT (cross-cutting), systemic fix applied to "
-                                        f"{len(systemic_result.files_modified)} files"
-                                    )
-                                else:
-                                    # cross_cutting=False OR failure count > 50 (fallback to file-level fix)
-                                    grouped = self._group_failures_by_file(test_result.failures)
-                                    files_fixed += await self.fix_failures_by_file(grouped, config, context)
-                                    prior_fix_attempts.append(
-                                        f"Iteration {iteration}: CODE_DEFECT classified, applied file-level fixes"
-                                    )
+                                systemic_result = await self.fix_failures_systemically(
+                                    test_result.failures, classification, config, context
+                                )
+                                files_fixed += len(systemic_result.files_modified)
+                                prior_fix_attempts.append(
+                                    f"Iteration {iteration}: {classification.classification.value} (cross-cutting), systemic fix applied to "
+                                    f"{len(systemic_result.files_modified)} files"
+                                )
+                            elif classification.classification == FailureClassification.CODE_DEFECT:
+                                consecutive_transient_failures = 0  # Reset counter
+                                # cross_cutting=False OR failure count > 50 (fallback to file-level fix)
+                                grouped = self._group_failures_by_file(test_result.failures)
+                                files_fixed += await self.fix_failures_by_file(grouped, config, context)
+                                prior_fix_attempts.append(
+                                    f"Iteration {iteration}: CODE_DEFECT classified, applied file-level fixes"
+                                )
                             elif classification.classification == FailureClassification.ENVIRONMENT_ISSUE:
                                 consecutive_transient_failures = 0  # Reset counter
                                 rebuild_success = await self.rebuild_environment(config, context)

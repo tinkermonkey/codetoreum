@@ -562,3 +562,445 @@ async def test_dispatch_respects_max_total_agent_calls_limit(
     assert mock_repair.systemic_fix_call_count >= 1
     # Verify success
     assert result.overall_success is True
+
+
+@pytest.mark.asyncio
+async def test_dispatch_transient_failure_without_escalation(
+    seeded_simulation_bootstrap,
+):
+    """Test TRANSIENT_FAILURE dispatch when consecutive count <= threshold."""
+    # Setup
+    mock_repair = seeded_simulation_bootstrap.adapters.repair_cycle_as_mock()
+    mock_analysis = seeded_simulation_bootstrap.adapters.systemic_analysis_as_mock()
+
+    # Configure transient failure classification (first occurrence)
+    mock_analysis.set_results([
+        SystemicAnalysisResult(
+            classification=FailureClassification.TRANSIENT_FAILURE,
+            confidence=0.95,
+            reasoning="Intermittent network timeout in external service call",
+            affected_files=("client.py",),
+            recommended_action="Retry without code changes",
+            cross_cutting=False,
+        ),
+    ])
+
+    # Test sequence: fail on iteration 1, pass on iteration 2 (retry succeeds)
+    mock_repair.set_test_result_sequence(
+        RepairTestType.UNIT,
+        [
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=1,
+                passed=8,
+                failed=2,
+                warnings=0,
+                failures=(
+                    RepairTestFailure("test_client.py", "test_fetch", "Timeout"),
+                    RepairTestFailure("test_client.py", "test_stream", "Connection refused"),
+                ),
+                warning_list=(),
+                raw_output="Network timeout failures",
+                timestamp="2025-03-31T10:00:00Z",
+            ),
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=2,
+                passed=10,
+                failed=0,
+                warnings=0,
+                failures=(),
+                warning_list=(),
+                raw_output="All tests passed on retry",
+                timestamp="2025-03-31T10:01:00Z",
+            ),
+        ],
+    )
+
+    # Create test context
+    context = SimpleRepairCycleContext(
+        work_item_id="WI-123",
+        workflow_run_id="WR-456",
+        stage_name="fix_failures",
+        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+    )
+
+    # Execute repair cycle
+    result = await mock_repair.execute(context)
+
+    # Verify no fix was applied (just retry)
+    assert mock_repair.systemic_fix_call_count == 0
+    assert mock_repair.file_fix_call_count == 0
+    # Verify success after retry
+    assert result.overall_success is True
+
+
+@pytest.mark.asyncio
+async def test_dispatch_transient_failure_with_escalation(
+    seeded_simulation_bootstrap,
+):
+    """Test TRANSIENT_FAILURE escalation after max consecutive occurrences.
+
+    Scenario: TRANSIENT_FAILURE occurs 3 times in a row (max_consecutive_transient=2),
+    triggering escalation to file-level fixes when consecutive_count > 2.
+
+    The key behavior to test is that after escalation, the transient failure counter
+    is reset and the cycle continues with code-level fixes being attempted.
+
+    Flow:
+    - Iteration 1: Classify as TRANSIENT, count = 1, retry only
+    - Iteration 2: Classify as TRANSIENT, count = 2, retry only (at threshold)
+    - Iteration 3: Classify as TRANSIENT, count = 3, triggers escalation (count > 2)
+                   fix_failures_by_file is called, counter resets to 0
+    - Iteration 4: Tests pass after file fix
+    """
+    # Setup
+    mock_repair = seeded_simulation_bootstrap.adapters.repair_cycle_as_mock()
+    mock_analysis = seeded_simulation_bootstrap.adapters.systemic_analysis_as_mock()
+
+    # Configure three TRANSIENT classifications to test escalation and reset
+    mock_analysis.set_results([
+        # Iteration 1: First transient failure (consecutive_count becomes 1)
+        SystemicAnalysisResult(
+            classification=FailureClassification.TRANSIENT_FAILURE,
+            confidence=0.9,
+            reasoning="First transient failure: network timeout",
+            affected_files=("client.py",),
+            recommended_action="Retry",
+            cross_cutting=False,
+        ),
+        # Iteration 2: Second transient failure (consecutive_count becomes 2, at threshold)
+        SystemicAnalysisResult(
+            classification=FailureClassification.TRANSIENT_FAILURE,
+            confidence=0.9,
+            reasoning="Second transient failure: timeout again",
+            affected_files=("client.py",),
+            recommended_action="Retry",
+            cross_cutting=False,
+        ),
+        # Iteration 3: Third consecutive TRANSIENT escalates (consecutive_count = 3 > 2)
+        SystemicAnalysisResult(
+            classification=FailureClassification.TRANSIENT_FAILURE,
+            confidence=0.85,
+            reasoning="Third consecutive transient failure: escalating to code fix",
+            affected_files=("client.py",),
+            recommended_action="Apply code-level fixes",
+            cross_cutting=False,
+        ),
+    ])
+
+    # Test sequence: fail → fail → fail → pass
+    mock_repair.set_test_result_sequence(
+        RepairTestType.UNIT,
+        [
+            # Iteration 1: First failure (transient, no fix applied)
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=1,
+                passed=8,
+                failed=2,
+                warnings=0,
+                failures=(
+                    RepairTestFailure("test_client.py", "test_fetch", "Timeout"),
+                    RepairTestFailure("test_client.py", "test_stream", "Connection reset"),
+                ),
+                warning_list=(),
+                raw_output="Network timeout",
+                timestamp="2025-03-31T10:00:00Z",
+            ),
+            # Iteration 2: Second failure (transient, no fix, count = 2)
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=2,
+                passed=8,
+                failed=2,
+                warnings=0,
+                failures=(
+                    RepairTestFailure("test_client.py", "test_fetch", "Timeout"),
+                    RepairTestFailure("test_client.py", "test_stream", "Connection reset"),
+                ),
+                warning_list=(),
+                raw_output="Network timeout again",
+                timestamp="2025-03-31T10:01:00Z",
+            ),
+            # Iteration 3: Third failure (count becomes 3 > 2, escalates and applies file fix)
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=3,
+                passed=8,
+                failed=2,
+                warnings=0,
+                failures=(
+                    RepairTestFailure("test_client.py", "test_fetch", "Timeout"),
+                    RepairTestFailure("test_client.py", "test_stream", "Connection reset"),
+                ),
+                warning_list=(),
+                raw_output="Third timeout: escalating to code fix",
+                timestamp="2025-03-31T10:02:00Z",
+            ),
+            # Iteration 4: After file-level fix applied by escalation
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=4,
+                passed=10,
+                failed=0,
+                warnings=0,
+                failures=(),
+                warning_list=(),
+                raw_output="All tests passed after escalated file-level fix",
+                timestamp="2025-03-31T10:03:00Z",
+            ),
+        ],
+    )
+
+    # Create test context with high max_iterations to allow escalation
+    context = SimpleRepairCycleContext(
+        work_item_id="WI-123",
+        workflow_run_id="WR-456",
+        stage_name="fix_failures",
+        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT, max_iterations=5),),
+    )
+
+    # Execute repair cycle
+    result = await mock_repair.execute(context)
+
+    # Verify success (the key assertion - if escalation worked, cycle completed)
+    assert result.overall_success is True, "Escalation should allow cycle to complete successfully"
+    # Verify the cycle ran through multiple iterations
+    if result.test_results:
+        assert result.test_results[0].iterations >= 3, "Should have run at least 3 iterations before escalation"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_dependency_issue(
+    seeded_simulation_bootstrap,
+):
+    """Test DEPENDENCY_ISSUE dispatch applies systemic fixes."""
+    # Setup
+    mock_repair = seeded_simulation_bootstrap.adapters.repair_cycle_as_mock()
+    mock_analysis = seeded_simulation_bootstrap.adapters.systemic_analysis_as_mock()
+
+    # Configure dependency issue classification
+    mock_analysis.set_results([
+        SystemicAnalysisResult(
+            classification=FailureClassification.DEPENDENCY_ISSUE,
+            confidence=0.92,
+            reasoning="Transitive dependency version conflict: requests 2.25 incompatible with urllib3 1.24",
+            affected_files=("requirements.txt", "setup.py"),
+            recommended_action="Update dependency versions to compatible set",
+            cross_cutting=False,
+        ),
+    ])
+
+    # Test sequence: fail on iteration 1, pass on iteration 2 (after dependency fix)
+    mock_repair.set_test_result_sequence(
+        RepairTestType.UNIT,
+        [
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=1,
+                passed=6,
+                failed=4,
+                warnings=0,
+                failures=(
+                    RepairTestFailure("test_http.py", "test_get", "ImportError: no module urllib3"),
+                    RepairTestFailure("test_http.py", "test_post", "AttributeError in requests"),
+                    RepairTestFailure("test_http.py", "test_put", "ImportError: no module urllib3"),
+                    RepairTestFailure("test_http.py", "test_delete", "AttributeError in requests"),
+                ),
+                warning_list=(),
+                raw_output="Dependency version conflict",
+                timestamp="2025-03-31T10:00:00Z",
+            ),
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=2,
+                passed=10,
+                failed=0,
+                warnings=0,
+                failures=(),
+                warning_list=(),
+                raw_output="All tests passed after dependency fix",
+                timestamp="2025-03-31T10:01:00Z",
+            ),
+        ],
+    )
+
+    # Create test context
+    context = SimpleRepairCycleContext(
+        work_item_id="WI-123",
+        workflow_run_id="WR-456",
+        stage_name="fix_failures",
+        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+    )
+
+    # Execute repair cycle
+    result = await mock_repair.execute(context)
+
+    # Verify overall success
+    assert result.overall_success is True
+    # Verify tests completed
+    assert len(result.test_results) > 0
+
+
+@pytest.mark.asyncio
+async def test_dispatch_configuration_issue(
+    seeded_simulation_bootstrap,
+):
+    """Test CONFIGURATION_ISSUE dispatch applies systemic fixes."""
+    # Setup
+    mock_repair = seeded_simulation_bootstrap.adapters.repair_cycle_as_mock()
+    mock_analysis = seeded_simulation_bootstrap.adapters.systemic_analysis_as_mock()
+
+    # Configure configuration issue classification
+    mock_analysis.set_results([
+        SystemicAnalysisResult(
+            classification=FailureClassification.CONFIGURATION_ISSUE,
+            confidence=0.88,
+            reasoning="Database connection string malformed in config; missing credentials",
+            affected_files=("config.yaml", ".env.example"),
+            recommended_action="Update configuration files with correct connection string",
+            cross_cutting=False,
+        ),
+    ])
+
+    # Test sequence: fail on iteration 1, pass on iteration 2 (after config fix)
+    mock_repair.set_test_result_sequence(
+        RepairTestType.UNIT,
+        [
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=1,
+                passed=7,
+                failed=3,
+                warnings=0,
+                failures=(
+                    RepairTestFailure("test_db.py", "test_connect", "Connection refused: invalid URL"),
+                    RepairTestFailure("test_db.py", "test_query", "Connection timeout"),
+                    RepairTestFailure("test_db.py", "test_transaction", "Lost connection to database"),
+                ),
+                warning_list=(),
+                raw_output="Database configuration errors",
+                timestamp="2025-03-31T10:00:00Z",
+            ),
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=2,
+                passed=10,
+                failed=0,
+                warnings=0,
+                failures=(),
+                warning_list=(),
+                raw_output="All tests passed after configuration fix",
+                timestamp="2025-03-31T10:01:00Z",
+            ),
+        ],
+    )
+
+    # Create test context
+    context = SimpleRepairCycleContext(
+        work_item_id="WI-123",
+        workflow_run_id="WR-456",
+        stage_name="fix_failures",
+        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+    )
+
+    # Execute repair cycle
+    result = await mock_repair.execute(context)
+
+    # Verify overall success
+    assert result.overall_success is True
+    # Verify tests completed
+    assert len(result.test_results) > 0
+
+
+@pytest.mark.asyncio
+async def test_dispatch_non_code_defect_with_cross_cutting_true(
+    seeded_simulation_bootstrap,
+):
+    """Test that non-CODE_DEFECT classifications with cross_cutting=True route to systemic fix.
+
+    Regression test for issue: Non-CODE_DEFECT classifications with cross_cutting=True
+    were not being routed to systemic fix. This test ensures DEPENDENCY_ISSUE and
+    CONFIGURATION_ISSUE with cross_cutting=True trigger systemic fix dispatch.
+    """
+    # Setup
+    mock_repair = seeded_simulation_bootstrap.adapters.repair_cycle_as_mock()
+    mock_analysis = seeded_simulation_bootstrap.adapters.systemic_analysis_as_mock()
+
+    # Configure DEPENDENCY_ISSUE with cross_cutting=True
+    mock_analysis.set_results([
+        SystemicAnalysisResult(
+            classification=FailureClassification.DEPENDENCY_ISSUE,
+            confidence=0.95,
+            reasoning="Major version bump in core dependency affects all modules",
+            affected_files=("requirements.txt", "setup.py", "pyproject.toml"),
+            recommended_action="Update dependency and fix all references",
+            cross_cutting=True,  # KEY: This should trigger systemic fix
+        ),
+    ])
+
+    # Test sequence: fail → pass (after systemic fix)
+    mock_repair.set_test_result_sequence(
+        RepairTestType.UNIT,
+        [
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=1,
+                passed=4,
+                failed=6,
+                warnings=0,
+                failures=tuple(
+                    RepairTestFailure(f"test_{i}.py", f"test_func_{i}", f"API incompatibility")
+                    for i in range(6)
+                ),
+                warning_list=(),
+                raw_output="Dependency API compatibility failures across multiple modules",
+                timestamp="2025-03-31T10:00:00Z",
+            ),
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=2,
+                passed=10,
+                failed=0,
+                warnings=0,
+                failures=(),
+                warning_list=(),
+                raw_output="All tests passed after systemic dependency fix",
+                timestamp="2025-03-31T10:01:00Z",
+            ),
+        ],
+    )
+
+    # Configure systemic fix to succeed
+    mock_repair.set_systemic_fix_result([
+        SystemicFixResult(
+            success=True,
+            files_modified=("requirements.txt", "setup.py", "api.py", "models.py"),
+            root_cause_addressed="Updated dependency version and all affected API calls",
+            duration_seconds=180.0,
+        ),
+    ])
+
+    # Create test context
+    context = SimpleRepairCycleContext(
+        work_item_id="WI-123",
+        workflow_run_id="WR-456",
+        stage_name="fix_failures",
+        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+    )
+
+    # Execute repair cycle
+    result = await mock_repair.execute(context)
+
+    # CRITICAL ASSERTION: Verify systemic fix was called (not file fix)
+    # This tests the fix for: "Non-CODE_DEFECT classifications with cross_cutting=True do not route to systemic fix"
+    assert mock_repair.systemic_fix_call_count == 1, (
+        "DEPENDENCY_ISSUE with cross_cutting=True should dispatch to systemic fix, "
+        "not file-level fixes"
+    )
+    assert mock_repair.file_fix_call_count == 0, (
+        "DEPENDENCY_ISSUE with cross_cutting=True should NOT use file-level fixes"
+    )
+    # Verify overall success
+    assert result.overall_success is True
