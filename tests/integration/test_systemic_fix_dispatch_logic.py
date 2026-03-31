@@ -12,13 +12,15 @@ Verifies:
 - Failure counts are correctly tracked through dispatch
 """
 
+from dataclasses import dataclass
+
 import pytest
 
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
 from codetoreum.domain.repair_cycle_types import (
     AnalysisContext,
     FailureClassification,
-    RepairCycleContext,
+    RepairCycleAgentConfig,
     RepairCycleStageConfig,
     RepairTestFailure,
     RepairTestResult,
@@ -28,6 +30,21 @@ from codetoreum.domain.repair_cycle_types import (
     SystemicFixResult,
 )
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
+from codetoreum.ports.output.repair_cycle_service import RepairCycleContext
+
+
+@dataclass
+class SimpleRepairCycleContext:
+    """Simple concrete implementation of RepairCycleContext for testing."""
+
+    stage_name: str
+    workflow_run_id: str
+    work_item_id: str
+    test_configs: tuple[RepairTestRunConfig, ...]
+    agent_name: str = "senior_software_engineer"
+    max_total_agent_calls: int = 100
+    checkpoint_interval: int = 5
+    agent_config: RepairCycleAgentConfig | None = None
 
 
 @pytest.mark.asyncio
@@ -94,19 +111,12 @@ async def test_dispatch_to_systemic_fix_when_cross_cutting_true(
         ),
     ])
 
-    # Create test context using RepairCycleContext
-    context = RepairCycleContext(
+    # Create test context using SimpleRepairCycleContext
+    context = SimpleRepairCycleContext(
         work_item_id="WI-123",
         workflow_run_id="WR-456",
-        analysis_context=AnalysisContext(
-            work_item_id="WI-123",
-            iteration=1,
-            workflow_run_id="WR-456",
-        ),
-        stage_config=RepairCycleStageConfig(
-            name="fix_failures",
-            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
-        ),
+        stage_name="fix_failures",
+        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
     )
 
     # Execute repair cycle
@@ -174,18 +184,11 @@ async def test_dispatch_to_file_fix_when_cross_cutting_false(
     )
 
     # Create test context
-    context = RepairCycleContext(
+    context = SimpleRepairCycleContext(
         work_item_id="WI-123",
         workflow_run_id="WR-456",
-        analysis_context=AnalysisContext(
-            work_item_id="WI-123",
-            iteration=1,
-            workflow_run_id="WR-456",
-        ),
-        stage_config=RepairCycleStageConfig(
-            name="fix_failures",
-            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
-        ),
+        stage_name="fix_failures",
+        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
     )
 
     # Execute repair cycle
@@ -257,18 +260,11 @@ async def test_fallback_to_file_fix_when_failure_count_exceeds_50(
     )
 
     # Create test context
-    context = RepairCycleContext(
+    context = SimpleRepairCycleContext(
         work_item_id="WI-123",
         workflow_run_id="WR-456",
-        analysis_context=AnalysisContext(
-            work_item_id="WI-123",
-            iteration=1,
-            workflow_run_id="WR-456",
-        ),
-        stage_config=RepairCycleStageConfig(
-            name="fix_failures",
-            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
-        ),
+        stage_name="fix_failures",
+        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
     )
 
     # Execute repair cycle
@@ -383,18 +379,11 @@ async def test_multiple_systemic_fix_iterations(
     ])
 
     # Create test context
-    context = RepairCycleContext(
+    context = SimpleRepairCycleContext(
         work_item_id="WI-123",
         workflow_run_id="WR-456",
-        analysis_context=AnalysisContext(
-            work_item_id="WI-123",
-            iteration=1,
-            workflow_run_id="WR-456",
-        ),
-        stage_config=RepairCycleStageConfig(
-            name="fix_failures",
-            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
-        ),
+        stage_name="fix_failures",
+        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
     )
 
     # Execute repair cycle
@@ -475,18 +464,11 @@ async def test_systemic_fix_result_with_no_files_modified(
     ])
 
     # Create test context
-    context = RepairCycleContext(
+    context = SimpleRepairCycleContext(
         work_item_id="WI-123",
         workflow_run_id="WR-456",
-        analysis_context=AnalysisContext(
-            work_item_id="WI-123",
-            iteration=1,
-            workflow_run_id="WR-456",
-        ),
-        stage_config=RepairCycleStageConfig(
-            name="fix_failures",
-            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
-        ),
+        stage_name="fix_failures",
+        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
     )
 
     # Execute repair cycle
@@ -565,19 +547,12 @@ async def test_dispatch_respects_max_total_agent_calls_limit(
     ])
 
     # Create test context
-    context = RepairCycleContext(
+    context = SimpleRepairCycleContext(
         work_item_id="WI-123",
         workflow_run_id="WR-456",
-        analysis_context=AnalysisContext(
-            work_item_id="WI-123",
-            iteration=1,
-            workflow_run_id="WR-456",
-        ),
-        stage_config=RepairCycleStageConfig(
-            name="fix_failures",
-            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
-            max_total_agent_calls=100,  # Sufficient for systemic fix
-        ),
+        stage_name="fix_failures",
+        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+        max_total_agent_calls=100,  # Sufficient for systemic fix
     )
 
     # Execute repair cycle

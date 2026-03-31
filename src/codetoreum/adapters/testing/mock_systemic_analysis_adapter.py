@@ -78,6 +78,17 @@ class MockSystemicAnalysisAdapter(ISystemicAnalysisService):
         """Return list of all (failures, context) argument tuples in order."""
         return list(self._calls)
 
+    def set_results(self, results: list[SystemicAnalysisResult]) -> None:
+        """Set the sequence of results to return from analyze() calls.
+
+        Resets the call index to 0, allowing the same sequence to be replayed.
+
+        Args:
+            results: List of SystemicAnalysisResult objects to return in sequence.
+        """
+        self._results = list(results) if results else []
+        self._call_index = 0
+
     async def analyze(
         self,
         failures: list[RepairTestFailure],
