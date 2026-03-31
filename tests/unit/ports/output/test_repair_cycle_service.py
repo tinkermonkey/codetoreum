@@ -13,6 +13,7 @@ import pytest
 
 from codetoreum.domain.repair_cycle_types import (
     CycleResult,
+    FailureClassification,
     RepairCycleResult,
     RepairTestFailure,
     RepairTestResult,
@@ -173,7 +174,7 @@ class MockRepairCycle:
 
     async def apply_systemic_fixes(
         self,
-        classification,
+        classification: FailureClassification,
         reasoning: str,
         test_result: RepairTestResult,
         config: RepairTestRunConfig,
