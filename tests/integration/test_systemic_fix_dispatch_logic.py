@@ -977,7 +977,7 @@ async def test_dispatch_non_code_defect_with_cross_cutting_true(
                 failed=6,
                 warnings=0,
                 failures=tuple(
-                    RepairTestFailure(f"test_{i}.py", f"test_func_{i}", f"API incompatibility")
+                    RepairTestFailure(f"test_{i}.py", f"test_func_{i}", "API incompatibility")
                     for i in range(6)
                 ),
                 warning_list=(),
