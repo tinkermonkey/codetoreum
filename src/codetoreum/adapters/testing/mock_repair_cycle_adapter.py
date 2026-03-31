@@ -41,8 +41,8 @@ from codetoreum.domain.events.repair_cycle_events import (
     SystemicFixStartedEvent,
 )
 from codetoreum.domain.repair_cycle_types import (
+    SYSTEMIC_FIX_FAILURE_CEILING,
     CycleResult,
-    FailureClassification,
     RepairCycleCheckpoint,
     RepairCycleResult,
     RepairTestFailure,
@@ -52,7 +52,6 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestWarning,
     SystemicAnalysisResult,
     SystemicFixResult,
-    SYSTEMIC_FIX_FAILURE_CEILING,
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
@@ -1755,7 +1754,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                         ):
                             # DEPENDENCY_ISSUE and CONFIGURATION_ISSUE route to apply_systemic_fixes
                             # (not fix_failures_systemically, regardless of cross_cutting flag)
-                            fix_success = await self.apply_systemic_fixes(
+                            await self.apply_systemic_fixes(
                                 classification.reasoning,
                                 test_result,
                                 config,

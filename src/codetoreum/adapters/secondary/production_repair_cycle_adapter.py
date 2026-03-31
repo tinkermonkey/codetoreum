@@ -57,6 +57,7 @@ from codetoreum.domain.events.repair_cycle_events import (
 )
 from codetoreum.domain.exceptions import TestOutputParseError
 from codetoreum.domain.repair_cycle_types import (
+    SYSTEMIC_FIX_FAILURE_CEILING,
     AnalysisContext,
     CycleResult,
     FailureClassification,
@@ -69,7 +70,6 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestWarning,
     SystemicAnalysisResult,
     SystemicFixResult,
-    SYSTEMIC_FIX_FAILURE_CEILING,
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.resilience.exceptions import CircuitBreakerOpenError
