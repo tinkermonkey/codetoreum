@@ -1055,7 +1055,12 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 },
                 exc_info=False,
             )
-            raise CircuitBreakerOpenError("Circuit breaker is open")
+            return SystemicFixResult(
+                success=False,
+                files_modified=(),
+                root_cause_addressed="Circuit breaker triggered: max agent calls exceeded",
+                duration_seconds=0.0,
+            )
 
         # Resolve and record which agent is executing this sub-task
         _, agent_name = await self._resolve_and_record_agent("systemic_fix", context)
