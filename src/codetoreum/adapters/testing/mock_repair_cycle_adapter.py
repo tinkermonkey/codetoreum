@@ -54,6 +54,7 @@ from codetoreum.domain.repair_cycle_types import (
     SystemicFixResult,
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.infrastructure.resilience.exceptions import CircuitBreakerOpenError
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.output.monitoring import (
     MonitoringConfig,
@@ -1043,21 +1044,18 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         """
         # Check circuit breaker
         if self.total_agent_calls >= context.max_total_agent_calls:
-            logger.warning(
-                "Circuit breaker triggered; cannot apply systemic fixes",
+            logger.error(
+                "Circuit breaker open; cannot apply systemic fixes",
                 extra={
                     "workflow_run_id": context.workflow_run_id,
+                    "work_item_id": context.work_item_id,
                     "total_agent_calls": self.total_agent_calls,
                     "max_total_agent_calls": context.max_total_agent_calls,
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_CIRCUIT_BREAKER_OPEN,
                 },
                 exc_info=False,
             )
-            return SystemicFixResult(
-                success=False,
-                files_modified=(),
-                root_cause_addressed="Circuit breaker triggered",
-                duration_seconds=0.0,
-            )
+            raise CircuitBreakerOpenError("Circuit breaker is open")
 
         # Resolve and record which agent is executing this sub-task
         _, agent_name = await self._resolve_and_record_agent("systemic_fix", context)
@@ -1656,7 +1654,10 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             # Fix failures
             if not cycle_passed:
                 # Perform systemic analysis to determine fix strategy
-                from codetoreum.domain.repair_cycle_types import FailureClassification
+                from codetoreum.domain.repair_cycle_types import (
+                    AnalysisContext,
+                    FailureClassification,
+                )
 
                 # Resolve and record which agent is executing systemic analysis (even if not used)
                 _, agent_name = await self._resolve_and_record_agent("systemic_analysis", context)
@@ -1664,11 +1665,11 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 # Try systemic analysis and dispatch if available
                 if self._systemic_analysis_service and test_result.failures:
                     try:
-                        analysis_context = {
-                            "failures": list(test_result.failures),
-                            "test_type": config.test_type.value,
-                            "iteration": iteration,
-                        }
+                        analysis_context = AnalysisContext(
+                            work_item_id=context.work_item_id,
+                            iteration=iteration,
+                            workflow_run_id=context.workflow_run_id,
+                        )
                         classification = await self._systemic_analysis_service.analyze(
                             list(test_result.failures), analysis_context
                         )
