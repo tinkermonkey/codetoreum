@@ -4,9 +4,8 @@ Tests verify the conditional dispatch between fix_failures_systemically() and
 fix_failures_by_file() based on the cross_cutting field from systemic analysis.
 
 Verifies:
-- When cross_cutting=True and failure_count <= 50: dispatches to fix_failures_systemically()
+- When cross_cutting=True: dispatches to fix_failures_systemically()
 - When cross_cutting=False: dispatches to fix_failures_by_file()
-- When cross_cutting=True but failure_count > 50: falls back to fix_failures_by_file()
 - Multiple systemic fix iterations within a single repair cycle
 - Proper state transitions and event emission for both branches
 - Failure counts are correctly tracked through dispatch
@@ -203,27 +202,26 @@ async def test_dispatch_to_file_fix_when_cross_cutting_false(
 
 
 @pytest.mark.asyncio
-async def test_fallback_to_file_fix_when_failure_count_exceeds_50(
+async def test_systemic_fix_with_many_failures(
     seeded_simulation_bootstrap,
 ):
-    """Test fallback to file fix when cross_cutting=True but failure_count > 50."""
+    """Test systemic fix is called when cross_cutting=True, regardless of failure count."""
     # Setup
     mock_repair = seeded_simulation_bootstrap.adapters.repair_cycle_as_mock()
     mock_analysis = seeded_simulation_bootstrap.adapters.systemic_analysis_as_mock()
 
-    # Create 51 failures (exceeds the 50-failure threshold)
+    # Create 51 failures
     failures = tuple(
         RepairTestFailure(f"test_{i}.py", f"test_case_{i}", f"Failure {i}")
         for i in range(51)
     )
 
     # Pre-configure mock analysis to return cross_cutting=True
-    # (but we have > 50 failures, so should fall back to file fix)
     mock_analysis.set_results([
         SystemicAnalysisResult(
             classification=FailureClassification.CODE_DEFECT,
             confidence=0.9,
-            reasoning="Cross-cutting issue with many failures",
+            reasoning="Cross-cutting issue affecting many files",
             affected_files=tuple(f"file_{i}.py" for i in range(10)),
             recommended_action="Fix systematically",
             cross_cutting=True,
@@ -270,10 +268,8 @@ async def test_fallback_to_file_fix_when_failure_count_exceeds_50(
     # Execute repair cycle
     result = await mock_repair.execute(context)
 
-    # Verify systemic fix was NOT called (failure count > 50 triggers fallback)
-    assert mock_repair.systemic_fix_call_count == 0
-    # Verify fix_failures_by_file WAS called (fallback)
-    assert mock_repair.file_fix_call_count > 0
+    # Verify systemic fix WAS called (cross_cutting=True means systemic fix, regardless of count)
+    assert mock_repair.systemic_fix_call_count > 0
     # Verify overall success
     assert result.overall_success is True
 

@@ -546,8 +546,7 @@ class SystemicAnalysisResult:
         reasoning: Explanation of classification decision
         affected_files: Immutable tuple of file names affected by the issue
         recommended_action: Recommended remediation step for this classification
-        cross_cutting: Whether the failure indicates a cross-cutting root cause
-                      (default False for backward compatibility)
+        cross_cutting: Whether the failure indicates a cross-cutting root cause (required)
     """
 
     classification: FailureClassification
@@ -555,7 +554,7 @@ class SystemicAnalysisResult:
     reasoning: str
     affected_files: tuple[str, ...]  # Immutable tuple
     recommended_action: str
-    cross_cutting: bool = False
+    cross_cutting: bool
 
     def __post_init__(self) -> None:
         """Validate analysis result after initialization."""

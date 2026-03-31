@@ -1979,8 +1979,8 @@ class TestClassificationDispatchCodeDefectWithCrossCutting:
         adapter.fix_failures_by_file.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_code_defect_cross_cutting_exceeds_50_failures_fallback(self):
-        """CODE_DEFECT with cross_cutting=True but > 50 failures falls back to fix_failures_by_file."""
+    async def test_code_defect_cross_cutting_with_many_failures(self):
+        """CODE_DEFECT with cross_cutting=True calls fix_failures_systemically regardless of failure count."""
         event_emitter = MagicMock()
         systemic_service = AsyncMock()
 
@@ -1996,14 +1996,14 @@ class TestClassificationDispatchCodeDefectWithCrossCutting:
             reasoning="Shared interface issue",
             recommended_action="Fix interface",
             affected_files=("a.py", "b.py"),
-            cross_cutting=True,  # cross_cutting but > 50 failures
+            cross_cutting=True,
         )
 
         adapter, _ = _make_adapter(event_emitter=event_emitter)
         adapter._systemic_analysis_service = systemic_service
 
         # Mock both methods
-        adapter.fix_failures_systemically = AsyncMock()
+        adapter.fix_failures_systemically = AsyncMock(return_value=MagicMock(files_modified=[]))
         adapter.fix_failures_by_file = AsyncMock(return_value=5)
 
         # Manually call _run_test_cycle since execute uses run_tests mock
@@ -2031,9 +2031,9 @@ class TestClassificationDispatchCodeDefectWithCrossCutting:
 
         await adapter.execute(ctx)
 
-        # Should fallback to fix_failures_by_file instead of systemic
-        adapter.fix_failures_systemically.assert_not_called()
-        adapter.fix_failures_by_file.assert_called_once()
+        # Should call systemic fix since cross_cutting=True (no cardinality ceiling per spec)
+        adapter.fix_failures_systemically.assert_called_once()
+        adapter.fix_failures_by_file.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

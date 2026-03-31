@@ -358,31 +358,29 @@ async def test_scenario_systemic_fix_multiple_iterations(
 
 
 @pytest.mark.asyncio
-async def test_scenario_systemic_fix_large_failure_count_fallback(
+async def test_scenario_systemic_fix_large_failure_count(
     simulation_bootstrap: SimulationApplicationBootstrap,
 ):
-    """Test fallback to file fixes when failure count exceeds threshold.
+    """Test systemic fix with large failure count.
 
-    Even though analysis reports cross_cutting=True,
-    failure count > 50 triggers fallback to per-file fixes.
+    When cross_cutting=True, systemic fix is called regardless of failure count.
     """
     # Setup adapters
     mock_repair = simulation_bootstrap.adapters.repair_cycle_as_mock()
     mock_analysis = simulation_bootstrap.adapters.systemic_analysis_as_mock()
 
-    # Create 60 failures (exceeds 50-failure threshold)
+    # Create 60 failures
     failures = tuple(
         RepairTestFailure(f"test_{i}.py", f"test_{i}", f"Failure {i}")
         for i in range(60)
     )
 
     # Configure systemic analysis with cross_cutting=True
-    # (but we have > 50 failures, so should fall back anyway)
     mock_analysis.set_results([
         SystemicAnalysisResult(
             classification=FailureClassification.CODE_DEFECT,
             confidence=0.9,
-            reasoning="Cross-cutting issue with many failures",
+            reasoning="Cross-cutting issue affecting many files",
             affected_files=tuple(f"file_{i}.py" for i in range(10)),
             recommended_action="Fix systematically",
             cross_cutting=True,
@@ -404,7 +402,7 @@ async def test_scenario_systemic_fix_large_failure_count_fallback(
             raw_output="60 failures detected",
             timestamp="2025-03-31T10:00:00Z",
         ),
-        # After per-file fixes: pass
+        # After systemic fix: pass
         RepairTestResult(
             test_type=RepairTestType.UNIT,
             iteration=2,
@@ -413,7 +411,7 @@ async def test_scenario_systemic_fix_large_failure_count_fallback(
             warnings=0,
             failures=(),
             warning_list=(),
-            raw_output="All passed after file fixes",
+            raw_output="All passed after systemic fix",
             timestamp="2025-03-31T10:01:00Z",
         ),
     ])
@@ -437,10 +435,10 @@ async def test_scenario_systemic_fix_large_failure_count_fallback(
 
     # Verify outcomes
     assert result.overall_success is True
-    # Should NOT call systemic fix (failure count > 50 triggers fallback)
-    assert mock_repair.systemic_fix_call_count == 0
-    # Should call file-level fix instead
-    assert mock_repair.file_fix_call_count > 0
+    # Should call systemic fix (cross_cutting=True means systemic fix, regardless of count)
+    assert mock_repair.systemic_fix_call_count > 0
+    # Should not call file-level fix
+    assert mock_repair.file_fix_call_count == 0
 
 
 @pytest.mark.asyncio

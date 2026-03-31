@@ -1678,10 +1678,8 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                             list(test_result.failures), analysis_context
                         )
 
-                        # Dispatch based on cross_cutting and failure count
-                        # If cross_cutting=True and <= 50 failures, use systemic fix (works for any classification)
-                        # Otherwise, use file-level fixes (or other classification-specific fixes)
-                        if classification.cross_cutting and len(test_result.failures) <= 50:
+                        # Dispatch based on cross_cutting flag (binary dispatch per specification)
+                        if classification.cross_cutting:
                             # Systemic fix: address root cause across all affected files
                             systemic_result = await self.fix_failures_systemically(
                                 test_result.failures, classification, config, context

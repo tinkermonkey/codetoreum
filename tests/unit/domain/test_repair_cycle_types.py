@@ -1069,6 +1069,7 @@ class TestSystemicAnalysisResult:
             reasoning="Environment setup misconfiguration detected",
             affected_files=("setup.sh", "docker-compose.yml"),
             recommended_action="Rebuild environment",
+            cross_cutting=False,
         )
         assert result.classification == FailureClassification.ENVIRONMENT_ISSUE
         assert result.confidence == 0.75
@@ -1084,6 +1085,7 @@ class TestSystemicAnalysisResult:
             reasoning="Likely transient network issue",
             affected_files=(),
             recommended_action="Retry without fix",
+            cross_cutting=False,
         )
         assert result.affected_files == ()
 
@@ -1095,6 +1097,7 @@ class TestSystemicAnalysisResult:
             reasoning="Code defect found",
             affected_files=("main.py",),
             recommended_action="Fix code",
+            cross_cutting=False,
         )
         with pytest.raises(FrozenInstanceError):
             result.classification = FailureClassification.ENVIRONMENT_ISSUE  # type: ignore[misc]
@@ -1116,6 +1119,7 @@ class TestSystemicAnalysisResult:
             reasoning="Unknown classification",
             affected_files=(),
             recommended_action="Default action",
+            cross_cutting=False,
         )
         assert result.confidence == 0.0
 
@@ -1127,6 +1131,7 @@ class TestSystemicAnalysisResult:
             reasoning="Definite classification",
             affected_files=(),
             recommended_action="Action",
+            cross_cutting=False,
         )
         assert result.confidence == 1.0
 
@@ -1138,6 +1143,7 @@ class TestSystemicAnalysisResult:
             reasoning="Moderate confidence",
             affected_files=(),
             recommended_action="Action",
+            cross_cutting=False,
         )
         assert result.confidence == 0.5
 
@@ -1150,6 +1156,7 @@ class TestSystemicAnalysisResult:
                 reasoning="Valid reasoning",
                 affected_files=(),
                 recommended_action="Action",
+                cross_cutting=False,
             )
 
     def test_confidence_above_1_raises_error(self):
@@ -1161,6 +1168,7 @@ class TestSystemicAnalysisResult:
                 reasoning="Valid reasoning",
                 affected_files=(),
                 recommended_action="Action",
+                cross_cutting=False,
             )
 
     def test_invalid_classification_raises_error(self):
@@ -1172,6 +1180,7 @@ class TestSystemicAnalysisResult:
                 reasoning="Valid reasoning",
                 affected_files=(),
                 recommended_action="Action",
+                cross_cutting=False,
             )
 
     def test_empty_reasoning_raises_error(self):
@@ -1183,6 +1192,7 @@ class TestSystemicAnalysisResult:
                 reasoning="",
                 affected_files=(),
                 recommended_action="Action",
+                cross_cutting=False,
             )
 
     def test_empty_recommended_action_raises_error(self):
@@ -1194,6 +1204,7 @@ class TestSystemicAnalysisResult:
                 reasoning="Valid reasoning",
                 affected_files=(),
                 recommended_action="",
+                cross_cutting=False,
             )
 
     def test_affected_files_tuple_immutable(self):
@@ -1204,6 +1215,7 @@ class TestSystemicAnalysisResult:
             reasoning="Code defect",
             affected_files=("file1.py", "file2.py"),
             recommended_action="Fix code",
+            cross_cutting=False,
         )
         with pytest.raises((TypeError, AttributeError)):
             result.affected_files.append("file3.py")  # type: ignore[attr-defined]
@@ -1216,6 +1228,7 @@ class TestSystemicAnalysisResult:
             reasoning="Code defect",
             affected_files=("file.py",),
             recommended_action="Fix code",
+            cross_cutting=False,
         )
         result2 = SystemicAnalysisResult(
             classification=FailureClassification.CODE_DEFECT,
@@ -1223,6 +1236,7 @@ class TestSystemicAnalysisResult:
             reasoning="Code defect",
             affected_files=("file.py",),
             recommended_action="Fix code",
+            cross_cutting=False,
         )
         assert result1 == result2
 
@@ -1234,6 +1248,7 @@ class TestSystemicAnalysisResult:
             reasoning="Code defect",
             affected_files=("file.py",),
             recommended_action="Fix code",
+            cross_cutting=False,
         )
         result2 = SystemicAnalysisResult(
             classification=FailureClassification.ENVIRONMENT_ISSUE,
@@ -1241,6 +1256,7 @@ class TestSystemicAnalysisResult:
             reasoning="Code defect",
             affected_files=("file.py",),
             recommended_action="Fix code",
+            cross_cutting=False,
         )
         assert result1 != result2
 
@@ -1252,6 +1268,7 @@ class TestSystemicAnalysisResult:
             reasoning="Code defect",
             affected_files=("file.py",),
             recommended_action="Fix code",
+            cross_cutting=False,
         )
         assert result.cross_cutting is False
 
@@ -1382,6 +1399,7 @@ class TestAnalysisContext:
             reasoning="Previous classification",
             affected_files=(),
             recommended_action="Previous action",
+            cross_cutting=False,
         )
         context = AnalysisContext(
             work_item_id="WI-123",
@@ -1468,6 +1486,7 @@ class TestAnalysisContext:
             reasoning="Previous",
             affected_files=(),
             recommended_action="Action",
+            cross_cutting=False,
         )
         context = AnalysisContext(
             work_item_id="WI-123",
@@ -1515,6 +1534,7 @@ class TestAnalysisContext:
             reasoning="Initial guess: code defect",
             affected_files=("main.py",),
             recommended_action="Fix code",
+            cross_cutting=False,
         )
         result2 = SystemicAnalysisResult(
             classification=FailureClassification.ENVIRONMENT_ISSUE,
@@ -1522,6 +1542,7 @@ class TestAnalysisContext:
             reasoning="Escalated: environment issue after code fix failed",
             affected_files=(),
             recommended_action="Rebuild environment",
+            cross_cutting=False,
         )
         context = AnalysisContext(
             work_item_id="WI-123",
