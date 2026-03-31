@@ -175,6 +175,12 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         self.circuit_breaker = circuit_breaker
         self._systemic_analysis_service = systemic_analysis_service
 
+        # Tracking state for checkpoint resumption (initialized in __init__, not in setter)
+        self._files_fixed = 0  # Number of files fixed in current cycle
+        self._warnings_reviewed = 0  # Number of warnings reviewed in current cycle
+        self._elapsed_time = 0.0  # Total time spent in current cycle (seconds)
+        self._cycle_results: list[CycleResult] = []  # Accumulated test results
+
     @property
     def systemic_analysis_service(self) -> ISystemicAnalysisService | None:
         """Get the systemic analysis service."""
@@ -182,14 +188,12 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
     @systemic_analysis_service.setter
     def systemic_analysis_service(self, service: ISystemicAnalysisService | None) -> None:
-        """Set the systemic analysis service."""
-        self._systemic_analysis_service = service
+        """Set the systemic analysis service.
 
-        # Tracking state for checkpoint resumption
-        self._files_fixed = 0  # Number of files fixed in current cycle
-        self._warnings_reviewed = 0  # Number of warnings reviewed in current cycle
-        self._elapsed_time = 0.0  # Total time spent in current cycle (seconds)
-        self._cycle_results: list[CycleResult] = []  # Accumulated test results
+        Note: This setter only updates the service reference, not tracking state.
+        Tracking state is initialized in __init__ and updated during repair cycle execution.
+        """
+        self._systemic_analysis_service = service
 
     async def _get_llm_for_subtask(self, sub_task: str, context: RepairCycleContext) -> tuple[ILLMProvider, str]:
         """Resolve the appropriate agent for a sub-task and return its LLM provider.
@@ -764,7 +768,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         that affect multiple files with a shared root cause.
 
         Args:
-            failures: Immutable tuple of test failures to address
+            failures: Immutable tuple of test failures to address (must not be empty)
             analysis_result: Systemic analysis result with root cause and affected files
             config: Test run configuration
             context: Repair cycle context
@@ -774,8 +778,23 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             files were modified
 
         Raises:
+            ValueError: If failures tuple is empty (nothing to fix)
             CircuitBreakerOpenError: When circuit breaker is open
         """
+        # Validate that failures tuple is not empty
+        if not failures:
+            msg = "failures tuple must not be empty when calling fix_failures_systemically"
+            logger.error(
+                msg,
+                extra={
+                    "workflow_run_id": context.workflow_run_id,
+                    "work_item_id": context.work_item_id,
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                },
+                exc_info=False,
+            )
+            raise ValueError(msg)
+
         start_time = datetime.now(UTC)
 
         # Circuit breaker check
@@ -1547,7 +1566,7 @@ Return a JSON response with the verification status and any issues found."""
         """
         try:
             prompt = self._build_dependency_fix_prompt(reasoning, test_result)
-            await self._execute_llm_prompt(prompt, "apply_dependency_fix", config, context)
+            await self._execute_llm_prompt(prompt, "systemic_fix", config, context)
             return True
         except Exception as e:
             logger.error(
@@ -1585,7 +1604,7 @@ Return a JSON response with the verification status and any issues found."""
         """
         try:
             prompt = self._build_configuration_fix_prompt(reasoning, test_result)
-            await self._execute_llm_prompt(prompt, "apply_configuration_fix", config, context)
+            await self._execute_llm_prompt(prompt, "systemic_fix", config, context)
             return True
         except Exception as e:
             logger.error(
@@ -1674,7 +1693,7 @@ Return a JSON response with the status of configuration fixes applied."""
         """
         try:
             rebuild_prompt = self._build_environment_rebuild_prompt(config)
-            await self._execute_llm_prompt(rebuild_prompt, "rebuild_environment", config, context)
+            await self._execute_llm_prompt(rebuild_prompt, "env_rebuild", config, context)
             return True
         except Exception as e:
             logger.error(
@@ -1708,7 +1727,7 @@ Return a JSON response with the status of configuration fixes applied."""
         """
         try:
             verify_prompt = self._build_environment_verify_prompt(config)
-            await self._execute_llm_prompt(verify_prompt, "verify_environment", config, context)
+            await self._execute_llm_prompt(verify_prompt, "env_verification", config, context)
             return True
         except Exception as e:
             logger.error(
