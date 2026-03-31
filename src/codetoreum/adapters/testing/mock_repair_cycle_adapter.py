@@ -54,7 +54,6 @@ from codetoreum.domain.repair_cycle_types import (
     SystemicFixResult,
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
-from codetoreum.infrastructure.resilience.exceptions import CircuitBreakerOpenError
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.output.monitoring import (
     MonitoringConfig,
