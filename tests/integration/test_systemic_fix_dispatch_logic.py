@@ -9,6 +9,12 @@ Verifies:
 - Multiple systemic fix iterations within a single repair cycle
 - Proper state transitions and event emission for both branches
 - Failure counts are correctly tracked through dispatch
+
+NOTE: These tests use MockRepairCycleAdapter with mocked sub-dependencies.
+The production adapter's dispatch logic is tested separately in unit tests
+(tests/unit/adapters/secondary/test_production_repair_cycle_adapter.py).
+These integration tests verify the mock adapter behavior and the overall dispatch
+routing when integrated with other mocked services.
 """
 
 from dataclasses import dataclass
@@ -44,6 +50,9 @@ class SimpleRepairCycleContext:
     max_total_agent_calls: int = 100
     checkpoint_interval: int = 5
     agent_config: RepairCycleAgentConfig | None = None
+    iteration: int = 1
+    prior_fix_attempts: tuple[str, ...] = ()
+    prior_classifications: tuple = ()
 
 
 @pytest.mark.asyncio
