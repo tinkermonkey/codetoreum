@@ -1193,23 +1193,6 @@ class TestPromptBuilders:
         assert "test_foo.py" in prompt
         assert "dependency" in prompt.lower()
 
-    def test_build_configuration_fix_prompt(self):
-        """_build_configuration_fix_prompt includes reasoning and failure details."""
-        adapter, _ = _make_adapter()
-        failure = RepairTestFailure(
-            file="test_foo.py",
-            test="test_bar",
-            message="KeyError: 'DATABASE_URL'",
-        )
-        test_result = MagicMock()
-        test_result.failures = [failure]
-
-        prompt = adapter._build_configuration_fix_prompt("Missing DATABASE_URL env var", test_result)
-
-        assert "Missing DATABASE_URL env var" in prompt
-        assert "test_foo.py" in prompt
-        assert "configuration" in prompt.lower()
-
 
 # ---------------------------------------------------------------------------
 # Dependency Fix Helper Tests
@@ -1262,49 +1245,6 @@ class TestApplyDependencyFix:
 # ---------------------------------------------------------------------------
 # Configuration Fix Helper Tests
 # ---------------------------------------------------------------------------
-
-
-class TestApplyConfigurationFix:
-    @pytest.mark.asyncio
-    async def test_apply_configuration_fix_success(self):
-        """_apply_configuration_fix returns True on successful fix."""
-        event_emitter = MagicMock()
-
-        adapter, llm = _make_adapter(event_emitter=event_emitter)
-        ctx = _RepairCycleContext()
-        config = ctx.test_configs[0]
-        failure = RepairTestFailure(file="test_foo.py", test="test_bar", message="fail")
-        test_result = MagicMock()
-        test_result.failures = [failure]
-
-        result = await adapter._apply_configuration_fix("Missing config", test_result, config, ctx)
-
-        assert result is True
-        llm.execute.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_apply_configuration_fix_failure(self):
-        """_apply_configuration_fix returns False on exception."""
-        event_emitter = MagicMock()
-        llm = AsyncMock()
-        llm.execute.side_effect = RuntimeError("LLM failed")
-
-        config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
-        adapter = ProductionRepairCycleAdapter(
-            llm_factory=_make_async_factory(llm),
-            config=config,
-            event_emitter=event_emitter,
-            circuit_breaker=None,
-        )
-
-        ctx = _RepairCycleContext()
-        failure = RepairTestFailure(file="test_foo.py", test="test_bar", message="fail")
-        test_result = MagicMock()
-        test_result.failures = [failure]
-
-        result = await adapter._apply_configuration_fix("Missing config", test_result, ctx.test_configs[0], ctx)
-
-        assert result is False
 
 
 # ---------------------------------------------------------------------------

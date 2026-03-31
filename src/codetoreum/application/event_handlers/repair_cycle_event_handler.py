@@ -39,6 +39,9 @@ class RepairCycleEventContext:
     max_total_agent_calls: int
     checkpoint_interval: int
     agent_config: RepairCycleAgentConfig | None = None
+    iteration: int = 0
+    prior_fix_attempts: tuple[str, ...] = ()
+    prior_classifications: tuple = ()
 
 
 @event_handler("WorkItemColumnChanged")
