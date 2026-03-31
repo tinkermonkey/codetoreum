@@ -17,7 +17,7 @@ import pytest
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
 from codetoreum.domain.repair_cycle_types import (
     AnalysisContext,
-    FailureClassification,
+    RepairCycleContext,
     RepairCycleStageConfig,
     RepairTestFailure,
     RepairTestResult,
@@ -77,18 +77,21 @@ async def test_mock_adapter_configurable_systemic_fix_success(
         ),
     ])
 
-    context = AnalysisContext(
+    context = RepairCycleContext(
         work_item_id="WI-123",
-        iteration=1,
         workflow_run_id="WR-456",
+        analysis_context=AnalysisContext(
+            work_item_id="WI-123",
+            iteration=1,
+            workflow_run_id="WR-456",
+        ),
+        stage_config=RepairCycleStageConfig(
+            name="fix_failures",
+            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+        ),
     )
 
-    config = RepairCycleStageConfig(
-        name="fix_failures",
-        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
-    )
-
-    result = await mock_adapter.execute(context, config)
+    result = await mock_adapter.execute(context)
 
     # Verify systemic fix was invoked
     assert mock_adapter.systemic_fix_call_count >= 1
@@ -145,18 +148,21 @@ async def test_mock_adapter_configurable_systemic_fix_failure(
         ),
     ])
 
-    context = AnalysisContext(
+    context = RepairCycleContext(
         work_item_id="WI-123",
-        iteration=1,
         workflow_run_id="WR-456",
+        analysis_context=AnalysisContext(
+            work_item_id="WI-123",
+            iteration=1,
+            workflow_run_id="WR-456",
+        ),
+        stage_config=RepairCycleStageConfig(
+            name="fix_failures",
+            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+        ),
     )
 
-    config = RepairCycleStageConfig(
-        name="fix_failures",
-        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
-    )
-
-    result = await mock_adapter.execute(context, config)
+    result = await mock_adapter.execute(context)
 
     # Even with failed systemic fix, should eventually succeed via fallback
     assert result.overall_success is True
@@ -230,18 +236,21 @@ async def test_mock_adapter_multiple_systemic_fix_sequence(
         ),
     ])
 
-    context = AnalysisContext(
+    context = RepairCycleContext(
         work_item_id="WI-123",
-        iteration=1,
         workflow_run_id="WR-456",
+        analysis_context=AnalysisContext(
+            work_item_id="WI-123",
+            iteration=1,
+            workflow_run_id="WR-456",
+        ),
+        stage_config=RepairCycleStageConfig(
+            name="fix_failures",
+            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+        ),
     )
 
-    config = RepairCycleStageConfig(
-        name="fix_failures",
-        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
-    )
-
-    result = await mock_adapter.execute(context, config)
+    result = await mock_adapter.execute(context)
 
     # Verify two systemic fix calls occurred
     assert mock_adapter.systemic_fix_call_count == 2
@@ -297,18 +306,21 @@ async def test_mock_adapter_systemic_fix_no_files_modified(
         ),
     ])
 
-    context = AnalysisContext(
+    context = RepairCycleContext(
         work_item_id="WI-123",
-        iteration=1,
         workflow_run_id="WR-456",
+        analysis_context=AnalysisContext(
+            work_item_id="WI-123",
+            iteration=1,
+            workflow_run_id="WR-456",
+        ),
+        stage_config=RepairCycleStageConfig(
+            name="fix_failures",
+            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+        ),
     )
 
-    config = RepairCycleStageConfig(
-        name="fix_failures",
-        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
-    )
-
-    result = await mock_adapter.execute(context, config)
+    result = await mock_adapter.execute(context)
 
     # Verify systemic fix was invoked
     assert mock_adapter.systemic_fix_call_count >= 1
@@ -367,18 +379,21 @@ async def test_mock_adapter_systemic_fix_with_clock_advancement(
         ),
     ])
 
-    context = AnalysisContext(
+    context = RepairCycleContext(
         work_item_id="WI-123",
-        iteration=1,
         workflow_run_id="WR-456",
+        analysis_context=AnalysisContext(
+            work_item_id="WI-123",
+            iteration=1,
+            workflow_run_id="WR-456",
+        ),
+        stage_config=RepairCycleStageConfig(
+            name="fix_failures",
+            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+        ),
     )
 
-    config = RepairCycleStageConfig(
-        name="fix_failures",
-        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
-    )
-
-    result = await mock_adapter.execute(context, config)
+    result = await mock_adapter.execute(context)
 
     # Verify systemic fix was invoked
     assert mock_adapter.systemic_fix_call_count >= 1
@@ -438,18 +453,21 @@ async def test_mock_adapter_assert_systemic_fix_call_count(
         ),
     ])
 
-    context = AnalysisContext(
+    context = RepairCycleContext(
         work_item_id="WI-123",
-        iteration=1,
         workflow_run_id="WR-456",
+        analysis_context=AnalysisContext(
+            work_item_id="WI-123",
+            iteration=1,
+            workflow_run_id="WR-456",
+        ),
+        stage_config=RepairCycleStageConfig(
+            name="fix_failures",
+            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+        ),
     )
 
-    config = RepairCycleStageConfig(
-        name="fix_failures",
-        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
-    )
-
-    result = await mock_adapter.execute(context, config)
+    result = await mock_adapter.execute(context)
 
     # Use assertion helper
     try:
@@ -527,19 +545,22 @@ async def test_mock_adapter_systemic_fix_exhausts_results_queue(
         ),
     ])
 
-    context = AnalysisContext(
+    context = RepairCycleContext(
         work_item_id="WI-123",
-        iteration=1,
         workflow_run_id="WR-456",
-    )
-
-    config = RepairCycleStageConfig(
-        name="fix_failures",
-        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+        analysis_context=AnalysisContext(
+            work_item_id="WI-123",
+            iteration=1,
+            workflow_run_id="WR-456",
+        ),
+        stage_config=RepairCycleStageConfig(
+            name="fix_failures",
+            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+        ),
     )
 
     # Execute: should handle exhausted queue gracefully
-    result = await mock_adapter.execute(context, config)
+    result = await mock_adapter.execute(context)
 
     # Verify that adapter handled the situation (either via fallback or other mechanism)
     # The cycle should still succeed

@@ -17,7 +17,6 @@ Comprehensive scenarios cover:
 
 import pytest
 
-from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
 from codetoreum.adapters.testing.mock_systemic_analysis_adapter import (
     MockSystemicAnalysisAdapter,
@@ -30,6 +29,7 @@ from codetoreum.domain.events import (
 from codetoreum.domain.repair_cycle_types import (
     AnalysisContext,
     FailureClassification,
+    RepairCycleContext,
     RepairCycleStageConfig,
     RepairTestFailure,
     RepairTestResult,
@@ -39,21 +39,6 @@ from codetoreum.domain.repair_cycle_types import (
     SystemicFixResult,
 )
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
-from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
-from codetoreum.infrastructure.simulation.simulation_runner import SimulationRunner
-
-
-def create_config(scenario_name: str = "scenario_systemic_fix") -> SimulationConfig:
-    """Create configuration for systemic fix scenario."""
-    config = SimulationConfig.create_fast_config(
-        scenario_name=scenario_name,
-        speed_multiplier=100.0,
-    )
-    config.scenario_description = (
-        "Systemic fix test-analyze-fix-validate loop with cross-cutting "
-        "root cause analysis and conditional dispatch"
-    )
-    return config
 
 
 @pytest.mark.asyncio
@@ -74,7 +59,7 @@ async def test_scenario_systemic_fix_happy_path(
     event_store = simulation_bootstrap.adapters.event_store_as_in_memory()
 
     # Configure systemic analysis to report cross-cutting issue
-    mock_analysis._results = [
+    mock_analysis.set_results([
         SystemicAnalysisResult(
             classification=FailureClassification.CODE_DEFECT,
             confidence=0.95,
@@ -83,7 +68,7 @@ async def test_scenario_systemic_fix_happy_path(
             recommended_action="Update API contract consistently across modules",
             cross_cutting=True,
         ),
-    ]
+    ])
 
     # Configure test failures and recovery
     mock_repair.set_test_result_sequence(
@@ -130,18 +115,21 @@ async def test_scenario_systemic_fix_happy_path(
     ])
 
     # Execute repair cycle
-    context = AnalysisContext(
+    context = RepairCycleContext(
         work_item_id="WI-456",
-        iteration=1,
         workflow_run_id="WR-789",
+        analysis_context=AnalysisContext(
+            work_item_id="WI-456",
+            iteration=1,
+            workflow_run_id="WR-789",
+        ),
+        stage_config=RepairCycleStageConfig(
+            name="fix_failures",
+            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+        ),
     )
 
-    config = RepairCycleStageConfig(
-        name="fix_failures",
-        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
-    )
-
-    result = await mock_repair.execute(context, config)
+    result = await mock_repair.execute(context)
 
     # Verify outcomes
     assert result.overall_success is True
@@ -177,7 +165,7 @@ async def test_scenario_systemic_fix_non_cross_cutting_dispatches_to_files(
     mock_analysis = simulation_bootstrap.adapters.systemic_analysis_as_mock()
 
     # Configure systemic analysis to report isolated issue
-    mock_analysis._results = [
+    mock_analysis.set_results([
         SystemicAnalysisResult(
             classification=FailureClassification.CODE_DEFECT,
             confidence=0.9,
@@ -222,18 +210,21 @@ async def test_scenario_systemic_fix_non_cross_cutting_dispatches_to_files(
     ])
 
     # Execute repair cycle
-    context = AnalysisContext(
+    context = RepairCycleContext(
         work_item_id="WI-456",
-        iteration=1,
         workflow_run_id="WR-789",
+        analysis_context=AnalysisContext(
+            work_item_id="WI-456",
+            iteration=1,
+            workflow_run_id="WR-789",
+        ),
+        stage_config=RepairCycleStageConfig(
+            name="fix_failures",
+            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+        ),
     )
 
-    config = RepairCycleStageConfig(
-        name="fix_failures",
-        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
-    )
-
-    result = await mock_repair.execute(context, config)
+    result = await mock_repair.execute(context)
 
     # Verify outcomes
     assert result.overall_success is True
@@ -260,7 +251,7 @@ async def test_scenario_systemic_fix_multiple_iterations(
     mock_analysis = simulation_bootstrap.adapters.systemic_analysis_as_mock()
 
     # Configure two systemic analyses (one for each iteration)
-    mock_analysis._results = [
+    mock_analysis.set_results([
         SystemicAnalysisResult(
             classification=FailureClassification.CODE_DEFECT,
             confidence=0.7,
@@ -344,18 +335,21 @@ async def test_scenario_systemic_fix_multiple_iterations(
     ])
 
     # Execute repair cycle
-    context = AnalysisContext(
+    context = RepairCycleContext(
         work_item_id="WI-456",
-        iteration=1,
         workflow_run_id="WR-789",
+        analysis_context=AnalysisContext(
+            work_item_id="WI-456",
+            iteration=1,
+            workflow_run_id="WR-789",
+        ),
+        stage_config=RepairCycleStageConfig(
+            name="fix_failures",
+            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+        ),
     )
 
-    config = RepairCycleStageConfig(
-        name="fix_failures",
-        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
-    )
-
-    result = await mock_repair.execute(context, config)
+    result = await mock_repair.execute(context)
 
     # Verify outcomes
     assert result.overall_success is True
@@ -386,7 +380,7 @@ async def test_scenario_systemic_fix_large_failure_count_fallback(
 
     # Configure systemic analysis with cross_cutting=True
     # (but we have > 50 failures, so should fall back anyway)
-    mock_analysis._results = [
+    mock_analysis.set_results([
         SystemicAnalysisResult(
             classification=FailureClassification.CODE_DEFECT,
             confidence=0.9,
@@ -428,18 +422,21 @@ async def test_scenario_systemic_fix_large_failure_count_fallback(
     ])
 
     # Execute repair cycle
-    context = AnalysisContext(
+    context = RepairCycleContext(
         work_item_id="WI-456",
-        iteration=1,
         workflow_run_id="WR-789",
+        analysis_context=AnalysisContext(
+            work_item_id="WI-456",
+            iteration=1,
+            workflow_run_id="WR-789",
+        ),
+        stage_config=RepairCycleStageConfig(
+            name="fix_failures",
+            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+        ),
     )
 
-    config = RepairCycleStageConfig(
-        name="fix_failures",
-        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
-    )
-
-    result = await mock_repair.execute(context, config)
+    result = await mock_repair.execute(context)
 
     # Verify outcomes
     assert result.overall_success is True
@@ -464,7 +461,7 @@ async def test_scenario_systemic_fix_with_event_emission(
     event_store = simulation_bootstrap.adapters.event_store_as_in_memory()
 
     # Configure systemic analysis
-    mock_analysis._results = [
+    mock_analysis.set_results([
         SystemicAnalysisResult(
             classification=FailureClassification.CODE_DEFECT,
             confidence=0.9,
@@ -517,18 +514,21 @@ async def test_scenario_systemic_fix_with_event_emission(
     ])
 
     # Execute repair cycle
-    context = AnalysisContext(
+    context = RepairCycleContext(
         work_item_id="WI-456",
-        iteration=1,
         workflow_run_id="WR-789",
+        analysis_context=AnalysisContext(
+            work_item_id="WI-456",
+            iteration=1,
+            workflow_run_id="WR-789",
+        ),
+        stage_config=RepairCycleStageConfig(
+            name="fix_failures",
+            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+        ),
     )
 
-    config = RepairCycleStageConfig(
-        name="fix_failures",
-        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
-    )
-
-    result = await mock_repair.execute(context, config)
+    result = await mock_repair.execute(context)
 
     # Verify overall success
     assert result.overall_success is True
