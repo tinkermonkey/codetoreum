@@ -20,7 +20,6 @@ For each test type:
 from typing import Protocol
 
 from codetoreum.domain.repair_cycle_types import (
-    FailureClassification,
     RepairCycleAgentConfig,
     RepairCycleResult,
     RepairTestFailure,

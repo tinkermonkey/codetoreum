@@ -42,7 +42,6 @@ from codetoreum.domain.events.repair_cycle_events import (
 )
 from codetoreum.domain.repair_cycle_types import (
     CycleResult,
-    FailureClassification,
     RepairCycleCheckpoint,
     RepairCycleResult,
     RepairTestFailure,
