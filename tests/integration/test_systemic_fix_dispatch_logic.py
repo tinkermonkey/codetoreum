@@ -205,12 +205,16 @@ async def test_dispatch_to_file_fix_when_cross_cutting_false(
 async def test_systemic_fix_with_many_failures(
     seeded_simulation_bootstrap,
 ):
-    """Test systemic fix is called when cross_cutting=True, regardless of failure count."""
+    """Test that failure count ceiling (50) is enforced for systemic fix.
+
+    When failures exceed the ceiling, dispatcher falls back to file-level fixes
+    even if cross_cutting=True. This prevents overwhelming the systemic fix agent.
+    """
     # Setup
     mock_repair = seeded_simulation_bootstrap.adapters.repair_cycle_as_mock()
     mock_analysis = seeded_simulation_bootstrap.adapters.systemic_analysis_as_mock()
 
-    # Create 51 failures
+    # Create 51 failures (exceeds ceiling of 50)
     failures = tuple(
         RepairTestFailure(f"test_{i}.py", f"test_case_{i}", f"Failure {i}")
         for i in range(51)
@@ -268,8 +272,106 @@ async def test_systemic_fix_with_many_failures(
     # Execute repair cycle
     result = await mock_repair.execute(context)
 
-    # Verify systemic fix WAS called (cross_cutting=True means systemic fix, regardless of count)
-    assert mock_repair.systemic_fix_call_count > 0
+    # Verify systemic fix was NOT called (exceeded ceiling of 50)
+    assert mock_repair.systemic_fix_call_count == 0, (
+        "Failure count (51) exceeds ceiling (50), should fallback to file-level fixes"
+    )
+    # Verify file fix WAS called (fallback behavior)
+    assert mock_repair.file_fix_call_count > 0, (
+        "Should fallback to file-level fixes when failure count exceeds ceiling"
+    )
+    # Verify overall success
+    assert result.overall_success is True
+
+
+@pytest.mark.asyncio
+async def test_systemic_fix_at_failure_ceiling(
+    seeded_simulation_bootstrap,
+):
+    """Test that systemic fix IS called when failures are at or below ceiling (50).
+
+    Validates boundary condition: exactly 50 failures should dispatch to systemic fix.
+    """
+    # Setup
+    mock_repair = seeded_simulation_bootstrap.adapters.repair_cycle_as_mock()
+    mock_analysis = seeded_simulation_bootstrap.adapters.systemic_analysis_as_mock()
+
+    # Create exactly 50 failures (at ceiling)
+    failures = tuple(
+        RepairTestFailure(f"test_{i}.py", f"test_case_{i}", f"Failure {i}")
+        for i in range(50)
+    )
+
+    # Pre-configure mock analysis to return cross_cutting=True
+    mock_analysis.set_results([
+        SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.9,
+            reasoning="Cross-cutting issue affecting many files",
+            affected_files=tuple(f"file_{i}.py" for i in range(10)),
+            recommended_action="Fix systematically",
+            cross_cutting=True,
+        ),
+    ])
+
+    # Pre-configure mock repair with 50 test failures
+    mock_repair.set_test_result_sequence(
+        RepairTestType.UNIT,
+        [
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=1,
+                passed=0,
+                failed=50,
+                warnings=0,
+                failures=failures,
+                warning_list=(),
+                raw_output="50 test failures detected",
+                timestamp="2025-03-31T10:00:00Z",
+            ),
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=2,
+                passed=50,
+                failed=0,
+                warnings=0,
+                failures=(),
+                warning_list=(),
+                raw_output="All tests passed",
+                timestamp="2025-03-31T10:01:00Z",
+            ),
+        ],
+    )
+
+    # Pre-configure systemic fix to succeed
+    mock_repair.set_systemic_fix_result([
+        SystemicFixResult(
+            success=True,
+            files_modified=("api.py", "models.py", "services.py"),
+            root_cause_addressed="Fixed cross-cutting issue",
+            duration_seconds=120.0,
+        ),
+    ])
+
+    # Create test context
+    context = SimpleRepairCycleContext(
+        work_item_id="WI-123",
+        workflow_run_id="WR-456",
+        stage_name="fix_failures",
+        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+    )
+
+    # Execute repair cycle
+    result = await mock_repair.execute(context)
+
+    # Verify systemic fix WAS called (at ceiling boundary)
+    assert mock_repair.systemic_fix_call_count == 1, (
+        "50 failures at ceiling should dispatch to systemic fix"
+    )
+    # Verify file fix was NOT called (systemic fix used)
+    assert mock_repair.file_fix_call_count == 0, (
+        "Should use systemic fix when at ceiling"
+    )
     # Verify overall success
     assert result.overall_success is True
 
@@ -406,14 +508,14 @@ async def test_systemic_fix_result_with_no_files_modified(
     mock_repair = seeded_simulation_bootstrap.adapters.repair_cycle_as_mock()
     mock_analysis = seeded_simulation_bootstrap.adapters.systemic_analysis_as_mock()
 
-    # Configure cross_cutting analysis
+    # Configure CODE_DEFECT + cross_cutting (routes to systemic fix)
     mock_analysis.set_results([
         SystemicAnalysisResult(
-            classification=FailureClassification.ENVIRONMENT_ISSUE,
+            classification=FailureClassification.CODE_DEFECT,
             confidence=0.9,
-            reasoning="Environment variable misconfiguration",
-            affected_files=(),  # No code files to modify
-            recommended_action="Set correct environment variables",
+            reasoning="Cross-cutting logic issue affecting multiple modules",
+            affected_files=(),  # No code files to modify (conceptual fix)
+            recommended_action="Update internal logic",
             cross_cutting=True,
         ),
     ])
@@ -428,11 +530,11 @@ async def test_systemic_fix_result_with_no_files_modified(
                 failed=5,
                 warnings=0,
                 failures=tuple(
-                    RepairTestFailure(f"test_{i}.py", f"test_{i}", "Config error")
+                    RepairTestFailure(f"test_{i}.py", f"test_{i}", "Logic error")
                     for i in range(5)
                 ),
                 warning_list=(),
-                raw_output="Environment configuration errors",
+                raw_output="Cross-cutting logic errors",
                 timestamp="2025-03-31T10:00:00Z",
             ),
             RepairTestResult(
@@ -443,18 +545,18 @@ async def test_systemic_fix_result_with_no_files_modified(
                 warnings=0,
                 failures=(),
                 warning_list=(),
-                raw_output="All tests passed after environment fix",
+                raw_output="All tests passed after systemic fix",
                 timestamp="2025-03-31T10:01:00Z",
             ),
         ],
     )
 
-    # Systemic fix succeeds but modifies no files
+    # Systemic fix succeeds but modifies no files (conceptual fix)
     mock_repair.set_systemic_fix_result([
         SystemicFixResult(
             success=True,
             files_modified=(),  # No files modified
-            root_cause_addressed="Environment variables correctly configured",
+            root_cause_addressed="Logic fixed through code generation (no file changes)",
             duration_seconds=30.0,
         ),
     ])
@@ -843,11 +945,11 @@ async def test_dispatch_dependency_issue(
     # Execute repair cycle
     result = await mock_repair.execute(context)
 
-    # Verify systemic fix was called (DEPENDENCY_ISSUE dispatch to apply_systemic_fixes)
-    assert mock_repair.systemic_fix_call_count == 1, (
-        "DEPENDENCY_ISSUE classification should dispatch to systemic fix"
+    # Verify fix_failures_systemically was NOT called (DEPENDENCY_ISSUE routes to apply_systemic_fixes, not fix_failures_systemically)
+    assert mock_repair.systemic_fix_call_count == 0, (
+        "DEPENDENCY_ISSUE should route to apply_systemic_fixes(), not fix_failures_systemically()"
     )
-    # Verify file fix was NOT called
+    # Verify file fix was NOT called (DEPENDENCY_ISSUE uses apply_systemic_fixes)
     assert mock_repair.file_fix_call_count == 0, (
         "DEPENDENCY_ISSUE should not use file-level fixes"
     )
@@ -922,11 +1024,11 @@ async def test_dispatch_configuration_issue(
     # Execute repair cycle
     result = await mock_repair.execute(context)
 
-    # Verify systemic fix was called (CONFIGURATION_ISSUE dispatch to apply_systemic_fixes)
-    assert mock_repair.systemic_fix_call_count == 1, (
-        "CONFIGURATION_ISSUE classification should dispatch to systemic fix"
+    # Verify fix_failures_systemically was NOT called (CONFIGURATION_ISSUE routes to apply_systemic_fixes, not fix_failures_systemically)
+    assert mock_repair.systemic_fix_call_count == 0, (
+        "CONFIGURATION_ISSUE should route to apply_systemic_fixes(), not fix_failures_systemically()"
     )
-    # Verify file fix was NOT called
+    # Verify file fix was NOT called (CONFIGURATION_ISSUE uses apply_systemic_fixes)
     assert mock_repair.file_fix_call_count == 0, (
         "CONFIGURATION_ISSUE should not use file-level fixes"
     )
@@ -934,95 +1036,3 @@ async def test_dispatch_configuration_issue(
     assert result.overall_success is True
     # Verify tests completed
     assert len(result.test_results) > 0
-
-
-@pytest.mark.asyncio
-async def test_dispatch_non_code_defect_with_cross_cutting_true(
-    seeded_simulation_bootstrap,
-):
-    """Test that non-CODE_DEFECT classifications with cross_cutting=True route to systemic fix.
-
-    Regression test for issue: Non-CODE_DEFECT classifications with cross_cutting=True
-    were not being routed to systemic fix. This test ensures DEPENDENCY_ISSUE and
-    CONFIGURATION_ISSUE with cross_cutting=True trigger systemic fix dispatch.
-    """
-    # Setup
-    mock_repair = seeded_simulation_bootstrap.adapters.repair_cycle_as_mock()
-    mock_analysis = seeded_simulation_bootstrap.adapters.systemic_analysis_as_mock()
-
-    # Configure DEPENDENCY_ISSUE with cross_cutting=True
-    mock_analysis.set_results([
-        SystemicAnalysisResult(
-            classification=FailureClassification.DEPENDENCY_ISSUE,
-            confidence=0.95,
-            reasoning="Major version bump in core dependency affects all modules",
-            affected_files=("requirements.txt", "setup.py", "pyproject.toml"),
-            recommended_action="Update dependency and fix all references",
-            cross_cutting=True,  # KEY: This should trigger systemic fix
-        ),
-    ])
-
-    # Test sequence: fail → pass (after systemic fix)
-    mock_repair.set_test_result_sequence(
-        RepairTestType.UNIT,
-        [
-            RepairTestResult(
-                test_type=RepairTestType.UNIT,
-                iteration=1,
-                passed=4,
-                failed=6,
-                warnings=0,
-                failures=tuple(
-                    RepairTestFailure(f"test_{i}.py", f"test_func_{i}", "API incompatibility")
-                    for i in range(6)
-                ),
-                warning_list=(),
-                raw_output="Dependency API compatibility failures across multiple modules",
-                timestamp="2025-03-31T10:00:00Z",
-            ),
-            RepairTestResult(
-                test_type=RepairTestType.UNIT,
-                iteration=2,
-                passed=10,
-                failed=0,
-                warnings=0,
-                failures=(),
-                warning_list=(),
-                raw_output="All tests passed after systemic dependency fix",
-                timestamp="2025-03-31T10:01:00Z",
-            ),
-        ],
-    )
-
-    # Configure systemic fix to succeed
-    mock_repair.set_systemic_fix_result([
-        SystemicFixResult(
-            success=True,
-            files_modified=("requirements.txt", "setup.py", "api.py", "models.py"),
-            root_cause_addressed="Updated dependency version and all affected API calls",
-            duration_seconds=180.0,
-        ),
-    ])
-
-    # Create test context
-    context = SimpleRepairCycleContext(
-        work_item_id="WI-123",
-        workflow_run_id="WR-456",
-        stage_name="fix_failures",
-        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
-    )
-
-    # Execute repair cycle
-    result = await mock_repair.execute(context)
-
-    # CRITICAL ASSERTION: Verify systemic fix was called (not file fix)
-    # This tests the fix for: "Non-CODE_DEFECT classifications with cross_cutting=True do not route to systemic fix"
-    assert mock_repair.systemic_fix_call_count == 1, (
-        "DEPENDENCY_ISSUE with cross_cutting=True should dispatch to systemic fix, "
-        "not file-level fixes"
-    )
-    assert mock_repair.file_fix_call_count == 0, (
-        "DEPENDENCY_ISSUE with cross_cutting=True should NOT use file-level fixes"
-    )
-    # Verify overall success
-    assert result.overall_success is True

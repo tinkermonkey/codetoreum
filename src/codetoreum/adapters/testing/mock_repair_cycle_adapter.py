@@ -1684,9 +1684,16 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                             list(test_result.failures), analysis_context
                         )
 
-                        # Dispatch based on cross_cutting flag (binary dispatch per specification)
-                        if classification.cross_cutting:
-                            # Systemic fix: address root cause across all affected files
+                        # Dispatch based on spec: CODE_DEFECT + cross_cutting=True routes to systemic fix
+                        # with practical ceiling (50 failures) to prevent overwhelming the agent
+                        failure_count_ceiling = 50
+
+                        if (
+                            classification.classification == FailureClassification.CODE_DEFECT
+                            and classification.cross_cutting
+                            and len(test_result.failures) <= failure_count_ceiling
+                        ):
+                            # CODE_DEFECT + cross_cutting + within ceiling → systemic fix
                             systemic_result = await self.fix_failures_systemically(
                                 test_result.failures, classification, config, context
                             )
@@ -1696,12 +1703,31 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                                 rebuild_success = await self.rebuild_environment(config, context)
                                 if rebuild_success:
                                     await self.verify_environment(config, context)
+                        elif (
+                            classification.classification == FailureClassification.CODE_DEFECT
+                            and classification.cross_cutting
+                            and len(test_result.failures) > failure_count_ceiling
+                        ):
+                            # CODE_DEFECT + cross_cutting but EXCEEDS ceiling → fallback to file-level fix
+                            logger.info(
+                                f"Failure count ({len(test_result.failures)}) exceeds ceiling ({failure_count_ceiling}), "
+                                f"falling back to file-level fixes",
+                                extra={
+                                    "workflow_run_id": context.workflow_run_id,
+                                    "iteration": iteration,
+                                    "failure_count": len(test_result.failures),
+                                    "ceiling": failure_count_ceiling,
+                                },
+                                exc_info=False,
+                            )
+                            grouped = self._group_failures_by_file(test_result.failures)
+                            files_fixed += await self.fix_failures_by_file(grouped, config, context)
                         elif classification.classification == FailureClassification.CODE_DEFECT:
-                            # File-level fix: fix failures grouped by file
+                            # CODE_DEFECT + cross_cutting=False → file-level fix
                             grouped = self._group_failures_by_file(test_result.failures)
                             files_fixed += await self.fix_failures_by_file(grouped, config, context)
                         elif classification.classification == FailureClassification.ENVIRONMENT_ISSUE:
-                            # Environment fix
+                            # Environment issue (cross_cutting value doesn't matter)
                             rebuild_success = await self.rebuild_environment(config, context)
                             if rebuild_success:
                                 await self.verify_environment(config, context)
@@ -1712,17 +1738,15 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                             FailureClassification.DEPENDENCY_ISSUE,
                             FailureClassification.CONFIGURATION_ISSUE,
                         ):
-                            # DEPENDENCY_ISSUE and CONFIGURATION_ISSUE always route to systemic fixes
-                            # (regardless of cross_cutting flag, unlike CODE_DEFECT)
-                            systemic_result = await self.fix_failures_systemically(
-                                test_result.failures, classification, config, context
+                            # DEPENDENCY_ISSUE and CONFIGURATION_ISSUE route to apply_systemic_fixes
+                            # (not fix_failures_systemically, regardless of cross_cutting flag)
+                            fix_success = await self.apply_systemic_fixes(
+                                classification.reasoning,
+                                test_result,
+                                config,
+                                context,
                             )
-                            files_fixed += len(systemic_result.files_modified)
-                            # After systemic fix, rebuild and verify environment
-                            if systemic_result.success:
-                                rebuild_success = await self.rebuild_environment(config, context)
-                                if rebuild_success:
-                                    await self.verify_environment(config, context)
+                            # No files_fixed count for these special handlers
                         else:
                             # Default: use file-level fixes
                             grouped = self._group_failures_by_file(test_result.failures)
