@@ -41,6 +41,7 @@ class MockSystemicAnalysisAdapter(ISystemicAnalysisService):
                 reasoning="Stale Docker image",
                 affected_files=(),
                 recommended_action="Rebuild environment",
+                cross_cutting=False,
             ),
         ])
 

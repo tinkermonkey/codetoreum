@@ -56,6 +56,7 @@ async def test_systemic_analysis_configuration_in_scenario(
             reasoning="Stale Docker image detected",
             affected_files=(),
             recommended_action="Rebuild environment and retry",
+            cross_cutting=False,
         ),
     ]
 
@@ -78,6 +79,7 @@ async def test_systemic_analysis_call_recording(
             reasoning="Test failure in src/main.py",
             affected_files=("src/main.py",),
             recommended_action="Fix code defects",
+            cross_cutting=False,
         ),
     ]
 
@@ -225,6 +227,7 @@ async def test_mock_adapter_can_be_configured_with_environment_issue(
             reasoning="Docker image cache stale",
             affected_files=(),
             recommended_action="Rebuild environment",
+            cross_cutting=False,
         ),
     ]
 

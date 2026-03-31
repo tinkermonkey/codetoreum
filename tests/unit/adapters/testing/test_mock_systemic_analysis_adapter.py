@@ -97,6 +97,7 @@ class TestMockSystemicAnalysisAdapter:
             reasoning="Stale Docker image",
             affected_files=("Dockerfile",),
             recommended_action="Rebuild environment",
+            cross_cutting=False,
         )
         adapter = MockSystemicAnalysisAdapter(results=[custom_result])
 
@@ -118,6 +119,7 @@ class TestMockSystemicAnalysisAdapter:
             reasoning="Docker issue",
             affected_files=("Dockerfile",),
             recommended_action="Rebuild",
+            cross_cutting=False,
         )
         result2_config = SystemicAnalysisResult(
             classification=FailureClassification.DEPENDENCY_ISSUE,
@@ -125,6 +127,7 @@ class TestMockSystemicAnalysisAdapter:
             reasoning="Package version mismatch",
             affected_files=("requirements.txt",),
             recommended_action="Update dependencies",
+            cross_cutting=True,
         )
         adapter = MockSystemicAnalysisAdapter(results=[result1_config, result2_config])
 
@@ -201,6 +204,7 @@ class TestMockSystemicAnalysisAdapter:
                 reasoning="First result",
                 affected_files=(),
                 recommended_action="Fix code",
+                cross_cutting=False,
             ),
             SystemicAnalysisResult(
                 classification=FailureClassification.TRANSIENT_FAILURE,
@@ -208,6 +212,7 @@ class TestMockSystemicAnalysisAdapter:
                 reasoning="Second result",
                 affected_files=(),
                 recommended_action="Retry",
+                cross_cutting=True,
             ),
             SystemicAnalysisResult(
                 classification=FailureClassification.CONFIGURATION_ISSUE,
@@ -215,6 +220,7 @@ class TestMockSystemicAnalysisAdapter:
                 reasoning="Third result",
                 affected_files=("config.yaml",),
                 recommended_action="Fix configuration",
+                cross_cutting=False,
             ),
         ]
         adapter = MockSystemicAnalysisAdapter(results=results)
@@ -287,6 +293,7 @@ class TestMockSystemicAnalysisAdapter:
             reasoning="Custom reasoning text",
             affected_files=("file1.py", "file2.py"),
             recommended_action="Update dependencies",
+            cross_cutting=True,
         )
         adapter = MockSystemicAnalysisAdapter(results=[custom_result])
 
