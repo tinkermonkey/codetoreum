@@ -1699,6 +1699,21 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                         elif classification.classification == FailureClassification.TRANSIENT_FAILURE:
                             # For transient failures, just re-test without fixing
                             pass
+                        elif classification.classification in (
+                            FailureClassification.DEPENDENCY_ISSUE,
+                            FailureClassification.CONFIGURATION_ISSUE,
+                        ):
+                            # DEPENDENCY_ISSUE and CONFIGURATION_ISSUE always route to systemic fixes
+                            # (regardless of cross_cutting flag, unlike CODE_DEFECT)
+                            systemic_result = await self.fix_failures_systemically(
+                                test_result.failures, classification, config, context
+                            )
+                            files_fixed += len(systemic_result.files_modified)
+                            # After systemic fix, rebuild and verify environment
+                            if systemic_result.success:
+                                rebuild_success = await self.rebuild_environment(config, context)
+                                if rebuild_success:
+                                    await self.verify_environment(config, context)
                         else:
                             # Default: use file-level fixes
                             grouped = self._group_failures_by_file(test_result.failures)

@@ -764,11 +764,21 @@ async def test_dispatch_transient_failure_with_escalation(
     # Execute repair cycle
     result = await mock_repair.execute(context)
 
-    # Verify success (the key assertion - if escalation worked, cycle completed)
-    assert result.overall_success is True, "Escalation should allow cycle to complete successfully"
+    # Verify no systemic fixes were applied (transient failures should never use systemic path)
+    assert mock_repair.systemic_fix_call_count == 0, (
+        "TRANSIENT_FAILURE should not use systemic fixes"
+    )
+    # Note: The mock adapter's _run_test_cycle does not implement consecutive transient escalation
+    # tracking (that logic is in the production adapter). The mock simply retries TRANSIENT_FAILURE
+    # without fixing. In a real scenario, after consecutive_transient_failures > 2, the production
+    # adapter would escalate to file-level fixes. The test validates that the cycle continues
+    # through multiple iterations and eventually succeeds via retries.
+
+    # Verify success (cycle should eventually pass via retries or escalation)
+    assert result.overall_success is True, "Transient failures should eventually resolve via retries"
     # Verify the cycle ran through multiple iterations
     if result.test_results:
-        assert result.test_results[0].iterations >= 3, "Should have run at least 3 iterations before escalation"
+        assert result.test_results[0].iterations >= 3, "Should have run at least 3 iterations for escalation scenario"
 
 
 @pytest.mark.asyncio
@@ -837,6 +847,14 @@ async def test_dispatch_dependency_issue(
     # Execute repair cycle
     result = await mock_repair.execute(context)
 
+    # Verify systemic fix was called (DEPENDENCY_ISSUE dispatch to apply_systemic_fixes)
+    assert mock_repair.systemic_fix_call_count == 1, (
+        "DEPENDENCY_ISSUE classification should dispatch to systemic fix"
+    )
+    # Verify file fix was NOT called
+    assert mock_repair.file_fix_call_count == 0, (
+        "DEPENDENCY_ISSUE should not use file-level fixes"
+    )
     # Verify overall success
     assert result.overall_success is True
     # Verify tests completed
@@ -908,6 +926,14 @@ async def test_dispatch_configuration_issue(
     # Execute repair cycle
     result = await mock_repair.execute(context)
 
+    # Verify systemic fix was called (CONFIGURATION_ISSUE dispatch to apply_systemic_fixes)
+    assert mock_repair.systemic_fix_call_count == 1, (
+        "CONFIGURATION_ISSUE classification should dispatch to systemic fix"
+    )
+    # Verify file fix was NOT called
+    assert mock_repair.file_fix_call_count == 0, (
+        "CONFIGURATION_ISSUE should not use file-level fixes"
+    )
     # Verify overall success
     assert result.overall_success is True
     # Verify tests completed
