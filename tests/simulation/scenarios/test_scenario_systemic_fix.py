@@ -73,7 +73,6 @@ async def test_scenario_systemic_fix_happy_path(
     # Setup adapters
     mock_repair = simulation_bootstrap.adapters.repair_cycle_as_mock()
     mock_analysis = simulation_bootstrap.adapters.systemic_analysis_as_mock()
-    event_store = simulation_bootstrap.adapters.event_store_as_in_memory()
 
     # Configure systemic analysis to report cross-cutting issue
     mock_analysis.set_results([
@@ -497,3 +496,15 @@ async def test_scenario_systemic_fix_with_event_emission(
 
     # Verify overall success
     assert result.overall_success is True
+
+    # Verify audit trail: check that expected domain events were emitted
+    events = event_store.get_events()
+    event_types = [type(event).__name__ for event in events]
+
+    # Verify the expected event sequence is present in the audit trail
+    assert any(isinstance(e, SystemicAnalysisCompletedEvent) for e in events), \
+        "SystemicAnalysisCompletedEvent should be emitted"
+    assert any(isinstance(e, SystemicFixStartedEvent) for e in events), \
+        "SystemicFixStartedEvent should be emitted"
+    assert any(isinstance(e, SystemicFixCompletedEvent) for e in events), \
+        "SystemicFixCompletedEvent should be emitted"

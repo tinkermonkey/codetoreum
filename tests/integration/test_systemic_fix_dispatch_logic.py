@@ -35,7 +35,6 @@ from codetoreum.domain.repair_cycle_types import (
     SystemicFixResult,
 )
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
-from codetoreum.ports.output.repair_cycle_service import RepairCycleContext
 
 
 @dataclass
