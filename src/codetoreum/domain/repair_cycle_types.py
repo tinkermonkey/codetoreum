@@ -628,20 +628,20 @@ class SystemicFixResult:
 
     Attributes:
         success: Whether the systemic fix successfully addressed the root cause
-        files_modified: Immutable tuple of file paths modified by the systemic fix
+        files_modified: List of file paths modified by the systemic fix
         root_cause_addressed: Description of what root cause was addressed
         duration_seconds: Time taken to apply the systemic fix (non-negative)
     """
 
     success: bool
-    files_modified: tuple[str, ...]
+    files_modified: list[str]
     root_cause_addressed: str
     duration_seconds: float
 
     def __post_init__(self) -> None:
         """Validate systemic fix result after initialization."""
-        if not isinstance(self.files_modified, tuple):
-            object.__setattr__(self, "files_modified", tuple(self.files_modified))
+        if not isinstance(self.files_modified, list):
+            object.__setattr__(self, "files_modified", list(self.files_modified))
         if self.duration_seconds < 0:
             msg = "duration_seconds must be non-negative"
             raise ValueError(msg)

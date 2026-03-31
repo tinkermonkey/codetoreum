@@ -1093,8 +1093,8 @@ class RepairCycleCheckpointFailedEvent(CodetoreumEvent):
         if not self.test_type:
             msg = "test_type is required"
             raise ValueError(msg)
-        if self.iteration < 0:
-            msg = "iteration must be >= 0"
+        if self.iteration < 1:
+            msg = "iteration must be >= 1"
             raise ValueError(msg)
         if not self.error_type:
             msg = "error_type is required"
