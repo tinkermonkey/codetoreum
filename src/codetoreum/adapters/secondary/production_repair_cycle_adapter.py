@@ -1477,7 +1477,7 @@ After making changes, respond with JSON:
             if isinstance(response, str):
                 try:
                     response = json.loads(response)
-                except json.JSONDecodeError as e:
+                except json.JSONDecodeError:
                     # Log the parse error before falling back
                     logger.warning(
                         "LLM response was not valid JSON, falling back to plain response wrapper",
