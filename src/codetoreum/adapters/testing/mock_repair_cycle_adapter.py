@@ -1652,6 +1652,9 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         start_time = self.clock.now()
         test_type_index = len(self._cycle_results) + 1
         last_test_result = None
+        prior_fix_attempts: list[str] = []
+        consecutive_transient_failures = 0
+        max_consecutive_transient = 3
 
         self._log_event(
             {
