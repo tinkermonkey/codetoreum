@@ -927,6 +927,9 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 duration_seconds=duration,
             )
 
+        except CircuitBreakerOpenError:
+            # Re-raise circuit breaker errors as specified in docstring
+            raise
         except Exception as e:
             logger.error(
                 "Unexpected error in systemic fix",
@@ -1477,19 +1480,23 @@ After making changes, respond with JSON:
             if isinstance(response, str):
                 try:
                     response = json.loads(response)
-                except json.JSONDecodeError:
-                    # Log the parse error before falling back
-                    logger.warning(
-                        "LLM response was not valid JSON, falling back to plain response wrapper",
+                except json.JSONDecodeError as e:
+                    # Reject non-JSON responses instead of fabricating success
+                    logger.error(
+                        "LLM response was not valid JSON",
                         extra={
                             "workflow_run_id": context.workflow_run_id,
                             "operation": operation_name,
                             "raw_response": response[:500],  # Limit response length in logs
+                            "error": str(e),
+                            "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
                         },
                         exc_info=True,
                     )
-                    # If not valid JSON, treat as plain response
-                    response = {"status": "success", "response": response}
+                    # Raise exception to prevent garbled responses from being treated as success
+                    raise ValueError(
+                        f"LLM operation {operation_name} returned non-JSON response: {response[:200]}"
+                    ) from e
 
             # Check for failure indicators in response
             if isinstance(response, dict):
@@ -1926,11 +1933,17 @@ Return a JSON response with the status of dependency fixes applied."""
                                 systemic_result = await self.fix_failures_systemically(
                                     test_result.failures, classification, config, context
                                 )
-                                files_fixed += len(systemic_result.files_modified)
-                                prior_fix_attempts.append(
-                                    f"Iteration {iteration}: CODE_DEFECT (cross-cutting), systemic fix applied to "
-                                    f"{len(systemic_result.files_modified)} files"
-                                )
+                                # Only count files as fixed if the systemic fix succeeded
+                                if systemic_result.success:
+                                    files_fixed += len(systemic_result.files_modified)
+                                    prior_fix_attempts.append(
+                                        f"Iteration {iteration}: CODE_DEFECT (cross-cutting), systemic fix applied to "
+                                        f"{len(systemic_result.files_modified)} files"
+                                    )
+                                else:
+                                    prior_fix_attempts.append(
+                                        f"Iteration {iteration}: CODE_DEFECT (cross-cutting), systemic fix attempted but failed"
+                                    )
                             elif (
                                 classification.classification == FailureClassification.CODE_DEFECT
                                 and classification.cross_cutting
