@@ -1741,32 +1741,28 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                             and len(test_result.failures) <= SYSTEMIC_FIX_FAILURE_CEILING
                         ):
                             # CODE_DEFECT + cross_cutting + within ceiling → systemic fix
+                            consecutive_transient_failures = 0  # Reset counter
                             systemic_result = await self.fix_failures_systemically(
                                 test_result.failures, classification, config, context
                             )
-                            files_fixed += len(systemic_result.files_modified)
-                            # After systemic fix, rebuild and verify environment
+                            # Only count files as fixed if the systemic fix succeeded
                             if systemic_result.success:
-                                rebuild_success = await self.rebuild_environment(config, context)
-                                if rebuild_success:
-                                    verify_success = await self.verify_environment(config, context)
-                                    if not verify_success:
-                                        logger.error(
-                                            "Environment verification failed after rebuild",
-                                            extra={
-                                                "workflow_run_id": context.workflow_run_id,
-                                                "test_type": config.test_type.value,
-                                                "iteration": iteration,
-                                                "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
-                                            },
-                                            exc_info=False,
-                                        )
+                                files_fixed += len(systemic_result.files_modified)
+                                prior_fix_attempts.append(
+                                    f"Iteration {iteration}: CODE_DEFECT (cross-cutting), systemic fix applied to "
+                                    f"{len(systemic_result.files_modified)} files"
+                                )
+                            else:
+                                prior_fix_attempts.append(
+                                    f"Iteration {iteration}: CODE_DEFECT (cross-cutting), systemic fix attempted but failed"
+                                )
                         elif (
                             classification.classification == FailureClassification.CODE_DEFECT
                             and classification.cross_cutting
                             and len(test_result.failures) > SYSTEMIC_FIX_FAILURE_CEILING
                         ):
                             # CODE_DEFECT + cross_cutting but EXCEEDS ceiling → fallback to file-level fix
+                            consecutive_transient_failures = 0  # Reset counter
                             logger.info(
                                 f"Failure count ({len(test_result.failures)}) exceeds ceiling ({SYSTEMIC_FIX_FAILURE_CEILING}), "
                                 f"falling back to file-level fixes",
@@ -1779,12 +1775,20 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                             )
                             grouped = self._group_failures_by_file(test_result.failures)
                             files_fixed += await self.fix_failures_by_file(grouped, config, context)
+                            prior_fix_attempts.append(
+                                f"Iteration {iteration}: CODE_DEFECT (cross-cutting, {len(test_result.failures)} failures > {SYSTEMIC_FIX_FAILURE_CEILING} ceiling), "
+                                f"fell back to file-level fixes"
+                            )
                         elif classification.classification == FailureClassification.CODE_DEFECT:
-                            # CODE_DEFECT + cross_cutting=False → file-level fix
+                            consecutive_transient_failures = 0  # Reset counter
+                            # Apply per-file fix for non-cross-cutting issues
                             grouped = self._group_failures_by_file(test_result.failures)
                             files_fixed += await self.fix_failures_by_file(grouped, config, context)
+                            prior_fix_attempts.append(
+                                f"Iteration {iteration}: CODE_DEFECT classified, applied file-level fixes"
+                            )
                         elif classification.classification == FailureClassification.ENVIRONMENT_ISSUE:
-                            # Environment issue (cross_cutting value doesn't matter)
+                            consecutive_transient_failures = 0  # Reset counter
                             rebuild_success = await self.rebuild_environment(config, context)
                             if rebuild_success:
                                 verify_success = await self.verify_environment(config, context)
@@ -1799,22 +1803,57 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                                         },
                                         exc_info=False,
                                     )
+                                    prior_fix_attempts.append(
+                                        f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuilt environment but verification failed"
+                                    )
+                                else:
+                                    prior_fix_attempts.append(
+                                        f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuilt and verified environment"
+                                    )
+                            else:
+                                prior_fix_attempts.append(
+                                    f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuild failed"
+                                )
                         elif classification.classification == FailureClassification.TRANSIENT_FAILURE:
-                            # For transient failures, just re-test without fixing
-                            pass
+                            consecutive_transient_failures += 1
+                            if consecutive_transient_failures > max_consecutive_transient:
+                                # Escalate: treat as code defect after repeated transient failures
+                                logger.warning(
+                                    f"Escalating TRANSIENT_FAILURE after {consecutive_transient_failures} consecutive occurrences",
+                                    extra={
+                                        "workflow_run_id": context.workflow_run_id,
+                                        "iteration": iteration,
+                                        "consecutive_transient_count": consecutive_transient_failures,
+                                    },
+                                    exc_info=False,
+                                )
+                                grouped = self._group_failures_by_file(test_result.failures)
+                                files_fixed += await self.fix_failures_by_file(grouped, config, context)
+                                prior_fix_attempts.append(
+                                    f"Iteration {iteration}: TRANSIENT_FAILURE escalated to CODE_DEFECT (after {consecutive_transient_failures} consecutive), applied file-level fixes"
+                                )
+                                consecutive_transient_failures = 0  # Reset counter after escalation
+                            else:
+                                prior_fix_attempts.append(
+                                    f"Iteration {iteration}: TRANSIENT_FAILURE classified, retrying without fix (consecutive count: {consecutive_transient_failures})"
+                                )
                         elif classification.classification in (
                             FailureClassification.DEPENDENCY_ISSUE,
                             FailureClassification.CONFIGURATION_ISSUE,
                         ):
+                            consecutive_transient_failures = 0  # Reset counter
                             # DEPENDENCY_ISSUE and CONFIGURATION_ISSUE route to apply_systemic_fixes
                             # (not fix_failures_systemically, regardless of cross_cutting flag)
-                            await self.apply_systemic_fixes(
+                            fix_success = await self.apply_systemic_fixes(
                                 classification.reasoning,
                                 test_result,
                                 config,
                                 context,
                             )
-                            # No files_fixed count for these special handlers
+                            status = "applied" if fix_success else "attempted but failed"
+                            prior_fix_attempts.append(
+                                f"Iteration {iteration}: {classification.classification.value} classified, {status} systemic fixes"
+                            )
                         else:
                             # Default: use file-level fixes
                             grouped = self._group_failures_by_file(test_result.failures)
