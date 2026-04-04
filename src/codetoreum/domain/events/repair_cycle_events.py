@@ -2099,3 +2099,102 @@ class EnvironmentVerificationCompletedEvent(CodetoreumEvent):
             checks_failed=tuple(checks_failed),
             duration_seconds=data.get("duration_seconds", 0.0),
         )
+
+
+@dataclass(frozen=True)
+class EnvironmentRebuildExhaustedEvent(CodetoreumEvent):
+    """Emitted when environment rebuild attempts are exhausted.
+
+    This terminal event indicates that the environment rebuild/verification
+    process failed to achieve a healthy state after max_env_rebuilds attempts,
+    making continued repair impossible without external intervention.
+
+    This is a named failure outcome per specification, surfacing the
+    ENV_REBUILD_EXHAUSTED terminal condition as both an event and a structured
+    failure record.
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Attempting to modify any field will raise `FrozenInstanceError`.
+
+    Attributes:
+        type (str): Fixed to "repair_cycle.environment_rebuild_exhausted"
+        work_item_id (str): ID of the work item being repaired
+        workflow_run_id (str): ID of the workflow run
+        test_type (RepairTestType): Type of test being executed (UNIT, INTEGRATION, E2E)
+        iteration (int): Current iteration number within the test cycle
+        max_attempts (int): Maximum rebuild attempts configured
+        error_message (str): Description of why rebuild failed
+        timestamp (str): ISO 8601 timestamp when exhaustion occurred
+    """
+
+    work_item_id: str = ""
+    workflow_run_id: str = ""
+    test_type: RepairTestType = RepairTestType.UNIT
+    iteration: int = 0
+    max_attempts: int = 0
+    error_message: str = ""
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.work_item_id:
+            msg = "work_item_id is required"
+            raise ValueError(msg)
+        if not self.workflow_run_id:
+            msg = "workflow_run_id is required"
+            raise ValueError(msg)
+        # Convert string to enum if needed (backward compatibility)
+        if isinstance(self.test_type, str):
+            if not self.test_type:
+                msg = "test_type is required"
+                raise ValueError(msg)
+            object.__setattr__(self, "test_type", RepairTestType(self.test_type))
+        if self.iteration < 1:
+            msg = "iteration must be >= 1"
+            raise ValueError(msg)
+        if self.max_attempts <= 0:
+            msg = "max_attempts must be > 0"
+            raise ValueError(msg)
+        if not self.error_message:
+            msg = "error_message is required"
+            raise ValueError(msg)
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update(
+            {
+                "work_item_id": self.work_item_id,
+                "workflow_run_id": self.workflow_run_id,
+                "test_type": self.test_type.value,
+                "iteration": self.iteration,
+                "max_attempts": self.max_attempts,
+                "error_message": self.error_message,
+            }
+        )
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "EnvironmentRebuildExhaustedEvent":
+        """Deserialize from dictionary with backward compatibility.
+
+        Raises:
+            KeyError: If required fields (work_item_id, workflow_run_id, test_type, iteration, max_attempts, error_message) are missing.
+        """
+        test_type = (
+            RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
+        )
+        return cls(
+            type=data.get("type", "repair_cycle.environment_rebuild_exhausted"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            work_item_id=data.get("work_item_id", ""),
+            workflow_run_id=data["workflow_run_id"],
+            test_type=test_type,
+            iteration=data["iteration"],
+            max_attempts=data["max_attempts"],
+            error_message=data["error_message"],
+        )

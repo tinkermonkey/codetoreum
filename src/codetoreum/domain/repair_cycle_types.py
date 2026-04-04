@@ -25,7 +25,7 @@ Reference: review_events.py for event sourcing immutability patterns
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 logger = logging.getLogger(__name__)
@@ -43,6 +43,7 @@ class FailureClassification(str, Enum):
     - TRANSIENT_FAILURE: Temporary failure, likely to pass on retry (no fix)
     - DEPENDENCY_ISSUE: External dependency problem (systemic fix path)
     - CONFIGURATION_ISSUE: Configuration error (systemic fix path)
+    - ENV_REBUILD_EXHAUSTED: Environment rebuild failed to achieve healthy state after max attempts
 
     **Serialization**: Inherits from `str, Enum` for direct JSON serialization
     without `.value` access.
@@ -53,6 +54,7 @@ class FailureClassification(str, Enum):
     TRANSIENT_FAILURE = "transient_failure"
     DEPENDENCY_ISSUE = "dependency_issue"
     CONFIGURATION_ISSUE = "configuration_issue"
+    ENV_REBUILD_EXHAUSTED = "env_rebuild_exhausted"
 
 
 class RepairTestType(Enum):
@@ -527,9 +529,13 @@ class RepairCycleStageConfig:
     - Overall constraints and circuit breakers
     - Checkpointing strategy for long-running cycles
     - Optional specialized agent assignments
+    - Environment repair configuration (co-located per specification)
 
     **Immutability**: Frozen dataclass - all fields read-only after construction.
     Collections stored as immutable Tuples instead of Lists.
+
+    **Co-location Pattern**: EnvironmentRepairConfig is embedded here rather than
+    injected separately, keeping related configuration together as a cohesive unit.
 
     Attributes:
         name: Stage name (e.g., "fix_failures", "fix_warnings")
@@ -544,6 +550,8 @@ class RepairCycleStageConfig:
         systemic_fix_failure_ceiling: Maximum number of failures to attempt systemic fix.
                                      Prevents overwhelming the agent with too many failures.
                                      Defaults to 50.
+        environment_repair_config: Configuration for environment rebuild/verify operations.
+                                  Co-located with stage config for consistency.
     """
 
     name: str
@@ -553,6 +561,7 @@ class RepairCycleStageConfig:
     checkpoint_interval: int = 5  # Save state every N iterations
     agent_config: RepairCycleAgentConfig | None = None  # Optional specialized agents
     systemic_fix_failure_ceiling: int = 50  # Max failures for systemic fix dispatch
+    environment_repair_config: EnvironmentRepairConfig = field(default_factory=EnvironmentRepairConfig)  # Co-located config
 
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""

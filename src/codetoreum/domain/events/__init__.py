@@ -159,6 +159,7 @@ from .queue_events import (
 # Repair cycle events
 from .repair_cycle_events import (
     EnvironmentRebuildCompletedEvent,
+    EnvironmentRebuildExhaustedEvent,
     EnvironmentRebuildStartedEvent,
     EnvironmentVerificationCompletedEvent,
     EnvironmentVerificationStartedEvent,
@@ -342,6 +343,7 @@ __all__ = [
     "SystemicFixStartedEvent",
     "EnvironmentRebuildStartedEvent",
     "EnvironmentRebuildCompletedEvent",
+    "EnvironmentRebuildExhaustedEvent",
     "EnvironmentVerificationStartedEvent",
     "EnvironmentVerificationCompletedEvent",
     # Review cycle events

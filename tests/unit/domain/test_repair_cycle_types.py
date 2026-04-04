@@ -1032,17 +1032,18 @@ class TestFailureClassification:
     """Test FailureClassification enum."""
 
     def test_all_five_values_exist(self):
-        """Test that all five required classification values exist."""
+        """Test that all required classification values exist."""
         assert FailureClassification.CODE_DEFECT.value == "code_defect"
         assert FailureClassification.ENVIRONMENT_ISSUE.value == "environment_issue"
         assert FailureClassification.TRANSIENT_FAILURE.value == "transient_failure"
         assert FailureClassification.DEPENDENCY_ISSUE.value == "dependency_issue"
         assert FailureClassification.CONFIGURATION_ISSUE.value == "configuration_issue"
+        assert FailureClassification.ENV_REBUILD_EXHAUSTED.value == "env_rebuild_exhausted"
 
     def test_enum_count(self):
-        """Test that exactly five enum values exist."""
+        """Test that exactly six enum values exist."""
         values = list(FailureClassification)
-        assert len(values) == 5
+        assert len(values) == 6
 
     def test_enum_is_str(self):
         """Test that enum values are strings (inherits from str)."""

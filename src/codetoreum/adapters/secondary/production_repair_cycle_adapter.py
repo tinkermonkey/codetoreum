@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from codetoreum.ports.output.llm_provider import AgentLLMFactory, ExecutionResult, ILLMProvider
 
 from codetoreum.domain.events.repair_cycle_events import (
+    EnvironmentRebuildExhaustedEvent,
     RepairCycleCheckpointFailedEvent,
     RepairCycleCompletedEvent,
     RepairCycleFastFailEvent,
@@ -2208,6 +2209,21 @@ Return a JSON response with the status of dependency fixes applied."""
                                     # Break out of test cycle with env_rebuild_exhausted failure mode
                                     error_msg = f"Iteration {iteration}: Environment rebuild exhausted ({self._environment_repair_config.max_env_rebuilds} attempts) without achieving healthy state"
                                     error = error_msg
+
+                                    # Emit dedicated failure event for env_rebuild_exhausted (named outcome per specification)
+                                    self.event_emitter.emit(
+                                        EnvironmentRebuildExhaustedEvent(
+                                            type="repair_cycle.environment_rebuild_exhausted",
+                                            timestamp=datetime.now(UTC).isoformat(),
+                                            source="production_repair_cycle",
+                                            work_item_id=context.work_item_id,
+                                            workflow_run_id=context.workflow_run_id,
+                                            test_type=config.test_type,
+                                            iteration=iteration,
+                                            max_attempts=self._environment_repair_config.max_env_rebuilds,
+                                            error_message=error_msg,
+                                        )
+                                    )
                                     break  # Exit test cycle loop
                             elif classification.classification == FailureClassification.TRANSIENT_FAILURE:
                                 consecutive_transient_failures += 1
