@@ -260,6 +260,48 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             logger.error(f"{message_prefix} timed out", extra=log_extra, exc_info=True)
             raise TimeoutError(f"{message_prefix} exceeded timeout of {config.timeout} seconds") from e
 
+    def _emit_event_safely(
+        self,
+        event: RepairCycleStartedEvent
+        | RepairCycleFastFailEvent
+        | RepairCycleCompletedEvent
+        | RepairCycleTestCycleCompletedEvent
+        | RepairCycleTestExecutionCompletedEvent
+        | RepairCycleFileFixStartedEvent
+        | RepairCycleFileFixCompletedEvent
+        | RepairCycleWarningReviewStartedEvent
+        | RepairCycleWarningReviewCompletedEvent
+        | SystemicAnalysisStartedEvent
+        | SystemicAnalysisCompletedEvent
+        | SystemicFixStartedEvent
+        | SystemicFixCompletedEvent
+        | EnvironmentRebuildExhaustedEvent,
+        description: str,
+        workflow_run_id: str,
+    ) -> None:
+        """Emit a domain event with error handling.
+
+        Wraps event emission in try/except to prevent event emission failures
+        from crashing the calling operation. Logs detailed errors for diagnostics.
+
+        Args:
+            event: Domain event to emit
+            description: Event description for error logging (e.g., "cycle started")
+            workflow_run_id: Workflow run ID for log context
+        """
+        try:
+            self.event_emitter.emit(event)
+        except Exception as emit_error:
+            logger.error(
+                f"Failed to emit {description}",
+                extra={
+                    "workflow_run_id": workflow_run_id,
+                    "emission_error": str(emit_error),
+                    "error_id": ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR,
+                },
+                exc_info=True,
+            )
+
     async def execute(self, context: RepairCycleContext) -> RepairCycleResult:
         """Execute complete repair cycle for all configured test types.
 
@@ -292,7 +334,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         cycle_start_timestamp = start_time.isoformat()
 
         # Emit repair cycle started event
-        self.event_emitter.emit(
+        self._emit_event_safely(
             RepairCycleStartedEvent(
                 type="repair_cycle.started",
                 timestamp=cycle_start_timestamp,
@@ -300,7 +342,9 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 stage_name=context.stage_name,
                 test_types=tuple(cfg.test_type for cfg in context.test_configs),
                 workflow_run_id=context.workflow_run_id,
-            )
+            ),
+            "cycle started event",
+            context.workflow_run_id,
         )
 
         # Execute each test type in sequence
@@ -318,7 +362,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     },
                     exc_info=False,
                 )
-                self.event_emitter.emit(
+                self._emit_event_safely(
                     RepairCycleFastFailEvent(
                         type="repair_cycle.fast_fail",
                         timestamp=datetime.now(UTC).isoformat(),
@@ -326,7 +370,9 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                         test_type=test_config.test_type,
                         reason="circuit_breaker_triggered",
                         workflow_run_id=context.workflow_run_id,
-                    )
+                    ),
+                    "fast fail event",
+                    context.workflow_run_id,
                 )
                 raise CircuitBreakerOpenError("Max agent calls reached; circuit breaker is open")
 
@@ -351,7 +397,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         total_agent_calls = self.circuit_breaker.get_stats().total_calls if self.circuit_breaker else 0
 
         if test_results:
-            self.event_emitter.emit(
+            self._emit_event_safely(
                 RepairCycleCompletedEvent(
                     type="repair_cycle.completed",
                     timestamp=cycle_start_timestamp,
@@ -361,7 +407,9 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     total_agent_calls=total_agent_calls,
                     duration_seconds=duration_seconds,
                     workflow_run_id=context.workflow_run_id,
-                )
+                ),
+                "cycle completed event",
+                context.workflow_run_id,
             )
 
         return RepairCycleResult(
@@ -1669,6 +1717,9 @@ Return a JSON response with the status of dependency fixes applied."""
                     context=context,
                 )
                 return result.success
+            except TimeoutError:
+                # Re-raise transient timeout errors - retry loop can distinguish and attempt again
+                raise
             except Exception as e:
                 logger.error(
                     "Environment rebuild failed (via service)",
@@ -1758,6 +1809,9 @@ Return a JSON response with the status of dependency fixes applied."""
                     context=context,
                 )
                 return result.healthy
+            except TimeoutError:
+                # Re-raise transient timeout errors - retry loop can distinguish and attempt again
+                raise
             except Exception as e:
                 logger.error(
                     "Environment verification failed (via service)",

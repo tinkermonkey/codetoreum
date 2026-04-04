@@ -31,6 +31,7 @@ from codetoreum.domain.events.repair_cycle_events import (
     EnvironmentVerificationCompletedEvent,
     EnvironmentVerificationStartedEvent,
 )
+from codetoreum.domain.exceptions import TestOutputParseError
 from codetoreum.domain.repair_cycle_types import (
     EnvironmentRepairConfig,
     RebuildResult,
@@ -205,7 +206,7 @@ Return a JSON response with the verification status and any issues found."""
             log_extra = {
                 "workflow_run_id": context.workflow_run_id,
                 "timeout_seconds": timeout_seconds,
-                "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                "error_id": ErrorRegistry.ERR_ENVIRONMENT_REPAIR_TIMEOUT,
                 **(extra_log or {}),
             }
             logger.error(f"{message_prefix} timed out", extra=log_extra, exc_info=True)
@@ -238,7 +239,7 @@ Return a JSON response with the verification status and any issues found."""
                 extra={
                     "workflow_run_id": workflow_run_id,
                     "emission_error": str(emit_error),
-                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                    "error_id": ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR,
                 },
                 exc_info=True,
             )
@@ -318,28 +319,23 @@ Return a JSON response with the verification status and any issues found."""
                     extra={
                         "workflow_run_id": context.workflow_run_id,
                         "error": str(e),
-                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                        "error_id": ErrorRegistry.ERR_ENVIRONMENT_REPAIR_JSON_PARSE,
                     },
                     exc_info=True,
                 )
-                rebuild_result = RebuildResult(
-                    success=False,
-                    duration_seconds=duration_seconds,
-                    actions_taken=(),
-                    error=f"Failed to parse LLM response: {e!s}",
-                )
-            else:
-                # Extract result from response
-                success = response_data.get("success", False)
-                actions = response_data.get("actions_taken", [])
-                error_msg = response_data.get("error")
+                raise TestOutputParseError(f"Failed to parse environment rebuild response: {e!s}") from e
 
-                rebuild_result = RebuildResult(
-                    success=success,
-                    duration_seconds=duration_seconds,
-                    actions_taken=tuple(actions) if actions else (),
-                    error=error_msg,
-                )
+            # Extract result from response
+            success = response_data.get("success", False)
+            actions = response_data.get("actions_taken", [])
+            error_msg = response_data.get("error")
+
+            rebuild_result = RebuildResult(
+                success=success,
+                duration_seconds=duration_seconds,
+                actions_taken=tuple(actions) if actions else (),
+                error=error_msg,
+            )
 
             # Emit rebuild completed event with error handling
             self._emit_event_safely(
@@ -471,28 +467,23 @@ Return a JSON response with the verification status and any issues found."""
                     extra={
                         "workflow_run_id": context.workflow_run_id,
                         "error": str(e),
-                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                        "error_id": ErrorRegistry.ERR_ENVIRONMENT_REPAIR_JSON_PARSE,
                     },
                     exc_info=True,
                 )
-                verification_result = VerificationResult(
-                    healthy=False,
-                    checks_passed=(),
-                    checks_failed=("parsing_response",),
-                    duration_seconds=duration_seconds,
-                )
-            else:
-                # Extract result from response
-                healthy = response_data.get("healthy", False)
-                checks_passed = response_data.get("checks_passed", [])
-                checks_failed = response_data.get("checks_failed", [])
+                raise TestOutputParseError(f"Failed to parse environment verification response: {e!s}") from e
 
-                verification_result = VerificationResult(
-                    healthy=healthy,
-                    checks_passed=tuple(checks_passed) if checks_passed else (),
-                    checks_failed=tuple(checks_failed) if checks_failed else (),
-                    duration_seconds=duration_seconds,
-                )
+            # Extract result from response
+            healthy = response_data.get("healthy", False)
+            checks_passed = response_data.get("checks_passed", [])
+            checks_failed = response_data.get("checks_failed", [])
+
+            verification_result = VerificationResult(
+                healthy=healthy,
+                checks_passed=tuple(checks_passed) if checks_passed else (),
+                checks_failed=tuple(checks_failed) if checks_failed else (),
+                duration_seconds=duration_seconds,
+            )
 
             # Emit verification completed event with error handling
             self._emit_event_safely(
