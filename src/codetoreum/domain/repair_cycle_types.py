@@ -504,6 +504,9 @@ class RepairCycleStageConfig:
         agent_config: Optional RepairCycleAgentConfig for agent specialization. None means
                       fall back to agent_name. Supports assigning specialized agents to
                       specific repair cycle sub-tasks.
+        systemic_fix_failure_ceiling: Maximum number of failures to attempt systemic fix.
+                                     Prevents overwhelming the agent with too many failures.
+                                     Defaults to 50.
     """
 
     name: str
@@ -512,6 +515,7 @@ class RepairCycleStageConfig:
     max_total_agent_calls: int = 100  # Circuit breaker
     checkpoint_interval: int = 5  # Save state every N iterations
     agent_config: RepairCycleAgentConfig | None = None  # Optional specialized agents
+    systemic_fix_failure_ceiling: int = 50  # Max failures for systemic fix dispatch
 
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""
@@ -526,6 +530,9 @@ class RepairCycleStageConfig:
             raise ValueError(msg)
         if self.checkpoint_interval <= 0:
             msg = "checkpoint_interval must be > 0"
+            raise ValueError(msg)
+        if self.systemic_fix_failure_ceiling <= 0:
+            msg = "systemic_fix_failure_ceiling must be > 0"
             raise ValueError(msg)
 
 
@@ -542,10 +549,11 @@ class SystemicAnalysisResult:
 
     Attributes:
         classification: Root cause category (FailureClassification enum)
-        confidence: Confidence in classification (0.0–1.0)
+        confidence: Confidence in classification (0.0-1.0)
         reasoning: Explanation of classification decision
         affected_files: Immutable tuple of file names affected by the issue
         recommended_action: Recommended remediation step for this classification
+        cross_cutting: Whether the failure indicates a cross-cutting root cause
     """
 
     classification: FailureClassification
@@ -553,6 +561,7 @@ class SystemicAnalysisResult:
     reasoning: str
     affected_files: tuple[str, ...]  # Immutable tuple
     recommended_action: str
+    cross_cutting: bool
 
     def __post_init__(self) -> None:
         """Validate analysis result after initialization."""
@@ -567,6 +576,9 @@ class SystemicAnalysisResult:
             raise ValueError(msg)
         if not self.recommended_action:
             msg = "recommended_action is required"
+            raise ValueError(msg)
+        if not isinstance(self.cross_cutting, bool):
+            msg = "cross_cutting must be a boolean"
             raise ValueError(msg)
 
 
@@ -605,4 +617,36 @@ class AnalysisContext:
             raise ValueError(msg)
         if self.iteration < 0:
             msg = "iteration must be non-negative"
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True)
+class SystemicFixResult:
+    """Result of a systemic fix operation addressing a cross-cutting root cause.
+
+    Immutable record of a holistic fix attempt that addresses a failure pattern
+    affecting multiple files with a shared root cause (e.g., API contract change,
+    configuration update, dependency version bump).
+
+    **Immutability**: Frozen dataclass - all fields read-only after construction.
+    Attempting to modify any field raises FrozenInstanceError.
+
+    Attributes:
+        success: Whether the systemic fix successfully addressed the root cause
+        files_modified: List of file paths modified by the systemic fix
+        root_cause_addressed: Description of what root cause was addressed
+        duration_seconds: Time taken to apply the systemic fix (non-negative)
+    """
+
+    success: bool
+    files_modified: tuple[str, ...]  # Immutable tuple (spec requires list[str], but tuple maintains frozen dataclass immutability contract)
+    root_cause_addressed: str
+    duration_seconds: float
+
+    def __post_init__(self) -> None:
+        """Validate systemic fix result after initialization."""
+        if not isinstance(self.files_modified, tuple):
+            object.__setattr__(self, "files_modified", tuple(self.files_modified))
+        if self.duration_seconds < 0:
+            msg = "duration_seconds must be non-negative"
             raise ValueError(msg)

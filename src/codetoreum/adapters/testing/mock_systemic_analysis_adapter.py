@@ -20,6 +20,7 @@ DEFAULT_RESULT = SystemicAnalysisResult(
     reasoning="Default classification",
     affected_files=(),
     recommended_action="Fix code defects",
+    cross_cutting=False,
 )
 
 
@@ -40,6 +41,7 @@ class MockSystemicAnalysisAdapter(ISystemicAnalysisService):
                 reasoning="Stale Docker image",
                 affected_files=(),
                 recommended_action="Rebuild environment",
+                cross_cutting=False,
             ),
         ])
 
@@ -76,6 +78,17 @@ class MockSystemicAnalysisAdapter(ISystemicAnalysisService):
     def calls(self) -> list[tuple[list[RepairTestFailure], AnalysisContext]]:
         """Return list of all (failures, context) argument tuples in order."""
         return list(self._calls)
+
+    def set_results(self, results: list[SystemicAnalysisResult]) -> None:
+        """Set the sequence of results to return from analyze() calls.
+
+        Resets the call index to 0, allowing the same sequence to be replayed.
+
+        Args:
+            results: List of SystemicAnalysisResult objects to return in sequence.
+        """
+        self._results = list(results) if results else []
+        self._call_index = 0
 
     async def analyze(
         self,

@@ -13,6 +13,7 @@ import pytest
 
 from codetoreum.domain.repair_cycle_types import (
     CycleResult,
+    FailureClassification,
     RepairCycleResult,
     RepairTestFailure,
     RepairTestResult,
@@ -38,6 +39,8 @@ class MockRepairCycleContext:
         agent_name: str = "repair-agent",
         max_total_agent_calls: int = 100,
         checkpoint_interval: int = 5,
+        agent_config=None,
+        systemic_fix_failure_ceiling: int = 50,
     ):
         self.stage_name = stage_name
         self.workflow_run_id = workflow_run_id
@@ -46,6 +49,8 @@ class MockRepairCycleContext:
         self.agent_name = agent_name
         self.max_total_agent_calls = max_total_agent_calls
         self.checkpoint_interval = checkpoint_interval
+        self.agent_config = agent_config
+        self.systemic_fix_failure_ceiling = systemic_fix_failure_ceiling
 
 
 class TestRepairCycleContextProtocol:
@@ -181,6 +186,22 @@ class MockRepairCycle:
         """Apply cross-cutting fixes based on systemic analysis."""
         return True
 
+    async def fix_failures_systemically(
+        self,
+        failures: tuple[RepairTestFailure, ...],
+        analysis_result,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ):
+        """Apply a coordinated holistic fix addressing the root cause across all affected files."""
+        from codetoreum.domain.repair_cycle_types import SystemicFixResult
+        return SystemicFixResult(
+            success=True,
+            files_modified=(),
+            root_cause_addressed="Root cause addressed by systemic fix",
+            duration_seconds=5.0,
+        )
+
     async def rebuild_environment(
         self,
         config: RepairTestRunConfig,
@@ -235,9 +256,9 @@ class TestIRepairCycleProtocol:
         assert hasattr(IRepairCycle, "analyze_systemic_issues")
 
     def test_protocol_has_expected_method_count(self) -> None:
-        """Test that IRepairCycle Protocol has exactly 9 methods."""
+        """Test that IRepairCycle Protocol has exactly 10 methods."""
         methods = [m for m in dir(IRepairCycle) if not m.startswith("_") and callable(getattr(IRepairCycle, m))]
-        assert len(methods) == 9
+        assert len(methods) == 10
         assert set(methods) == {
             "execute",
             "run_tests",
@@ -245,6 +266,7 @@ class TestIRepairCycleProtocol:
             "handle_warnings",
             "analyze_systemic_issues",
             "apply_systemic_fixes",
+            "fix_failures_systemically",
             "rebuild_environment",
             "verify_environment",
             "checkpoint",

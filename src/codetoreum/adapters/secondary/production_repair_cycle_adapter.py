@@ -52,6 +52,8 @@ from codetoreum.domain.events.repair_cycle_events import (
     RepairCycleWarningReviewStartedEvent,
     SystemicAnalysisCompletedEvent,
     SystemicAnalysisStartedEvent,
+    SystemicFixCompletedEvent,
+    SystemicFixStartedEvent,
 )
 from codetoreum.domain.exceptions import TestOutputParseError
 from codetoreum.domain.repair_cycle_types import (
@@ -66,6 +68,7 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestType,
     RepairTestWarning,
     SystemicAnalysisResult,
+    SystemicFixResult,
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.resilience.exceptions import CircuitBreakerOpenError
@@ -172,6 +175,12 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         self.circuit_breaker = circuit_breaker
         self._systemic_analysis_service = systemic_analysis_service
 
+        # Tracking state for checkpoint resumption (initialized in __init__, not in setter)
+        self._files_fixed = 0  # Number of files fixed in current cycle
+        self._warnings_reviewed = 0  # Number of warnings reviewed in current cycle
+        self._elapsed_time = 0.0  # Total time spent in current cycle (seconds)
+        self._cycle_results: list[CycleResult] = []  # Accumulated test results
+
     @property
     def systemic_analysis_service(self) -> ISystemicAnalysisService | None:
         """Get the systemic analysis service."""
@@ -179,14 +188,12 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
     @systemic_analysis_service.setter
     def systemic_analysis_service(self, service: ISystemicAnalysisService | None) -> None:
-        """Set the systemic analysis service."""
-        self._systemic_analysis_service = service
+        """Set the systemic analysis service.
 
-        # Tracking state for checkpoint resumption
-        self._files_fixed = 0  # Number of files fixed in current cycle
-        self._warnings_reviewed = 0  # Number of warnings reviewed in current cycle
-        self._elapsed_time = 0.0  # Total time spent in current cycle (seconds)
-        self._cycle_results: list[CycleResult] = []  # Accumulated test results
+        Note: This setter only updates the service reference, not tracking state.
+        Tracking state is initialized in __init__ and updated during repair cycle execution.
+        """
+        self._systemic_analysis_service = service
 
     async def _get_llm_for_subtask(self, sub_task: str, context: RepairCycleContext) -> tuple[ILLMProvider, str]:
         """Resolve the appropriate agent for a sub-task and return its LLM provider.
@@ -745,7 +752,218 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     exc_info=True,
                 )
 
+                # Emit warning review completed event (failure)
+                self.event_emitter.emit(
+                    RepairCycleWarningReviewCompletedEvent(
+                        type="repair_cycle.warning_review_completed",
+                        timestamp=datetime.now(UTC).isoformat(),
+                        source="production_repair_cycle",
+                        source_file=warning.file,
+                        warning_count=1,
+                        test_type=config.test_type,
+                        success=False,
+                        agent_name=resolved_agent_name,
+                        workflow_run_id=context.workflow_run_id,
+                    )
+                )
+
         return reviewed
+
+    async def fix_failures_systemically(
+        self,
+        failures: tuple[RepairTestFailure, ...],
+        analysis_result: SystemicAnalysisResult,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> SystemicFixResult:
+        """Apply a coordinated holistic fix addressing the root cause across all affected files.
+
+        Issues a single agent invocation presenting all failures together with the root cause
+        context from systemic analysis. This is the primary contract for cross-cutting fixes
+        that affect multiple files with a shared root cause.
+
+        Args:
+            failures: Immutable tuple of test failures to address (must not be empty)
+            analysis_result: Systemic analysis result with root cause and affected files
+            config: Test run configuration
+            context: Repair cycle context
+
+        Returns:
+            SystemicFixResult indicating whether the holistic fix succeeded and which
+            files were modified
+
+        Raises:
+            ValueError: If failures tuple is empty (nothing to fix)
+            CircuitBreakerOpenError: When circuit breaker is open
+        """
+        # Validate that failures tuple is not empty
+        if not failures:
+            msg = "failures tuple must not be empty when calling fix_failures_systemically"
+            logger.error(
+                msg,
+                extra={
+                    "workflow_run_id": context.workflow_run_id,
+                    "work_item_id": context.work_item_id,
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                },
+                exc_info=False,
+            )
+            raise ValueError(msg)
+
+        start_time = datetime.now(UTC)
+
+        # Circuit breaker check
+        if self.circuit_breaker and self.circuit_breaker.is_open():
+            logger.error(
+                "Circuit breaker open; cannot apply systemic fixes",
+                extra={
+                    "workflow_run_id": context.workflow_run_id,
+                    "work_item_id": context.work_item_id,
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_CIRCUIT_BREAKER_OPEN,
+                },
+                exc_info=False,
+            )
+            raise CircuitBreakerOpenError("Circuit breaker is open")
+
+        # Emit systemic fix started event
+        self.event_emitter.emit(
+            SystemicFixStartedEvent(
+                type="repair_cycle.systemic_fix_started",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="production_repair_cycle",
+                work_item_id=context.work_item_id,
+                workflow_run_id=context.workflow_run_id,
+                root_cause_classification=analysis_result.classification.value,
+                confidence=analysis_result.confidence,
+                affected_file_count=len(analysis_result.affected_files),
+                failure_count=len(failures),
+            )
+        )
+
+        try:
+            logger.info(
+                "Starting systemic fix for cross-cutting root cause",
+                extra={
+                    "workflow_run_id": context.workflow_run_id,
+                    "work_item_id": context.work_item_id,
+                    "failure_count": len(failures),
+                    "classification": analysis_result.classification.value,
+                    "affected_files": ",".join(analysis_result.affected_files),
+                },
+                exc_info=False,
+            )
+
+            # Get LLM provider for the fix agent
+            llm_provider, resolved_agent_name = await self._get_llm_for_subtask("systemic_fix", context)
+
+            # Build prompt with failure details and root cause context
+            prompt = self._build_systemic_fix_prompt(failures, analysis_result)
+
+            # Execute LLM call
+            execution_result = await self._execute_llm_with_timeout(
+                llm=llm_provider,
+                prompt=prompt,
+                operation="repair_cycle.fix_failures_systemically",
+                config=config,
+                context=context,
+                error_message="Systemic fix execution",
+            )
+
+            files_modified = ()
+            root_cause_addressed = ""
+            success = False
+
+            # Parse agent response
+            try:
+                response_json = json.loads(execution_result.content or "{}")
+                files_modified = tuple(response_json.get("files_modified", []))
+                root_cause_addressed = response_json.get("root_cause_addressed", "")
+                success = True
+
+                logger.info(
+                    "Systemic fix completed successfully",
+                    extra={
+                        "workflow_run_id": context.workflow_run_id,
+                        "work_item_id": context.work_item_id,
+                        "files_modified_count": len(files_modified),
+                    },
+                    exc_info=False,
+                )
+
+            except (json.JSONDecodeError, KeyError, TypeError) as e:
+                logger.error(
+                    "Failed to parse systemic fix response",
+                    extra={
+                        "workflow_run_id": context.workflow_run_id,
+                        "work_item_id": context.work_item_id,
+                        "error": str(e),
+                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                    },
+                    exc_info=True,
+                )
+
+            duration = (datetime.now(UTC) - start_time).total_seconds()
+
+            # Emit systemic fix completed event
+            self.event_emitter.emit(
+                SystemicFixCompletedEvent(
+                    type="repair_cycle.systemic_fix_completed",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    source="production_repair_cycle",
+                    work_item_id=context.work_item_id,
+                    workflow_run_id=context.workflow_run_id,
+                    success=success,
+                    files_modified=files_modified,
+                    root_cause_addressed=root_cause_addressed,
+                    duration_seconds=duration,
+                )
+            )
+
+            return SystemicFixResult(
+                success=success,
+                files_modified=files_modified,
+                root_cause_addressed=root_cause_addressed,
+                duration_seconds=duration,
+            )
+
+        except CircuitBreakerOpenError:
+            # Re-raise circuit breaker errors as specified in docstring
+            raise
+        except Exception as e:
+            logger.error(
+                "Unexpected error in systemic fix",
+                extra={
+                    "workflow_run_id": context.workflow_run_id,
+                    "work_item_id": context.work_item_id,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                },
+                exc_info=True,
+            )
+            duration = (datetime.now(UTC) - start_time).total_seconds()
+
+            # Emit failed completion event
+            self.event_emitter.emit(
+                SystemicFixCompletedEvent(
+                    type="repair_cycle.systemic_fix_completed",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    source="production_repair_cycle",
+                    work_item_id=context.work_item_id,
+                    workflow_run_id=context.workflow_run_id,
+                    success=False,
+                    files_modified=(),
+                    root_cause_addressed="",
+                    duration_seconds=duration,
+                )
+            )
+
+            return SystemicFixResult(
+                success=False,
+                files_modified=(),
+                root_cause_addressed="",
+                duration_seconds=duration,
+            )
 
     async def checkpoint(
         self,
@@ -1130,6 +1348,67 @@ Return a JSON response with the status of fixes applied."""
 Analyze the warning, understand its root cause, and make targeted fixes.
 Return a JSON response with the status of fixes applied."""
 
+    def _build_systemic_fix_prompt(
+        self,
+        failures: tuple[RepairTestFailure, ...],
+        analysis_result: SystemicAnalysisResult,
+    ) -> str:
+        """Build prompt for LLM to apply a coordinated systemic fix across all affected files.
+
+        Groups failures by file and includes comprehensive root cause analysis context.
+
+        Args:
+            failures: All failures to address (up to 50)
+            analysis_result: Systemic analysis result with root cause and affected files
+
+        Returns:
+            Prompt for LLM agent
+        """
+        # Group failures by file
+        grouped_failures: dict[str, list[RepairTestFailure]] = {}
+        for failure in failures:
+            if failure.file not in grouped_failures:
+                grouped_failures[failure.file] = []
+            grouped_failures[failure.file].append(failure)
+
+        # Build failures section grouped by file
+        failures_by_file_text = ""
+        for file_path in sorted(grouped_failures.keys()):
+            failures_in_file = grouped_failures[file_path]
+            failures_by_file_text += f"\n{file_path}\n"
+            for failure in failures_in_file:
+                failures_by_file_text += f"  - {failure.test}: {failure.message}\n"
+
+        return f"""You are a specialized repair agent addressing a cross-cutting root cause issue.
+
+## Root Cause Analysis
+**Classification**: {analysis_result.classification.value}
+**Confidence**: {analysis_result.confidence:.0%}
+**Reasoning**: {analysis_result.reasoning}
+**Recommended Action**: {analysis_result.recommended_action}
+**Affected Files**: {', '.join(analysis_result.affected_files)}
+
+## All Failures by File ({len(failures)} total)
+{failures_by_file_text}
+
+## Your Task
+Apply a COORDINATED fix across all listed files in a single pass.
+Do not fix files independently — the root cause is shared and changes may need to be consistent across files.
+
+This may involve:
+- Updating dependencies or configuration
+- Fixing shared interfaces or contracts
+- Updating build/environment configuration
+- Or other systemic changes
+
+After making changes, respond with JSON:
+{{
+    "root_cause_addressed": "description of what was fixed",
+    "files_modified": ["file1", "file2", ...],
+    "explanation": "how this addresses all failures"
+}}
+"""
+
     def _group_failures_by_file(
         self, failures: tuple[RepairTestFailure, ...]
     ) -> dict[str, tuple[RepairTestFailure, ...]]:
@@ -1200,9 +1479,23 @@ Return a JSON response with the status of fixes applied."""
             if isinstance(response, str):
                 try:
                     response = json.loads(response)
-                except json.JSONDecodeError:
-                    # If not valid JSON, treat as plain response
-                    response = {"status": "success", "response": response}
+                except json.JSONDecodeError as e:
+                    # Reject non-JSON responses instead of fabricating success
+                    logger.error(
+                        "LLM response was not valid JSON",
+                        extra={
+                            "workflow_run_id": context.workflow_run_id,
+                            "operation": operation_name,
+                            "raw_response": response[:500],  # Limit response length in logs
+                            "error": str(e),
+                            "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                        },
+                        exc_info=True,
+                    )
+                    # Raise exception to prevent garbled responses from being treated as success
+                    raise ValueError(
+                        f"LLM operation {operation_name} returned non-JSON response: {response[:200]}"
+                    ) from e
 
             # Check for failure indicators in response
             if isinstance(response, dict):
@@ -1305,49 +1598,11 @@ Return a JSON response with the verification status and any issues found."""
         """
         try:
             prompt = self._build_dependency_fix_prompt(reasoning, test_result)
-            await self._execute_llm_prompt(prompt, "apply_dependency_fix", config, context)
+            await self._execute_llm_prompt(prompt, "systemic_fix", config, context)
             return True
         except Exception as e:
             logger.error(
                 "Dependency fix failed",
-                extra={
-                    "workflow_run_id": context.workflow_run_id,
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
-                },
-                exc_info=True,
-            )
-            return False
-
-    async def _apply_configuration_fix(
-        self,
-        reasoning: str,
-        test_result: RepairTestResult,
-        config: RepairTestRunConfig,
-        context: RepairCycleContext,
-    ) -> bool:
-        """Apply fixes for configuration-related issues.
-
-        Routes configuration issue fixes through the LLM to identify and resolve
-        configuration problems or missing environment setup.
-
-        Args:
-            reasoning: Classification reasoning from systemic analysis
-            test_result: Test result that triggered this fix
-            config: Test run configuration
-            context: Repair cycle context
-
-        Returns:
-            True if configuration fixes were applied, False otherwise
-        """
-        try:
-            prompt = self._build_configuration_fix_prompt(reasoning, test_result)
-            await self._execute_llm_prompt(prompt, "apply_configuration_fix", config, context)
-            return True
-        except Exception as e:
-            logger.error(
-                "Configuration fix failed",
                 extra={
                     "workflow_run_id": context.workflow_run_id,
                     "error": str(e),
@@ -1385,34 +1640,6 @@ Please identify and resolve the missing or incompatible dependencies. This may i
 
 Return a JSON response with the status of dependency fixes applied."""
 
-    def _build_configuration_fix_prompt(self, reasoning: str, test_result: RepairTestResult) -> str:
-        """Build prompt for LLM to fix configuration issues.
-
-        Args:
-            reasoning: Classification reasoning from systemic analysis
-            test_result: Test result containing failure details
-
-        Returns:
-            Prompt for LLM agent
-        """
-        failure_details = "\n".join([f"- {f.file}::{f.test}: {f.message}" for f in test_result.failures])
-
-        return f"""The failures are classified as CONFIGURATION_ISSUE based on the following analysis:
-
-Reasoning: {reasoning}
-
-Test failures:
-{failure_details}
-
-Please identify and resolve the configuration problems. This may involve:
-1. Adding or modifying environment variables
-2. Creating or updating configuration files
-3. Adjusting service configurations
-4. Setting up required credentials or API keys
-5. Configuring test fixtures or test databases
-
-Return a JSON response with the status of configuration fixes applied."""
-
     async def rebuild_environment(
         self,
         config: RepairTestRunConfig,
@@ -1432,7 +1659,7 @@ Return a JSON response with the status of configuration fixes applied."""
         """
         try:
             rebuild_prompt = self._build_environment_rebuild_prompt(config)
-            await self._execute_llm_prompt(rebuild_prompt, "rebuild_environment", config, context)
+            await self._execute_llm_prompt(rebuild_prompt, "env_rebuild", config, context)
             return True
         except Exception as e:
             logger.error(
@@ -1466,7 +1693,7 @@ Return a JSON response with the status of configuration fixes applied."""
         """
         try:
             verify_prompt = self._build_environment_verify_prompt(config)
-            await self._execute_llm_prompt(verify_prompt, "verify_environment", config, context)
+            await self._execute_llm_prompt(verify_prompt, "env_verification", config, context)
             return True
         except Exception as e:
             logger.error(
@@ -1484,50 +1711,40 @@ Return a JSON response with the status of configuration fixes applied."""
 
     async def apply_systemic_fixes(
         self,
-        classification: FailureClassification,
-        reasoning: str,
+        analysis_summary: str,
         test_result: RepairTestResult,
         config: RepairTestRunConfig,
         context: RepairCycleContext,
     ) -> bool:
-        """Apply systemic fixes for DEPENDENCY_ISSUE or CONFIGURATION_ISSUE.
+        """Apply cross-cutting fixes based on systemic analysis.
 
-        Coordinates with the LLM provider to identify and implement fixes for
-        systemic issues like dependency problems or configuration errors.
-        Routes to differentiated fix strategies based on classification.
+        Uses the systemic analysis summary to apply fixes that address root
+        causes affecting multiple tests. These are broader fixes beyond
+        file-level changes, such as architecture adjustments or dependency
+        updates.
 
         Args:
-            classification: The systemic failure classification from analysis
-            reasoning: Classification reasoning from systemic analysis
-            test_result: Test result that triggered this fix
+            analysis_summary: Summary from systemic analysis
+            test_result: Test result that triggered the analysis
             config: Test run configuration
             context: Repair cycle context
 
         Returns:
-            True if systemic fixes were applied, False otherwise
+            True if fixes were successfully applied
+
+        Raises:
+            CircuitBreakerOpenError: When circuit breaker is open
         """
         try:
-            if classification == FailureClassification.DEPENDENCY_ISSUE:
-                return await self._apply_dependency_fix(reasoning, test_result, config, context)
-            if classification == FailureClassification.CONFIGURATION_ISSUE:
-                return await self._apply_configuration_fix(reasoning, test_result, config, context)
-            # Fallback to dependency fix if classification is unknown
-            logger.warning(
-                "Unknown systemic fix classification; defaulting to dependency fix",
-                extra={
-                    "workflow_run_id": context.workflow_run_id,
-                    "classification": classification.value if classification else "none",
-                },
-                exc_info=False,
-            )
-            return await self._apply_dependency_fix(reasoning, test_result, config, context)
+            # Default strategy: attempt dependency fix with analysis summary
+            return await self._apply_dependency_fix(analysis_summary, test_result, config, context)
 
         except Exception as e:
             # Safety net for unexpected exceptions in routing logic. Inner fix methods
             # catch and log their own exceptions, so this handler primarily catches
             # errors from classification checks or unexpected routing failures.
             logger.error(
-                "Unexpected error in systemic fix routing",
+                "Unexpected error in systemic fix",
                 extra={
                     "workflow_run_id": context.workflow_run_id,
                     "error": str(e),
@@ -1540,39 +1757,42 @@ Return a JSON response with the status of configuration fixes applied."""
 
     async def analyze_systemic_issues(
         self,
-        failures: tuple[RepairTestFailure, ...],
+        test_result: RepairTestResult,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
     ) -> str:
-        """Analyze systemic issues in test failures.
+        """Analyze failure root causes at systemic level.
 
-        Backward-compatible method that delegates to ISystemicAnalysisService
-        for failure classification. Returns the reasoning string from the
-        analysis result.
+        Delegates to ISystemicAnalysisService for failure classification.
+        Returns the analysis summary string.
 
         Args:
-            failures: Tuple of test failures to analyze
+            test_result: Test result containing failures to analyze
+            config: Test run configuration
+            context: Repair cycle context
 
         Returns:
-            Reasoning string from the systemic analysis result
+            Analysis summary from the agent
 
         Raises:
-            ValueError: If no systemic analysis service is configured
+            CircuitBreakerOpenError: When circuit breaker is open
         """
         if self._systemic_analysis_service is None:
             msg = "Cannot analyze systemic issues: ISystemicAnalysisService is not configured"
             raise ValueError(msg)
 
-        # Create a minimal AnalysisContext for the analysis
-        # Note: work_item_id, iteration, and workflow_run_id would ideally come from caller context,
-        # but for backward compatibility, we use placeholder values.
+        # Create analysis context from repair cycle context
         analysis_context = AnalysisContext(
-            work_item_id="unknown",
-            iteration=0,
-            workflow_run_id="unknown",
-            prior_fix_attempts=(),
-            prior_classifications=(),
+            work_item_id=context.work_item_id,
+            iteration=context.iteration,
+            workflow_run_id=context.workflow_run_id,
+            prior_fix_attempts=context.prior_fix_attempts,
+            prior_classifications=context.prior_classifications,
         )
 
-        result = await self._systemic_analysis_service.analyze(list(failures), analysis_context)
+        result = await self._systemic_analysis_service.analyze(
+            list(test_result.failures), analysis_context
+        )
         return result.reasoning
 
     async def _run_test_cycle(
@@ -1700,8 +1920,55 @@ Return a JSON response with the status of configuration fixes applied."""
                             # Track this classification for escalation support in future iterations
                             prior_classifications.append(classification)
 
-                            if classification.classification == FailureClassification.CODE_DEFECT:
+                            # Dispatch based on spec: CODE_DEFECT + cross_cutting=True routes to systemic fix
+                            # with practical ceiling to prevent overwhelming the agent
+                            if (
+                                classification.classification == FailureClassification.CODE_DEFECT
+                                and classification.cross_cutting
+                                and len(test_result.failures) <= context.systemic_fix_failure_ceiling
+                            ):
+                                # CODE_DEFECT + cross_cutting + within ceiling → systemic fix
                                 consecutive_transient_failures = 0  # Reset counter
+                                systemic_result = await self.fix_failures_systemically(
+                                    test_result.failures, classification, config, context
+                                )
+                                # Only count files as fixed if the systemic fix succeeded
+                                if systemic_result.success:
+                                    files_fixed += len(systemic_result.files_modified)
+                                    prior_fix_attempts.append(
+                                        f"Iteration {iteration}: CODE_DEFECT (cross-cutting), systemic fix applied to "
+                                        f"{len(systemic_result.files_modified)} files"
+                                    )
+                                else:
+                                    prior_fix_attempts.append(
+                                        f"Iteration {iteration}: CODE_DEFECT (cross-cutting), systemic fix attempted but failed"
+                                    )
+                            elif (
+                                classification.classification == FailureClassification.CODE_DEFECT
+                                and classification.cross_cutting
+                                and len(test_result.failures) > context.systemic_fix_failure_ceiling
+                            ):
+                                # CODE_DEFECT + cross_cutting but EXCEEDS ceiling → fallback to file-level fix
+                                consecutive_transient_failures = 0  # Reset counter
+                                logger.info(
+                                    f"Failure count ({len(test_result.failures)}) exceeds ceiling ({context.systemic_fix_failure_ceiling}), "
+                                    f"falling back to file-level fixes",
+                                    extra={
+                                        "workflow_run_id": context.workflow_run_id,
+                                        "iteration": iteration,
+                                        "failure_count": len(test_result.failures),
+                                        "ceiling": context.systemic_fix_failure_ceiling,
+                                    },
+                                )
+                                grouped = self._group_failures_by_file(test_result.failures)
+                                files_fixed += await self.fix_failures_by_file(grouped, config, context)
+                                prior_fix_attempts.append(
+                                    f"Iteration {iteration}: CODE_DEFECT (cross-cutting, {len(test_result.failures)} failures > {context.systemic_fix_failure_ceiling} ceiling), "
+                                    f"fell back to file-level fixes"
+                                )
+                            elif classification.classification == FailureClassification.CODE_DEFECT:
+                                consecutive_transient_failures = 0  # Reset counter
+                                # Apply per-file fix for non-cross-cutting issues
                                 grouped = self._group_failures_by_file(test_result.failures)
                                 files_fixed += await self.fix_failures_by_file(grouped, config, context)
                                 prior_fix_attempts.append(
@@ -1711,10 +1978,29 @@ Return a JSON response with the status of configuration fixes applied."""
                                 consecutive_transient_failures = 0  # Reset counter
                                 rebuild_success = await self.rebuild_environment(config, context)
                                 if rebuild_success:
-                                    await self.verify_environment(config, context)
-                                prior_fix_attempts.append(
-                                    f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuilt and verified environment"
-                                )
+                                    verify_success = await self.verify_environment(config, context)
+                                    if not verify_success:
+                                        logger.error(
+                                            "Environment verification failed after rebuild",
+                                            extra={
+                                                "workflow_run_id": context.workflow_run_id,
+                                                "test_type": config.test_type.value,
+                                                "iteration": iteration,
+                                                "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                                            },
+                                            exc_info=False,
+                                        )
+                                        prior_fix_attempts.append(
+                                            f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuilt environment but verification failed"
+                                        )
+                                    else:
+                                        prior_fix_attempts.append(
+                                            f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuilt and verified environment"
+                                        )
+                                else:
+                                    prior_fix_attempts.append(
+                                        f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuild failed"
+                                    )
                             elif classification.classification == FailureClassification.TRANSIENT_FAILURE:
                                 consecutive_transient_failures += 1
                                 if consecutive_transient_failures > max_consecutive_transient:
@@ -1738,13 +2024,69 @@ Return a JSON response with the status of configuration fixes applied."""
                                     prior_fix_attempts.append(
                                         f"Iteration {iteration}: TRANSIENT_FAILURE classified, retrying without fix (consecutive count: {consecutive_transient_failures})"
                                     )
+                            elif (
+                                classification.classification
+                                in (
+                                    FailureClassification.DEPENDENCY_ISSUE,
+                                    FailureClassification.CONFIGURATION_ISSUE,
+                                )
+                                and classification.cross_cutting
+                                and len(test_result.failures) <= context.systemic_fix_failure_ceiling
+                            ):
+                                # DEPENDENCY_ISSUE or CONFIGURATION_ISSUE + cross_cutting + within ceiling → systemic fix
+                                consecutive_transient_failures = 0  # Reset counter
+                                systemic_result = await self.fix_failures_systemically(
+                                    test_result.failures, classification, config, context
+                                )
+                                # Only count files as fixed if the systemic fix succeeded
+                                if systemic_result.success:
+                                    files_fixed += len(systemic_result.files_modified)
+                                    prior_fix_attempts.append(
+                                        f"Iteration {iteration}: {classification.classification.value} (cross-cutting), systemic fix applied to "
+                                        f"{len(systemic_result.files_modified)} files"
+                                    )
+                                else:
+                                    prior_fix_attempts.append(
+                                        f"Iteration {iteration}: {classification.classification.value} (cross-cutting), systemic fix attempted but failed"
+                                    )
+                            elif (
+                                classification.classification
+                                in (
+                                    FailureClassification.DEPENDENCY_ISSUE,
+                                    FailureClassification.CONFIGURATION_ISSUE,
+                                )
+                                and classification.cross_cutting
+                                and len(test_result.failures) > context.systemic_fix_failure_ceiling
+                            ):
+                                # DEPENDENCY_ISSUE or CONFIGURATION_ISSUE + cross_cutting but EXCEEDS ceiling → fallback to apply_systemic_fixes
+                                consecutive_transient_failures = 0  # Reset counter
+                                logger.info(
+                                    f"Failure count ({len(test_result.failures)}) exceeds ceiling ({context.systemic_fix_failure_ceiling}), "
+                                    f"falling back to apply_systemic_fixes instead of fix_failures_systemically",
+                                    extra={
+                                        "workflow_run_id": context.workflow_run_id,
+                                        "iteration": iteration,
+                                        "failure_count": len(test_result.failures),
+                                        "ceiling": context.systemic_fix_failure_ceiling,
+                                    },
+                                )
+                                fix_success = await self.apply_systemic_fixes(
+                                    classification.reasoning,
+                                    test_result,
+                                    config,
+                                    context,
+                                )
+                                status = "applied" if fix_success else "attempted but failed"
+                                prior_fix_attempts.append(
+                                    f"Iteration {iteration}: {classification.classification.value} (cross-cutting, {len(test_result.failures)} failures > {context.systemic_fix_failure_ceiling} ceiling), {status} systemic fixes"
+                                )
                             elif classification.classification in (
                                 FailureClassification.DEPENDENCY_ISSUE,
                                 FailureClassification.CONFIGURATION_ISSUE,
                             ):
+                                # DEPENDENCY_ISSUE or CONFIGURATION_ISSUE without cross_cutting → apply_systemic_fixes
                                 consecutive_transient_failures = 0  # Reset counter
                                 fix_success = await self.apply_systemic_fixes(
-                                    classification.classification,
                                     classification.reasoning,
                                     test_result,
                                     config,

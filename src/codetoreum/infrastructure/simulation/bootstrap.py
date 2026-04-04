@@ -657,6 +657,13 @@ class SimulationAdapters:
             msg = f"Failed to import MockSystemicAnalysisAdapter: {e}"
             raise TypeError(msg) from e
 
+    def systemic_analysis_service_as_mock(self) -> "MockSystemicAnalysisAdapter":
+        """Get systemic analysis service as MockSystemicAnalysisAdapter (alias for systemic_analysis_as_mock).
+
+        Raises TypeError if systemic_analysis_service is not MockSystemicAnalysisAdapter.
+        """
+        return self.systemic_analysis_as_mock()
+
 
 @dataclass
 class SimulationServices:
@@ -1244,6 +1251,13 @@ class SimulationApplicationBootstrap:
         # (storage depends on container, so we inject it after resolution)
         if isinstance(resolved.storage, InMemoryStorageAdapter):
             resolved.storage.container = resolved.container
+
+        # Wire systemic analysis service to repair cycle adapter for dispatch logic
+        # This enables the mock repair cycle adapter to dispatch to systemic_fix based on cross_cutting
+        from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
+
+        if isinstance(resolved.repair_cycle, MockRepairCycleAdapter):
+            resolved.repair_cycle.set_systemic_analysis_service(resolved.systemic_analysis_service)
 
         # Create audit store (not provided by resolver)
         audit_store = InMemoryAuditStore()

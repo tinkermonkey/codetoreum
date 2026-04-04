@@ -16,6 +16,8 @@ from codetoreum.domain.events import (
     RepairCycleWarningReviewStartedEvent,
     SystemicAnalysisCompletedEvent,
     SystemicAnalysisStartedEvent,
+    SystemicFixCompletedEvent,
+    SystemicFixStartedEvent,
     now_iso,
 )
 from codetoreum.domain.repair_cycle_types import (
@@ -100,7 +102,6 @@ class TestRepairCycleStartedEvent:
             test_types=(RepairTestType.UNIT, RepairTestType.E2E),
             workflow_run_id="run-123",
         )
-
         d = event.to_dict()
         assert d["stage_name"] == "fix_failures"
         assert d["test_types"] == ["UNIT", "E2E"]
@@ -117,7 +118,6 @@ class TestRepairCycleStartedEvent:
             "test_types": ["UNIT", "INTEGRATION"],
             "workflow_run_id": "run-123",
         }
-
         event = RepairCycleStartedEvent.from_dict(d)
         assert event.stage_name == "fix_failures"
         assert event.test_types == (RepairTestType.UNIT, RepairTestType.INTEGRATION)
@@ -971,13 +971,12 @@ class TestSystemicAnalysisStartedEvent:
             source="repair_cycle",
             work_item_id="issue-123",
             workflow_run_id="run-456",
-            failure_count=5,
+            failure_count=3,
         )
 
         assert event.work_item_id == "issue-123"
         assert event.workflow_run_id == "run-456"
-        assert event.failure_count == 5
-        assert event.type == "repair_cycle.systemic_analysis_started"
+        assert event.failure_count == 3
 
     def test_missing_work_item_id(self):
         """Test that work_item_id is required."""
@@ -988,7 +987,6 @@ class TestSystemicAnalysisStartedEvent:
                 source="repair_cycle",
                 work_item_id="",
                 workflow_run_id="run-456",
-                failure_count=5,
             )
 
     def test_missing_workflow_run_id(self):
@@ -1000,108 +998,7 @@ class TestSystemicAnalysisStartedEvent:
                 source="repair_cycle",
                 work_item_id="issue-123",
                 workflow_run_id="",
-                failure_count=5,
             )
-
-    def test_default_failure_count(self):
-        """Test that failure_count defaults to 0."""
-        event = SystemicAnalysisStartedEvent(
-            type="repair_cycle.systemic_analysis_started",
-            timestamp=now_iso(),
-            source="repair_cycle",
-            work_item_id="issue-123",
-            workflow_run_id="run-456",
-        )
-        assert event.failure_count == 0
-
-    def test_serialization(self):
-        """Test SystemicAnalysisStartedEvent serialization."""
-        timestamp = now_iso()
-        event = SystemicAnalysisStartedEvent(
-            type="repair_cycle.systemic_analysis_started",
-            timestamp=timestamp,
-            source="repair_cycle",
-            work_item_id="issue-123",
-            workflow_run_id="run-456",
-            failure_count=5,
-        )
-
-        d = event.to_dict()
-        assert d["work_item_id"] == "issue-123"
-        assert d["workflow_run_id"] == "run-456"
-        assert d["failure_count"] == 5
-        assert d["type"] == "repair_cycle.systemic_analysis_started"
-        assert d["timestamp"] == timestamp
-
-    def test_deserialization(self):
-        """Test SystemicAnalysisStartedEvent deserialization."""
-        timestamp = now_iso()
-        d = {
-            "type": "repair_cycle.systemic_analysis_started",
-            "timestamp": timestamp,
-            "source": "repair_cycle",
-            "work_item_id": "issue-123",
-            "workflow_run_id": "run-456",
-            "failure_count": 5,
-        }
-
-        event = SystemicAnalysisStartedEvent.from_dict(d)
-        assert event.work_item_id == "issue-123"
-        assert event.workflow_run_id == "run-456"
-        assert event.failure_count == 5
-        assert event.timestamp == timestamp
-
-    def test_deserialization_missing_optional_fields(self):
-        """Test deserialization with missing optional fields uses defaults."""
-        d = {
-            "type": "repair_cycle.systemic_analysis_started",
-            "timestamp": now_iso(),
-            "source": "repair_cycle",
-            "work_item_id": "issue-123",
-            "workflow_run_id": "run-456",
-        }
-
-        event = SystemicAnalysisStartedEvent.from_dict(d)
-        assert event.failure_count == 0
-
-    def test_round_trip_serialization(self):
-        """Test that serialization round-trips through deserialization."""
-        original = SystemicAnalysisStartedEvent(
-            type="repair_cycle.systemic_analysis_started",
-            timestamp=now_iso(),
-            source="repair_cycle",
-            work_item_id="issue-789",
-            workflow_run_id="run-999",
-            failure_count=10,
-        )
-
-        d = original.to_dict()
-        restored = SystemicAnalysisStartedEvent.from_dict(d)
-
-        assert restored.work_item_id == original.work_item_id
-        assert restored.workflow_run_id == original.workflow_run_id
-        assert restored.failure_count == original.failure_count
-        assert restored.timestamp == original.timestamp
-
-    def test_immutability(self):
-        """Test that SystemicAnalysisStartedEvent is immutable."""
-        event = SystemicAnalysisStartedEvent(
-            type="repair_cycle.systemic_analysis_started",
-            timestamp=now_iso(),
-            source="repair_cycle",
-            work_item_id="issue-123",
-            workflow_run_id="run-456",
-            failure_count=5,
-        )
-
-        with pytest.raises(FrozenInstanceError):
-            event.work_item_id = "issue-999"  # type: ignore
-
-        with pytest.raises(FrozenInstanceError):
-            event.workflow_run_id = "run-999"  # type: ignore
-
-        with pytest.raises(FrozenInstanceError):
-            event.failure_count = 10  # type: ignore
 
 
 class TestSystemicAnalysisCompletedEvent:
@@ -1115,39 +1012,16 @@ class TestSystemicAnalysisCompletedEvent:
             timestamp=timestamp,
             source="repair_cycle",
             classification=FailureClassification.CODE_DEFECT.value,
-            confidence=0.95,
-            reasoning="Consistent failure pattern in test file suggests code logic error",
-            recommended_action="Apply code fix and re-run tests",
+            confidence=0.9,
+            reasoning="Code defect detected",
+            recommended_action="Fix code",
             work_item_id="issue-123",
             workflow_run_id="run-456",
-            failure_count=5,
         )
 
-        assert event.classification == "code_defect"
-        assert event.confidence == 0.95
-        assert event.reasoning == "Consistent failure pattern in test file suggests code logic error"
-        assert event.recommended_action == "Apply code fix and re-run tests"
+        assert event.classification == FailureClassification.CODE_DEFECT.value
+        assert event.confidence == 0.9
         assert event.work_item_id == "issue-123"
-        assert event.workflow_run_id == "run-456"
-        assert event.failure_count == 5
-
-    def test_classification_string(self):
-        """Test that classification is stored as a string."""
-        event = SystemicAnalysisCompletedEvent(
-            type="repair_cycle.systemic_analysis_completed",
-            timestamp=now_iso(),
-            source="repair_cycle",
-            classification=FailureClassification.ENVIRONMENT_ISSUE.value,
-            confidence=0.8,
-            reasoning="Tests pass in local environment but fail in CI",
-            recommended_action="Verify CI environment setup",
-            work_item_id="issue-123",
-            workflow_run_id="run-456",
-            failure_count=3,
-        )
-
-        assert isinstance(event.classification, str)
-        assert event.classification == "environment_issue"
 
     def test_missing_work_item_id(self):
         """Test that work_item_id is required."""
@@ -1157,12 +1031,11 @@ class TestSystemicAnalysisCompletedEvent:
                 timestamp=now_iso(),
                 source="repair_cycle",
                 classification=FailureClassification.CODE_DEFECT.value,
-                confidence=0.95,
-                reasoning="Some reason",
-                recommended_action="Some action",
+                confidence=0.9,
+                reasoning="Code defect",
+                recommended_action="Fix code",
                 work_item_id="",
                 workflow_run_id="run-456",
-                failure_count=5,
             )
 
     def test_missing_workflow_run_id(self):
@@ -1173,227 +1046,29 @@ class TestSystemicAnalysisCompletedEvent:
                 timestamp=now_iso(),
                 source="repair_cycle",
                 classification=FailureClassification.CODE_DEFECT.value,
-                confidence=0.95,
-                reasoning="Some reason",
-                recommended_action="Some action",
+                confidence=0.9,
+                reasoning="Code defect",
+                recommended_action="Fix code",
                 work_item_id="issue-123",
                 workflow_run_id="",
-                failure_count=5,
             )
 
-    def test_default_values(self):
-        """Test that fields have appropriate defaults."""
-        event = SystemicAnalysisCompletedEvent(
-            type="repair_cycle.systemic_analysis_completed",
-            timestamp=now_iso(),
-            source="repair_cycle",
-            work_item_id="issue-123",
-            workflow_run_id="run-456",
-        )
-
-        assert event.classification == "code_defect"
-        assert event.confidence == 0.0
-        assert event.reasoning == ""
-        assert event.recommended_action == ""
-        assert event.failure_count == 0
-
-    def test_serialization(self):
-        """Test SystemicAnalysisCompletedEvent serialization."""
-        timestamp = now_iso()
-        event = SystemicAnalysisCompletedEvent(
-            type="repair_cycle.systemic_analysis_completed",
-            timestamp=timestamp,
-            source="repair_cycle",
-            classification=FailureClassification.TRANSIENT_FAILURE.value,
-            confidence=0.6,
-            reasoning="Intermittent failures suggest flaky test or transient resource issue",
-            recommended_action="Retry execution or investigate resource contention",
-            work_item_id="issue-456",
-            workflow_run_id="run-789",
-            failure_count=7,
-        )
-
-        d = event.to_dict()
-        assert d["classification"] == "transient_failure"
-        assert d["confidence"] == 0.6
-        assert d["reasoning"] == "Intermittent failures suggest flaky test or transient resource issue"
-        assert d["recommended_action"] == "Retry execution or investigate resource contention"
-        assert d["work_item_id"] == "issue-456"
-        assert d["workflow_run_id"] == "run-789"
-        assert d["failure_count"] == 7
-        assert d["type"] == "repair_cycle.systemic_analysis_completed"
-        assert d["timestamp"] == timestamp
-
-    def test_deserialization(self):
-        """Test SystemicAnalysisCompletedEvent deserialization."""
-        timestamp = now_iso()
-        d = {
-            "type": "repair_cycle.systemic_analysis_completed",
-            "timestamp": timestamp,
-            "source": "repair_cycle",
-            "classification": "dependency_issue",
-            "confidence": 0.85,
-            "reasoning": "Multiple dependencies fail to resolve",
-            "recommended_action": "Update dependency versions",
-            "work_item_id": "issue-789",
-            "workflow_run_id": "run-111",
-            "failure_count": 4,
-        }
-
-        event = SystemicAnalysisCompletedEvent.from_dict(d)
-        assert event.classification == FailureClassification.DEPENDENCY_ISSUE.value
-        assert event.confidence == 0.85
-        assert event.reasoning == "Multiple dependencies fail to resolve"
-        assert event.recommended_action == "Update dependency versions"
-        assert event.work_item_id == "issue-789"
-        assert event.workflow_run_id == "run-111"
-        assert event.failure_count == 4
-
-    def test_deserialization_missing_optional_fields(self):
-        """Test deserialization with missing optional fields uses defaults."""
-        d = {
-            "type": "repair_cycle.systemic_analysis_completed",
-            "timestamp": now_iso(),
-            "source": "repair_cycle",
-            "work_item_id": "issue-123",
-            "workflow_run_id": "run-456",
-        }
-
-        event = SystemicAnalysisCompletedEvent.from_dict(d)
-        assert event.classification == FailureClassification.CODE_DEFECT.value
-        assert event.confidence == 0.0
-        assert event.reasoning == ""
-        assert event.recommended_action == ""
-        assert event.failure_count == 0
-
-    def test_round_trip_serialization(self):
-        """Test that serialization round-trips through deserialization."""
-        original = SystemicAnalysisCompletedEvent(
-            type="repair_cycle.systemic_analysis_completed",
-            timestamp=now_iso(),
-            source="repair_cycle",
-            classification=FailureClassification.CONFIGURATION_ISSUE.value,
-            confidence=0.92,
-            reasoning="Configuration mismatch between test environments",
-            recommended_action="Standardize test configuration",
-            work_item_id="issue-999",
-            workflow_run_id="run-555",
-            failure_count=8,
-        )
-
-        d = original.to_dict()
-        restored = SystemicAnalysisCompletedEvent.from_dict(d)
-
-        assert restored.classification == original.classification
-        assert restored.confidence == original.confidence
-        assert restored.reasoning == original.reasoning
-        assert restored.recommended_action == original.recommended_action
-        assert restored.work_item_id == original.work_item_id
-        assert restored.workflow_run_id == original.workflow_run_id
-        assert restored.failure_count == original.failure_count
-        assert restored.timestamp == original.timestamp
-
-    def test_confidence_boundary_values(self):
-        """Test that confidence bounds are validated (0.0 to 1.0)."""
-        # Test 0.0 (no confidence)
-        event_zero = SystemicAnalysisCompletedEvent(
-            type="repair_cycle.systemic_analysis_completed",
-            timestamp=now_iso(),
-            source="repair_cycle",
-            classification=FailureClassification.ENVIRONMENT_ISSUE.value,
-            confidence=0.0,
-            work_item_id="issue-123",
-            workflow_run_id="run-456",
-        )
-        assert event_zero.confidence == 0.0
-
-        # Test 1.0 (full confidence)
-        event_full = SystemicAnalysisCompletedEvent(
-            type="repair_cycle.systemic_analysis_completed",
-            timestamp=now_iso(),
-            source="repair_cycle",
-            classification=FailureClassification.CODE_DEFECT.value,
-            confidence=1.0,
-            work_item_id="issue-123",
-            workflow_run_id="run-456",
-        )
-        assert event_full.confidence == 1.0
-
-        # Test intermediate value
-        event_mid = SystemicAnalysisCompletedEvent(
-            type="repair_cycle.systemic_analysis_completed",
-            timestamp=now_iso(),
-            source="repair_cycle",
-            classification=FailureClassification.CODE_DEFECT.value,
-            confidence=0.5,
-            work_item_id="issue-123",
-            workflow_run_id="run-456",
-        )
-        assert event_mid.confidence == 0.5
-
-    def test_immutability(self):
-        """Test that SystemicAnalysisCompletedEvent is immutable."""
-        event = SystemicAnalysisCompletedEvent(
-            type="repair_cycle.systemic_analysis_completed",
-            timestamp=now_iso(),
-            source="repair_cycle",
-            classification=FailureClassification.CODE_DEFECT.value,
-            confidence=0.95,
-            reasoning="Test failure analysis",
-            recommended_action="Fix code issue",
-            work_item_id="issue-123",
-            workflow_run_id="run-456",
-            failure_count=5,
-        )
-
-        with pytest.raises(FrozenInstanceError):
-            event.classification = FailureClassification.ENVIRONMENT_ISSUE  # type: ignore
-
-        with pytest.raises(FrozenInstanceError):
-            event.confidence = 0.8  # type: ignore
-
-        with pytest.raises(FrozenInstanceError):
-            event.reasoning = "Different reasoning"  # type: ignore
-
-        with pytest.raises(FrozenInstanceError):
-            event.recommended_action = "Different action"  # type: ignore
-
-        with pytest.raises(FrozenInstanceError):
-            event.work_item_id = "issue-999"  # type: ignore
-
-        with pytest.raises(FrozenInstanceError):
-            event.workflow_run_id = "run-999"  # type: ignore
-
-        with pytest.raises(FrozenInstanceError):
-            event.failure_count = 10  # type: ignore
-
-    def test_invalid_classification(self):
-        """Test that invalid classification value raises ValueError."""
+    def test_invalid_classification_raises_error(self):
+        """Test that invalid classification raises ValueError."""
         with pytest.raises(ValueError, match="is not a valid FailureClassification"):
             SystemicAnalysisCompletedEvent(
                 type="repair_cycle.systemic_analysis_completed",
                 timestamp=now_iso(),
                 source="repair_cycle",
-                classification="invalid_type",  # type: ignore
-                confidence=0.5,
+                classification="invalid",
+                confidence=0.9,
+                reasoning="Code defect",
+                recommended_action="Fix code",
                 work_item_id="issue-123",
                 workflow_run_id="run-456",
             )
 
-    def test_confidence_above_one(self):
-        """Test that confidence > 1.0 raises ValueError."""
-        with pytest.raises(ValueError, match="confidence must be between 0.0 and 1.0"):
-            SystemicAnalysisCompletedEvent(
-                type="repair_cycle.systemic_analysis_completed",
-                timestamp=now_iso(),
-                source="repair_cycle",
-                classification=FailureClassification.CODE_DEFECT.value,
-                confidence=1.5,
-                work_item_id="issue-123",
-                workflow_run_id="run-456",
-            )
-
-    def test_confidence_below_zero(self):
+    def test_confidence_below_0_raises_error(self):
         """Test that confidence < 0.0 raises ValueError."""
         with pytest.raises(ValueError, match="confidence must be between 0.0 and 1.0"):
             SystemicAnalysisCompletedEvent(
@@ -1439,3 +1114,502 @@ class TestSystemicAnalysisCompletedEvent:
         event = SystemicAnalysisCompletedEvent.from_dict(d)
         # Should default to CODE_DEFECT for unknown enum values
         assert event.classification == FailureClassification.CODE_DEFECT
+
+
+# ============================================================================
+# SystemicFixStartedEvent Tests
+# ============================================================================
+
+
+class TestSystemicFixStartedEvent:
+    """Test SystemicFixStartedEvent."""
+
+    def test_create_valid_event(self):
+        """Test creating a valid systemic fix started event."""
+        timestamp = now_iso()
+        event = SystemicFixStartedEvent(
+            type="repair_cycle.systemic_fix_started",
+            timestamp=timestamp,
+            source="repair_cycle",
+            work_item_id="issue-123",
+            workflow_run_id="run-456",
+            root_cause_classification=FailureClassification.CODE_DEFECT.value,
+            confidence=0.9,
+            affected_file_count=5,
+            failure_count=3,
+        )
+
+        assert event.work_item_id == "issue-123"
+        assert event.workflow_run_id == "run-456"
+        assert event.root_cause_classification == FailureClassification.CODE_DEFECT.value
+        assert event.confidence == 0.9
+        assert event.affected_file_count == 5
+        assert event.failure_count == 3
+
+    def test_missing_work_item_id(self):
+        """Test that work_item_id is required."""
+        with pytest.raises(ValueError, match="work_item_id is required"):
+            SystemicFixStartedEvent(
+                type="repair_cycle.systemic_fix_started",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                work_item_id="",
+                workflow_run_id="run-456",
+                root_cause_classification=FailureClassification.CODE_DEFECT.value,
+                confidence=0.9,
+                affected_file_count=5,
+                failure_count=3,
+            )
+
+    def test_missing_workflow_run_id(self):
+        """Test that workflow_run_id is required."""
+        with pytest.raises(ValueError, match="workflow_run_id is required"):
+            SystemicFixStartedEvent(
+                type="repair_cycle.systemic_fix_started",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                work_item_id="issue-123",
+                workflow_run_id="",
+                root_cause_classification=FailureClassification.CODE_DEFECT.value,
+                confidence=0.9,
+                affected_file_count=5,
+                failure_count=3,
+            )
+
+    def test_invalid_root_cause_classification_invalid_value(self):
+        """Test that invalid classification string is rejected."""
+        # String that's not a valid FailureClassification value
+        with pytest.raises(ValueError, match="is not a valid FailureClassification"):
+            SystemicFixStartedEvent(
+                type="repair_cycle.systemic_fix_started",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                work_item_id="issue-123",
+                workflow_run_id="run-456",
+                root_cause_classification="not_a_classification",
+                confidence=0.9,
+                affected_file_count=5,
+                failure_count=3,
+            )
+
+    def test_invalid_classification_value(self):
+        """Test that root_cause_classification must be a valid FailureClassification value."""
+        with pytest.raises(ValueError, match="is not a valid FailureClassification"):
+            SystemicFixStartedEvent(
+                type="repair_cycle.systemic_fix_started",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                work_item_id="issue-123",
+                workflow_run_id="run-456",
+                root_cause_classification="invalid_classification",
+                confidence=0.9,
+                affected_file_count=5,
+                failure_count=3,
+            )
+
+    def test_confidence_below_0_raises_error(self):
+        """Test that confidence < 0.0 raises ValueError."""
+        with pytest.raises(ValueError, match="confidence must be between 0.0 and 1.0"):
+            SystemicFixStartedEvent(
+                type="repair_cycle.systemic_fix_started",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                work_item_id="issue-123",
+                workflow_run_id="run-456",
+                root_cause_classification=FailureClassification.CODE_DEFECT.value,
+                confidence=-0.1,
+                affected_file_count=5,
+                failure_count=3,
+            )
+
+    def test_confidence_above_1_raises_error(self):
+        """Test that confidence > 1.0 raises ValueError."""
+        with pytest.raises(ValueError, match="confidence must be between 0.0 and 1.0"):
+            SystemicFixStartedEvent(
+                type="repair_cycle.systemic_fix_started",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                work_item_id="issue-123",
+                workflow_run_id="run-456",
+                root_cause_classification=FailureClassification.CODE_DEFECT.value,
+                confidence=1.1,
+                affected_file_count=5,
+                failure_count=3,
+            )
+
+    def test_serialization_round_trip(self):
+        """Test SystemicFixStartedEvent serialization and deserialization."""
+        timestamp = now_iso()
+        original_event = SystemicFixStartedEvent(
+            type="repair_cycle.systemic_fix_started",
+            timestamp=timestamp,
+            source="repair_cycle",
+            work_item_id="issue-123",
+            workflow_run_id="run-456",
+            root_cause_classification=FailureClassification.ENVIRONMENT_ISSUE.value,
+            confidence=0.75,
+            affected_file_count=7,
+            failure_count=5,
+        )
+
+        # Serialize
+        d = original_event.to_dict()
+
+        # Deserialize
+        restored_event = SystemicFixStartedEvent.from_dict(d)
+
+        # Verify round-trip fidelity
+        assert restored_event.work_item_id == original_event.work_item_id
+        assert restored_event.workflow_run_id == original_event.workflow_run_id
+        assert restored_event.root_cause_classification == original_event.root_cause_classification
+        assert restored_event.confidence == original_event.confidence
+        assert restored_event.affected_file_count == original_event.affected_file_count
+        assert restored_event.failure_count == original_event.failure_count
+
+    def test_deserialization_with_missing_optional_fields(self):
+        """Test that missing optional fields get default values."""
+        d = {
+            "type": "repair_cycle.systemic_fix_started",
+            "timestamp": now_iso(),
+            "source": "repair_cycle",
+            "work_item_id": "issue-123",
+            "workflow_run_id": "run-456",
+        }
+
+        event = SystemicFixStartedEvent.from_dict(d)
+        assert event.work_item_id == "issue-123"
+        assert event.workflow_run_id == "run-456"
+        assert event.root_cause_classification == FailureClassification.CODE_DEFECT.value
+        assert event.confidence == 0.0
+        assert event.affected_file_count == 0
+        assert event.failure_count == 0
+
+    def test_deserialization_invalid_classification_defaults_to_code_defect(self):
+        """Test that invalid classification value defaults to CODE_DEFECT."""
+        d = {
+            "type": "repair_cycle.systemic_fix_started",
+            "timestamp": now_iso(),
+            "source": "repair_cycle",
+            "work_item_id": "issue-123",
+            "workflow_run_id": "run-456",
+            "root_cause_classification": "invalid_classification",
+            "confidence": 0.5,
+            "affected_file_count": 3,
+            "failure_count": 2,
+        }
+
+        event = SystemicFixStartedEvent.from_dict(d)
+        assert event.root_cause_classification == FailureClassification.CODE_DEFECT.value
+
+
+# ============================================================================
+# SystemicFixCompletedEvent Tests
+# ============================================================================
+
+
+class TestSystemicFixCompletedEvent:
+    """Test SystemicFixCompletedEvent."""
+
+    def test_create_successful_fix_completed_event(self):
+        """Test creating a successful systemic fix completed event."""
+        timestamp = now_iso()
+        event = SystemicFixCompletedEvent(
+            type="repair_cycle.systemic_fix_completed",
+            timestamp=timestamp,
+            source="repair_cycle",
+            work_item_id="issue-123",
+            workflow_run_id="run-456",
+            success=True,
+            files_modified=("src/api.py", "src/models.py", "src/services.py"),
+            root_cause_addressed="API contract change across modules",
+            duration_seconds=45.5,
+        )
+
+        assert event.work_item_id == "issue-123"
+        assert event.workflow_run_id == "run-456"
+        assert event.success is True
+        assert event.files_modified == ("src/api.py", "src/models.py", "src/services.py")
+        assert event.root_cause_addressed == "API contract change across modules"
+        assert event.duration_seconds == 45.5
+
+    def test_create_failed_fix_completed_event(self):
+        """Test creating a failed systemic fix completed event."""
+        timestamp = now_iso()
+        event = SystemicFixCompletedEvent(
+            type="repair_cycle.systemic_fix_completed",
+            timestamp=timestamp,
+            source="repair_cycle",
+            work_item_id="issue-123",
+            workflow_run_id="run-456",
+            success=False,
+            files_modified=(),
+            root_cause_addressed="Failed to apply fix",
+            duration_seconds=30.0,
+        )
+
+        assert event.success is False
+        assert event.files_modified == ()
+
+    def test_missing_work_item_id(self):
+        """Test that work_item_id is required."""
+        with pytest.raises(ValueError, match="work_item_id is required"):
+            SystemicFixCompletedEvent(
+                type="repair_cycle.systemic_fix_completed",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                work_item_id="",
+                workflow_run_id="run-456",
+                success=True,
+                files_modified=("file.py",),
+                root_cause_addressed="Root cause",
+                duration_seconds=10.0,
+            )
+
+    def test_missing_workflow_run_id(self):
+        """Test that workflow_run_id is required."""
+        with pytest.raises(ValueError, match="workflow_run_id is required"):
+            SystemicFixCompletedEvent(
+                type="repair_cycle.systemic_fix_completed",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                work_item_id="issue-123",
+                workflow_run_id="",
+                success=True,
+                files_modified=("file.py",),
+                root_cause_addressed="Root cause",
+                duration_seconds=10.0,
+            )
+
+    def test_list_files_modified_coerced_to_tuple(self):
+        """Test that list files_modified is coerced to tuple."""
+        event = SystemicFixCompletedEvent(
+            type="repair_cycle.systemic_fix_completed",
+            timestamp=now_iso(),
+            source="repair_cycle",
+            work_item_id="issue-123",
+            workflow_run_id="run-456",
+            success=True,
+            files_modified=["file1.py", "file2.py"],  # type: ignore[arg-type]
+            root_cause_addressed="Root cause",
+            duration_seconds=10.0,
+        )
+
+        assert isinstance(event.files_modified, tuple)
+        assert event.files_modified == ("file1.py", "file2.py")
+
+    def test_serialization_round_trip(self):
+        """Test SystemicFixCompletedEvent serialization and deserialization."""
+        timestamp = now_iso()
+        original_event = SystemicFixCompletedEvent(
+            type="repair_cycle.systemic_fix_completed",
+            timestamp=timestamp,
+            source="repair_cycle",
+            work_item_id="issue-123",
+            workflow_run_id="run-456",
+            success=True,
+            files_modified=("src/api.py", "src/models.py"),
+            root_cause_addressed="API contract change",
+            duration_seconds=120.5,
+        )
+
+        # Serialize to dict
+        d = original_event.to_dict()
+
+        # Verify that files_modified is serialized as list
+        assert isinstance(d["files_modified"], list)
+        assert d["files_modified"] == ["src/api.py", "src/models.py"]
+
+        # Deserialize from dict
+        restored_event = SystemicFixCompletedEvent.from_dict(d)
+
+        # Verify round-trip fidelity
+        assert restored_event.work_item_id == original_event.work_item_id
+        assert restored_event.workflow_run_id == original_event.workflow_run_id
+        assert restored_event.success == original_event.success
+        assert restored_event.files_modified == original_event.files_modified
+        assert restored_event.root_cause_addressed == original_event.root_cause_addressed
+        assert restored_event.duration_seconds == original_event.duration_seconds
+
+    def test_deserialization_with_missing_optional_fields(self):
+        """Test that missing optional fields get default values."""
+        d = {
+            "type": "repair_cycle.systemic_fix_completed",
+            "timestamp": now_iso(),
+            "source": "repair_cycle",
+            "work_item_id": "issue-123",
+            "workflow_run_id": "run-456",
+        }
+
+        event = SystemicFixCompletedEvent.from_dict(d)
+        assert event.work_item_id == "issue-123"
+        assert event.workflow_run_id == "run-456"
+        assert event.success is False
+        assert event.files_modified == ()
+        assert event.root_cause_addressed == ""
+        assert event.duration_seconds == 0.0
+
+    def test_deserialization_with_invalid_files_modified(self):
+        """Test that invalid files_modified defaults to empty tuple."""
+        d = {
+            "type": "repair_cycle.systemic_fix_completed",
+            "timestamp": now_iso(),
+            "source": "repair_cycle",
+            "work_item_id": "issue-123",
+            "workflow_run_id": "run-456",
+            "files_modified": 123,  # Invalid: not list or tuple
+            "success": True,
+            "root_cause_addressed": "Root cause",
+            "duration_seconds": 10.0,
+        }
+
+        event = SystemicFixCompletedEvent.from_dict(d)
+        assert event.files_modified == ()
+
+
+# ============================================================================
+# SystemicFixStartedEvent Edge Cases and Round-Trip Tests
+# ============================================================================
+
+
+class TestSystemicFixStartedEventEdgeCases:
+    """Test edge cases and round-trip serialization for SystemicFixStartedEvent."""
+
+    def test_round_trip_with_all_fields(self):
+        """Test complete round-trip with all fields populated."""
+        timestamp = now_iso()
+        original = SystemicFixStartedEvent(
+            type="repair_cycle.systemic_fix_started",
+            timestamp=timestamp,
+            source="repair_cycle",
+            work_item_id="WI-123",
+            workflow_run_id="WR-456",
+            root_cause_classification=FailureClassification.CODE_DEFECT.value,
+            confidence=0.85,
+            affected_file_count=7,
+            failure_count=5,
+        )
+
+        d = original.to_dict()
+        restored = SystemicFixStartedEvent.from_dict(d)
+
+        assert restored == original
+        assert restored.work_item_id == "WI-123"
+        assert restored.workflow_run_id == "WR-456"
+        assert restored.root_cause_classification == FailureClassification.CODE_DEFECT.value
+        assert restored.confidence == 0.85
+        assert restored.affected_file_count == 7
+        assert restored.failure_count == 5
+
+    def test_round_trip_immutability(self):
+        """Test that deserialized event is immutable."""
+        d = {
+            "type": "repair_cycle.systemic_fix_started",
+            "timestamp": now_iso(),
+            "source": "repair_cycle",
+            "work_item_id": "WI-123",
+            "workflow_run_id": "WR-456",
+            "root_cause_classification": FailureClassification.CODE_DEFECT.value,
+            "confidence": 0.9,
+            "affected_file_count": 3,
+            "failure_count": 2,
+        }
+
+        event = SystemicFixStartedEvent.from_dict(d)
+
+        with pytest.raises(FrozenInstanceError):
+            event.work_item_id = "WI-999"  # type: ignore[misc]
+
+
+# ============================================================================
+# SystemicFixCompletedEvent Edge Cases and Round-Trip Tests
+# ============================================================================
+
+
+class TestSystemicFixCompletedEventEdgeCases:
+    """Test edge cases and round-trip serialization for SystemicFixCompletedEvent."""
+
+    def test_round_trip_with_multiple_files(self):
+        """Test round-trip with multiple files modified."""
+        timestamp = now_iso()
+        files = ("src/api.py", "src/models.py", "src/services.py", "src/utils.py")
+        original = SystemicFixCompletedEvent(
+            type="repair_cycle.systemic_fix_completed",
+            timestamp=timestamp,
+            source="repair_cycle",
+            work_item_id="WI-123",
+            workflow_run_id="WR-456",
+            success=True,
+            files_modified=files,
+            root_cause_addressed="API contract changed across multiple modules",
+            duration_seconds=256.75,
+        )
+
+        d = original.to_dict()
+        assert d["files_modified"] == list(files)
+
+        restored = SystemicFixCompletedEvent.from_dict(d)
+        assert restored.files_modified == files
+        assert isinstance(restored.files_modified, tuple)
+
+    def test_round_trip_failed_fix(self):
+        """Test round-trip with failed systemic fix."""
+        timestamp = now_iso()
+        original = SystemicFixCompletedEvent(
+            type="repair_cycle.systemic_fix_completed",
+            timestamp=timestamp,
+            source="repair_cycle",
+            work_item_id="WI-123",
+            workflow_run_id="WR-456",
+            success=False,
+            files_modified=(),
+            root_cause_addressed="Attempted to apply fix but validation failed",
+            duration_seconds=180.0,
+        )
+
+        d = original.to_dict()
+        restored = SystemicFixCompletedEvent.from_dict(d)
+
+        assert restored.success is False
+        assert restored.files_modified == ()
+
+    def test_round_trip_zero_duration(self):
+        """Test round-trip with zero duration."""
+        timestamp = now_iso()
+        original = SystemicFixCompletedEvent(
+            type="repair_cycle.systemic_fix_completed",
+            timestamp=timestamp,
+            source="repair_cycle",
+            work_item_id="WI-123",
+            workflow_run_id="WR-456",
+            success=False,
+            files_modified=(),
+            root_cause_addressed="Quick failure",
+            duration_seconds=0.0,
+        )
+
+        d = original.to_dict()
+        restored = SystemicFixCompletedEvent.from_dict(d)
+
+        assert restored.duration_seconds == 0.0
+
+    def test_immutability_after_deserialization(self):
+        """Test that deserialized event is immutable."""
+        d = {
+            "type": "repair_cycle.systemic_fix_completed",
+            "timestamp": now_iso(),
+            "source": "repair_cycle",
+            "work_item_id": "WI-123",
+            "workflow_run_id": "WR-456",
+            "success": True,
+            "files_modified": ["src/api.py"],
+            "root_cause_addressed": "Root cause",
+            "duration_seconds": 100.0,
+        }
+
+        event = SystemicFixCompletedEvent.from_dict(d)
+
+        with pytest.raises(FrozenInstanceError):
+            event.success = False  # type: ignore[misc]
+
+        with pytest.raises(FrozenInstanceError):
+            event.root_cause_addressed = "Different cause"  # type: ignore[misc]

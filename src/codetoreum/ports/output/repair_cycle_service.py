@@ -26,6 +26,8 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestResult,
     RepairTestRunConfig,
     RepairTestType,
+    SystemicAnalysisResult,
+    SystemicFixResult,
 )
 
 
@@ -46,6 +48,13 @@ class RepairCycleContext(Protocol):
         agent_config: Optional RepairCycleAgentConfig for agent specialization. None means
                       fall back to stage's default agent (agent_name). Supports assigning
                       specialized agents to specific repair cycle sub-tasks.
+        systemic_fix_failure_ceiling: Maximum number of failures to attempt systemic fix.
+                                     Prevents overwhelming the agent with too many failures.
+        iteration: Current iteration number in the repair cycle (for analysis context)
+        prior_fix_attempts: Immutable tuple of descriptions of prior fix attempts
+                           (for escalation and re-classification)
+        prior_classifications: Immutable tuple of prior classification results
+                              (for escalation and re-classification)
     """
 
     stage_name: str
@@ -56,6 +65,10 @@ class RepairCycleContext(Protocol):
     max_total_agent_calls: int
     checkpoint_interval: int
     agent_config: RepairCycleAgentConfig | None
+    systemic_fix_failure_ceiling: int
+    iteration: int
+    prior_fix_attempts: tuple[str, ...]
+    prior_classifications: tuple
 
 
 class IRepairCycle(Protocol):
@@ -225,6 +238,34 @@ class IRepairCycle(Protocol):
         """
         ...
 
+    async def fix_failures_systemically(
+        self,
+        failures: tuple[RepairTestFailure, ...],
+        analysis_result: SystemicAnalysisResult,
+        config: RepairTestRunConfig,
+        context: RepairCycleContext,
+    ) -> SystemicFixResult:
+        """Apply a coordinated holistic fix addressing the root cause across all affected files.
+
+        Unlike fix_failures_by_file(), this method issues a single agent invocation
+        presenting all failures together with the root cause context from systemic analysis.
+        Use when analysis_result.cross_cutting is True.
+
+        Args:
+            failures: Immutable tuple of test failures to address
+            analysis_result: Systemic analysis result with root cause and affected files
+            config: Test run configuration
+            context: Repair cycle context
+
+        Returns:
+            SystemicFixResult indicating whether the holistic fix succeeded and which
+            files were modified
+
+        Raises:
+            CircuitBreakerOpenError: When circuit breaker is open
+        """
+        ...
+
     async def rebuild_environment(
         self,
         config: RepairTestRunConfig,
@@ -275,7 +316,7 @@ class IRepairCycle(Protocol):
         test_type: RepairTestType,
         iteration: int,
         context: RepairCycleContext,
-    ) -> None:
+    ) -> bool:
         """Save repair cycle state for resume after failures.
 
         Called at checkpoint_interval iterations (e.g., every 5 iterations).
@@ -285,5 +326,8 @@ class IRepairCycle(Protocol):
             test_type: Current test type being executed
             iteration: Current iteration number
             context: Repair cycle context
+
+        Returns:
+            True if checkpoint saved successfully, False otherwise
         """
         ...

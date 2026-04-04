@@ -8,7 +8,8 @@ enabling the repair cycle to dispatch to the correct handling strategy (code fix
 environment rebuild, dependency fix, or transient retry).
 
 Architecture:
-- Factory injection of ILLMProvider for flexible provider selection
+- Async factory injection for agent-based LLM provider resolution
+- Factory resolves providers by agent name (e.g., "systemic_analysis")
 - Prompt construction with comprehensive context (failures, prior attempts, iteration)
 - JSON parsing with fallback to CODE_DEFECT classification on parse errors
 - No event emission (caller's responsibility)
@@ -46,7 +47,7 @@ class LLMSystemicAnalysisAdapter(ISystemicAnalysisService):
     attempts, and iteration count.
 
     Example:
-        adapter = LLMSystemicAnalysisAdapter(llm_factory=lambda: llm_provider)
+        adapter = LLMSystemicAnalysisAdapter(llm_factory=lambda agent_name: provider_coro)
         result = await adapter.analyze(failures, context)
     """
 
@@ -54,7 +55,8 @@ class LLMSystemicAnalysisAdapter(ISystemicAnalysisService):
         """Initialize production systemic analysis adapter.
 
         Args:
-            llm_factory: Factory callable that returns configured ILLMProvider instance
+            llm_factory: Factory callable that takes agent name (str) and returns coroutine
+                        resolving to configured ILLMProvider instance
             timeout_seconds: Timeout for LLM execution in seconds (default 300)
 
         Raises:
@@ -138,6 +140,7 @@ class LLMSystemicAnalysisAdapter(ISystemicAnalysisService):
                 reasoning=f"Parse failure: {e}",
                 affected_files=(),
                 recommended_action="Fix code defects",
+                cross_cutting=False,
             )
 
     def _build_prompt(
@@ -181,8 +184,17 @@ Respond with JSON only (no markdown, no additional text):
   "confidence": <0.0-1.0>,
   "reasoning": "<explanation>",
   "affected_files": ["<file1>", ...],
-  "recommended_action": "<action>"
-}}"""
+  "recommended_action": "<action>",
+  "cross_cutting": <true|false>
+}}
+
+Field definitions:
+- classification: The root cause category of the failures
+- confidence: Your confidence in the classification (0.0-1.0)
+- reasoning: Explanation of why you chose this classification
+- affected_files: List of files involved in the failures
+- recommended_action: What action should be taken to fix this issue
+- cross_cutting: Set to true if the identified root cause is a single change that propagates failures across multiple files simultaneously (e.g., renamed method, changed interface contract, modified base class, API contract change, schema migration, shared import path change). Set to false when failures in different files are independent and can be fixed in isolation."""
 
     async def _execute_llm_with_timeout(
         self,
@@ -208,7 +220,7 @@ Respond with JSON only (no markdown, no additional text):
             Exception: Any exception raised by the LLM provider
         """
         try:
-            llm_provider = self._llm_factory()
+            llm_provider = await self._llm_factory("systemic_analysis")
             return await asyncio.wait_for(
                 llm_provider.execute(prompt, context=execution_context),
                 timeout=execution_context.timeout_seconds,
@@ -271,7 +283,7 @@ Respond with JSON only (no markdown, no additional text):
                     "work_item_id": context.work_item_id,
                     "iteration": context.iteration,
                 },
-                exc_info=False,
+                exc_info=True,
             )
             raise ValueError(f"Invalid classification value: {classification_str}") from e
 
@@ -281,6 +293,9 @@ Respond with JSON only (no markdown, no additional text):
             msg = f"Confidence must be between 0.0 and 1.0, got {confidence}"
             raise ValueError(msg)
 
+        # Extract cross_cutting - optional field, defaults to False (backward-compatible)
+        cross_cutting = bool(data.get("cross_cutting", False))
+
         # Build result
         return SystemicAnalysisResult(
             classification=classification,
@@ -288,6 +303,7 @@ Respond with JSON only (no markdown, no additional text):
             reasoning=data["reasoning"],
             affected_files=tuple(data.get("affected_files", [])),
             recommended_action=data["recommended_action"],
+            cross_cutting=cross_cutting,
         )
 
     def _extract_json_from_response(

@@ -18,12 +18,15 @@ from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
     MockRepairCycleAdapter,
 )
 from codetoreum.domain.repair_cycle_types import (
+    FailureClassification,
     RepairCycleAgentConfig,
     RepairTestFailure,
     RepairTestResult,
     RepairTestRunConfig,
     RepairTestType,
     RepairTestWarning,
+    SystemicAnalysisResult,
+    SystemicFixResult,
 )
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 
@@ -53,6 +56,7 @@ class MockRepairCycleContext:
         max_total_agent_calls: int = 100,
         checkpoint_interval: int = 5,
         agent_config=None,
+        systemic_fix_failure_ceiling: int = 50,
     ):
         self.stage_name = stage_name
         self.workflow_run_id = workflow_run_id
@@ -69,6 +73,7 @@ class MockRepairCycleContext:
         self.max_total_agent_calls = max_total_agent_calls
         self.checkpoint_interval = checkpoint_interval
         self.agent_config = agent_config
+        self.systemic_fix_failure_ceiling = systemic_fix_failure_ceiling
 
 
 class TestSimulationClockIntegration:
@@ -865,3 +870,356 @@ class TestAgentSelectionTracking:
         # And fail for the first one
         with pytest.raises(AssertionError):
             adapter.assert_subtask_used_agent("test_execution", "agent_1")
+
+
+class TestSystemicFixConfiguration:
+    """Tests for systemic fix configuration and execution (Phase 5)."""
+
+    @pytest.mark.asyncio
+    async def test_systemic_fix_default_result(self, llm_factory):
+        """Test fix_failures_systemically() with no pre-configured result (default behavior)."""
+        clock = SimulationClock(speed_multiplier=100.0)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
+        adapter.current_project = "proj-1"
+
+        # Create test fixtures
+        failures = (
+            RepairTestFailure(
+                file="test_api.py",
+                test="test_endpoint_migration",
+                message="API contract changed",
+            ),
+        )
+        analysis_result = SystemicAnalysisResult(
+            classification=FailureClassification.DEPENDENCY_ISSUE,
+            confidence=0.95,
+            reasoning="API contract was updated in dependency",
+            affected_files=("src/api_client.py", "src/handlers.py"),
+            recommended_action="Update API usage patterns",
+            cross_cutting=True,
+        )
+        context = MockRepairCycleContext()
+
+        # Call without pre-configured result
+        result = await adapter.fix_failures_systemically(
+            failures,
+            analysis_result,
+            context.test_configs[0],
+            context,
+        )
+
+        # Should return default success result with no files modified
+        assert result.success is True
+        assert result.files_modified == ()
+        assert result.root_cause_addressed == "API contract was updated in dependency"
+        assert result.duration_seconds == 180.0  # Default 3 minutes
+
+    @pytest.mark.asyncio
+    async def test_systemic_fix_single_configured_result(self, llm_factory):
+        """Test fix_failures_systemically() with single configured result."""
+        clock = SimulationClock(speed_multiplier=100.0)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
+        adapter.current_project = "proj-1"
+
+        # Configure single result
+        configured_result = SystemicFixResult(
+            success=True,
+            files_modified=("src/config.py", "src/handler.py"),
+            root_cause_addressed="Updated configuration loading pattern",
+            duration_seconds=240.0,
+        )
+        adapter.set_systemic_fix_result(configured_result)
+
+        failures = (RepairTestFailure("test_config.py", "test_load_config", "Config not found"),)
+        analysis_result = SystemicAnalysisResult(
+            classification=FailureClassification.CONFIGURATION_ISSUE,
+            confidence=0.92,
+            reasoning="Configuration loading pattern changed",
+            affected_files=("src/config.py", "src/handler.py"),
+            recommended_action="Update config loading",
+            cross_cutting=True,
+        )
+        context = MockRepairCycleContext()
+
+        result = await adapter.fix_failures_systemically(
+            failures,
+            analysis_result,
+            context.test_configs[0],
+            context,
+        )
+
+        # Should return the configured result
+        assert result.success is True
+        assert set(result.files_modified) == {"src/config.py", "src/handler.py"}
+        assert result.root_cause_addressed == "Updated configuration loading pattern"
+        assert result.duration_seconds == 240.0
+
+    @pytest.mark.asyncio
+    async def test_systemic_fix_sequence_of_results(self, llm_factory):
+        """Test fix_failures_systemically() with sequence of results consumed in order."""
+        clock = SimulationClock(speed_multiplier=100.0)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
+        adapter.current_project = "proj-1"
+
+        # Configure sequence of results
+        result1 = SystemicFixResult(
+            success=False,
+            files_modified=(),
+            root_cause_addressed="First attempt failed",
+            duration_seconds=180.0,
+        )
+        result2 = SystemicFixResult(
+            success=True,
+            files_modified=("src/fix.py",),
+            root_cause_addressed="Successfully fixed",
+            duration_seconds=240.0,
+        )
+        adapter.set_systemic_fix_result([result1, result2])
+
+        failures = (RepairTestFailure("test_main.py", "test_main", "Main failed"),)
+        analysis_result = SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.88,
+            reasoning="Main function needs fixing",
+            affected_files=("src/fix.py",),
+            recommended_action="Fix main function",
+            cross_cutting=True,
+        )
+        context = MockRepairCycleContext()
+
+        # First call returns first result
+        result_first = await adapter.fix_failures_systemically(
+            failures,
+            analysis_result,
+            context.test_configs[0],
+            context,
+        )
+        assert result_first.success is False
+        assert result_first.root_cause_addressed == "First attempt failed"
+
+        # Second call returns second result
+        result_second = await adapter.fix_failures_systemically(
+            failures,
+            analysis_result,
+            context.test_configs[0],
+            context,
+        )
+        assert result_second.success is True
+        assert result_second.root_cause_addressed == "Successfully fixed"
+        assert "src/fix.py" in result_second.files_modified
+
+    @pytest.mark.asyncio
+    async def test_systemic_fix_call_count_tracking(self, llm_factory):
+        """Test systemic_fix_call_count property tracks invocations separately."""
+        clock = SimulationClock(speed_multiplier=100.0)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
+        adapter.current_project = "proj-1"
+
+        failures = (RepairTestFailure("test.py", "test", "failed"),)
+        analysis_result = SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.9,
+            reasoning="Test reasoning",
+            affected_files=("src/main.py",),
+            recommended_action="Fix it",
+            cross_cutting=True,
+        )
+        context = MockRepairCycleContext()
+
+        # Initial count is 0
+        assert adapter.systemic_fix_call_count == 0
+
+        # Call once
+        await adapter.fix_failures_systemically(
+            failures,
+            analysis_result,
+            context.test_configs[0],
+            context,
+        )
+        assert adapter.systemic_fix_call_count == 1
+
+        # Call again
+        await adapter.fix_failures_systemically(
+            failures,
+            analysis_result,
+            context.test_configs[0],
+            context,
+        )
+        assert adapter.systemic_fix_call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_file_fix_vs_systemic_fix_tracking(self, llm_factory):
+        """Test dispatch decisions via separate call counts."""
+        clock = SimulationClock(speed_multiplier=100.0)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
+        adapter.current_project = "proj-1"
+
+        context = MockRepairCycleContext()
+
+        # Simulate file-level fix
+        grouped_failures = {"test_file.py": (RepairTestFailure("test_file.py", "test_1", "failed"),)}
+        await adapter.fix_failures_by_file(grouped_failures, context.test_configs[0], context)
+        assert adapter.file_fix_call_count == 1
+        assert adapter.systemic_fix_call_count == 0
+
+        # Simulate systemic fix
+        failures = (RepairTestFailure("test.py", "test", "failed"),)
+        analysis_result = SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.9,
+            reasoning="Cross-cutting issue",
+            affected_files=("src/main.py",),
+            recommended_action="Fix it",
+            cross_cutting=True,
+        )
+        await adapter.fix_failures_systemically(failures, analysis_result, context.test_configs[0], context)
+        assert adapter.file_fix_call_count == 1
+        assert adapter.systemic_fix_call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_systemic_fix_emits_events(self, llm_factory):
+        """Test SystemicFixStartedEvent and SystemicFixCompletedEvent emission with field verification."""
+        clock = SimulationClock(speed_multiplier=100.0)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
+        adapter.current_project = "proj-1"
+
+        failures = (RepairTestFailure("test.py", "test_main", "failed"),)
+        analysis_result = SystemicAnalysisResult(
+            classification=FailureClassification.DEPENDENCY_ISSUE,
+            confidence=0.85,
+            reasoning="Dependency API changed",
+            affected_files=("src/api.py", "src/client.py"),
+            recommended_action="Update API calls",
+            cross_cutting=True,
+        )
+        context = MockRepairCycleContext()
+
+        await adapter.fix_failures_systemically(
+            failures,
+            analysis_result,
+            context.test_configs[0],
+            context,
+        )
+
+        # Check events were emitted with correct field values
+        events = adapter.get_all_events()
+
+        started_event_dict = next((e for e in events if e["type"] == "repair_cycle.systemic_fix_started"), None)
+        assert started_event_dict is not None
+        started_event = started_event_dict["event"]
+        assert started_event.root_cause_classification == FailureClassification.DEPENDENCY_ISSUE.value
+        assert started_event.confidence == 0.85
+        assert started_event.affected_file_count == 2  # src/api.py, src/client.py
+        assert started_event.failure_count == 1
+
+        completed_event_dict = next((e for e in events if e["type"] == "repair_cycle.systemic_fix_completed"), None)
+        assert completed_event_dict is not None
+        completed_event = completed_event_dict["event"]
+        assert completed_event.success is True
+        assert completed_event.files_modified == ()
+        assert completed_event.root_cause_addressed == "Dependency API changed"
+        assert completed_event.duration_seconds == 180.0  # 3 minutes default
+
+    @pytest.mark.asyncio
+    async def test_systemic_fix_clock_advance_default(self, llm_factory):
+        """Test clock advances by default 3 minutes per systemic fix."""
+        clock = SimulationClock(speed_multiplier=100.0)
+        start_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
+        clock.start_at(start_time)
+
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
+        adapter.current_project = "proj-1"
+
+        failures = (RepairTestFailure("test.py", "test", "failed"),)
+        analysis_result = SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.9,
+            reasoning="Test reasoning",
+            affected_files=("src/main.py",),
+            recommended_action="Fix it",
+            cross_cutting=True,
+        )
+        context = MockRepairCycleContext()
+
+        await adapter.fix_failures_systemically(
+            failures,
+            analysis_result,
+            context.test_configs[0],
+            context,
+        )
+
+        # Clock should have advanced 3 minutes
+        elapsed = clock.now() - start_time
+        assert elapsed.total_seconds() == pytest.approx(180.0, abs=0.1)
+
+    @pytest.mark.asyncio
+    async def test_systemic_fix_clock_advance_custom(self, llm_factory):
+        """Test clock advance can be customized per set_systemic_fix_result()."""
+        clock = SimulationClock(speed_multiplier=100.0)
+        start_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
+        clock.start_at(start_time)
+
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
+        adapter.current_project = "proj-1"
+
+        # Configure with custom clock advance
+        result = SystemicFixResult(
+            success=True,
+            files_modified=("src/fix.py",),
+            root_cause_addressed="Fixed",
+            duration_seconds=300.0,
+        )
+        adapter.set_systemic_fix_result(result, clock_advance=timedelta(minutes=5))
+
+        failures = (RepairTestFailure("test.py", "test", "failed"),)
+        analysis_result = SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.9,
+            reasoning="Test reasoning",
+            affected_files=("src/fix.py",),
+            recommended_action="Fix it",
+            cross_cutting=True,
+        )
+        context = MockRepairCycleContext()
+
+        await adapter.fix_failures_systemically(
+            failures,
+            analysis_result,
+            context.test_configs[0],
+            context,
+        )
+
+        # Clock should have advanced 5 minutes
+        elapsed = clock.now() - start_time
+        assert elapsed.total_seconds() == pytest.approx(300.0, abs=0.1)
+
+    @pytest.mark.asyncio
+    async def test_systemic_fix_circuit_breaker(self, llm_factory):
+        """Test circuit breaker prevents systemic fix when max agent calls exceeded."""
+        clock = SimulationClock(speed_multiplier=100.0)
+        adapter = MockRepairCycleAdapter(llm_factory, clock)
+        adapter.current_project = "proj-1"
+
+        # Set max agent calls to 0 to trigger circuit breaker
+        context = MockRepairCycleContext(max_total_agent_calls=0)
+
+        failures = (RepairTestFailure("test.py", "test", "failed"),)
+        analysis_result = SystemicAnalysisResult(
+            classification=FailureClassification.CODE_DEFECT,
+            confidence=0.9,
+            reasoning="Test reasoning",
+            affected_files=("src/main.py",),
+            recommended_action="Fix it",
+            cross_cutting=True,
+        )
+
+        result = await adapter.fix_failures_systemically(
+            failures,
+            analysis_result,
+            context.test_configs[0],
+            context,
+        )
+
+        # Should return failure due to circuit breaker
+        assert result.success is False
+        assert "Circuit breaker triggered" in result.root_cause_addressed
