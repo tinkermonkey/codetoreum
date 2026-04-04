@@ -48,6 +48,8 @@ class RepairCycleContext(Protocol):
         agent_config: Optional RepairCycleAgentConfig for agent specialization. None means
                       fall back to stage's default agent (agent_name). Supports assigning
                       specialized agents to specific repair cycle sub-tasks.
+        systemic_fix_failure_ceiling: Maximum number of failures to attempt systemic fix.
+                                     Prevents overwhelming the agent with too many failures.
         iteration: Current iteration number in the repair cycle (for analysis context)
         prior_fix_attempts: Immutable tuple of descriptions of prior fix attempts
                            (for escalation and re-classification)
@@ -63,6 +65,7 @@ class RepairCycleContext(Protocol):
     max_total_agent_calls: int
     checkpoint_interval: int
     agent_config: RepairCycleAgentConfig | None
+    systemic_fix_failure_ceiling: int
     iteration: int
     prior_fix_attempts: tuple[str, ...]
     prior_classifications: tuple

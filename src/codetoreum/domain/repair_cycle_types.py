@@ -30,11 +30,6 @@ from enum import Enum
 
 logger = logging.getLogger(__name__)
 
-# Systemic fix dispatch threshold: maximum failures before falling back to file-level fixes.
-# When CODE_DEFECT + cross_cutting=True has more than this many failures, the repair cycle
-# falls back to fix_failures_by_file() to prevent overwhelming the systemic fix agent.
-SYSTEMIC_FIX_FAILURE_CEILING = 50
-
 
 class FailureClassification(str, Enum):
     """Classification of the root cause of test failures.
@@ -509,6 +504,9 @@ class RepairCycleStageConfig:
         agent_config: Optional RepairCycleAgentConfig for agent specialization. None means
                       fall back to agent_name. Supports assigning specialized agents to
                       specific repair cycle sub-tasks.
+        systemic_fix_failure_ceiling: Maximum number of failures to attempt systemic fix.
+                                     Prevents overwhelming the agent with too many failures.
+                                     Defaults to 50.
     """
 
     name: str
@@ -517,6 +515,7 @@ class RepairCycleStageConfig:
     max_total_agent_calls: int = 100  # Circuit breaker
     checkpoint_interval: int = 5  # Save state every N iterations
     agent_config: RepairCycleAgentConfig | None = None  # Optional specialized agents
+    systemic_fix_failure_ceiling: int = 50  # Max failures for systemic fix dispatch
 
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""
@@ -531,6 +530,9 @@ class RepairCycleStageConfig:
             raise ValueError(msg)
         if self.checkpoint_interval <= 0:
             msg = "checkpoint_interval must be > 0"
+            raise ValueError(msg)
+        if self.systemic_fix_failure_ceiling <= 0:
+            msg = "systemic_fix_failure_ceiling must be > 0"
             raise ValueError(msg)
 
 
@@ -551,7 +553,7 @@ class SystemicAnalysisResult:
         reasoning: Explanation of classification decision
         affected_files: Immutable tuple of file names affected by the issue
         recommended_action: Recommended remediation step for this classification
-        cross_cutting: Whether the failure indicates a cross-cutting root cause (default: False)
+        cross_cutting: Whether the failure indicates a cross-cutting root cause
     """
 
     classification: FailureClassification
@@ -559,7 +561,7 @@ class SystemicAnalysisResult:
     reasoning: str
     affected_files: tuple[str, ...]  # Immutable tuple
     recommended_action: str
-    cross_cutting: bool = False
+    cross_cutting: bool
 
     def __post_init__(self) -> None:
         """Validate analysis result after initialization."""
@@ -574,6 +576,9 @@ class SystemicAnalysisResult:
             raise ValueError(msg)
         if not self.recommended_action:
             msg = "recommended_action is required"
+            raise ValueError(msg)
+        if not isinstance(self.cross_cutting, bool):
+            msg = "cross_cutting must be a boolean"
             raise ValueError(msg)
 
 

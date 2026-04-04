@@ -39,6 +39,7 @@ class RepairCycleEventContext:
     max_total_agent_calls: int
     checkpoint_interval: int
     agent_config: RepairCycleAgentConfig | None = None
+    systemic_fix_failure_ceiling: int = 50
     iteration: int = 0
     prior_fix_attempts: tuple[str, ...] = ()
     prior_classifications: tuple = ()

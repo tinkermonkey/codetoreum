@@ -57,7 +57,6 @@ from codetoreum.domain.events.repair_cycle_events import (
 )
 from codetoreum.domain.exceptions import TestOutputParseError
 from codetoreum.domain.repair_cycle_types import (
-    SYSTEMIC_FIX_FAILURE_CEILING,
     AnalysisContext,
     CycleResult,
     FailureClassification,
@@ -1926,7 +1925,7 @@ Return a JSON response with the status of dependency fixes applied."""
                             if (
                                 classification.classification == FailureClassification.CODE_DEFECT
                                 and classification.cross_cutting
-                                and len(test_result.failures) <= SYSTEMIC_FIX_FAILURE_CEILING
+                                and len(test_result.failures) <= context.systemic_fix_failure_ceiling
                             ):
                                 # CODE_DEFECT + cross_cutting + within ceiling → systemic fix
                                 consecutive_transient_failures = 0  # Reset counter
@@ -1947,24 +1946,24 @@ Return a JSON response with the status of dependency fixes applied."""
                             elif (
                                 classification.classification == FailureClassification.CODE_DEFECT
                                 and classification.cross_cutting
-                                and len(test_result.failures) > SYSTEMIC_FIX_FAILURE_CEILING
+                                and len(test_result.failures) > context.systemic_fix_failure_ceiling
                             ):
                                 # CODE_DEFECT + cross_cutting but EXCEEDS ceiling → fallback to file-level fix
                                 consecutive_transient_failures = 0  # Reset counter
                                 logger.info(
-                                    f"Failure count ({len(test_result.failures)}) exceeds ceiling ({SYSTEMIC_FIX_FAILURE_CEILING}), "
+                                    f"Failure count ({len(test_result.failures)}) exceeds ceiling ({context.systemic_fix_failure_ceiling}), "
                                     f"falling back to file-level fixes",
                                     extra={
                                         "workflow_run_id": context.workflow_run_id,
                                         "iteration": iteration,
                                         "failure_count": len(test_result.failures),
-                                        "ceiling": SYSTEMIC_FIX_FAILURE_CEILING,
+                                        "ceiling": context.systemic_fix_failure_ceiling,
                                     },
                                 )
                                 grouped = self._group_failures_by_file(test_result.failures)
                                 files_fixed += await self.fix_failures_by_file(grouped, config, context)
                                 prior_fix_attempts.append(
-                                    f"Iteration {iteration}: CODE_DEFECT (cross-cutting, {len(test_result.failures)} failures > {SYSTEMIC_FIX_FAILURE_CEILING} ceiling), "
+                                    f"Iteration {iteration}: CODE_DEFECT (cross-cutting, {len(test_result.failures)} failures > {context.systemic_fix_failure_ceiling} ceiling), "
                                     f"fell back to file-level fixes"
                                 )
                             elif classification.classification == FailureClassification.CODE_DEFECT:
@@ -2025,10 +2024,67 @@ Return a JSON response with the status of dependency fixes applied."""
                                     prior_fix_attempts.append(
                                         f"Iteration {iteration}: TRANSIENT_FAILURE classified, retrying without fix (consecutive count: {consecutive_transient_failures})"
                                     )
+                            elif (
+                                classification.classification
+                                in (
+                                    FailureClassification.DEPENDENCY_ISSUE,
+                                    FailureClassification.CONFIGURATION_ISSUE,
+                                )
+                                and classification.cross_cutting
+                                and len(test_result.failures) <= context.systemic_fix_failure_ceiling
+                            ):
+                                # DEPENDENCY_ISSUE or CONFIGURATION_ISSUE + cross_cutting + within ceiling → systemic fix
+                                consecutive_transient_failures = 0  # Reset counter
+                                systemic_result = await self.fix_failures_systemically(
+                                    test_result.failures, classification, config, context
+                                )
+                                # Only count files as fixed if the systemic fix succeeded
+                                if systemic_result.success:
+                                    files_fixed += len(systemic_result.files_modified)
+                                    prior_fix_attempts.append(
+                                        f"Iteration {iteration}: {classification.classification.value} (cross-cutting), systemic fix applied to "
+                                        f"{len(systemic_result.files_modified)} files"
+                                    )
+                                else:
+                                    prior_fix_attempts.append(
+                                        f"Iteration {iteration}: {classification.classification.value} (cross-cutting), systemic fix attempted but failed"
+                                    )
+                            elif (
+                                classification.classification
+                                in (
+                                    FailureClassification.DEPENDENCY_ISSUE,
+                                    FailureClassification.CONFIGURATION_ISSUE,
+                                )
+                                and classification.cross_cutting
+                                and len(test_result.failures) > context.systemic_fix_failure_ceiling
+                            ):
+                                # DEPENDENCY_ISSUE or CONFIGURATION_ISSUE + cross_cutting but EXCEEDS ceiling → fallback to apply_systemic_fixes
+                                consecutive_transient_failures = 0  # Reset counter
+                                logger.info(
+                                    f"Failure count ({len(test_result.failures)}) exceeds ceiling ({context.systemic_fix_failure_ceiling}), "
+                                    f"falling back to apply_systemic_fixes instead of fix_failures_systemically",
+                                    extra={
+                                        "workflow_run_id": context.workflow_run_id,
+                                        "iteration": iteration,
+                                        "failure_count": len(test_result.failures),
+                                        "ceiling": context.systemic_fix_failure_ceiling,
+                                    },
+                                )
+                                fix_success = await self.apply_systemic_fixes(
+                                    classification.reasoning,
+                                    test_result,
+                                    config,
+                                    context,
+                                )
+                                status = "applied" if fix_success else "attempted but failed"
+                                prior_fix_attempts.append(
+                                    f"Iteration {iteration}: {classification.classification.value} (cross-cutting, {len(test_result.failures)} failures > {context.systemic_fix_failure_ceiling} ceiling), {status} systemic fixes"
+                                )
                             elif classification.classification in (
                                 FailureClassification.DEPENDENCY_ISSUE,
                                 FailureClassification.CONFIGURATION_ISSUE,
                             ):
+                                # DEPENDENCY_ISSUE or CONFIGURATION_ISSUE without cross_cutting → apply_systemic_fixes
                                 consecutive_transient_failures = 0  # Reset counter
                                 fix_success = await self.apply_systemic_fixes(
                                     classification.reasoning,
