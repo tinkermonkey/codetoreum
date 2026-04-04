@@ -211,68 +211,32 @@ Return a JSON response with the verification status and any issues found."""
             logger.error(f"{message_prefix} timed out", extra=log_extra, exc_info=True)
             raise TimeoutError(f"{message_prefix} exceeded timeout of {timeout_seconds} seconds") from e
 
-    def _emit_completed_event_safely(
+    def _emit_event_safely(
         self,
-        operation_type: str,
-        event_class: type[EnvironmentRebuildCompletedEvent | EnvironmentVerificationCompletedEvent],
-        context: RepairCycleContext,
-        config: RepairTestRunConfig,
-        error: TimeoutError | Exception,
-        start_time: datetime,
+        event: EnvironmentRebuildStartedEvent
+        | EnvironmentRebuildCompletedEvent
+        | EnvironmentVerificationStartedEvent
+        | EnvironmentVerificationCompletedEvent,
+        description: str,
+        workflow_run_id: str,
     ) -> None:
-        """Emit completed event with error information, handling emission failures gracefully.
+        """Emit a domain event with error handling.
 
-        Handles event emission for failed operations separately from result building,
-        ensuring that event emission failures don't crash the main error handling flow.
+        Wraps event emission in try/except to prevent event emission failures
+        from crashing the calling operation. Logs detailed errors for diagnostics.
 
         Args:
-            operation_type: Type of operation ("rebuild" or "verify") for logging
-            event_class: Event class to emit
-            context: Repair cycle context
-            config: Test run configuration
-            error: The exception that occurred
-            start_time: When the operation started (for computing duration)
+            event: Domain event to emit
+            description: Event description for error logging (e.g., "rebuild started")
+            workflow_run_id: Workflow run ID for log context
         """
-        end_time = datetime.now(UTC)
-        final_duration = (end_time - start_time).total_seconds()
-
         try:
-            if operation_type == "rebuild":
-                self.event_emitter.emit(
-                    event_class(
-                        type="repair_cycle.environment_rebuild_completed",
-                        timestamp=datetime.now(UTC).isoformat(),
-                        source="production_environment_repair",
-                        workflow_run_id=context.workflow_run_id,
-                        test_type=config.test_type,
-                        iteration=context.iteration,
-                        success=False,
-                        duration_seconds=final_duration,
-                        actions_taken=(),
-                        error=str(error),
-                    )
-                )
-            else:  # verify
-                self.event_emitter.emit(
-                    event_class(
-                        type="repair_cycle.environment_verification_completed",
-                        timestamp=datetime.now(UTC).isoformat(),
-                        source="production_environment_repair",
-                        workflow_run_id=context.workflow_run_id,
-                        test_type=config.test_type,
-                        iteration=context.iteration,
-                        healthy=False,
-                        checks_passed=(),
-                        checks_failed=("timeout",) if isinstance(error, TimeoutError) else ("exception",),
-                        duration_seconds=final_duration,
-                    )
-                )
+            self.event_emitter.emit(event)
         except Exception as emit_error:
             logger.error(
-                f"Failed to emit {operation_type} completion event",
+                f"Failed to emit {description}",
                 extra={
-                    "workflow_run_id": context.workflow_run_id,
-                    "event_type": operation_type,
+                    "workflow_run_id": workflow_run_id,
                     "emission_error": str(emit_error),
                     "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
                 },
@@ -308,27 +272,18 @@ Return a JSON response with the verification status and any issues found."""
         timestamp = start_time.isoformat()
 
         # Emit rebuild started event with error handling
-        try:
-            self.event_emitter.emit(
-                EnvironmentRebuildStartedEvent(
-                    type="repair_cycle.environment_rebuild_started",
-                    timestamp=timestamp,
-                    source="production_environment_repair",
-                    workflow_run_id=context.workflow_run_id,
-                    test_type=config.test_type,
-                    iteration=context.iteration,
-                )
-            )
-        except Exception as emit_error:
-            logger.error(
-                "Failed to emit rebuild started event",
-                extra={
-                    "workflow_run_id": context.workflow_run_id,
-                    "emission_error": str(emit_error),
-                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
-                },
-                exc_info=True,
-            )
+        self._emit_event_safely(
+            EnvironmentRebuildStartedEvent(
+                type="repair_cycle.environment_rebuild_started",
+                timestamp=timestamp,
+                source="production_environment_repair",
+                workflow_run_id=context.workflow_run_id,
+                test_type=config.test_type,
+                iteration=context.iteration,
+            ),
+            "rebuild started event",
+            context.workflow_run_id,
+        )
 
         try:
             # Get LLM for environment rebuild task
@@ -386,31 +341,22 @@ Return a JSON response with the verification status and any issues found."""
                 )
 
             # Emit rebuild completed event with error handling
-            try:
-                self.event_emitter.emit(
-                    EnvironmentRebuildCompletedEvent(
-                        type="repair_cycle.environment_rebuild_completed",
-                        timestamp=datetime.now(UTC).isoformat(),
-                        source="production_environment_repair",
-                        workflow_run_id=context.workflow_run_id,
-                        test_type=config.test_type,
-                        iteration=context.iteration,
-                        success=rebuild_result.success,
-                        duration_seconds=rebuild_result.duration_seconds,
-                        actions_taken=rebuild_result.actions_taken,
-                        error=rebuild_result.error,
-                    )
-                )
-            except Exception as emit_error:
-                logger.error(
-                    "Failed to emit rebuild completed event",
-                    extra={
-                        "workflow_run_id": context.workflow_run_id,
-                        "emission_error": str(emit_error),
-                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
-                    },
-                    exc_info=True,
-                )
+            self._emit_event_safely(
+                EnvironmentRebuildCompletedEvent(
+                    type="repair_cycle.environment_rebuild_completed",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    source="production_environment_repair",
+                    workflow_run_id=context.workflow_run_id,
+                    test_type=config.test_type,
+                    iteration=context.iteration,
+                    success=rebuild_result.success,
+                    duration_seconds=rebuild_result.duration_seconds,
+                    actions_taken=rebuild_result.actions_taken,
+                    error=rebuild_result.error,
+                ),
+                "rebuild completed event",
+                context.workflow_run_id,
+            )
 
             return rebuild_result
 
@@ -426,13 +372,24 @@ Return a JSON response with the verification status and any issues found."""
                 },
                 exc_info=True,
             )
-            self._emit_completed_event_safely(
-                operation_type="rebuild",
-                event_class=EnvironmentRebuildCompletedEvent,
-                context=context,
-                config=config,
-                error=e,
-                start_time=start_time,
+            # Emit rebuild completion event with error information
+            end_time = datetime.now(UTC)
+            final_duration = (end_time - start_time).total_seconds()
+            self._emit_event_safely(
+                EnvironmentRebuildCompletedEvent(
+                    type="repair_cycle.environment_rebuild_completed",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    source="production_environment_repair",
+                    workflow_run_id=context.workflow_run_id,
+                    test_type=config.test_type,
+                    iteration=context.iteration,
+                    success=False,
+                    duration_seconds=final_duration,
+                    actions_taken=(),
+                    error=str(e),
+                ),
+                "rebuild completed event",
+                context.workflow_run_id,
             )
             raise
 
@@ -465,27 +422,18 @@ Return a JSON response with the verification status and any issues found."""
         timestamp = start_time.isoformat()
 
         # Emit verification started event with error handling
-        try:
-            self.event_emitter.emit(
-                EnvironmentVerificationStartedEvent(
-                    type="repair_cycle.environment_verification_started",
-                    timestamp=timestamp,
-                    source="production_environment_repair",
-                    workflow_run_id=context.workflow_run_id,
-                    test_type=config.test_type,
-                    iteration=context.iteration,
-                )
-            )
-        except Exception as emit_error:
-            logger.error(
-                "Failed to emit verification started event",
-                extra={
-                    "workflow_run_id": context.workflow_run_id,
-                    "emission_error": str(emit_error),
-                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
-                },
-                exc_info=True,
-            )
+        self._emit_event_safely(
+            EnvironmentVerificationStartedEvent(
+                type="repair_cycle.environment_verification_started",
+                timestamp=timestamp,
+                source="production_environment_repair",
+                workflow_run_id=context.workflow_run_id,
+                test_type=config.test_type,
+                iteration=context.iteration,
+            ),
+            "verification started event",
+            context.workflow_run_id,
+        )
 
         try:
             # Get LLM for environment verification task
@@ -543,31 +491,22 @@ Return a JSON response with the verification status and any issues found."""
                 )
 
             # Emit verification completed event with error handling
-            try:
-                self.event_emitter.emit(
-                    EnvironmentVerificationCompletedEvent(
-                        type="repair_cycle.environment_verification_completed",
-                        timestamp=datetime.now(UTC).isoformat(),
-                        source="production_environment_repair",
-                        workflow_run_id=context.workflow_run_id,
-                        test_type=config.test_type,
-                        iteration=context.iteration,
-                        healthy=verification_result.healthy,
-                        checks_passed=verification_result.checks_passed,
-                        checks_failed=verification_result.checks_failed,
-                        duration_seconds=verification_result.duration_seconds,
-                    )
-                )
-            except Exception as emit_error:
-                logger.error(
-                    "Failed to emit verification completed event",
-                    extra={
-                        "workflow_run_id": context.workflow_run_id,
-                        "emission_error": str(emit_error),
-                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
-                    },
-                    exc_info=True,
-                )
+            self._emit_event_safely(
+                EnvironmentVerificationCompletedEvent(
+                    type="repair_cycle.environment_verification_completed",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    source="production_environment_repair",
+                    workflow_run_id=context.workflow_run_id,
+                    test_type=config.test_type,
+                    iteration=context.iteration,
+                    healthy=verification_result.healthy,
+                    checks_passed=verification_result.checks_passed,
+                    checks_failed=verification_result.checks_failed,
+                    duration_seconds=verification_result.duration_seconds,
+                ),
+                "verification completed event",
+                context.workflow_run_id,
+            )
 
             return verification_result
 
@@ -583,13 +522,24 @@ Return a JSON response with the verification status and any issues found."""
                 },
                 exc_info=True,
             )
-            self._emit_completed_event_safely(
-                operation_type="verify",
-                event_class=EnvironmentVerificationCompletedEvent,
-                context=context,
-                config=config,
-                error=e,
-                start_time=start_time,
+            # Emit verification completion event with error information
+            end_time = datetime.now(UTC)
+            final_duration = (end_time - start_time).total_seconds()
+            self._emit_event_safely(
+                EnvironmentVerificationCompletedEvent(
+                    type="repair_cycle.environment_verification_completed",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    source="production_environment_repair",
+                    workflow_run_id=context.workflow_run_id,
+                    test_type=config.test_type,
+                    iteration=context.iteration,
+                    healthy=False,
+                    checks_passed=(),
+                    checks_failed=("timeout",) if isinstance(e, TimeoutError) else ("exception",),
+                    duration_seconds=final_duration,
+                ),
+                "verification completed event",
+                context.workflow_run_id,
             )
             raise
 
