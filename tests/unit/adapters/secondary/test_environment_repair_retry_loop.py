@@ -427,3 +427,99 @@ async def test_mock_repair_cycle_adapter_fallback_without_service():
     # Should simulate successful verify
     verify_result = await adapter.verify_environment(config, ctx)
     assert verify_result is True
+
+
+# ---------------------------------------------------------------------------
+# Exception Handling During Retry Loop Tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_environment_issue_rebuild_raises_exception_during_retry_loop():
+    """Test ENVIRONMENT_ISSUE where rebuild_environment() raises exception during retry loop.
+
+    This test ensures that when env_service.rebuild_environment() raises an
+    exception (not returning a RebuildResult), the exception is properly handled
+    during the retry loop without silently failing.
+    """
+    env_service = AsyncMock()
+
+    # rebuild_environment raises an exception
+    env_service.rebuild_environment.side_effect = RuntimeError("Docker daemon not available")
+
+    systemic_service = AsyncMock()
+    systemic_service.analyze.return_value = MagicMock(
+        classification=FailureClassification.ENVIRONMENT_ISSUE,
+        confidence=0.95,
+        reasoning="Docker environment unavailable",
+        recommended_action="Rebuild environment",
+        affected_files=("test_foo.py",),
+        cross_cutting=False,
+    )
+
+    adapter, llm = _make_adapter(environment_repair_service=env_service)
+    adapter._systemic_analysis_service = systemic_service
+
+    llm.execute.return_value = ExecutionResult(content=_ENVIRONMENT_ISSUE_JSON)
+
+    ctx = _RepairCycleContext()
+
+    # Execute - should handle the exception appropriately
+    # The adapter should catch the exception and continue/fail appropriately
+    result = await adapter.execute(ctx)
+
+    # Verify rebuild was attempted (even though it raised)
+    assert env_service.rebuild_environment.call_count >= 1
+
+    # The cycle should fail due to the exception
+    assert result.overall_success is False
+
+
+@pytest.mark.asyncio
+async def test_environment_issue_verify_raises_exception_during_retry_loop():
+    """Test ENVIRONMENT_ISSUE where verify_environment() raises exception during retry loop.
+
+    This test ensures that when env_service.verify_environment() raises an
+    exception (not returning a VerificationResult), the exception is properly
+    handled during the retry loop.
+    """
+    env_service = AsyncMock()
+
+    env_service.rebuild_environment.return_value = RebuildResult(
+        success=True,
+        duration_seconds=5.0,
+        actions_taken=("install_deps",),
+        error=None,
+    )
+
+    # verify_environment raises an exception
+    env_service.verify_environment.side_effect = IOError("Cannot write verification logs")
+
+    systemic_service = AsyncMock()
+    systemic_service.analyze.return_value = MagicMock(
+        classification=FailureClassification.ENVIRONMENT_ISSUE,
+        confidence=0.95,
+        reasoning="IO error during verification",
+        recommended_action="Rebuild environment",
+        affected_files=("test_foo.py",),
+        cross_cutting=False,
+    )
+
+    adapter, llm = _make_adapter(environment_repair_service=env_service)
+    adapter._systemic_analysis_service = systemic_service
+
+    llm.execute.return_value = ExecutionResult(content=_ENVIRONMENT_ISSUE_JSON)
+
+    ctx = _RepairCycleContext()
+
+    # Execute - should handle the exception appropriately
+    result = await adapter.execute(ctx)
+
+    # Verify rebuild was called successfully
+    env_service.rebuild_environment.assert_called()
+
+    # Verify was attempted and raised
+    assert env_service.verify_environment.call_count >= 1
+
+    # The cycle should fail due to the exception
+    assert result.overall_success is False

@@ -790,6 +790,74 @@ class TestRepairCycleEventsImmutability:
         with pytest.raises(FrozenInstanceError):
             event.reason = "timeout"  # type: ignore
 
+    def test_environment_rebuild_started_is_frozen(self):
+        """Test that environment rebuild started event is immutable."""
+        event = EnvironmentRebuildStartedEvent(
+            type="repair_cycle.environment_rebuild_started",
+            timestamp=now_iso(),
+            source="production_environment_repair",
+            work_item_id="issue-123",
+            workflow_run_id="run-456",
+            test_type=RepairTestType.UNIT,
+            iteration=1,
+        )
+
+        with pytest.raises(FrozenInstanceError):
+            event.test_type = RepairTestType.INTEGRATION  # type: ignore
+
+    def test_environment_rebuild_completed_is_frozen(self):
+        """Test that environment rebuild completed event is immutable."""
+        event = EnvironmentRebuildCompletedEvent(
+            type="repair_cycle.environment_rebuild_completed",
+            timestamp=now_iso(),
+            source="production_environment_repair",
+            work_item_id="issue-123",
+            workflow_run_id="run-456",
+            test_type=RepairTestType.UNIT,
+            iteration=1,
+            success=True,
+            duration_seconds=10.5,
+            actions_taken=("install_deps",),
+            error=None,
+        )
+
+        with pytest.raises(FrozenInstanceError):
+            event.success = False  # type: ignore
+
+    def test_environment_verification_started_is_frozen(self):
+        """Test that environment verification started event is immutable."""
+        event = EnvironmentVerificationStartedEvent(
+            type="repair_cycle.environment_verification_started",
+            timestamp=now_iso(),
+            source="production_environment_repair",
+            work_item_id="issue-123",
+            workflow_run_id="run-456",
+            test_type=RepairTestType.INTEGRATION,
+            iteration=1,
+        )
+
+        with pytest.raises(FrozenInstanceError):
+            event.test_type = RepairTestType.UNIT  # type: ignore
+
+    def test_environment_verification_completed_is_frozen(self):
+        """Test that environment verification completed event is immutable."""
+        event = EnvironmentVerificationCompletedEvent(
+            type="repair_cycle.environment_verification_completed",
+            timestamp=now_iso(),
+            source="production_environment_repair",
+            work_item_id="issue-123",
+            workflow_run_id="run-456",
+            test_type=RepairTestType.E2E,
+            iteration=1,
+            healthy=True,
+            checks_passed=("deps_check", "env_check"),
+            checks_failed=(),
+            duration_seconds=5.2,
+        )
+
+        with pytest.raises(FrozenInstanceError):
+            event.healthy = False  # type: ignore
+
 
 class TestRepairCycleEventsSerialization:
     """Test serialization/deserialization of all repair cycle events."""

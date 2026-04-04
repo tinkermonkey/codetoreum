@@ -612,3 +612,247 @@ async def test_verify_with_specialized_agent(mock_llm, repair_config, test_confi
     # Verify specialized agent was used
     assert "specialized_verify_agent" in llm_calls
     agent_config.resolve_agent.assert_called_with("env_verification", "default_agent")
+
+
+# ============================================================================
+# Generic Exception Handling Tests
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_verify_environment_generic_exception_handling(
+    repair_config, test_context, test_config, mock_event_emitter
+):
+    """Test verify_environment with generic exception (not TimeoutError).
+
+    This test exercises the generic Exception handler at line 518-550,
+    specifically the branch at line 544 that checks_failed=("exception",)
+    for non-TimeoutError exceptions.
+    """
+
+    async def failing_factory(agent_name):
+        llm = AsyncMock()
+        llm.execute.side_effect = RuntimeError("LLM provider connection failed")
+        return llm
+
+    adapter = ProductionEnvironmentRepairAdapter(
+        llm_factory=failing_factory,
+        repair_config=repair_config,
+        event_emitter=mock_event_emitter,
+    )
+
+    # Execute and expect RuntimeError to be raised
+    with pytest.raises(RuntimeError, match="LLM provider connection failed"):
+        await adapter.verify_environment(
+            project="test-project",
+            config=test_config,
+            context=test_context,
+        )
+
+    # Verify completion event was emitted with "exception" in checks_failed
+    events = mock_event_emitter.get_events()
+    assert len(events) >= 2
+
+    # Find the completed event
+    completed_event = next(
+        (e for e in events if isinstance(e, EnvironmentVerificationCompletedEvent)),
+        None,
+    )
+    assert completed_event is not None
+    assert completed_event.healthy is False
+    # Generic exception should set checks_failed to ("exception",)
+    assert "exception" in completed_event.checks_failed
+    assert "timeout" not in completed_event.checks_failed
+
+
+@pytest.mark.asyncio
+async def test_rebuild_environment_generic_exception_handling(
+    repair_config, test_context, test_config, mock_event_emitter
+):
+    """Test rebuild_environment with generic exception (not TimeoutError).
+
+    This test exercises the generic Exception handler at line 365-397,
+    specifically the branch that logs with exc_info=True and emits
+    completion event with error information.
+    """
+
+    async def failing_factory(agent_name):
+        llm = AsyncMock()
+        llm.execute.side_effect = ValueError("Invalid configuration in LLM")
+        return llm
+
+    adapter = ProductionEnvironmentRepairAdapter(
+        llm_factory=failing_factory,
+        repair_config=repair_config,
+        event_emitter=mock_event_emitter,
+    )
+
+    # Execute and expect ValueError to be raised
+    with pytest.raises(ValueError, match="Invalid configuration in LLM"):
+        await adapter.rebuild_environment(
+            project="test-project",
+            config=test_config,
+            context=test_context,
+        )
+
+    # Verify completion event was emitted
+    events = mock_event_emitter.get_events()
+    assert len(events) >= 2
+
+    # Find the completed event
+    completed_event = next(
+        (e for e in events if isinstance(e, EnvironmentRebuildCompletedEvent)),
+        None,
+    )
+    assert completed_event is not None
+    assert completed_event.success is False
+    assert "Invalid configuration in LLM" in (completed_event.error or "")
+
+
+# ============================================================================
+# Configuration Validation Tests
+# ============================================================================
+
+
+def test_environment_repair_adapter_config_valid_defaults():
+    """Test that default configuration is valid."""
+    config = EnvironmentRepairAdapterConfig()
+    assert config.max_json_parse_retries == 3
+    assert config.json_parse_retry_delay_ms == 500
+
+
+def test_environment_repair_adapter_config_valid_custom():
+    """Test that valid custom configuration is accepted."""
+    config = EnvironmentRepairAdapterConfig(
+        max_json_parse_retries=5,
+        json_parse_retry_delay_ms=100,
+    )
+    assert config.max_json_parse_retries == 5
+    assert config.json_parse_retry_delay_ms == 100
+
+
+def test_environment_repair_adapter_config_invalid_retries_zero():
+    """Test that max_json_parse_retries < 1 is rejected."""
+    with pytest.raises(ValueError, match="max_json_parse_retries must be >= 1"):
+        EnvironmentRepairAdapterConfig(max_json_parse_retries=0)
+
+
+def test_environment_repair_adapter_config_invalid_retries_negative():
+    """Test that negative max_json_parse_retries is rejected."""
+    with pytest.raises(ValueError, match="max_json_parse_retries must be >= 1"):
+        EnvironmentRepairAdapterConfig(max_json_parse_retries=-1)
+
+
+def test_environment_repair_adapter_config_invalid_delay_negative():
+    """Test that negative json_parse_retry_delay_ms is rejected."""
+    with pytest.raises(ValueError, match="json_parse_retry_delay_ms must be >= 0"):
+        EnvironmentRepairAdapterConfig(json_parse_retry_delay_ms=-1)
+
+
+def test_environment_repair_adapter_config_zero_delay_valid():
+    """Test that zero json_parse_retry_delay_ms is valid."""
+    config = EnvironmentRepairAdapterConfig(json_parse_retry_delay_ms=0)
+    assert config.json_parse_retry_delay_ms == 0
+
+
+# ============================================================================
+# Circuit Breaker Integration Tests
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_rebuild_with_circuit_breaker_success(
+    mock_llm, repair_config, test_context, test_config, mock_event_emitter
+):
+    """Test rebuild with circuit breaker that allows the call."""
+    # Create a mock circuit breaker with async call method
+    mock_circuit_breaker = AsyncMock()
+
+    # Make circuit breaker return the LLM execute result
+    async def call_wrapper(operation, *args, **kwargs):
+        # Extract the function and call it
+        return await mock_llm.execute(**kwargs)
+
+    mock_circuit_breaker.call.side_effect = call_wrapper
+
+    # Setup LLM response
+    response = {
+        "success": True,
+        "actions_taken": ["install_deps"],
+        "error": None,
+    }
+    mock_llm.execute.return_value = ExecutionResult(content=json.dumps(response))
+
+    # Create adapter with circuit breaker
+    adapter = ProductionEnvironmentRepairAdapter(
+        llm_factory=_make_async_factory(mock_llm),
+        repair_config=repair_config,
+        event_emitter=mock_event_emitter,
+        circuit_breaker=mock_circuit_breaker,
+    )
+
+    # Execute
+    result = await adapter.rebuild_environment(
+        project="test-project",
+        config=test_config,
+        context=test_context,
+    )
+
+    # Verify success
+    assert result.success is True
+    assert "install_deps" in result.actions_taken
+
+    # Verify circuit breaker was called with correct operation
+    assert mock_circuit_breaker.call.called
+    call_args = mock_circuit_breaker.call.call_args
+    # The first positional arg should be the operation name
+    assert "environment_repair.rebuild_env" in str(call_args)
+
+
+@pytest.mark.asyncio
+async def test_verify_with_circuit_breaker_success(
+    mock_llm, repair_config, test_context, test_config, mock_event_emitter
+):
+    """Test verify with circuit breaker that allows the call."""
+    # Create a mock circuit breaker with async call method
+    mock_circuit_breaker = AsyncMock()
+
+    # Make circuit breaker return the LLM execute result
+    async def call_wrapper(operation, *args, **kwargs):
+        # Extract the function and call it
+        return await mock_llm.execute(**kwargs)
+
+    mock_circuit_breaker.call.side_effect = call_wrapper
+
+    # Setup LLM response
+    response = {
+        "healthy": True,
+        "checks_passed": ["deps_check"],
+        "checks_failed": [],
+    }
+    mock_llm.execute.return_value = ExecutionResult(content=json.dumps(response))
+
+    # Create adapter with circuit breaker
+    adapter = ProductionEnvironmentRepairAdapter(
+        llm_factory=_make_async_factory(mock_llm),
+        repair_config=repair_config,
+        event_emitter=mock_event_emitter,
+        circuit_breaker=mock_circuit_breaker,
+    )
+
+    # Execute
+    result = await adapter.verify_environment(
+        project="test-project",
+        config=test_config,
+        context=test_context,
+    )
+
+    # Verify success
+    assert result.healthy is True
+    assert "deps_check" in result.checks_passed
+
+    # Verify circuit breaker was called with correct operation
+    assert mock_circuit_breaker.call.called
+    call_args = mock_circuit_breaker.call.call_args
+    # The first positional arg should be the operation name
+    assert "environment_repair.verify_env" in str(call_args)
