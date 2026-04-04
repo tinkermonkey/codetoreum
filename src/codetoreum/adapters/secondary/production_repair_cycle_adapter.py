@@ -72,7 +72,7 @@ from codetoreum.domain.repair_cycle_types import (
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.resilience.exceptions import CircuitBreakerOpenError
-from codetoreum.ports.output.event_emitter import IEventEmitter
+from codetoreum.ports.output.event_emitter import IEventEmitter, NullEventEmitter
 from codetoreum.ports.output.repair_cycle_checkpoint_store import (
     IRepairCycleCheckpointStore,
 )
@@ -109,26 +109,6 @@ class RepairCycleConfig:
         if self.json_parse_retry_delay_ms < 0:
             msg = "json_parse_retry_delay_ms must be >= 0"
             raise ValueError(msg)
-
-
-class NullEventEmitter(IEventEmitter):
-    """Null-object pattern for optional event emission.
-
-    Implements IEventEmitter with no-op methods for use when event emission is not required.
-    All methods are silent, allowing the repair cycle to run without event infrastructure.
-    """
-
-    def emit(self, event: CodetoreumEvent) -> None:
-        """No-op emit - silently discards all events."""
-
-    def on(self, event_type: str, handler: Callable) -> None:
-        """No-op subscription - no handlers are registered."""
-
-    def off(self, event_type: str, handler: Callable) -> None:
-        """No-op unsubscription - no handlers to unregister."""
-
-    def once(self, event_type: str, handler: Callable) -> None:
-        """No-op single subscription - no handlers are registered."""
 
 
 class ProductionRepairCycleAdapter(IRepairCycle):

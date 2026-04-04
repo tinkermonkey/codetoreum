@@ -432,7 +432,7 @@ Return a JSON response with the verification status and any issues found."""
 
             return rebuild_result
 
-        except (TimeoutError, Exception) as e:
+        except Exception as e:
             rebuild_result = self._handle_operation_error(
                 operation_type="rebuild",
                 event_class=EnvironmentRebuildCompletedEvent,
@@ -556,7 +556,7 @@ Return a JSON response with the verification status and any issues found."""
 
             return verification_result
 
-        except (TimeoutError, Exception) as e:
+        except Exception as e:
             verification_result = self._handle_operation_error(
                 operation_type="verify",
                 event_class=EnvironmentVerificationCompletedEvent,
