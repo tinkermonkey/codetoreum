@@ -1762,14 +1762,29 @@ class TestEnvironmentRebuildStartedEvent:
             type="repair_cycle.environment_rebuild_started",
             timestamp=timestamp,
             source="repair_cycle",
+            work_item_id="issue-456",
             workflow_run_id="run-123",
             test_type="UNIT",
             iteration=1,
         )
 
+        assert event.work_item_id == "issue-456"
         assert event.workflow_run_id == "run-123"
         assert event.test_type == RepairTestType.UNIT
         assert event.iteration == 1
+
+    def test_missing_work_item_id(self):
+        """Test that work_item_id is required."""
+        with pytest.raises(ValueError, match="work_item_id"):
+            EnvironmentRebuildStartedEvent(
+                type="repair_cycle.environment_rebuild_started",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                work_item_id="",
+                workflow_run_id="run-123",
+                test_type="UNIT",
+                iteration=1,
+            )
 
     def test_missing_workflow_run_id(self):
         """Test that workflow_run_id is required."""
@@ -1778,6 +1793,7 @@ class TestEnvironmentRebuildStartedEvent:
                 type="repair_cycle.environment_rebuild_started",
                 timestamp=now_iso(),
                 source="repair_cycle",
+                work_item_id="issue-456",
                 workflow_run_id="",
                 test_type="UNIT",
                 iteration=1,
@@ -1790,6 +1806,7 @@ class TestEnvironmentRebuildStartedEvent:
                 type="repair_cycle.environment_rebuild_started",
                 timestamp=now_iso(),
                 source="repair_cycle",
+                work_item_id="issue-456",
                 workflow_run_id="run-123",
                 test_type="",
                 iteration=1,
@@ -1802,6 +1819,7 @@ class TestEnvironmentRebuildStartedEvent:
                 type="repair_cycle.environment_rebuild_started",
                 timestamp=now_iso(),
                 source="repair_cycle",
+                work_item_id="issue-456",
                 workflow_run_id="run-123",
                 test_type="UNIT",
                 iteration=0,
@@ -1814,11 +1832,13 @@ class TestEnvironmentRebuildStartedEvent:
             type="repair_cycle.environment_rebuild_started",
             timestamp=timestamp,
             source="repair_cycle",
+            work_item_id="issue-456",
             workflow_run_id="run-123",
             test_type="INTEGRATION",
             iteration=2,
         )
         d = event.to_dict()
+        assert d["work_item_id"] == "issue-456"
         assert d["workflow_run_id"] == "run-123"
         assert d["test_type"] == "INTEGRATION"
         assert d["iteration"] == 2
@@ -1830,11 +1850,13 @@ class TestEnvironmentRebuildStartedEvent:
             "type": "repair_cycle.environment_rebuild_started",
             "timestamp": timestamp,
             "source": "repair_cycle",
+            "work_item_id": "issue-456",
             "workflow_run_id": "run-123",
             "test_type": "E2E",
             "iteration": 1,
         }
         event = EnvironmentRebuildStartedEvent.from_dict(d)
+        assert event.work_item_id == "issue-456"
         assert event.workflow_run_id == "run-123"
         assert event.test_type == RepairTestType.E2E
         assert event.iteration == 1
@@ -1850,6 +1872,7 @@ class TestEnvironmentRebuildCompletedEvent:
             type="repair_cycle.environment_rebuild_completed",
             timestamp=timestamp,
             source="repair_cycle",
+            work_item_id="issue-456",
             workflow_run_id="run-123",
             test_type="UNIT",
             iteration=1,
@@ -1871,6 +1894,7 @@ class TestEnvironmentRebuildCompletedEvent:
             type="repair_cycle.environment_rebuild_completed",
             timestamp=timestamp,
             source="repair_cycle",
+            work_item_id="issue-456",
             workflow_run_id="run-123",
             test_type="UNIT",
             iteration=1,
@@ -1890,6 +1914,7 @@ class TestEnvironmentRebuildCompletedEvent:
                 type="repair_cycle.environment_rebuild_completed",
                 timestamp=now_iso(),
                 source="repair_cycle",
+                work_item_id="issue-456",
                 workflow_run_id="run-123",
                 test_type="UNIT",
                 iteration=1,
@@ -1906,6 +1931,7 @@ class TestEnvironmentRebuildCompletedEvent:
             type="repair_cycle.environment_rebuild_completed",
             timestamp=timestamp,
             source="repair_cycle",
+            work_item_id="issue-456",
             workflow_run_id="run-123",
             test_type="UNIT",
             iteration=1,
@@ -1915,6 +1941,7 @@ class TestEnvironmentRebuildCompletedEvent:
             error=None,
         )
         d = event.to_dict()
+        assert d["work_item_id"] == "issue-456"
         assert d["success"] is True
         assert d["duration_seconds"] == 100.0
         assert d["actions_taken"] == ["action1", "action2"]
@@ -1927,6 +1954,7 @@ class TestEnvironmentRebuildCompletedEvent:
             "type": "repair_cycle.environment_rebuild_completed",
             "timestamp": timestamp,
             "source": "repair_cycle",
+            "work_item_id": "issue-456",
             "workflow_run_id": "run-123",
             "test_type": "UNIT",
             "iteration": 1,
@@ -1936,6 +1964,7 @@ class TestEnvironmentRebuildCompletedEvent:
             "error": "Build failed",
         }
         event = EnvironmentRebuildCompletedEvent.from_dict(d)
+        assert event.work_item_id == "issue-456"
         assert event.success is False
         assert event.error == "Build failed"
         assert event.actions_taken == ("docker build",)
@@ -1947,6 +1976,7 @@ class TestEnvironmentRebuildCompletedEvent:
             type="repair_cycle.environment_rebuild_completed",
             timestamp=timestamp,
             source="repair_cycle",
+            work_item_id="issue-789",
             workflow_run_id="run-456",
             test_type="INTEGRATION",
             iteration=2,
@@ -1975,11 +2005,13 @@ class TestEnvironmentVerificationStartedEvent:
             type="repair_cycle.environment_verification_started",
             timestamp=timestamp,
             source="repair_cycle",
+            work_item_id="issue-456",
             workflow_run_id="run-123",
             test_type="UNIT",
             iteration=1,
         )
 
+        assert event.work_item_id == "issue-456"
         assert event.workflow_run_id == "run-123"
         assert event.test_type == RepairTestType.UNIT
         assert event.iteration == 1
@@ -1991,11 +2023,13 @@ class TestEnvironmentVerificationStartedEvent:
             type="repair_cycle.environment_verification_started",
             timestamp=timestamp,
             source="repair_cycle",
+            work_item_id="issue-789",
             workflow_run_id="run-789",
             test_type="E2E",
             iteration=3,
         )
         d = event.to_dict()
+        assert d["work_item_id"] == "issue-789"
         assert d["workflow_run_id"] == "run-789"
         assert d["test_type"] == "E2E"
         assert d["iteration"] == 3
@@ -2007,11 +2041,13 @@ class TestEnvironmentVerificationStartedEvent:
             "type": "repair_cycle.environment_verification_started",
             "timestamp": timestamp,
             "source": "repair_cycle",
+            "work_item_id": "issue-789",
             "workflow_run_id": "run-789",
             "test_type": "INTEGRATION",
             "iteration": 2,
         }
         event = EnvironmentVerificationStartedEvent.from_dict(d)
+        assert event.work_item_id == "issue-789"
         assert event.workflow_run_id == "run-789"
         assert event.test_type == RepairTestType.INTEGRATION
         assert event.iteration == 2
@@ -2027,6 +2063,7 @@ class TestEnvironmentVerificationCompletedEvent:
             type="repair_cycle.environment_verification_completed",
             timestamp=timestamp,
             source="repair_cycle",
+            work_item_id="issue-456",
             workflow_run_id="run-123",
             test_type="UNIT",
             iteration=1,
@@ -2048,6 +2085,7 @@ class TestEnvironmentVerificationCompletedEvent:
             type="repair_cycle.environment_verification_completed",
             timestamp=timestamp,
             source="repair_cycle",
+            work_item_id="issue-456",
             workflow_run_id="run-123",
             test_type="UNIT",
             iteration=1,
@@ -2068,6 +2106,7 @@ class TestEnvironmentVerificationCompletedEvent:
                 type="repair_cycle.environment_verification_completed",
                 timestamp=now_iso(),
                 source="repair_cycle",
+                work_item_id="issue-456",
                 workflow_run_id="run-123",
                 test_type="UNIT",
                 iteration=1,
@@ -2084,6 +2123,7 @@ class TestEnvironmentVerificationCompletedEvent:
             type="repair_cycle.environment_verification_completed",
             timestamp=timestamp,
             source="repair_cycle",
+            work_item_id="issue-456",
             workflow_run_id="run-123",
             test_type="INTEGRATION",
             iteration=2,
@@ -2105,6 +2145,7 @@ class TestEnvironmentVerificationCompletedEvent:
             type="repair_cycle.environment_verification_completed",
             timestamp=timestamp,
             source="repair_cycle",
+            work_item_id="issue-789",
             workflow_run_id="run-456",
             test_type="E2E",
             iteration=1,
@@ -2114,6 +2155,7 @@ class TestEnvironmentVerificationCompletedEvent:
             duration_seconds=15.0,
         )
         d = event.to_dict()
+        assert d["work_item_id"] == "issue-789"
         assert d["healthy"] is False
         assert d["checks_passed"] == ["check1"]
         assert d["checks_failed"] == ["check2", "check3"]
@@ -2125,6 +2167,7 @@ class TestEnvironmentVerificationCompletedEvent:
             "type": "repair_cycle.environment_verification_completed",
             "timestamp": timestamp,
             "source": "repair_cycle",
+            "work_item_id": "issue-789",
             "workflow_run_id": "run-789",
             "test_type": "UNIT",
             "iteration": 1,
@@ -2134,6 +2177,7 @@ class TestEnvironmentVerificationCompletedEvent:
             "duration_seconds": 10.0,
         }
         event = EnvironmentVerificationCompletedEvent.from_dict(d)
+        assert event.work_item_id == "issue-789"
         assert event.healthy is True
         assert event.checks_passed == ("all_good",)
         assert event.checks_failed == ()
@@ -2145,6 +2189,7 @@ class TestEnvironmentVerificationCompletedEvent:
             "type": "repair_cycle.environment_verification_completed",
             "timestamp": timestamp,
             "source": "repair_cycle",
+            "work_item_id": "issue-789",
             "workflow_run_id": "run-789",
             "test_type": "INTEGRATION",
             "iteration": 2,
@@ -2154,6 +2199,7 @@ class TestEnvironmentVerificationCompletedEvent:
             "duration_seconds": 8.0,
         }
         event = EnvironmentVerificationCompletedEvent.from_dict(d)
+        assert event.work_item_id == "issue-789"
         assert event.healthy is False
         assert event.checks_passed == ("check1",)
         assert event.checks_failed == ("check2", "check3")
@@ -2165,6 +2211,7 @@ class TestEnvironmentVerificationCompletedEvent:
             type="repair_cycle.environment_verification_completed",
             timestamp=timestamp,
             source="repair_cycle",
+            work_item_id="issue-999",
             workflow_run_id="run-999",
             test_type="E2E",
             iteration=3,
@@ -2177,6 +2224,7 @@ class TestEnvironmentVerificationCompletedEvent:
         d = original.to_dict()
         restored = EnvironmentVerificationCompletedEvent.from_dict(d)
 
+        assert restored.work_item_id == original.work_item_id
         assert restored.healthy == original.healthy
         assert restored.checks_passed == original.checks_passed
         assert restored.checks_failed == original.checks_failed

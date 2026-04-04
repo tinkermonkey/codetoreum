@@ -69,6 +69,7 @@ def repair_config():
 def test_context():
     """Create a test repair cycle context."""
     context = MagicMock(spec=RepairCycleContext)
+    context.work_item_id = "issue-456"
     context.workflow_run_id = "run-123"
     context.iteration = 1
     context.agent_name = "test_agent"
@@ -541,6 +542,7 @@ async def test_rebuild_with_specialized_agent(mock_llm, repair_config, test_conf
     agent_config.resolve_agent.return_value = "specialized_rebuild_agent"
 
     context = MagicMock(spec=RepairCycleContext)
+    context.work_item_id = "issue-456"
     context.workflow_run_id = "run-123"
     context.iteration = 1
     context.agent_name = "default_agent"
@@ -580,6 +582,7 @@ async def test_verify_with_specialized_agent(mock_llm, repair_config, test_confi
     agent_config.resolve_agent.return_value = "specialized_verify_agent"
 
     context = MagicMock(spec=RepairCycleContext)
+    context.work_item_id = "issue-456"
     context.workflow_run_id = "run-123"
     context.iteration = 1
     context.agent_name = "default_agent"

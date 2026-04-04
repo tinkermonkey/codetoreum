@@ -57,6 +57,7 @@ def mock_event_emitter():
 def test_context():
     """Create a test repair cycle context."""
     context = MagicMock(spec=RepairCycleContext)
+    context.work_item_id = "issue-456"
     context.workflow_run_id = "run-123"
     context.iteration = 1
     return context

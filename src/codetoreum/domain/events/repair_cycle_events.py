@@ -1750,12 +1750,14 @@ class EnvironmentRebuildStartedEvent(CodetoreumEvent):
 
     Attributes:
         type (str): Fixed to "repair_cycle.environment_rebuild_started"
+        work_item_id (str): ID of the work item being repaired
         workflow_run_id (str): ID of the workflow run
         test_type (RepairTestType): Type of test being executed (UNIT, INTEGRATION, E2E)
         iteration (int): Current iteration number within the test cycle
         timestamp (str): ISO 8601 timestamp when rebuild started
     """
 
+    work_item_id: str = ""
     workflow_run_id: str = ""
     test_type: RepairTestType = RepairTestType.UNIT
     iteration: int = 0
@@ -1763,6 +1765,9 @@ class EnvironmentRebuildStartedEvent(CodetoreumEvent):
     def __post_init__(self) -> None:
         """Validate event after initialization."""
         super().__post_init__()
+        if not self.work_item_id:
+            msg = "work_item_id is required"
+            raise ValueError(msg)
         if not self.workflow_run_id:
             msg = "workflow_run_id is required"
             raise ValueError(msg)
@@ -1781,6 +1786,7 @@ class EnvironmentRebuildStartedEvent(CodetoreumEvent):
         d = super().to_dict()
         d.update(
             {
+                "work_item_id": self.work_item_id,
                 "workflow_run_id": self.workflow_run_id,
                 "test_type": self.test_type.value,
                 "iteration": self.iteration,
@@ -1793,7 +1799,7 @@ class EnvironmentRebuildStartedEvent(CodetoreumEvent):
         """Deserialize from dictionary with backward compatibility.
 
         Raises:
-            KeyError: If required fields (workflow_run_id, test_type, iteration) are missing.
+            KeyError: If required fields (work_item_id, workflow_run_id, test_type, iteration) are missing.
         """
         test_type = (
             RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
@@ -1804,6 +1810,7 @@ class EnvironmentRebuildStartedEvent(CodetoreumEvent):
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
+            work_item_id=data.get("work_item_id", ""),
             workflow_run_id=data["workflow_run_id"],
             test_type=test_type,
             iteration=data["iteration"],
@@ -1820,6 +1827,7 @@ class EnvironmentRebuildCompletedEvent(CodetoreumEvent):
 
     Attributes:
         type (str): Fixed to "repair_cycle.environment_rebuild_completed"
+        work_item_id (str): ID of the work item being repaired
         workflow_run_id (str): ID of the workflow run
         test_type (RepairTestType): Type of test being executed (UNIT, INTEGRATION, E2E)
         iteration (int): Current iteration number within the test cycle
@@ -1830,6 +1838,7 @@ class EnvironmentRebuildCompletedEvent(CodetoreumEvent):
         timestamp (str): ISO 8601 timestamp when rebuild completed
     """
 
+    work_item_id: str = ""
     workflow_run_id: str = ""
     test_type: RepairTestType = RepairTestType.UNIT
     iteration: int = 0
@@ -1841,6 +1850,9 @@ class EnvironmentRebuildCompletedEvent(CodetoreumEvent):
     def __post_init__(self) -> None:
         """Validate event after initialization."""
         super().__post_init__()
+        if not self.work_item_id:
+            msg = "work_item_id is required"
+            raise ValueError(msg)
         if not self.workflow_run_id:
             msg = "workflow_run_id is required"
             raise ValueError(msg)
@@ -1864,6 +1876,7 @@ class EnvironmentRebuildCompletedEvent(CodetoreumEvent):
         d = super().to_dict()
         d.update(
             {
+                "work_item_id": self.work_item_id,
                 "workflow_run_id": self.workflow_run_id,
                 "test_type": self.test_type.value,
                 "iteration": self.iteration,
@@ -1880,7 +1893,7 @@ class EnvironmentRebuildCompletedEvent(CodetoreumEvent):
         """Deserialize from dictionary with backward compatibility.
 
         Raises:
-            KeyError: If required fields (workflow_run_id, test_type, iteration) are missing.
+            KeyError: If required fields (work_item_id, workflow_run_id, test_type, iteration) are missing.
         """
         test_type = (
             RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
@@ -1894,6 +1907,7 @@ class EnvironmentRebuildCompletedEvent(CodetoreumEvent):
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
+            work_item_id=data.get("work_item_id", ""),
             workflow_run_id=data["workflow_run_id"],
             test_type=test_type,
             iteration=data["iteration"],
@@ -1914,12 +1928,14 @@ class EnvironmentVerificationStartedEvent(CodetoreumEvent):
 
     Attributes:
         type (str): Fixed to "repair_cycle.environment_verification_started"
+        work_item_id (str): ID of the work item being repaired
         workflow_run_id (str): ID of the workflow run
         test_type (RepairTestType): Type of test being executed (UNIT, INTEGRATION, E2E)
         iteration (int): Current iteration number within the test cycle
         timestamp (str): ISO 8601 timestamp when verification started
     """
 
+    work_item_id: str = ""
     workflow_run_id: str = ""
     test_type: RepairTestType = RepairTestType.UNIT
     iteration: int = 0
@@ -1927,6 +1943,9 @@ class EnvironmentVerificationStartedEvent(CodetoreumEvent):
     def __post_init__(self) -> None:
         """Validate event after initialization."""
         super().__post_init__()
+        if not self.work_item_id:
+            msg = "work_item_id is required"
+            raise ValueError(msg)
         if not self.workflow_run_id:
             msg = "workflow_run_id is required"
             raise ValueError(msg)
@@ -1945,6 +1964,7 @@ class EnvironmentVerificationStartedEvent(CodetoreumEvent):
         d = super().to_dict()
         d.update(
             {
+                "work_item_id": self.work_item_id,
                 "workflow_run_id": self.workflow_run_id,
                 "test_type": self.test_type.value,
                 "iteration": self.iteration,
@@ -1957,7 +1977,7 @@ class EnvironmentVerificationStartedEvent(CodetoreumEvent):
         """Deserialize from dictionary with backward compatibility.
 
         Raises:
-            KeyError: If required fields (workflow_run_id, test_type, iteration) are missing.
+            KeyError: If required fields (work_item_id, workflow_run_id, test_type, iteration) are missing.
         """
         test_type = (
             RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
@@ -1968,6 +1988,7 @@ class EnvironmentVerificationStartedEvent(CodetoreumEvent):
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
+            work_item_id=data.get("work_item_id", ""),
             workflow_run_id=data["workflow_run_id"],
             test_type=test_type,
             iteration=data["iteration"],
@@ -1984,6 +2005,7 @@ class EnvironmentVerificationCompletedEvent(CodetoreumEvent):
 
     Attributes:
         type (str): Fixed to "repair_cycle.environment_verification_completed"
+        work_item_id (str): ID of the work item being repaired
         workflow_run_id (str): ID of the workflow run
         test_type (RepairTestType): Type of test being executed (UNIT, INTEGRATION, E2E)
         iteration (int): Current iteration number within the test cycle
@@ -1994,6 +2016,7 @@ class EnvironmentVerificationCompletedEvent(CodetoreumEvent):
         timestamp (str): ISO 8601 timestamp when verification completed
     """
 
+    work_item_id: str = ""
     workflow_run_id: str = ""
     test_type: RepairTestType = RepairTestType.UNIT
     iteration: int = 0
@@ -2005,6 +2028,9 @@ class EnvironmentVerificationCompletedEvent(CodetoreumEvent):
     def __post_init__(self) -> None:
         """Validate event after initialization."""
         super().__post_init__()
+        if not self.work_item_id:
+            msg = "work_item_id is required"
+            raise ValueError(msg)
         if not self.workflow_run_id:
             msg = "workflow_run_id is required"
             raise ValueError(msg)
@@ -2030,6 +2056,7 @@ class EnvironmentVerificationCompletedEvent(CodetoreumEvent):
         d = super().to_dict()
         d.update(
             {
+                "work_item_id": self.work_item_id,
                 "workflow_run_id": self.workflow_run_id,
                 "test_type": self.test_type.value,
                 "iteration": self.iteration,
@@ -2046,7 +2073,7 @@ class EnvironmentVerificationCompletedEvent(CodetoreumEvent):
         """Deserialize from dictionary with backward compatibility.
 
         Raises:
-            KeyError: If required fields (workflow_run_id, test_type, iteration) are missing.
+            KeyError: If required fields (work_item_id, workflow_run_id, test_type, iteration) are missing.
         """
         test_type = (
             RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
@@ -2063,6 +2090,7 @@ class EnvironmentVerificationCompletedEvent(CodetoreumEvent):
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
+            work_item_id=data.get("work_item_id", ""),
             workflow_run_id=data["workflow_run_id"],
             test_type=test_type,
             iteration=data["iteration"],
