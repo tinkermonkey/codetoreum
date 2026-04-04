@@ -8,7 +8,6 @@ import pytest
 
 from codetoreum.ports.output.environment_repair_service import IEnvironmentRepairService
 
-
 # ============================================================================
 # IEnvironmentRepairService Interface Tests
 # ============================================================================
