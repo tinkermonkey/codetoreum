@@ -24,11 +24,9 @@ from uuid import uuid4
 from ..repair_cycle_types import (
     CycleResult,
     FailureClassification,
-    RebuildResult,
     RepairTestFailure,
     RepairTestType,
     RepairTestWarning,
-    VerificationResult,
 )
 from .adapter_events import CodetoreumEvent
 
@@ -1753,13 +1751,13 @@ class EnvironmentRebuildStartedEvent(CodetoreumEvent):
     Attributes:
         type (str): Fixed to "repair_cycle.environment_rebuild_started"
         workflow_run_id (str): ID of the workflow run
-        test_type (str): Type of test being executed (UNIT, INTEGRATION, E2E)
+        test_type (RepairTestType): Type of test being executed (UNIT, INTEGRATION, E2E)
         iteration (int): Current iteration number within the test cycle
         timestamp (str): ISO 8601 timestamp when rebuild started
     """
 
     workflow_run_id: str = ""
-    test_type: str = ""
+    test_type: RepairTestType = RepairTestType.UNIT
     iteration: int = 0
 
     def __post_init__(self) -> None:
@@ -1768,9 +1766,12 @@ class EnvironmentRebuildStartedEvent(CodetoreumEvent):
         if not self.workflow_run_id:
             msg = "workflow_run_id is required"
             raise ValueError(msg)
-        if not self.test_type:
-            msg = "test_type is required"
-            raise ValueError(msg)
+        # Convert string to enum if needed (backward compatibility)
+        if isinstance(self.test_type, str):
+            if not self.test_type:
+                msg = "test_type is required"
+                raise ValueError(msg)
+            object.__setattr__(self, "test_type", RepairTestType(self.test_type))
         if self.iteration < 1:
             msg = "iteration must be >= 1"
             raise ValueError(msg)
@@ -1781,7 +1782,7 @@ class EnvironmentRebuildStartedEvent(CodetoreumEvent):
         d.update(
             {
                 "workflow_run_id": self.workflow_run_id,
-                "test_type": self.test_type,
+                "test_type": self.test_type.value,
                 "iteration": self.iteration,
             }
         )
@@ -1794,6 +1795,9 @@ class EnvironmentRebuildStartedEvent(CodetoreumEvent):
         Raises:
             KeyError: If required fields (workflow_run_id, test_type, iteration) are missing.
         """
+        test_type = (
+            RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
+        )
         return cls(
             type=data.get("type", "repair_cycle.environment_rebuild_started"),
             timestamp=data.get("timestamp", ""),
@@ -1801,7 +1805,7 @@ class EnvironmentRebuildStartedEvent(CodetoreumEvent):
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
             workflow_run_id=data["workflow_run_id"],
-            test_type=data["test_type"],
+            test_type=test_type,
             iteration=data["iteration"],
         )
 
@@ -1817,7 +1821,7 @@ class EnvironmentRebuildCompletedEvent(CodetoreumEvent):
     Attributes:
         type (str): Fixed to "repair_cycle.environment_rebuild_completed"
         workflow_run_id (str): ID of the workflow run
-        test_type (str): Type of test being executed (UNIT, INTEGRATION, E2E)
+        test_type (RepairTestType): Type of test being executed (UNIT, INTEGRATION, E2E)
         iteration (int): Current iteration number within the test cycle
         success (bool): Whether the rebuild was successful
         duration_seconds (float): Time taken to rebuild the environment
@@ -1827,7 +1831,7 @@ class EnvironmentRebuildCompletedEvent(CodetoreumEvent):
     """
 
     workflow_run_id: str = ""
-    test_type: str = ""
+    test_type: RepairTestType = RepairTestType.UNIT
     iteration: int = 0
     success: bool = False
     duration_seconds: float = 0.0
@@ -1840,9 +1844,12 @@ class EnvironmentRebuildCompletedEvent(CodetoreumEvent):
         if not self.workflow_run_id:
             msg = "workflow_run_id is required"
             raise ValueError(msg)
-        if not self.test_type:
-            msg = "test_type is required"
-            raise ValueError(msg)
+        # Convert string to enum if needed (backward compatibility)
+        if isinstance(self.test_type, str):
+            if not self.test_type:
+                msg = "test_type is required"
+                raise ValueError(msg)
+            object.__setattr__(self, "test_type", RepairTestType(self.test_type))
         if self.iteration < 1:
             msg = "iteration must be >= 1"
             raise ValueError(msg)
@@ -1858,7 +1865,7 @@ class EnvironmentRebuildCompletedEvent(CodetoreumEvent):
         d.update(
             {
                 "workflow_run_id": self.workflow_run_id,
-                "test_type": self.test_type,
+                "test_type": self.test_type.value,
                 "iteration": self.iteration,
                 "success": self.success,
                 "duration_seconds": self.duration_seconds,
@@ -1875,6 +1882,9 @@ class EnvironmentRebuildCompletedEvent(CodetoreumEvent):
         Raises:
             KeyError: If required fields (workflow_run_id, test_type, iteration) are missing.
         """
+        test_type = (
+            RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
+        )
         actions_taken = data.get("actions_taken", [])
         if not isinstance(actions_taken, (list, tuple)):
             actions_taken = []
@@ -1885,7 +1895,7 @@ class EnvironmentRebuildCompletedEvent(CodetoreumEvent):
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
             workflow_run_id=data["workflow_run_id"],
-            test_type=data["test_type"],
+            test_type=test_type,
             iteration=data["iteration"],
             success=data.get("success", False),
             duration_seconds=data.get("duration_seconds", 0.0),
@@ -1905,13 +1915,13 @@ class EnvironmentVerificationStartedEvent(CodetoreumEvent):
     Attributes:
         type (str): Fixed to "repair_cycle.environment_verification_started"
         workflow_run_id (str): ID of the workflow run
-        test_type (str): Type of test being executed (UNIT, INTEGRATION, E2E)
+        test_type (RepairTestType): Type of test being executed (UNIT, INTEGRATION, E2E)
         iteration (int): Current iteration number within the test cycle
         timestamp (str): ISO 8601 timestamp when verification started
     """
 
     workflow_run_id: str = ""
-    test_type: str = ""
+    test_type: RepairTestType = RepairTestType.UNIT
     iteration: int = 0
 
     def __post_init__(self) -> None:
@@ -1920,9 +1930,12 @@ class EnvironmentVerificationStartedEvent(CodetoreumEvent):
         if not self.workflow_run_id:
             msg = "workflow_run_id is required"
             raise ValueError(msg)
-        if not self.test_type:
-            msg = "test_type is required"
-            raise ValueError(msg)
+        # Convert string to enum if needed (backward compatibility)
+        if isinstance(self.test_type, str):
+            if not self.test_type:
+                msg = "test_type is required"
+                raise ValueError(msg)
+            object.__setattr__(self, "test_type", RepairTestType(self.test_type))
         if self.iteration < 1:
             msg = "iteration must be >= 1"
             raise ValueError(msg)
@@ -1933,7 +1946,7 @@ class EnvironmentVerificationStartedEvent(CodetoreumEvent):
         d.update(
             {
                 "workflow_run_id": self.workflow_run_id,
-                "test_type": self.test_type,
+                "test_type": self.test_type.value,
                 "iteration": self.iteration,
             }
         )
@@ -1946,6 +1959,9 @@ class EnvironmentVerificationStartedEvent(CodetoreumEvent):
         Raises:
             KeyError: If required fields (workflow_run_id, test_type, iteration) are missing.
         """
+        test_type = (
+            RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
+        )
         return cls(
             type=data.get("type", "repair_cycle.environment_verification_started"),
             timestamp=data.get("timestamp", ""),
@@ -1953,7 +1969,7 @@ class EnvironmentVerificationStartedEvent(CodetoreumEvent):
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
             workflow_run_id=data["workflow_run_id"],
-            test_type=data["test_type"],
+            test_type=test_type,
             iteration=data["iteration"],
         )
 
@@ -1969,7 +1985,7 @@ class EnvironmentVerificationCompletedEvent(CodetoreumEvent):
     Attributes:
         type (str): Fixed to "repair_cycle.environment_verification_completed"
         workflow_run_id (str): ID of the workflow run
-        test_type (str): Type of test being executed (UNIT, INTEGRATION, E2E)
+        test_type (RepairTestType): Type of test being executed (UNIT, INTEGRATION, E2E)
         iteration (int): Current iteration number within the test cycle
         healthy (bool): Whether the environment passed all verification checks
         checks_passed (tuple[str, ...]): Verification checks that passed
@@ -1979,7 +1995,7 @@ class EnvironmentVerificationCompletedEvent(CodetoreumEvent):
     """
 
     workflow_run_id: str = ""
-    test_type: str = ""
+    test_type: RepairTestType = RepairTestType.UNIT
     iteration: int = 0
     healthy: bool = False
     checks_passed: tuple[str, ...] = ()
@@ -1992,9 +2008,12 @@ class EnvironmentVerificationCompletedEvent(CodetoreumEvent):
         if not self.workflow_run_id:
             msg = "workflow_run_id is required"
             raise ValueError(msg)
-        if not self.test_type:
-            msg = "test_type is required"
-            raise ValueError(msg)
+        # Convert string to enum if needed (backward compatibility)
+        if isinstance(self.test_type, str):
+            if not self.test_type:
+                msg = "test_type is required"
+                raise ValueError(msg)
+            object.__setattr__(self, "test_type", RepairTestType(self.test_type))
         if self.iteration < 1:
             msg = "iteration must be >= 1"
             raise ValueError(msg)
@@ -2012,7 +2031,7 @@ class EnvironmentVerificationCompletedEvent(CodetoreumEvent):
         d.update(
             {
                 "workflow_run_id": self.workflow_run_id,
-                "test_type": self.test_type,
+                "test_type": self.test_type.value,
                 "iteration": self.iteration,
                 "healthy": self.healthy,
                 "checks_passed": list(self.checks_passed),
@@ -2029,6 +2048,9 @@ class EnvironmentVerificationCompletedEvent(CodetoreumEvent):
         Raises:
             KeyError: If required fields (workflow_run_id, test_type, iteration) are missing.
         """
+        test_type = (
+            RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
+        )
         checks_passed = data.get("checks_passed", [])
         checks_failed = data.get("checks_failed", [])
         if not isinstance(checks_passed, (list, tuple)):
@@ -2042,7 +2064,7 @@ class EnvironmentVerificationCompletedEvent(CodetoreumEvent):
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
             workflow_run_id=data["workflow_run_id"],
-            test_type=data["test_type"],
+            test_type=test_type,
             iteration=data["iteration"],
             healthy=data.get("healthy", False),
             checks_passed=tuple(checks_passed),

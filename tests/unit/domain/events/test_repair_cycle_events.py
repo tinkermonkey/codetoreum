@@ -1768,7 +1768,7 @@ class TestEnvironmentRebuildStartedEvent:
         )
 
         assert event.workflow_run_id == "run-123"
-        assert event.test_type == "UNIT"
+        assert event.test_type == RepairTestType.UNIT
         assert event.iteration == 1
 
     def test_missing_workflow_run_id(self):
@@ -1836,7 +1836,7 @@ class TestEnvironmentRebuildStartedEvent:
         }
         event = EnvironmentRebuildStartedEvent.from_dict(d)
         assert event.workflow_run_id == "run-123"
-        assert event.test_type == "E2E"
+        assert event.test_type == RepairTestType.E2E
         assert event.iteration == 1
 
 
@@ -1981,7 +1981,7 @@ class TestEnvironmentVerificationStartedEvent:
         )
 
         assert event.workflow_run_id == "run-123"
-        assert event.test_type == "UNIT"
+        assert event.test_type == RepairTestType.UNIT
         assert event.iteration == 1
 
     def test_serialization(self):
@@ -2013,7 +2013,7 @@ class TestEnvironmentVerificationStartedEvent:
         }
         event = EnvironmentVerificationStartedEvent.from_dict(d)
         assert event.workflow_run_id == "run-789"
-        assert event.test_type == "INTEGRATION"
+        assert event.test_type == RepairTestType.INTEGRATION
         assert event.iteration == 2
 
 
