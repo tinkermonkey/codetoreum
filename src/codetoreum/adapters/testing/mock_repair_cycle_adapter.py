@@ -24,6 +24,9 @@ from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
 
 if TYPE_CHECKING:
     from codetoreum.ports.output.container import IContainer
+    from codetoreum.ports.output.environment_repair_service import (
+        IEnvironmentRepairService,
+    )
     from codetoreum.ports.output.llm_provider import ILLMProvider
     from codetoreum.ports.output.systemic_analysis_service import (
         ISystemicAnalysisService,
@@ -120,6 +123,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         checkpoint_store: IRepairCycleCheckpointStore | None = None,
         container_adapter: "IContainer | None" = None,
         systemic_analysis_service: "ISystemicAnalysisService | None" = None,
+        environment_repair_service: "IEnvironmentRepairService | None" = None,
     ) -> None:
         """Initialize the repair cycle adapter with SimulationClock.
 
@@ -138,6 +142,9 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             systemic_analysis_service: Optional systemic analysis service for test dispatch logic.
                                       If provided, enables systemic fix dispatch based on cross_cutting
                                       field from analysis results.
+            environment_repair_service: Optional environment repair service for rebuilding and verifying
+                                       test environments. If provided, enables environment rebuild retry
+                                       loop dispatch during ENVIRONMENT_ISSUE failures.
         """
         super().__init__()
         # Default factory returns MockLLMAdapter for any agent
@@ -153,6 +160,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         self._checkpoint_store = checkpoint_store
         self._container_adapter = container_adapter
         self._systemic_analysis_service = systemic_analysis_service
+        self._environment_repair_service = environment_repair_service
         self._current_project: str | None = None
         self._repair_state: dict[str, Any] = {}
         self._test_type_index: dict[str, int] = {}
@@ -1177,6 +1185,9 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
     ) -> bool:
         """Mock implementation: simulate environment rebuild.
 
+        If an environment repair service is injected, delegates to it.
+        Otherwise, simulates a successful environment rebuild.
+
         Args:
             config: Test run configuration
             context: Repair cycle context
@@ -1184,6 +1195,31 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         Returns:
             True if environment was successfully rebuilt
         """
+        # Delegate to environment repair service if provided
+        if self._environment_repair_service is not None:
+            try:
+                result = await self._environment_repair_service.rebuild_environment(
+                    project=context.work_item_id,
+                    config=config,
+                    context=context,
+                )
+                # Track agent call
+                self.agent_call_count += 1
+                self.total_agent_calls += 1
+                return result.success
+            except Exception as e:
+                logger.error(
+                    "Environment rebuild failed (via service)",
+                    extra={
+                        "workflow_run_id": context.workflow_run_id,
+                        "test_type": config.test_type.value,
+                        "error": str(e),
+                    },
+                    exc_info=True,
+                )
+                return False
+
+        # Mock implementation: simulate successful rebuild
         # Resolve and record which agent is executing this sub-task
         _, agent_name = await self._resolve_and_record_agent("env_rebuild", context)
 
@@ -1210,6 +1246,9 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
     ) -> bool:
         """Mock implementation: simulate environment verification.
 
+        If an environment repair service is injected, delegates to it.
+        Otherwise, simulates a successful environment verification.
+
         Args:
             config: Test run configuration
             context: Repair cycle context
@@ -1217,6 +1256,31 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         Returns:
             True if environment verification passed
         """
+        # Delegate to environment repair service if provided
+        if self._environment_repair_service is not None:
+            try:
+                result = await self._environment_repair_service.verify_environment(
+                    project=context.work_item_id,
+                    config=config,
+                    context=context,
+                )
+                # Track agent call
+                self.agent_call_count += 1
+                self.total_agent_calls += 1
+                return result.healthy
+            except Exception as e:
+                logger.error(
+                    "Environment verification failed (via service)",
+                    extra={
+                        "workflow_run_id": context.workflow_run_id,
+                        "test_type": config.test_type.value,
+                        "error": str(e),
+                    },
+                    exc_info=True,
+                )
+                return False
+
+        # Mock implementation: simulate successful verification
         # Resolve and record which agent is executing this sub-task
         _, agent_name = await self._resolve_and_record_agent("env_verification", context)
 

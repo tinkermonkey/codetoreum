@@ -410,7 +410,9 @@ class TestClassificationDispatchEnvironmentIssue:
 
     @pytest.mark.asyncio
     async def test_environment_issue_skip_verify_if_rebuild_fails(self):
-        """ENVIRONMENT_ISSUE skips verify_environment if rebuild_environment returns False."""
+        """ENVIRONMENT_ISSUE retries rebuild when it fails, exhausts max_env_rebuilds, and skips verify."""
+        from codetoreum.domain.repair_cycle_types import EnvironmentRepairConfig
+
         event_emitter = MagicMock()
         systemic_service = AsyncMock()
         systemic_service.analyze.return_value = MagicMock(
@@ -429,7 +431,9 @@ class TestClassificationDispatchEnvironmentIssue:
         ctx = _RepairCycleContext(max_total_agent_calls=100)
         await adapter.execute(ctx)
 
-        adapter.rebuild_environment.assert_called_once()
+        # With retry loop, rebuild should be called max_env_rebuilds times
+        env_repair_config = EnvironmentRepairConfig()
+        assert adapter.rebuild_environment.call_count == env_repair_config.max_env_rebuilds
         # verify_environment should not be called if rebuild fails
         adapter.verify_environment.assert_not_called()
 
