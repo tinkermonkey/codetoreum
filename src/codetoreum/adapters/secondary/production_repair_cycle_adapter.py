@@ -139,7 +139,6 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         circuit_breaker: ICircuitBreaker | None = None,
         systemic_analysis_service: ISystemicAnalysisService | None = None,
         environment_repair_service: IEnvironmentRepairService | None = None,
-        environment_repair_config: EnvironmentRepairConfig | None = None,
     ) -> None:
         """Initialize production repair cycle adapter.
 
@@ -151,7 +150,6 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             circuit_breaker: Optional circuit breaker for LLM call protection
             systemic_analysis_service: Optional systemic analysis service for failure classification
             environment_repair_service: Optional environment repair service for rebuilding and verifying environments
-            environment_repair_config: Optional EnvironmentRepairConfig (uses defaults if not provided)
         """
         self._llm_factory = llm_factory
         self.config = config or RepairCycleConfig()
@@ -160,7 +158,6 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         self.circuit_breaker = circuit_breaker
         self._systemic_analysis_service = systemic_analysis_service
         self._environment_repair_service = environment_repair_service
-        self._environment_repair_config = environment_repair_config or EnvironmentRepairConfig()
 
         # Tracking state for checkpoint resumption (initialized in __init__, not in setter)
         self._files_fixed = 0  # Number of files fixed in current cycle
@@ -194,16 +191,6 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         Note: This setter only updates the service reference, not tracking state.
         """
         self._environment_repair_service = service
-
-    @property
-    def environment_repair_config(self) -> EnvironmentRepairConfig:
-        """Get the environment repair configuration."""
-        return self._environment_repair_config
-
-    @environment_repair_config.setter
-    def environment_repair_config(self, config: EnvironmentRepairConfig) -> None:
-        """Set the environment repair configuration."""
-        self._environment_repair_config = config
 
     async def _get_llm_for_subtask(self, sub_task: str, context: RepairCycleContext) -> tuple[ILLMProvider, str]:
         """Resolve the appropriate agent for a sub-task and return its LLM provider.
@@ -2112,7 +2099,7 @@ Return a JSON response with the status of dependency fixes applied."""
                                 consecutive_transient_failures = 0  # Reset counter
                                 # Retry loop bounded by max_env_rebuilds
                                 env_rebuild_success = False
-                                for rebuild_attempt in range(1, self._environment_repair_config.max_env_rebuilds + 1):
+                                for rebuild_attempt in range(1, context.stage_config.environment_repair_config.max_env_rebuilds + 1):
                                     try:
                                         rebuild_success = await self.rebuild_environment(config, context)
                                         if rebuild_success:
@@ -2127,7 +2114,7 @@ Return a JSON response with the status of dependency fixes applied."""
                                                     break
                                                 # Rebuild succeeded but verification failed, try again
                                                 logger.warning(
-                                                    f"Environment verification failed after rebuild (attempt {rebuild_attempt}/{self._environment_repair_config.max_env_rebuilds}), retrying",
+                                                    f"Environment verification failed after rebuild (attempt {rebuild_attempt}/{context.stage_config.environment_repair_config.max_env_rebuilds}), retrying",
                                                     extra={
                                                         "workflow_run_id": context.workflow_run_id,
                                                         "test_type": config.test_type.value,
@@ -2136,16 +2123,16 @@ Return a JSON response with the status of dependency fixes applied."""
                                                     },
                                                     exc_info=False,
                                                 )
-                                                if rebuild_attempt == self._environment_repair_config.max_env_rebuilds:
+                                                if rebuild_attempt == context.stage_config.environment_repair_config.max_env_rebuilds:
                                                     # Exhausted all attempts
                                                     prior_fix_attempts.append(
-                                                        f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuilt environment but verification failed (all {self._environment_repair_config.max_env_rebuilds} attempts exhausted)"
+                                                        f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuilt environment but verification failed (all {context.stage_config.environment_repair_config.max_env_rebuilds} attempts exhausted)"
                                                     )
                                             except TimeoutError:
                                                 # Transient timeout in verification - log and retry
-                                                if rebuild_attempt < self._environment_repair_config.max_env_rebuilds:
+                                                if rebuild_attempt < context.stage_config.environment_repair_config.max_env_rebuilds:
                                                     logger.warning(
-                                                        f"Environment verification timed out (attempt {rebuild_attempt}/{self._environment_repair_config.max_env_rebuilds}), retrying",
+                                                        f"Environment verification timed out (attempt {rebuild_attempt}/{context.stage_config.environment_repair_config.max_env_rebuilds}), retrying",
                                                         extra={
                                                             "workflow_run_id": context.workflow_run_id,
                                                             "test_type": config.test_type.value,
@@ -2161,7 +2148,7 @@ Return a JSON response with the status of dependency fixes applied."""
                                         else:
                                             # Rebuild failed (permanent failure), try again if attempts remaining
                                             logger.warning(
-                                                f"Environment rebuild failed (attempt {rebuild_attempt}/{self._environment_repair_config.max_env_rebuilds}), retrying",
+                                                f"Environment rebuild failed (attempt {rebuild_attempt}/{context.stage_config.environment_repair_config.max_env_rebuilds}), retrying",
                                                 extra={
                                                     "workflow_run_id": context.workflow_run_id,
                                                     "test_type": config.test_type.value,
@@ -2170,16 +2157,16 @@ Return a JSON response with the status of dependency fixes applied."""
                                                 },
                                                 exc_info=False,
                                             )
-                                        if rebuild_attempt == self._environment_repair_config.max_env_rebuilds:
+                                        if rebuild_attempt == context.stage_config.environment_repair_config.max_env_rebuilds:
                                             # Exhausted all attempts
                                             prior_fix_attempts.append(
-                                                f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuild failed (all {self._environment_repair_config.max_env_rebuilds} attempts exhausted)"
+                                                f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuild failed (all {context.stage_config.environment_repair_config.max_env_rebuilds} attempts exhausted)"
                                             )
                                     except TimeoutError:
                                         # Transient timeout in rebuild - log and retry if attempts remaining
-                                        if rebuild_attempt < self._environment_repair_config.max_env_rebuilds:
+                                        if rebuild_attempt < context.stage_config.environment_repair_config.max_env_rebuilds:
                                             logger.warning(
-                                                f"Environment rebuild timed out (attempt {rebuild_attempt}/{self._environment_repair_config.max_env_rebuilds}), retrying",
+                                                f"Environment rebuild timed out (attempt {rebuild_attempt}/{context.stage_config.environment_repair_config.max_env_rebuilds}), retrying",
                                                 extra={
                                                     "workflow_run_id": context.workflow_run_id,
                                                     "test_type": config.test_type.value,
@@ -2201,13 +2188,13 @@ Return a JSON response with the status of dependency fixes applied."""
                                             "workflow_run_id": context.workflow_run_id,
                                             "test_type": config.test_type.value,
                                             "iteration": iteration,
-                                            "max_env_rebuilds": self._environment_repair_config.max_env_rebuilds,
+                                            "max_env_rebuilds": context.stage_config.environment_repair_config.max_env_rebuilds,
                                             "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
                                         },
                                         exc_info=False,
                                     )
                                     # Break out of test cycle with env_rebuild_exhausted failure mode
-                                    error_msg = f"Iteration {iteration}: Environment rebuild exhausted ({self._environment_repair_config.max_env_rebuilds} attempts) without achieving healthy state"
+                                    error_msg = f"Iteration {iteration}: Environment rebuild exhausted ({context.stage_config.environment_repair_config.max_env_rebuilds} attempts) without achieving healthy state"
                                     error = error_msg
 
                                     # Emit dedicated failure event for env_rebuild_exhausted (named outcome per specification)
@@ -2220,7 +2207,7 @@ Return a JSON response with the status of dependency fixes applied."""
                                             workflow_run_id=context.workflow_run_id,
                                             test_type=config.test_type,
                                             iteration=iteration,
-                                            max_attempts=self._environment_repair_config.max_env_rebuilds,
+                                            max_attempts=context.stage_config.environment_repair_config.max_env_rebuilds,
                                             error_message=error_msg,
                                         )
                                     )

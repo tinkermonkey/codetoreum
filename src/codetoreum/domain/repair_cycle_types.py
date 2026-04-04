@@ -43,7 +43,6 @@ class FailureClassification(str, Enum):
     - TRANSIENT_FAILURE: Temporary failure, likely to pass on retry (no fix)
     - DEPENDENCY_ISSUE: External dependency problem (systemic fix path)
     - CONFIGURATION_ISSUE: Configuration error (systemic fix path)
-    - ENV_REBUILD_EXHAUSTED: Environment rebuild failed to achieve healthy state after max attempts
 
     **Serialization**: Inherits from `str, Enum` for direct JSON serialization
     without `.value` access.
@@ -54,7 +53,6 @@ class FailureClassification(str, Enum):
     TRANSIENT_FAILURE = "transient_failure"
     DEPENDENCY_ISSUE = "dependency_issue"
     CONFIGURATION_ISSUE = "configuration_issue"
-    ENV_REBUILD_EXHAUSTED = "env_rebuild_exhausted"
 
 
 class RepairTestType(Enum):

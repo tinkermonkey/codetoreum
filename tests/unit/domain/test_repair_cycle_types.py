@@ -1022,6 +1022,61 @@ class TestRepairCycleStageConfig:
                 checkpoint_interval=0,
             )
 
+    def test_environment_repair_config_default_factory(self):
+        """Test that environment_repair_config has correct default."""
+        config = RepairCycleStageConfig(
+            name="repair",
+            test_configs=(
+                RepairTestRunConfig(
+                    test_type=RepairTestType.UNIT,
+                    timeout=300,
+                    max_iterations=5,
+                ),
+            ),
+        )
+        assert isinstance(config.environment_repair_config, EnvironmentRepairConfig)
+        assert config.environment_repair_config.max_env_rebuilds == 2
+        assert config.environment_repair_config.env_rebuild_timeout_seconds == 1200
+        assert config.environment_repair_config.env_verification_timeout_seconds == 120
+
+    def test_environment_repair_config_custom_values(self):
+        """Test that custom environment_repair_config is preserved."""
+        custom_env_config = EnvironmentRepairConfig(
+            max_env_rebuilds=4,
+            env_rebuild_timeout_seconds=2400,
+            env_verification_timeout_seconds=300,
+        )
+        config = RepairCycleStageConfig(
+            name="repair",
+            test_configs=(
+                RepairTestRunConfig(
+                    test_type=RepairTestType.UNIT,
+                    timeout=300,
+                    max_iterations=5,
+                ),
+            ),
+            environment_repair_config=custom_env_config,
+        )
+        assert config.environment_repair_config is custom_env_config
+        assert config.environment_repair_config.max_env_rebuilds == 4
+        assert config.environment_repair_config.env_rebuild_timeout_seconds == 2400
+        assert config.environment_repair_config.env_verification_timeout_seconds == 300
+
+    def test_environment_repair_config_immutability(self):
+        """Test that environment_repair_config is immutable as part of frozen dataclass."""
+        config = RepairCycleStageConfig(
+            name="repair",
+            test_configs=(
+                RepairTestRunConfig(
+                    test_type=RepairTestType.UNIT,
+                    timeout=300,
+                    max_iterations=5,
+                ),
+            ),
+        )
+        with pytest.raises(FrozenInstanceError):
+            config.environment_repair_config = EnvironmentRepairConfig(max_env_rebuilds=5)  # type: ignore[misc]
+
 
 # ============================================================================
 # FailureClassification Enum Tests
@@ -1038,12 +1093,11 @@ class TestFailureClassification:
         assert FailureClassification.TRANSIENT_FAILURE.value == "transient_failure"
         assert FailureClassification.DEPENDENCY_ISSUE.value == "dependency_issue"
         assert FailureClassification.CONFIGURATION_ISSUE.value == "configuration_issue"
-        assert FailureClassification.ENV_REBUILD_EXHAUSTED.value == "env_rebuild_exhausted"
 
     def test_enum_count(self):
-        """Test that exactly six enum values exist."""
+        """Test that exactly five enum values exist."""
         values = list(FailureClassification)
-        assert len(values) == 6
+        assert len(values) == 5
 
     def test_enum_is_str(self):
         """Test that enum values are strings (inherits from str)."""

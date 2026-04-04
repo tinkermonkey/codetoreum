@@ -4,6 +4,7 @@ import pytest
 
 from codetoreum.domain.events import (
     EnvironmentRebuildCompletedEvent,
+    EnvironmentRebuildExhaustedEvent,
     EnvironmentRebuildStartedEvent,
     EnvironmentVerificationCompletedEvent,
     EnvironmentVerificationStartedEvent,
@@ -2230,3 +2231,210 @@ class TestEnvironmentVerificationCompletedEvent:
         assert restored.checks_failed == original.checks_failed
         assert restored.duration_seconds == original.duration_seconds
         assert restored.workflow_run_id == original.workflow_run_id
+
+
+class TestEnvironmentRebuildExhaustedEvent:
+    """Test EnvironmentRebuildExhaustedEvent."""
+
+    def test_create_event(self):
+        """Test creating an exhausted event."""
+        timestamp = now_iso()
+        event = EnvironmentRebuildExhaustedEvent(
+            type="repair_cycle.environment_rebuild_exhausted",
+            timestamp=timestamp,
+            source="repair_cycle",
+            work_item_id="issue-123",
+            workflow_run_id="run-456",
+            test_type=RepairTestType.UNIT,
+            iteration=2,
+            max_attempts=3,
+            error_message="Rebuild failed: dependency timeout",
+        )
+        assert event.work_item_id == "issue-123"
+        assert event.workflow_run_id == "run-456"
+        assert event.test_type == RepairTestType.UNIT
+        assert event.iteration == 2
+        assert event.max_attempts == 3
+        assert event.error_message == "Rebuild failed: dependency timeout"
+
+    def test_event_immutability(self):
+        """Test that event is frozen."""
+        event = EnvironmentRebuildExhaustedEvent(
+            type="repair_cycle.environment_rebuild_exhausted",
+            timestamp=now_iso(),
+            source="repair_cycle",
+            work_item_id="issue-123",
+            workflow_run_id="run-456",
+            test_type=RepairTestType.INTEGRATION,
+            iteration=1,
+            max_attempts=2,
+            error_message="Failed",
+        )
+        with pytest.raises(FrozenInstanceError):
+            event.work_item_id = "issue-999"  # type: ignore[misc]
+
+    def test_missing_work_item_id_raises_error(self):
+        """Test that missing work_item_id raises ValueError."""
+        with pytest.raises(ValueError, match="work_item_id is required"):
+            EnvironmentRebuildExhaustedEvent(
+                type="repair_cycle.environment_rebuild_exhausted",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                work_item_id="",
+                workflow_run_id="run-456",
+                test_type=RepairTestType.UNIT,
+                iteration=1,
+                max_attempts=2,
+                error_message="Error",
+            )
+
+    def test_missing_workflow_run_id_raises_error(self):
+        """Test that missing workflow_run_id raises ValueError."""
+        with pytest.raises(ValueError, match="workflow_run_id is required"):
+            EnvironmentRebuildExhaustedEvent(
+                type="repair_cycle.environment_rebuild_exhausted",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                work_item_id="issue-123",
+                workflow_run_id="",
+                test_type=RepairTestType.UNIT,
+                iteration=1,
+                max_attempts=2,
+                error_message="Error",
+            )
+
+    def test_invalid_iteration_raises_error(self):
+        """Test that iteration < 1 raises ValueError."""
+        with pytest.raises(ValueError, match="iteration must be >= 1"):
+            EnvironmentRebuildExhaustedEvent(
+                type="repair_cycle.environment_rebuild_exhausted",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                work_item_id="issue-123",
+                workflow_run_id="run-456",
+                test_type=RepairTestType.UNIT,
+                iteration=0,
+                max_attempts=2,
+                error_message="Error",
+            )
+
+    def test_invalid_max_attempts_raises_error(self):
+        """Test that max_attempts <= 0 raises ValueError."""
+        with pytest.raises(ValueError, match="max_attempts must be > 0"):
+            EnvironmentRebuildExhaustedEvent(
+                type="repair_cycle.environment_rebuild_exhausted",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                work_item_id="issue-123",
+                workflow_run_id="run-456",
+                test_type=RepairTestType.UNIT,
+                iteration=1,
+                max_attempts=0,
+                error_message="Error",
+            )
+
+    def test_missing_error_message_raises_error(self):
+        """Test that missing error_message raises ValueError."""
+        with pytest.raises(ValueError, match="error_message is required"):
+            EnvironmentRebuildExhaustedEvent(
+                type="repair_cycle.environment_rebuild_exhausted",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                work_item_id="issue-123",
+                workflow_run_id="run-456",
+                test_type=RepairTestType.UNIT,
+                iteration=1,
+                max_attempts=2,
+                error_message="",
+            )
+
+    def test_serialization_round_trip(self):
+        """Test that event can be serialized and deserialized."""
+        timestamp = now_iso()
+        original = EnvironmentRebuildExhaustedEvent(
+            type="repair_cycle.environment_rebuild_exhausted",
+            timestamp=timestamp,
+            source="repair_cycle",
+            work_item_id="issue-123",
+            workflow_run_id="run-456",
+            test_type=RepairTestType.E2E,
+            iteration=3,
+            max_attempts=5,
+            error_message="Multiple rebuild attempts failed",
+        )
+
+        # Serialize
+        data = original.to_dict()
+
+        # Deserialize
+        restored = EnvironmentRebuildExhaustedEvent.from_dict(data)
+
+        # Verify
+        assert restored.work_item_id == original.work_item_id
+        assert restored.workflow_run_id == original.workflow_run_id
+        assert restored.test_type == original.test_type
+        assert restored.iteration == original.iteration
+        assert restored.max_attempts == original.max_attempts
+        assert restored.error_message == original.error_message
+
+    def test_from_dict_with_string_test_type(self):
+        """Test from_dict converts string test_type to enum."""
+        data = {
+            "type": "repair_cycle.environment_rebuild_exhausted",
+            "timestamp": now_iso(),
+            "source": "repair_cycle",
+            "work_item_id": "issue-123",
+            "workflow_run_id": "run-456",
+            "test_type": "INTEGRATION",
+            "iteration": 2,
+            "max_attempts": 3,
+            "error_message": "Error",
+        }
+        event = EnvironmentRebuildExhaustedEvent.from_dict(data)
+        assert event.test_type == RepairTestType.INTEGRATION
+        assert isinstance(event.test_type, RepairTestType)
+
+    def test_from_dict_missing_work_item_id_raises_error(self):
+        """Test that from_dict raises KeyError for missing work_item_id."""
+        data = {
+            "type": "repair_cycle.environment_rebuild_exhausted",
+            "timestamp": now_iso(),
+            "source": "repair_cycle",
+            "workflow_run_id": "run-456",
+            "test_type": "UNIT",
+            "iteration": 1,
+            "max_attempts": 2,
+            "error_message": "Error",
+        }
+        with pytest.raises(KeyError):
+            EnvironmentRebuildExhaustedEvent.from_dict(data)
+
+    def test_from_dict_missing_test_type_raises_error(self):
+        """Test that from_dict raises KeyError for missing test_type."""
+        data = {
+            "type": "repair_cycle.environment_rebuild_exhausted",
+            "timestamp": now_iso(),
+            "source": "repair_cycle",
+            "work_item_id": "issue-123",
+            "workflow_run_id": "run-456",
+            "iteration": 1,
+            "max_attempts": 2,
+            "error_message": "Error",
+        }
+        with pytest.raises(KeyError):
+            EnvironmentRebuildExhaustedEvent.from_dict(data)
+
+    def test_from_dict_missing_iteration_raises_error(self):
+        """Test that from_dict raises KeyError for missing iteration."""
+        data = {
+            "type": "repair_cycle.environment_rebuild_exhausted",
+            "timestamp": now_iso(),
+            "source": "repair_cycle",
+            "work_item_id": "issue-123",
+            "workflow_run_id": "run-456",
+            "test_type": "UNIT",
+            "max_attempts": 2,
+            "error_message": "Error",
+        }
+        with pytest.raises(KeyError):
+            EnvironmentRebuildExhaustedEvent.from_dict(data)

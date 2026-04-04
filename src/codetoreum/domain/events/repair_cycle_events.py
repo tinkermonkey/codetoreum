@@ -2182,16 +2182,20 @@ class EnvironmentRebuildExhaustedEvent(CodetoreumEvent):
         Raises:
             KeyError: If required fields (work_item_id, workflow_run_id, test_type, iteration, max_attempts, error_message) are missing.
         """
-        test_type = (
-            RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
-        )
+        # Convert test_type to enum if needed
+        test_type_value = data["test_type"]
+        if isinstance(test_type_value, str):
+            test_type = RepairTestType(test_type_value)
+        else:
+            test_type = test_type_value
+
         return cls(
             type=data.get("type", "repair_cycle.environment_rebuild_exhausted"),
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
-            work_item_id=data.get("work_item_id", ""),
+            work_item_id=data["work_item_id"],
             workflow_run_id=data["workflow_run_id"],
             test_type=test_type,
             iteration=data["iteration"],
