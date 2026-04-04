@@ -26,11 +26,11 @@ from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycl
 from codetoreum.domain.repair_cycle_types import (
     EnvironmentRepairConfig,
     FailureClassification,
+    RebuildResult,
     RepairTestFailure,
     RepairTestResult,
     RepairTestRunConfig,
     RepairTestType,
-    RebuildResult,
     VerificationResult,
 )
 from codetoreum.ports.output.llm_provider import ExecutionResult

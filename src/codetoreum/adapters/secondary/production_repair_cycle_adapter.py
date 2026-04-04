@@ -71,6 +71,7 @@ from codetoreum.domain.repair_cycle_types import (
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.resilience.exceptions import CircuitBreakerOpenError
+from codetoreum.ports.output.environment_repair_service import IEnvironmentRepairService
 from codetoreum.ports.output.event_emitter import IEventEmitter, NullEventEmitter
 from codetoreum.ports.output.repair_cycle_checkpoint_store import (
     IRepairCycleCheckpointStore,
@@ -80,7 +81,6 @@ from codetoreum.ports.output.repair_cycle_service import (
     RepairCycleContext,
 )
 from codetoreum.ports.output.systemic_analysis_service import ISystemicAnalysisService
-from codetoreum.ports.output.environment_repair_service import IEnvironmentRepairService
 
 logger = logging.getLogger(__name__)
 
@@ -1883,7 +1883,6 @@ Return a JSON response with the status of dependency fixes applied."""
         prior_classifications: list[SystemicAnalysisResult] = []  # Track prior SystemicAnalysisResult objects
         consecutive_transient_failures = 0  # Track consecutive TRANSIENT_FAILURE classifications
         max_consecutive_transient = 2  # Escalate after 2 consecutive transient failures
-        cycle_terminated_early = False  # Track if cycle terminated early (e.g., env exhaustion)
 
         for iteration in range(1, config.max_iterations + 1):
             # Check circuit breaker
@@ -2049,23 +2048,22 @@ Return a JSON response with the status of dependency fixes applied."""
                                                 f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuilt and verified environment (attempt {rebuild_attempt})"
                                             )
                                             break
-                                        else:
-                                            # Rebuild succeeded but verification failed, try again
-                                            logger.warning(
-                                                f"Environment verification failed after rebuild (attempt {rebuild_attempt}/{self._environment_repair_config.max_env_rebuilds}), retrying",
-                                                extra={
-                                                    "workflow_run_id": context.workflow_run_id,
-                                                    "test_type": config.test_type.value,
-                                                    "iteration": iteration,
-                                                    "rebuild_attempt": rebuild_attempt,
-                                                },
-                                                exc_info=False,
+                                        # Rebuild succeeded but verification failed, try again
+                                        logger.warning(
+                                            f"Environment verification failed after rebuild (attempt {rebuild_attempt}/{self._environment_repair_config.max_env_rebuilds}), retrying",
+                                            extra={
+                                                "workflow_run_id": context.workflow_run_id,
+                                                "test_type": config.test_type.value,
+                                                "iteration": iteration,
+                                                "rebuild_attempt": rebuild_attempt,
+                                            },
+                                            exc_info=False,
+                                        )
+                                        if rebuild_attempt == self._environment_repair_config.max_env_rebuilds:
+                                            # Exhausted all attempts
+                                            prior_fix_attempts.append(
+                                                f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuilt environment but verification failed (all {self._environment_repair_config.max_env_rebuilds} attempts exhausted)"
                                             )
-                                            if rebuild_attempt == self._environment_repair_config.max_env_rebuilds:
-                                                # Exhausted all attempts
-                                                prior_fix_attempts.append(
-                                                    f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuilt environment but verification failed (all {self._environment_repair_config.max_env_rebuilds} attempts exhausted)"
-                                                )
                                     else:
                                         # Rebuild failed, try again
                                         logger.warning(
@@ -2100,7 +2098,6 @@ Return a JSON response with the status of dependency fixes applied."""
                                     # Break out of test cycle with env_rebuild_exhausted failure mode
                                     error_msg = f"Iteration {iteration}: Environment rebuild exhausted ({self._environment_repair_config.max_env_rebuilds} attempts) without achieving healthy state"
                                     error = error_msg
-                                    cycle_terminated_early = True
                                     break  # Exit test cycle loop
                             elif classification.classification == FailureClassification.TRANSIENT_FAILURE:
                                 consecutive_transient_failures += 1
