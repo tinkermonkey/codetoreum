@@ -65,6 +65,7 @@ from codetoreum.domain.pipeline_stage import PipelineStage, StageStatus, StageTy
 from codetoreum.domain.project_context import ProjectContext
 from codetoreum.domain.repair_cycle_types import (
     CycleResult,
+    EnvironmentRepairConfig,
     RebuildResult,
     RepairCycleAgentConfig,
     RepairCycleResult,
@@ -245,6 +246,7 @@ __all__ = [
     "CycleResult",
     "RepairCycleResult",
     "RepairCycleAgentConfig",
+    "EnvironmentRepairConfig",
     "RepairCycleStageConfig",
     "RebuildResult",
     "VerificationResult",

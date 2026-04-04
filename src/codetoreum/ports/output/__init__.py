@@ -1,5 +1,6 @@
 """Output port interfaces."""
 
+from codetoreum.domain.repair_cycle_types import EnvironmentRepairConfig
 from codetoreum.domain.value_objects import ProjectConfig
 from codetoreum.ports.output.agent_executor import IAgentExecutor
 from codetoreum.ports.output.board_service import (
@@ -40,6 +41,7 @@ from codetoreum.ports.output.encryption_service import (
     EncryptionError,
     IEncryptionService,
 )
+from codetoreum.ports.output.environment_repair_service import IEnvironmentRepairService
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.output.failed_event_store import (
@@ -153,6 +155,9 @@ __all__ = [
     "IEncryptionService",
     "EncryptionError",
     "DecryptionError",
+    # Environment Repair Service
+    "IEnvironmentRepairService",
+    "EnvironmentRepairConfig",
     # Event Emitter
     "IEventEmitter",
     # Event Store

@@ -482,6 +482,43 @@ class RepairCycleCheckpoint:
 
 
 @dataclass(frozen=True)
+class EnvironmentRepairConfig:
+    """Configuration for environment repair operations.
+
+    Immutable configuration controlling how environment rebuild and verification
+    operations are executed during the repair cycle when environment-related
+    test failures are detected.
+
+    **Immutability**: Frozen dataclass - all fields read-only after construction.
+    Attempting to modify any field raises FrozenInstanceError.
+
+    Attributes:
+        max_env_rebuilds: Maximum number of environment rebuild attempts
+                         before giving up (default 2)
+        env_rebuild_timeout_seconds: Timeout for a single rebuild operation
+                                    in seconds (default 1200 = 20 minutes)
+        env_verification_timeout_seconds: Timeout for environment verification
+                                         in seconds (default 120 = 2 minutes)
+    """
+
+    max_env_rebuilds: int = 2
+    env_rebuild_timeout_seconds: int = 1200
+    env_verification_timeout_seconds: int = 120
+
+    def __post_init__(self) -> None:
+        """Validate configuration after initialization."""
+        if self.max_env_rebuilds <= 0:
+            msg = "max_env_rebuilds must be > 0"
+            raise ValueError(msg)
+        if self.env_rebuild_timeout_seconds <= 0:
+            msg = "env_rebuild_timeout_seconds must be > 0"
+            raise ValueError(msg)
+        if self.env_verification_timeout_seconds <= 0:
+            msg = "env_verification_timeout_seconds must be > 0"
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True)
 class RepairCycleStageConfig:
     """Configuration for entire repair cycle stage.
 
