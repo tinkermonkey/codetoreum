@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from codetoreum.ports.output.event_emitter import IEventEmitter
     from codetoreum.ports.output.llm_provider import AgentLLMFactory, ExecutionResult, ILLMProvider
 
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.domain.events.repair_cycle_events import (
     EnvironmentRebuildExhaustedEvent,
     RepairCycleCheckpointFailedEvent,
@@ -262,20 +263,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
     def _emit_event_safely(
         self,
-        event: RepairCycleStartedEvent
-        | RepairCycleFastFailEvent
-        | RepairCycleCompletedEvent
-        | RepairCycleTestCycleCompletedEvent
-        | RepairCycleTestExecutionCompletedEvent
-        | RepairCycleFileFixStartedEvent
-        | RepairCycleFileFixCompletedEvent
-        | RepairCycleWarningReviewStartedEvent
-        | RepairCycleWarningReviewCompletedEvent
-        | SystemicAnalysisStartedEvent
-        | SystemicAnalysisCompletedEvent
-        | SystemicFixStartedEvent
-        | SystemicFixCompletedEvent
-        | EnvironmentRebuildExhaustedEvent,
+        event: CodetoreumEvent,
         description: str,
         workflow_run_id: str,
     ) -> None:
@@ -1720,6 +1708,9 @@ Return a JSON response with the status of dependency fixes applied."""
             except TimeoutError:
                 # Re-raise transient timeout errors - retry loop can distinguish and attempt again
                 raise
+            except TestOutputParseError:
+                # Re-raise parse errors - indicate unrecoverable JSON from environment repair service
+                raise
             except Exception as e:
                 logger.error(
                     "Environment rebuild failed (via service)",
@@ -1763,7 +1754,7 @@ Return a JSON response with the status of dependency fixes applied."""
                     "workflow_run_id": context.workflow_run_id,
                     "test_type": config.test_type.value,
                     "error": str(e),
-                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                    "error_id": ErrorRegistry.ERR_ENVIRONMENT_REPAIR_TIMEOUT,
                 },
                 exc_info=False,
             )
@@ -1812,6 +1803,9 @@ Return a JSON response with the status of dependency fixes applied."""
             except TimeoutError:
                 # Re-raise transient timeout errors - retry loop can distinguish and attempt again
                 raise
+            except TestOutputParseError:
+                # Re-raise parse errors - indicate unrecoverable JSON from environment repair service
+                raise
             except Exception as e:
                 logger.error(
                     "Environment verification failed (via service)",
@@ -1855,7 +1849,7 @@ Return a JSON response with the status of dependency fixes applied."""
                     "workflow_run_id": context.workflow_run_id,
                     "test_type": config.test_type.value,
                     "error": str(e),
-                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                    "error_id": ErrorRegistry.ERR_ENVIRONMENT_REPAIR_TIMEOUT,
                 },
                 exc_info=False,
             )
