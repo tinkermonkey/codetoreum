@@ -1015,10 +1015,10 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 test_type=test_type,
                 iteration=iteration,
                 total_agent_calls=self.circuit_breaker.get_stats().total_calls if self.circuit_breaker else 0,
-                files_fixed=0,  # Would be tracked by application layer
-                warnings_reviewed=0,  # Would be tracked by application layer
-                elapsed_seconds=0.0,  # Would be tracked by application layer
-                test_results=(),  # Would contain completed test results
+                files_fixed=self._files_fixed,
+                warnings_reviewed=self._warnings_reviewed,
+                elapsed_seconds=self._elapsed_time,
+                test_results=tuple(self._cycle_results),
                 timestamp=now.isoformat(),
                 expires_at=expires_at,
             )
@@ -1693,11 +1693,41 @@ Return a JSON response with the status of dependency fixes applied."""
         # Fallback to LLM-based rebuild
         try:
             rebuild_prompt = self._build_environment_rebuild_prompt(config)
-            await self._execute_llm_prompt(rebuild_prompt, "env_rebuild", config, context)
+            response = await self._execute_llm_prompt(rebuild_prompt, "env_rebuild", config, context)
+
+            # Parse response to check actual success (same pattern as ProductionEnvironmentRepairAdapter)
+            success = response.get("success", False)
+            if not success:
+                error_msg = response.get("error", response.get("message", "Environment rebuild reported failure"))
+                logger.error(
+                    "Environment rebuild LLM reported failure",
+                    extra={
+                        "workflow_run_id": context.workflow_run_id,
+                        "test_type": config.test_type.value,
+                        "error": error_msg,
+                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                    },
+                    exc_info=False,
+                )
+                return False
             return True
+        except TimeoutError as e:
+            # Re-raise transient timeout errors - retry loop can distinguish and attempt again
+            logger.warning(
+                "Environment rebuild timed out (transient failure - will retry)",
+                extra={
+                    "workflow_run_id": context.workflow_run_id,
+                    "test_type": config.test_type.value,
+                    "error": str(e),
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                },
+                exc_info=False,
+            )
+            raise
         except Exception as e:
+            # Permanent failures (bad config, missing dependencies, etc.) return False
             logger.error(
-                "Environment rebuild failed",
+                "Environment rebuild failed (permanent failure)",
                 extra={
                     "workflow_run_id": context.workflow_run_id,
                     "test_type": config.test_type.value,
@@ -1752,11 +1782,41 @@ Return a JSON response with the status of dependency fixes applied."""
         # Fallback to LLM-based verification
         try:
             verify_prompt = self._build_environment_verify_prompt(config)
-            await self._execute_llm_prompt(verify_prompt, "env_verification", config, context)
+            response = await self._execute_llm_prompt(verify_prompt, "env_verification", config, context)
+
+            # Parse response to check actual health (same pattern as ProductionEnvironmentRepairAdapter)
+            healthy = response.get("healthy", False)
+            if not healthy:
+                checks_failed = response.get("checks_failed", [])
+                logger.error(
+                    "Environment verification LLM reported unhealthy environment",
+                    extra={
+                        "workflow_run_id": context.workflow_run_id,
+                        "test_type": config.test_type.value,
+                        "checks_failed": checks_failed,
+                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                    },
+                    exc_info=False,
+                )
+                return False
             return True
+        except TimeoutError as e:
+            # Re-raise transient timeout errors - retry loop can distinguish and attempt again
+            logger.warning(
+                "Environment verification timed out (transient failure - will retry)",
+                extra={
+                    "workflow_run_id": context.workflow_run_id,
+                    "test_type": config.test_type.value,
+                    "error": str(e),
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                },
+                exc_info=False,
+            )
+            raise
         except Exception as e:
+            # Permanent failures (bad config, missing dependencies, etc.) return False
             logger.error(
-                "Environment verification failed",
+                "Environment verification failed (permanent failure)",
                 extra={
                     "workflow_run_id": context.workflow_run_id,
                     "test_type": config.test_type.value,
@@ -1922,7 +1982,9 @@ Return a JSON response with the status of dependency fixes applied."""
 
                     # Handle warnings if configured
                     if config.review_warnings and test_result.warnings > 0:
-                        warnings_reviewed += await self.handle_warnings(test_result, config, context)
+                        num_warnings = await self.handle_warnings(test_result, config, context)
+                        warnings_reviewed += num_warnings
+                        self._warnings_reviewed += num_warnings
 
                         # Re-test after warning fixes
                         retest = await self.run_tests(config, context)
@@ -1993,7 +2055,9 @@ Return a JSON response with the status of dependency fixes applied."""
                                 )
                                 # Only count files as fixed if the systemic fix succeeded
                                 if systemic_result.success:
-                                    files_fixed += len(systemic_result.files_modified)
+                                    num_files = len(systemic_result.files_modified)
+                                    files_fixed += num_files
+                                    self._files_fixed += num_files
                                     prior_fix_attempts.append(
                                         f"Iteration {iteration}: CODE_DEFECT (cross-cutting), systemic fix applied to "
                                         f"{len(systemic_result.files_modified)} files"
@@ -2020,7 +2084,9 @@ Return a JSON response with the status of dependency fixes applied."""
                                     },
                                 )
                                 grouped = self._group_failures_by_file(test_result.failures)
-                                files_fixed += await self.fix_failures_by_file(grouped, config, context)
+                                num_files = await self.fix_failures_by_file(grouped, config, context)
+                                files_fixed += num_files
+                                self._files_fixed += num_files
                                 prior_fix_attempts.append(
                                     f"Iteration {iteration}: CODE_DEFECT (cross-cutting, {len(test_result.failures)} failures > {context.systemic_fix_failure_ceiling} ceiling), "
                                     f"fell back to file-level fixes"
@@ -2029,7 +2095,9 @@ Return a JSON response with the status of dependency fixes applied."""
                                 consecutive_transient_failures = 0  # Reset counter
                                 # Apply per-file fix for non-cross-cutting issues
                                 grouped = self._group_failures_by_file(test_result.failures)
-                                files_fixed += await self.fix_failures_by_file(grouped, config, context)
+                                num_files = await self.fix_failures_by_file(grouped, config, context)
+                                files_fixed += num_files
+                                self._files_fixed += num_files
                                 prior_fix_attempts.append(
                                     f"Iteration {iteration}: CODE_DEFECT classified, applied file-level fixes"
                                 )
@@ -2038,48 +2106,84 @@ Return a JSON response with the status of dependency fixes applied."""
                                 # Retry loop bounded by max_env_rebuilds
                                 env_rebuild_success = False
                                 for rebuild_attempt in range(1, self._environment_repair_config.max_env_rebuilds + 1):
-                                    rebuild_success = await self.rebuild_environment(config, context)
-                                    if rebuild_success:
-                                        verify_success = await self.verify_environment(config, context)
-                                        if verify_success:
-                                            # Healthy environment achieved
-                                            env_rebuild_success = True
-                                            prior_fix_attempts.append(
-                                                f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuilt and verified environment (attempt {rebuild_attempt})"
-                                            )
-                                            break
-                                        # Rebuild succeeded but verification failed, try again
-                                        logger.warning(
-                                            f"Environment verification failed after rebuild (attempt {rebuild_attempt}/{self._environment_repair_config.max_env_rebuilds}), retrying",
-                                            extra={
-                                                "workflow_run_id": context.workflow_run_id,
-                                                "test_type": config.test_type.value,
-                                                "iteration": iteration,
-                                                "rebuild_attempt": rebuild_attempt,
-                                            },
-                                            exc_info=False,
+                                    try:
+                                        rebuild_success = await self.rebuild_environment(config, context)
+                                        if rebuild_success:
+                                            try:
+                                                verify_success = await self.verify_environment(config, context)
+                                                if verify_success:
+                                                    # Healthy environment achieved
+                                                    env_rebuild_success = True
+                                                    prior_fix_attempts.append(
+                                                        f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuilt and verified environment (attempt {rebuild_attempt})"
+                                                    )
+                                                    break
+                                                # Rebuild succeeded but verification failed, try again
+                                                logger.warning(
+                                                    f"Environment verification failed after rebuild (attempt {rebuild_attempt}/{self._environment_repair_config.max_env_rebuilds}), retrying",
+                                                    extra={
+                                                        "workflow_run_id": context.workflow_run_id,
+                                                        "test_type": config.test_type.value,
+                                                        "iteration": iteration,
+                                                        "rebuild_attempt": rebuild_attempt,
+                                                    },
+                                                    exc_info=False,
                                         )
-                                        if rebuild_attempt == self._environment_repair_config.max_env_rebuilds:
-                                            # Exhausted all attempts
-                                            prior_fix_attempts.append(
-                                                f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuilt environment but verification failed (all {self._environment_repair_config.max_env_rebuilds} attempts exhausted)"
-                                            )
-                                    else:
-                                        # Rebuild failed, try again
-                                        logger.warning(
-                                            f"Environment rebuild failed (attempt {rebuild_attempt}/{self._environment_repair_config.max_env_rebuilds}), retrying",
-                                            extra={
-                                                "workflow_run_id": context.workflow_run_id,
-                                                "test_type": config.test_type.value,
-                                                "iteration": iteration,
-                                                "rebuild_attempt": rebuild_attempt,
-                                            },
+                                                if rebuild_attempt == self._environment_repair_config.max_env_rebuilds:
+                                                    # Exhausted all attempts
+                                                    prior_fix_attempts.append(
+                                                        f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuilt environment but verification failed (all {self._environment_repair_config.max_env_rebuilds} attempts exhausted)"
+                                                    )
+                                            except TimeoutError:
+                                                # Transient timeout in verification - log and retry
+                                                if rebuild_attempt < self._environment_repair_config.max_env_rebuilds:
+                                                    logger.warning(
+                                                        f"Environment verification timed out (attempt {rebuild_attempt}/{self._environment_repair_config.max_env_rebuilds}), retrying",
+                                                        extra={
+                                                            "workflow_run_id": context.workflow_run_id,
+                                                            "test_type": config.test_type.value,
+                                                            "iteration": iteration,
+                                                            "rebuild_attempt": rebuild_attempt,
+                                                        },
+                                                        exc_info=False,
+                                                    )
+                                                else:
+                                                    prior_fix_attempts.append(
+                                                        f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, verification timed out after {rebuild_attempt} attempts"
+                                                    )
+                                        else:
+                                            # Rebuild failed (permanent failure), try again if attempts remaining
+                                            logger.warning(
+                                                f"Environment rebuild failed (attempt {rebuild_attempt}/{self._environment_repair_config.max_env_rebuilds}), retrying",
+                                                extra={
+                                                    "workflow_run_id": context.workflow_run_id,
+                                                    "test_type": config.test_type.value,
+                                                    "iteration": iteration,
+                                                    "rebuild_attempt": rebuild_attempt,
+                                                },
                                             exc_info=False,
                                         )
                                         if rebuild_attempt == self._environment_repair_config.max_env_rebuilds:
                                             # Exhausted all attempts
                                             prior_fix_attempts.append(
                                                 f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuild failed (all {self._environment_repair_config.max_env_rebuilds} attempts exhausted)"
+                                            )
+                                    except TimeoutError:
+                                        # Transient timeout in rebuild - log and retry if attempts remaining
+                                        if rebuild_attempt < self._environment_repair_config.max_env_rebuilds:
+                                            logger.warning(
+                                                f"Environment rebuild timed out (attempt {rebuild_attempt}/{self._environment_repair_config.max_env_rebuilds}), retrying",
+                                                extra={
+                                                    "workflow_run_id": context.workflow_run_id,
+                                                    "test_type": config.test_type.value,
+                                                    "iteration": iteration,
+                                                    "rebuild_attempt": rebuild_attempt,
+                                                },
+                                                exc_info=False,
+                                            )
+                                        else:
+                                            prior_fix_attempts.append(
+                                                f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuild timed out after {rebuild_attempt} attempts"
                                             )
 
                                 # If rebuild/verify exhausted, mark as env_rebuild_exhausted and break
@@ -2113,7 +2217,9 @@ Return a JSON response with the status of dependency fixes applied."""
                                         exc_info=False,
                                     )
                                     grouped = self._group_failures_by_file(test_result.failures)
-                                    files_fixed += await self.fix_failures_by_file(grouped, config, context)
+                                    num_files = await self.fix_failures_by_file(grouped, config, context)
+                                    files_fixed += num_files
+                                    self._files_fixed += num_files
                                     prior_fix_attempts.append(
                                         f"Iteration {iteration}: TRANSIENT_FAILURE escalated to CODE_DEFECT (after {consecutive_transient_failures} consecutive), applied file-level fixes"
                                     )
@@ -2138,7 +2244,9 @@ Return a JSON response with the status of dependency fixes applied."""
                                 )
                                 # Only count files as fixed if the systemic fix succeeded
                                 if systemic_result.success:
-                                    files_fixed += len(systemic_result.files_modified)
+                                    num_files = len(systemic_result.files_modified)
+                                    files_fixed += num_files
+                                    self._files_fixed += num_files
                                     prior_fix_attempts.append(
                                         f"Iteration {iteration}: {classification.classification.value} (cross-cutting), systemic fix applied to "
                                         f"{len(systemic_result.files_modified)} files"
@@ -2256,6 +2364,7 @@ Return a JSON response with the status of dependency fixes applied."""
 
         # Emit test cycle completed event
         duration_seconds = (datetime.now(UTC) - start_time).total_seconds()
+        self._elapsed_time += duration_seconds
 
         self.event_emitter.emit(
             RepairCycleTestCycleCompletedEvent(
@@ -2274,7 +2383,7 @@ Return a JSON response with the status of dependency fixes applied."""
             )
         )
 
-        return CycleResult(
+        cycle_result = CycleResult(
             test_type=config.test_type,
             passed=cycle_passed,
             iterations=iteration,
@@ -2284,3 +2393,5 @@ Return a JSON response with the status of dependency fixes applied."""
             warnings_reviewed=warnings_reviewed,
             duration_seconds=duration_seconds,
         )
+        self._cycle_results.append(cycle_result)
+        return cycle_result
