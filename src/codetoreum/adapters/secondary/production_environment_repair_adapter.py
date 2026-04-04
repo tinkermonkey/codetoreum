@@ -18,13 +18,12 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from codetoreum.domain.events.adapter_events import CodetoreumEvent
     from codetoreum.infrastructure.resilience.interfaces import ICircuitBreaker
-    from codetoreum.ports.output.event_emitter import IEventEmitter
     from codetoreum.ports.output.llm_provider import AgentLLMFactory, ExecutionResult, ILLMProvider
 
 from codetoreum.domain.events.repair_cycle_events import (
@@ -42,30 +41,10 @@ from codetoreum.domain.repair_cycle_types import (
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.output.environment_repair_service import IEnvironmentRepairService
-from codetoreum.ports.output.event_emitter import IEventEmitter
+from codetoreum.ports.output.event_emitter import IEventEmitter, NullEventEmitter
 from codetoreum.ports.output.repair_cycle_service import RepairCycleContext
 
 logger = logging.getLogger(__name__)
-
-
-class NullEventEmitter(IEventEmitter):
-    """Null-object pattern for optional event emission.
-
-    Implements IEventEmitter with no-op methods for use when event emission is not required.
-    All methods are silent, allowing the repair service to run without event infrastructure.
-    """
-
-    def emit(self, event: CodetoreumEvent) -> None:
-        """No-op emit - silently discards all events."""
-
-    def on(self, event_type: str, handler: Any) -> None:
-        """No-op subscription - no handlers are registered."""
-
-    def off(self, event_type: str, handler: Any) -> None:
-        """No-op unsubscription - no handlers to unregister."""
-
-    def once(self, event_type: str, handler: Any) -> None:
-        """No-op single subscription - no handlers are registered."""
 
 
 @dataclass(frozen=True)
@@ -126,7 +105,7 @@ class ProductionEnvironmentRepairAdapter(IEnvironmentRepairService):
         """Initialize production environment repair adapter.
 
         Args:
-            llm_factory: Factory callable that takes agent name and returns configured ILLMProvider
+            llm_factory: Async factory callable that takes agent name and returns configured ILLMProvider
             repair_config: Optional EnvironmentRepairConfig (uses defaults if not provided)
             event_emitter: Optional event emitter (uses null-object if not provided)
             config: Optional adapter-specific configuration (uses defaults if not provided)
@@ -232,6 +211,113 @@ Return a JSON response with the verification status and any issues found."""
             }
             logger.error(f"{message_prefix} timed out", extra=log_extra, exc_info=True)
             raise TimeoutError(f"{message_prefix} exceeded timeout of {timeout_seconds} seconds") from e
+
+    def _handle_operation_error(
+        self,
+        operation_type: str,
+        event_class: type[EnvironmentRebuildCompletedEvent] | type[EnvironmentVerificationCompletedEvent],
+        context: RepairCycleContext,
+        config: RepairTestRunConfig,
+        error: TimeoutError | Exception,
+        start_time: datetime,
+    ) -> RebuildResult | VerificationResult:
+        """Handle errors for rebuild and verify operations with consistent event emission.
+
+        Eliminates duplication between rebuild_environment and verify_environment
+        exception handlers by centralizing error logging and event emission.
+
+        Args:
+            operation_type: Type of operation ("rebuild" or "verify") for logging
+            event_class: Event class to emit (EnvironmentRebuildCompletedEvent or EnvironmentVerificationCompletedEvent)
+            context: Repair cycle context
+            config: Test run configuration
+            error: The exception that occurred
+            start_time: When the operation started (for computing duration)
+
+        Returns:
+            RebuildResult or VerificationResult with error information
+        """
+        end_time = datetime.now(UTC)
+        final_duration = (end_time - start_time).total_seconds()
+
+        if isinstance(error, TimeoutError):
+            # Timeout already logged in _execute_llm_with_timeout, just build result
+            if operation_type == "rebuild":
+                result = RebuildResult(
+                    success=False,
+                    duration_seconds=final_duration,
+                    actions_taken=(),
+                    error=f"Environment rebuild exceeded timeout of {self.repair_config.env_rebuild_timeout_seconds} seconds",
+                )
+            else:  # verify
+                result = VerificationResult(
+                    healthy=False,
+                    checks_passed=(),
+                    checks_failed=("timeout",),
+                    duration_seconds=final_duration,
+                )
+        else:
+            # Log the non-timeout exception
+            logger.error(
+                f"Environment {operation_type} failed with exception",
+                extra={
+                    "workflow_run_id": context.workflow_run_id,
+                    "test_type": config.test_type.value,
+                    "error": str(error),
+                    "error_type": type(error).__name__,
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                },
+                exc_info=True,
+            )
+
+            if operation_type == "rebuild":
+                result = RebuildResult(
+                    success=False,
+                    duration_seconds=final_duration,
+                    actions_taken=(),
+                    error=str(error),
+                )
+            else:  # verify
+                result = VerificationResult(
+                    healthy=False,
+                    checks_passed=(),
+                    checks_failed=("exception",),
+                    duration_seconds=final_duration,
+                )
+
+        # Emit the appropriate completed event with error info
+        if operation_type == "rebuild":
+            self.event_emitter.emit(
+                event_class(
+                    type="repair_cycle.environment_rebuild_completed",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    source="production_environment_repair",
+                    workflow_run_id=context.workflow_run_id,
+                    test_type=config.test_type,
+                    iteration=context.iteration,
+                    success=False,
+                    duration_seconds=final_duration,
+                    actions_taken=(),
+                    error=result.error,
+                )
+            )
+        else:  # verify
+            self.event_emitter.emit(
+                event_class(
+                    type="repair_cycle.environment_verification_completed",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    source="production_environment_repair",
+                    workflow_run_id=context.workflow_run_id,
+                    test_type=config.test_type,
+                    iteration=context.iteration,
+                    healthy=False,
+                    checks_passed=(),
+                    checks_failed=("timeout",) if isinstance(error, TimeoutError) else ("exception",),
+                    duration_seconds=final_duration,
+                )
+            )
+
+        return result
 
     async def rebuild_environment(
         self,
@@ -346,74 +432,15 @@ Return a JSON response with the verification status and any issues found."""
 
             return rebuild_result
 
-        except TimeoutError:
-            # Timeout error already logged and emitted in _execute_llm_with_timeout
-            end_time = datetime.now(UTC)
-            duration_seconds = (end_time - start_time).total_seconds()
-
-            rebuild_result = RebuildResult(
-                success=False,
-                duration_seconds=duration_seconds,
-                actions_taken=(),
-                error=f"Environment rebuild exceeded timeout of {self.repair_config.env_rebuild_timeout_seconds} seconds",
+        except (TimeoutError, Exception) as e:
+            rebuild_result = self._handle_operation_error(
+                operation_type="rebuild",
+                event_class=EnvironmentRebuildCompletedEvent,
+                context=context,
+                config=config,
+                error=e,
+                start_time=start_time,
             )
-
-            self.event_emitter.emit(
-                EnvironmentRebuildCompletedEvent(
-                    type="repair_cycle.environment_rebuild_completed",
-                    timestamp=datetime.now(UTC).isoformat(),
-                    source="production_environment_repair",
-                    workflow_run_id=context.workflow_run_id,
-                    test_type=config.test_type,
-                    iteration=context.iteration,
-                    success=False,
-                    duration_seconds=duration_seconds,
-                    actions_taken=(),
-                    error=rebuild_result.error,
-                )
-            )
-
-            raise
-
-        except Exception as e:
-            end_time = datetime.now(UTC)
-            duration_seconds = (end_time - start_time).total_seconds()
-
-            logger.error(
-                "Environment rebuild failed with exception",
-                extra={
-                    "workflow_run_id": context.workflow_run_id,
-                    "project": project,
-                    "test_type": config.test_type.value,
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
-                },
-                exc_info=True,
-            )
-
-            rebuild_result = RebuildResult(
-                success=False,
-                duration_seconds=duration_seconds,
-                actions_taken=(),
-                error=str(e),
-            )
-
-            self.event_emitter.emit(
-                EnvironmentRebuildCompletedEvent(
-                    type="repair_cycle.environment_rebuild_completed",
-                    timestamp=datetime.now(UTC).isoformat(),
-                    source="production_environment_repair",
-                    workflow_run_id=context.workflow_run_id,
-                    test_type=config.test_type,
-                    iteration=context.iteration,
-                    success=False,
-                    duration_seconds=duration_seconds,
-                    actions_taken=(),
-                    error=rebuild_result.error,
-                )
-            )
-
             raise
 
     async def verify_environment(
@@ -529,74 +556,15 @@ Return a JSON response with the verification status and any issues found."""
 
             return verification_result
 
-        except TimeoutError:
-            # Timeout error already logged and emitted in _execute_llm_with_timeout
-            end_time = datetime.now(UTC)
-            duration_seconds = (end_time - start_time).total_seconds()
-
-            verification_result = VerificationResult(
-                healthy=False,
-                checks_passed=(),
-                checks_failed=("timeout",),
-                duration_seconds=duration_seconds,
+        except (TimeoutError, Exception) as e:
+            verification_result = self._handle_operation_error(
+                operation_type="verify",
+                event_class=EnvironmentVerificationCompletedEvent,
+                context=context,
+                config=config,
+                error=e,
+                start_time=start_time,
             )
-
-            self.event_emitter.emit(
-                EnvironmentVerificationCompletedEvent(
-                    type="repair_cycle.environment_verification_completed",
-                    timestamp=datetime.now(UTC).isoformat(),
-                    source="production_environment_repair",
-                    workflow_run_id=context.workflow_run_id,
-                    test_type=config.test_type,
-                    iteration=context.iteration,
-                    healthy=False,
-                    checks_passed=(),
-                    checks_failed=("timeout",),
-                    duration_seconds=duration_seconds,
-                )
-            )
-
-            raise
-
-        except Exception as e:
-            end_time = datetime.now(UTC)
-            duration_seconds = (end_time - start_time).total_seconds()
-
-            logger.error(
-                "Environment verification failed with exception",
-                extra={
-                    "workflow_run_id": context.workflow_run_id,
-                    "project": project,
-                    "test_type": config.test_type.value,
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
-                },
-                exc_info=True,
-            )
-
-            verification_result = VerificationResult(
-                healthy=False,
-                checks_passed=(),
-                checks_failed=("exception",),
-                duration_seconds=duration_seconds,
-            )
-
-            self.event_emitter.emit(
-                EnvironmentVerificationCompletedEvent(
-                    type="repair_cycle.environment_verification_completed",
-                    timestamp=datetime.now(UTC).isoformat(),
-                    source="production_environment_repair",
-                    workflow_run_id=context.workflow_run_id,
-                    test_type=config.test_type,
-                    iteration=context.iteration,
-                    healthy=False,
-                    checks_passed=(),
-                    checks_failed=("exception",),
-                    duration_seconds=duration_seconds,
-                )
-            )
-
             raise
 
     async def _get_llm_for_subtask(

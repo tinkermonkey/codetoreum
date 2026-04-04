@@ -15,10 +15,6 @@ The mock adapter:
 import logging
 from collections.abc import Sequence
 from datetime import timedelta
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    pass
 
 from codetoreum.domain.events.repair_cycle_events import (
     EnvironmentRebuildCompletedEvent,

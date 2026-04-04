@@ -83,3 +83,23 @@ class IEventEmitter(ABC):
                 self.off(event_type, one_time_handler)
 
         self.on(event_type, one_time_handler)
+
+
+class NullEventEmitter(IEventEmitter):
+    """Null-object pattern for optional event emission.
+
+    Implements IEventEmitter with no-op methods for use when event emission is not required.
+    All methods are silent, allowing adapters to run without event infrastructure.
+    """
+
+    def emit(self, event: "CodetoreumEvent") -> None:
+        """No-op emit - silently discards all events."""
+
+    def on(self, event_type: str, handler: Callable) -> None:
+        """No-op subscription - no handlers are registered."""
+
+    def off(self, event_type: str, handler: Callable) -> None:
+        """No-op unsubscription - no handlers to unregister."""
+
+    def once(self, event_type: str, handler: Callable) -> None:
+        """No-op single subscription - no handlers are registered."""
