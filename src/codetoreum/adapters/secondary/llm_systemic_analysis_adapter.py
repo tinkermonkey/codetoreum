@@ -293,21 +293,8 @@ Field definitions:
             msg = f"Confidence must be between 0.0 and 1.0, got {confidence}"
             raise ValueError(msg)
 
-        # Extract cross_cutting - required field, no default
-        if "cross_cutting" not in data:
-            msg = "cross_cutting field is required in systemic analysis result"
-            self._logger.error(
-                msg,
-                extra={
-                    "workflow_run_id": context.workflow_run_id,
-                    "work_item_id": context.work_item_id,
-                    "iteration": context.iteration,
-                    "error_id": ErrorRegistry.ERR_PARSER_ERROR,
-                },
-                exc_info=False,
-            )
-            raise KeyError(msg)
-        cross_cutting = bool(data["cross_cutting"])
+        # Extract cross_cutting - optional field, defaults to False (backward-compatible)
+        cross_cutting = bool(data.get("cross_cutting", False))
 
         # Build result
         return SystemicAnalysisResult(
