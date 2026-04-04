@@ -356,6 +356,10 @@ Return a JSON response with the verification status and any issues found."""
             actions = response_data.get("actions_taken", [])
             error_msg = response_data.get("error")
 
+            # Ensure error message is provided when success is False (RebuildResult invariant)
+            if not success and not error_msg:
+                error_msg = "Unknown error (no details in response)"
+
             rebuild_result = RebuildResult(
                 success=success,
                 duration_seconds=duration_seconds,
