@@ -22,6 +22,7 @@ from typing import Protocol
 from codetoreum.domain.repair_cycle_types import (
     RepairCycleAgentConfig,
     RepairCycleResult,
+    RepairCycleStageConfig,
     RepairTestFailure,
     RepairTestResult,
     RepairTestRunConfig,
@@ -55,6 +56,7 @@ class RepairCycleContext(Protocol):
                            (for escalation and re-classification)
         prior_classifications: Immutable tuple of prior classification results
                               (for escalation and re-classification)
+        stage_config: Configuration for the repair cycle stage including environment repair config
     """
 
     stage_name: str
@@ -69,6 +71,7 @@ class RepairCycleContext(Protocol):
     iteration: int
     prior_fix_attempts: tuple[str, ...]
     prior_classifications: tuple
+    stage_config: RepairCycleStageConfig
 
 
 class IRepairCycle(Protocol):

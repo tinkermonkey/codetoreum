@@ -58,7 +58,6 @@ from codetoreum.domain.exceptions import TestOutputParseError
 from codetoreum.domain.repair_cycle_types import (
     AnalysisContext,
     CycleResult,
-    EnvironmentRepairConfig,
     FailureClassification,
     RepairCycleCheckpoint,
     RepairCycleResult,

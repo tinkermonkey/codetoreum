@@ -27,6 +27,7 @@ from codetoreum.domain.repair_cycle_types import (
     EnvironmentRepairConfig,
     FailureClassification,
     RebuildResult,
+    RepairCycleStageConfig,
     RepairTestFailure,
     RepairTestResult,
     RepairTestRunConfig,
@@ -86,6 +87,16 @@ class _RepairCycleContext:
         self.iteration = 0
         self.prior_fix_attempts = ()
         self.prior_classifications = ()
+        self.stage_config = RepairCycleStageConfig(
+            name="fix_failures",
+            test_configs=self.test_configs,
+            agent_name=self.agent_name,
+            max_total_agent_calls=max_total_agent_calls,
+            checkpoint_interval=self.checkpoint_interval,
+            agent_config=self.agent_config,
+            systemic_fix_failure_ceiling=self.systemic_fix_failure_ceiling,
+            environment_repair_config=EnvironmentRepairConfig(),
+        )
 
 
 def _make_async_factory(llm):

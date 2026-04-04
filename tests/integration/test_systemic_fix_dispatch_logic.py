@@ -24,6 +24,7 @@ import pytest
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
 from codetoreum.domain.repair_cycle_types import (
     AnalysisContext,
+    EnvironmentRepairConfig,
     FailureClassification,
     RepairCycleAgentConfig,
     RepairCycleStageConfig,
@@ -53,6 +54,23 @@ class SimpleRepairCycleContext:
     iteration: int = 1
     prior_fix_attempts: tuple[str, ...] = ()
     prior_classifications: tuple = ()
+
+    def __post_init__(self) -> None:
+        """Initialize stage_config after dataclass initialization."""
+        object.__setattr__(
+            self,
+            "stage_config",
+            RepairCycleStageConfig(
+                name=self.stage_name,
+                test_configs=self.test_configs,
+                agent_name=self.agent_name,
+                max_total_agent_calls=self.max_total_agent_calls,
+                checkpoint_interval=self.checkpoint_interval,
+                agent_config=self.agent_config,
+                systemic_fix_failure_ceiling=self.systemic_fix_failure_ceiling,
+                environment_repair_config=EnvironmentRepairConfig(),
+            ),
+        )
 
 
 @pytest.mark.asyncio
