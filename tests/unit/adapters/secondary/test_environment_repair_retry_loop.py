@@ -493,7 +493,7 @@ async def test_environment_issue_verify_raises_exception_during_retry_loop():
     )
 
     # verify_environment raises an exception
-    env_service.verify_environment.side_effect = IOError("Cannot write verification logs")
+    env_service.verify_environment.side_effect = OSError("Cannot write verification logs")
 
     systemic_service = AsyncMock()
     systemic_service.analyze.return_value = MagicMock(
