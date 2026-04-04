@@ -53,7 +53,7 @@ class TestAdapterSelectionConfig:
         assert config.repository == "in_memory"
 
     def test_all_29_adapter_slots_present(self) -> None:
-        """Test that all 29 adapter slots are defined."""
+        """Test that all 30 adapter slots are defined."""
         config = AdapterSelectionConfig()
         field_names = set(config.__dataclass_fields__.keys())
         expected_adapters = {
@@ -87,9 +87,10 @@ class TestAdapterSelectionConfig:
             "repository",
             "container_recovery",
             "systemic_analysis",
+            "environment_repair",
         }
         assert field_names == expected_adapters
-        assert len(field_names) == 30
+        assert len(field_names) == 31
 
     def test_create_with_custom_values(self) -> None:
         """Test creating adapter selection config with custom values."""

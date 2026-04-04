@@ -21,9 +21,9 @@ from codetoreum.adapters.testing.mock_environment_repair_adapter import (
 )
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
 from codetoreum.domain.repair_cycle_types import (
+    RebuildResult,
     RepairTestRunConfig,
     RepairTestType,
-    RebuildResult,
     VerificationResult,
 )
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
