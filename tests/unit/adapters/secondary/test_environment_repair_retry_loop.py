@@ -47,7 +47,24 @@ _ENVIRONMENT_ISSUE_JSON = (
 
 
 class _RepairCycleContext:
-    """Minimal RepairCycleContext for unit tests."""
+    """Minimal RepairCycleContext for unit tests.
+
+    This is a concrete implementation of the RepairCycleContext Protocol
+    (codetoreum.ports.output.repair_cycle_service.RepairCycleContext).
+    It provides all required attributes for the protocol contract.
+
+    Note: If RepairCycleContext Protocol changes (new required fields added
+    or existing field names changed), this mock MUST be updated to maintain
+    compatibility. See the Protocol definition in repair_cycle_service.py for
+    the authoritative field list.
+
+    Required fields that must stay in sync:
+    - stage_name, workflow_run_id, work_item_id
+    - test_configs (tuple of RepairTestRunConfig)
+    - agent_name, max_total_agent_calls, checkpoint_interval
+    - agent_config, systemic_fix_failure_ceiling
+    - iteration, prior_fix_attempts, prior_classifications
+    """
 
     def __init__(self, max_total_agent_calls: int = 100) -> None:
         self.stage_name = "fix_failures"
