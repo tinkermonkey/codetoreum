@@ -1205,6 +1205,8 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         """
         # Delegate to environment repair service if provided
         if self._environment_repair_service is not None:
+            # Resolve and record which agent is executing this sub-task
+            _, agent_name = await self._resolve_and_record_agent("env_rebuild", context)
             try:
                 result = await self._environment_repair_service.rebuild_environment(
                     project=context.work_item_id,
@@ -1266,6 +1268,8 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         """
         # Delegate to environment repair service if provided
         if self._environment_repair_service is not None:
+            # Resolve and record which agent is executing this sub-task
+            _, agent_name = await self._resolve_and_record_agent("env_verification", context)
             try:
                 result = await self._environment_repair_service.verify_environment(
                     project=context.work_item_id,

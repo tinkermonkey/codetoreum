@@ -31,7 +31,6 @@ from codetoreum.domain.events.repair_cycle_events import (
     EnvironmentVerificationCompletedEvent,
     EnvironmentVerificationStartedEvent,
 )
-from codetoreum.domain.exceptions import TestOutputParseError
 from codetoreum.domain.repair_cycle_types import (
     EnvironmentRepairConfig,
     RebuildResult,
@@ -214,10 +213,12 @@ Return a JSON response with the verification status and any issues found."""
 
     def _emit_event_safely(
         self,
-        event: EnvironmentRebuildStartedEvent
-        | EnvironmentRebuildCompletedEvent
-        | EnvironmentVerificationStartedEvent
-        | EnvironmentVerificationCompletedEvent,
+        event: (
+            EnvironmentRebuildStartedEvent
+            | EnvironmentRebuildCompletedEvent
+            | EnvironmentVerificationStartedEvent
+            | EnvironmentVerificationCompletedEvent
+        ),
         description: str,
         workflow_run_id: str,
     ) -> None:
@@ -323,7 +324,32 @@ Return a JSON response with the verification status and any issues found."""
                     },
                     exc_info=True,
                 )
-                raise TestOutputParseError(f"Failed to parse environment rebuild response: {e!s}") from e
+                # Return gracefully degraded result instead of raising
+                rebuild_result = RebuildResult(
+                    success=False,
+                    duration_seconds=duration_seconds,
+                    actions_taken=(),
+                    error=f"Failed to parse environment rebuild response: {e!s}",
+                )
+                # Emit rebuild completed event with parse error
+                self._emit_event_safely(
+                    EnvironmentRebuildCompletedEvent(
+                        type="repair_cycle.environment_rebuild_completed",
+                        timestamp=datetime.now(UTC).isoformat(),
+                        source="production_environment_repair",
+                        work_item_id=context.work_item_id,
+                        workflow_run_id=context.workflow_run_id,
+                        test_type=config.test_type,
+                        iteration=context.iteration,
+                        success=False,
+                        duration_seconds=duration_seconds,
+                        actions_taken=(),
+                        error=rebuild_result.error,
+                    ),
+                    "rebuild completed event",
+                    context.workflow_run_id,
+                )
+                return rebuild_result
 
             # Extract result from response
             success = response_data.get("success", False)
@@ -471,7 +497,32 @@ Return a JSON response with the verification status and any issues found."""
                     },
                     exc_info=True,
                 )
-                raise TestOutputParseError(f"Failed to parse environment verification response: {e!s}") from e
+                # Return gracefully degraded result instead of raising
+                verification_result = VerificationResult(
+                    healthy=False,
+                    checks_passed=(),
+                    checks_failed=("parsing_response",),
+                    duration_seconds=duration_seconds,
+                )
+                # Emit verification completed event with parse error
+                self._emit_event_safely(
+                    EnvironmentVerificationCompletedEvent(
+                        type="repair_cycle.environment_verification_completed",
+                        timestamp=datetime.now(UTC).isoformat(),
+                        source="production_environment_repair",
+                        work_item_id=context.work_item_id,
+                        workflow_run_id=context.workflow_run_id,
+                        test_type=config.test_type,
+                        iteration=context.iteration,
+                        healthy=False,
+                        checks_passed=(),
+                        checks_failed=verification_result.checks_failed,
+                        duration_seconds=duration_seconds,
+                    ),
+                    "verification completed event",
+                    context.workflow_run_id,
+                )
+                return verification_result
 
             # Extract result from response
             healthy = response_data.get("healthy", False)
@@ -540,9 +591,7 @@ Return a JSON response with the verification status and any issues found."""
             )
             raise
 
-    async def _get_llm_for_subtask(
-        self, sub_task: str, context: RepairCycleContext
-    ) -> tuple[ILLMProvider, str]:
+    async def _get_llm_for_subtask(self, sub_task: str, context: RepairCycleContext) -> tuple[ILLMProvider, str]:
         """Resolve the appropriate agent for a sub-task and return its LLM provider.
 
         Args:
