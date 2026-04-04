@@ -33,6 +33,7 @@ class _RepairCycleContextImpl:
     agent_name: str
     max_total_agent_calls: int
     checkpoint_interval: int
+    systemic_fix_failure_ceiling: int = 50
 
 
 def _create_repair_cycle_context(**kwargs: Any) -> _RepairCycleContextImpl:

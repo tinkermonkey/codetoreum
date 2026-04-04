@@ -47,6 +47,7 @@ class MockRepairCycleContext:
         max_total_agent_calls: int = 100,
         checkpoint_interval: int = 5,
         agent_config: RepairCycleAgentConfig | None = None,
+        systemic_fix_failure_ceiling: int = 50,
     ):
         self.stage_name = stage_name
         self.workflow_run_id = workflow_run_id
@@ -56,6 +57,7 @@ class MockRepairCycleContext:
         self.max_total_agent_calls = max_total_agent_calls
         self.checkpoint_interval = checkpoint_interval
         self.agent_config = agent_config
+        self.systemic_fix_failure_ceiling = systemic_fix_failure_ceiling
 
 
 class TestRepairCycleDomainTypesContract(ABC):

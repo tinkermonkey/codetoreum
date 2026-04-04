@@ -40,6 +40,7 @@ class _RepairCycleContextImpl:
     max_total_agent_calls: int
     checkpoint_interval: int
     agent_config: RepairCycleAgentConfig | None = None
+    systemic_fix_failure_ceiling: int = 50
 
 
 @pytest.mark.asyncio

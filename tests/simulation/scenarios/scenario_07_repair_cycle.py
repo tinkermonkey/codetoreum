@@ -43,6 +43,7 @@ class RepairCycleTestContext:
     max_total_agent_calls: int
     checkpoint_interval: int
     agent_config: object | None = None  # Optional specialized agent configuration
+    systemic_fix_failure_ceiling: int = 50
 
 
 def create_config(scenario_name: str = "scenario_07_repair_cycle") -> SimulationConfig:

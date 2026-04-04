@@ -70,6 +70,7 @@ class _RepairCycleContext:
         self.max_total_agent_calls = max_total_agent_calls
         self.checkpoint_interval = 5
         self.agent_config = None  # No per-subtask agent config in tests
+        self.systemic_fix_failure_ceiling = 50
         self.iteration = 0
         self.prior_fix_attempts = ()
         self.prior_classifications = ()
