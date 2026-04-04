@@ -85,15 +85,53 @@ def _make_async_factory(llm):
     return factory
 
 
+def _default_response_factory(prompt: str) -> ExecutionResult:
+    """Create a response factory that returns context-aware responses based on the prompt.
+
+    Detects operation type from the prompt and returns appropriate JSON response format.
+    """
+    prompt_lower = prompt.lower()
+
+    # Detect environment rebuild operation
+    if "rebuild" in prompt_lower and "environment" in prompt_lower:
+        return ExecutionResult(content='{"success": true}')
+
+    # Detect environment verification operation
+    if "verify" in prompt_lower and "environment" in prompt_lower:
+        return ExecutionResult(content='{"healthy": true}')
+
+    # Detect dependency fix operation
+    if "dependency" in prompt_lower or "install" in prompt_lower:
+        return ExecutionResult(content='{"success": true}')
+
+    # Default to test result format (for run_tests, fix_failures, etc.)
+    return ExecutionResult(content=_VALID_JSON_RESPONSE)
+
+
 def _make_adapter(
     *,
     llm_response: str = _VALID_JSON_RESPONSE,
     circuit_breaker=None,
     event_emitter=None,
+    llm_response_factory=None,
 ) -> tuple[ProductionRepairCycleAdapter, AsyncMock]:
-    """Return (adapter, mock_llm) pre-wired for tests."""
+    """Return (adapter, mock_llm) pre-wired for tests.
+
+    Args:
+        llm_response: Default response for simple cases. Ignored if llm_response_factory is provided.
+        llm_response_factory: Optional callable(prompt: str) -> ExecutionResult that generates context-aware responses.
+                             Takes precedence over llm_response.
+        circuit_breaker: Optional circuit breaker mock
+        event_emitter: Optional event emitter mock
+    """
     llm = AsyncMock()
-    llm.execute.return_value = ExecutionResult(content=llm_response)
+
+    if llm_response_factory is not None:
+        # Use factory for context-aware responses via side_effect
+        llm.execute.side_effect = lambda prompt, **kwargs: llm_response_factory(prompt)
+    else:
+        # Use static response
+        llm.execute.return_value = ExecutionResult(content=llm_response)
 
     # Create async factory that returns the same mock LLM for any agent name
     llm_factory = _make_async_factory(llm)
@@ -976,7 +1014,10 @@ class TestEnvironmentHelperMethods:
         """rebuild_environment returns True on successful execution."""
         event_emitter = MagicMock()
 
-        adapter, llm = _make_adapter(event_emitter=event_emitter)
+        adapter, llm = _make_adapter(
+            event_emitter=event_emitter,
+            llm_response_factory=_default_response_factory,
+        )
         ctx = _RepairCycleContext()
         config = ctx.test_configs[0]
 
@@ -1010,7 +1051,10 @@ class TestEnvironmentHelperMethods:
         """verify_environment returns True on successful execution."""
         event_emitter = MagicMock()
 
-        adapter, llm = _make_adapter(event_emitter=event_emitter)
+        adapter, llm = _make_adapter(
+            event_emitter=event_emitter,
+            llm_response_factory=_default_response_factory,
+        )
         ctx = _RepairCycleContext()
         config = ctx.test_configs[0]
 
