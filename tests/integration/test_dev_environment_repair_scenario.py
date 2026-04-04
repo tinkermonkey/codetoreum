@@ -366,11 +366,7 @@ async def test_dev_environment_repair_environment_issue_agent_dispatch(
     repair_cycle_adapter.assert_subtask_used_agent("test_execution", "qa_engineer")
     repair_cycle_adapter.assert_subtask_used_agent("systemic_analysis", "senior_software_engineer")
 
-    # Verify that the agent configuration includes the environment repair agents
-    # This confirms that env_rebuild -> devops_engineer and env_verification -> qa_engineer
-    # are properly configured in the repair_cycle_agents, which would be used when
-    # ENVIRONMENT_ISSUE is classified and the environment needs to be rebuilt
-    assert agent_config.env_rebuild == "devops_engineer", \
-        f"Expected env_rebuild='devops_engineer', got '{agent_config.env_rebuild}'"
-    assert agent_config.env_verification == "qa_engineer", \
-        f"Expected env_verification='qa_engineer', got '{agent_config.env_verification}'"
+    # Verify that the environment repair subtasks used the correct agents
+    # This confirms execution-level dispatch, not just config-level setup
+    repair_cycle_adapter.assert_subtask_used_agent("env_rebuild", "devops_engineer")
+    repair_cycle_adapter.assert_subtask_used_agent("env_verification", "qa_engineer")

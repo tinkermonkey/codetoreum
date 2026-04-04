@@ -768,10 +768,10 @@ async def test_rebuild_with_circuit_breaker_success(
     # Create a mock circuit breaker with async call method
     mock_circuit_breaker = AsyncMock()
 
-    # Make circuit breaker return the LLM execute result
-    async def call_wrapper(operation, *args, **kwargs):
-        # Extract the function and call it
-        return await mock_llm.execute(**kwargs)
+    # Make circuit breaker delegate through the received function
+    async def call_wrapper(func, *args, **kwargs):
+        # Delegate to the received function
+        return await func(*args, **kwargs)
 
     mock_circuit_breaker.call.side_effect = call_wrapper
 
@@ -804,9 +804,9 @@ async def test_rebuild_with_circuit_breaker_success(
 
     # Verify circuit breaker was called with correct operation
     assert mock_circuit_breaker.call.called
-    call_args = mock_circuit_breaker.call.call_args
-    # The first positional arg should be the operation name
-    assert "environment_repair.rebuild_env" in str(call_args)
+    args, kwargs = mock_circuit_breaker.call.call_args
+    # The second positional arg should be the operation name
+    assert args[1] == "environment_repair.rebuild_env"
 
 
 @pytest.mark.asyncio
@@ -817,10 +817,10 @@ async def test_verify_with_circuit_breaker_success(
     # Create a mock circuit breaker with async call method
     mock_circuit_breaker = AsyncMock()
 
-    # Make circuit breaker return the LLM execute result
-    async def call_wrapper(operation, *args, **kwargs):
-        # Extract the function and call it
-        return await mock_llm.execute(**kwargs)
+    # Make circuit breaker delegate through the received function
+    async def call_wrapper(func, *args, **kwargs):
+        # Delegate to the received function
+        return await func(*args, **kwargs)
 
     mock_circuit_breaker.call.side_effect = call_wrapper
 
@@ -853,6 +853,66 @@ async def test_verify_with_circuit_breaker_success(
 
     # Verify circuit breaker was called with correct operation
     assert mock_circuit_breaker.call.called
-    call_args = mock_circuit_breaker.call.call_args
-    # The first positional arg should be the operation name
-    assert "environment_repair.verify_env" in str(call_args)
+    args, kwargs = mock_circuit_breaker.call.call_args
+    # The second positional arg should be the operation name
+    assert args[1] == "environment_repair.verify_env"
+
+
+@pytest.mark.asyncio
+async def test_rebuild_with_circuit_breaker_open(
+    mock_llm, repair_config, test_context, test_config, mock_event_emitter
+):
+    """Test rebuild when circuit breaker is open/tripped."""
+    from codetoreum.infrastructure.resilience.circuit_breaker import CircuitBreakerOpenError
+
+    # Create a mock circuit breaker that raises CircuitBreakerOpenError
+    mock_circuit_breaker = AsyncMock()
+    mock_circuit_breaker.call.side_effect = CircuitBreakerOpenError("Circuit is open")
+
+    # Create adapter with circuit breaker
+    adapter = ProductionEnvironmentRepairAdapter(
+        llm_factory=_make_async_factory(mock_llm),
+        repair_config=repair_config,
+        event_emitter=mock_event_emitter,
+        circuit_breaker=mock_circuit_breaker,
+    )
+
+    # Execute and expect the exception to be propagated
+    with pytest.raises(CircuitBreakerOpenError) as exc_info:
+        await adapter.rebuild_environment(
+            project="test-project",
+            config=test_config,
+            context=test_context,
+        )
+
+    assert "Circuit is open" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_verify_with_circuit_breaker_open(
+    mock_llm, repair_config, test_context, test_config, mock_event_emitter
+):
+    """Test verify when circuit breaker is open/tripped."""
+    from codetoreum.infrastructure.resilience.circuit_breaker import CircuitBreakerOpenError
+
+    # Create a mock circuit breaker that raises CircuitBreakerOpenError
+    mock_circuit_breaker = AsyncMock()
+    mock_circuit_breaker.call.side_effect = CircuitBreakerOpenError("Circuit is open")
+
+    # Create adapter with circuit breaker
+    adapter = ProductionEnvironmentRepairAdapter(
+        llm_factory=_make_async_factory(mock_llm),
+        repair_config=repair_config,
+        event_emitter=mock_event_emitter,
+        circuit_breaker=mock_circuit_breaker,
+    )
+
+    # Execute and expect the exception to be propagated
+    with pytest.raises(CircuitBreakerOpenError) as exc_info:
+        await adapter.verify_environment(
+            project="test-project",
+            config=test_config,
+            context=test_context,
+        )
+
+    assert "Circuit is open" in str(exc_info.value)
