@@ -295,6 +295,12 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             msg = "test_configs cannot be empty"
             raise ValueError(msg)
 
+        # Reset tracking fields for this cycle (ensures checkpoint reflects current cycle, not cumulative)
+        self._files_fixed = 0
+        self._warnings_reviewed = 0
+        self._elapsed_time = 0.0
+        self._cycle_results = []
+
         start_time = datetime.now(UTC)
         cycle_start_timestamp = start_time.isoformat()
 
@@ -2128,7 +2134,7 @@ Return a JSON response with the status of dependency fixes applied."""
                                                         "rebuild_attempt": rebuild_attempt,
                                                     },
                                                     exc_info=False,
-                                        )
+                                                )
                                                 if rebuild_attempt == self._environment_repair_config.max_env_rebuilds:
                                                     # Exhausted all attempts
                                                     prior_fix_attempts.append(
@@ -2161,8 +2167,8 @@ Return a JSON response with the status of dependency fixes applied."""
                                                     "iteration": iteration,
                                                     "rebuild_attempt": rebuild_attempt,
                                                 },
-                                            exc_info=False,
-                                        )
+                                                exc_info=False,
+                                            )
                                         if rebuild_attempt == self._environment_repair_config.max_env_rebuilds:
                                             # Exhausted all attempts
                                             prior_fix_attempts.append(
