@@ -65,6 +65,7 @@ from codetoreum.domain.pipeline_stage import PipelineStage, StageStatus, StageTy
 from codetoreum.domain.project_context import ProjectContext
 from codetoreum.domain.repair_cycle_types import (
     CycleResult,
+    RebuildResult,
     RepairCycleAgentConfig,
     RepairCycleResult,
     RepairCycleStageConfig,
@@ -73,6 +74,7 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestRunConfig,
     RepairTestType,
     RepairTestWarning,
+    VerificationResult,
 )
 from codetoreum.domain.review_cycle import (
     ReviewCycle,
@@ -244,6 +246,8 @@ __all__ = [
     "RepairCycleResult",
     "RepairCycleAgentConfig",
     "RepairCycleStageConfig",
+    "RebuildResult",
+    "VerificationResult",
     # Conversational Session
     "ConversationalSessionState",
 ]

@@ -3,6 +3,10 @@
 import pytest
 
 from codetoreum.domain.events import (
+    EnvironmentRebuildCompletedEvent,
+    EnvironmentRebuildStartedEvent,
+    EnvironmentVerificationCompletedEvent,
+    EnvironmentVerificationStartedEvent,
     RepairCycleCompletedEvent,
     RepairCycleFastFailEvent,
     RepairCycleFileFixCompletedEvent,
@@ -23,10 +27,12 @@ from codetoreum.domain.events import (
 from codetoreum.domain.repair_cycle_types import (
     CycleResult,
     FailureClassification,
+    RebuildResult,
     RepairTestFailure,
     RepairTestResult,
     RepairTestType,
     RepairTestWarning,
+    VerificationResult,
 )
 
 # For immutability tests
@@ -1613,3 +1619,566 @@ class TestSystemicFixCompletedEventEdgeCases:
 
         with pytest.raises(FrozenInstanceError):
             event.root_cause_addressed = "Different cause"  # type: ignore[misc]
+
+
+class TestRebuildResultType:
+    """Test RebuildResult domain type."""
+
+    def test_create_successful_rebuild_result(self):
+        """Test creating a successful RebuildResult."""
+        result = RebuildResult(
+            success=True,
+            duration_seconds=120.0,
+            actions_taken=("docker build", "pip install", "pytest --collect-only"),
+            error=None,
+        )
+
+        assert result.success is True
+        assert result.duration_seconds == 120.0
+        assert result.actions_taken == ("docker build", "pip install", "pytest --collect-only")
+        assert result.error is None
+
+    def test_create_failed_rebuild_result(self):
+        """Test creating a failed RebuildResult."""
+        result = RebuildResult(
+            success=False,
+            duration_seconds=45.0,
+            actions_taken=("docker build",),
+            error="Build failed: dependency resolution timeout",
+        )
+
+        assert result.success is False
+        assert result.duration_seconds == 45.0
+        assert result.actions_taken == ("docker build",)
+        assert result.error == "Build failed: dependency resolution timeout"
+
+    def test_empty_actions_tuple(self):
+        """Test RebuildResult with empty actions."""
+        result = RebuildResult(
+            success=False,
+            duration_seconds=0.0,
+            actions_taken=(),
+            error="No actions attempted",
+        )
+
+        assert result.actions_taken == ()
+
+    def test_negative_duration_rejected(self):
+        """Test that negative duration is rejected."""
+        with pytest.raises(ValueError, match="duration_seconds"):
+            RebuildResult(
+                success=True,
+                duration_seconds=-1.0,
+                actions_taken=(),
+                error=None,
+            )
+
+    def test_immutability(self):
+        """Test that RebuildResult is immutable."""
+        result = RebuildResult(
+            success=True,
+            duration_seconds=100.0,
+            actions_taken=("action1",),
+            error=None,
+        )
+
+        with pytest.raises(FrozenInstanceError):
+            result.success = False  # type: ignore
+
+
+class TestVerificationResultType:
+    """Test VerificationResult domain type."""
+
+    def test_create_healthy_verification_result(self):
+        """Test creating a healthy VerificationResult."""
+        result = VerificationResult(
+            healthy=True,
+            checks_passed=("docker_running", "pip_packages_installed", "workspace_mounted"),
+            checks_failed=(),
+            duration_seconds=30.0,
+        )
+
+        assert result.healthy is True
+        assert result.checks_passed == ("docker_running", "pip_packages_installed", "workspace_mounted")
+        assert result.checks_failed == ()
+        assert result.duration_seconds == 30.0
+
+    def test_create_unhealthy_verification_result(self):
+        """Test creating an unhealthy VerificationResult."""
+        result = VerificationResult(
+            healthy=False,
+            checks_passed=("docker_running",),
+            checks_failed=("pip_packages_installed", "workspace_mounted"),
+            duration_seconds=15.0,
+        )
+
+        assert result.healthy is False
+        assert result.checks_passed == ("docker_running",)
+        assert result.checks_failed == ("pip_packages_installed", "workspace_mounted")
+        assert result.duration_seconds == 15.0
+
+    def test_no_checks_performed(self):
+        """Test VerificationResult with no checks."""
+        result = VerificationResult(
+            healthy=True,
+            checks_passed=(),
+            checks_failed=(),
+            duration_seconds=0.0,
+        )
+
+        assert result.checks_passed == ()
+        assert result.checks_failed == ()
+
+    def test_negative_duration_rejected(self):
+        """Test that negative duration is rejected."""
+        with pytest.raises(ValueError, match="duration_seconds"):
+            VerificationResult(
+                healthy=True,
+                checks_passed=(),
+                checks_failed=(),
+                duration_seconds=-10.0,
+            )
+
+    def test_immutability(self):
+        """Test that VerificationResult is immutable."""
+        result = VerificationResult(
+            healthy=True,
+            checks_passed=("check1",),
+            checks_failed=(),
+            duration_seconds=10.0,
+        )
+
+        with pytest.raises(FrozenInstanceError):
+            result.healthy = False  # type: ignore
+
+
+class TestEnvironmentRebuildStartedEvent:
+    """Test EnvironmentRebuildStartedEvent."""
+
+    def test_create_valid_event(self):
+        """Test creating a valid environment rebuild started event."""
+        timestamp = now_iso()
+        event = EnvironmentRebuildStartedEvent(
+            type="repair_cycle.environment_rebuild_started",
+            timestamp=timestamp,
+            source="repair_cycle",
+            workflow_run_id="run-123",
+            test_type="UNIT",
+            iteration=1,
+        )
+
+        assert event.workflow_run_id == "run-123"
+        assert event.test_type == "UNIT"
+        assert event.iteration == 1
+
+    def test_missing_workflow_run_id(self):
+        """Test that workflow_run_id is required."""
+        with pytest.raises(ValueError, match="workflow_run_id"):
+            EnvironmentRebuildStartedEvent(
+                type="repair_cycle.environment_rebuild_started",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                workflow_run_id="",
+                test_type="UNIT",
+                iteration=1,
+            )
+
+    def test_missing_test_type(self):
+        """Test that test_type is required."""
+        with pytest.raises(ValueError, match="test_type"):
+            EnvironmentRebuildStartedEvent(
+                type="repair_cycle.environment_rebuild_started",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                workflow_run_id="run-123",
+                test_type="",
+                iteration=1,
+            )
+
+    def test_invalid_iteration(self):
+        """Test that iteration must be >= 1."""
+        with pytest.raises(ValueError, match="iteration"):
+            EnvironmentRebuildStartedEvent(
+                type="repair_cycle.environment_rebuild_started",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                workflow_run_id="run-123",
+                test_type="UNIT",
+                iteration=0,
+            )
+
+    def test_serialization(self):
+        """Test EnvironmentRebuildStartedEvent serialization."""
+        timestamp = now_iso()
+        event = EnvironmentRebuildStartedEvent(
+            type="repair_cycle.environment_rebuild_started",
+            timestamp=timestamp,
+            source="repair_cycle",
+            workflow_run_id="run-123",
+            test_type="INTEGRATION",
+            iteration=2,
+        )
+        d = event.to_dict()
+        assert d["workflow_run_id"] == "run-123"
+        assert d["test_type"] == "INTEGRATION"
+        assert d["iteration"] == 2
+
+    def test_deserialization(self):
+        """Test EnvironmentRebuildStartedEvent deserialization."""
+        timestamp = now_iso()
+        d = {
+            "type": "repair_cycle.environment_rebuild_started",
+            "timestamp": timestamp,
+            "source": "repair_cycle",
+            "workflow_run_id": "run-123",
+            "test_type": "E2E",
+            "iteration": 1,
+        }
+        event = EnvironmentRebuildStartedEvent.from_dict(d)
+        assert event.workflow_run_id == "run-123"
+        assert event.test_type == "E2E"
+        assert event.iteration == 1
+
+
+class TestEnvironmentRebuildCompletedEvent:
+    """Test EnvironmentRebuildCompletedEvent."""
+
+    def test_create_successful_event(self):
+        """Test creating a successful rebuild completed event."""
+        timestamp = now_iso()
+        event = EnvironmentRebuildCompletedEvent(
+            type="repair_cycle.environment_rebuild_completed",
+            timestamp=timestamp,
+            source="repair_cycle",
+            workflow_run_id="run-123",
+            test_type="UNIT",
+            iteration=1,
+            success=True,
+            duration_seconds=150.0,
+            actions_taken=("docker build", "pip install"),
+            error=None,
+        )
+
+        assert event.success is True
+        assert event.duration_seconds == 150.0
+        assert event.actions_taken == ("docker build", "pip install")
+        assert event.error is None
+
+    def test_create_failed_event(self):
+        """Test creating a failed rebuild completed event."""
+        timestamp = now_iso()
+        event = EnvironmentRebuildCompletedEvent(
+            type="repair_cycle.environment_rebuild_completed",
+            timestamp=timestamp,
+            source="repair_cycle",
+            workflow_run_id="run-123",
+            test_type="UNIT",
+            iteration=1,
+            success=False,
+            duration_seconds=60.0,
+            actions_taken=("docker build",),
+            error="Build failed: timeout",
+        )
+
+        assert event.success is False
+        assert event.error == "Build failed: timeout"
+
+    def test_invalid_duration(self):
+        """Test that negative duration is rejected."""
+        with pytest.raises(ValueError, match="duration_seconds"):
+            EnvironmentRebuildCompletedEvent(
+                type="repair_cycle.environment_rebuild_completed",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                workflow_run_id="run-123",
+                test_type="UNIT",
+                iteration=1,
+                success=True,
+                duration_seconds=-10.0,
+                actions_taken=(),
+                error=None,
+            )
+
+    def test_serialization(self):
+        """Test EnvironmentRebuildCompletedEvent serialization."""
+        timestamp = now_iso()
+        event = EnvironmentRebuildCompletedEvent(
+            type="repair_cycle.environment_rebuild_completed",
+            timestamp=timestamp,
+            source="repair_cycle",
+            workflow_run_id="run-123",
+            test_type="UNIT",
+            iteration=1,
+            success=True,
+            duration_seconds=100.0,
+            actions_taken=("action1", "action2"),
+            error=None,
+        )
+        d = event.to_dict()
+        assert d["success"] is True
+        assert d["duration_seconds"] == 100.0
+        assert d["actions_taken"] == ["action1", "action2"]
+        assert d["error"] is None
+
+    def test_deserialization_with_error(self):
+        """Test EnvironmentRebuildCompletedEvent deserialization with error."""
+        timestamp = now_iso()
+        d = {
+            "type": "repair_cycle.environment_rebuild_completed",
+            "timestamp": timestamp,
+            "source": "repair_cycle",
+            "workflow_run_id": "run-123",
+            "test_type": "UNIT",
+            "iteration": 1,
+            "success": False,
+            "duration_seconds": 50.0,
+            "actions_taken": ["docker build"],
+            "error": "Build failed",
+        }
+        event = EnvironmentRebuildCompletedEvent.from_dict(d)
+        assert event.success is False
+        assert event.error == "Build failed"
+        assert event.actions_taken == ("docker build",)
+
+    def test_round_trip_serialization(self):
+        """Test round-trip serialization of rebuild completed event."""
+        timestamp = now_iso()
+        original = EnvironmentRebuildCompletedEvent(
+            type="repair_cycle.environment_rebuild_completed",
+            timestamp=timestamp,
+            source="repair_cycle",
+            workflow_run_id="run-456",
+            test_type="INTEGRATION",
+            iteration=2,
+            success=True,
+            duration_seconds=200.0,
+            actions_taken=("step1", "step2", "step3"),
+            error=None,
+        )
+
+        d = original.to_dict()
+        restored = EnvironmentRebuildCompletedEvent.from_dict(d)
+
+        assert restored.success == original.success
+        assert restored.duration_seconds == original.duration_seconds
+        assert restored.actions_taken == original.actions_taken
+        assert restored.error == original.error
+
+
+class TestEnvironmentVerificationStartedEvent:
+    """Test EnvironmentVerificationStartedEvent."""
+
+    def test_create_valid_event(self):
+        """Test creating a valid verification started event."""
+        timestamp = now_iso()
+        event = EnvironmentVerificationStartedEvent(
+            type="repair_cycle.environment_verification_started",
+            timestamp=timestamp,
+            source="repair_cycle",
+            workflow_run_id="run-123",
+            test_type="UNIT",
+            iteration=1,
+        )
+
+        assert event.workflow_run_id == "run-123"
+        assert event.test_type == "UNIT"
+        assert event.iteration == 1
+
+    def test_serialization(self):
+        """Test serialization."""
+        timestamp = now_iso()
+        event = EnvironmentVerificationStartedEvent(
+            type="repair_cycle.environment_verification_started",
+            timestamp=timestamp,
+            source="repair_cycle",
+            workflow_run_id="run-789",
+            test_type="E2E",
+            iteration=3,
+        )
+        d = event.to_dict()
+        assert d["workflow_run_id"] == "run-789"
+        assert d["test_type"] == "E2E"
+        assert d["iteration"] == 3
+
+    def test_deserialization(self):
+        """Test deserialization."""
+        timestamp = now_iso()
+        d = {
+            "type": "repair_cycle.environment_verification_started",
+            "timestamp": timestamp,
+            "source": "repair_cycle",
+            "workflow_run_id": "run-789",
+            "test_type": "INTEGRATION",
+            "iteration": 2,
+        }
+        event = EnvironmentVerificationStartedEvent.from_dict(d)
+        assert event.workflow_run_id == "run-789"
+        assert event.test_type == "INTEGRATION"
+        assert event.iteration == 2
+
+
+class TestEnvironmentVerificationCompletedEvent:
+    """Test EnvironmentVerificationCompletedEvent."""
+
+    def test_create_healthy_environment_event(self):
+        """Test creating an event for healthy environment."""
+        timestamp = now_iso()
+        event = EnvironmentVerificationCompletedEvent(
+            type="repair_cycle.environment_verification_completed",
+            timestamp=timestamp,
+            source="repair_cycle",
+            workflow_run_id="run-123",
+            test_type="UNIT",
+            iteration=1,
+            healthy=True,
+            checks_passed=("docker_ready", "dependencies_installed", "workspace_mounted"),
+            checks_failed=(),
+            duration_seconds=30.0,
+        )
+
+        assert event.healthy is True
+        assert len(event.checks_passed) == 3
+        assert len(event.checks_failed) == 0
+        assert event.duration_seconds == 30.0
+
+    def test_create_unhealthy_environment_event(self):
+        """Test creating an event for unhealthy environment."""
+        timestamp = now_iso()
+        event = EnvironmentVerificationCompletedEvent(
+            type="repair_cycle.environment_verification_completed",
+            timestamp=timestamp,
+            source="repair_cycle",
+            workflow_run_id="run-123",
+            test_type="UNIT",
+            iteration=1,
+            healthy=False,
+            checks_passed=("docker_ready",),
+            checks_failed=("dependencies_installed", "workspace_mounted"),
+            duration_seconds=20.0,
+        )
+
+        assert event.healthy is False
+        assert event.checks_passed == ("docker_ready",)
+        assert event.checks_failed == ("dependencies_installed", "workspace_mounted")
+
+    def test_invalid_duration(self):
+        """Test that negative duration is rejected."""
+        with pytest.raises(ValueError, match="duration_seconds"):
+            EnvironmentVerificationCompletedEvent(
+                type="repair_cycle.environment_verification_completed",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                workflow_run_id="run-123",
+                test_type="UNIT",
+                iteration=1,
+                healthy=True,
+                checks_passed=(),
+                checks_failed=(),
+                duration_seconds=-5.0,
+            )
+
+    def test_serialization_healthy(self):
+        """Test serialization of healthy environment event."""
+        timestamp = now_iso()
+        event = EnvironmentVerificationCompletedEvent(
+            type="repair_cycle.environment_verification_completed",
+            timestamp=timestamp,
+            source="repair_cycle",
+            workflow_run_id="run-123",
+            test_type="INTEGRATION",
+            iteration=2,
+            healthy=True,
+            checks_passed=("check1", "check2"),
+            checks_failed=(),
+            duration_seconds=25.0,
+        )
+        d = event.to_dict()
+        assert d["healthy"] is True
+        assert d["checks_passed"] == ["check1", "check2"]
+        assert d["checks_failed"] == []
+        assert d["duration_seconds"] == 25.0
+
+    def test_serialization_unhealthy(self):
+        """Test serialization of unhealthy environment event."""
+        timestamp = now_iso()
+        event = EnvironmentVerificationCompletedEvent(
+            type="repair_cycle.environment_verification_completed",
+            timestamp=timestamp,
+            source="repair_cycle",
+            workflow_run_id="run-456",
+            test_type="E2E",
+            iteration=1,
+            healthy=False,
+            checks_passed=("check1",),
+            checks_failed=("check2", "check3"),
+            duration_seconds=15.0,
+        )
+        d = event.to_dict()
+        assert d["healthy"] is False
+        assert d["checks_passed"] == ["check1"]
+        assert d["checks_failed"] == ["check2", "check3"]
+
+    def test_deserialization_healthy(self):
+        """Test deserialization of healthy environment event."""
+        timestamp = now_iso()
+        d = {
+            "type": "repair_cycle.environment_verification_completed",
+            "timestamp": timestamp,
+            "source": "repair_cycle",
+            "workflow_run_id": "run-789",
+            "test_type": "UNIT",
+            "iteration": 1,
+            "healthy": True,
+            "checks_passed": ["all_good"],
+            "checks_failed": [],
+            "duration_seconds": 10.0,
+        }
+        event = EnvironmentVerificationCompletedEvent.from_dict(d)
+        assert event.healthy is True
+        assert event.checks_passed == ("all_good",)
+        assert event.checks_failed == ()
+
+    def test_deserialization_unhealthy(self):
+        """Test deserialization of unhealthy environment event."""
+        timestamp = now_iso()
+        d = {
+            "type": "repair_cycle.environment_verification_completed",
+            "timestamp": timestamp,
+            "source": "repair_cycle",
+            "workflow_run_id": "run-789",
+            "test_type": "INTEGRATION",
+            "iteration": 2,
+            "healthy": False,
+            "checks_passed": ["check1"],
+            "checks_failed": ["check2", "check3"],
+            "duration_seconds": 8.0,
+        }
+        event = EnvironmentVerificationCompletedEvent.from_dict(d)
+        assert event.healthy is False
+        assert event.checks_passed == ("check1",)
+        assert event.checks_failed == ("check2", "check3")
+
+    def test_round_trip_serialization(self):
+        """Test round-trip serialization."""
+        timestamp = now_iso()
+        original = EnvironmentVerificationCompletedEvent(
+            type="repair_cycle.environment_verification_completed",
+            timestamp=timestamp,
+            source="repair_cycle",
+            workflow_run_id="run-999",
+            test_type="E2E",
+            iteration=3,
+            healthy=True,
+            checks_passed=("setup", "ready", "verified"),
+            checks_failed=(),
+            duration_seconds=45.5,
+        )
+
+        d = original.to_dict()
+        restored = EnvironmentVerificationCompletedEvent.from_dict(d)
+
+        assert restored.healthy == original.healthy
+        assert restored.checks_passed == original.checks_passed
+        assert restored.checks_failed == original.checks_failed
+        assert restored.duration_seconds == original.duration_seconds
+        assert restored.workflow_run_id == original.workflow_run_id

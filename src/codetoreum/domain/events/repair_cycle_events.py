@@ -24,9 +24,11 @@ from uuid import uuid4
 from ..repair_cycle_types import (
     CycleResult,
     FailureClassification,
+    RebuildResult,
     RepairTestFailure,
     RepairTestType,
     RepairTestWarning,
+    VerificationResult,
 )
 from .adapter_events import CodetoreumEvent
 
@@ -1736,5 +1738,314 @@ class SystemicFixCompletedEvent(CodetoreumEvent):
             success=data.get("success", False),
             files_modified=tuple(files_modified),
             root_cause_addressed=data.get("root_cause_addressed", ""),
+            duration_seconds=data.get("duration_seconds", 0.0),
+        )
+
+
+@dataclass(frozen=True)
+class EnvironmentRebuildStartedEvent(CodetoreumEvent):
+    """Emitted when environment rebuild begins.
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Attempting to modify any field will raise `FrozenInstanceError`.
+
+    Attributes:
+        type (str): Fixed to "repair_cycle.environment_rebuild_started"
+        workflow_run_id (str): ID of the workflow run
+        test_type (str): Type of test being executed (UNIT, INTEGRATION, E2E)
+        iteration (int): Current iteration number within the test cycle
+        timestamp (str): ISO 8601 timestamp when rebuild started
+    """
+
+    workflow_run_id: str = ""
+    test_type: str = ""
+    iteration: int = 0
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.workflow_run_id:
+            msg = "workflow_run_id is required"
+            raise ValueError(msg)
+        if not self.test_type:
+            msg = "test_type is required"
+            raise ValueError(msg)
+        if self.iteration < 1:
+            msg = "iteration must be >= 1"
+            raise ValueError(msg)
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update(
+            {
+                "workflow_run_id": self.workflow_run_id,
+                "test_type": self.test_type,
+                "iteration": self.iteration,
+            }
+        )
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "EnvironmentRebuildStartedEvent":
+        """Deserialize from dictionary with backward compatibility.
+
+        Raises:
+            KeyError: If required fields (workflow_run_id, test_type, iteration) are missing.
+        """
+        return cls(
+            type=data.get("type", "repair_cycle.environment_rebuild_started"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            workflow_run_id=data["workflow_run_id"],
+            test_type=data["test_type"],
+            iteration=data["iteration"],
+        )
+
+
+@dataclass(frozen=True)
+class EnvironmentRebuildCompletedEvent(CodetoreumEvent):
+    """Emitted when environment rebuild completes.
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Attempting to modify any field will raise `FrozenInstanceError`.
+
+    Attributes:
+        type (str): Fixed to "repair_cycle.environment_rebuild_completed"
+        workflow_run_id (str): ID of the workflow run
+        test_type (str): Type of test being executed (UNIT, INTEGRATION, E2E)
+        iteration (int): Current iteration number within the test cycle
+        success (bool): Whether the rebuild was successful
+        duration_seconds (float): Time taken to rebuild the environment
+        actions_taken (tuple[str, ...]): List of actions performed during rebuild
+        error (str | None): Error message if rebuild failed, None if successful
+        timestamp (str): ISO 8601 timestamp when rebuild completed
+    """
+
+    workflow_run_id: str = ""
+    test_type: str = ""
+    iteration: int = 0
+    success: bool = False
+    duration_seconds: float = 0.0
+    actions_taken: tuple[str, ...] = ()
+    error: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.workflow_run_id:
+            msg = "workflow_run_id is required"
+            raise ValueError(msg)
+        if not self.test_type:
+            msg = "test_type is required"
+            raise ValueError(msg)
+        if self.iteration < 1:
+            msg = "iteration must be >= 1"
+            raise ValueError(msg)
+        if self.duration_seconds < 0:
+            msg = "duration_seconds must be non-negative"
+            raise ValueError(msg)
+        if not isinstance(self.actions_taken, tuple):
+            object.__setattr__(self, "actions_taken", tuple(self.actions_taken))
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update(
+            {
+                "workflow_run_id": self.workflow_run_id,
+                "test_type": self.test_type,
+                "iteration": self.iteration,
+                "success": self.success,
+                "duration_seconds": self.duration_seconds,
+                "actions_taken": list(self.actions_taken),
+                "error": self.error,
+            }
+        )
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "EnvironmentRebuildCompletedEvent":
+        """Deserialize from dictionary with backward compatibility.
+
+        Raises:
+            KeyError: If required fields (workflow_run_id, test_type, iteration) are missing.
+        """
+        actions_taken = data.get("actions_taken", [])
+        if not isinstance(actions_taken, (list, tuple)):
+            actions_taken = []
+        return cls(
+            type=data.get("type", "repair_cycle.environment_rebuild_completed"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            workflow_run_id=data["workflow_run_id"],
+            test_type=data["test_type"],
+            iteration=data["iteration"],
+            success=data.get("success", False),
+            duration_seconds=data.get("duration_seconds", 0.0),
+            actions_taken=tuple(actions_taken),
+            error=data.get("error"),
+        )
+
+
+@dataclass(frozen=True)
+class EnvironmentVerificationStartedEvent(CodetoreumEvent):
+    """Emitted when environment verification begins.
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Attempting to modify any field will raise `FrozenInstanceError`.
+
+    Attributes:
+        type (str): Fixed to "repair_cycle.environment_verification_started"
+        workflow_run_id (str): ID of the workflow run
+        test_type (str): Type of test being executed (UNIT, INTEGRATION, E2E)
+        iteration (int): Current iteration number within the test cycle
+        timestamp (str): ISO 8601 timestamp when verification started
+    """
+
+    workflow_run_id: str = ""
+    test_type: str = ""
+    iteration: int = 0
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.workflow_run_id:
+            msg = "workflow_run_id is required"
+            raise ValueError(msg)
+        if not self.test_type:
+            msg = "test_type is required"
+            raise ValueError(msg)
+        if self.iteration < 1:
+            msg = "iteration must be >= 1"
+            raise ValueError(msg)
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update(
+            {
+                "workflow_run_id": self.workflow_run_id,
+                "test_type": self.test_type,
+                "iteration": self.iteration,
+            }
+        )
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "EnvironmentVerificationStartedEvent":
+        """Deserialize from dictionary with backward compatibility.
+
+        Raises:
+            KeyError: If required fields (workflow_run_id, test_type, iteration) are missing.
+        """
+        return cls(
+            type=data.get("type", "repair_cycle.environment_verification_started"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            workflow_run_id=data["workflow_run_id"],
+            test_type=data["test_type"],
+            iteration=data["iteration"],
+        )
+
+
+@dataclass(frozen=True)
+class EnvironmentVerificationCompletedEvent(CodetoreumEvent):
+    """Emitted when environment verification completes.
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Attempting to modify any field will raise `FrozenInstanceError`.
+
+    Attributes:
+        type (str): Fixed to "repair_cycle.environment_verification_completed"
+        workflow_run_id (str): ID of the workflow run
+        test_type (str): Type of test being executed (UNIT, INTEGRATION, E2E)
+        iteration (int): Current iteration number within the test cycle
+        healthy (bool): Whether the environment passed all verification checks
+        checks_passed (tuple[str, ...]): Verification checks that passed
+        checks_failed (tuple[str, ...]): Verification checks that failed
+        duration_seconds (float): Time taken to verify the environment
+        timestamp (str): ISO 8601 timestamp when verification completed
+    """
+
+    workflow_run_id: str = ""
+    test_type: str = ""
+    iteration: int = 0
+    healthy: bool = False
+    checks_passed: tuple[str, ...] = ()
+    checks_failed: tuple[str, ...] = ()
+    duration_seconds: float = 0.0
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.workflow_run_id:
+            msg = "workflow_run_id is required"
+            raise ValueError(msg)
+        if not self.test_type:
+            msg = "test_type is required"
+            raise ValueError(msg)
+        if self.iteration < 1:
+            msg = "iteration must be >= 1"
+            raise ValueError(msg)
+        if self.duration_seconds < 0:
+            msg = "duration_seconds must be non-negative"
+            raise ValueError(msg)
+        if not isinstance(self.checks_passed, tuple):
+            object.__setattr__(self, "checks_passed", tuple(self.checks_passed))
+        if not isinstance(self.checks_failed, tuple):
+            object.__setattr__(self, "checks_failed", tuple(self.checks_failed))
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update(
+            {
+                "workflow_run_id": self.workflow_run_id,
+                "test_type": self.test_type,
+                "iteration": self.iteration,
+                "healthy": self.healthy,
+                "checks_passed": list(self.checks_passed),
+                "checks_failed": list(self.checks_failed),
+                "duration_seconds": self.duration_seconds,
+            }
+        )
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "EnvironmentVerificationCompletedEvent":
+        """Deserialize from dictionary with backward compatibility.
+
+        Raises:
+            KeyError: If required fields (workflow_run_id, test_type, iteration) are missing.
+        """
+        checks_passed = data.get("checks_passed", [])
+        checks_failed = data.get("checks_failed", [])
+        if not isinstance(checks_passed, (list, tuple)):
+            checks_passed = []
+        if not isinstance(checks_failed, (list, tuple)):
+            checks_failed = []
+        return cls(
+            type=data.get("type", "repair_cycle.environment_verification_completed"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            workflow_run_id=data["workflow_run_id"],
+            test_type=data["test_type"],
+            iteration=data["iteration"],
+            healthy=data.get("healthy", False),
+            checks_passed=tuple(checks_passed),
+            checks_failed=tuple(checks_failed),
             duration_seconds=data.get("duration_seconds", 0.0),
         )

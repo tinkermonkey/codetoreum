@@ -621,6 +621,70 @@ class AnalysisContext:
 
 
 @dataclass(frozen=True)
+class RebuildResult:
+    """Result of an environment rebuild operation.
+
+    Immutable record of rebuilding the test environment, including success status,
+    actions taken, duration, and any errors encountered.
+
+    **Immutability**: Frozen dataclass - all fields read-only after construction.
+    Attempting to modify any field raises FrozenInstanceError.
+
+    Attributes:
+        success: Whether the environment rebuild was successful
+        duration_seconds: Time taken to rebuild the environment (non-negative)
+        actions_taken: Immutable tuple of actions performed during rebuild (e.g., "docker build", "pip install")
+        error: Optional error message if rebuild failed, None if successful
+    """
+
+    success: bool
+    duration_seconds: float
+    actions_taken: tuple[str, ...]  # Immutable tuple
+    error: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate rebuild result after initialization."""
+        if self.duration_seconds < 0:
+            msg = "duration_seconds must be non-negative"
+            raise ValueError(msg)
+        if not isinstance(self.actions_taken, tuple):
+            object.__setattr__(self, "actions_taken", tuple(self.actions_taken))
+
+
+@dataclass(frozen=True)
+class VerificationResult:
+    """Result of an environment verification operation.
+
+    Immutable record of verifying that a rebuilt environment is healthy and ready
+    for testing, including which checks passed and failed.
+
+    **Immutability**: Frozen dataclass - all fields read-only after construction.
+    Attempting to modify any field raises FrozenInstanceError.
+
+    Attributes:
+        healthy: Whether the environment verification succeeded (all checks passed)
+        checks_passed: Immutable tuple of verification checks that passed
+        checks_failed: Immutable tuple of verification checks that failed
+        duration_seconds: Time taken to verify the environment (non-negative)
+    """
+
+    healthy: bool
+    checks_passed: tuple[str, ...]  # Immutable tuple
+    checks_failed: tuple[str, ...]  # Immutable tuple
+    duration_seconds: float
+
+    def __post_init__(self) -> None:
+        """Validate verification result after initialization."""
+        if self.duration_seconds < 0:
+            msg = "duration_seconds must be non-negative"
+            raise ValueError(msg)
+        if not isinstance(self.checks_passed, tuple):
+            object.__setattr__(self, "checks_passed", tuple(self.checks_passed))
+        if not isinstance(self.checks_failed, tuple):
+            object.__setattr__(self, "checks_failed", tuple(self.checks_failed))
+
+
+@dataclass(frozen=True)
 class SystemicFixResult:
     """Result of a systemic fix operation addressing a cross-cutting root cause.
 
