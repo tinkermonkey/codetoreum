@@ -21,8 +21,6 @@ from codetoreum.adapters.testing.mock_environment_repair_adapter import (
 )
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
 from codetoreum.domain.repair_cycle_types import (
-    RepairTestFailure,
-    RepairTestResult,
     RepairTestRunConfig,
     RepairTestType,
     RebuildResult,
@@ -30,7 +28,6 @@ from codetoreum.domain.repair_cycle_types import (
 )
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
-from codetoreum.infrastructure.simulation.simulation_runner import SimulationRunner
 
 
 @dataclass
@@ -93,10 +90,8 @@ async def test_environment_repair_successful_rebuild_and_verify(
     Verifies that:
     1. rebuild_environment succeeds
     2. verify_environment succeeds
-    3. Events are emitted correctly
     """
     # Setup
-    clock = SimulationClock(speed_multiplier=100.0)
     test_config = RepairTestRunConfig(test_type=RepairTestType.UNIT)
     context = create_repair_context((test_config,))
 
