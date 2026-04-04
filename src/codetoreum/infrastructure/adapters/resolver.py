@@ -439,28 +439,31 @@ class AdapterResolver:
         and delegates to factory method.
 
         For "production" adapter, injects the LLM factory for environment
-        rebuild and verification operations.
+        rebuild and verification operations. Uses _create_agent_llm_factory()
+        to provide agent-aware LLM resolution, matching the pattern used
+        for repair_cycle adapter.
 
         Returns:
             IEnvironmentRepairService implementation
 
         Raises:
-            AdapterConfigurationError: If production adapter is configured but required
-                                        dependencies (llm_provider) are missing
+            AdapterConfigurationError: If production adapter is configured but agent_repository
+                                        is not yet resolved
         """
-        # For "production" adapter, we need the resolved LLM provider
+        # For "production" adapter, we need the agent-aware LLM factory
         if self._config.environment_repair == "production":
-            llm_provider = self._resolved.get("llm")
-            if not llm_provider:
+            # Ensure agent_repository is resolved before creating the factory
+            agent_repo = self._resolved.get("agent_repository")
+            if not agent_repo:
                 raise AdapterConfigurationError(
                     [
-                        "environment_repair adapter set to 'production' but llm_provider is not resolved. "
-                        "Ensure llm_provider is resolved before environment_repair service.",
+                        "environment_repair adapter set to 'production' but agent_repository is not resolved. "
+                        "Ensure agent_repository is resolved before environment_repair service.",
                     ]
                 )
             return self._factory.create_environment_repair_service(
                 adapter_name=self._config.environment_repair,
-                llm_factory=lambda: llm_provider,
+                llm_factory=self._create_agent_llm_factory(),
                 event_emitter=self._resolved.get("event_emitter"),
             )
 
