@@ -687,6 +687,11 @@ class RebuildResult:
         if not isinstance(self.actions_taken, tuple):
             object.__setattr__(self, "actions_taken", tuple(self.actions_taken))
 
+        # Consistency check: success state must align with error
+        if self.success and self.error is not None:
+            msg = f"success=True but error is set: '{self.error}' (contradiction)"
+            raise ValueError(msg)
+
 
 @dataclass(frozen=True)
 class VerificationResult:

@@ -2229,6 +2229,16 @@ class TestRebuildResult:
         )
         assert result1 == result2
 
+    def test_success_true_with_error_raises_contradiction(self):
+        """Test that success=True with error set raises ValueError (consistency validation)."""
+        with pytest.raises(ValueError, match="success=True but error is set.*contradiction"):
+            RebuildResult(
+                success=True,
+                duration_seconds=30.0,
+                actions_taken=("action",),
+                error="Some error occurred",
+            )
+
 
 # ============================================================================
 # VerificationResult Tests
