@@ -2294,6 +2294,16 @@ class TestRebuildResult:
                 error="Some error occurred",
             )
 
+    def test_success_false_without_error_raises_data_quality_error(self):
+        """Test that success=False with error=None raises ValueError (data quality requirement for audit trail)."""
+        with pytest.raises(ValueError, match="success=False but error is not set.*audit trail"):
+            RebuildResult(
+                success=False,
+                duration_seconds=30.0,
+                actions_taken=("action",),
+                error=None,
+            )
+
 
 # ============================================================================
 # VerificationResult Tests
@@ -2415,3 +2425,13 @@ class TestVerificationResult:
             duration_seconds=5.0,
         )
         assert result1 != result2
+
+    def test_healthy_true_with_checks_failed_raises_contradiction(self):
+        """Test that healthy=True with checks_failed non-empty raises ValueError (consistency validation)."""
+        with pytest.raises(ValueError, match="healthy=True but checks_failed is non-empty.*contradiction"):
+            VerificationResult(
+                healthy=True,
+                checks_passed=("docker available",),
+                checks_failed=("python installed",),
+                duration_seconds=5.0,
+            )

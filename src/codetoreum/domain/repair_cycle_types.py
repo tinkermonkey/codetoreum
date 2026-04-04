@@ -699,6 +699,11 @@ class RebuildResult:
             msg = f"success=True but error is set: '{self.error}' (contradiction)"
             raise ValueError(msg)
 
+        # Consistency check: failure without explanation is a data quality gap
+        if not self.success and self.error is None:
+            msg = "success=False but error is not set (failure must have explanation for audit trail)"
+            raise ValueError(msg)
+
 
 @dataclass(frozen=True)
 class VerificationResult:
@@ -731,6 +736,11 @@ class VerificationResult:
             object.__setattr__(self, "checks_passed", tuple(self.checks_passed))
         if not isinstance(self.checks_failed, tuple):
             object.__setattr__(self, "checks_failed", tuple(self.checks_failed))
+
+        # Consistency check: healthy state must align with checks_failed
+        if self.healthy and self.checks_failed:
+            msg = f"healthy=True but checks_failed is non-empty: {self.checks_failed} (contradiction)"
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True)

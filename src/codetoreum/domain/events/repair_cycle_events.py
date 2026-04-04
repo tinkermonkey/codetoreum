@@ -2051,6 +2051,11 @@ class EnvironmentVerificationCompletedEvent(CodetoreumEvent):
         if not isinstance(self.checks_failed, tuple):
             object.__setattr__(self, "checks_failed", tuple(self.checks_failed))
 
+        # Consistency check: healthy state must align with checks_failed
+        if self.healthy and self.checks_failed:
+            msg = f"healthy=True but checks_failed is non-empty: {self.checks_failed} (contradiction)"
+            raise ValueError(msg)
+
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()

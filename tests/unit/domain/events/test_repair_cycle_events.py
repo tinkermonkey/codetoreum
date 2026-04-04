@@ -2300,6 +2300,23 @@ class TestEnvironmentVerificationCompletedEvent:
         assert restored.duration_seconds == original.duration_seconds
         assert restored.workflow_run_id == original.workflow_run_id
 
+    def test_healthy_true_with_checks_failed_raises_contradiction(self):
+        """Test that healthy=True with checks_failed non-empty raises ValueError (consistency validation)."""
+        with pytest.raises(ValueError, match="healthy=True but checks_failed is non-empty.*contradiction"):
+            EnvironmentVerificationCompletedEvent(
+                type="repair_cycle.environment_verification_completed",
+                timestamp=now_iso(),
+                source="repair_cycle",
+                work_item_id="issue-456",
+                workflow_run_id="run-123",
+                test_type="UNIT",
+                iteration=1,
+                healthy=True,
+                checks_passed=("docker_ready", "dependencies_installed"),
+                checks_failed=("workspace_mounted",),
+                duration_seconds=30.0,
+            )
+
 
 class TestEnvironmentRebuildExhaustedEvent:
     """Test EnvironmentRebuildExhaustedEvent."""
