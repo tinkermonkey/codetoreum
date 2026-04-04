@@ -31,6 +31,7 @@ from codetoreum.ports.output.container import IContainer
 from codetoreum.ports.output.container_recovery import IAgentContainerRecoveryService
 from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.encryption_service import IEncryptionService
+from codetoreum.ports.output.environment_repair_service import IEnvironmentRepairService
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.output.identity_service import IIdentityService
@@ -352,9 +353,9 @@ class AdapterResolver:
         - If mock variant selected: use engine to create time-aware mock with llm_factory
         - If real variant: create directly without engine
 
-        The systemic_analysis_service is resolved separately in resolve_all() before
-        repair_cycle creation to ensure centralized adapter resolution and proper
-        dependency injection at construction time.
+        The systemic_analysis_service and environment_repair_service are resolved separately
+        in resolve_all() before repair_cycle creation to ensure centralized adapter resolution
+        and proper dependency injection at construction time.
         """
         if self._config.repair_cycle == "mock":
             # Engine creates time-aware mock with llm_factory for contract enforcement
@@ -365,15 +366,18 @@ class AdapterResolver:
                 checkpoint_store=checkpoint_store,
                 container_adapter=container_adapter,
             )
-        # Real adapter: inject agent-aware factory
+        # Real adapter: inject agent-aware factory and pre-resolved services
         # Use the pre-resolved systemic_analysis_service (resolved in phase 9)
+        # Use the pre-resolved environment_repair_service (resolved in phase 9b)
         systemic_analysis_service = self._resolved.get("systemic_analysis_service")
+        environment_repair_service = self._resolved.get("environment_repair_service")
 
         return self._factory.create_repair_cycle(
             adapter_name=self._config.repair_cycle,
             llm_factory=self._create_agent_llm_factory(),
             agent_repository=self._resolved["agent_repository"],
             systemic_analysis_service=systemic_analysis_service,
+            environment_repair_service=environment_repair_service,
         )
 
     def resolve_code_review(self) -> ICodeReviewService:
@@ -426,6 +430,44 @@ class AdapterResolver:
         # For all other adapters (mock, in_memory, etc.), use factory with no extra args
         return self._factory.create_systemic_analysis_service(
             adapter_name=self._config.systemic_analysis,
+        )
+
+    def resolve_environment_repair_service(self) -> IEnvironmentRepairService:
+        """Resolve environment repair service adapter.
+
+        Follows the standard resolver pattern: reads from adapter config
+        and delegates to factory method.
+
+        For "production" adapter, injects the LLM factory for environment
+        rebuild and verification operations.
+
+        Returns:
+            IEnvironmentRepairService implementation
+
+        Raises:
+            AdapterConfigurationError: If production adapter is configured but required
+                                        dependencies (llm_provider) are missing
+        """
+        # For "production" adapter, we need the resolved LLM provider
+        if self._config.environment_repair == "production":
+            llm_provider = self._resolved.get("llm")
+            if not llm_provider:
+                raise AdapterConfigurationError(
+                    [
+                        "environment_repair adapter set to 'production' but llm_provider is not resolved. "
+                        "Ensure llm_provider is resolved before environment_repair service.",
+                    ]
+                )
+            return self._factory.create_environment_repair_service(
+                adapter_name=self._config.environment_repair,
+                llm_factory=lambda: llm_provider,
+                event_emitter=self._resolved.get("event_emitter"),
+            )
+
+        # For all other adapters (mock, in_memory, etc.), use factory with optional event_emitter
+        return self._factory.create_environment_repair_service(
+            adapter_name=self._config.environment_repair,
+            event_emitter=self._resolved.get("event_emitter"),
         )
 
     def resolve_repository(self) -> IRepository:
@@ -673,6 +715,9 @@ class AdapterResolver:
         # 9. Systemic analysis service (depends on llm, used by repair_cycle)
         self._resolved["systemic_analysis_service"] = self.resolve_systemic_analysis_service()
 
+        # 9b. Environment repair service (depends on llm, used by repair_cycle)
+        self._resolved["environment_repair_service"] = self.resolve_environment_repair_service()
+
         # 10. Review and repair cycles depend on previously resolved adapters
         # (review_cycle depends on llm, repair_cycle depends on checkpoint_store, container, and systemic_analysis_service)
         self._resolved["review_cycle"] = self.resolve_review_cycle()
@@ -728,4 +773,6 @@ class AdapterResolver:
             container_recovery=self._resolved["container_recovery"],
             # Systemic analysis service (resolved in phase 9)
             systemic_analysis_service=self._resolved["systemic_analysis_service"],
+            # Environment repair service (resolved in phase 9b)
+            environment_repair_service=self._resolved["environment_repair_service"],
         )

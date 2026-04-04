@@ -401,6 +401,14 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         """
         self._systemic_analysis_service = service
 
+    def set_environment_repair_service(self, service: "Any") -> None:
+        """Set the environment repair service (for testing).
+
+        Args:
+            service: IEnvironmentRepairService instance for environment repair operations
+        """
+        self._environment_repair_service = service
+
     @property
     def current_project(self) -> str | None:
         """Get current project ID."""

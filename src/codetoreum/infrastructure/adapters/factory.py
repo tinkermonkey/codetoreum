@@ -54,6 +54,7 @@ from codetoreum.adapters.testing import (
     MockBoardAdapter,
     MockContainerRecoveryAdapter,
     MockDiscussionAdapter,
+    MockEnvironmentRepairAdapter,
     MockLLMAdapter,
     MockNotifierAdapter,
     MockProjectManagerAdapter,
@@ -150,6 +151,18 @@ except ImportError:
     )
     LLMSystemicAnalysisAdapter = None  # type: ignore
 
+try:
+    from codetoreum.adapters.secondary.production_environment_repair_adapter import (
+        ProductionEnvironmentRepairAdapter,
+    )
+except ImportError:
+    logger.warning(
+        "Optional adapter ProductionEnvironmentRepairAdapter not available, skipping registration",
+        exc_info=True,
+        extra={"adapter": "ProductionEnvironmentRepairAdapter"},
+    )
+    ProductionEnvironmentRepairAdapter = None  # type: ignore
+
 from codetoreum.infrastructure.adapters.registries import (
     ActiveWorkflowRunRegistryRegistry,
     AgentExecutorRegistry,
@@ -161,6 +174,7 @@ from codetoreum.infrastructure.adapters.registries import (
     ContainerRegistry,
     DiscussionAdapterRegistry,
     EncryptionRegistry,
+    EnvironmentRepairRegistry,
     EventEmitterRegistry,
     EventStoreRegistry,
     IdentityServiceRegistry,
@@ -206,6 +220,7 @@ from codetoreum.ports.output.container import IContainer
 from codetoreum.ports.output.container_recovery import IAgentContainerRecoveryService
 from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.encryption_service import IEncryptionService
+from codetoreum.ports.output.environment_repair_service import IEnvironmentRepairService
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.output.identity_service import IIdentityService
@@ -298,6 +313,7 @@ class AdapterFactory:
         self._repair_cycle_checkpoint_registry = RepairCycleCheckpointStoreRegistry()
         self._active_workflow_run_registry_registry = ActiveWorkflowRunRegistryRegistry()
         self._systemic_analysis_registry = SystemicAnalysisRegistry()
+        self._environment_repair_registry = EnvironmentRepairRegistry()
 
         # Dependency injection container
         self._dependencies: dict[str, Any] = {}
@@ -901,6 +917,28 @@ class AdapterFactory:
                 tags=["production", "llm"],
             )
 
+        # Environment Repair Adapters
+        self._environment_repair_registry.register(
+            name="mock",
+            adapter_type=MockEnvironmentRepairAdapter,
+            description="Mock environment repair for testing",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
+            set_as_default=True,
+        )
+        if ProductionEnvironmentRepairAdapter:
+            self._environment_repair_registry.register(
+                name="production",
+                adapter_type=ProductionEnvironmentRepairAdapter,
+                description="Production environment repair with LLM integration",
+                version="1.0.0",
+                tags=["production", "llm"],
+            )
+
     # Registry access methods
 
     @property
@@ -1058,6 +1096,11 @@ class AdapterFactory:
         """Get the systemic analysis registry."""
         return self._systemic_analysis_registry
 
+    @property
+    def environment_repair_registry(self) -> EnvironmentRepairRegistry:
+        """Get the environment repair registry."""
+        return self._environment_repair_registry
+
     def get_registry(self, slot_name: str) -> Any:
         """
         Get the registry for a given adapter slot name.
@@ -1103,6 +1146,7 @@ class AdapterFactory:
             "work_item_service": self._work_item_service_registry,
             "repository": self._repository_registry,
             "systemic_analysis": self._systemic_analysis_registry,
+            "environment_repair": self._environment_repair_registry,
         }
 
         if slot_name not in registry_map:
@@ -1510,6 +1554,12 @@ class AdapterFactory:
         """Create a systemic analysis service adapter instance."""
         return self._create_adapter(
             self._systemic_analysis_registry, adapter_name, "systemic analysis service", **kwargs
+        )
+
+    def create_environment_repair_service(self, adapter_name: str | None = None, **kwargs) -> IEnvironmentRepairService:
+        """Create an environment repair service adapter instance."""
+        return self._create_adapter(
+            self._environment_repair_registry, adapter_name, "environment repair service", **kwargs
         )
 
     def _apply_resilience_wrapper(
