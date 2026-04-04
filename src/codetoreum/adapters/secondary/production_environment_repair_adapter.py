@@ -22,7 +22,6 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from codetoreum.domain.events.adapter_events import CodetoreumEvent
     from codetoreum.infrastructure.resilience.interfaces import ICircuitBreaker
     from codetoreum.ports.output.llm_provider import AgentLLMFactory, ExecutionResult, ILLMProvider
 
@@ -215,7 +214,7 @@ Return a JSON response with the verification status and any issues found."""
     def _handle_operation_error(
         self,
         operation_type: str,
-        event_class: type[EnvironmentRebuildCompletedEvent] | type[EnvironmentVerificationCompletedEvent],
+        event_class: type[EnvironmentRebuildCompletedEvent | EnvironmentVerificationCompletedEvent],
         context: RepairCycleContext,
         config: RepairTestRunConfig,
         error: TimeoutError | Exception,
@@ -399,7 +398,7 @@ Return a JSON response with the verification status and any issues found."""
                     success=False,
                     duration_seconds=duration_seconds,
                     actions_taken=(),
-                    error=f"Failed to parse LLM response: {str(e)}",
+                    error=f"Failed to parse LLM response: {e!s}",
                 )
             else:
                 # Extract result from response

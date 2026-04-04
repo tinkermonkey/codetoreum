@@ -12,13 +12,14 @@ Verifies that:
 """
 
 from datetime import timedelta
+from unittest.mock import MagicMock
 
 import pytest
 
+from codetoreum.adapters.testing.capturing_mock_event_emitter import CapturingMockEventEmitter
 from codetoreum.adapters.testing.mock_environment_repair_adapter import (
     MockEnvironmentRepairAdapter,
 )
-from codetoreum.adapters.testing.capturing_mock_event_emitter import CapturingMockEventEmitter
 from codetoreum.domain.events.repair_cycle_events import (
     EnvironmentRebuildCompletedEvent,
     EnvironmentRebuildStartedEvent,
@@ -33,7 +34,6 @@ from codetoreum.domain.repair_cycle_types import (
 )
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.output.repair_cycle_service import RepairCycleContext
-from unittest.mock import MagicMock
 
 # ============================================================================
 # Test Fixtures
