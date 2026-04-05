@@ -23,6 +23,7 @@ from codetoreum.domain.events.branch_events import (
     BranchReusedEvent,
 )
 from codetoreum.domain.work_item import WorkItem
+from codetoreum.ports.exceptions import ExternalServiceError
 
 # =============================================================================
 # Strategy 1: Exact Match Tests
@@ -971,8 +972,13 @@ class TestErrorHandling:
     """Tests for error handling and resilience."""
 
     @pytest.mark.asyncio
-    async def test_list_branches_error_handled_in_strategies(self):
-        """Test that errors in list_branches are handled gracefully."""
+    async def test_list_branches_error_propagates_as_external_service_error(self):
+        """Test that errors in list_branches propagate as ExternalServiceError.
+
+        Infrastructure failures should not be silently masked by falling through
+        to "create new" branch. The error should propagate to the caller so they
+        can take appropriate action (retry, fail fast, etc.).
+        """
         ticket_system = AsyncMock()
         version_control = AsyncMock()
         event_emitter = MagicMock()
@@ -983,24 +989,28 @@ class TestErrorHandling:
             event_emitter=event_emitter,
         )
 
-        # list_branches fails
+        # list_branches fails with infrastructure error
         version_control.list_branches.side_effect = Exception("API error")
 
-        # Should fall through strategies and create new
-        resolution = await adapter.resolve_branch(
-            project_id="proj-1",
-            issue_id="123",
-            issue_metadata={"title": "Feature"},
-            repo_path="/repo",
-        )
+        # Should raise ExternalServiceError, not silently fall back to "create new"
+        with pytest.raises(ExternalServiceError) as exc_info:
+            await adapter.resolve_branch(
+                project_id="proj-1",
+                issue_id="123",
+                issue_metadata={"title": "Feature"},
+                repo_path="/repo",
+            )
 
-        # Falls back to creating new
-        assert resolution.action == "create"
-        assert resolution.resolution_strategy == "new"
+        assert "branch_resolution" in str(exc_info.value)
+        assert "Branch resolution failed" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_get_related_items_error_handled(self):
-        """Test that errors in get_related_items are handled."""
+    async def test_get_related_items_error_propagates_as_external_service_error(self):
+        """Test that errors in get_related_items propagate as ExternalServiceError.
+
+        Infrastructure failures in ticket system should not be silently masked.
+        The error should propagate to the caller for appropriate handling.
+        """
         ticket_system = AsyncMock()
         version_control = AsyncMock()
         event_emitter = MagicMock()
@@ -1013,15 +1023,17 @@ class TestErrorHandling:
 
         version_control.list_branches.return_value = ["main"]
 
-        # get_related_items fails
+        # get_related_items fails with infrastructure error
         ticket_system.get_related_items.side_effect = Exception("API error")
 
-        # Should fall back to creating new (after skipping parent/sibling)
-        resolution = await adapter.resolve_branch(
-            project_id="proj-1",
-            issue_id="123",
-            issue_metadata={"title": "Feature"},
-            repo_path="/repo",
-        )
+        # Should raise ExternalServiceError when strategy fails, not fall back to create
+        with pytest.raises(ExternalServiceError) as exc_info:
+            await adapter.resolve_branch(
+                project_id="proj-1",
+                issue_id="123",
+                issue_metadata={"title": "Feature"},
+                repo_path="/repo",
+            )
 
-        assert resolution.action == "create"
+        assert "branch_resolution" in str(exc_info.value)
+        assert "Branch resolution failed" in str(exc_info.value)

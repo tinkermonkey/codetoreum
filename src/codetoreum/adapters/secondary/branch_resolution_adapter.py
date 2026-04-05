@@ -234,33 +234,25 @@ class BranchResolutionAdapter(IBranchResolutionService):
 
         Returns:
             BranchResolution with confidence 1.0 if found, None otherwise
+
+        Raises:
+            ExternalServiceError: If branch listing fails (infrastructure error)
         """
-        try:
-            branches = await self._list_branches(repo_path)
+        branches = await self._list_branches(repo_path)
 
-            # Look for exact pattern: feature/issue-{issue_id}-*
-            pattern = f"feature/issue-{issue_id}-".lower()
-            for branch in branches:
-                if branch.lower().startswith(pattern):
-                    return BranchResolution(
-                        action="reuse",
-                        branch_name=branch,
-                        confidence=1.0,
-                        reason=f"Exact match found for issue #{issue_id}",
-                        resolution_strategy="exact_match",
-                        parent_issue_id=None,
-                    )
-            return None
-
-        except Exception as e:
-            logger.error(
-                "%s: Exact match strategy failed for issue %s: %s",
-                ErrorRegistry.ERR_BRANCH_RESOLUTION_FALLBACK,
-                issue_id,
-                str(e),
-                exc_info=True,
-            )
-            return None
+        # Look for exact pattern: feature/issue-{issue_id}-*
+        pattern = f"feature/issue-{issue_id}-".lower()
+        for branch in branches:
+            if branch.lower().startswith(pattern):
+                return BranchResolution(
+                    action="reuse",
+                    branch_name=branch,
+                    confidence=1.0,
+                    reason=f"Exact match found for issue #{issue_id}",
+                    resolution_strategy="exact_match",
+                    parent_issue_id=None,
+                )
+        return None
 
     async def _strategy_parent_issue(
         self,
@@ -275,43 +267,35 @@ class BranchResolutionAdapter(IBranchResolutionService):
 
         Returns:
             BranchResolution with confidence 0.95 if parent branch found, else None
+
+        Raises:
+            ExternalServiceError: If ticket system or branch listing fails
         """
-        try:
-            # Get parent issue (uses cache to avoid duplicate calls)
-            parent_items = await self._get_parent_items(issue_id)
+        # Get parent issue (uses cache to avoid duplicate calls)
+        parent_items = await self._get_parent_items(issue_id)
 
-            if not parent_items:
-                return None
-
-            parent_issue = parent_items[0]  # Take first parent
-            parent_id = parent_issue.id
-
-            # Look for parent's branch
-            branches = await self._list_branches(repo_path)
-            pattern = f"feature/issue-{parent_id}-".lower()
-
-            for branch in branches:
-                if branch.lower().startswith(pattern):
-                    return BranchResolution(
-                        action="reuse",
-                        branch_name=branch,
-                        confidence=0.95,
-                        reason=f"Parent issue #{parent_id} has existing branch",
-                        resolution_strategy="parent_issue",
-                        parent_issue_id=parent_id,
-                    )
-
+        if not parent_items:
             return None
 
-        except Exception as e:
-            logger.error(
-                "%s: Parent issue strategy failed for issue %s: %s",
-                ErrorRegistry.ERR_BRANCH_RESOLUTION_FALLBACK,
-                issue_id,
-                str(e),
-                exc_info=True,
-            )
-            return None
+        parent_issue = parent_items[0]  # Take first parent
+        parent_id = parent_issue.id
+
+        # Look for parent's branch
+        branches = await self._list_branches(repo_path)
+        pattern = f"feature/issue-{parent_id}-".lower()
+
+        for branch in branches:
+            if branch.lower().startswith(pattern):
+                return BranchResolution(
+                    action="reuse",
+                    branch_name=branch,
+                    confidence=0.95,
+                    reason=f"Parent issue #{parent_id} has existing branch",
+                    resolution_strategy="parent_issue",
+                    parent_issue_id=parent_id,
+                )
+
+        return None
 
     async def _strategy_sibling_issues(
         self,
@@ -327,52 +311,44 @@ class BranchResolutionAdapter(IBranchResolutionService):
 
         Returns:
             BranchResolution with confidence 0.9 if sibling branch found, else None
+
+        Raises:
+            ExternalServiceError: If ticket system or branch listing fails
         """
-        try:
-            # Get parent issue (uses cache to avoid duplicate calls)
-            parent_items = await self._get_parent_items(issue_id)
+        # Get parent issue (uses cache to avoid duplicate calls)
+        parent_items = await self._get_parent_items(issue_id)
 
-            if not parent_items:
-                return None
-
-            parent_issue = parent_items[0]
-            parent_id = parent_issue.id
-
-            # Get siblings
-            sibling_items = await self._ticket_system.get_related_items(
-                parent_id, relationship="parent-of"
-            )
-
-            # Skip ourselves, look for siblings with branches
-            branches = await self._list_branches(repo_path)
-
-            for sibling in sibling_items:
-                if sibling.id == issue_id:
-                    continue
-
-                pattern = f"feature/issue-{sibling.id}-".lower()
-                for branch in branches:
-                    if branch.lower().startswith(pattern):
-                        return BranchResolution(
-                            action="reuse",
-                            branch_name=branch,
-                            confidence=0.9,
-                            reason=f"Sibling issue #{sibling.id} has existing branch",
-                            resolution_strategy="sibling",
-                            parent_issue_id=parent_id,
-                        )
-
+        if not parent_items:
             return None
 
-        except Exception as e:
-            logger.error(
-                "%s: Sibling issue strategy failed for issue %s: %s",
-                ErrorRegistry.ERR_BRANCH_RESOLUTION_FALLBACK,
-                issue_id,
-                str(e),
-                exc_info=True,
-            )
-            return None
+        parent_issue = parent_items[0]
+        parent_id = parent_issue.id
+
+        # Get siblings
+        sibling_items = await self._ticket_system.get_related_items(
+            parent_id, relationship="parent-of"
+        )
+
+        # Skip ourselves, look for siblings with branches
+        branches = await self._list_branches(repo_path)
+
+        for sibling in sibling_items:
+            if sibling.id == issue_id:
+                continue
+
+            pattern = f"feature/issue-{sibling.id}-".lower()
+            for branch in branches:
+                if branch.lower().startswith(pattern):
+                    return BranchResolution(
+                        action="reuse",
+                        branch_name=branch,
+                        confidence=0.9,
+                        reason=f"Sibling issue #{sibling.id} has existing branch",
+                        resolution_strategy="sibling",
+                        parent_issue_id=parent_id,
+                    )
+
+        return None
 
     async def _strategy_fuzzy_match(
         self,
@@ -389,54 +365,46 @@ class BranchResolutionAdapter(IBranchResolutionService):
         Returns:
             BranchResolution with confidence 0.5-0.8 if fuzzy match found above
             threshold, else None
+
+        Raises:
+            ExternalServiceError: If branch listing fails
         """
-        try:
-            # Extract and slugify keywords from issue metadata
-            issue_keywords = self._extract_keywords(metadata)
-            if not issue_keywords:
-                return None
-
-            branches = await self._list_branches(repo_path)
-
-            best_match = None
-            best_similarity = 0.0
-
-            for branch in branches:
-                # Skip exact pattern branches (already handled by strategy 1)
-                if self._is_exact_pattern_branch(branch, issue_id):
-                    continue
-
-                branch_keywords = self._extract_branch_keywords(branch)
-                similarity = self._jaccard_similarity(issue_keywords, branch_keywords)
-
-                if similarity > best_similarity:
-                    best_similarity = similarity
-                    best_match = branch
-
-            # Only return if above threshold
-            if best_match and best_similarity >= self._min_confidence_threshold:
-                # Confidence maps similarity to 0.5-0.8 range
-                confidence = 0.5 + (best_similarity * 0.3)
-                return BranchResolution(
-                    action="reuse",
-                    branch_name=best_match,
-                    confidence=min(0.8, confidence),  # Cap at 0.8
-                    reason=f"Fuzzy match on branch keywords (similarity: {best_similarity:.2f})",
-                    resolution_strategy="fuzzy",
-                    parent_issue_id=None,
-                )
-
+        # Extract and slugify keywords from issue metadata
+        issue_keywords = self._extract_keywords(metadata)
+        if not issue_keywords:
             return None
 
-        except Exception as e:
-            logger.error(
-                "%s: Fuzzy match strategy failed for issue %s: %s",
-                ErrorRegistry.ERR_BRANCH_RESOLUTION_FALLBACK,
-                issue_id,
-                str(e),
-                exc_info=True,
+        branches = await self._list_branches(repo_path)
+
+        best_match = None
+        best_similarity = 0.0
+
+        for branch in branches:
+            # Skip exact pattern branches (already handled by strategy 1)
+            if self._is_exact_pattern_branch(branch, issue_id):
+                continue
+
+            branch_keywords = self._extract_branch_keywords(branch)
+            similarity = self._jaccard_similarity(issue_keywords, branch_keywords)
+
+            if similarity > best_similarity:
+                best_similarity = similarity
+                best_match = branch
+
+        # Only return if above threshold
+        if best_match and best_similarity >= self._min_confidence_threshold:
+            # Confidence maps similarity to 0.5-0.8 range
+            confidence = 0.5 + (best_similarity * 0.3)
+            return BranchResolution(
+                action="reuse",
+                branch_name=best_match,
+                confidence=min(0.8, confidence),  # Cap at 0.8
+                reason=f"Fuzzy match on branch keywords (similarity: {best_similarity:.2f})",
+                resolution_strategy="fuzzy",
+                parent_issue_id=None,
             )
-            return None
+
+        return None
 
     async def _strategy_create_new(
         self,

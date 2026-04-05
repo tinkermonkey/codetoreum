@@ -17,6 +17,7 @@ from codetoreum.domain.events.branch_events import (
     BranchReusedEvent,
 )
 from codetoreum.domain.value_objects import BranchResolution
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.output.branch_resolution_service import IBranchResolutionService
 
 if TYPE_CHECKING:
@@ -167,52 +168,67 @@ class MockBranchResolutionAdapter(MockEventEmitter, IBranchResolutionService):
         now = self._clock.now() if self._clock else datetime.now(UTC)
         timestamp = now.isoformat()
 
-        # Emit primary audit event
-        resolved_event = BranchResolvedEvent(
-            type="branch.resolved",
-            timestamp=timestamp,
-            source="mock_branch_resolution",
-            project_id=project_id,
-            issue_id=issue_id,
-            action=resolution.action,
-            branch_name=resolution.branch_name,
-            confidence=resolution.confidence,
-            reason=resolution.reason,
-            parent_issue_id=resolution.parent_issue_id,
-            resolution_strategy=resolution.resolution_strategy,
-        )
-        self.emit(resolved_event)
-
-        # Emit outcome-specific event
-        if resolution.action == "reuse":
-            outcome_event = BranchReusedEvent(
-                type="branch.reused",
+        # Emit events with error handling to match production adapter behavior
+        try:
+            # Emit primary audit event
+            resolved_event = BranchResolvedEvent(
+                type="branch.resolved",
                 timestamp=timestamp,
                 source="mock_branch_resolution",
                 project_id=project_id,
                 issue_id=issue_id,
+                action=resolution.action,
                 branch_name=resolution.branch_name,
                 confidence=resolution.confidence,
                 reason=resolution.reason,
                 parent_issue_id=resolution.parent_issue_id,
                 resolution_strategy=resolution.resolution_strategy,
             )
-        else:
-            # action == "create"
-            outcome_event = BranchResolutionCreatedEvent(
-                type="branch.created",
-                timestamp=timestamp,
-                source="mock_branch_resolution",
-                project_id=project_id,
-                issue_id=issue_id,
-                branch_name=resolution.branch_name,
-                confidence=resolution.confidence,
-                reason=resolution.reason,
-                parent_issue_id=resolution.parent_issue_id,
-                resolution_strategy=resolution.resolution_strategy,
-            )
+            self.emit(resolved_event)
 
-        self.emit(outcome_event)
+            # Emit outcome-specific event
+            if resolution.action == "reuse":
+                outcome_event = BranchReusedEvent(
+                    type="branch.reused",
+                    timestamp=timestamp,
+                    source="mock_branch_resolution",
+                    project_id=project_id,
+                    issue_id=issue_id,
+                    branch_name=resolution.branch_name,
+                    confidence=resolution.confidence,
+                    reason=resolution.reason,
+                    parent_issue_id=resolution.parent_issue_id,
+                    resolution_strategy=resolution.resolution_strategy,
+                )
+            else:
+                # action == "create"
+                outcome_event = BranchResolutionCreatedEvent(
+                    type="branch.created",
+                    timestamp=timestamp,
+                    source="mock_branch_resolution",
+                    project_id=project_id,
+                    issue_id=issue_id,
+                    branch_name=resolution.branch_name,
+                    confidence=resolution.confidence,
+                    reason=resolution.reason,
+                    parent_issue_id=resolution.parent_issue_id,
+                    resolution_strategy=resolution.resolution_strategy,
+                )
+
+            self.emit(outcome_event)
+
+        except Exception as e:
+            # Log event emission failure but do not propagate - the resolution
+            # is already complete and successful at this point. This matches
+            # production adapter behavior in _emit_events().
+            logger.error(
+                "%s: Failed to emit branch resolution events for issue %s in project %s: %s",
+                ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR,
+                issue_id,
+                project_id,
+                str(e),
+                exc_info=True,
+            )
 
         return resolution
 
