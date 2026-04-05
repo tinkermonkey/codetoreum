@@ -30,7 +30,10 @@ if TYPE_CHECKING:
     from codetoreum.adapters.testing.mock_review_cycle_adapter import (
         MockReviewCycleAdapter,
     )
-    from codetoreum.application.event_handlers import RepairCycleEventHandler
+    from codetoreum.application.event_handlers import (
+        BranchResolutionEventHandler,
+        RepairCycleEventHandler,
+    )
     from codetoreum.ports.output.container import IContainer
     from codetoreum.ports.output.llm_provider import ILLMProvider
     from codetoreum.ports.output.repair_cycle_checkpoint_store import (

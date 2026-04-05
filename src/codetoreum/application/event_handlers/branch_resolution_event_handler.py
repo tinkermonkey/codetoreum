@@ -9,7 +9,6 @@ All events are logged with structured fields for audit trail and metrics.
 """
 
 import logging
-from dataclasses import dataclass
 
 from codetoreum.domain.events import DomainEvent
 from codetoreum.domain.events.branch_events import (
