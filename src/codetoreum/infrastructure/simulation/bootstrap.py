@@ -2020,7 +2020,7 @@ class SimulationApplicationBootstrap:
         BranchReusedEvent, BranchCreatedEvent) and logs them with structured fields
         for complete audit trail and metrics tracking.
 
-        Logs an error if components are not yet initialized, indicating a bootstrap
+        Raises RuntimeError if components are not yet initialized, indicating a bootstrap
         ordering bug that must be fixed.
         """
         if not self.infrastructure or not self._engine:
@@ -2046,7 +2046,7 @@ class SimulationApplicationBootstrap:
         This method registers event handlers on the adapter that publish events
         to the event bus via async tasks, ensuring failures are logged and tracked.
 
-        Logs an error if components are not yet initialized, indicating a bootstrap
+        Raises RuntimeError if components are not yet initialized, indicating a bootstrap
         ordering bug that must be fixed.
         """
         if not self.adapters or not self.infrastructure:
