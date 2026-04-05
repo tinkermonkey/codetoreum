@@ -11,8 +11,9 @@ Resolution Chain:
 4. Fuzzy matching using Jaccard similarity on keywords (confidence 0.5-0.8)
 5. Create new branch using _generate_branch_name() logic (confidence 1.0)
 
-All external API calls (list_branches, get_related_items) are cached with a
-configurable TTL to reduce redundant calls within a single pipeline run.
+Branch list caching (list_branches) uses a configurable TTL to reduce redundant
+calls within a single pipeline run. Parent items are cached within each resolve_branch
+call to avoid duplicate API calls across multiple strategies.
 """
 
 import asyncio
@@ -28,6 +29,7 @@ from codetoreum.domain.events.branch_events import (
     BranchReusedEvent,
 )
 from codetoreum.domain.value_objects import BranchResolution
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.exceptions import ExternalServiceError
 from codetoreum.ports.output.branch_resolution_service import IBranchResolutionService
 from codetoreum.ports.output.event_emitter import IEventEmitter
@@ -196,11 +198,29 @@ class BranchResolutionAdapter(IBranchResolutionService):
             await self._emit_events(resolution, project_id, issue_id)
             return resolution
 
-        except Exception as e:
-            logger.exception(
-                "Branch resolution failed for issue %s in project %s",
+        except (TypeError, AttributeError, ValueError, KeyError) as e:
+            # Programming error in orchestration logic - log and re-raise
+            logger.error(
+                "%s [%s]: Orchestration logic error in branch resolution for issue %s in project %s",
+                ErrorRegistry.ERR_BRANCH_RESOLUTION_ERROR,
+                type(e).__name__,
                 issue_id,
                 project_id,
+                exc_info=True,
+            )
+            raise
+        except ExternalServiceError:
+            # Re-raise external service errors as-is
+            raise
+        except Exception as e:
+            # All other exceptions are infrastructure/external service failures
+            logger.error(
+                "%s: Branch resolution failed for issue %s in project %s: %s",
+                ErrorRegistry.ERR_BRANCH_RESOLUTION_ERROR,
+                issue_id,
+                project_id,
+                str(e),
+                exc_info=True,
             )
             raise ExternalServiceError("branch_resolution", f"Branch resolution failed: {e!s}") from e
 
@@ -233,8 +253,12 @@ class BranchResolutionAdapter(IBranchResolutionService):
             return None
 
         except Exception as e:
-            logger.warning(
-                "Exact match strategy failed: %s", str(e), exc_info=True
+            logger.error(
+                "%s: Exact match strategy failed for issue %s: %s",
+                ErrorRegistry.ERR_BRANCH_RESOLUTION_FALLBACK,
+                issue_id,
+                str(e),
+                exc_info=True,
             )
             return None
 
@@ -280,8 +304,12 @@ class BranchResolutionAdapter(IBranchResolutionService):
             return None
 
         except Exception as e:
-            logger.warning(
-                "Parent issue strategy failed: %s", str(e), exc_info=True
+            logger.error(
+                "%s: Parent issue strategy failed for issue %s: %s",
+                ErrorRegistry.ERR_BRANCH_RESOLUTION_FALLBACK,
+                issue_id,
+                str(e),
+                exc_info=True,
             )
             return None
 
@@ -337,8 +365,12 @@ class BranchResolutionAdapter(IBranchResolutionService):
             return None
 
         except Exception as e:
-            logger.warning(
-                "Sibling issue strategy failed: %s", str(e), exc_info=True
+            logger.error(
+                "%s: Sibling issue strategy failed for issue %s: %s",
+                ErrorRegistry.ERR_BRANCH_RESOLUTION_FALLBACK,
+                issue_id,
+                str(e),
+                exc_info=True,
             )
             return None
 
@@ -397,8 +429,12 @@ class BranchResolutionAdapter(IBranchResolutionService):
             return None
 
         except Exception as e:
-            logger.warning(
-                "Fuzzy match strategy failed: %s", str(e), exc_info=True
+            logger.error(
+                "%s: Fuzzy match strategy failed for issue %s: %s",
+                ErrorRegistry.ERR_BRANCH_RESOLUTION_FALLBACK,
+                issue_id,
+                str(e),
+                exc_info=True,
             )
             return None
 
@@ -437,56 +473,72 @@ class BranchResolutionAdapter(IBranchResolutionService):
         2. BranchReusedEvent (if action="reuse") or BranchResolutionCreatedEvent
            (if action="create")
 
+        Note: Event emission failures are logged but do not block the resolution.
+        The primary resolution decision is independent of event emission success.
+
         Args:
             resolution: The resolution result
             project_id: Project identifier
             issue_id: Issue identifier
         """
-        now = datetime.now(UTC)
-        timestamp = now.isoformat()
+        try:
+            now = datetime.now(UTC)
+            timestamp = now.isoformat()
 
-        # Primary audit event
-        resolved_event = BranchResolvedEvent(
-            type="branch.resolved",
-            timestamp=timestamp,
-            source="branch_resolution",
-            project_id=project_id,
-            issue_id=issue_id,
-            action=resolution.action,
-            branch_name=resolution.branch_name,
-            confidence=resolution.confidence,
-            reason=resolution.reason,
-            parent_issue_id=resolution.parent_issue_id,
-            resolution_strategy=resolution.resolution_strategy,
-        )
-        self.emit(resolved_event)
-
-        # Outcome-specific event
-        if resolution.action == "reuse":
-            outcome_event = BranchReusedEvent(
-                type="branch.reused",
+            # Primary audit event
+            resolved_event = BranchResolvedEvent(
+                type="branch.resolved",
                 timestamp=timestamp,
                 source="branch_resolution",
                 project_id=project_id,
                 issue_id=issue_id,
+                action=resolution.action,
                 branch_name=resolution.branch_name,
                 confidence=resolution.confidence,
                 reason=resolution.reason,
                 parent_issue_id=resolution.parent_issue_id,
                 resolution_strategy=resolution.resolution_strategy,
             )
-        else:
-            outcome_event = BranchResolutionCreatedEvent(
-                type="branch.created",
-                timestamp=timestamp,
-                source="branch_resolution",
-                project_id=project_id,
-                issue_id=issue_id,
-                branch_name=resolution.branch_name,
-                reason=resolution.reason,
-            )
+            self.emit(resolved_event)
 
-        self.emit(outcome_event)
+            # Outcome-specific event
+            if resolution.action == "reuse":
+                outcome_event = BranchReusedEvent(
+                    type="branch.reused",
+                    timestamp=timestamp,
+                    source="branch_resolution",
+                    project_id=project_id,
+                    issue_id=issue_id,
+                    branch_name=resolution.branch_name,
+                    confidence=resolution.confidence,
+                    reason=resolution.reason,
+                    parent_issue_id=resolution.parent_issue_id,
+                    resolution_strategy=resolution.resolution_strategy,
+                )
+            else:
+                outcome_event = BranchResolutionCreatedEvent(
+                    type="branch.created",
+                    timestamp=timestamp,
+                    source="branch_resolution",
+                    project_id=project_id,
+                    issue_id=issue_id,
+                    branch_name=resolution.branch_name,
+                    reason=resolution.reason,
+                )
+
+            self.emit(outcome_event)
+
+        except Exception as e:
+            # Log event emission failure but do not propagate - the resolution
+            # is already complete and successful at this point
+            logger.error(
+                "%s: Failed to emit branch resolution events for issue %s in project %s: %s",
+                ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR,
+                issue_id,
+                project_id,
+                str(e),
+                exc_info=True,
+            )
 
     async def _get_parent_items(self, issue_id: str) -> Any:
         """Get parent items for an issue with caching within a resolve_branch call.
@@ -525,7 +577,8 @@ class BranchResolutionAdapter(IBranchResolutionService):
             repo_path: Local repository path
 
         Returns:
-            List of branch names (without remote prefix)
+            List of branch names. Whether remote prefixes (e.g., "origin/") are
+            included depends on the IVersionControlService implementation.
         """
         async with self._cache_lock:
             now = datetime.now(UTC)
