@@ -3,6 +3,7 @@
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
+from threading import Lock
 from typing import Any
 
 from codetoreum.domain.agent import Agent
@@ -127,7 +128,15 @@ class WorkspaceRouter:
 
         # Cache for branch resolutions: work_item_id -> BranchResolution
         # Used to pass resolution decisions from route_workspace() to prepare_workspace()
+        # Protected by lock for thread-safety in concurrent prepare_workspace calls
         self._branch_resolutions: dict[str, BranchResolution] = {}
+        # Track which work items fell back due to resolution failure
+        self._branch_resolution_fallbacks: dict[str, str] = {}  # work_item_id -> error_message
+        # Cache actual resolved branch names (work_item_id -> branch_name)
+        # Used by finalize_workspace() and prepare_container_environment() to get the actual
+        # branch name after resolution, since WorkspaceContext is frozen with placeholder name
+        self._resolved_branch_names: dict[str, str] = {}
+        self._branch_resolutions_lock = Lock()
 
     async def _emit_event_safely(self, event: Any) -> None:
         """
@@ -304,8 +313,10 @@ class WorkspaceRouter:
                 # This will cache the resolution decision in _branch_resolutions
                 resolved_branch_name = await self._resolve_branch_name(work_item, project, repository_path)
 
-                # Check if there's a cached branch resolution from _resolve_branch_name()
-                resolution = self._branch_resolutions.get(work_item.id)
+                # Check if there's a cached branch resolution from _resolve_branch_name() (thread-safe)
+                with self._branch_resolutions_lock:
+                    resolution = self._branch_resolutions.get(work_item.id)
+                    fallback_error = self._branch_resolution_fallbacks.get(work_item.id)
 
                 try:
                     if resolution is not None:
@@ -353,14 +364,26 @@ class WorkspaceRouter:
                             )
                             await self.vcs.checkout(repo_path_str, resolved_branch_name or "")
                             metadata["branch_action"] = "create_new"
+
+                        # Record fallback if resolution failed
+                        if fallback_error is not None:
+                            metadata["branch_resolution_fallback"] = True
+                            metadata["branch_resolution_fallback_reason"] = fallback_error
                 finally:
-                    # Clean up the cached resolution to prevent memory leaks in long-lived router
-                    self._branch_resolutions.pop(work_item.id, None)
+                    # Clean up the cached resolution to prevent memory leaks in long-lived router (thread-safe)
+                    with self._branch_resolutions_lock:
+                        self._branch_resolutions.pop(work_item.id, None)
+                        self._branch_resolution_fallbacks.pop(work_item.id, None)
 
                 # Update branch with latest from base
                 self._logger.info(f"Pulling latest changes from {project.default_branch}")
                 await self.vcs.pull(repo_path_str, branch=project.default_branch)
                 metadata["updated_from_base"] = True
+
+                # Cache the actual resolved branch name for later use by finalize_workspace()
+                # and prepare_container_environment() (thread-safe)
+                with self._branch_resolutions_lock:
+                    self._resolved_branch_names[work_item.id] = resolved_branch_name
 
                 return WorkspacePreparationResult(
                     success=True,
@@ -466,9 +489,10 @@ class WorkspaceRouter:
                     metadata["commit_sha"] = commit_sha
                     metadata["commit_message"] = commit_message
 
-                    # Push branch
-                    self._logger.info(f"Pushing branch: {context.branch_name}")
-                    await self.vcs.push(repo_path_str, context.branch_name or "")
+                    # Push branch - use resolved name if available, fall back to context name
+                    branch_to_push = self._get_resolved_branch_name(work_item.id, context.branch_name or "")
+                    self._logger.info(f"Pushing branch: {branch_to_push}")
+                    await self.vcs.push(repo_path_str, branch_to_push)
                     metadata["pushed"] = True
 
                     # TODO: Create PR if needed (requires ticket system integration)
@@ -514,6 +538,10 @@ class WorkspaceRouter:
                 reason=f"Workspace finalization failed: {e!s}",
                 metadata={"error": str(e)},
             )
+        finally:
+            # Clean up resolved branch name cache to prevent memory leaks (thread-safe)
+            with self._branch_resolutions_lock:
+                self._resolved_branch_names.pop(context.work_item_id, None)
 
     def prepare_container_environment(
         self,
@@ -557,7 +585,10 @@ class WorkspaceRouter:
 
         # Add branch info for issue workspaces
         if context.is_issue_workspace():
-            env_vars["CODETOREUM_BRANCH_NAME"] = context.branch_name or ""
+            # Use resolved branch name if available (actual name after resolution),
+            # fall back to context branch name (placeholder from route_workspace)
+            branch_name = self._get_resolved_branch_name(context.work_item_id, context.branch_name or "")
+            env_vars["CODETOREUM_BRANCH_NAME"] = branch_name
 
         # Add discussion info for discussion workspaces
         if context.is_discussion_workspace():
@@ -646,8 +677,9 @@ class WorkspaceRouter:
                     repo_path=repository_path,
                 )
 
-                # Cache the resolution for prepare_workspace() to use
-                self._branch_resolutions[work_item.id] = resolution
+                # Cache the resolution for prepare_workspace() to use (thread-safe)
+                with self._branch_resolutions_lock:
+                    self._branch_resolutions[work_item.id] = resolution
 
                 self._logger.info(
                     f"Branch resolved with action={resolution.action}, "
@@ -658,11 +690,15 @@ class WorkspaceRouter:
                 return resolution.branch_name
 
             except Exception as e:
+                error_msg = f"Branch resolution failed: {e}"
                 self._logger.warning(
-                    f"Branch resolution failed, falling back to generation: {e}",
+                    f"Falling back to branch generation. {error_msg}",
                     exc_info=True,
                     extra={"error_id": "ERR_BRANCH_RESOLUTION_FALLBACK"},
                 )
+                # Record fallback for metadata reporting in prepare_workspace() (thread-safe)
+                with self._branch_resolutions_lock:
+                    self._branch_resolution_fallbacks[work_item.id] = error_msg
                 # Fall through to generate name
 
         # No service or service failed: generate branch name
@@ -706,6 +742,27 @@ class WorkspaceRouter:
             number=issue_number,
             title=title_slug,
         )
+
+    def _get_resolved_branch_name(self, work_item_id: str, fallback_name: str) -> str:
+        """
+        Get the actual resolved branch name for a work item.
+
+        Checks the cache of resolved branch names (set during prepare_workspace).
+        If not found, returns the fallback name (placeholder from route_workspace).
+
+        This handles the case where WorkspaceContext is frozen with a placeholder
+        branch name, but the actual branch may have been resolved to a different
+        name during prepare_workspace().
+
+        Args:
+            work_item_id: Work item identifier
+            fallback_name: Placeholder/default name to use if no resolution cached
+
+        Returns:
+            str: The actual resolved branch name, or fallback if not resolved
+        """
+        with self._branch_resolutions_lock:
+            return self._resolved_branch_names.get(work_item_id, fallback_name)
 
     def _generate_commit_message(self, context: WorkspaceContext, execution_result: dict[str, Any]) -> str:
         """

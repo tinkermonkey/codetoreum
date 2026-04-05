@@ -218,6 +218,7 @@ class ErrorRegistry:
 
     # Branch resolution errors
     ERR_BRANCH_RESOLUTION_ERROR = "ERR_BRANCH_RESOLUTION_ERROR"
+    ERR_BRANCH_RESOLUTION_FALLBACK = "ERR_BRANCH_RESOLUTION_FALLBACK"
 
     @classmethod
     def get_all_error_ids(cls) -> set[str]:
