@@ -11,7 +11,13 @@ if TYPE_CHECKING:
     from codetoreum.domain.agent import AgentCapability
 
 from codetoreum.domain.exceptions import DomainError
-from codetoreum.domain.events.branch_events import VALID_RESOLUTION_STRATEGIES
+
+# ============================================================================
+# Branch Resolution Strategy Constants
+# ============================================================================
+
+VALID_RESOLUTION_STRATEGIES = {"exact_match", "parent_issue", "sibling", "fuzzy", "new"}
+VALID_REUSE_STRATEGIES = {"exact_match", "parent_issue", "sibling", "fuzzy"}
 
 # ============================================================================
 # Project Configuration Value Object

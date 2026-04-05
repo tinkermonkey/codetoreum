@@ -9,11 +9,12 @@ from dataclasses import dataclass
 from typing import Literal
 from uuid import uuid4
 
-from .adapter_events import CodetoreumEvent
+from codetoreum.domain.value_objects import (
+    VALID_REUSE_STRATEGIES,
+    VALID_RESOLUTION_STRATEGIES,
+)
 
-# Valid strategies for branch resolution
-VALID_RESOLUTION_STRATEGIES = {"exact_match", "parent_issue", "sibling", "fuzzy", "new"}
-VALID_REUSE_STRATEGIES = {"exact_match", "parent_issue", "sibling", "fuzzy"}
+from .adapter_events import CodetoreumEvent
 
 
 @dataclass(frozen=True)
