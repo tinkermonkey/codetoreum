@@ -26,7 +26,7 @@ from codetoreum.infrastructure.observability.instrumentation import (
 logger = logging.getLogger(__name__)
 
 
-@event_handler("BranchResolved", "BranchReused", "BranchCreated")
+@event_handler("BranchResolvedEvent", "BranchReusedEvent", "BranchResolutionCreatedEvent")
 class BranchResolutionEventHandler(EventHandler):
     """Handles branch resolution events for audit trail and metrics.
 
@@ -71,7 +71,7 @@ class BranchResolutionEventHandler(EventHandler):
         Returns:
             List of event type names
         """
-        return ["BranchResolved", "BranchReused", "BranchCreated"]
+        return ["BranchResolvedEvent", "BranchReusedEvent", "BranchResolutionCreatedEvent"]
 
     @instrument_async_function(
         name="branch_resolution_event_handler.handle",

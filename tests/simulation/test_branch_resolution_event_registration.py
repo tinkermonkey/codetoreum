@@ -161,7 +161,7 @@ async def test_all_three_branch_event_types_handled():
     async def scenario(sim):
         """Publish all three branch event types."""
         from codetoreum.domain.events.branch_events import (
-            BranchCreatedEvent,
+            BranchResolutionCreatedEvent,
             BranchResolvedEvent,
             BranchReusedEvent,
         )
@@ -197,8 +197,8 @@ async def test_all_three_branch_event_types_handled():
         )
         await event_bus.publish(reused_event)
 
-        # 3. BranchCreatedEvent
-        created_event = BranchCreatedEvent(
+        # 3. BranchResolutionCreatedEvent
+        created_event = BranchResolutionCreatedEvent(
             type="branch.created",
             timestamp="2025-01-14T10:32:00+00:00",
             source="branch_resolution",
@@ -218,12 +218,12 @@ async def test_all_three_branch_event_types_handled():
             filters={"event_type": "BranchReusedEvent"}
         )
         created = await event_store.get_events(
-            filters={"event_type": "BranchCreatedEvent"}
+            filters={"event_type": "BranchResolutionCreatedEvent"}
         )
 
         assert len(resolved) > 0, "BranchResolvedEvent not persisted"
         assert len(reused) > 0, "BranchReusedEvent not persisted"
-        assert len(created) > 0, "BranchCreatedEvent not persisted"
+        assert len(created) > 0, "BranchResolutionCreatedEvent not persisted"
 
     result = await runner.run(scenario)
     assert result.success
