@@ -4,7 +4,7 @@ This module provides a deterministic mock implementation of IBranchResolutionSer
 that enables testing branch resolution logic without external dependencies.
 """
 
-import threading
+import asyncio
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -73,7 +73,7 @@ class MockBranchResolutionAdapter(MockEventEmitter, IBranchResolutionService):
         """
         super().__init__()
         self._clock = clock
-        self._lock = threading.Lock()
+        self._lock = asyncio.Lock()
 
         # Configured resolutions: (project_id, issue_id) -> BranchResolution
         self._configured_resolutions: dict[tuple[str, str], BranchResolution] = {}
@@ -111,8 +111,7 @@ class MockBranchResolutionAdapter(MockEventEmitter, IBranchResolutionService):
             msg = "issue_id cannot be empty"
             raise ValueError(msg)
 
-        with self._lock:
-            self._configured_resolutions[(project_id, issue_id)] = resolution
+        self._configured_resolutions[(project_id, issue_id)] = resolution
 
     async def resolve_branch(
         self,
@@ -148,14 +147,14 @@ class MockBranchResolutionAdapter(MockEventEmitter, IBranchResolutionService):
             raise ValueError(msg)
 
         # Check if we should raise an exception (for testing fallback behavior)
-        with self._lock:
+        async with self._lock:
             if self._exception_to_raise is not None:
                 exc = self._exception_to_raise
                 self._exception_to_raise = None  # Clear after raising
                 raise exc
 
         # Get configured or default resolution
-        with self._lock:
+        async with self._lock:
             resolution = self._configured_resolutions.get(
                 (project_id, issue_id), self._default_resolution
             )
@@ -223,8 +222,7 @@ class MockBranchResolutionAdapter(MockEventEmitter, IBranchResolutionService):
 
     def clear_configurations(self) -> None:
         """Clear all configured resolutions."""
-        with self._lock:
-            self._configured_resolutions.clear()
+        self._configured_resolutions.clear()
 
     def set_default_resolution(self, resolution: BranchResolution) -> None:
         """Set the default resolution for unconfigured cases.
@@ -232,8 +230,7 @@ class MockBranchResolutionAdapter(MockEventEmitter, IBranchResolutionService):
         Args:
             resolution: BranchResolution to use as default
         """
-        with self._lock:
-            self._default_resolution = resolution
+        self._default_resolution = resolution
 
     def configure_to_raise(self, exception: Exception) -> None:
         """Configure the adapter to raise an exception on next resolve_branch call.
@@ -243,8 +240,7 @@ class MockBranchResolutionAdapter(MockEventEmitter, IBranchResolutionService):
         Args:
             exception: Exception to raise on next resolve_branch() call
         """
-        with self._lock:
-            self._exception_to_raise = exception
+        self._exception_to_raise = exception
 
     def get_configured_count(self) -> int:
         """Get count of configured resolutions.
@@ -252,5 +248,4 @@ class MockBranchResolutionAdapter(MockEventEmitter, IBranchResolutionService):
         Returns:
             Number of configured (project_id, issue_id) pairs
         """
-        with self._lock:
-            return len(self._configured_resolutions)
+        return len(self._configured_resolutions)

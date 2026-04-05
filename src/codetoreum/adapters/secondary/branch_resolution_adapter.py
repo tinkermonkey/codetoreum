@@ -532,17 +532,19 @@ class BranchResolutionAdapter(IBranchResolutionService):
         Returns:
             Parent items list from get_related_items
         """
+        # Check cache without holding lock during I/O
         async with self._parent_items_lock:
             # Check cache first
             if issue_id in self._parent_items_cache:
                 return self._parent_items_cache[issue_id]
 
-            # Fetch parent items (with lock held to prevent duplicate calls)
-            parent_items = await self._ticket_system.get_related_items(
-                issue_id, relationship="child-of"
-            )
+        # Release lock before I/O call to allow concurrent requests
+        parent_items = await self._ticket_system.get_related_items(
+            issue_id, relationship="child-of"
+        )
 
-            # Cache result (still holding lock)
+        # Cache result with lock held to ensure atomic update
+        async with self._parent_items_lock:
             self._parent_items_cache[issue_id] = parent_items
 
         return parent_items
@@ -560,6 +562,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
             List of branch names. Whether remote prefixes (e.g., "origin/") are
             included depends on the IVersionControlService implementation.
         """
+        # Check cache without holding lock during I/O
         async with self._cache_lock:
             now = datetime.now(UTC)
 
@@ -567,15 +570,16 @@ class BranchResolutionAdapter(IBranchResolutionService):
             if repo_path in self._branch_cache:
                 timestamp, branches = self._branch_cache[repo_path]
                 if now - timestamp < self._cache_ttl:
-                    return list(branches)
+                    return list(branches)  # Defensive copy
 
-            # Fetch fresh branches (with lock held to prevent duplicate calls)
-            branches = await self._version_control.list_branches(repo_path, remote=True)
+        # Release lock before I/O call to allow concurrent requests
+        branches = await self._version_control.list_branches(repo_path, remote=True)
 
-            # Cache result (still holding lock)
+        # Cache result with lock held to ensure atomic update
+        async with self._cache_lock:
             self._branch_cache[repo_path] = (datetime.now(UTC), branches)
 
-        return branches
+        return list(branches)  # Always return defensive copy
 
     def _extract_keywords(self, metadata: dict[str, Any]) -> set[str]:
         """Extract and slugify keywords from issue metadata.
