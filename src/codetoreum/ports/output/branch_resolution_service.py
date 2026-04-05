@@ -14,6 +14,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from codetoreum.domain.value_objects import BranchResolution
+
 from .event_emitter import IEventEmitter
 
 
