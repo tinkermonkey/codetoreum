@@ -9,8 +9,8 @@ Tests cover:
 """
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -23,7 +23,6 @@ from codetoreum.domain.events.branch_events import (
     BranchReusedEvent,
 )
 from codetoreum.domain.work_item import WorkItem
-
 
 # =============================================================================
 # Strategy 1: Exact Match Tests

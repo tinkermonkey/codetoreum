@@ -202,7 +202,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
                 issue_id,
                 project_id,
             )
-            raise ExternalServiceError("branch_resolution", f"Branch resolution failed: {str(e)}") from e
+            raise ExternalServiceError("branch_resolution", f"Branch resolution failed: {e!s}") from e
 
     async def _strategy_exact_match(
         self, repo_path: str, issue_id: str
@@ -587,7 +587,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
             Set of slugified keywords from branch name
         """
         # Remove prefix (feature/, bugfix/, etc.)
-        name = branch_name.split("/")[-1] if "/" in branch_name else branch_name
+        name = branch_name.rsplit("/", maxsplit=1)[-1] if "/" in branch_name else branch_name
 
         # Split on common separators
         keywords = set()
