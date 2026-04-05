@@ -916,3 +916,118 @@ async def test_verify_with_circuit_breaker_open(
         )
 
     assert "Circuit is open" in str(exc_info.value)
+
+
+# ============================================================================
+# Test Type Description Error Handling Tests
+# ============================================================================
+
+
+def test_get_test_type_description_unknown_type(
+    mock_event_emitter, caplog
+):
+    """Test that unknown test type raises ValueError and logs error.
+
+    This test verifies that when an unknown RepairTestType enum value is
+    encountered (indicating the enum was extended but prompt builders were
+    not updated), the method:
+    1. Raises ValueError with a clear message
+    2. Logs an error with ErrorRegistry.ERR_REPAIR_CYCLE_ERROR
+    3. Includes the unknown value in the error message
+    """
+    adapter = _make_adapter(MagicMock(), event_emitter=mock_event_emitter)
+
+    # Create a mock test type that is not in _test_type_descriptions
+    unknown_test_type = MagicMock(spec=RepairTestType)
+    unknown_test_type.value = "UNKNOWN_TYPE"
+
+    # Verify the type is not in descriptions
+    assert unknown_test_type not in adapter._test_type_descriptions
+
+    # Attempt to get description - should raise ValueError
+    with pytest.raises(ValueError) as exc_info:
+        adapter._get_test_type_description(unknown_test_type)
+
+    # Verify error message indicates enum extension issue
+    error_msg = str(exc_info.value)
+    assert "Unknown RepairTestType" in error_msg
+    assert "enum was extended" in error_msg
+    assert "prompt builders were not updated" in error_msg
+
+    # Verify error was logged with correct context
+    assert any(
+        record.levelname == "ERROR"
+        and "Unknown RepairTestType" in record.message
+        and record.test_type == "UNKNOWN_TYPE"
+        for record in caplog.records
+    )
+
+
+@pytest.mark.asyncio
+async def test_build_environment_rebuild_prompt_unknown_test_type(
+    mock_event_emitter, caplog
+):
+    """Test that rebuild prompt builder raises ValueError for unknown test type.
+
+    Verifies that _build_environment_rebuild_prompt correctly propagates
+    the ValueError from _get_test_type_description when an unknown test type
+    is encountered.
+    """
+    mock_llm = MagicMock()
+    adapter = _make_adapter(mock_llm, event_emitter=mock_event_emitter)
+
+    # Create a mock test type that is not in _test_type_descriptions
+    unknown_test_type = MagicMock(spec=RepairTestType)
+    unknown_test_type.value = "NEW_TEST_TYPE"
+
+    # Create config with unknown test type
+    config = RepairTestRunConfig(
+        test_type=unknown_test_type,
+        timeout=900,
+        max_iterations=5,
+        review_warnings=True,
+    )
+
+    # Attempt to build prompt - should raise ValueError
+    with pytest.raises(ValueError) as exc_info:
+        adapter._build_environment_rebuild_prompt(config)
+
+    # Verify error message
+    error_msg = str(exc_info.value)
+    assert "Unknown RepairTestType" in error_msg
+    assert "enum was extended" in error_msg
+
+
+@pytest.mark.asyncio
+async def test_build_environment_verify_prompt_unknown_test_type(
+    mock_event_emitter, caplog
+):
+    """Test that verify prompt builder raises ValueError for unknown test type.
+
+    Verifies that _build_environment_verify_prompt correctly propagates
+    the ValueError from _get_test_type_description when an unknown test type
+    is encountered.
+    """
+    mock_llm = MagicMock()
+    adapter = _make_adapter(mock_llm, event_emitter=mock_event_emitter)
+
+    # Create a mock test type that is not in _test_type_descriptions
+    unknown_test_type = MagicMock(spec=RepairTestType)
+    unknown_test_type.value = "FUTURE_TEST_TYPE"
+
+    # Create config with unknown test type
+    config = RepairTestRunConfig(
+        test_type=unknown_test_type,
+        timeout=900,
+        max_iterations=5,
+        review_warnings=True,
+    )
+
+    # Attempt to build prompt - should raise ValueError
+    with pytest.raises(ValueError) as exc_info:
+        adapter._build_environment_verify_prompt(config)
+
+    # Verify error message
+    error_msg = str(exc_info.value)
+    assert "Unknown RepairTestType" in error_msg
+    assert "enum was extended" in error_msg

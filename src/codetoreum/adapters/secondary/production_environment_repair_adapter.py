@@ -131,7 +131,7 @@ class ProductionEnvironmentRepairAdapter(IEnvironmentRepairService):
             Human-readable description of the test type
 
         Raises:
-            AssertionError: If test_type is not in the known descriptions dictionary
+            ValueError: If test_type is not in the known descriptions dictionary
         """
         if test_type not in self._test_type_descriptions:
             msg = f"Unknown RepairTestType {test_type!r} - this indicates RepairTestType enum was extended but prompt builders were not updated"
