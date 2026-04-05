@@ -699,6 +699,175 @@ class TestBranchResolvedEventInstantiation:
             )
 
 
+class TestBranchResolvedEventCrossFieldValidation:
+    """Tests for cross-field validation between action and resolution_strategy in events."""
+
+    def test_create_action_with_exact_match_fails(self):
+        """Test that action='create' with resolution_strategy='exact_match' fails."""
+        with pytest.raises(DomainError, match="action='create' requires resolution_strategy='new'"):
+            BranchResolvedEvent(
+                type="branch.resolved",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="branch_resolution",
+                project_id="proj-1",
+                issue_id="123",
+                action="create",
+                branch_name="feature/test",
+                confidence=0.5,
+                reason="test",
+                resolution_strategy="exact_match",
+            )
+
+    def test_create_action_with_parent_issue_fails(self):
+        """Test that action='create' with resolution_strategy='parent_issue' fails."""
+        with pytest.raises(DomainError, match="action='create' requires resolution_strategy='new'"):
+            BranchResolvedEvent(
+                type="branch.resolved",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="branch_resolution",
+                project_id="proj-1",
+                issue_id="123",
+                action="create",
+                branch_name="feature/test",
+                confidence=0.5,
+                reason="test",
+                resolution_strategy="parent_issue",
+            )
+
+    def test_create_action_with_sibling_fails(self):
+        """Test that action='create' with resolution_strategy='sibling' fails."""
+        with pytest.raises(DomainError, match="action='create' requires resolution_strategy='new'"):
+            BranchResolvedEvent(
+                type="branch.resolved",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="branch_resolution",
+                project_id="proj-1",
+                issue_id="123",
+                action="create",
+                branch_name="feature/test",
+                confidence=0.5,
+                reason="test",
+                resolution_strategy="sibling",
+            )
+
+    def test_create_action_with_fuzzy_fails(self):
+        """Test that action='create' with resolution_strategy='fuzzy' fails."""
+        with pytest.raises(DomainError, match="action='create' requires resolution_strategy='new'"):
+            BranchResolvedEvent(
+                type="branch.resolved",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="branch_resolution",
+                project_id="proj-1",
+                issue_id="123",
+                action="create",
+                branch_name="feature/test",
+                confidence=0.5,
+                reason="test",
+                resolution_strategy="fuzzy",
+            )
+
+    def test_reuse_action_with_new_fails(self):
+        """Test that action='reuse' with resolution_strategy='new' fails."""
+        with pytest.raises(DomainError, match="action='reuse' cannot use resolution_strategy='new'"):
+            BranchResolvedEvent(
+                type="branch.resolved",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="branch_resolution",
+                project_id="proj-1",
+                issue_id="123",
+                action="reuse",
+                branch_name="feature/test",
+                confidence=0.5,
+                reason="test",
+                resolution_strategy="new",
+            )
+
+    def test_create_action_with_new_succeeds(self):
+        """Test that action='create' with resolution_strategy='new' succeeds."""
+        event = BranchResolvedEvent(
+            type="branch.resolved",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="branch_resolution",
+            project_id="proj-1",
+            issue_id="123",
+            action="create",
+            branch_name="feature/test",
+            confidence=0.5,
+            reason="test",
+            resolution_strategy="new",
+        )
+        assert event.action == "create"
+        assert event.resolution_strategy == "new"
+
+    def test_reuse_action_with_exact_match_succeeds(self):
+        """Test that action='reuse' with resolution_strategy='exact_match' succeeds."""
+        event = BranchResolvedEvent(
+            type="branch.resolved",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="branch_resolution",
+            project_id="proj-1",
+            issue_id="123",
+            action="reuse",
+            branch_name="feature/test",
+            confidence=0.5,
+            reason="test",
+            resolution_strategy="exact_match",
+        )
+        assert event.action == "reuse"
+        assert event.resolution_strategy == "exact_match"
+
+    def test_reuse_action_with_parent_issue_succeeds(self):
+        """Test that action='reuse' with resolution_strategy='parent_issue' succeeds."""
+        event = BranchResolvedEvent(
+            type="branch.resolved",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="branch_resolution",
+            project_id="proj-1",
+            issue_id="123",
+            action="reuse",
+            branch_name="feature/test",
+            confidence=0.5,
+            reason="test",
+            resolution_strategy="parent_issue",
+        )
+        assert event.action == "reuse"
+        assert event.resolution_strategy == "parent_issue"
+
+    def test_reuse_action_with_sibling_succeeds(self):
+        """Test that action='reuse' with resolution_strategy='sibling' succeeds."""
+        event = BranchResolvedEvent(
+            type="branch.resolved",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="branch_resolution",
+            project_id="proj-1",
+            issue_id="123",
+            action="reuse",
+            branch_name="feature/test",
+            confidence=0.5,
+            reason="test",
+            resolution_strategy="sibling",
+        )
+        assert event.action == "reuse"
+        assert event.resolution_strategy == "sibling"
+
+    def test_reuse_action_with_fuzzy_succeeds(self):
+        """Test that action='reuse' with resolution_strategy='fuzzy' succeeds."""
+        event = BranchResolvedEvent(
+            type="branch.resolved",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="branch_resolution",
+            project_id="proj-1",
+            issue_id="123",
+            action="reuse",
+            branch_name="feature/test",
+            confidence=0.5,
+            reason="test",
+            resolution_strategy="fuzzy",
+        )
+        assert event.action == "reuse"
+        assert event.resolution_strategy == "fuzzy"
+
+
 class TestBranchResolvedEventSerialization:
     """Tests for BranchResolvedEvent serialization/deserialization."""
 

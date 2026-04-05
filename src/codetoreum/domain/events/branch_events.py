@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Literal
 from uuid import uuid4
 
+from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.value_objects import (
     VALID_RESOLUTION_STRATEGIES,
     VALID_REUSE_STRATEGIES,
@@ -94,6 +95,13 @@ class BranchResolvedEvent(CodetoreumEvent):
         if self.resolution_strategy not in VALID_RESOLUTION_STRATEGIES:
             msg = f"resolution_strategy must be one of {VALID_RESOLUTION_STRATEGIES}, got {self.resolution_strategy}"
             raise ValueError(msg)
+        # Cross-field validation: action and resolution_strategy must be compatible
+        if self.action == "create" and self.resolution_strategy != "new":
+            msg = f"BranchResolvedEvent: action='create' requires resolution_strategy='new', got '{self.resolution_strategy}'"
+            raise DomainError(msg)
+        if self.action == "reuse" and self.resolution_strategy == "new":
+            msg = "BranchResolvedEvent: action='reuse' cannot use resolution_strategy='new'"
+            raise DomainError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
