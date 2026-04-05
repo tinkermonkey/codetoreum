@@ -513,7 +513,7 @@ async def test_prepare_container_environment(workspace_router, sample_work_item,
         project=sample_project,
     )
 
-    env_vars = workspace_router.prepare_container_environment(
+    env_vars = await workspace_router.prepare_container_environment(
         context=context,
         project=sample_project,
         agent=sample_agent,
