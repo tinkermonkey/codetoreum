@@ -692,7 +692,6 @@ class BranchResolution:
 
         Raises:
             ValueError: If required fields are missing or invalid.
-            KeyError: If required field is missing.
         """
         try:
             return cls(

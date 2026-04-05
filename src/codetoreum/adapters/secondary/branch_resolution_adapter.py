@@ -8,7 +8,7 @@ Resolution Chain:
 1. Exact match on feature/issue-{issue_id}-* pattern (confidence 1.0)
 2. Parent issue lookup via ITicketSystem, check parent's branch (confidence 0.95)
 3. Sibling issues - query parent's children, check for shared branch (confidence 0.9)
-4. Fuzzy matching using Jaccard similarity on keywords (confidence 0.5-0.8)
+4. Fuzzy matching using Jaccard similarity on keywords (confidence 0.71-0.8)
 5. Create new branch using _generate_branch_name() logic (confidence 1.0)
 
 Branch list caching (list_branches) uses a configurable TTL to reduce redundant
@@ -573,7 +573,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
 
         Processes title and description, extracting tokens and slugifying them.
         Slugification converts to lowercase and replaces non-alphanumeric chars
-        with hyphens.
+        with spaces.
 
         Args:
             metadata: Issue metadata dict
@@ -602,7 +602,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
     def _extract_branch_keywords(self, branch_name: str) -> set[str]:
         """Extract keywords from branch name.
 
-        Splits on common separators and slugifies tokens.
+        Splits on common separators (hyphens, underscores) and extracts tokens.
 
         Args:
             branch_name: Branch name (e.g., "feature/issue-123-fix-auth-bug")
@@ -680,7 +680,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
         """Generate a new branch name.
 
         Creates feature/issue-{issue_id}-{slugified-title} branch name.
-        Falls back to feature/issue-{issue_id}-branch if title unavailable.
+        Falls back to feature/issue-{issue_id} if title unavailable.
 
         Args:
             issue_id: Issue ID
