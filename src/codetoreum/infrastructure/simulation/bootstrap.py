@@ -2080,10 +2080,14 @@ class SimulationApplicationBootstrap:
         CRITICAL: Event publishing is awaited (not fire-and-forget) to ensure failures
         are captured by the dead letter queue. Silent failures would disable automation
         for affected work items. See issue #371.
+
+        Raises RuntimeError if components are not yet initialized, indicating a bootstrap
+        ordering bug that must be fixed.
         """
         if not self.adapters or not self.infrastructure:
-            logger.error("Cannot register board event bridge: components not ready")
-            return
+            error_msg = "Cannot register board event bridge: components not ready"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
 
         event_bus = self.infrastructure.event_bus
         ticket_adapter = self.adapters.ticket_system
