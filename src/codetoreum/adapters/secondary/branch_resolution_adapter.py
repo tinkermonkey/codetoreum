@@ -441,67 +441,76 @@ class BranchResolutionAdapter(IBranchResolutionService):
         2. BranchReusedEvent (if action="reuse") or BranchResolutionCreatedEvent
            (if action="create")
 
-        Note: Event emission failures are logged but do not block the resolution.
-        The primary resolution decision is independent of event emission success.
+        Note: Infrastructure/transport failures during event emission are logged but do
+        not block the resolution. The primary resolution decision is independent of
+        event emission success. Programming errors (wrong event constructor arguments,
+        etc.) are allowed to propagate for immediate debugging.
 
         Args:
             resolution: The resolution result
             project_id: Project identifier
             issue_id: Issue identifier
-        """
-        try:
-            now = datetime.now(UTC)
-            timestamp = now.isoformat()
 
-            # Primary audit event
-            resolved_event = BranchResolvedEvent(
-                type="branch.resolved",
+        Raises:
+            TypeError, AttributeError, ValueError, KeyError: Programming errors in
+                event construction (e.g., wrong dataclass arguments after refactor)
+        """
+        now = datetime.now(UTC)
+        timestamp = now.isoformat()
+
+        # Create events (let programming errors propagate)
+        resolved_event = BranchResolvedEvent(
+            type="branch.resolved",
+            timestamp=timestamp,
+            source="branch_resolution",
+            project_id=project_id,
+            issue_id=issue_id,
+            action=resolution.action,
+            branch_name=resolution.branch_name,
+            confidence=resolution.confidence,
+            reason=resolution.reason,
+            parent_issue_id=resolution.parent_issue_id,
+            resolution_strategy=resolution.resolution_strategy,
+        )
+
+        # Outcome-specific event
+        if resolution.action == "reuse":
+            outcome_event = BranchReusedEvent(
+                type="branch.reused",
                 timestamp=timestamp,
                 source="branch_resolution",
                 project_id=project_id,
                 issue_id=issue_id,
-                action=resolution.action,
                 branch_name=resolution.branch_name,
                 confidence=resolution.confidence,
                 reason=resolution.reason,
                 parent_issue_id=resolution.parent_issue_id,
                 resolution_strategy=resolution.resolution_strategy,
             )
+        else:
+            outcome_event = BranchResolutionCreatedEvent(
+                type="branch.created",
+                timestamp=timestamp,
+                source="branch_resolution",
+                project_id=project_id,
+                issue_id=issue_id,
+                branch_name=resolution.branch_name,
+                confidence=resolution.confidence,
+                reason=resolution.reason,
+                parent_issue_id=resolution.parent_issue_id,
+                resolution_strategy=resolution.resolution_strategy,
+            )
+
+        # Emit events with infrastructure failure handling only
+        try:
             self.emit(resolved_event)
-
-            # Outcome-specific event
-            if resolution.action == "reuse":
-                outcome_event = BranchReusedEvent(
-                    type="branch.reused",
-                    timestamp=timestamp,
-                    source="branch_resolution",
-                    project_id=project_id,
-                    issue_id=issue_id,
-                    branch_name=resolution.branch_name,
-                    confidence=resolution.confidence,
-                    reason=resolution.reason,
-                    parent_issue_id=resolution.parent_issue_id,
-                    resolution_strategy=resolution.resolution_strategy,
-                )
-            else:
-                outcome_event = BranchResolutionCreatedEvent(
-                    type="branch.created",
-                    timestamp=timestamp,
-                    source="branch_resolution",
-                    project_id=project_id,
-                    issue_id=issue_id,
-                    branch_name=resolution.branch_name,
-                    confidence=resolution.confidence,
-                    reason=resolution.reason,
-                    parent_issue_id=resolution.parent_issue_id,
-                    resolution_strategy=resolution.resolution_strategy,
-                )
-
             self.emit(outcome_event)
-
+        except (TypeError, AttributeError, ValueError, KeyError):
+            # Programming errors in event emission - re-raise immediately
+            raise
         except Exception as e:
-            # Log event emission failure but do not propagate - the resolution
-            # is already complete and successful at this point
+            # Infrastructure/transport failures - log but do not propagate
+            # The resolution is already complete and successful at this point
             logger.error(
                 "%s: Failed to emit branch resolution events for issue %s in project %s: %s",
                 ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR,
