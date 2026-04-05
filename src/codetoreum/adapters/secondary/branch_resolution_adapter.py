@@ -140,7 +140,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
         1. Exact match on feature/issue-{issue_id}-* (confidence 1.0)
         2. Parent issue branch (confidence 0.95)
         3. Sibling issue branch (confidence 0.9)
-        4. Fuzzy keyword match (confidence 0.5-0.8)
+        4. Fuzzy keyword match (confidence 0.71-0.8)
         5. Create new branch (confidence 1.0)
 
         Args:
@@ -363,7 +363,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
         Only accepts matches with confidence >= min_confidence_threshold.
 
         Returns:
-            BranchResolution with confidence 0.5-0.8 if fuzzy match found above
+            BranchResolution with confidence 0.71-0.8 if fuzzy match found above
             threshold, else None
 
         Raises:
@@ -393,7 +393,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
 
         # Only return if above threshold
         if best_match and best_similarity >= self._min_confidence_threshold:
-            # Confidence maps similarity to 0.5-0.8 range
+            # Confidence maps similarity to 0.71-0.8 range
             confidence = 0.5 + (best_similarity * 0.3)
             return BranchResolution(
                 action="reuse",
@@ -608,7 +608,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
             branch_name: Branch name (e.g., "feature/issue-123-fix-auth-bug")
 
         Returns:
-            Set of slugified keywords from branch name
+            Set of lowercase keyword tokens from branch name
         """
         # Remove prefix (feature/, bugfix/, etc.)
         name = branch_name.rsplit("/", maxsplit=1)[-1] if "/" in branch_name else branch_name
