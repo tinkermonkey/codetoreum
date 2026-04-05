@@ -119,6 +119,7 @@ class MockBranchResolutionAdapter(MockEventEmitter, IBranchResolutionService):
         project_id: str,
         issue_id: str,
         issue_metadata: Mapping[str, Any],
+        repo_path: str,
     ) -> BranchResolution:
         """Resolve branch for a work item.
 
@@ -130,6 +131,7 @@ class MockBranchResolutionAdapter(MockEventEmitter, IBranchResolutionService):
             project_id: Project identifier
             issue_id: Issue/work item identifier
             issue_metadata: Issue metadata (unused in mock)
+            repo_path: Local repository path (unused in mock, but required by interface)
 
         Returns:
             BranchResolution with action and branch details

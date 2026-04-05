@@ -15,9 +15,9 @@ All external API calls (list_branches, get_related_items) are cached with a
 configurable TTL to reduce redundant calls within a single pipeline run.
 """
 
+import asyncio
 import logging
 import re
-import threading
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -103,11 +103,11 @@ class BranchResolutionAdapter(IBranchResolutionService):
 
         # Branch cache: {repo_identifier} -> (timestamp, [branch_names])
         self._branch_cache: dict[str, tuple[datetime, list[str]]] = {}
-        self._cache_lock = threading.Lock()
+        self._cache_lock = asyncio.Lock()
 
         # Parent items cache: {issue_id} -> parent_items (for reducing duplicate API calls)
         self._parent_items_cache: dict[str, Any] = {}
-        self._parent_items_lock = threading.Lock()
+        self._parent_items_lock = asyncio.Lock()
 
     # =========================================================================
     # IEventEmitter Implementation (Delegation)
@@ -130,7 +130,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
         project_id: str,
         issue_id: str,
         issue_metadata: Mapping[str, Any],
-        repo_path: str | None = None,
+        repo_path: str,
     ) -> BranchResolution:
         """Resolve branch using five-step priority chain.
 
@@ -157,13 +157,8 @@ class BranchResolutionAdapter(IBranchResolutionService):
             # Convert immutable mapping to dict for convenience
             metadata = dict(issue_metadata) if issue_metadata else {}
 
-            # repo_path is required
-            if not repo_path:
-                msg = "repo_path is required for branch resolution"
-                raise ValueError(msg)
-
             # Clear parent items cache for this resolution call
-            with self._parent_items_lock:
+            async with self._parent_items_lock:
                 self._parent_items_cache.clear()
 
             # Strategy 1: Exact match
@@ -505,17 +500,17 @@ class BranchResolutionAdapter(IBranchResolutionService):
         Returns:
             Parent items list from get_related_items
         """
-        with self._parent_items_lock:
+        async with self._parent_items_lock:
+            # Check cache first
             if issue_id in self._parent_items_cache:
                 return self._parent_items_cache[issue_id]
 
-        # Fetch parent items
-        parent_items = await self._ticket_system.get_related_items(
-            issue_id, relationship="child-of"
-        )
+            # Fetch parent items (with lock held to prevent duplicate calls)
+            parent_items = await self._ticket_system.get_related_items(
+                issue_id, relationship="child-of"
+            )
 
-        # Cache result
-        with self._parent_items_lock:
+            # Cache result (still holding lock)
             self._parent_items_cache[issue_id] = parent_items
 
         return parent_items
@@ -532,20 +527,19 @@ class BranchResolutionAdapter(IBranchResolutionService):
         Returns:
             List of branch names (without remote prefix)
         """
-        with self._cache_lock:
+        async with self._cache_lock:
             now = datetime.now(UTC)
 
-            # Check cache
+            # Check cache first
             if repo_path in self._branch_cache:
                 timestamp, branches = self._branch_cache[repo_path]
                 if now - timestamp < self._cache_ttl:
                     return list(branches)
 
-        # Fetch fresh branches
-        branches = await self._version_control.list_branches(repo_path, remote=True)
+            # Fetch fresh branches (with lock held to prevent duplicate calls)
+            branches = await self._version_control.list_branches(repo_path, remote=True)
 
-        # Cache result
-        with self._cache_lock:
+            # Cache result (still holding lock)
             self._branch_cache[repo_path] = (datetime.now(UTC), branches)
 
         return branches

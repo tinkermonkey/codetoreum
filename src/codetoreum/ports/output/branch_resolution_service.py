@@ -46,7 +46,8 @@ class IBranchResolutionService(IEventEmitter, ABC):
                     "description": "Users cannot login via OAuth",
                     "labels": ["bug", "high-priority"],
                     "parent_issue": "issue-100"
-                }
+                },
+                repo_path="/workspace/my-repo"
             )
 
             # Resolution includes action and confidence
@@ -62,6 +63,7 @@ class IBranchResolutionService(IEventEmitter, ABC):
         project_id: str,
         issue_id: str,
         issue_metadata: Mapping[str, Any],
+        repo_path: str,
     ) -> BranchResolution:
         """Resolve branch for a work item.
 
@@ -74,6 +76,7 @@ class IBranchResolutionService(IEventEmitter, ABC):
             issue_metadata: Immutable mapping of issue details (title,
                            description, labels, relationships, etc.)
                            The mapping must not be modified during resolution.
+            repo_path: Local repository path (required for querying branches)
 
         Returns:
             BranchResolution: Resolution decision including action (create/reuse),

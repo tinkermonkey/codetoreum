@@ -22,7 +22,7 @@ class TestMockBranchResolutionAdapter:
         """Test default behavior returns action='create' with resolution_strategy='new'."""
         adapter = MockBranchResolutionAdapter()
 
-        result = await adapter.resolve_branch("proj-1", "123", {})
+        result = await adapter.resolve_branch("proj-1", "123", {}, "/repo")
 
         assert result.action == "create"
         assert result.resolution_strategy == "new"
@@ -42,7 +42,7 @@ class TestMockBranchResolutionAdapter:
         )
         adapter.configure_resolution("proj-1", "123", configured)
 
-        result = await adapter.resolve_branch("proj-1", "123", {})
+        result = await adapter.resolve_branch("proj-1", "123", {}, "/repo")
 
         assert result.action == "reuse"
         assert result.branch_name == "feature/issue-123-auth-fix"
@@ -71,8 +71,8 @@ class TestMockBranchResolutionAdapter:
         adapter.configure_resolution("proj-1", "1", config1)
         adapter.configure_resolution("proj-1", "2", config2)
 
-        result1 = await adapter.resolve_branch("proj-1", "1", {})
-        result2 = await adapter.resolve_branch("proj-1", "2", {})
+        result1 = await adapter.resolve_branch("proj-1", "1", {}, "/repo")
+        result2 = await adapter.resolve_branch("proj-1", "2", {}, "/repo")
 
         assert result1.branch_name == "feature/issue-1-fix"
         assert result2.branch_name == "feature/issue-2-new"
@@ -95,7 +95,7 @@ class TestMockBranchResolutionAdapter:
         )
         adapter.configure_resolution("proj-1", "100", resolution)
 
-        result = await adapter.resolve_branch("proj-1", "100", {})
+        result = await adapter.resolve_branch("proj-1", "100", {}, "/repo")
 
         assert result.action == "reuse"
         assert result.resolution_strategy == "exact_match"
@@ -116,7 +116,7 @@ class TestMockBranchResolutionAdapter:
         )
         adapter.configure_resolution("proj-1", "201", resolution)
 
-        result = await adapter.resolve_branch("proj-1", "201", {})
+        result = await adapter.resolve_branch("proj-1", "201", {}, "/repo")
 
         assert result.action == "reuse"
         assert result.resolution_strategy == "parent_issue"
@@ -136,7 +136,7 @@ class TestMockBranchResolutionAdapter:
         )
         adapter.configure_resolution("proj-1", "302", resolution)
 
-        result = await adapter.resolve_branch("proj-1", "302", {})
+        result = await adapter.resolve_branch("proj-1", "302", {}, "/repo")
 
         assert result.action == "reuse"
         assert result.resolution_strategy == "sibling"
@@ -156,7 +156,7 @@ class TestMockBranchResolutionAdapter:
         )
         adapter.configure_resolution("proj-1", "400", resolution)
 
-        result = await adapter.resolve_branch("proj-1", "400", {})
+        result = await adapter.resolve_branch("proj-1", "400", {}, "/repo")
 
         assert result.action == "reuse"
         assert result.resolution_strategy == "fuzzy"
@@ -176,7 +176,7 @@ class TestMockBranchResolutionAdapter:
         )
         adapter.configure_resolution("proj-1", "500", resolution)
 
-        result = await adapter.resolve_branch("proj-1", "500", {})
+        result = await adapter.resolve_branch("proj-1", "500", {}, "/repo")
 
         assert result.action == "create"
         assert result.resolution_strategy == "new"
@@ -203,7 +203,7 @@ class TestMockBranchResolutionAdapter:
         )
         adapter.configure_resolution("proj-1", "600", resolution)
 
-        await adapter.resolve_branch("proj-1", "600", {})
+        await adapter.resolve_branch("proj-1", "600", {}, "/repo")
 
         assert len(events) == 1
         assert events[0].type == "branch.resolved"
@@ -227,7 +227,7 @@ class TestMockBranchResolutionAdapter:
         )
         adapter.configure_resolution("proj-1", "700", resolution)
 
-        await adapter.resolve_branch("proj-1", "700", {})
+        await adapter.resolve_branch("proj-1", "700", {}, "/repo")
 
         assert len(events) == 1
         assert events[0].type == "branch.reused"
@@ -250,7 +250,7 @@ class TestMockBranchResolutionAdapter:
         )
         adapter.configure_resolution("proj-1", "800", resolution)
 
-        await adapter.resolve_branch("proj-1", "800", {})
+        await adapter.resolve_branch("proj-1", "800", {}, "/repo")
 
         assert len(events) == 1
         assert events[0].type == "branch.created"
@@ -281,7 +281,7 @@ class TestMockBranchResolutionAdapter:
         assert adapter.get_configured_count() == 0
 
         # Should now return default
-        result = await adapter.resolve_branch("proj-1", "900", {})
+        result = await adapter.resolve_branch("proj-1", "900", {}, "/repo")
         assert result.action == "create"
 
     @pytest.mark.asyncio
@@ -299,7 +299,7 @@ class TestMockBranchResolutionAdapter:
         adapter.set_default_resolution(custom_default)
 
         # Request for unconfigured pair should return custom default
-        result = await adapter.resolve_branch("proj-1", "999", {})
+        result = await adapter.resolve_branch("proj-1", "999", {}, "/repo")
 
         assert result.action == "reuse"
         assert result.branch_name == "feature/custom-default"
@@ -315,7 +315,7 @@ class TestMockBranchResolutionAdapter:
         adapter = MockBranchResolutionAdapter()
 
         with pytest.raises(ValueError, match="project_id cannot be empty"):
-            await adapter.resolve_branch("", "123", {})
+            await adapter.resolve_branch("", "123", {}, "/repo")
 
     @pytest.mark.asyncio
     async def test_empty_issue_id_raises_error(self):
@@ -323,7 +323,7 @@ class TestMockBranchResolutionAdapter:
         adapter = MockBranchResolutionAdapter()
 
         with pytest.raises(ValueError, match="issue_id cannot be empty"):
-            await adapter.resolve_branch("proj-1", "", {})
+            await adapter.resolve_branch("proj-1", "", {}, "/repo")
 
     def test_configure_with_empty_project_id_raises_error(self):
         """Test configure_resolution with empty project_id raises ValueError."""
@@ -371,8 +371,8 @@ class TestMockBranchResolutionAdapter:
         )
         adapter.configure_resolution("proj-1", "1000", resolution)
 
-        result1 = await adapter.resolve_branch("proj-1", "1000", {})
-        result2 = await adapter.resolve_branch("proj-1", "1000", {})
+        result1 = await adapter.resolve_branch("proj-1", "1000", {}, "/repo")
+        result2 = await adapter.resolve_branch("proj-1", "1000", {}, "/repo")
 
         assert result1.branch_name == result2.branch_name
         assert result1.action == result2.action
@@ -395,6 +395,6 @@ class TestMockBranchResolutionAdapter:
             resolutions.append(res)
 
         for i in range(5):
-            result = await adapter.resolve_branch("proj-1", str(i), {})
+            result = await adapter.resolve_branch("proj-1", str(i), {}, "/repo")
             assert result.branch_name == resolutions[i].branch_name
             assert result.action == resolutions[i].action
