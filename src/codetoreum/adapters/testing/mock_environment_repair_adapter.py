@@ -6,7 +6,7 @@ result sequences for comprehensive simulation testing.
 
 The mock adapter:
 1. Returns pre-configured RebuildResult and VerificationResult sequences
-2. Emits all 4 environment repair domain events
+2. Emits 4 of 5 environment repair domain events
 3. Integrates with SimulationClock for deterministic timing
 4. Raises error when configured sequence is exhausted (prevents silent test failures)
 5. Raises error on subsequent calls when no results are configured (prevents infinite default successes)
@@ -58,7 +58,7 @@ class MockEnvironmentRepairAdapter(IEnvironmentRepairService):
     - Configurable rebuild result sequences
     - Configurable verification result sequences
     - SimulationClock integration for deterministic timing
-    - Event emission for all 4 environment repair domain events
+    - Event emission for 4 of 5 environment repair domain events
     - Error on sequence exhaustion (prevents silent test failures)
 
     Example:

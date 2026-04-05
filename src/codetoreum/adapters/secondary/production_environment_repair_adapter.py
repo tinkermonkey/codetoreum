@@ -7,7 +7,7 @@ timeout enforcement and comprehensive event emission.
 Key responsibilities:
 1. Environment rebuild: Coordinate re-provisioning of dependencies and configuration
 2. Environment verification: Validate that the rebuilt environment is healthy
-3. Event emission: Emit all 4 domain events via injected IEventEmitter
+3. Event emission: Emit 4 of 5 environment repair domain events via injected IEventEmitter
 4. Timeout enforcement: Apply independent timeouts for rebuild and verification
 5. Error logging: Comprehensive error logging with ErrorRegistry IDs
 """
@@ -80,8 +80,12 @@ class ProductionEnvironmentRepairAdapter(IEnvironmentRepairService):
             env_rebuild_timeout_seconds=1200,
             env_verification_timeout_seconds=120
         )
+        # llm_factory must be an async callable returning ILLMProvider
+        async def get_llm(agent_name: str) -> ILLMProvider:
+            return await llm_provider_factory(agent_name)
+
         adapter = ProductionEnvironmentRepairAdapter(
-            llm_factory=lambda agent_name: llm_provider,
+            llm_factory=get_llm,
             repair_config=config,
             event_emitter=event_emitter
         )
