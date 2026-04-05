@@ -2050,7 +2050,7 @@ Return a JSON response with the status of dependency fixes applied."""
                             prior_fix_attempts=tuple(prior_fix_attempts),
                             prior_classifications=tuple(prior_classifications),
                         )
-                        self.event_emitter.emit(
+                        self._emit_event_safely(
                             SystemicAnalysisStartedEvent(
                                 type="repair_cycle.systemic_analysis_started",
                                 timestamp=datetime.now(UTC).isoformat(),
@@ -2058,13 +2058,15 @@ Return a JSON response with the status of dependency fixes applied."""
                                 work_item_id=context.work_item_id,
                                 workflow_run_id=context.workflow_run_id,
                                 failure_count=len(test_result.failures),
-                            )
+                            ),
+                            "systemic analysis started",
+                            context.workflow_run_id,
                         )
                         try:
                             classification = await self._systemic_analysis_service.analyze(
                                 list(test_result.failures), analysis_context
                             )
-                            self.event_emitter.emit(
+                            self._emit_event_safely(
                                 SystemicAnalysisCompletedEvent(
                                     type="repair_cycle.systemic_analysis_completed",
                                     timestamp=datetime.now(UTC).isoformat(),
@@ -2076,7 +2078,9 @@ Return a JSON response with the status of dependency fixes applied."""
                                     work_item_id=context.work_item_id,
                                     workflow_run_id=context.workflow_run_id,
                                     failure_count=len(test_result.failures),
-                                )
+                                ),
+                                "systemic analysis completed",
+                                context.workflow_run_id,
                             )
 
                             # Track this classification for escalation support in future iterations
@@ -2245,7 +2249,7 @@ Return a JSON response with the status of dependency fixes applied."""
                                     error = error_msg
 
                                     # Emit dedicated failure event for env_rebuild_exhausted (named outcome per specification)
-                                    self.event_emitter.emit(
+                                    self._emit_event_safely(
                                         EnvironmentRebuildExhaustedEvent(
                                             type="repair_cycle.environment_rebuild_exhausted",
                                             timestamp=datetime.now(UTC).isoformat(),
@@ -2256,7 +2260,9 @@ Return a JSON response with the status of dependency fixes applied."""
                                             iteration=iteration,
                                             max_attempts=context.stage_config.environment_repair_config.max_env_rebuilds,
                                             error_message=error_msg,
-                                        )
+                                        ),
+                                        "environment rebuild exhausted",
+                                        context.workflow_run_id,
                                     )
                                     break  # Exit test cycle loop
                             elif classification.classification == FailureClassification.TRANSIENT_FAILURE:
@@ -2371,7 +2377,7 @@ Return a JSON response with the status of dependency fixes applied."""
                                 exc_info=True,
                             )
                             # Emit failed completion event to close out the started event
-                            self.event_emitter.emit(
+                            self._emit_event_safely(
                                 SystemicAnalysisCompletedEvent(
                                     type="repair_cycle.systemic_analysis_completed",
                                     timestamp=datetime.now(UTC).isoformat(),
@@ -2383,7 +2389,9 @@ Return a JSON response with the status of dependency fixes applied."""
                                     work_item_id=context.work_item_id,
                                     workflow_run_id=context.workflow_run_id,
                                     failure_count=len(test_result.failures),
-                                )
+                                ),
+                                "systemic analysis completed (failure fallback)",
+                                context.workflow_run_id,
                             )
                             grouped = self._group_failures_by_file(test_result.failures)
                             files_fixed += await self.fix_failures_by_file(grouped, config, context)
@@ -2422,7 +2430,7 @@ Return a JSON response with the status of dependency fixes applied."""
         duration_seconds = (datetime.now(UTC) - start_time).total_seconds()
         self._elapsed_time += duration_seconds
 
-        self.event_emitter.emit(
+        self._emit_event_safely(
             RepairCycleTestCycleCompletedEvent(
                 type="repair_cycle.test_cycle_completed",
                 timestamp=datetime.now(UTC).isoformat(),
@@ -2436,7 +2444,9 @@ Return a JSON response with the status of dependency fixes applied."""
                 error=error,
                 duration_seconds=duration_seconds,
                 workflow_run_id=context.workflow_run_id,
-            )
+            ),
+            "test cycle completed",
+            context.workflow_run_id,
         )
 
         cycle_result = CycleResult(

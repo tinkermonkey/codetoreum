@@ -1871,6 +1871,16 @@ class EnvironmentRebuildCompletedEvent(CodetoreumEvent):
         if not isinstance(self.actions_taken, tuple):
             object.__setattr__(self, "actions_taken", tuple(self.actions_taken))
 
+        # Consistency check: success state must align with error
+        if self.success and self.error is not None:
+            msg = f"success=True but error is set: '{self.error}' (contradiction)"
+            raise ValueError(msg)
+
+        # Consistency check: failure without explanation is a data quality gap
+        if not self.success and self.error is None:
+            msg = "success=False but error is not set (failure must have explanation for audit trail)"
+            raise ValueError(msg)
+
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
