@@ -12,6 +12,10 @@ Available Adapters:
 """
 
 from codetoreum.adapters.primary.fastapi_app import create_app, create_development_app
+from codetoreum.adapters.primary.factories.production import (
+    create_branch_resolution_adapter,
+    create_workspace_router_with_branch_resolution,
+)
 from codetoreum.adapters.primary.github_webhook_adapter import (
     GitHubWebhookAdapter,
     WebhookEvent,
@@ -28,4 +32,6 @@ __all__ = [
     "WebhookProcessingResult",
     "create_app",
     "create_development_app",
+    "create_branch_resolution_adapter",
+    "create_workspace_router_with_branch_resolution",
 ]

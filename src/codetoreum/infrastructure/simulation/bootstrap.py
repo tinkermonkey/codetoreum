@@ -2020,11 +2020,11 @@ class SimulationApplicationBootstrap:
         BranchReusedEvent, BranchCreatedEvent) and logs them with structured fields
         for complete audit trail and metrics tracking.
 
-        Logs a warning if components are not yet initialized, allowing
-        graceful degradation if called before full setup completion.
+        Logs an error if components are not yet initialized, indicating a bootstrap
+        ordering bug that must be fixed.
         """
         if not self.infrastructure or not self._engine:
-            logger.warning("Cannot register branch resolution handler: components not ready")
+            logger.error("Cannot register branch resolution handler: components not ready")
             return
 
         handler = self._engine.create_branch_resolution_event_handler(
@@ -2045,11 +2045,11 @@ class SimulationApplicationBootstrap:
         This method registers event handlers on the adapter that publish events
         to the event bus via async tasks, ensuring failures are logged and tracked.
 
-        Logs a warning if components are not yet initialized, allowing
-        graceful degradation if called before full setup completion.
+        Logs an error if components are not yet initialized, indicating a bootstrap
+        ordering bug that must be fixed.
         """
         if not self.adapters or not self.infrastructure:
-            logger.warning("Cannot wire branch resolution adapter: components not ready")
+            logger.error("Cannot wire branch resolution adapter: components not ready")
             return
 
         from codetoreum.infrastructure.event_bus_wiring import (
@@ -2080,7 +2080,7 @@ class SimulationApplicationBootstrap:
         for affected work items. See issue #371.
         """
         if not self.adapters or not self.infrastructure:
-            logger.warning("Cannot register board event bridge: components not ready")
+            logger.error("Cannot register board event bridge: components not ready")
             return
 
         event_bus = self.infrastructure.event_bus
