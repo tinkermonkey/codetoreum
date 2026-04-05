@@ -690,8 +690,8 @@ class TestBranchResolvedEventInstantiation:
         assert event.confidence == 0.95
 
     def test_missing_project_id(self):
-        """Test that missing project_id raises ValueError."""
-        with pytest.raises(ValueError, match="project_id is required"):
+        """Test that missing project_id raises DomainError."""
+        with pytest.raises(DomainError, match="project_id is required"):
             BranchResolvedEvent(
                 type="branch.resolved",
                 timestamp=datetime.now(UTC).isoformat(),
@@ -706,8 +706,8 @@ class TestBranchResolvedEventInstantiation:
             )
 
     def test_missing_issue_id(self):
-        """Test that missing issue_id raises ValueError."""
-        with pytest.raises(ValueError, match="issue_id is required"):
+        """Test that missing issue_id raises DomainError."""
+        with pytest.raises(DomainError, match="issue_id is required"):
             BranchResolvedEvent(
                 type="branch.resolved",
                 timestamp=datetime.now(UTC).isoformat(),
@@ -722,8 +722,8 @@ class TestBranchResolvedEventInstantiation:
             )
 
     def test_invalid_confidence(self):
-        """Test that invalid confidence raises ValueError."""
-        with pytest.raises(ValueError, match="confidence must be between 0.0 and 1.0"):
+        """Test that invalid confidence raises DomainError."""
+        with pytest.raises(DomainError, match="confidence must be between 0.0 and 1.0"):
             BranchResolvedEvent(
                 type="branch.resolved",
                 timestamp=datetime.now(UTC).isoformat(),
@@ -856,7 +856,7 @@ class TestBranchResolvedEventCrossFieldValidation:
         assert event.resolution_strategy == "exact_match"
 
     def test_reuse_action_with_parent_issue_succeeds(self):
-        """Test that action='reuse' with resolution_strategy='parent_issue' succeeds."""
+        """Test that action='reuse' with resolution_strategy='parent_issue' succeeds when parent_issue_id is provided."""
         event = BranchResolvedEvent(
             type="branch.resolved",
             timestamp=datetime.now(UTC).isoformat(),
@@ -867,10 +867,29 @@ class TestBranchResolvedEventCrossFieldValidation:
             branch_name="feature/test",
             confidence=0.5,
             reason="test",
+            parent_issue_id="456",
             resolution_strategy="parent_issue",
         )
         assert event.action == "reuse"
         assert event.resolution_strategy == "parent_issue"
+        assert event.parent_issue_id == "456"
+
+    def test_parent_issue_strategy_without_parent_issue_id_fails(self):
+        """Test that resolution_strategy='parent_issue' without parent_issue_id fails."""
+        with pytest.raises(DomainError, match="resolution_strategy='parent_issue' requires parent_issue_id"):
+            BranchResolvedEvent(
+                type="branch.resolved",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="branch_resolution",
+                project_id="proj-1",
+                issue_id="123",
+                action="reuse",
+                branch_name="feature/test",
+                confidence=0.5,
+                reason="test",
+                parent_issue_id=None,
+                resolution_strategy="parent_issue",
+            )
 
     def test_reuse_action_with_sibling_succeeds(self):
         """Test that action='reuse' with resolution_strategy='sibling' succeeds."""
@@ -1037,7 +1056,7 @@ class TestBranchReusedEventInstantiation:
 
     def test_invalid_resolution_strategy_for_reuse(self):
         """Test that 'new' strategy is not allowed for BranchReusedEvent."""
-        with pytest.raises(ValueError, match="resolution_strategy must be one of"):
+        with pytest.raises(DomainError, match="resolution_strategy must be one of"):
             BranchReusedEvent(
                 type="branch.reused",
                 timestamp=datetime.now(UTC).isoformat(),
@@ -1050,6 +1069,39 @@ class TestBranchReusedEventInstantiation:
                 parent_issue_id=None,
                 resolution_strategy="new",
             )
+
+    def test_parent_issue_strategy_without_parent_issue_id_fails(self):
+        """Test that resolution_strategy='parent_issue' without parent_issue_id fails."""
+        with pytest.raises(DomainError, match="resolution_strategy='parent_issue' requires parent_issue_id"):
+            BranchReusedEvent(
+                type="branch.reused",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="branch_resolution",
+                project_id="proj-1",
+                issue_id="123",
+                branch_name="feature/test",
+                confidence=0.95,
+                reason="test",
+                parent_issue_id=None,
+                resolution_strategy="parent_issue",
+            )
+
+    def test_parent_issue_strategy_with_parent_issue_id_succeeds(self):
+        """Test that resolution_strategy='parent_issue' with parent_issue_id succeeds."""
+        event = BranchReusedEvent(
+            type="branch.reused",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="branch_resolution",
+            project_id="proj-1",
+            issue_id="123",
+            branch_name="feature/456",
+            confidence=0.95,
+            reason="Found via parent issue",
+            parent_issue_id="456",
+            resolution_strategy="parent_issue",
+        )
+        assert event.resolution_strategy == "parent_issue"
+        assert event.parent_issue_id == "456"
 
 
 class TestBranchReusedEventSerialization:
@@ -1126,8 +1178,8 @@ class TestBranchResolutionCreatedEventInstantiation:
         assert event.reason == "No existing branch found, creating new"
 
     def test_missing_branch_name(self):
-        """Test that missing branch_name raises ValueError."""
-        with pytest.raises(ValueError, match="branch_name is required"):
+        """Test that missing branch_name raises DomainError."""
+        with pytest.raises(DomainError, match="branch_name is required"):
             BranchResolutionCreatedEvent(
                 type="branch.created",
                 timestamp=datetime.now(UTC).isoformat(),
@@ -1139,8 +1191,8 @@ class TestBranchResolutionCreatedEventInstantiation:
             )
 
     def test_missing_reason(self):
-        """Test that missing reason raises ValueError."""
-        with pytest.raises(ValueError, match="reason is required"):
+        """Test that missing reason raises DomainError."""
+        with pytest.raises(DomainError, match="reason is required"):
             BranchResolutionCreatedEvent(
                 type="branch.created",
                 timestamp=datetime.now(UTC).isoformat(),
