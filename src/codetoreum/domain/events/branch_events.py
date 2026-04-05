@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from typing import Literal
 from uuid import uuid4
 
-from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.value_objects import (
     VALID_RESOLUTION_STRATEGIES,
     VALID_REUSE_STRATEGIES,
@@ -79,33 +78,33 @@ class BranchResolvedEvent(CodetoreumEvent):
         super().__post_init__()
         if not self.project_id:
             msg = "project_id is required"
-            raise DomainError(msg)
+            raise ValueError(msg)
         if not self.issue_id:
             msg = "issue_id is required"
-            raise DomainError(msg)
+            raise ValueError(msg)
         if not self.branch_name:
             msg = "branch_name is required"
-            raise DomainError(msg)
+            raise ValueError(msg)
         if not 0.0 <= self.confidence <= 1.0:
             msg = "confidence must be between 0.0 and 1.0"
-            raise DomainError(msg)
+            raise ValueError(msg)
         if not self.reason:
             msg = "reason is required"
-            raise DomainError(msg)
+            raise ValueError(msg)
         if self.resolution_strategy not in VALID_RESOLUTION_STRATEGIES:
             msg = f"resolution_strategy must be one of {VALID_RESOLUTION_STRATEGIES}, got {self.resolution_strategy}"
-            raise DomainError(msg)
+            raise ValueError(msg)
         # Cross-field validation: action and resolution_strategy must be compatible
         if self.action == "create" and self.resolution_strategy != "new":
             msg = f"BranchResolvedEvent: action='create' requires resolution_strategy='new', got '{self.resolution_strategy}'"
-            raise DomainError(msg)
+            raise ValueError(msg)
         if self.action == "reuse" and self.resolution_strategy == "new":
             msg = "BranchResolvedEvent: action='reuse' cannot use resolution_strategy='new'"
-            raise DomainError(msg)
+            raise ValueError(msg)
         # Cross-field validation: parent_issue strategy requires parent_issue_id
         if self.resolution_strategy == "parent_issue" and self.parent_issue_id is None:
             msg = "BranchResolvedEvent: resolution_strategy='parent_issue' requires parent_issue_id to be set"
-            raise DomainError(msg)
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -203,26 +202,26 @@ class BranchReusedEvent(CodetoreumEvent):
         super().__post_init__()
         if not self.project_id:
             msg = "project_id is required"
-            raise DomainError(msg)
+            raise ValueError(msg)
         if not self.issue_id:
             msg = "issue_id is required"
-            raise DomainError(msg)
+            raise ValueError(msg)
         if not self.branch_name:
             msg = "branch_name is required"
-            raise DomainError(msg)
+            raise ValueError(msg)
         if not 0.0 <= self.confidence <= 1.0:
             msg = "confidence must be between 0.0 and 1.0"
-            raise DomainError(msg)
+            raise ValueError(msg)
         if not self.reason:
             msg = "reason is required"
-            raise DomainError(msg)
+            raise ValueError(msg)
         if self.resolution_strategy not in VALID_REUSE_STRATEGIES:
             msg = f"resolution_strategy must be one of {VALID_REUSE_STRATEGIES}, got {self.resolution_strategy}"
-            raise DomainError(msg)
+            raise ValueError(msg)
         # Cross-field validation: parent_issue strategy requires parent_issue_id
         if self.resolution_strategy == "parent_issue" and self.parent_issue_id is None:
             msg = "BranchReusedEvent: resolution_strategy='parent_issue' requires parent_issue_id to be set"
-            raise DomainError(msg)
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -317,22 +316,22 @@ class BranchResolutionCreatedEvent(CodetoreumEvent):
         super().__post_init__()
         if not self.project_id:
             msg = "project_id is required"
-            raise DomainError(msg)
+            raise ValueError(msg)
         if not self.issue_id:
             msg = "issue_id is required"
-            raise DomainError(msg)
+            raise ValueError(msg)
         if not self.branch_name:
             msg = "branch_name is required"
-            raise DomainError(msg)
+            raise ValueError(msg)
         if not 0.0 <= self.confidence <= 1.0:
             msg = "confidence must be between 0.0 and 1.0"
-            raise DomainError(msg)
+            raise ValueError(msg)
         if not self.reason:
             msg = "reason is required"
-            raise DomainError(msg)
+            raise ValueError(msg)
         if self.resolution_strategy != "new":
             msg = f"resolution_strategy must be 'new' for BranchResolutionCreatedEvent, got {self.resolution_strategy}"
-            raise DomainError(msg)
+            raise ValueError(msg)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""

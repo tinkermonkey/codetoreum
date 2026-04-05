@@ -691,7 +691,7 @@ class TestBranchResolvedEventInstantiation:
 
     def test_missing_project_id(self):
         """Test that missing project_id raises DomainError."""
-        with pytest.raises(DomainError, match="project_id is required"):
+        with pytest.raises(ValueError, match="project_id is required"):
             BranchResolvedEvent(
                 type="branch.resolved",
                 timestamp=datetime.now(UTC).isoformat(),
@@ -707,7 +707,7 @@ class TestBranchResolvedEventInstantiation:
 
     def test_missing_issue_id(self):
         """Test that missing issue_id raises DomainError."""
-        with pytest.raises(DomainError, match="issue_id is required"):
+        with pytest.raises(ValueError, match="issue_id is required"):
             BranchResolvedEvent(
                 type="branch.resolved",
                 timestamp=datetime.now(UTC).isoformat(),
@@ -723,7 +723,7 @@ class TestBranchResolvedEventInstantiation:
 
     def test_invalid_confidence(self):
         """Test that invalid confidence raises DomainError."""
-        with pytest.raises(DomainError, match="confidence must be between 0.0 and 1.0"):
+        with pytest.raises(ValueError, match="confidence must be between 0.0 and 1.0"):
             BranchResolvedEvent(
                 type="branch.resolved",
                 timestamp=datetime.now(UTC).isoformat(),
@@ -743,7 +743,7 @@ class TestBranchResolvedEventCrossFieldValidation:
 
     def test_create_action_with_exact_match_fails(self):
         """Test that action='create' with resolution_strategy='exact_match' fails."""
-        with pytest.raises(DomainError, match="action='create' requires resolution_strategy='new'"):
+        with pytest.raises(ValueError, match="action='create' requires resolution_strategy='new'"):
             BranchResolvedEvent(
                 type="branch.resolved",
                 timestamp=datetime.now(UTC).isoformat(),
@@ -759,7 +759,7 @@ class TestBranchResolvedEventCrossFieldValidation:
 
     def test_create_action_with_parent_issue_fails(self):
         """Test that action='create' with resolution_strategy='parent_issue' fails."""
-        with pytest.raises(DomainError, match="action='create' requires resolution_strategy='new'"):
+        with pytest.raises(ValueError, match="action='create' requires resolution_strategy='new'"):
             BranchResolvedEvent(
                 type="branch.resolved",
                 timestamp=datetime.now(UTC).isoformat(),
@@ -775,7 +775,7 @@ class TestBranchResolvedEventCrossFieldValidation:
 
     def test_create_action_with_sibling_fails(self):
         """Test that action='create' with resolution_strategy='sibling' fails."""
-        with pytest.raises(DomainError, match="action='create' requires resolution_strategy='new'"):
+        with pytest.raises(ValueError, match="action='create' requires resolution_strategy='new'"):
             BranchResolvedEvent(
                 type="branch.resolved",
                 timestamp=datetime.now(UTC).isoformat(),
@@ -791,7 +791,7 @@ class TestBranchResolvedEventCrossFieldValidation:
 
     def test_create_action_with_fuzzy_fails(self):
         """Test that action='create' with resolution_strategy='fuzzy' fails."""
-        with pytest.raises(DomainError, match="action='create' requires resolution_strategy='new'"):
+        with pytest.raises(ValueError, match="action='create' requires resolution_strategy='new'"):
             BranchResolvedEvent(
                 type="branch.resolved",
                 timestamp=datetime.now(UTC).isoformat(),
@@ -807,7 +807,7 @@ class TestBranchResolvedEventCrossFieldValidation:
 
     def test_reuse_action_with_new_fails(self):
         """Test that action='reuse' with resolution_strategy='new' fails."""
-        with pytest.raises(DomainError, match="action='reuse' cannot use resolution_strategy='new'"):
+        with pytest.raises(ValueError, match="action='reuse' cannot use resolution_strategy='new'"):
             BranchResolvedEvent(
                 type="branch.resolved",
                 timestamp=datetime.now(UTC).isoformat(),
@@ -876,7 +876,7 @@ class TestBranchResolvedEventCrossFieldValidation:
 
     def test_parent_issue_strategy_without_parent_issue_id_fails(self):
         """Test that resolution_strategy='parent_issue' without parent_issue_id fails."""
-        with pytest.raises(DomainError, match="resolution_strategy='parent_issue' requires parent_issue_id"):
+        with pytest.raises(ValueError, match="resolution_strategy='parent_issue' requires parent_issue_id"):
             BranchResolvedEvent(
                 type="branch.resolved",
                 timestamp=datetime.now(UTC).isoformat(),
@@ -1056,7 +1056,7 @@ class TestBranchReusedEventInstantiation:
 
     def test_invalid_resolution_strategy_for_reuse(self):
         """Test that 'new' strategy is not allowed for BranchReusedEvent."""
-        with pytest.raises(DomainError, match="resolution_strategy must be one of"):
+        with pytest.raises(ValueError, match="resolution_strategy must be one of"):
             BranchReusedEvent(
                 type="branch.reused",
                 timestamp=datetime.now(UTC).isoformat(),
@@ -1072,7 +1072,7 @@ class TestBranchReusedEventInstantiation:
 
     def test_parent_issue_strategy_without_parent_issue_id_fails(self):
         """Test that resolution_strategy='parent_issue' without parent_issue_id fails."""
-        with pytest.raises(DomainError, match="resolution_strategy='parent_issue' requires parent_issue_id"):
+        with pytest.raises(ValueError, match="resolution_strategy='parent_issue' requires parent_issue_id"):
             BranchReusedEvent(
                 type="branch.reused",
                 timestamp=datetime.now(UTC).isoformat(),
@@ -1179,7 +1179,7 @@ class TestBranchResolutionCreatedEventInstantiation:
 
     def test_missing_branch_name(self):
         """Test that missing branch_name raises DomainError."""
-        with pytest.raises(DomainError, match="branch_name is required"):
+        with pytest.raises(ValueError, match="branch_name is required"):
             BranchResolutionCreatedEvent(
                 type="branch.created",
                 timestamp=datetime.now(UTC).isoformat(),
@@ -1192,7 +1192,7 @@ class TestBranchResolutionCreatedEventInstantiation:
 
     def test_missing_reason(self):
         """Test that missing reason raises DomainError."""
-        with pytest.raises(DomainError, match="reason is required"):
+        with pytest.raises(ValueError, match="reason is required"):
             BranchResolutionCreatedEvent(
                 type="branch.created",
                 timestamp=datetime.now(UTC).isoformat(),
