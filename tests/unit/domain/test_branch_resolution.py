@@ -224,17 +224,147 @@ class TestBranchResolutionInstantiation:
             )
 
     def test_all_valid_resolution_strategies(self):
-        """Test that all valid strategies are accepted."""
-        strategies = ["exact_match", "parent_issue", "sibling", "fuzzy", "new"]
-        for strategy in strategies:
+        """Test that all valid strategies are accepted with correct action."""
+        # Test reuse strategies
+        reuse_strategies = ["exact_match", "parent_issue", "sibling", "fuzzy"]
+        for strategy in reuse_strategies:
             resolution = BranchResolution(
-                action="create",
+                action="reuse",
                 branch_name="feature/test",
                 confidence=0.5,
                 reason="test",
                 resolution_strategy=strategy,
             )
             assert resolution.resolution_strategy == strategy
+
+        # Test create strategy
+        resolution = BranchResolution(
+            action="create",
+            branch_name="feature/test",
+            confidence=0.5,
+            reason="test",
+            resolution_strategy="new",
+        )
+        assert resolution.resolution_strategy == "new"
+
+
+class TestBranchResolutionCrossFieldValidation:
+    """Tests for cross-field validation between action and resolution_strategy."""
+
+    def test_create_action_with_exact_match_fails(self):
+        """Test that action='create' with resolution_strategy='exact_match' fails."""
+        with pytest.raises(DomainError, match="action='create' requires resolution_strategy='new'"):
+            BranchResolution(
+                action="create",
+                branch_name="feature/test",
+                confidence=0.5,
+                reason="test",
+                resolution_strategy="exact_match",
+            )
+
+    def test_create_action_with_parent_issue_fails(self):
+        """Test that action='create' with resolution_strategy='parent_issue' fails."""
+        with pytest.raises(DomainError, match="action='create' requires resolution_strategy='new'"):
+            BranchResolution(
+                action="create",
+                branch_name="feature/test",
+                confidence=0.5,
+                reason="test",
+                resolution_strategy="parent_issue",
+            )
+
+    def test_create_action_with_sibling_fails(self):
+        """Test that action='create' with resolution_strategy='sibling' fails."""
+        with pytest.raises(DomainError, match="action='create' requires resolution_strategy='new'"):
+            BranchResolution(
+                action="create",
+                branch_name="feature/test",
+                confidence=0.5,
+                reason="test",
+                resolution_strategy="sibling",
+            )
+
+    def test_create_action_with_fuzzy_fails(self):
+        """Test that action='create' with resolution_strategy='fuzzy' fails."""
+        with pytest.raises(DomainError, match="action='create' requires resolution_strategy='new'"):
+            BranchResolution(
+                action="create",
+                branch_name="feature/test",
+                confidence=0.5,
+                reason="test",
+                resolution_strategy="fuzzy",
+            )
+
+    def test_reuse_action_with_new_fails(self):
+        """Test that action='reuse' with resolution_strategy='new' fails."""
+        with pytest.raises(DomainError, match="action='reuse' cannot use resolution_strategy='new'"):
+            BranchResolution(
+                action="reuse",
+                branch_name="feature/test",
+                confidence=0.5,
+                reason="test",
+                resolution_strategy="new",
+            )
+
+    def test_create_action_with_new_succeeds(self):
+        """Test that action='create' with resolution_strategy='new' succeeds."""
+        resolution = BranchResolution(
+            action="create",
+            branch_name="feature/test",
+            confidence=0.5,
+            reason="test",
+            resolution_strategy="new",
+        )
+        assert resolution.action == "create"
+        assert resolution.resolution_strategy == "new"
+
+    def test_reuse_action_with_exact_match_succeeds(self):
+        """Test that action='reuse' with resolution_strategy='exact_match' succeeds."""
+        resolution = BranchResolution(
+            action="reuse",
+            branch_name="feature/test",
+            confidence=0.5,
+            reason="test",
+            resolution_strategy="exact_match",
+        )
+        assert resolution.action == "reuse"
+        assert resolution.resolution_strategy == "exact_match"
+
+    def test_reuse_action_with_parent_issue_succeeds(self):
+        """Test that action='reuse' with resolution_strategy='parent_issue' succeeds."""
+        resolution = BranchResolution(
+            action="reuse",
+            branch_name="feature/test",
+            confidence=0.5,
+            reason="test",
+            resolution_strategy="parent_issue",
+        )
+        assert resolution.action == "reuse"
+        assert resolution.resolution_strategy == "parent_issue"
+
+    def test_reuse_action_with_sibling_succeeds(self):
+        """Test that action='reuse' with resolution_strategy='sibling' succeeds."""
+        resolution = BranchResolution(
+            action="reuse",
+            branch_name="feature/test",
+            confidence=0.5,
+            reason="test",
+            resolution_strategy="sibling",
+        )
+        assert resolution.action == "reuse"
+        assert resolution.resolution_strategy == "sibling"
+
+    def test_reuse_action_with_fuzzy_succeeds(self):
+        """Test that action='reuse' with resolution_strategy='fuzzy' succeeds."""
+        resolution = BranchResolution(
+            action="reuse",
+            branch_name="feature/test",
+            confidence=0.5,
+            reason="test",
+            resolution_strategy="fuzzy",
+        )
+        assert resolution.action == "reuse"
+        assert resolution.resolution_strategy == "fuzzy"
 
 
 class TestBranchResolutionImmutability:
@@ -378,7 +508,7 @@ class TestBranchResolutionSerialization:
         assert resolution.resolution_strategy == "exact_match"
 
     def test_from_dict_missing_action(self):
-        """Test that missing action raises ValueError."""
+        """Test that missing action raises ValueError with exception chaining."""
         data = {
             "branch_name": "feature/test",
             "confidence": 0.5,
@@ -386,8 +516,11 @@ class TestBranchResolutionSerialization:
             "resolution_strategy": "new",
         }
 
-        with pytest.raises(ValueError, match="Missing required field"):
+        with pytest.raises(ValueError, match="Missing required field") as exc_info:
             BranchResolution.from_dict(data)
+        # Verify exception chaining is preserved
+        assert exc_info.value.__cause__ is not None
+        assert isinstance(exc_info.value.__cause__, KeyError)
 
     def test_from_dict_missing_branch_name(self):
         """Test that missing branch_name raises ValueError."""

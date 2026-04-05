@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Generic, Literal, Self, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, Literal, Self, TypeVar, get_args
 from uuid import uuid4
 
 if TYPE_CHECKING:
@@ -16,8 +16,11 @@ from codetoreum.domain.exceptions import DomainError
 # Branch Resolution Strategy Constants
 # ============================================================================
 
-VALID_RESOLUTION_STRATEGIES = {"exact_match", "parent_issue", "sibling", "fuzzy", "new"}
-VALID_REUSE_STRATEGIES = {"exact_match", "parent_issue", "sibling", "fuzzy"}
+# Derive valid strategies from the Literal type annotation in BranchResolution
+# This ensures the constants stay synchronized with the type definition
+_RESOLUTION_STRATEGY_LITERAL = Literal["exact_match", "parent_issue", "sibling", "fuzzy", "new"]
+VALID_RESOLUTION_STRATEGIES = set(get_args(_RESOLUTION_STRATEGY_LITERAL))
+VALID_REUSE_STRATEGIES = VALID_RESOLUTION_STRATEGIES - {"new"}
 
 # ============================================================================
 # Project Configuration Value Object
@@ -637,7 +640,7 @@ class BranchResolution:
     branch_name: str
     confidence: float
     reason: str
-    resolution_strategy: Literal["exact_match", "parent_issue", "sibling", "fuzzy", "new"]
+    resolution_strategy: _RESOLUTION_STRATEGY_LITERAL
     parent_issue_id: str | None = None
 
     def __post_init__(self) -> None:
@@ -653,6 +656,13 @@ class BranchResolution:
             raise DomainError(msg)
         if self.resolution_strategy not in VALID_RESOLUTION_STRATEGIES:
             msg = f"BranchResolution.resolution_strategy must be one of {VALID_RESOLUTION_STRATEGIES}, got {self.resolution_strategy}"
+            raise DomainError(msg)
+        # Cross-field validation: action and resolution_strategy must be compatible
+        if self.action == "create" and self.resolution_strategy != "new":
+            msg = f"BranchResolution: action='create' requires resolution_strategy='new', got '{self.resolution_strategy}'"
+            raise DomainError(msg)
+        if self.action == "reuse" and self.resolution_strategy == "new":
+            msg = "BranchResolution: action='reuse' cannot use resolution_strategy='new'"
             raise DomainError(msg)
 
     def to_dict(self) -> dict[str, Any]:
@@ -691,4 +701,4 @@ class BranchResolution:
             )
         except KeyError as e:
             msg = f"Missing required field: {e}"
-            raise ValueError(msg)
+            raise ValueError(msg) from e
