@@ -38,6 +38,9 @@ class BranchResolutionEventHandler(EventHandler):
 
         # When a branch resolution occurs:
         event = BranchResolvedEvent(
+            type="branch.resolved",
+            timestamp="2025-01-14T10:30:00+00:00",
+            source="branch_resolution",
             project_id="proj-1",
             issue_id="123",
             action="reuse",

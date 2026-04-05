@@ -53,14 +53,14 @@ class MockBranchResolutionAdapter(MockEventEmitter, IBranchResolutionService):
         adapter.configure_resolution("proj-1", "123", resolution)
 
         # Call resolve_branch
-        result = await adapter.resolve_branch("proj-1", "123", {})
+        result = await adapter.resolve_branch("proj-1", "123", {}, "/workspace/my-repo")
         assert result.action == "reuse"
         assert result.branch_name == "feature/issue-123-fix"
 
         # Subscribe to events
         events = []
         adapter.on("branch.resolved", events.append)
-        await adapter.resolve_branch("proj-1", "123", {})
+        await adapter.resolve_branch("proj-1", "123", {}, "/workspace/my-repo")
         assert len(events) == 1
     """
 

@@ -47,11 +47,12 @@ class IBranchResolutionService(IEventEmitter, ABC):
             issue_metadata={
                 "title": "Fix authentication bug",
                 "description": "Users cannot login via OAuth",
-                "labels": ["bug", "high-priority"],
-                "parent_issue": "issue-100"
+                "labels": ["bug", "high-priority"]
             },
             repo_path="/workspace/my-repo"
         )
+        # Note: Parent relationships are resolved by the service via ITicketSystem.get_related_items(),
+        # not through metadata keys.
 
         # Resolution includes action and confidence
         if resolution.action == "reuse":
