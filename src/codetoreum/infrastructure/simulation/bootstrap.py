@@ -1603,6 +1603,7 @@ class SimulationApplicationBootstrap:
             vcs=self.adapters.version_control,
             container=self.adapters.container,
             event_store=self.adapters.event_store,
+            branch_resolution_service=self.adapters.branch_resolution_service,
         )
 
         # Phase 3a: Create AgentExecutionRecoveryService
