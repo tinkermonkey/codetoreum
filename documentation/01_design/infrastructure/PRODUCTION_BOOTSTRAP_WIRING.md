@@ -2,22 +2,29 @@
 
 ## Summary
 
-Phase 5 of the intelligent branch resolution feature integrates `BranchResolutionAdapter` into the workspace preparation flow. The production bootstrap must wire this adapter to enable intelligent branch reuse in production environments.
+Phase 5 of the intelligent branch resolution feature provides factory functions to wire `BranchResolutionAdapter` into the workspace preparation flow. These factories are ready for integration into a production bootstrap path once it exists.
+
+**Important Note**: A production bootstrap entry point for `WorkspaceRouter` does not yet exist in `fastapi_app.py`. Currently, only the simulation bootstrap (`infrastructure/simulation/bootstrap.py`) instantiates `WorkspaceRouter`. The factories in this document are designed to be called from production startup code once such an entry point is created.
 
 ## Current Status
 
-### Simulation Environment ✅
+### Simulation Environment ✅ (Complete)
 - `MockBranchResolutionAdapter` is wired in `SimulationApplicationBootstrap` (line 1306)
 - `WorkspaceRouter` receives the service via constructor injection
 - Resolution happens in `prepare_workspace()` where `repo_path` is available
 - Tests verify resolution and fallback behavior
 
-### Production Environment ✅ (Complete)
+### Production Factories ✅ (Ready)
 - `BranchResolutionAdapter` factory exists in `adapters/primary/factories/production.py:create_branch_resolution_adapter()`
 - `create_workspace_router_with_branch_resolution()` factory wires adapter into WorkspaceRouter
-- `create_workspace_router_with_production_branch_resolution()` convenience factory combines both steps
+- Unit tests verify factory behavior in `tests/unit/adapters/primary/factories/test_production.py`
 - Factories are exported from `adapters/primary/factories/__init__.py` for use in production bootstrap
-- Factories are ready for integration into production application startup
+
+### Production Integration 🔄 (Blocked - No Entry Point)
+- **Blocker**: No production bootstrap entry point exists for instantiating `WorkspaceRouter`
+- The `fastapi_app.py:create_app()` function does not currently instantiate `WorkspaceRouter`
+- Only the simulation bootstrap instantiates `WorkspaceRouter` (simulation/bootstrap.py:1602)
+- **Next step**: Create production bootstrap entry point (e.g., in CLI startup or app initialization), then wire factories
 
 ## Implementation Checklist for Production Bootstrap
 
@@ -50,23 +57,6 @@ workspace_router = create_workspace_router_with_branch_resolution(
 )
 ```
 
-#### Option B: Single-Call Convenience Factory (Recommended for Production)
-```python
-from codetoreum.adapters.primary.factories import (
-    create_workspace_router_with_production_branch_resolution,
-)
-
-# Create router with adapter in one call
-workspace_router = create_workspace_router_with_production_branch_resolution(
-    ticket_system=ticket_system_adapter,
-    version_control=vcs_adapter,
-    container=container_adapter,
-    event_store=event_store_adapter,
-    event_emitter=event_emitter_adapter,
-    min_confidence_threshold=0.7,  # Optional, defaults to 0.7
-    cache_ttl_seconds=30,          # Optional, defaults to 30
-)
-```
 
 ### Production Bootstrap Integration Checklist
 
@@ -108,11 +98,12 @@ The `WorkspaceRouter` includes fallback logic:
 
 ## Integration in Production Bootstrap
 
-When implementing a production bootstrap (e.g., in a CLI command or application initialization):
+When integrating branch resolution into production bootstrap (e.g., in `fastapi_app.py`'s `create_app()`):
 
 ```python
 from codetoreum.adapters.primary.factories import (
-    create_workspace_router_with_production_branch_resolution,
+    create_branch_resolution_adapter,
+    create_workspace_router_with_branch_resolution,
 )
 
 # Assuming you have already created the output adapters:
@@ -122,13 +113,19 @@ from codetoreum.adapters.primary.factories import (
 # - event_store_adapter: Redis or persistent event store
 # - event_emitter_adapter: Event publishing service
 
-# Create workspace router with branch resolution wired in
-workspace_router = create_workspace_router_with_production_branch_resolution(
+# Step 1: Create branch resolution adapter
+branch_resolution_adapter = create_branch_resolution_adapter(
     ticket_system=ticket_system_adapter,
+    version_control=vcs_adapter,
+    event_emitter=event_emitter_adapter,
+)
+
+# Step 2: Create workspace router with branch resolution wired in
+workspace_router = create_workspace_router_with_branch_resolution(
     version_control=vcs_adapter,
     container=container_adapter,
     event_store=event_store_adapter,
-    event_emitter=event_emitter_adapter,
+    branch_resolution_service=branch_resolution_adapter,
 )
 
 # Now pass workspace_router to application services that need it:
@@ -157,10 +154,15 @@ execution_service = ExecutionService(
 
 ## Next Steps
 
-1. ✅ **Factories Available** - Production bootstrap factories are now available in `adapters/primary/factories/production.py`
-2. **Integration** - Integrate factories into production application startup code (main entry point, CLI commands)
-3. **Testing** - Run existing tests to verify no regressions
-4. **Validation** - Deploy to staging and verify:
-   - Branch resolution events are emitted correctly
-   - Intelligent branch reuse works for agent executions
-   - Fallback logic activates correctly when branch resolution is unavailable
+1. ✅ **Phase 5: Factories & Tests** - Production bootstrap factories are available with unit tests in `adapters/primary/factories/production.py` and `tests/unit/adapters/primary/factories/test_production.py`
+
+2. **Phase 6: Production Bootstrap** (Future Work) - Create production bootstrap entry point:
+   - Determine where `WorkspaceRouter` should be instantiated in production (CLI startup, app initialization, etc.)
+   - Call `create_branch_resolution_adapter()` and `create_workspace_router_with_branch_resolution()` factories during bootstrap
+   - Inject `WorkspaceRouter` into `ExecutionServiceAgentExecutor` (per simulation pattern)
+   - This completes the acceptance criterion: "Integration into workflow startup before agent execution begins"
+
+3. **Phase 7: Validation** - After production bootstrap is created:
+   - Verify branch resolution events are emitted correctly
+   - Verify intelligent branch reuse works for agent executions
+   - Verify fallback logic activates correctly when branch resolution is unavailable
