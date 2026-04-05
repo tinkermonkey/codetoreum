@@ -105,6 +105,10 @@ class BranchResolutionAdapter(IBranchResolutionService):
         self._branch_cache: dict[str, tuple[datetime, list[str]]] = {}
         self._cache_lock = threading.Lock()
 
+        # Parent items cache: {issue_id} -> parent_items (for reducing duplicate API calls)
+        self._parent_items_cache: dict[str, Any] = {}
+        self._parent_items_lock = threading.Lock()
+
     # =========================================================================
     # IEventEmitter Implementation (Delegation)
     # =========================================================================
@@ -126,6 +130,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
         project_id: str,
         issue_id: str,
         issue_metadata: Mapping[str, Any],
+        repo_path: str | None = None,
     ) -> BranchResolution:
         """Resolve branch using five-step priority chain.
 
@@ -140,6 +145,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
             project_id: Project identifier
             issue_id: Issue/work item identifier
             issue_metadata: Issue metadata (title, description, labels, etc.)
+            repo_path: Local repository path (required for list_branches calls)
 
         Returns:
             BranchResolution with action, branch_name, confidence, and reason
@@ -151,15 +157,24 @@ class BranchResolutionAdapter(IBranchResolutionService):
             # Convert immutable mapping to dict for convenience
             metadata = dict(issue_metadata) if issue_metadata else {}
 
+            # repo_path is required
+            if not repo_path:
+                msg = "repo_path is required for branch resolution"
+                raise ValueError(msg)
+
+            # Clear parent items cache for this resolution call
+            with self._parent_items_lock:
+                self._parent_items_cache.clear()
+
             # Strategy 1: Exact match
-            resolution = await self._strategy_exact_match(project_id, issue_id)
+            resolution = await self._strategy_exact_match(repo_path, issue_id)
             if resolution:
                 await self._emit_events(resolution, project_id, issue_id)
                 return resolution
 
             # Strategy 2: Parent issue
             resolution = await self._strategy_parent_issue(
-                project_id, issue_id, metadata
+                repo_path, issue_id, metadata
             )
             if resolution:
                 await self._emit_events(resolution, project_id, issue_id)
@@ -167,7 +182,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
 
             # Strategy 3: Sibling issues
             resolution = await self._strategy_sibling_issues(
-                project_id, issue_id, metadata
+                repo_path, issue_id, metadata
             )
             if resolution:
                 await self._emit_events(resolution, project_id, issue_id)
@@ -175,14 +190,14 @@ class BranchResolutionAdapter(IBranchResolutionService):
 
             # Strategy 4: Fuzzy matching
             resolution = await self._strategy_fuzzy_match(
-                project_id, issue_id, metadata
+                repo_path, issue_id, metadata
             )
             if resolution:
                 await self._emit_events(resolution, project_id, issue_id)
                 return resolution
 
             # Strategy 5: Create new branch
-            resolution = await self._strategy_create_new(project_id, issue_id, metadata)
+            resolution = await self._strategy_create_new(repo_path, issue_id, metadata)
             await self._emit_events(resolution, project_id, issue_id)
             return resolution
 
@@ -191,14 +206,11 @@ class BranchResolutionAdapter(IBranchResolutionService):
                 "Branch resolution failed for issue %s in project %s",
                 issue_id,
                 project_id,
-                exc_info=True,
             )
-            raise ExternalServiceError(
-                f"Branch resolution failed: {str(e)}", cause=e
-            ) from e
+            raise ExternalServiceError("branch_resolution", f"Branch resolution failed: {str(e)}") from e
 
     async def _strategy_exact_match(
-        self, project_id: str, issue_id: str
+        self, repo_path: str, issue_id: str
     ) -> BranchResolution | None:
         """Strategy 1: Exact match on feature/issue-{issue_id}-* pattern.
 
@@ -209,7 +221,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
             BranchResolution with confidence 1.0 if found, None otherwise
         """
         try:
-            branches = await self._list_branches(project_id)
+            branches = await self._list_branches(repo_path)
 
             # Look for exact pattern: feature/issue-{issue_id}-*
             pattern = f"feature/issue-{issue_id}-".lower()
@@ -233,7 +245,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
 
     async def _strategy_parent_issue(
         self,
-        project_id: str,
+        repo_path: str,
         issue_id: str,
         metadata: dict[str, Any],
     ) -> BranchResolution | None:
@@ -246,10 +258,8 @@ class BranchResolutionAdapter(IBranchResolutionService):
             BranchResolution with confidence 0.95 if parent branch found, else None
         """
         try:
-            # Get parent issue
-            parent_items = await self._ticket_system.get_related_items(
-                issue_id, relationship="child-of"
-            )
+            # Get parent issue (uses cache to avoid duplicate calls)
+            parent_items = await self._get_parent_items(issue_id)
 
             if not parent_items:
                 return None
@@ -258,7 +268,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
             parent_id = parent_issue.id
 
             # Look for parent's branch
-            branches = await self._list_branches(project_id)
+            branches = await self._list_branches(repo_path)
             pattern = f"feature/issue-{parent_id}-".lower()
 
             for branch in branches:
@@ -282,7 +292,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
 
     async def _strategy_sibling_issues(
         self,
-        project_id: str,
+        repo_path: str,
         issue_id: str,
         metadata: dict[str, Any],
     ) -> BranchResolution | None:
@@ -296,10 +306,8 @@ class BranchResolutionAdapter(IBranchResolutionService):
             BranchResolution with confidence 0.9 if sibling branch found, else None
         """
         try:
-            # Get parent issue
-            parent_items = await self._ticket_system.get_related_items(
-                issue_id, relationship="child-of"
-            )
+            # Get parent issue (uses cache to avoid duplicate calls)
+            parent_items = await self._get_parent_items(issue_id)
 
             if not parent_items:
                 return None
@@ -313,7 +321,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
             )
 
             # Skip ourselves, look for siblings with branches
-            branches = await self._list_branches(project_id)
+            branches = await self._list_branches(repo_path)
 
             for sibling in sibling_items:
                 if sibling.id == issue_id:
@@ -341,7 +349,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
 
     async def _strategy_fuzzy_match(
         self,
-        project_id: str,
+        repo_path: str,
         issue_id: str,
         metadata: dict[str, Any],
     ) -> BranchResolution | None:
@@ -361,7 +369,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
             if not issue_keywords:
                 return None
 
-            branches = await self._list_branches(project_id)
+            branches = await self._list_branches(repo_path)
 
             best_match = None
             best_similarity = 0.0
@@ -401,7 +409,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
 
     async def _strategy_create_new(
         self,
-        project_id: str,
+        repo_path: str,
         issue_id: str,
         metadata: dict[str, Any],
     ) -> BranchResolution:
@@ -485,14 +493,41 @@ class BranchResolutionAdapter(IBranchResolutionService):
 
         self.emit(outcome_event)
 
-    async def _list_branches(self, project_id: str) -> list[str]:
+    async def _get_parent_items(self, issue_id: str) -> Any:
+        """Get parent items for an issue with caching within a resolve_branch call.
+
+        Caches the result to avoid duplicate API calls when multiple strategies
+        need the parent issue (e.g., parent_issue strategy and sibling_issues strategy).
+
+        Args:
+            issue_id: Issue identifier
+
+        Returns:
+            Parent items list from get_related_items
+        """
+        with self._parent_items_lock:
+            if issue_id in self._parent_items_cache:
+                return self._parent_items_cache[issue_id]
+
+        # Fetch parent items
+        parent_items = await self._ticket_system.get_related_items(
+            issue_id, relationship="child-of"
+        )
+
+        # Cache result
+        with self._parent_items_lock:
+            self._parent_items_cache[issue_id] = parent_items
+
+        return parent_items
+
+    async def _list_branches(self, repo_path: str) -> list[str]:
         """Get list of branches with caching.
 
         Caches results for cache_ttl_seconds to reduce redundant API calls
         within a single pipeline run.
 
         Args:
-            project_id: Project identifier
+            repo_path: Local repository path
 
         Returns:
             List of branch names (without remote prefix)
@@ -501,17 +536,17 @@ class BranchResolutionAdapter(IBranchResolutionService):
             now = datetime.now(UTC)
 
             # Check cache
-            if project_id in self._branch_cache:
-                timestamp, branches = self._branch_cache[project_id]
+            if repo_path in self._branch_cache:
+                timestamp, branches = self._branch_cache[repo_path]
                 if now - timestamp < self._cache_ttl:
                     return list(branches)
 
         # Fetch fresh branches
-        branches = await self._version_control.list_branches(project_id, remote=True)
+        branches = await self._version_control.list_branches(repo_path, remote=True)
 
         # Cache result
         with self._cache_lock:
-            self._branch_cache[project_id] = (datetime.now(UTC), branches)
+            self._branch_cache[repo_path] = (datetime.now(UTC), branches)
 
         return branches
 

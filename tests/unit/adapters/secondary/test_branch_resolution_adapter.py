@@ -17,14 +17,12 @@ import pytest
 from codetoreum.adapters.secondary.branch_resolution_adapter import (
     BranchResolutionAdapter,
 )
-from codetoreum.domain.comment import Comment
 from codetoreum.domain.events.branch_events import (
     BranchResolutionCreatedEvent,
     BranchResolvedEvent,
     BranchReusedEvent,
 )
-from codetoreum.domain.work_item import WorkItem, WorkItemStatus
-from codetoreum.ports.exceptions import ExternalServiceError
+from codetoreum.domain.work_item import WorkItem
 
 
 # =============================================================================
@@ -60,6 +58,7 @@ class TestExactMatchStrategy:
             project_id="proj-1",
             issue_id="123",
             issue_metadata={"title": "Any title"},
+            repo_path="/repo",
         )
 
         assert resolution.action == "reuse"
@@ -90,6 +89,7 @@ class TestExactMatchStrategy:
             project_id="proj-1",
             issue_id="123",
             issue_metadata={"title": "Fix auth"},
+            repo_path="/repo",
         )
 
         assert resolution.action == "reuse"
@@ -119,6 +119,7 @@ class TestExactMatchStrategy:
             project_id="proj-1",
             issue_id="123",
             issue_metadata={"title": "Fix authentication issues"},
+            repo_path="/repo",
         )
 
         # Must be exact match, not fuzzy
@@ -151,6 +152,7 @@ class TestExactMatchStrategy:
             project_id="proj-1",
             issue_id="123",
             issue_metadata={"title": "Some feature"},
+            repo_path="/repo",
         )
 
         # Falls through to create new
@@ -195,6 +197,7 @@ class TestParentIssueStrategy:
             project_id="proj-1",
             issue_id="123",
             issue_metadata={"title": "Child task"},
+            repo_path="/repo",
         )
 
         assert resolution.action == "reuse"
@@ -243,6 +246,7 @@ class TestParentIssueStrategy:
             project_id="proj-1",
             issue_id="123",
             issue_metadata={"title": "Child task"},
+            repo_path="/repo",
         )
 
         # Should find sibling's branch when parent has none
@@ -298,6 +302,7 @@ class TestSiblingIssueStrategy:
             project_id="proj-1",
             issue_id="123",
             issue_metadata={"title": "Sibling work"},
+            repo_path="/repo",
         )
 
         assert resolution.action == "reuse"
@@ -344,6 +349,7 @@ class TestSiblingIssueStrategy:
             project_id="proj-1",
             issue_id="123",
             issue_metadata={},
+            repo_path="/repo",
         )
 
         # Should find sibling's branch (self not in branches)
@@ -385,6 +391,7 @@ class TestFuzzyMatchingStrategy:
             project_id="proj-1",
             issue_id="123",
             issue_metadata={"title": "Fix authentication and authorization issues"},
+            repo_path="/repo",
         )
 
         assert resolution.action == "reuse"
@@ -417,6 +424,7 @@ class TestFuzzyMatchingStrategy:
             project_id="proj-1",
             issue_id="123",
             issue_metadata={"title": "Fix a different thing"},
+            repo_path="/repo",
         )
 
         # Should fall through to create new
@@ -450,6 +458,7 @@ class TestFuzzyMatchingStrategy:
             issue_metadata={
                 "title": "Fix authentication and authorization issues",
             },
+            repo_path="/repo",
         )
 
         # Should be high confidence due to keyword overlap
@@ -482,6 +491,7 @@ class TestFuzzyMatchingStrategy:
             project_id="proj-1",
             issue_id="123",
             issue_metadata={"title": "Fix authentication"},
+            repo_path="/repo",
         )
 
         # Should NOT find exact pattern branch in fuzzy (already tested in strategy 1)
@@ -517,6 +527,7 @@ class TestCreateNewStrategy:
             project_id="proj-1",
             issue_id="123",
             issue_metadata={"title": "Fix authentication bug"},
+            repo_path="/repo",
         )
 
         assert resolution.action == "create"
@@ -545,6 +556,7 @@ class TestCreateNewStrategy:
             project_id="proj-1",
             issue_id="456",
             issue_metadata={},  # No title
+            repo_path="/repo",
         )
 
         assert resolution.action == "create"
@@ -628,10 +640,10 @@ class TestBranchCaching:
         version_control.list_branches.return_value = ["main", "feature/123"]
         ticket_system.get_related_items.return_value = []
 
-        await adapter.resolve_branch("proj-1", "123", {"title": "Test"})
+        await adapter.resolve_branch("proj-1", "123", {"title": "Test"}, repo_path="/repo")
 
         # Second call to same project within TTL - should use cache
-        await adapter.resolve_branch("proj-1", "456", {"title": "Test"})
+        await adapter.resolve_branch("proj-1", "456", {"title": "Test"}, repo_path="/repo")
 
         # Should only call list_branches once (cached)
         version_control.list_branches.assert_called_once()
@@ -647,28 +659,46 @@ class TestBranchCaching:
             ticket_system=ticket_system,
             version_control=version_control,
             event_emitter=event_emitter,
-            cache_ttl_seconds=0,  # Expire immediately
+            cache_ttl_seconds=1,  # 1 second TTL
         )
 
         version_control.list_branches.return_value = ["main"]
         ticket_system.get_related_items.return_value = []
 
-        # First call
-        await adapter.resolve_branch("proj-1", "123", {"title": "Test"})
+        # First call - populates cache
+        await adapter.resolve_branch("proj-1", "123", {"title": "Test"}, repo_path="/repo")
+        assert version_control.list_branches.call_count == 1
 
-        # Mock time passing
+        # Second call within TTL - should use cache
+        await adapter.resolve_branch("proj-1", "456", {"title": "Test"}, repo_path="/repo")
+        assert version_control.list_branches.call_count == 1
+
+        # Mock time passing and second resolution call
         with patch(
             "codetoreum.adapters.secondary.branch_resolution_adapter.datetime"
         ) as mock_datetime:
-            # Simulate time passing
-            mock_datetime.now.return_value = datetime.now(UTC) + timedelta(seconds=1)
-            mock_datetime.side_effect = lambda *args, **kwargs: datetime.now(UTC)
+            # Set up mock to advance time
+            now = datetime.now(UTC)
+            past_time = now
+            future_time = now + timedelta(seconds=2)
 
-            # Second call - cache should be expired
-            await adapter.resolve_branch("proj-1", "456", {"title": "Test"})
+            call_times = [past_time, future_time]
+            call_count = [0]
 
-        # Should call list_branches twice (cache expired)
-        assert version_control.list_branches.call_count >= 1
+            def mock_now(tz=None):
+                """Return advancing time values on each call."""
+                result = call_times[min(call_count[0], len(call_times) - 1)]
+                call_count[0] += 1
+                return result
+
+            mock_datetime.now = mock_now
+            mock_datetime.side_effect = None
+
+            # Third call after TTL expired - cache should be invalidated
+            await adapter.resolve_branch("proj-1", "789", {"title": "Test"}, repo_path="/repo")
+
+        # Should call list_branches twice (second call uses cache, third call misses cache due to TTL)
+        assert version_control.list_branches.call_count == 2
 
 
 # =============================================================================
@@ -700,6 +730,7 @@ class TestEventEmission:
             project_id="proj-1",
             issue_id="123",
             issue_metadata={"title": "Fix"},
+            repo_path="/repo",
         )
 
         # Check emit was called
@@ -731,6 +762,7 @@ class TestEventEmission:
             project_id="proj-1",
             issue_id="123",
             issue_metadata={},
+            repo_path="/repo",
         )
 
         # Second emit should be BranchReusedEvent
@@ -759,6 +791,7 @@ class TestEventEmission:
             project_id="proj-1",
             issue_id="456",
             issue_metadata={"title": "New feature"},
+            repo_path="/repo",
         )
 
         # Second emit should be BranchResolutionCreatedEvent
@@ -913,6 +946,7 @@ class TestErrorHandling:
             project_id="proj-1",
             issue_id="123",
             issue_metadata={"title": "Feature"},
+            repo_path="/repo",
         )
 
         # Falls back to creating new
@@ -942,6 +976,7 @@ class TestErrorHandling:
             project_id="proj-1",
             issue_id="123",
             issue_metadata={"title": "Feature"},
+            repo_path="/repo",
         )
 
         assert resolution.action == "create"
