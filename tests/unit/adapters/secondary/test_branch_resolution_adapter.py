@@ -1037,3 +1037,141 @@ class TestErrorHandling:
 
         assert "branch_resolution" in str(exc_info.value)
         assert "Branch resolution failed" in str(exc_info.value)
+
+
+# =============================================================================
+# Event Emission Failure Isolation Tests
+# =============================================================================
+
+
+class TestEventEmissionFailureIsolation:
+    """Tests for event emission failure isolation.
+
+    Verifies that failures in event emission do not block resolution results.
+    This is critical because event emission is a side effect - if the event bus
+    or event store fails, we still need to return the resolved branch decision
+    to the caller. The resolution is independent of event emission success.
+    """
+
+    @pytest.mark.asyncio
+    async def test_event_emission_failure_does_not_block_reuse_resolution(self):
+        """Test that event emission failures don't block reuse resolution.
+
+        This test verifies that when the event_emitter raises an exception
+        during _emit_events, the resolution is still returned successfully.
+        This is critical: if someone removes the try/except in _emit_events,
+        this test would fail, ensuring the error handling stays in place.
+        """
+        ticket_system = AsyncMock()
+        version_control = AsyncMock()
+        event_emitter = MagicMock()
+
+        adapter = BranchResolutionAdapter(
+            ticket_system=ticket_system,
+            version_control=version_control,
+            event_emitter=event_emitter,
+        )
+
+        # Setup mock to find an exact match
+        version_control.list_branches.return_value = [
+            "feature/issue-123-fix-bug",
+        ]
+
+        # Configure event emitter to fail on emit calls
+        event_emitter.emit.side_effect = Exception("Event bus down")
+
+        # Act - should not raise even though event emission fails
+        resolution = await adapter.resolve_branch(
+            project_id="proj-1",
+            issue_id="123",
+            issue_metadata={"title": "Fix bug"},
+            repo_path="/repo",
+        )
+
+        # Assert - resolution is successful despite event failure
+        assert resolution.action == "reuse"
+        assert resolution.branch_name == "feature/issue-123-fix-bug"
+        assert resolution.confidence == 1.0
+        # Verify emit was called (and failed silently)
+        assert event_emitter.emit.called
+
+    @pytest.mark.asyncio
+    async def test_event_emission_failure_does_not_block_create_resolution(self):
+        """Test that event emission failures don't block create resolution.
+
+        Verifies that even when creating a new branch and event emission fails,
+        the resolution is returned successfully. Tests the fallback path where
+        all strategies fail to find an existing branch.
+        """
+        ticket_system = AsyncMock()
+        version_control = AsyncMock()
+        event_emitter = MagicMock()
+
+        adapter = BranchResolutionAdapter(
+            ticket_system=ticket_system,
+            version_control=version_control,
+            event_emitter=event_emitter,
+        )
+
+        # No branches exist
+        version_control.list_branches.return_value = ["main"]
+        ticket_system.get_related_items.return_value = []
+
+        # Configure event emitter to fail
+        event_emitter.emit.side_effect = Exception("Event bus unavailable")
+
+        # Act - should still return create resolution even though events fail
+        resolution = await adapter.resolve_branch(
+            project_id="proj-1",
+            issue_id="456",
+            issue_metadata={"title": "New feature"},
+            repo_path="/repo",
+        )
+
+        # Assert - resolution succeeds despite event emission failure
+        assert resolution.action == "create"
+        assert resolution.confidence == 1.0
+        assert "feature/issue-456" in resolution.branch_name
+
+    @pytest.mark.asyncio
+    async def test_event_emission_failure_does_not_block_parent_issue_resolution(self):
+        """Test that event emission failures don't block parent issue resolution.
+
+        Verifies that when reusing a parent's branch and event emission fails,
+        the resolution is still returned. This tests the parent_issue strategy path.
+        """
+        ticket_system = AsyncMock()
+        version_control = AsyncMock()
+        event_emitter = MagicMock()
+
+        adapter = BranchResolutionAdapter(
+            ticket_system=ticket_system,
+            version_control=version_control,
+            event_emitter=event_emitter,
+        )
+
+        # Parent's branch exists
+        version_control.list_branches.return_value = [
+            "feature/issue-100-parent-task",
+        ]
+
+        # Issue has a parent
+        parent_issue = MagicMock(spec=WorkItem)
+        parent_issue.id = "100"
+        ticket_system.get_related_items.return_value = [parent_issue]
+
+        # Configure event emitter to fail
+        event_emitter.emit.side_effect = Exception("Event store failure")
+
+        # Act - should return parent resolution even though events fail
+        resolution = await adapter.resolve_branch(
+            project_id="proj-1",
+            issue_id="123",
+            issue_metadata={"title": "Child task"},
+            repo_path="/repo",
+        )
+
+        # Assert - resolution succeeds despite event failure
+        assert resolution.action == "reuse"
+        assert resolution.branch_name == "feature/issue-100-parent-task"
+        assert resolution.resolution_strategy == "parent_issue"

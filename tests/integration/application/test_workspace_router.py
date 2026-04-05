@@ -888,6 +888,10 @@ async def test_prepare_workspace_with_resolution_service_failure_falls_back(
     assert result.success is True
     assert result.metadata["branch_action"] == "create_new"
     assert "resolution_strategy" not in result.metadata  # No resolution strategy recorded
+    # Verify fallback metadata fields are recorded
+    assert result.metadata.get("branch_resolution_fallback") is True
+    assert "branch_resolution_fallback_reason" in result.metadata
+    assert result.metadata["branch_resolution_fallback_reason"] != ""
     mock_repository.create_branch.assert_called_once()
 
 
