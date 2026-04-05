@@ -36,9 +36,9 @@ class TestBranchResolutionEventHandlerInitialization:
         # Check that event_handler decorator adds get_event_types method
         assert hasattr(handler, "get_event_types")
         event_types = handler.get_event_types()
-        assert "BranchResolved" in event_types
-        assert "BranchReused" in event_types
-        assert "BranchCreated" in event_types
+        assert "BranchResolvedEvent" in event_types
+        assert "BranchReusedEvent" in event_types
+        assert "BranchResolutionCreatedEvent" in event_types
 
 
 class TestBranchResolvedEventHandler:
@@ -48,6 +48,7 @@ class TestBranchResolvedEventHandler:
     async def test_handle_branch_resolved_event(self, caplog):
         """Test handler logs BranchResolvedEvent with structured fields."""
         import logging
+
         caplog.set_level(logging.INFO)
         handler = BranchResolutionEventHandler()
 
@@ -73,6 +74,7 @@ class TestBranchResolvedEventHandler:
     async def test_handle_branch_reused_event(self, caplog):
         """Test handler logs BranchReusedEvent with structured fields."""
         import logging
+
         caplog.set_level(logging.INFO)
         handler = BranchResolutionEventHandler()
 
@@ -97,6 +99,7 @@ class TestBranchResolvedEventHandler:
     async def test_handle_branch_created_event(self, caplog):
         """Test handler logs BranchResolutionCreatedEvent with structured fields."""
         import logging
+
         caplog.set_level(logging.INFO)
         handler = BranchResolutionEventHandler()
 
@@ -137,6 +140,7 @@ class TestBranchResolutionEventHandlerErrorHandling:
     async def test_handle_unexpected_event_logs_warning(self, caplog):
         """Test handler logs warning for unexpected event type."""
         import logging
+
         caplog.set_level(logging.WARNING)
         handler = BranchResolutionEventHandler()
 
