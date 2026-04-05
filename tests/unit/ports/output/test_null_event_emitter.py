@@ -85,34 +85,29 @@ class TestNullEventEmitter:
             assert emitter._warned is True
 
     def test_on_is_noop(self):
-        """on() method should be a no-op."""
+        """on() method should be a no-op - registered handler is never called."""
         emitter = NullEventEmitter()
 
-        def handler(event):
-            pass
+        # Use MagicMock directly as handler to verify it's never invoked
+        handler = MagicMock()
 
-        # Should not raise
+        # on() should not raise
         emitter.on("test.event", handler)
 
-        # Emitting should still be a no-op
         event = CodetoreumEvent(
             type="test.event",
             timestamp=now_iso(),
             source="test",
         )
 
-        with patch("logging.getLogger") as mock_get_logger:
-            mock_logger = MagicMock()
-            mock_get_logger.return_value = mock_logger
-
-            # Record initial warning call count
+        with patch("logging.getLogger"):
+            # Emit event - handler should not be called
             emitter.emit(event)
-            initial_calls = mock_logger.warning.call_count
+            handler.assert_not_called()
 
-            # Handler should never be called (noop)
-            with patch.object(handler, "__call__") as mock_handler:
-                emitter.emit(event)
-                mock_handler.assert_not_called()
+            # Multiple emissions - handler still never called
+            emitter.emit(event)
+            handler.assert_not_called()
 
     def test_off_is_noop(self):
         """off() method should be a no-op."""

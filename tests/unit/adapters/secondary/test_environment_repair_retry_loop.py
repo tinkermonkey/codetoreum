@@ -528,6 +528,40 @@ async def test_environment_issue_verify_raises_exception_during_retry_loop():
 
 
 # ---------------------------------------------------------------------------
+# Module-Level Test Helpers for Event Emission Testing
+# ---------------------------------------------------------------------------
+
+
+class CapturingEventEmitter(IEventEmitter):
+    """Test helper that captures emitted events for assertion."""
+
+    def __init__(self):
+        self.events = []
+
+    def on(self, event_type: str, handler) -> None:
+        pass
+
+    def off(self, event_type: str, handler) -> None:
+        pass
+
+    def emit(self, event) -> None:
+        self.events.append(event)
+
+
+class FailingEventEmitter(IEventEmitter):
+    """Test helper that raises RuntimeError on emit() to simulate event bus failure."""
+
+    def on(self, event_type: str, handler) -> None:
+        pass
+
+    def off(self, event_type: str, handler) -> None:
+        pass
+
+    def emit(self, event) -> None:
+        raise RuntimeError("Event bus connection failed")
+
+
+# ---------------------------------------------------------------------------
 # Event Emission Tests
 # ---------------------------------------------------------------------------
 
@@ -562,18 +596,6 @@ async def test_environment_rebuild_exhausted_event_emitted():
     )
 
     # Create a capturing event emitter to verify events are emitted
-    captured_events = []
-
-    class CapturingEventEmitter(IEventEmitter):
-        def on(self, event_type: str, handler) -> None:
-            pass
-
-        def off(self, event_type: str, handler) -> None:
-            pass
-
-        def emit(self, event) -> None:
-            captured_events.append(event)
-
     event_emitter = CapturingEventEmitter()
     adapter, llm = _make_adapter(environment_repair_service=env_service)
     adapter._systemic_analysis_service = systemic_service
@@ -590,7 +612,7 @@ async def test_environment_rebuild_exhausted_event_emitted():
     # Verify that EnvironmentRebuildExhaustedEvent was emitted
     exhausted_events = [
         e
-        for e in captured_events
+        for e in event_emitter.events
         if isinstance(e, EnvironmentRebuildExhaustedEvent)
     ]
     assert len(exhausted_events) > 0, "EnvironmentRebuildExhaustedEvent should be emitted when all rebuilds exhausted"
@@ -599,7 +621,7 @@ async def test_environment_rebuild_exhausted_event_emitted():
 
 
 @pytest.mark.asyncio
-async def test_emit_event_safely_catches_emitter_failures_in_rebuild():
+async def test_emit_event_safely_catches_emitter_failures_in_rebuild(caplog):
     """Test that _emit_event_safely catches event emitter failures during rebuild.
 
     This test verifies that when the event emitter raises an exception during
@@ -610,17 +632,6 @@ async def test_emit_event_safely_catches_emitter_failures_in_rebuild():
     from codetoreum.adapters.secondary.production_environment_repair_adapter import (
         ProductionEnvironmentRepairAdapter,
     )
-
-    # Create a failing event emitter that raises on emit()
-    class FailingEventEmitter(IEventEmitter):
-        def on(self, event_type: str, handler) -> None:
-            pass
-
-        def off(self, event_type: str, handler) -> None:
-            pass
-
-        def emit(self, event) -> None:
-            raise RuntimeError("Event bus connection failed")
 
     # Create adapter with failing event emitter
     llm = AsyncMock()
@@ -635,7 +646,7 @@ async def test_emit_event_safely_catches_emitter_failures_in_rebuild():
     )
 
     ctx = _RepairCycleContext()
-    ctx.iteration = 1  # Set iteration to 1 (required by event validation)
+    ctx.iteration = 1  # Set iteration to 1 - required for event initialization
     config = RepairTestRunConfig(
         test_type=RepairTestType.UNIT,
         timeout=30,
@@ -644,11 +655,12 @@ async def test_emit_event_safely_catches_emitter_failures_in_rebuild():
     )
 
     # Execute rebuild - should NOT raise despite event emitter failing
-    result = await adapter.rebuild_environment(
-        project="test_project",
-        config=config,
-        context=ctx,
-    )
+    with caplog.at_level("ERROR"):
+        result = await adapter.rebuild_environment(
+            project="test_project",
+            config=config,
+            context=ctx,
+        )
 
     # Verify rebuild completed successfully
     # (event emission failure should not crash the operation)
@@ -656,9 +668,17 @@ async def test_emit_event_safely_catches_emitter_failures_in_rebuild():
     # The rebuild itself should succeed (despite event emission failing)
     assert result.success is True
 
+    # Verify error was logged with "Failed to emit" message
+    error_logs = [record for record in caplog.records if record.levelname == "ERROR"]
+    assert len(error_logs) > 0, "Error should be logged when event emission fails"
+    failed_emit_logs = [
+        record for record in error_logs if "Failed to emit" in record.message
+    ]
+    assert len(failed_emit_logs) > 0, "Error log should contain 'Failed to emit' message"
+
 
 @pytest.mark.asyncio
-async def test_emit_event_safely_catches_emitter_failures_in_verify():
+async def test_emit_event_safely_catches_emitter_failures_in_verify(caplog):
     """Test that _emit_event_safely catches event emitter failures during verify.
 
     This test verifies that when the event emitter raises an exception during
@@ -669,17 +689,6 @@ async def test_emit_event_safely_catches_emitter_failures_in_verify():
     from codetoreum.adapters.secondary.production_environment_repair_adapter import (
         ProductionEnvironmentRepairAdapter,
     )
-
-    # Create a failing event emitter that raises on emit()
-    class FailingEventEmitter(IEventEmitter):
-        def on(self, event_type: str, handler) -> None:
-            pass
-
-        def off(self, event_type: str, handler) -> None:
-            pass
-
-        def emit(self, event) -> None:
-            raise RuntimeError("Event bus connection failed")
 
     # Create adapter with failing event emitter
     llm = AsyncMock()
@@ -694,7 +703,7 @@ async def test_emit_event_safely_catches_emitter_failures_in_verify():
     )
 
     ctx = _RepairCycleContext()
-    ctx.iteration = 1  # Set iteration to 1 (required by event validation)
+    ctx.iteration = 1  # Set iteration to 1 - required for event initialization
     config = RepairTestRunConfig(
         test_type=RepairTestType.UNIT,
         timeout=30,
@@ -703,14 +712,23 @@ async def test_emit_event_safely_catches_emitter_failures_in_verify():
     )
 
     # Execute verify - should NOT raise despite event emitter failing
-    result = await adapter.verify_environment(
-        project="test_project",
-        config=config,
-        context=ctx,
-    )
+    with caplog.at_level("ERROR"):
+        result = await adapter.verify_environment(
+            project="test_project",
+            config=config,
+            context=ctx,
+        )
 
     # Verify operation completed successfully
     # (event emission failure should not crash the operation)
     assert isinstance(result, VerificationResult)
     # The verify itself should succeed (despite event emission failing)
     assert result.healthy is True
+
+    # Verify error was logged with "Failed to emit" message
+    error_logs = [record for record in caplog.records if record.levelname == "ERROR"]
+    assert len(error_logs) > 0, "Error should be logged when event emission fails"
+    failed_emit_logs = [
+        record for record in error_logs if "Failed to emit" in record.message
+    ]
+    assert len(failed_emit_logs) > 0, "Error log should contain 'Failed to emit' message"
