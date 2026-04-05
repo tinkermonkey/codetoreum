@@ -92,8 +92,24 @@ class NullEventEmitter(IEventEmitter):
     All methods are silent, allowing adapters to run without event infrastructure.
     """
 
+    def __init__(self) -> None:
+        """Initialize the null event emitter."""
+        self._warned = False
+
     def emit(self, event: "CodetoreumEvent") -> None:
-        """No-op emit - silently discards all events."""
+        """No-op emit - silently discards all events.
+
+        Logs a warning on first invocation to alert developers that DI wiring
+        may have failed and events are not reaching the audit trail.
+        """
+        if not self._warned:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                "NullEventEmitter.emit() called - event DI wiring may have failed. "
+                "Events are being discarded and will not reach the audit trail."
+            )
+            self._warned = True
 
     def on(self, event_type: str, handler: Callable) -> None:
         """No-op subscription - no handlers are registered."""

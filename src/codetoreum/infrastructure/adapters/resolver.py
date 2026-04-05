@@ -464,13 +464,13 @@ class AdapterResolver:
             return self._factory.create_environment_repair_service(
                 adapter_name=self._config.environment_repair,
                 llm_factory=self._create_agent_llm_factory(),
-                event_emitter=self._resolved.get("event_emitter"),
+                event_emitter=self._resolved["event_emitter"],
             )
 
         # For all other adapters (mock, in_memory, etc.), use factory with optional event_emitter
         return self._factory.create_environment_repair_service(
             adapter_name=self._config.environment_repair,
-            event_emitter=self._resolved.get("event_emitter"),
+            event_emitter=self._resolved["event_emitter"],
         )
 
     def resolve_repository(self) -> IRepository:
