@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from codetoreum.domain.agent import Agent
+from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.project_context import ProjectContext
 from codetoreum.domain.value_objects import BranchResolution
 from codetoreum.domain.work_item import WorkItem
@@ -300,6 +301,13 @@ class WorkspaceRouter:
             f"Preparing workspace type={context.workspace_type.value}, project={project.id}, work_item={work_item.id}"
         )
 
+        # Clean up any stale resolved branch name from a previous call for this work_item.
+        # This prevents permanent cache leaks if finalize_workspace is never called (e.g.,
+        # in long-lived router instances where prepare_workspace may be called multiple times
+        # for the same work_item without an intervening finalize_workspace call). (async-safe)
+        async with self._branch_resolutions_lock:
+            self._resolved_branch_names.pop(work_item.id, None)
+
         if self.vcs is None:
             return WorkspacePreparationResult(
                 success=False,
@@ -378,7 +386,7 @@ class WorkspaceRouter:
                             metadata["branch_resolution_fallback"] = True
                             metadata["branch_resolution_fallback_reason"] = fallback_error
                 finally:
-                    # Clean up the cached resolution to prevent memory leaks in long-lived router (async-safe)
+                    # Clean up the cached resolutions to prevent memory leaks in long-lived router (async-safe)
                     async with self._branch_resolutions_lock:
                         self._branch_resolutions.pop(work_item.id, None)
                         self._branch_resolution_fallbacks.pop(work_item.id, None)
@@ -721,7 +729,7 @@ class WorkspaceRouter:
                 async with self._branch_resolutions_lock:
                     self._branch_resolution_fallbacks[work_item.id] = error_msg
                 # Fall through to generate name
-            except (TypeError, AttributeError):
+            except (TypeError, AttributeError, KeyError, ValueError, RuntimeError, DomainError):
                 # Programming errors should propagate, not silently fall back
                 raise
             except Exception as e:

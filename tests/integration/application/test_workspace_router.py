@@ -14,6 +14,7 @@ from codetoreum.domain.project_context import ProjectContext
 from codetoreum.domain.types import BranchName
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
 from codetoreum.domain.workspace_context import WorkspaceType
+from codetoreum.ports.exceptions import ExternalServiceError
 from codetoreum.ports.output.repository import RepositoryStatus
 
 # ============================================================================
@@ -864,7 +865,7 @@ async def test_prepare_workspace_with_resolution_service_failure_falls_back(
 ):
     """Test that prepare_workspace falls back to default logic when resolution service fails."""
     # Configure resolution service to raise exception
-    mock_branch_resolution_service.configure_to_raise(ValueError("Service unavailable"))
+    mock_branch_resolution_service.configure_to_raise(ExternalServiceError("branch_resolution", "Service unavailable"))
 
     # Mock list_branches to return no branches (for fallback logic)
     mock_repository.list_branches.return_value = []
