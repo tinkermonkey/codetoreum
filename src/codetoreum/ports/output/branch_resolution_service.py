@@ -14,7 +14,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from codetoreum.domain.value_objects import BranchResolution
-from codetoreum.ports.output.event_emitter import IEventEmitter
+from .event_emitter import IEventEmitter
 
 
 class IBranchResolutionService(IEventEmitter, ABC):
