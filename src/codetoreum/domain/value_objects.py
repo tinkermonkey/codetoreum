@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from codetoreum.domain.agent import AgentCapability
 
 from codetoreum.domain.exceptions import DomainError
+from codetoreum.domain.events.branch_events import VALID_RESOLUTION_STRATEGIES
 
 # ============================================================================
 # Project Configuration Value Object
@@ -630,8 +631,8 @@ class BranchResolution:
     branch_name: str
     confidence: float
     reason: str
+    resolution_strategy: Literal["exact_match", "parent_issue", "sibling", "fuzzy", "new"]
     parent_issue_id: str | None = None
-    resolution_strategy: str = ""
 
     def __post_init__(self) -> None:
         """Validate branch resolution."""
@@ -644,9 +645,8 @@ class BranchResolution:
         if not self.reason or not self.reason.strip():
             msg = "BranchResolution.reason cannot be empty"
             raise DomainError(msg)
-        valid_strategies = {"exact_match", "parent_issue", "sibling", "fuzzy", "new"}
-        if self.resolution_strategy not in valid_strategies:
-            msg = f"BranchResolution.resolution_strategy must be one of {valid_strategies}, got {self.resolution_strategy}"
+        if self.resolution_strategy not in VALID_RESOLUTION_STRATEGIES:
+            msg = f"BranchResolution.resolution_strategy must be one of {VALID_RESOLUTION_STRATEGIES}, got {self.resolution_strategy}"
             raise DomainError(msg)
 
     def to_dict(self) -> dict[str, Any]:
@@ -680,8 +680,8 @@ class BranchResolution:
                 branch_name=data["branch_name"],
                 confidence=data["confidence"],
                 reason=data["reason"],
+                resolution_strategy=data["resolution_strategy"],
                 parent_issue_id=data.get("parent_issue_id"),
-                resolution_strategy=data.get("resolution_strategy", ""),
             )
         except KeyError as e:
             msg = f"Missing required field: {e}"

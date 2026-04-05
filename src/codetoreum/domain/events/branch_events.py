@@ -11,6 +11,10 @@ from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
 
+# Valid strategies for branch resolution
+VALID_RESOLUTION_STRATEGIES = {"exact_match", "parent_issue", "sibling", "fuzzy", "new"}
+VALID_REUSE_STRATEGIES = {"exact_match", "parent_issue", "sibling", "fuzzy"}
+
 
 @dataclass(frozen=True)
 class BranchResolvedEvent(CodetoreumEvent):
@@ -26,7 +30,7 @@ class BranchResolvedEvent(CodetoreumEvent):
     This is the primary audit event emitted on every branch resolution attempt,
     regardless of outcome. Downstream handlers can filter by action (create vs.
     reuse) or subscribe to outcome-specific events (BranchReusedEvent or
-    BranchCreatedEvent) for more specific handling.
+    BranchResolutionCreatedEvent) for more specific handling.
 
     Attributes:
         type (str): Fixed to "branch.resolved"
@@ -86,9 +90,8 @@ class BranchResolvedEvent(CodetoreumEvent):
         if not self.reason:
             msg = "reason is required"
             raise ValueError(msg)
-        valid_strategies = {"exact_match", "parent_issue", "sibling", "fuzzy", "new"}
-        if self.resolution_strategy not in valid_strategies:
-            msg = f"resolution_strategy must be one of {valid_strategies}, got {self.resolution_strategy}"
+        if self.resolution_strategy not in VALID_RESOLUTION_STRATEGIES:
+            msg = f"resolution_strategy must be one of {VALID_RESOLUTION_STRATEGIES}, got {self.resolution_strategy}"
             raise ValueError(msg)
 
     def to_dict(self) -> dict:
@@ -200,9 +203,8 @@ class BranchReusedEvent(CodetoreumEvent):
         if not self.reason:
             msg = "reason is required"
             raise ValueError(msg)
-        valid_strategies = {"exact_match", "parent_issue", "sibling", "fuzzy"}
-        if self.resolution_strategy not in valid_strategies:
-            msg = f"resolution_strategy must be one of {valid_strategies}, got {self.resolution_strategy}"
+        if self.resolution_strategy not in VALID_REUSE_STRATEGIES:
+            msg = f"resolution_strategy must be one of {VALID_REUSE_STRATEGIES}, got {self.resolution_strategy}"
             raise ValueError(msg)
 
     def to_dict(self) -> dict:
@@ -245,7 +247,7 @@ class BranchReusedEvent(CodetoreumEvent):
 
 
 @dataclass(frozen=True)
-class BranchCreatedEvent(CodetoreumEvent):
+class BranchResolutionCreatedEvent(CodetoreumEvent):
     """Emitted when a new branch is created (outcome-specific event).
 
     **Immutability**: This is an immutable event (frozen dataclass). All fields
@@ -267,7 +269,7 @@ class BranchCreatedEvent(CodetoreumEvent):
         reason (str): Human-readable explanation of why new branch was created
 
     Example:
-        >>> event = BranchCreatedEvent(
+        >>> event = BranchResolutionCreatedEvent(
         ...     type="branch.created",
         ...     timestamp="2025-01-14T10:30:00+00:00",
         ...     source="branch_resolution",
@@ -314,7 +316,7 @@ class BranchCreatedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "BranchCreatedEvent":
+    def from_dict(cls, data: dict) -> "BranchResolutionCreatedEvent":
         """Deserialize from dictionary.
 
         Raises:

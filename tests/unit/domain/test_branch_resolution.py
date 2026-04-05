@@ -2,7 +2,7 @@
 
 Tests cover:
 - BranchResolution value object instantiation, immutability, and validation
-- BranchResolvedEvent, BranchReusedEvent, BranchCreatedEvent serialization
+- BranchResolvedEvent, BranchReusedEvent, BranchResolutionCreatedEvent serialization
 - Field validation and error handling
 """
 
@@ -13,7 +13,7 @@ import pytest
 
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.events.branch_events import (
-    BranchCreatedEvent,
+    BranchResolutionCreatedEvent,
     BranchResolvedEvent,
     BranchReusedEvent,
 )
@@ -35,8 +35,8 @@ class TestBranchResolutionInstantiation:
             branch_name="feature/issue-123-fix-auth",
             confidence=0.95,
             reason="Exact match found for issue #123",
-            parent_issue_id=None,
             resolution_strategy="exact_match",
+            parent_issue_id=None,
         )
 
         assert resolution.action == "reuse"
@@ -53,8 +53,8 @@ class TestBranchResolutionInstantiation:
             branch_name="feature/issue-124-new-feature",
             confidence=1.0,
             reason="No existing branch found, creating new",
-            parent_issue_id=None,
             resolution_strategy="new",
+            parent_issue_id=None,
         )
 
         assert resolution.action == "create"
@@ -69,8 +69,8 @@ class TestBranchResolutionInstantiation:
             branch_name="feature/issue-100-parent-task",
             confidence=0.95,
             reason="Parent issue has existing branch",
-            parent_issue_id="100",
             resolution_strategy="parent_issue",
+            parent_issue_id="100",
         )
 
         assert resolution.parent_issue_id == "100"
@@ -83,8 +83,8 @@ class TestBranchResolutionInstantiation:
             branch_name="feature/issue-101-sibling-task",
             confidence=0.9,
             reason="Sibling issue already has working branch",
-            parent_issue_id="100",
             resolution_strategy="sibling",
+            parent_issue_id="100",
         )
 
         assert resolution.resolution_strategy == "sibling"
@@ -96,8 +96,8 @@ class TestBranchResolutionInstantiation:
             branch_name="feature/auth-improvements",
             confidence=0.65,
             reason="Fuzzy match on branch name keywords",
-            parent_issue_id=None,
             resolution_strategy="fuzzy",
+            parent_issue_id=None,
         )
 
         assert resolution.confidence == 0.65
@@ -300,8 +300,8 @@ class TestBranchResolutionImmutability:
             branch_name="feature/test",
             confidence=0.5,
             reason="test",
-            parent_issue_id="123",
             resolution_strategy="new",
+            parent_issue_id="123",
         )
 
         with pytest.raises(AttributeError):
@@ -331,8 +331,8 @@ class TestBranchResolutionSerialization:
             branch_name="feature/issue-123",
             confidence=0.95,
             reason="Exact match found",
-            parent_issue_id="100",
             resolution_strategy="exact_match",
+            parent_issue_id="100",
         )
 
         data = resolution.to_dict()
@@ -351,8 +351,8 @@ class TestBranchResolutionSerialization:
             branch_name="feature/test",
             confidence=1.0,
             reason="Creating new",
-            parent_issue_id=None,
             resolution_strategy="new",
+            parent_issue_id=None,
         )
 
         data = resolution.to_dict()
@@ -427,7 +427,7 @@ class TestBranchResolutionSerialization:
             BranchResolution.from_dict(data)
 
     def test_from_dict_missing_resolution_strategy(self):
-        """Test that missing resolution_strategy defaults to empty string."""
+        """Test that missing resolution_strategy raises ValueError."""
         data = {
             "action": "create",
             "branch_name": "feature/test",
@@ -435,8 +435,8 @@ class TestBranchResolutionSerialization:
             "reason": "test",
         }
 
-        # This should fail validation since empty string is invalid strategy
-        with pytest.raises(DomainError, match="resolution_strategy"):
+        # This should fail since resolution_strategy is now required
+        with pytest.raises(ValueError, match="resolution_strategy"):
             BranchResolution.from_dict(data)
 
     def test_from_dict_with_optional_parent_issue(self):
@@ -473,8 +473,8 @@ class TestBranchResolutionSerialization:
             branch_name="feature/issue-123-complex-fix",
             confidence=0.87,
             reason="Fuzzy keyword match on existing branch",
-            parent_issue_id="100",
             resolution_strategy="fuzzy",
+            parent_issue_id="100",
         )
 
         serialized = original.to_dict()
@@ -761,16 +761,16 @@ class TestBranchReusedEventSerialization:
 
 
 # =============================================================================
-# BranchCreatedEvent Tests
+# BranchResolutionCreatedEvent Tests
 # =============================================================================
 
 
-class TestBranchCreatedEventInstantiation:
-    """Tests for BranchCreatedEvent instantiation."""
+class TestBranchResolutionCreatedEventInstantiation:
+    """Tests for BranchResolutionCreatedEvent instantiation."""
 
     def test_create_valid_event(self):
-        """Test creating a valid BranchCreatedEvent."""
-        event = BranchCreatedEvent(
+        """Test creating a valid BranchResolutionCreatedEvent."""
+        event = BranchResolutionCreatedEvent(
             type="branch.created",
             timestamp=datetime.now(UTC).isoformat(),
             source="branch_resolution",
@@ -788,7 +788,7 @@ class TestBranchCreatedEventInstantiation:
     def test_missing_branch_name(self):
         """Test that missing branch_name raises ValueError."""
         with pytest.raises(ValueError, match="branch_name is required"):
-            BranchCreatedEvent(
+            BranchResolutionCreatedEvent(
                 type="branch.created",
                 timestamp=datetime.now(UTC).isoformat(),
                 source="branch_resolution",
@@ -801,7 +801,7 @@ class TestBranchCreatedEventInstantiation:
     def test_missing_reason(self):
         """Test that missing reason raises ValueError."""
         with pytest.raises(ValueError, match="reason is required"):
-            BranchCreatedEvent(
+            BranchResolutionCreatedEvent(
                 type="branch.created",
                 timestamp=datetime.now(UTC).isoformat(),
                 source="branch_resolution",
@@ -812,12 +812,12 @@ class TestBranchCreatedEventInstantiation:
             )
 
 
-class TestBranchCreatedEventSerialization:
-    """Tests for BranchCreatedEvent serialization/deserialization."""
+class TestBranchResolutionCreatedEventSerialization:
+    """Tests for BranchResolutionCreatedEvent serialization/deserialization."""
 
     def test_to_dict(self):
         """Test event serialization to dictionary."""
-        event = BranchCreatedEvent(
+        event = BranchResolutionCreatedEvent(
             type="branch.created",
             timestamp=datetime.now(UTC).isoformat(),
             source="branch_resolution",
@@ -848,7 +848,7 @@ class TestBranchCreatedEventSerialization:
             "reason": "No existing branch, creating new",
         }
 
-        event = BranchCreatedEvent.from_dict(data)
+        event = BranchResolutionCreatedEvent.from_dict(data)
 
         assert event.project_id == "proj-1"
         assert event.issue_id == "124"
@@ -867,12 +867,12 @@ class TestBranchCreatedEventSerialization:
         }
 
         with pytest.raises(KeyError):
-            BranchCreatedEvent.from_dict(data)
+            BranchResolutionCreatedEvent.from_dict(data)
 
     def test_round_trip_serialization(self):
         """Test serialization and deserialization round-trip."""
         timestamp = datetime.now(UTC).isoformat()
-        original = BranchCreatedEvent(
+        original = BranchResolutionCreatedEvent(
             type="branch.created",
             timestamp=timestamp,
             source="branch_resolution",
@@ -883,7 +883,7 @@ class TestBranchCreatedEventSerialization:
         )
 
         serialized = original.to_dict()
-        deserialized = BranchCreatedEvent.from_dict(serialized)
+        deserialized = BranchResolutionCreatedEvent.from_dict(serialized)
 
         assert deserialized.project_id == original.project_id
         assert deserialized.issue_id == original.issue_id

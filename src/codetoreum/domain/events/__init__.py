@@ -28,7 +28,7 @@ from .board_events import (
 
 # Branch resolution events
 from .branch_events import (
-    BranchCreatedEvent as BranchResolutionCreatedEvent,
+    BranchResolutionCreatedEvent,
     BranchResolvedEvent,
     BranchReusedEvent,
 )
