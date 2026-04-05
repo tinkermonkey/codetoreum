@@ -781,11 +781,6 @@ class SystemicFixResult:
             msg = "duration_seconds must be non-negative"
             raise ValueError(msg)
 
-        # Consistency check: success state must align with root_cause_addressed
-        if self.success and not self.root_cause_addressed:
-            msg = "success=True but root_cause_addressed is empty (must explain what was fixed)"
-            raise ValueError(msg)
-
         # Consistency check: failure without explanation is a data quality gap
         if not self.success and not self.root_cause_addressed:
             msg = "success=False but root_cause_addressed is empty (failure must have explanation for audit trail)"

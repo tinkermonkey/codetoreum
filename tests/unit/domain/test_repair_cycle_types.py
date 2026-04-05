@@ -590,6 +590,20 @@ class TestCycleResult:
                 duration_seconds=5.0,
             )
 
+    def test_passed_false_with_no_error_raises_error(self):
+        """Test that passed=False without error raises ValueError."""
+        with pytest.raises(ValueError, match="passed=False but error is not set"):
+            CycleResult(
+                test_type=RepairTestType.UNIT,
+                passed=False,
+                iterations=1,
+                final_result=None,
+                error=None,  # Inconsistency: failed but no explanation
+                files_fixed=0,
+                warnings_reviewed=0,
+                duration_seconds=5.0,
+            )
+
 
 # ============================================================================
 # RepairCycleResult Immutability Tests
@@ -2059,6 +2073,16 @@ class TestSystemicFixResult:
         # Both results are equal, so set should contain only 1 element
         assert len(result_set) == 1
 
+    def test_success_false_with_empty_root_cause_raises_error(self):
+        """Test that success=False without root_cause_addressed raises ValueError."""
+        with pytest.raises(ValueError, match="success=False but root_cause_addressed is empty"):
+            SystemicFixResult(
+                success=False,
+                files_modified=(),
+                root_cause_addressed="",  # Inconsistency: failed but no explanation
+                duration_seconds=10.0,
+            )
+
 
 # ============================================================================
 # EnvironmentRepairConfig Tests
@@ -2433,5 +2457,15 @@ class TestVerificationResult:
                 healthy=True,
                 checks_passed=("docker available",),
                 checks_failed=("python installed",),
+                duration_seconds=5.0,
+            )
+
+    def test_healthy_false_with_no_checks_failed_raises_error(self):
+        """Test that healthy=False without checks_failed raises ValueError."""
+        with pytest.raises(ValueError, match="healthy=False but checks_failed is empty"):
+            VerificationResult(
+                healthy=False,
+                checks_passed=(),
+                checks_failed=(),  # Inconsistency: unhealthy but no evidence of failure
                 duration_seconds=5.0,
             )
