@@ -1303,15 +1303,6 @@ class SimulationApplicationBootstrap:
             resolved.repair_cycle.environment_repair_service = resolved.environment_repair_service
 
         # Create branch resolution adapter (mock adapter for simulation testing)
-        # PRODUCTION BOOTSTRAP: Wire BranchResolutionAdapter here instead:
-        #   from codetoreum.adapters.secondary.branch_resolution_adapter import BranchResolutionAdapter
-        #   resolved.branch_resolution_service = BranchResolutionAdapter(
-        #       ticket_system=resolved.ticket_system,
-        #       version_control=resolved.version_control,
-        #       event_emitter=resolved.event_emitter,
-        #       min_confidence_threshold=0.7,
-        #       cache_ttl_seconds=30,
-        #   )
         resolved.branch_resolution_service = MockBranchResolutionAdapter(
             clock=self._engine.get_clock_for_testing()
         )
