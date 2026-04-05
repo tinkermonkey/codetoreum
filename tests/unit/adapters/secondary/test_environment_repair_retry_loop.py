@@ -23,6 +23,7 @@ from codetoreum.adapters.secondary.production_repair_cycle_adapter import (
     RepairCycleConfig,
 )
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
+from codetoreum.domain.events.repair_cycle_events import EnvironmentRebuildExhaustedEvent
 from codetoreum.domain.repair_cycle_types import (
     EnvironmentRepairConfig,
     FailureClassification,
@@ -34,6 +35,7 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestType,
     VerificationResult,
 )
+from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.llm_provider import ExecutionResult
 
 # ---------------------------------------------------------------------------
@@ -523,3 +525,192 @@ async def test_environment_issue_verify_raises_exception_during_retry_loop():
 
     # The cycle should fail due to the exception
     assert result.overall_success is False
+
+
+# ---------------------------------------------------------------------------
+# Event Emission Tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_environment_rebuild_exhausted_event_emitted():
+    """Test that EnvironmentRebuildExhaustedEvent is emitted when all rebuild attempts fail.
+
+    This test verifies the critical observable behavior that when the environment
+    repair retry loop exhausts all max_env_rebuilds attempts, the adapter emits
+    an EnvironmentRebuildExhaustedEvent to the event bus for audit trail and
+    downstream handling.
+    """
+    env_service = AsyncMock()
+
+    # All rebuilds fail
+    env_service.rebuild_environment.return_value = RebuildResult(
+        success=False,
+        duration_seconds=3.0,
+        actions_taken=(),
+        error="Persistent environment issue",
+    )
+
+    systemic_service = AsyncMock()
+    systemic_service.analyze.return_value = MagicMock(
+        classification=FailureClassification.ENVIRONMENT_ISSUE,
+        confidence=0.95,
+        reasoning="Environment corruption",
+        recommended_action="Rebuild environment",
+        affected_files=("test_foo.py",),
+        cross_cutting=False,
+    )
+
+    # Create a capturing event emitter to verify events are emitted
+    captured_events = []
+
+    class CapturingEventEmitter(IEventEmitter):
+        def on(self, event_type: str, handler) -> None:
+            pass
+
+        def off(self, event_type: str, handler) -> None:
+            pass
+
+        def emit(self, event) -> None:
+            captured_events.append(event)
+
+    event_emitter = CapturingEventEmitter()
+    adapter, llm = _make_adapter(environment_repair_service=env_service)
+    adapter._systemic_analysis_service = systemic_service
+    adapter.event_emitter = event_emitter
+
+    llm.execute.return_value = ExecutionResult(content=_ENVIRONMENT_ISSUE_JSON)
+
+    ctx = _RepairCycleContext()
+    result = await adapter.execute(ctx)
+
+    # Verify cycle failed
+    assert result.overall_success is False
+
+    # Verify that EnvironmentRebuildExhaustedEvent was emitted
+    exhausted_events = [
+        e
+        for e in captured_events
+        if isinstance(e, EnvironmentRebuildExhaustedEvent)
+    ]
+    assert len(exhausted_events) > 0, "EnvironmentRebuildExhaustedEvent should be emitted when all rebuilds exhausted"
+    assert exhausted_events[0].work_item_id == ctx.work_item_id
+    assert exhausted_events[0].workflow_run_id == ctx.workflow_run_id
+
+
+@pytest.mark.asyncio
+async def test_emit_event_safely_catches_emitter_failures_in_rebuild():
+    """Test that _emit_event_safely catches event emitter failures during rebuild.
+
+    This test verifies that when the event emitter raises an exception during
+    rebuild operation, the _emit_event_safely wrapper in the environment repair
+    adapter catches it, logs the error, and allows the rebuild operation to
+    complete and return a result without crashing.
+    """
+    from codetoreum.adapters.secondary.production_environment_repair_adapter import (
+        ProductionEnvironmentRepairAdapter,
+    )
+
+    # Create a failing event emitter that raises on emit()
+    class FailingEventEmitter(IEventEmitter):
+        def on(self, event_type: str, handler) -> None:
+            pass
+
+        def off(self, event_type: str, handler) -> None:
+            pass
+
+        def emit(self, event) -> None:
+            raise RuntimeError("Event bus connection failed")
+
+    # Create adapter with failing event emitter
+    llm = AsyncMock()
+    llm.execute.return_value = ExecutionResult(content='{"success": true}')
+
+    async def llm_factory(agent_name):
+        return llm
+
+    adapter = ProductionEnvironmentRepairAdapter(
+        llm_factory=llm_factory,
+        event_emitter=FailingEventEmitter(),
+    )
+
+    ctx = _RepairCycleContext()
+    ctx.iteration = 1  # Set iteration to 1 (required by event validation)
+    config = RepairTestRunConfig(
+        test_type=RepairTestType.UNIT,
+        timeout=30,
+        max_iterations=1,
+        review_warnings=False,
+    )
+
+    # Execute rebuild - should NOT raise despite event emitter failing
+    result = await adapter.rebuild_environment(
+        project="test_project",
+        config=config,
+        context=ctx,
+    )
+
+    # Verify rebuild completed successfully
+    # (event emission failure should not crash the operation)
+    assert isinstance(result, RebuildResult)
+    # The rebuild itself should succeed (despite event emission failing)
+    assert result.success is True
+
+
+@pytest.mark.asyncio
+async def test_emit_event_safely_catches_emitter_failures_in_verify():
+    """Test that _emit_event_safely catches event emitter failures during verify.
+
+    This test verifies that when the event emitter raises an exception during
+    verify operation, the _emit_event_safely wrapper in the environment repair
+    adapter catches it, logs the error, and allows the verify operation to
+    complete and return a result without crashing.
+    """
+    from codetoreum.adapters.secondary.production_environment_repair_adapter import (
+        ProductionEnvironmentRepairAdapter,
+    )
+
+    # Create a failing event emitter that raises on emit()
+    class FailingEventEmitter(IEventEmitter):
+        def on(self, event_type: str, handler) -> None:
+            pass
+
+        def off(self, event_type: str, handler) -> None:
+            pass
+
+        def emit(self, event) -> None:
+            raise RuntimeError("Event bus connection failed")
+
+    # Create adapter with failing event emitter
+    llm = AsyncMock()
+    llm.execute.return_value = ExecutionResult(content='{"healthy": true, "checks_passed": ["test"]}')
+
+    async def llm_factory(agent_name):
+        return llm
+
+    adapter = ProductionEnvironmentRepairAdapter(
+        llm_factory=llm_factory,
+        event_emitter=FailingEventEmitter(),
+    )
+
+    ctx = _RepairCycleContext()
+    ctx.iteration = 1  # Set iteration to 1 (required by event validation)
+    config = RepairTestRunConfig(
+        test_type=RepairTestType.UNIT,
+        timeout=30,
+        max_iterations=1,
+        review_warnings=False,
+    )
+
+    # Execute verify - should NOT raise despite event emitter failing
+    result = await adapter.verify_environment(
+        project="test_project",
+        config=config,
+        context=ctx,
+    )
+
+    # Verify operation completed successfully
+    # (event emission failure should not crash the operation)
+    assert isinstance(result, VerificationResult)
+    # The verify itself should succeed (despite event emission failing)
+    assert result.healthy is True

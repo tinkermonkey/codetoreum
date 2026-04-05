@@ -1239,6 +1239,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                         "workflow_run_id": context.workflow_run_id,
                         "test_type": config.test_type.value,
                         "error": str(e),
+                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
                     },
                     exc_info=True,
                 )
@@ -1305,6 +1306,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                         "workflow_run_id": context.workflow_run_id,
                         "test_type": config.test_type.value,
                         "error": str(e),
+                        "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
                     },
                     exc_info=True,
                 )
