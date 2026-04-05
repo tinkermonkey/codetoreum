@@ -46,6 +46,9 @@ from codetoreum.adapters.testing.mock_container_recovery_adapter import (
     MockContainerRecoveryAdapter,
 )
 from codetoreum.adapters.testing.mock_discussion_adapter import MockDiscussionAdapter
+from codetoreum.adapters.testing.mock_environment_repair_adapter import (
+    MockEnvironmentRepairAdapter,
+)
 from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
 from codetoreum.adapters.testing.mock_notifier_adapter import MockNotifierAdapter
 from codetoreum.adapters.testing.mock_project_manager_adapter import (
@@ -89,6 +92,7 @@ __all__ = [
     "MockBoardAdapter",
     "MockContainerRecoveryAdapter",
     "MockDiscussionAdapter",
+    "MockEnvironmentRepairAdapter",
     "MockLLMAdapter",
     "MockNotifierAdapter",
     "MockProjectManagerAdapter",

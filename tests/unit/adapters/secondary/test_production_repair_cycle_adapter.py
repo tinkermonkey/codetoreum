@@ -26,7 +26,9 @@ from codetoreum.adapters.secondary.production_repair_cycle_adapter import (
 )
 from codetoreum.domain.events.repair_cycle_events import SystemicAnalysisCompletedEvent
 from codetoreum.domain.repair_cycle_types import (
+    EnvironmentRepairConfig,
     FailureClassification,
+    RepairCycleStageConfig,
     RepairTestFailure,
     RepairTestResult,
     RepairTestRunConfig,
@@ -74,6 +76,16 @@ class _RepairCycleContext:
         self.iteration = 0
         self.prior_fix_attempts = ()
         self.prior_classifications = ()
+        self.stage_config = RepairCycleStageConfig(
+            name="fix_failures",
+            test_configs=self.test_configs,
+            agent_name=self.agent_name,
+            max_total_agent_calls=max_total_agent_calls,
+            checkpoint_interval=self.checkpoint_interval,
+            agent_config=self.agent_config,
+            systemic_fix_failure_ceiling=self.systemic_fix_failure_ceiling,
+            environment_repair_config=EnvironmentRepairConfig(),
+        )
 
 
 def _make_async_factory(llm):
@@ -85,15 +97,53 @@ def _make_async_factory(llm):
     return factory
 
 
+def _default_response_factory(prompt: str) -> ExecutionResult:
+    """Create a response factory that returns context-aware responses based on the prompt.
+
+    Detects operation type from the prompt and returns appropriate JSON response format.
+    """
+    prompt_lower = prompt.lower()
+
+    # Detect environment rebuild operation
+    if "rebuild" in prompt_lower and "environment" in prompt_lower:
+        return ExecutionResult(content='{"success": true}')
+
+    # Detect environment verification operation
+    if "verify" in prompt_lower and "environment" in prompt_lower:
+        return ExecutionResult(content='{"healthy": true}')
+
+    # Detect dependency fix operation
+    if "dependency" in prompt_lower or "install" in prompt_lower:
+        return ExecutionResult(content='{"success": true}')
+
+    # Default to test result format (for run_tests, fix_failures, etc.)
+    return ExecutionResult(content=_VALID_JSON_RESPONSE)
+
+
 def _make_adapter(
     *,
     llm_response: str = _VALID_JSON_RESPONSE,
     circuit_breaker=None,
     event_emitter=None,
+    llm_response_factory=None,
 ) -> tuple[ProductionRepairCycleAdapter, AsyncMock]:
-    """Return (adapter, mock_llm) pre-wired for tests."""
+    """Return (adapter, mock_llm) pre-wired for tests.
+
+    Args:
+        llm_response: Default response for simple cases. Ignored if llm_response_factory is provided.
+        llm_response_factory: Optional callable(prompt: str) -> ExecutionResult that generates context-aware responses.
+                             Takes precedence over llm_response.
+        circuit_breaker: Optional circuit breaker mock
+        event_emitter: Optional event emitter mock
+    """
     llm = AsyncMock()
-    llm.execute.return_value = ExecutionResult(content=llm_response)
+
+    if llm_response_factory is not None:
+        # Use factory for context-aware responses via side_effect
+        llm.execute.side_effect = lambda prompt, **kwargs: llm_response_factory(prompt)
+    else:
+        # Use static response
+        llm.execute.return_value = ExecutionResult(content=llm_response)
 
     # Create async factory that returns the same mock LLM for any agent name
     llm_factory = _make_async_factory(llm)
@@ -410,7 +460,9 @@ class TestClassificationDispatchEnvironmentIssue:
 
     @pytest.mark.asyncio
     async def test_environment_issue_skip_verify_if_rebuild_fails(self):
-        """ENVIRONMENT_ISSUE skips verify_environment if rebuild_environment returns False."""
+        """ENVIRONMENT_ISSUE retries rebuild when it fails, exhausts max_env_rebuilds, and skips verify."""
+        from codetoreum.domain.repair_cycle_types import EnvironmentRepairConfig
+
         event_emitter = MagicMock()
         systemic_service = AsyncMock()
         systemic_service.analyze.return_value = MagicMock(
@@ -429,7 +481,9 @@ class TestClassificationDispatchEnvironmentIssue:
         ctx = _RepairCycleContext(max_total_agent_calls=100)
         await adapter.execute(ctx)
 
-        adapter.rebuild_environment.assert_called_once()
+        # With retry loop, rebuild should be called max_env_rebuilds times
+        env_repair_config = EnvironmentRepairConfig()
+        assert adapter.rebuild_environment.call_count == env_repair_config.max_env_rebuilds
         # verify_environment should not be called if rebuild fails
         adapter.verify_environment.assert_not_called()
 
@@ -972,7 +1026,10 @@ class TestEnvironmentHelperMethods:
         """rebuild_environment returns True on successful execution."""
         event_emitter = MagicMock()
 
-        adapter, llm = _make_adapter(event_emitter=event_emitter)
+        adapter, llm = _make_adapter(
+            event_emitter=event_emitter,
+            llm_response_factory=_default_response_factory,
+        )
         ctx = _RepairCycleContext()
         config = ctx.test_configs[0]
 
@@ -1006,7 +1063,10 @@ class TestEnvironmentHelperMethods:
         """verify_environment returns True on successful execution."""
         event_emitter = MagicMock()
 
-        adapter, llm = _make_adapter(event_emitter=event_emitter)
+        adapter, llm = _make_adapter(
+            event_emitter=event_emitter,
+            llm_response_factory=_default_response_factory,
+        )
         ctx = _RepairCycleContext()
         config = ctx.test_configs[0]
 
@@ -1178,6 +1238,106 @@ class TestPromptBuilders:
         prompt = adapter._build_environment_verify_prompt(config)
 
         assert "end-to-end tests" in prompt.lower()
+
+    def test_get_test_type_description_unknown_type(self, caplog):
+        """Test that unknown test type raises ValueError and logs error.
+
+        This test verifies that when an unknown RepairTestType enum value is
+        encountered (indicating the enum was extended but prompt builders were
+        not updated), the method:
+        1. Raises ValueError with a clear message
+        2. Logs an error with ErrorRegistry.ERR_REPAIR_CYCLE_ERROR
+        3. Includes the unknown value in the error message
+        """
+        adapter, _ = _make_adapter()
+
+        # Create a mock test type that is not in _test_type_descriptions
+        from unittest.mock import MagicMock
+        unknown_test_type = MagicMock(spec=RepairTestType)
+        unknown_test_type.value = "UNKNOWN_TYPE"
+
+        # Verify the type is not in descriptions
+        assert unknown_test_type not in adapter._test_type_descriptions
+
+        # Attempt to get description - should raise ValueError
+        with pytest.raises(ValueError) as exc_info:
+            adapter._get_test_type_description(unknown_test_type)
+
+        # Verify error message indicates enum extension issue
+        error_msg = str(exc_info.value)
+        assert "Unknown RepairTestType" in error_msg
+        assert "enum was extended" in error_msg
+        assert "prompt builders were not updated" in error_msg
+
+        # Verify error was logged with correct context
+        assert any(
+            record.levelname == "ERROR"
+            and "Unknown RepairTestType" in record.message
+            and record.test_type == "UNKNOWN_TYPE"
+            for record in caplog.records
+        )
+
+    def test_build_environment_rebuild_prompt_unknown_test_type(self, caplog):
+        """Test that rebuild prompt builder raises ValueError for unknown test type.
+
+        Verifies that _build_environment_rebuild_prompt correctly propagates
+        the ValueError from _get_test_type_description when an unknown test type
+        is encountered.
+        """
+        adapter, _ = _make_adapter()
+
+        # Create a mock test type that is not in _test_type_descriptions
+        from unittest.mock import MagicMock
+        unknown_test_type = MagicMock(spec=RepairTestType)
+        unknown_test_type.value = "NEW_TEST_TYPE"
+
+        # Create config with unknown test type
+        config = RepairTestRunConfig(
+            test_type=unknown_test_type,
+            timeout=900,
+            max_iterations=5,
+            review_warnings=True,
+        )
+
+        # Attempt to build prompt - should raise ValueError
+        with pytest.raises(ValueError) as exc_info:
+            adapter._build_environment_rebuild_prompt(config)
+
+        # Verify error message
+        error_msg = str(exc_info.value)
+        assert "Unknown RepairTestType" in error_msg
+        assert "enum was extended" in error_msg
+
+    def test_build_environment_verify_prompt_unknown_test_type(self, caplog):
+        """Test that verify prompt builder raises ValueError for unknown test type.
+
+        Verifies that _build_environment_verify_prompt correctly propagates
+        the ValueError from _get_test_type_description when an unknown test type
+        is encountered.
+        """
+        adapter, _ = _make_adapter()
+
+        # Create a mock test type that is not in _test_type_descriptions
+        from unittest.mock import MagicMock
+        unknown_test_type = MagicMock(spec=RepairTestType)
+        unknown_test_type.value = "FUTURE_TEST_TYPE"
+
+        # Create config with unknown test type
+        config = RepairTestRunConfig(
+            test_type=unknown_test_type,
+            timeout=900,
+            max_iterations=5,
+            review_warnings=True,
+        )
+
+        # Attempt to build prompt - should raise ValueError
+        with pytest.raises(ValueError) as exc_info:
+            adapter._build_environment_verify_prompt(config)
+
+        # Verify error message
+        error_msg = str(exc_info.value)
+        assert "Unknown RepairTestType" in error_msg
+        assert "enum was extended" in error_msg
 
     def test_build_dependency_fix_prompt(self):
         """_build_dependency_fix_prompt includes reasoning and failure details."""

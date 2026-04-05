@@ -23,6 +23,7 @@ from codetoreum.ports.output.container import IContainer
 from codetoreum.ports.output.container_recovery import IAgentContainerRecoveryService
 from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.encryption_service import IEncryptionService
+from codetoreum.ports.output.environment_repair_service import IEnvironmentRepairService
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.output.identity_service import IIdentityService
@@ -713,4 +714,16 @@ class SystemicAnalysisRegistry(AdapterRegistry[ISystemicAnalysisService]):
 
     def _is_valid_adapter(self, adapter_type: type[ISystemicAnalysisService]) -> bool:
         """Validate that an adapter implements ISystemicAnalysisService."""
+        return _validate_adapter_implements_interface(adapter_type, self._port_interface)
+
+
+class EnvironmentRepairRegistry(AdapterRegistry[IEnvironmentRepairService]):
+    """Registry for IEnvironmentRepairService adapter implementations."""
+
+    def __init__(self):
+        """Initialize the environment repair service registry."""
+        super().__init__(IEnvironmentRepairService)
+
+    def _is_valid_adapter(self, adapter_type: type[IEnvironmentRepairService]) -> bool:
+        """Validate that an adapter implements IEnvironmentRepairService."""
         return _validate_adapter_implements_interface(adapter_type, self._port_interface)

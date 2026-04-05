@@ -37,8 +37,6 @@ async def seeded_simulation_bootstrap(simulation_bootstrap, simulation_seeder):
 
     # Wire systemic analysis service to repair cycle adapter for dispatch logic
     repair_cycle = simulation_bootstrap.adapters.repair_cycle_as_mock()
-    repair_cycle.set_systemic_analysis_service(
-        simulation_bootstrap.adapters.systemic_analysis_service
-    )
+    repair_cycle.systemic_analysis_service = simulation_bootstrap.adapters.systemic_analysis_service
 
     return simulation_bootstrap

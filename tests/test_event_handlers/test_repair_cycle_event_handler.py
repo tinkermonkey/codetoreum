@@ -11,7 +11,9 @@ from codetoreum.application.event_handlers.repair_cycle_event_handler import (
 from codetoreum.domain.events import WorkItemColumnChanged
 from codetoreum.domain.repair_cycle_types import (
     CycleResult,
+    EnvironmentRepairConfig,
     RepairCycleResult,
+    RepairCycleStageConfig,
     RepairTestResult,
     RepairTestRunConfig,
     RepairTestType,
@@ -543,14 +545,24 @@ class TestRepairCycleEventContext:
 
     def test_context_creation(self):
         """Test context can be created with required fields."""
+        test_configs = (RepairTestRunConfig(test_type=RepairTestType.UNIT),)
+        stage_config = RepairCycleStageConfig(
+            name="Testing",
+            test_configs=test_configs,
+            agent_name="senior_software_engineer",
+            max_total_agent_calls=100,
+            checkpoint_interval=5,
+            environment_repair_config=EnvironmentRepairConfig(),
+        )
         context = RepairCycleEventContext(
             stage_name="Testing",
             workflow_run_id="item-1",
             work_item_id="issue-123",
-            test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+            test_configs=test_configs,
             agent_name="senior_software_engineer",
             max_total_agent_calls=100,
             checkpoint_interval=5,
+            stage_config=stage_config,
             agent_config=None,
         )
 
@@ -561,12 +573,21 @@ class TestRepairCycleEventContext:
         assert context.max_total_agent_calls == 100
         assert context.checkpoint_interval == 5
         assert context.agent_config is None
+        assert context.stage_config == stage_config
 
     def test_context_test_configs_are_tuple(self):
         """Test context test_configs is a tuple."""
         configs = (
             RepairTestRunConfig(test_type=RepairTestType.UNIT),
             RepairTestRunConfig(test_type=RepairTestType.INTEGRATION),
+        )
+        stage_config = RepairCycleStageConfig(
+            name="Testing",
+            test_configs=configs,
+            agent_name="senior_software_engineer",
+            max_total_agent_calls=100,
+            checkpoint_interval=5,
+            environment_repair_config=EnvironmentRepairConfig(),
         )
         context = RepairCycleEventContext(
             stage_name="Testing",
@@ -576,6 +597,7 @@ class TestRepairCycleEventContext:
             agent_name="senior_software_engineer",
             max_total_agent_calls=100,
             checkpoint_interval=5,
+            stage_config=stage_config,
             agent_config=None,
         )
 

@@ -25,7 +25,7 @@ Reference: review_events.py for event sourcing immutability patterns
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 logger = logging.getLogger(__name__)
@@ -244,8 +244,10 @@ class CycleResult:
             msg = f"passed=True but error is set: '{self.error}' (contradiction)"
             raise ValueError(msg)
 
-        # Note: passed=False with final_result is allowed (failed but completed)
-        # Note: passed=False with error is the expected failure case
+        # Consistency check: failure without explanation is a data quality gap
+        if not self.passed and self.error is None:
+            msg = "passed=False but error is not set (failure must have explanation for audit trail)"
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True)
@@ -482,6 +484,43 @@ class RepairCycleCheckpoint:
 
 
 @dataclass(frozen=True)
+class EnvironmentRepairConfig:
+    """Configuration for environment repair operations.
+
+    Immutable configuration controlling how environment rebuild and verification
+    operations are executed during the repair cycle when environment-related
+    test failures are detected.
+
+    **Immutability**: Frozen dataclass - all fields read-only after construction.
+    Attempting to modify any field raises FrozenInstanceError.
+
+    Attributes:
+        max_env_rebuilds: Maximum number of environment rebuild attempts
+                         before giving up (default 2)
+        env_rebuild_timeout_seconds: Timeout for a single rebuild operation
+                                    in seconds (default 1200 = 20 minutes)
+        env_verification_timeout_seconds: Timeout for environment verification
+                                         in seconds (default 120 = 2 minutes)
+    """
+
+    max_env_rebuilds: int = 2
+    env_rebuild_timeout_seconds: int = 1200
+    env_verification_timeout_seconds: int = 120
+
+    def __post_init__(self) -> None:
+        """Validate configuration after initialization."""
+        if self.max_env_rebuilds <= 0:
+            msg = "max_env_rebuilds must be > 0"
+            raise ValueError(msg)
+        if self.env_rebuild_timeout_seconds <= 0:
+            msg = "env_rebuild_timeout_seconds must be > 0"
+            raise ValueError(msg)
+        if self.env_verification_timeout_seconds <= 0:
+            msg = "env_verification_timeout_seconds must be > 0"
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True)
 class RepairCycleStageConfig:
     """Configuration for entire repair cycle stage.
 
@@ -490,9 +529,13 @@ class RepairCycleStageConfig:
     - Overall constraints and circuit breakers
     - Checkpointing strategy for long-running cycles
     - Optional specialized agent assignments
+    - Environment repair configuration (co-located per specification)
 
     **Immutability**: Frozen dataclass - all fields read-only after construction.
     Collections stored as immutable Tuples instead of Lists.
+
+    **Co-location Pattern**: EnvironmentRepairConfig is embedded here rather than
+    injected separately, keeping related configuration together as a cohesive unit.
 
     Attributes:
         name: Stage name (e.g., "fix_failures", "fix_warnings")
@@ -507,6 +550,8 @@ class RepairCycleStageConfig:
         systemic_fix_failure_ceiling: Maximum number of failures to attempt systemic fix.
                                      Prevents overwhelming the agent with too many failures.
                                      Defaults to 50.
+        environment_repair_config: Configuration for environment rebuild/verify operations.
+                                  Co-located with stage config for consistency.
     """
 
     name: str
@@ -516,6 +561,7 @@ class RepairCycleStageConfig:
     checkpoint_interval: int = 5  # Save state every N iterations
     agent_config: RepairCycleAgentConfig | None = None  # Optional specialized agents
     systemic_fix_failure_ceiling: int = 50  # Max failures for systemic fix dispatch
+    environment_repair_config: EnvironmentRepairConfig = field(default_factory=EnvironmentRepairConfig)  # Co-located config
 
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""
@@ -621,6 +667,90 @@ class AnalysisContext:
 
 
 @dataclass(frozen=True)
+class RebuildResult:
+    """Result of an environment rebuild operation.
+
+    Immutable record of rebuilding the test environment, including success status,
+    actions taken, duration, and any errors encountered.
+
+    **Immutability**: Frozen dataclass - all fields read-only after construction.
+    Attempting to modify any field raises FrozenInstanceError.
+
+    Attributes:
+        success: Whether the environment rebuild was successful
+        duration_seconds: Time taken to rebuild the environment (non-negative)
+        actions_taken: Immutable tuple of actions performed during rebuild (e.g., "docker build", "pip install")
+        error: Optional error message if rebuild failed, None if successful
+    """
+
+    success: bool
+    duration_seconds: float
+    actions_taken: tuple[str, ...]  # Immutable tuple
+    error: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate rebuild result after initialization."""
+        if self.duration_seconds < 0:
+            msg = "duration_seconds must be non-negative"
+            raise ValueError(msg)
+        if not isinstance(self.actions_taken, tuple):
+            object.__setattr__(self, "actions_taken", tuple(self.actions_taken))
+
+        # Consistency check: success state must align with error
+        if self.success and self.error is not None:
+            msg = f"success=True but error is set: '{self.error}' (contradiction)"
+            raise ValueError(msg)
+
+        # Consistency check: failure without explanation is a data quality gap
+        if not self.success and self.error is None:
+            msg = "success=False but error is not set (failure must have explanation for audit trail)"
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True)
+class VerificationResult:
+    """Result of an environment verification operation.
+
+    Immutable record of verifying that a rebuilt environment is healthy and ready
+    for testing, including which checks passed and failed.
+
+    **Immutability**: Frozen dataclass - all fields read-only after construction.
+    Attempting to modify any field raises FrozenInstanceError.
+
+    Attributes:
+        healthy: Whether the environment verification succeeded (all checks passed)
+        checks_passed: Immutable tuple of verification checks that passed
+        checks_failed: Immutable tuple of verification checks that failed
+        duration_seconds: Time taken to verify the environment (non-negative)
+    """
+
+    healthy: bool
+    checks_passed: tuple[str, ...]  # Immutable tuple
+    checks_failed: tuple[str, ...]  # Immutable tuple
+    duration_seconds: float
+
+    def __post_init__(self) -> None:
+        """Validate verification result after initialization."""
+        if self.duration_seconds < 0:
+            msg = "duration_seconds must be non-negative"
+            raise ValueError(msg)
+        if not isinstance(self.checks_passed, tuple):
+            object.__setattr__(self, "checks_passed", tuple(self.checks_passed))
+        if not isinstance(self.checks_failed, tuple):
+            object.__setattr__(self, "checks_failed", tuple(self.checks_failed))
+
+        # Consistency check: healthy state must align with checks_failed
+        if self.healthy and self.checks_failed:
+            msg = f"healthy=True but checks_failed is non-empty: {self.checks_failed} (contradiction)"
+            raise ValueError(msg)
+
+        # Consistency check: failure without evidence is a data quality gap
+        if not self.healthy and not self.checks_failed:
+            msg = "healthy=False but checks_failed is empty (failure must have evidence for audit trail)"
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True)
 class SystemicFixResult:
     """Result of a systemic fix operation addressing a cross-cutting root cause.
 
@@ -649,4 +779,9 @@ class SystemicFixResult:
             object.__setattr__(self, "files_modified", tuple(self.files_modified))
         if self.duration_seconds < 0:
             msg = "duration_seconds must be non-negative"
+            raise ValueError(msg)
+
+        # Consistency check: failure without explanation is a data quality gap
+        if not self.success and not self.root_cause_addressed:
+            msg = "success=False but root_cause_addressed is empty (failure must have explanation for audit trail)"
             raise ValueError(msg)

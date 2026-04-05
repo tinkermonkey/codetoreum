@@ -11,7 +11,9 @@ from dataclasses import dataclass
 
 from codetoreum.domain.events import DomainEvent, WorkItemColumnChanged
 from codetoreum.domain.repair_cycle_types import (
+    EnvironmentRepairConfig,
     RepairCycleAgentConfig,
+    RepairCycleStageConfig,
     RepairTestRunConfig,
     RepairTestType,
 )
@@ -38,6 +40,7 @@ class RepairCycleEventContext:
     agent_name: str
     max_total_agent_calls: int
     checkpoint_interval: int
+    stage_config: RepairCycleStageConfig
     agent_config: RepairCycleAgentConfig | None = None
     systemic_fix_failure_ceiling: int = 50
     iteration: int = 0
@@ -215,18 +218,30 @@ class RepairCycleEventHandler(EventHandler):
                 logger.debug("Workflow config service not provided, will use default agent for repair cycle")
 
             # Create repair cycle context
+            test_configs = (
+                RepairTestRunConfig(test_type=RepairTestType.UNIT),
+                RepairTestRunConfig(test_type=RepairTestType.INTEGRATION),
+                RepairTestRunConfig(test_type=RepairTestType.E2E),
+            )
+            stage_config = RepairCycleStageConfig(
+                name="Testing",
+                test_configs=test_configs,
+                agent_name="senior_software_engineer",
+                max_total_agent_calls=100,
+                checkpoint_interval=5,
+                agent_config=agent_config,
+                systemic_fix_failure_ceiling=50,
+                environment_repair_config=EnvironmentRepairConfig(),
+            )
             context = RepairCycleEventContext(
                 stage_name="Testing",
                 workflow_run_id=work_item_id,  # TODO: derive actual workflow_run_id once pipeline run tracking is available
                 work_item_id=work_item_id,
-                test_configs=(
-                    RepairTestRunConfig(test_type=RepairTestType.UNIT),
-                    RepairTestRunConfig(test_type=RepairTestType.INTEGRATION),
-                    RepairTestRunConfig(test_type=RepairTestType.E2E),
-                ),
+                test_configs=test_configs,
                 agent_name="senior_software_engineer",
                 max_total_agent_calls=100,
                 checkpoint_interval=5,
+                stage_config=stage_config,
                 agent_config=agent_config,
             )
 

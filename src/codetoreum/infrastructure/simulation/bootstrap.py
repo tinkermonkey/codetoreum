@@ -211,6 +211,7 @@ from codetoreum.ports.output.container import IContainer
 from codetoreum.ports.output.container_recovery import IAgentContainerRecoveryService
 from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.encryption_service import IEncryptionService
+from codetoreum.ports.output.environment_repair_service import IEnvironmentRepairService
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.output.failed_event_store import IFailedEventStore
@@ -352,6 +353,9 @@ class SimulationAdapters:
 
     # Systemic analysis service (for failure classification in repair cycle)
     systemic_analysis_service: ISystemicAnalysisService
+
+    # Environment repair service (for environment-related test failures)
+    environment_repair_service: IEnvironmentRepairService
 
     # Fields with defaults (must come after fields without defaults)
     agent_executor: IAgentExecutor | None = None
@@ -663,6 +667,24 @@ class SimulationAdapters:
         Raises TypeError if systemic_analysis_service is not MockSystemicAnalysisAdapter.
         """
         return self.systemic_analysis_as_mock()
+
+    def environment_repair_as_mock(self) -> "MockEnvironmentRepairAdapter":
+        """Get environment repair service as MockEnvironmentRepairAdapter.
+
+        Raises TypeError if environment_repair_service is not MockEnvironmentRepairAdapter.
+        """
+        try:
+            from codetoreum.adapters.testing.mock_environment_repair_adapter import (
+                MockEnvironmentRepairAdapter,
+            )
+
+            if not isinstance(self.environment_repair_service, MockEnvironmentRepairAdapter):
+                msg = f"environment_repair_service is {type(self.environment_repair_service).__name__}, not MockEnvironmentRepairAdapter"
+                raise TypeError(msg)
+            return cast("MockEnvironmentRepairAdapter", self.environment_repair_service)
+        except ImportError as e:
+            msg = f"Failed to import MockEnvironmentRepairAdapter: {e}"
+            raise TypeError(msg) from e
 
 
 @dataclass
@@ -1257,7 +1279,8 @@ class SimulationApplicationBootstrap:
         from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
 
         if isinstance(resolved.repair_cycle, MockRepairCycleAdapter):
-            resolved.repair_cycle.set_systemic_analysis_service(resolved.systemic_analysis_service)
+            resolved.repair_cycle.systemic_analysis_service = resolved.systemic_analysis_service
+            resolved.repair_cycle.environment_repair_service = resolved.environment_repair_service
 
         # Create audit store (not provided by resolver)
         audit_store = InMemoryAuditStore()

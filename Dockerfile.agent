@@ -38,13 +38,20 @@ WORKDIR /workspace/codetoreum
 
 # Copy ONLY the dependency manifests needed for installation
 # DO NOT copy source code - it comes from the runtime mount
-COPY requirements.txt* ./
+COPY requirements.txt* pyproject.toml ./
 
 # Pre-install Python dependencies if requirements.txt exists
 # Use BuildKit cache mount for pip cache to speed up rebuilds
 RUN if [ -f requirements.txt ]; then \
     pip install --no-cache-dir -r requirements.txt; \
     fi
+
+# Install the codetoreum package in editable mode so that `import codetoreum`
+# works at runtime. We create a minimal package skeleton here; the real source
+# code is volume-mounted at runtime and the editable .pth link resolves to it.
+RUN mkdir -p src/codetoreum && \
+    touch src/codetoreum/__init__.py README.md && \
+    pip install --no-cache-dir --no-deps -e .
 
 # Install pre-commit so repair cycle agents can run `pre-commit run --all-files`.
 # The local hooks in .pre-commit-config.yaml use `language: system`, meaning they

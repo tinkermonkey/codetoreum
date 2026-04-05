@@ -14,7 +14,9 @@ except ImportError:
 from codetoreum.domain.repair_cycle_types import (
     AnalysisContext,
     CycleResult,
+    EnvironmentRepairConfig,
     FailureClassification,
+    RebuildResult,
     RepairCycleAgentConfig,
     RepairCycleResult,
     RepairCycleStageConfig,
@@ -25,6 +27,7 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestWarning,
     SystemicAnalysisResult,
     SystemicFixResult,
+    VerificationResult,
 )
 
 # ============================================================================
@@ -587,6 +590,20 @@ class TestCycleResult:
                 duration_seconds=5.0,
             )
 
+    def test_passed_false_with_no_error_raises_error(self):
+        """Test that passed=False without error raises ValueError."""
+        with pytest.raises(ValueError, match="passed=False but error is not set"):
+            CycleResult(
+                test_type=RepairTestType.UNIT,
+                passed=False,
+                iterations=1,
+                final_result=None,
+                error=None,  # Inconsistency: failed but no explanation
+                files_fixed=0,
+                warnings_reviewed=0,
+                duration_seconds=5.0,
+            )
+
 
 # ============================================================================
 # RepairCycleResult Immutability Tests
@@ -1019,6 +1036,61 @@ class TestRepairCycleStageConfig:
                 checkpoint_interval=0,
             )
 
+    def test_environment_repair_config_default_factory(self):
+        """Test that environment_repair_config has correct default."""
+        config = RepairCycleStageConfig(
+            name="repair",
+            test_configs=(
+                RepairTestRunConfig(
+                    test_type=RepairTestType.UNIT,
+                    timeout=300,
+                    max_iterations=5,
+                ),
+            ),
+        )
+        assert isinstance(config.environment_repair_config, EnvironmentRepairConfig)
+        assert config.environment_repair_config.max_env_rebuilds == 2
+        assert config.environment_repair_config.env_rebuild_timeout_seconds == 1200
+        assert config.environment_repair_config.env_verification_timeout_seconds == 120
+
+    def test_environment_repair_config_custom_values(self):
+        """Test that custom environment_repair_config is preserved."""
+        custom_env_config = EnvironmentRepairConfig(
+            max_env_rebuilds=4,
+            env_rebuild_timeout_seconds=2400,
+            env_verification_timeout_seconds=300,
+        )
+        config = RepairCycleStageConfig(
+            name="repair",
+            test_configs=(
+                RepairTestRunConfig(
+                    test_type=RepairTestType.UNIT,
+                    timeout=300,
+                    max_iterations=5,
+                ),
+            ),
+            environment_repair_config=custom_env_config,
+        )
+        assert config.environment_repair_config is custom_env_config
+        assert config.environment_repair_config.max_env_rebuilds == 4
+        assert config.environment_repair_config.env_rebuild_timeout_seconds == 2400
+        assert config.environment_repair_config.env_verification_timeout_seconds == 300
+
+    def test_environment_repair_config_immutability(self):
+        """Test that environment_repair_config is immutable as part of frozen dataclass."""
+        config = RepairCycleStageConfig(
+            name="repair",
+            test_configs=(
+                RepairTestRunConfig(
+                    test_type=RepairTestType.UNIT,
+                    timeout=300,
+                    max_iterations=5,
+                ),
+            ),
+        )
+        with pytest.raises(FrozenInstanceError):
+            config.environment_repair_config = EnvironmentRepairConfig(max_env_rebuilds=5)  # type: ignore[misc]
+
 
 # ============================================================================
 # FailureClassification Enum Tests
@@ -1029,7 +1101,7 @@ class TestFailureClassification:
     """Test FailureClassification enum."""
 
     def test_all_five_values_exist(self):
-        """Test that all five required classification values exist."""
+        """Test that all required classification values exist."""
         assert FailureClassification.CODE_DEFECT.value == "code_defect"
         assert FailureClassification.ENVIRONMENT_ISSUE.value == "environment_issue"
         assert FailureClassification.TRANSIENT_FAILURE.value == "transient_failure"
@@ -2000,3 +2072,400 @@ class TestSystemicFixResult:
         result_set = {result1, result2}
         # Both results are equal, so set should contain only 1 element
         assert len(result_set) == 1
+
+    def test_success_false_with_empty_root_cause_raises_error(self):
+        """Test that success=False without root_cause_addressed raises ValueError."""
+        with pytest.raises(ValueError, match="success=False but root_cause_addressed is empty"):
+            SystemicFixResult(
+                success=False,
+                files_modified=(),
+                root_cause_addressed="",  # Inconsistency: failed but no explanation
+                duration_seconds=10.0,
+            )
+
+
+# ============================================================================
+# EnvironmentRepairConfig Tests
+# ============================================================================
+
+
+class TestEnvironmentRepairConfig:
+    """Test EnvironmentRepairConfig value object."""
+
+    def test_create_config_with_defaults(self):
+        """Test creating config with default values."""
+        config = EnvironmentRepairConfig()
+        assert config.max_env_rebuilds == 2
+        assert config.env_rebuild_timeout_seconds == 1200
+        assert config.env_verification_timeout_seconds == 120
+
+    def test_create_config_with_custom_values(self):
+        """Test creating config with custom values."""
+        config = EnvironmentRepairConfig(
+            max_env_rebuilds=5,
+            env_rebuild_timeout_seconds=3600,
+            env_verification_timeout_seconds=180,
+        )
+        assert config.max_env_rebuilds == 5
+        assert config.env_rebuild_timeout_seconds == 3600
+        assert config.env_verification_timeout_seconds == 180
+
+    def test_config_immutability_raises_frozen_error(self):
+        """Test that frozen dataclass prevents modification."""
+        config = EnvironmentRepairConfig()
+        with pytest.raises(FrozenInstanceError):
+            config.max_env_rebuilds = 5  # type: ignore[misc]
+
+        with pytest.raises(FrozenInstanceError):
+            config.env_rebuild_timeout_seconds = 3600  # type: ignore[misc]
+
+        with pytest.raises(FrozenInstanceError):
+            config.env_verification_timeout_seconds = 180  # type: ignore[misc]
+
+    def test_zero_max_env_rebuilds_raises_error(self):
+        """Test that max_env_rebuilds=0 raises ValueError."""
+        with pytest.raises(ValueError, match="max_env_rebuilds must be > 0"):
+            EnvironmentRepairConfig(max_env_rebuilds=0)
+
+    def test_negative_max_env_rebuilds_raises_error(self):
+        """Test that negative max_env_rebuilds raises ValueError."""
+        with pytest.raises(ValueError, match="max_env_rebuilds must be > 0"):
+            EnvironmentRepairConfig(max_env_rebuilds=-1)
+
+    def test_zero_rebuild_timeout_raises_error(self):
+        """Test that env_rebuild_timeout_seconds=0 raises ValueError."""
+        with pytest.raises(ValueError, match="env_rebuild_timeout_seconds must be > 0"):
+            EnvironmentRepairConfig(env_rebuild_timeout_seconds=0)
+
+    def test_negative_rebuild_timeout_raises_error(self):
+        """Test that negative env_rebuild_timeout_seconds raises ValueError."""
+        with pytest.raises(ValueError, match="env_rebuild_timeout_seconds must be > 0"):
+            EnvironmentRepairConfig(env_rebuild_timeout_seconds=-100)
+
+    def test_zero_verification_timeout_raises_error(self):
+        """Test that env_verification_timeout_seconds=0 raises ValueError."""
+        with pytest.raises(ValueError, match="env_verification_timeout_seconds must be > 0"):
+            EnvironmentRepairConfig(env_verification_timeout_seconds=0)
+
+    def test_negative_verification_timeout_raises_error(self):
+        """Test that negative env_verification_timeout_seconds raises ValueError."""
+        with pytest.raises(ValueError, match="env_verification_timeout_seconds must be > 0"):
+            EnvironmentRepairConfig(env_verification_timeout_seconds=-50)
+
+    def test_equality(self):
+        """Test value object equality."""
+        config1 = EnvironmentRepairConfig(
+            max_env_rebuilds=3,
+            env_rebuild_timeout_seconds=2400,
+            env_verification_timeout_seconds=150,
+        )
+        config2 = EnvironmentRepairConfig(
+            max_env_rebuilds=3,
+            env_rebuild_timeout_seconds=2400,
+            env_verification_timeout_seconds=150,
+        )
+        assert config1 == config2
+
+    def test_inequality_different_max_rebuilds(self):
+        """Test inequality when max_env_rebuilds differs."""
+        config1 = EnvironmentRepairConfig(max_env_rebuilds=2)
+        config2 = EnvironmentRepairConfig(max_env_rebuilds=5)
+        assert config1 != config2
+
+    def test_inequality_different_rebuild_timeout(self):
+        """Test inequality when env_rebuild_timeout_seconds differs."""
+        config1 = EnvironmentRepairConfig(env_rebuild_timeout_seconds=1200)
+        config2 = EnvironmentRepairConfig(env_rebuild_timeout_seconds=3600)
+        assert config1 != config2
+
+    def test_inequality_different_verification_timeout(self):
+        """Test inequality when env_verification_timeout_seconds differs."""
+        config1 = EnvironmentRepairConfig(env_verification_timeout_seconds=120)
+        config2 = EnvironmentRepairConfig(env_verification_timeout_seconds=240)
+        assert config1 != config2
+
+    def test_hashable(self):
+        """Test that frozen config is hashable."""
+        config1 = EnvironmentRepairConfig(max_env_rebuilds=2)
+        config2 = EnvironmentRepairConfig(max_env_rebuilds=2)
+        config_set = {config1, config2}
+        # Both configs are equal, so set should contain only 1 element
+        assert len(config_set) == 1
+
+    def test_large_timeout_values(self):
+        """Test that large timeout values are valid."""
+        config = EnvironmentRepairConfig(
+            env_rebuild_timeout_seconds=86400,  # 24 hours
+            env_verification_timeout_seconds=3600,  # 1 hour
+        )
+        assert config.env_rebuild_timeout_seconds == 86400
+        assert config.env_verification_timeout_seconds == 3600
+
+    def test_default_values_reasonable(self):
+        """Test that default values are reasonable."""
+        config = EnvironmentRepairConfig()
+        # max_env_rebuilds should allow a few attempts but not too many
+        assert 1 <= config.max_env_rebuilds <= 10
+        # rebuild timeout should be at least a couple of minutes
+        assert config.env_rebuild_timeout_seconds >= 600
+        # verification timeout should be less than rebuild timeout
+        assert config.env_verification_timeout_seconds < config.env_rebuild_timeout_seconds
+
+
+# ============================================================================
+# RebuildResult Tests
+# ============================================================================
+
+
+class TestRebuildResult:
+    """Test RebuildResult value object."""
+
+    def test_create_successful_rebuild(self):
+        """Test creating a successful rebuild result."""
+        result = RebuildResult(
+            success=True,
+            duration_seconds=45.5,
+            actions_taken=("docker build", "pip install", "npm install"),
+            error=None,
+        )
+        assert result.success is True
+        assert result.duration_seconds == 45.5
+        assert result.actions_taken == ("docker build", "pip install", "npm install")
+        assert result.error is None
+
+    def test_create_failed_rebuild(self):
+        """Test creating a failed rebuild result."""
+        result = RebuildResult(
+            success=False,
+            duration_seconds=120.0,
+            actions_taken=("docker build",),
+            error="Docker image build failed: disk space exceeded",
+        )
+        assert result.success is False
+        assert result.error == "Docker image build failed: disk space exceeded"
+
+    def test_actions_taken_coerced_to_tuple(self):
+        """Test that actions_taken list is coerced to tuple."""
+        result = RebuildResult(
+            success=True,
+            duration_seconds=30.0,
+            actions_taken=["action1", "action2"],  # type: ignore[arg-type]
+            error=None,
+        )
+        assert isinstance(result.actions_taken, tuple)
+        assert result.actions_taken == ("action1", "action2")
+
+    def test_result_immutability_raises_frozen_error(self):
+        """Test that frozen dataclass prevents modification."""
+        result = RebuildResult(
+            success=True,
+            duration_seconds=30.0,
+            actions_taken=("action",),
+            error=None,
+        )
+        with pytest.raises(FrozenInstanceError):
+            result.success = False  # type: ignore[misc]
+
+        with pytest.raises(FrozenInstanceError):
+            result.duration_seconds = 60.0  # type: ignore[misc]
+
+        with pytest.raises(FrozenInstanceError):
+            result.error = "Some error"  # type: ignore[misc]
+
+    def test_negative_duration_raises_error(self):
+        """Test that negative duration_seconds raises ValueError."""
+        with pytest.raises(ValueError, match="duration_seconds must be non-negative"):
+            RebuildResult(
+                success=True,
+                duration_seconds=-1.0,
+                actions_taken=(),
+                error=None,
+            )
+
+    def test_zero_duration_passes(self):
+        """Test that duration_seconds=0.0 is valid."""
+        result = RebuildResult(
+            success=True,
+            duration_seconds=0.0,
+            actions_taken=(),
+            error=None,
+        )
+        assert result.duration_seconds == 0.0
+
+    def test_equality(self):
+        """Test value object equality."""
+        result1 = RebuildResult(
+            success=True,
+            duration_seconds=30.0,
+            actions_taken=("action",),
+            error=None,
+        )
+        result2 = RebuildResult(
+            success=True,
+            duration_seconds=30.0,
+            actions_taken=("action",),
+            error=None,
+        )
+        assert result1 == result2
+
+    def test_success_true_with_error_raises_contradiction(self):
+        """Test that success=True with error set raises ValueError (consistency validation)."""
+        with pytest.raises(ValueError, match="success=True but error is set.*contradiction"):
+            RebuildResult(
+                success=True,
+                duration_seconds=30.0,
+                actions_taken=("action",),
+                error="Some error occurred",
+            )
+
+    def test_success_false_without_error_raises_data_quality_error(self):
+        """Test that success=False with error=None raises ValueError (data quality requirement for audit trail)."""
+        with pytest.raises(ValueError, match="success=False but error is not set.*audit trail"):
+            RebuildResult(
+                success=False,
+                duration_seconds=30.0,
+                actions_taken=("action",),
+                error=None,
+            )
+
+
+# ============================================================================
+# VerificationResult Tests
+# ============================================================================
+
+
+class TestVerificationResult:
+    """Test VerificationResult value object."""
+
+    def test_create_healthy_verification(self):
+        """Test creating a healthy verification result."""
+        result = VerificationResult(
+            healthy=True,
+            checks_passed=("docker available", "python installed", "node_modules exists"),
+            checks_failed=(),
+            duration_seconds=5.2,
+        )
+        assert result.healthy is True
+        assert len(result.checks_passed) == 3
+        assert result.checks_failed == ()
+        assert result.duration_seconds == 5.2
+
+    def test_create_unhealthy_verification(self):
+        """Test creating an unhealthy verification result."""
+        result = VerificationResult(
+            healthy=False,
+            checks_passed=("docker available",),
+            checks_failed=("python installed", "node_modules exists"),
+            duration_seconds=8.0,
+        )
+        assert result.healthy is False
+        assert len(result.checks_passed) == 1
+        assert len(result.checks_failed) == 2
+
+    def test_checks_passed_coerced_to_tuple(self):
+        """Test that checks_passed list is coerced to tuple."""
+        result = VerificationResult(
+            healthy=True,
+            checks_passed=["check1", "check2"],  # type: ignore[arg-type]
+            checks_failed=[],
+            duration_seconds=5.0,
+        )
+        assert isinstance(result.checks_passed, tuple)
+        assert result.checks_passed == ("check1", "check2")
+
+    def test_checks_failed_coerced_to_tuple(self):
+        """Test that checks_failed list is coerced to tuple."""
+        result = VerificationResult(
+            healthy=False,
+            checks_passed=[],
+            checks_failed=["check1", "check2"],  # type: ignore[arg-type]
+            duration_seconds=5.0,
+        )
+        assert isinstance(result.checks_failed, tuple)
+        assert result.checks_failed == ("check1", "check2")
+
+    def test_result_immutability_raises_frozen_error(self):
+        """Test that frozen dataclass prevents modification."""
+        result = VerificationResult(
+            healthy=True,
+            checks_passed=("check",),
+            checks_failed=(),
+            duration_seconds=5.0,
+        )
+        with pytest.raises(FrozenInstanceError):
+            result.healthy = False  # type: ignore[misc]
+
+        with pytest.raises(FrozenInstanceError):
+            result.duration_seconds = 10.0  # type: ignore[misc]
+
+    def test_negative_duration_raises_error(self):
+        """Test that negative duration_seconds raises ValueError."""
+        with pytest.raises(ValueError, match="duration_seconds must be non-negative"):
+            VerificationResult(
+                healthy=True,
+                checks_passed=(),
+                checks_failed=(),
+                duration_seconds=-1.0,
+            )
+
+    def test_zero_duration_passes(self):
+        """Test that duration_seconds=0.0 is valid."""
+        result = VerificationResult(
+            healthy=True,
+            checks_passed=(),
+            checks_failed=(),
+            duration_seconds=0.0,
+        )
+        assert result.duration_seconds == 0.0
+
+    def test_equality(self):
+        """Test value object equality."""
+        result1 = VerificationResult(
+            healthy=True,
+            checks_passed=("check",),
+            checks_failed=(),
+            duration_seconds=5.0,
+        )
+        result2 = VerificationResult(
+            healthy=True,
+            checks_passed=("check",),
+            checks_failed=(),
+            duration_seconds=5.0,
+        )
+        assert result1 == result2
+
+    def test_inequality_different_healthy(self):
+        """Test inequality when healthy differs."""
+        result1 = VerificationResult(
+            healthy=True,
+            checks_passed=("check",),
+            checks_failed=(),
+            duration_seconds=5.0,
+        )
+        result2 = VerificationResult(
+            healthy=False,
+            checks_passed=("check",),
+            checks_failed=("failed_check",),
+            duration_seconds=5.0,
+        )
+        assert result1 != result2
+
+    def test_healthy_true_with_checks_failed_raises_contradiction(self):
+        """Test that healthy=True with checks_failed non-empty raises ValueError (consistency validation)."""
+        with pytest.raises(ValueError, match="healthy=True but checks_failed is non-empty.*contradiction"):
+            VerificationResult(
+                healthy=True,
+                checks_passed=("docker available",),
+                checks_failed=("python installed",),
+                duration_seconds=5.0,
+            )
+
+    def test_healthy_false_with_no_checks_failed_raises_error(self):
+        """Test that healthy=False without checks_failed raises ValueError."""
+        with pytest.raises(ValueError, match="healthy=False but checks_failed is empty"):
+            VerificationResult(
+                healthy=False,
+                checks_passed=(),
+                checks_failed=(),  # Inconsistency: unhealthy but no evidence of failure
+                duration_seconds=5.0,
+            )
