@@ -9,12 +9,12 @@ from codetoreum.adapters.primary.factories.production import (
     create_branch_resolution_adapter,
     create_workspace_router_with_branch_resolution,
 )
+from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.adapters.testing import (
     InMemoryEventStore,
     MockBoardAdapter,
     MockBranchResolutionAdapter,
 )
-from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.application.workspace_router import WorkspaceRouter, WorkspaceRouterConfig
 from codetoreum.ports.output.branch_resolution_service import IBranchResolutionService
 
