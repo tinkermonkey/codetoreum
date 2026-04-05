@@ -523,7 +523,10 @@ class BranchResolutionAdapter(IBranchResolutionService):
                     project_id=project_id,
                     issue_id=issue_id,
                     branch_name=resolution.branch_name,
+                    confidence=resolution.confidence,
                     reason=resolution.reason,
+                    parent_issue_id=resolution.parent_issue_id,
+                    resolution_strategy=resolution.resolution_strategy,
                 )
 
             self.emit(outcome_event)

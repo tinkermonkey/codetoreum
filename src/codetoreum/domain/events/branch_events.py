@@ -71,7 +71,7 @@ class BranchResolvedEvent(CodetoreumEvent):
     confidence: float = 0.0
     reason: str = ""
     parent_issue_id: str | None = None
-    resolution_strategy: str = ""
+    resolution_strategy: Literal["exact_match", "parent_issue", "sibling", "fuzzy", "new"] = "new"
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""
@@ -184,7 +184,7 @@ class BranchReusedEvent(CodetoreumEvent):
     confidence: float = 0.0
     reason: str = ""
     parent_issue_id: str | None = None
-    resolution_strategy: str = ""
+    resolution_strategy: Literal["exact_match", "parent_issue", "sibling", "fuzzy"] = "exact_match"
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""
@@ -267,7 +267,10 @@ class BranchResolutionCreatedEvent(CodetoreumEvent):
         project_id (str): ID of the project
         issue_id (str): ID of the work item/issue for which branch was created
         branch_name (str): Name of the newly created branch
+        confidence (float): Confidence level of the decision (always 1.0 for creation)
         reason (str): Human-readable explanation of why new branch was created
+        parent_issue_id (str | None): ID of parent issue if applicable
+        resolution_strategy (Literal): Strategy used ("new" for creation)
 
     Example:
         >>> event = BranchResolutionCreatedEvent(
@@ -277,7 +280,10 @@ class BranchResolutionCreatedEvent(CodetoreumEvent):
         ...     project_id="proj-1",
         ...     issue_id="124",
         ...     branch_name="feature/issue-124-new-feature",
-        ...     reason="No existing branch found, creating new"
+        ...     confidence=1.0,
+        ...     reason="No existing branch found, creating new",
+        ...     parent_issue_id=None,
+        ...     resolution_strategy="new"
         ... )
         >>> event.branch_name = "other-branch"  # ❌ Raises FrozenInstanceError
     """
@@ -285,7 +291,10 @@ class BranchResolutionCreatedEvent(CodetoreumEvent):
     project_id: str = ""
     issue_id: str = ""
     branch_name: str = ""
+    confidence: float = 1.0
     reason: str = ""
+    parent_issue_id: str | None = None
+    resolution_strategy: Literal["new"] = "new"
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""
@@ -299,8 +308,14 @@ class BranchResolutionCreatedEvent(CodetoreumEvent):
         if not self.branch_name:
             msg = "branch_name is required"
             raise ValueError(msg)
+        if not 0.0 <= self.confidence <= 1.0:
+            msg = "confidence must be between 0.0 and 1.0"
+            raise ValueError(msg)
         if not self.reason:
             msg = "reason is required"
+            raise ValueError(msg)
+        if self.resolution_strategy != "new":
+            msg = f"resolution_strategy must be 'new' for BranchResolutionCreatedEvent, got {self.resolution_strategy}"
             raise ValueError(msg)
 
     def to_dict(self) -> dict:
@@ -311,7 +326,10 @@ class BranchResolutionCreatedEvent(CodetoreumEvent):
                 "project_id": self.project_id,
                 "issue_id": self.issue_id,
                 "branch_name": self.branch_name,
+                "confidence": self.confidence,
                 "reason": self.reason,
+                "parent_issue_id": self.parent_issue_id,
+                "resolution_strategy": self.resolution_strategy,
             }
         )
         return d
@@ -332,5 +350,8 @@ class BranchResolutionCreatedEvent(CodetoreumEvent):
             project_id=data["project_id"],
             issue_id=data["issue_id"],
             branch_name=data["branch_name"],
+            confidence=data.get("confidence", 1.0),
             reason=data["reason"],
+            parent_issue_id=data.get("parent_issue_id"),
+            resolution_strategy=data.get("resolution_strategy", "new"),
         )

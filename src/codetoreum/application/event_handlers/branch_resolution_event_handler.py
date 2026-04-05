@@ -3,7 +3,7 @@
 Subscribes to branch resolution events and maintains an audit trail:
 - BranchResolvedEvent: Primary audit event for all branch resolutions
 - BranchReusedEvent: Outcome-specific event when existing branch is selected
-- BranchCreatedEvent: Outcome-specific event when new branch is created
+- BranchResolutionCreatedEvent: Outcome-specific event when new branch is created
 
 All events are logged with structured fields for audit trail and metrics.
 """
@@ -87,7 +87,7 @@ class BranchResolutionEventHandler(EventHandler):
             event: Domain event to handle
 
         Raises:
-            Exception: If handling fails (logged but not re-raised)
+            Exception: If handling fails (logged and re-raised)
         """
         try:
             if isinstance(event, BranchResolvedEvent):
@@ -193,7 +193,10 @@ class BranchResolutionEventHandler(EventHandler):
                 "project_id": event.project_id,
                 "issue_id": event.issue_id,
                 "branch_name": event.branch_name,
+                "confidence": event.confidence,
                 "reason": event.reason,
+                "resolution_strategy": event.resolution_strategy,
+                "parent_issue_id": event.parent_issue_id,
                 "timestamp": event.timestamp,
                 "source": event.source,
             },

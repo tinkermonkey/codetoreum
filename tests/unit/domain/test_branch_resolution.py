@@ -832,7 +832,9 @@ class TestBranchResolutionCreatedEventSerialization:
         assert data["project_id"] == "proj-1"
         assert data["issue_id"] == "124"
         assert data["branch_name"] == "feature/issue-124-new"
+        assert data["confidence"] == 1.0
         assert data["reason"] == "No existing branch, creating new"
+        assert data["resolution_strategy"] == "new"
 
     def test_from_dict_valid_data(self):
         """Test event deserialization from valid dictionary."""
@@ -844,7 +846,9 @@ class TestBranchResolutionCreatedEventSerialization:
             "project_id": "proj-1",
             "issue_id": "124",
             "branch_name": "feature/issue-124-new",
+            "confidence": 1.0,
             "reason": "No existing branch, creating new",
+            "resolution_strategy": "new",
         }
 
         event = BranchResolutionCreatedEvent.from_dict(data)
@@ -852,7 +856,9 @@ class TestBranchResolutionCreatedEventSerialization:
         assert event.project_id == "proj-1"
         assert event.issue_id == "124"
         assert event.branch_name == "feature/issue-124-new"
+        assert event.confidence == 1.0
         assert event.reason == "No existing branch, creating new"
+        assert event.resolution_strategy == "new"
 
     def test_from_dict_missing_project_id(self):
         """Test that missing project_id raises KeyError."""
@@ -887,4 +893,6 @@ class TestBranchResolutionCreatedEventSerialization:
         assert deserialized.project_id == original.project_id
         assert deserialized.issue_id == original.issue_id
         assert deserialized.branch_name == original.branch_name
+        assert deserialized.confidence == original.confidence
         assert deserialized.reason == original.reason
+        assert deserialized.resolution_strategy == original.resolution_strategy

@@ -128,7 +128,7 @@ class MockBranchResolutionAdapter(MockEventEmitter, IBranchResolutionService):
 
         Returns pre-configured resolution if available, otherwise returns default.
         Emits BranchResolvedEvent and appropriate outcome event (BranchReusedEvent
-        or BranchCreatedEvent).
+        or BranchResolutionCreatedEvent).
 
         Args:
             project_id: Project identifier
@@ -206,7 +206,10 @@ class MockBranchResolutionAdapter(MockEventEmitter, IBranchResolutionService):
                 project_id=project_id,
                 issue_id=issue_id,
                 branch_name=resolution.branch_name,
+                confidence=resolution.confidence,
                 reason=resolution.reason,
+                parent_issue_id=resolution.parent_issue_id,
+                resolution_strategy=resolution.resolution_strategy,
             )
 
         self.emit(outcome_event)
