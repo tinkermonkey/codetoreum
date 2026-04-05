@@ -1279,8 +1279,8 @@ class SimulationApplicationBootstrap:
         from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
 
         if isinstance(resolved.repair_cycle, MockRepairCycleAdapter):
-            resolved.repair_cycle.set_systemic_analysis_service(resolved.systemic_analysis_service)
-            resolved.repair_cycle.set_environment_repair_service(resolved.environment_repair_service)
+            resolved.repair_cycle.systemic_analysis_service = resolved.systemic_analysis_service
+            resolved.repair_cycle.environment_repair_service = resolved.environment_repair_service
 
         # Create audit store (not provided by resolver)
         audit_store = InMemoryAuditStore()

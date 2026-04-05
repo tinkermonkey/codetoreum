@@ -393,16 +393,28 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         """Set the checkpoint store (for testing)."""
         self._checkpoint_store = store
 
-    def set_systemic_analysis_service(self, service: "Any") -> None:
-        """Set the systemic analysis service (for testing).
+    @property
+    def systemic_analysis_service(self) -> "ISystemicAnalysisService | None":
+        """Get the systemic analysis service."""
+        return self._systemic_analysis_service
+
+    @systemic_analysis_service.setter
+    def systemic_analysis_service(self, service: "ISystemicAnalysisService | None") -> None:
+        """Set the systemic analysis service.
 
         Args:
             service: ISystemicAnalysisService instance for analysis dispatch logic
         """
         self._systemic_analysis_service = service
 
-    def set_environment_repair_service(self, service: "Any") -> None:
-        """Set the environment repair service (for testing).
+    @property
+    def environment_repair_service(self) -> "IEnvironmentRepairService | None":
+        """Get the environment repair service."""
+        return self._environment_repair_service
+
+    @environment_repair_service.setter
+    def environment_repair_service(self, service: "IEnvironmentRepairService | None") -> None:
+        """Set the environment repair service.
 
         Args:
             service: IEnvironmentRepairService instance for environment repair operations
