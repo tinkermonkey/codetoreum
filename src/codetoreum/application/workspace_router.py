@@ -1,9 +1,9 @@
 """Workspace Router application service."""
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from threading import Lock
 from typing import Any
 
 from codetoreum.domain.agent import Agent
@@ -128,7 +128,7 @@ class WorkspaceRouter:
 
         # Cache for branch resolutions: work_item_id -> BranchResolution
         # Used to pass resolution decisions from route_workspace() to prepare_workspace()
-        # Protected by lock for thread-safety in concurrent prepare_workspace calls
+        # Protected by lock for async-safety in concurrent prepare_workspace calls
         self._branch_resolutions: dict[str, BranchResolution] = {}
         # Track which work items fell back due to resolution failure
         self._branch_resolution_fallbacks: dict[str, str] = {}  # work_item_id -> error_message
@@ -136,7 +136,7 @@ class WorkspaceRouter:
         # Used by finalize_workspace() and prepare_container_environment() to get the actual
         # branch name after resolution, since WorkspaceContext is frozen with placeholder name
         self._resolved_branch_names: dict[str, str] = {}
-        self._branch_resolutions_lock = Lock()
+        self._branch_resolutions_lock = asyncio.Lock()
 
     async def _emit_event_safely(self, event: Any) -> None:
         """
@@ -275,6 +275,11 @@ class WorkspaceRouter:
         - No branch operations needed
         - Minimal setup
 
+        **Expected Call Order**: Call this method BEFORE prepare_container_environment() and
+        finalize_workspace(). The resolved branch name is cached internally and returned in
+        the result metadata for explicit passing to callers. The cache is cleaned up in
+        finalize_workspace's finally block.
+
         Args:
             context: Workspace context
             project: Project context
@@ -282,7 +287,8 @@ class WorkspaceRouter:
             repository_path: Local path to cloned repository
 
         Returns:
-            WorkspacePreparationResult: Result of preparation operation
+            WorkspacePreparationResult: Result of preparation operation. Metadata includes
+                'resolved_branch_name' with the actual branch name after resolution.
 
         Raises:
             RepositoryError: If repository operations fail
@@ -313,8 +319,8 @@ class WorkspaceRouter:
                 # This will cache the resolution decision in _branch_resolutions
                 resolved_branch_name = await self._resolve_branch_name(work_item, project, repository_path)
 
-                # Check if there's a cached branch resolution from _resolve_branch_name() (thread-safe)
-                with self._branch_resolutions_lock:
+                # Check if there's a cached branch resolution from _resolve_branch_name() (async-safe)
+                async with self._branch_resolutions_lock:
                     resolution = self._branch_resolutions.get(work_item.id)
                     fallback_error = self._branch_resolution_fallbacks.get(work_item.id)
 
@@ -370,8 +376,8 @@ class WorkspaceRouter:
                             metadata["branch_resolution_fallback"] = True
                             metadata["branch_resolution_fallback_reason"] = fallback_error
                 finally:
-                    # Clean up the cached resolution to prevent memory leaks in long-lived router (thread-safe)
-                    with self._branch_resolutions_lock:
+                    # Clean up the cached resolution to prevent memory leaks in long-lived router (async-safe)
+                    async with self._branch_resolutions_lock:
                         self._branch_resolutions.pop(work_item.id, None)
                         self._branch_resolution_fallbacks.pop(work_item.id, None)
 
@@ -381,9 +387,12 @@ class WorkspaceRouter:
                 metadata["updated_from_base"] = True
 
                 # Cache the actual resolved branch name for later use by finalize_workspace()
-                # and prepare_container_environment() (thread-safe)
-                with self._branch_resolutions_lock:
+                # and prepare_container_environment() (async-safe)
+                async with self._branch_resolutions_lock:
                     self._resolved_branch_names[work_item.id] = resolved_branch_name
+
+                # Add resolved branch name to metadata for explicit passing to consumers
+                metadata["resolved_branch_name"] = resolved_branch_name
 
                 return WorkspacePreparationResult(
                     success=True,
@@ -428,11 +437,15 @@ class WorkspaceRouter:
 
         For ISSUE workspaces:
         - Commit changes if any
-        - Push branch to remote
+        - Push branch to remote (using resolved branch name from cache)
         - Optionally create pull request
 
         For DISCUSSION workspaces:
         - No-op (output already posted via ticket system)
+
+        **Expected Call Order**: This method should be called AFTER prepare_workspace()
+        and prepare_container_environment(). It cleans up the resolved branch name cache
+        in the finally block to prevent memory leaks. The cache is thread-safe via asyncio.Lock.
 
         Args:
             context: Workspace context
@@ -490,7 +503,7 @@ class WorkspaceRouter:
                     metadata["commit_message"] = commit_message
 
                     # Push branch - use resolved name if available, fall back to context name
-                    branch_to_push = self._get_resolved_branch_name(work_item.id, context.branch_name or "")
+                    branch_to_push = await self._get_resolved_branch_name(context.work_item_id, context.branch_name or "")
                     self._logger.info(f"Pushing branch: {branch_to_push}")
                     await self.vcs.push(repo_path_str, branch_to_push)
                     metadata["pushed"] = True
@@ -539,11 +552,11 @@ class WorkspaceRouter:
                 metadata={"error": str(e)},
             )
         finally:
-            # Clean up resolved branch name cache to prevent memory leaks (thread-safe)
-            with self._branch_resolutions_lock:
+            # Clean up resolved branch name cache to prevent memory leaks (async-safe)
+            async with self._branch_resolutions_lock:
                 self._resolved_branch_names.pop(context.work_item_id, None)
 
-    def prepare_container_environment(
+    async def prepare_container_environment(
         self,
         context: WorkspaceContext,
         project: ProjectContext,
@@ -552,13 +565,18 @@ class WorkspaceRouter:
         """
         Prepare environment variables for container execution.
 
+        **Expected Call Order**: This method should be called AFTER prepare_workspace()
+        and BEFORE finalize_workspace(). It retrieves the resolved branch name from the
+        cache populated during prepare_workspace() and sets CODETOREUM_BRANCH_NAME env var.
+
         Args:
             context: Workspace context
             project: Project context
             agent: Agent configuration
 
         Returns:
-            Dict[str, str]: Environment variables for container
+            Dict[str, str]: Environment variables for container. For issue workspaces,
+                includes CODETOREUM_BRANCH_NAME with the resolved branch name.
         """
         # Git author/committer info via env vars instead of .gitconfig bind mount.
         # .gitconfig file mounts break in Docker-in-Docker (DinD) environments
@@ -587,7 +605,7 @@ class WorkspaceRouter:
         if context.is_issue_workspace():
             # Use resolved branch name if available (actual name after resolution),
             # fall back to context branch name (placeholder from route_workspace)
-            branch_name = self._get_resolved_branch_name(context.work_item_id, context.branch_name or "")
+            branch_name = await self._get_resolved_branch_name(context.work_item_id, context.branch_name or "")
             env_vars["CODETOREUM_BRANCH_NAME"] = branch_name
 
         # Add discussion info for discussion workspaces
@@ -677,8 +695,8 @@ class WorkspaceRouter:
                     repo_path=repository_path,
                 )
 
-                # Cache the resolution for prepare_workspace() to use (thread-safe)
-                with self._branch_resolutions_lock:
+                # Cache the resolution for prepare_workspace() to use (async-safe)
+                async with self._branch_resolutions_lock:
                     self._branch_resolutions[work_item.id] = resolution
 
                 self._logger.info(
@@ -696,8 +714,8 @@ class WorkspaceRouter:
                     exc_info=True,
                     extra={"error_id": "ERR_BRANCH_RESOLUTION_FALLBACK"},
                 )
-                # Record fallback for metadata reporting in prepare_workspace() (thread-safe)
-                with self._branch_resolutions_lock:
+                # Record fallback for metadata reporting in prepare_workspace() (async-safe)
+                async with self._branch_resolutions_lock:
                     self._branch_resolution_fallbacks[work_item.id] = error_msg
                 # Fall through to generate name
 
@@ -743,7 +761,7 @@ class WorkspaceRouter:
             title=title_slug,
         )
 
-    def _get_resolved_branch_name(self, work_item_id: str, fallback_name: str) -> str:
+    async def _get_resolved_branch_name(self, work_item_id: str, fallback_name: str) -> str:
         """
         Get the actual resolved branch name for a work item.
 
@@ -761,7 +779,7 @@ class WorkspaceRouter:
         Returns:
             str: The actual resolved branch name, or fallback if not resolved
         """
-        with self._branch_resolutions_lock:
+        async with self._branch_resolutions_lock:
             return self._resolved_branch_names.get(work_item_id, fallback_name)
 
     def _generate_commit_message(self, context: WorkspaceContext, execution_result: dict[str, Any]) -> str:
