@@ -102,6 +102,7 @@ from codetoreum.adapters.testing import (
     InMemoryWorkflowConfigService,
     InMemoryWorkItemBranchTracker,
     MockBoardAdapter,
+    MockBranchResolutionAdapter,
     MockDiscussionAdapter,
     MockLLMAdapter,
     MockProjectManagerAdapter,
@@ -205,6 +206,7 @@ from codetoreum.ports.output.active_workflow_run_registry import (
 from codetoreum.ports.output.agent_executor import IAgentExecutor
 from codetoreum.ports.output.agent_repository import IAgentRepository
 from codetoreum.ports.output.board_service import IBoardService
+from codetoreum.ports.output.branch_resolution_service import IBranchResolutionService
 from codetoreum.ports.output.code_review_service import ICodeReviewService
 from codetoreum.ports.output.config_store import IConfigStore
 from codetoreum.ports.output.container import IContainer
@@ -358,6 +360,7 @@ class SimulationAdapters:
     environment_repair_service: IEnvironmentRepairService
 
     # Fields with defaults (must come after fields without defaults)
+    branch_resolution_service: IBranchResolutionService | None = None
     agent_executor: IAgentExecutor | None = None
     tracer: ITracer | None = None
 
@@ -582,6 +585,23 @@ class SimulationAdapters:
             msg = f"work_item_service is {type(self.work_item_service).__name__}, not MockWorkItemService"
             raise TypeError(msg)
         return cast("MockWorkItemService", self.work_item_service)
+
+    def branch_resolution_as_mock(self) -> "MockBranchResolutionAdapter":
+        """Get branch resolution service as MockBranchResolutionAdapter.
+
+        Raises TypeError if branch_resolution_service is not MockBranchResolutionAdapter.
+        """
+        from codetoreum.adapters.testing.mock_branch_resolution_adapter import (
+            MockBranchResolutionAdapter,
+        )
+
+        if self.branch_resolution_service is None:
+            msg = "branch_resolution_service is None, expected MockBranchResolutionAdapter"
+            raise TypeError(msg)
+        if not isinstance(self.branch_resolution_service, MockBranchResolutionAdapter):
+            msg = f"branch_resolution_service is {type(self.branch_resolution_service).__name__}, not MockBranchResolutionAdapter"
+            raise TypeError(msg)
+        return cast("MockBranchResolutionAdapter", self.branch_resolution_service)
 
     def storage_as_memory(self) -> InMemoryStorageAdapter:
         """Get storage as InMemoryStorageAdapter.
@@ -1282,10 +1302,15 @@ class SimulationApplicationBootstrap:
             resolved.repair_cycle.systemic_analysis_service = resolved.systemic_analysis_service
             resolved.repair_cycle.environment_repair_service = resolved.environment_repair_service
 
+        # Create branch resolution adapter (mock adapter for simulation testing)
+        resolved.branch_resolution_service = MockBranchResolutionAdapter(
+            clock=self._engine.get_clock_for_testing()
+        )
+
         # Create audit store (not provided by resolver)
         audit_store = InMemoryAuditStore()
 
-        logger.info("Created 30 simulation adapters (all via AdapterResolver)")
+        logger.info("Created 31 simulation adapters (30 via AdapterResolver + branch_resolution_service)")
 
         # Update audit_store in resolved adapters
         resolved.audit_store = audit_store

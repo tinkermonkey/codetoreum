@@ -42,6 +42,9 @@ from codetoreum.adapters.testing.mock_board_adapter import (
     MockBoardAdapter,
     MovementEvent,
 )
+from codetoreum.adapters.testing.mock_branch_resolution_adapter import (
+    MockBranchResolutionAdapter,
+)
 from codetoreum.adapters.testing.mock_container_recovery_adapter import (
     MockContainerRecoveryAdapter,
 )
@@ -90,6 +93,7 @@ __all__ = [
     "InMemoryWorkflowConfigService",
     "MockAgentExecutor",
     "MockBoardAdapter",
+    "MockBranchResolutionAdapter",
     "MockContainerRecoveryAdapter",
     "MockDiscussionAdapter",
     "MockEnvironmentRepairAdapter",
