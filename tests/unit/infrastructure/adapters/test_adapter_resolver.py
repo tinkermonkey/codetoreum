@@ -267,7 +267,7 @@ class TestAdapterResolver:
         import dataclasses
 
         # Optional fields are injected by bootstrap post-processing
-        optional_fields = {"agent_executor", "audit_store", "tracer", "systemic_analysis_service"}
+        optional_fields = {"agent_executor", "audit_store", "tracer", "systemic_analysis_service", "branch_resolution_service"}
         for field in dataclasses.fields(result):
             adapter = getattr(result, field.name)
             if field.name not in optional_fields:
@@ -996,7 +996,7 @@ class TestAdapterResolverIntegration:
         import dataclasses
 
         # Optional fields are injected by bootstrap post-processing
-        optional_fields = {"agent_executor", "audit_store", "tracer", "systemic_analysis_service"}
+        optional_fields = {"agent_executor", "audit_store", "tracer", "systemic_analysis_service", "branch_resolution_service"}
         for field in dataclasses.fields(result):
             adapter = getattr(result, field.name)
             if field.name not in optional_fields:
