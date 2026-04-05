@@ -889,3 +889,200 @@ async def test_prepare_workspace_with_resolution_service_failure_falls_back(
     assert result.metadata["branch_action"] == "create_new"
     assert "resolution_strategy" not in result.metadata  # No resolution strategy recorded
     mock_repository.create_branch.assert_called_once()
+
+
+# ============================================================================
+# Tests: Finalization with Branch Resolution
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_finalize_workspace_with_branch_resolution_reuse_pushes_resolved_branch(
+    workspace_router_with_resolution,
+    sample_work_item,
+    sample_agent,
+    sample_project,
+    mock_repository,
+    mock_branch_resolution_service,
+    repository_path,
+):
+    """Test finalize_workspace pushes to resolved branch when reusing parent's branch.
+
+    Verifies that when branch resolution decides to reuse a parent's branch,
+    finalize_workspace correctly pushes to the resolved branch name, not the
+    placeholder name from context.branch_name.
+
+    This test ensures:
+    - prepare_workspace caches the resolved branch name ("feature/issue-100-parent-task")
+    - finalize_workspace retrieves the cached resolved name for push operation
+    - The push uses the actual resolved branch, not the placeholder from context
+    """
+    from codetoreum.domain.value_objects import BranchResolution
+
+    # Configure resolution service to reuse parent's branch
+    parent_branch = "feature/issue-100-parent-task"
+    resolution = BranchResolution(
+        action="reuse",
+        branch_name=parent_branch,
+        confidence=0.95,
+        reason="Parent issue has existing branch",
+        resolution_strategy="parent_issue",
+        parent_issue_id="100",
+    )
+    mock_branch_resolution_service.configure_resolution(
+        sample_project.id, sample_work_item.id, resolution
+    )
+
+    # Mock repository status with changes
+    mock_repository.status.return_value = RepositoryStatus(
+        current_branch=BranchName(parent_branch),  # Currently on parent's branch
+        is_dirty=True,
+        staged_files=("file1.py",),
+        unstaged_files=(),
+        untracked_files=(),
+        ahead_count=0,
+        behind_count=0,
+    )
+
+    # Route to get context with generated placeholder branch name
+    context = await workspace_router_with_resolution.route_workspace(
+        work_item=sample_work_item,
+        agent=sample_agent,
+        project=sample_project,
+    )
+
+    # Verify context has placeholder branch name (not the resolved parent branch)
+    assert "issue-123-" in context.branch_name
+    assert context.branch_name != parent_branch
+
+    # Prepare workspace - this will cache the resolved branch name
+    prep_result = await workspace_router_with_resolution.prepare_workspace(
+        context=context,
+        project=sample_project,
+        work_item=sample_work_item,
+        repository_path=repository_path,
+    )
+    assert prep_result.success is True
+    assert prep_result.metadata["branch_action"] == "reuse_resolved"
+    # Verify resolved branch name is in metadata
+    assert prep_result.metadata["resolved_branch_name"] == parent_branch
+
+    # Execution result
+    execution_result = {
+        "agent_id": "developer-agent",
+        "summary": "Completed parent task work",
+    }
+
+    # Finalize workspace - should push to resolved branch, not context.branch_name
+    finalize_result = await workspace_router_with_resolution.finalize_workspace(
+        context=context,
+        project=sample_project,
+        execution_result=execution_result,
+        repository_path=repository_path,
+    )
+
+    # Assert finalization succeeded
+    assert finalize_result.success is True
+    assert finalize_result.commit_sha == "abc123"
+    assert finalize_result.metadata["pushed"] is True
+
+    # CRITICAL ASSERTION: Verify push was called with the resolved branch,
+    # not the placeholder branch from context
+    mock_repository.push.assert_called_once_with(repository_path, parent_branch)
+
+
+@pytest.mark.asyncio
+async def test_finalize_workspace_with_branch_resolution_create_pushes_resolved_branch(
+    workspace_router_with_resolution,
+    sample_work_item,
+    sample_agent,
+    sample_project,
+    mock_repository,
+    mock_branch_resolution_service,
+    repository_path,
+):
+    """Test finalize_workspace pushes to resolved branch when creating with different name.
+
+    Verifies that when branch resolution decides to create a new branch with
+    a different name than the generated placeholder, finalize_workspace correctly
+    pushes to the resolved branch name.
+
+    This test ensures:
+    - prepare_workspace caches the resolved branch name ("feature/issue-123-auth-flow")
+    - finalize_workspace retrieves the cached resolved name for push operation
+    - The push uses the resolved name, even though context.branch_name is different
+    """
+    from codetoreum.domain.value_objects import BranchResolution
+
+    # Configure resolution service to create with different name
+    resolved_branch = "feature/issue-123-auth-flow"
+    resolution = BranchResolution(
+        action="create",
+        branch_name=resolved_branch,
+        confidence=1.0,
+        reason="Creating new branch with optimized name",
+        resolution_strategy="new",
+        parent_issue_id=None,
+    )
+    mock_branch_resolution_service.configure_resolution(
+        sample_project.id, sample_work_item.id, resolution
+    )
+
+    # Mock repository status with changes
+    mock_repository.status.return_value = RepositoryStatus(
+        current_branch=BranchName(resolved_branch),
+        is_dirty=True,
+        staged_files=("auth.py",),
+        unstaged_files=(),
+        untracked_files=(),
+        ahead_count=0,
+        behind_count=0,
+    )
+
+    # Mock list_branches to return no existing branches (so create will happen)
+    mock_repository.list_branches.return_value = []
+
+    # Route to get context with generated placeholder branch name
+    context = await workspace_router_with_resolution.route_workspace(
+        work_item=sample_work_item,
+        agent=sample_agent,
+        project=sample_project,
+    )
+
+    # Verify context has different placeholder branch name
+    assert context.branch_name != resolved_branch
+
+    # Prepare workspace - this will cache the resolved branch name
+    prep_result = await workspace_router_with_resolution.prepare_workspace(
+        context=context,
+        project=sample_project,
+        work_item=sample_work_item,
+        repository_path=repository_path,
+    )
+    assert prep_result.success is True
+    assert prep_result.metadata["branch_action"] == "create_resolved"
+    # Verify resolved branch name is in metadata
+    assert prep_result.metadata["resolved_branch_name"] == resolved_branch
+
+    # Execution result
+    execution_result = {
+        "agent_id": "developer-agent",
+        "summary": "Implemented authentication flow",
+    }
+
+    # Finalize workspace - should push to resolved branch, not context.branch_name
+    finalize_result = await workspace_router_with_resolution.finalize_workspace(
+        context=context,
+        project=sample_project,
+        execution_result=execution_result,
+        repository_path=repository_path,
+    )
+
+    # Assert finalization succeeded
+    assert finalize_result.success is True
+    assert finalize_result.commit_sha == "abc123"
+    assert finalize_result.metadata["pushed"] is True
+
+    # CRITICAL ASSERTION: Verify push was called with the resolved branch,
+    # not the placeholder branch from context
+    mock_repository.push.assert_called_once_with(repository_path, resolved_branch)

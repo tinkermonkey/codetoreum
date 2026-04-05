@@ -466,7 +466,12 @@ class TestFuzzyMatchingStrategy:
 
     @pytest.mark.asyncio
     async def test_fuzzy_match_skips_exact_pattern_branches(self):
-        """Test fuzzy matching skips branches that match exact pattern."""
+        """Test fuzzy matching skips branches that match exact pattern.
+
+        When multiple branches are available, exact pattern takes priority.
+        This test verifies that fuzzy matching would be the result if no
+        exact pattern is found.
+        """
         ticket_system = AsyncMock()
         version_control = AsyncMock()
         event_emitter = MagicMock()
@@ -478,10 +483,10 @@ class TestFuzzyMatchingStrategy:
             min_confidence_threshold=0.3,
         )
 
-        # Has both exact pattern and fuzzy match candidate
+        # Has exact pattern AND fuzzy match candidate - exact match should win (strategy 1)
         version_control.list_branches.return_value = [
-            "feature/issue-123-exact",  # Exact pattern - skip in fuzzy
-            "feature/auth-fix",  # Fuzzy candidate
+            "feature/issue-123-exact",  # Exact pattern - strategy 1 will match
+            "feature/auth-fix",  # Fuzzy candidate (not reached)
         ]
 
         ticket_system.get_related_items.return_value = []
@@ -493,9 +498,50 @@ class TestFuzzyMatchingStrategy:
             repo_path="/repo",
         )
 
-        # Should NOT find exact pattern branch in fuzzy (already tested in strategy 1)
-        if resolution.resolution_strategy == "fuzzy":
-            assert resolution.branch_name == "feature/auth-fix"
+        # Exact match (strategy 1) takes priority over fuzzy (strategy 4)
+        assert resolution.resolution_strategy == "exact_match"
+        assert resolution.branch_name == "feature/issue-123-exact"
+
+    @pytest.mark.asyncio
+    async def test_fuzzy_match_when_no_exact_pattern_match(self):
+        """Test fuzzy matching is reached when no exact pattern branch exists.
+
+        Verifies that fuzzy matching correctly returns a result when:
+        - No exact match pattern (strategy 1) is found
+        - No parent issue (strategy 2) exists
+        - No sibling issue (strategy 3) exists
+        - Fuzzy keyword match (strategy 4) finds a candidate
+        """
+        ticket_system = AsyncMock()
+        version_control = AsyncMock()
+        event_emitter = MagicMock()
+
+        adapter = BranchResolutionAdapter(
+            ticket_system=ticket_system,
+            version_control=version_control,
+            event_emitter=event_emitter,
+            min_confidence_threshold=0.3,
+        )
+
+        # Only fuzzy candidate (no exact pattern like "feature/issue-123-*")
+        version_control.list_branches.return_value = [
+            "main",
+            "feature/auth-fix",  # Fuzzy candidate - will be matched in strategy 4
+        ]
+
+        ticket_system.get_related_items.return_value = []
+
+        resolution = await adapter.resolve_branch(
+            project_id="proj-1",
+            issue_id="999",  # Different issue - no exact match
+            issue_metadata={"title": "Fix authentication"},
+            repo_path="/repo",
+        )
+
+        # Should reach fuzzy matching and find the auth-fix branch
+        assert resolution.resolution_strategy == "fuzzy"
+        assert resolution.branch_name == "feature/auth-fix"
+        assert 0.5 <= resolution.confidence <= 0.8
 
 
 # =============================================================================
