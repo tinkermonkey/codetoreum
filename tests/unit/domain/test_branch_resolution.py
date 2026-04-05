@@ -226,7 +226,7 @@ class TestBranchResolutionInstantiation:
     def test_all_valid_resolution_strategies(self):
         """Test that all valid strategies are accepted with correct action."""
         # Test reuse strategies
-        reuse_strategies = ["exact_match", "parent_issue", "sibling", "fuzzy"]
+        reuse_strategies = ["exact_match", "sibling", "fuzzy"]
         for strategy in reuse_strategies:
             resolution = BranchResolution(
                 action="reuse",
@@ -236,6 +236,17 @@ class TestBranchResolutionInstantiation:
                 resolution_strategy=strategy,
             )
             assert resolution.resolution_strategy == strategy
+
+        # Test parent_issue strategy (requires parent_issue_id)
+        resolution = BranchResolution(
+            action="reuse",
+            branch_name="feature/test",
+            confidence=0.5,
+            reason="test",
+            resolution_strategy="parent_issue",
+            parent_issue_id="123",
+        )
+        assert resolution.resolution_strategy == "parent_issue"
 
         # Test create strategy
         resolution = BranchResolution(
@@ -271,6 +282,7 @@ class TestBranchResolutionCrossFieldValidation:
                 confidence=0.5,
                 reason="test",
                 resolution_strategy="parent_issue",
+                parent_issue_id="123",
             )
 
     def test_create_action_with_sibling_fails(self):
@@ -331,16 +343,43 @@ class TestBranchResolutionCrossFieldValidation:
         assert resolution.resolution_strategy == "exact_match"
 
     def test_reuse_action_with_parent_issue_succeeds(self):
-        """Test that action='reuse' with resolution_strategy='parent_issue' succeeds."""
+        """Test that action='reuse' with resolution_strategy='parent_issue' succeeds when parent_issue_id is provided."""
         resolution = BranchResolution(
             action="reuse",
             branch_name="feature/test",
             confidence=0.5,
             reason="test",
             resolution_strategy="parent_issue",
+            parent_issue_id="123",
         )
         assert resolution.action == "reuse"
         assert resolution.resolution_strategy == "parent_issue"
+        assert resolution.parent_issue_id == "123"
+
+    def test_parent_issue_strategy_without_parent_issue_id_fails(self):
+        """Test that resolution_strategy='parent_issue' without parent_issue_id fails."""
+        with pytest.raises(DomainError, match="resolution_strategy='parent_issue' requires parent_issue_id to be set"):
+            BranchResolution(
+                action="reuse",
+                branch_name="feature/test",
+                confidence=0.5,
+                reason="test",
+                resolution_strategy="parent_issue",
+                parent_issue_id=None,
+            )
+
+    def test_parent_issue_strategy_with_parent_issue_id_succeeds(self):
+        """Test that resolution_strategy='parent_issue' with parent_issue_id succeeds."""
+        resolution = BranchResolution(
+            action="reuse",
+            branch_name="feature/test",
+            confidence=0.5,
+            reason="test",
+            resolution_strategy="parent_issue",
+            parent_issue_id="456",
+        )
+        assert resolution.resolution_strategy == "parent_issue"
+        assert resolution.parent_issue_id == "456"
 
     def test_reuse_action_with_sibling_succeeds(self):
         """Test that action='reuse' with resolution_strategy='sibling' succeeds."""

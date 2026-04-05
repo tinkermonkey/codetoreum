@@ -664,6 +664,10 @@ class BranchResolution:
         if self.action == "reuse" and self.resolution_strategy == "new":
             msg = "BranchResolution: action='reuse' cannot use resolution_strategy='new'"
             raise DomainError(msg)
+        # Cross-field validation: parent_issue strategy requires parent_issue_id
+        if self.resolution_strategy == "parent_issue" and self.parent_issue_id is None:
+            msg = "BranchResolution: resolution_strategy='parent_issue' requires parent_issue_id to be set"
+            raise DomainError(msg)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
