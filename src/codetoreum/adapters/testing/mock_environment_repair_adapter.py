@@ -8,8 +8,8 @@ The mock adapter:
 1. Returns pre-configured RebuildResult and VerificationResult sequences
 2. Emits all 4 environment repair domain events
 3. Integrates with SimulationClock for deterministic timing
-4. Supports result exhaustion scenarios for testing
-5. Defaults to success on first attempt
+4. Raises error when configured sequence is exhausted (prevents silent test failures)
+5. Defaults to success on first attempt when no results are configured
 """
 
 import logging
@@ -58,7 +58,7 @@ class MockEnvironmentRepairAdapter(IEnvironmentRepairService):
     - Configurable verification result sequences
     - SimulationClock integration for deterministic timing
     - Event emission for all 4 environment repair domain events
-    - Default success behavior (first attempt succeeds)
+    - Error on sequence exhaustion (prevents silent test failures)
 
     Example:
         clock = SimulationClock()
@@ -71,12 +71,19 @@ class MockEnvironmentRepairAdapter(IEnvironmentRepairService):
         ])
 
         # Execute and verify
-        result = await adapter.rebuild_environment(
+        result1 = await adapter.rebuild_environment(
             project="my-project",
             config=test_config,
             context=context
         )
-        assert result.success
+        assert result1.success is False
+
+        result2 = await adapter.rebuild_environment(
+            project="my-project",
+            config=test_config,
+            context=context
+        )
+        assert result2.success is True
     """
 
     def __init__(
@@ -134,8 +141,9 @@ class MockEnvironmentRepairAdapter(IEnvironmentRepairService):
     ) -> RebuildResult:
         """Rebuild the test environment (mock implementation).
 
-        Returns pre-configured results from the sequence, or defaults to success
-        on first attempt.
+        Returns pre-configured results from the sequence. When no results are configured,
+        defaults to success on first attempt. Raises IndexError if the configured
+        sequence is exhausted (test made more calls than configured results).
 
         Args:
             project: Project identifier/name
@@ -144,6 +152,9 @@ class MockEnvironmentRepairAdapter(IEnvironmentRepairService):
 
         Returns:
             RebuildResult from configured sequence or default
+
+        Raises:
+            IndexError: When configured result sequence is exhausted
         """
         # Emit rebuild started event
         if self.event_emitter:
@@ -159,12 +170,20 @@ class MockEnvironmentRepairAdapter(IEnvironmentRepairService):
                 )
             )
 
-        # Get result from sequence or use default
-        if self._rebuild_index < len(self._rebuild_results):
+        # Get result from sequence or use default on first call
+        if len(self._rebuild_results) == 0:
+            # No results configured: use default for first attempt
+            result = _DEFAULT_REBUILD_RESULT
+        elif self._rebuild_index < len(self._rebuild_results):
             result = self._rebuild_results[self._rebuild_index]
             self._rebuild_index += 1
         else:
-            result = _DEFAULT_REBUILD_RESULT
+            # Sequence exhausted: raise error to prevent silent test failures
+            raise IndexError(
+                f"rebuild_environment sequence exhausted: "
+                f"{len(self._rebuild_results)} configured, "
+                f"call #{self._rebuild_index + 1} attempted"
+            )
 
         # Advance clock based on result duration
         await self.clock.advance(timedelta(seconds=result.duration_seconds))
@@ -207,8 +226,9 @@ class MockEnvironmentRepairAdapter(IEnvironmentRepairService):
     ) -> VerificationResult:
         """Verify that the rebuilt environment is ready for testing (mock implementation).
 
-        Returns pre-configured results from the sequence, or defaults to healthy
-        on first attempt.
+        Returns pre-configured results from the sequence. When no results are configured,
+        defaults to healthy on first attempt. Raises IndexError if the configured
+        sequence is exhausted (test made more calls than configured results).
 
         Args:
             project: Project identifier/name
@@ -217,6 +237,9 @@ class MockEnvironmentRepairAdapter(IEnvironmentRepairService):
 
         Returns:
             VerificationResult from configured sequence or default
+
+        Raises:
+            IndexError: When configured result sequence is exhausted
         """
         # Emit verification started event
         if self.event_emitter:
@@ -232,12 +255,20 @@ class MockEnvironmentRepairAdapter(IEnvironmentRepairService):
                 )
             )
 
-        # Get result from sequence or use default
-        if self._verification_index < len(self._verification_results):
+        # Get result from sequence or use default on first call
+        if len(self._verification_results) == 0:
+            # No results configured: use default for first attempt
+            result = _DEFAULT_VERIFICATION_RESULT
+        elif self._verification_index < len(self._verification_results):
             result = self._verification_results[self._verification_index]
             self._verification_index += 1
         else:
-            result = _DEFAULT_VERIFICATION_RESULT
+            # Sequence exhausted: raise error to prevent silent test failures
+            raise IndexError(
+                f"verify_environment sequence exhausted: "
+                f"{len(self._verification_results)} configured, "
+                f"call #{self._verification_index + 1} attempted"
+            )
 
         # Advance clock based on result duration
         await self.clock.advance(timedelta(seconds=result.duration_seconds))

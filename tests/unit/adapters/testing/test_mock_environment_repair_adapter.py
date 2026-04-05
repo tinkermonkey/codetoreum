@@ -6,7 +6,7 @@ Verifies that:
 3. Configurable verification result sequences work
 4. SimulationClock integration for deterministic timing
 5. Both rebuild and verify can be configured independently
-6. Result exhaustion (sequence runs out) falls back to defaults
+6. Result exhaustion (sequence runs out) raises IndexError to prevent silent test failures
 7. Events are emitted correctly with all required fields
 8. Clock is advanced by result duration for each operation
 """
@@ -230,10 +230,14 @@ async def test_rebuild_environment_multiple_failures(
 
 
 @pytest.mark.asyncio
-async def test_rebuild_environment_exhaustion_falls_back_to_default(
+async def test_rebuild_environment_exhaustion_raises_error(
     simulation_clock, test_context, test_config
 ):
-    """Test rebuild falls back to default when sequence is exhausted."""
+    """Test rebuild raises IndexError when sequence is exhausted.
+
+    This prevents silent test failures where tests make more calls than
+    configured results, masking regressions.
+    """
     adapter = MockEnvironmentRepairAdapter(clock=simulation_clock)
 
     # Configure only one result
@@ -254,11 +258,11 @@ async def test_rebuild_environment_exhaustion_falls_back_to_default(
     )
     assert result1.success is False
 
-    # Second call (sequence exhausted) falls back to default success
-    result2 = await adapter.rebuild_environment(
-        project="test-project", config=test_config, context=test_context
-    )
-    assert result2.success is True
+    # Second call (sequence exhausted) raises error
+    with pytest.raises(IndexError, match="rebuild_environment sequence exhausted"):
+        await adapter.rebuild_environment(
+            project="test-project", config=test_config, context=test_context
+        )
 
 
 # ============================================================================
@@ -418,10 +422,14 @@ async def test_verify_environment_multiple_unhealthy(
 
 
 @pytest.mark.asyncio
-async def test_verify_environment_exhaustion_falls_back_to_default(
+async def test_verify_environment_exhaustion_raises_error(
     simulation_clock, test_context, test_config
 ):
-    """Test verify falls back to default when sequence is exhausted."""
+    """Test verify raises IndexError when sequence is exhausted.
+
+    This prevents silent test failures where tests make more calls than
+    configured results, masking regressions.
+    """
     adapter = MockEnvironmentRepairAdapter(clock=simulation_clock)
 
     # Configure only one result
@@ -442,11 +450,11 @@ async def test_verify_environment_exhaustion_falls_back_to_default(
     )
     assert result1.healthy is False
 
-    # Second call (sequence exhausted) falls back to default healthy
-    result2 = await adapter.verify_environment(
-        project="test-project", config=test_config, context=test_context
-    )
-    assert result2.healthy is True
+    # Second call (sequence exhausted) raises error
+    with pytest.raises(IndexError, match="verify_environment sequence exhausted"):
+        await adapter.verify_environment(
+            project="test-project", config=test_config, context=test_context
+        )
 
 
 # ============================================================================
