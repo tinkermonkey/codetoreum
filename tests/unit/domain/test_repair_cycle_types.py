@@ -2421,7 +2421,7 @@ class TestVerificationResult:
         result2 = VerificationResult(
             healthy=False,
             checks_passed=("check",),
-            checks_failed=(),
+            checks_failed=("failed_check",),
             duration_seconds=5.0,
         )
         assert result1 != result2

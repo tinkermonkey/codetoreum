@@ -244,8 +244,10 @@ class CycleResult:
             msg = f"passed=True but error is set: '{self.error}' (contradiction)"
             raise ValueError(msg)
 
-        # Note: passed=False with final_result is allowed (failed but completed)
-        # Note: passed=False with error is the expected failure case
+        # Consistency check: failure without explanation is a data quality gap
+        if not self.passed and self.error is None:
+            msg = "passed=False but error is not set (failure must have explanation for audit trail)"
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True)
@@ -742,6 +744,11 @@ class VerificationResult:
             msg = f"healthy=True but checks_failed is non-empty: {self.checks_failed} (contradiction)"
             raise ValueError(msg)
 
+        # Consistency check: failure without evidence is a data quality gap
+        if not self.healthy and not self.checks_failed:
+            msg = "healthy=False but checks_failed is empty (failure must have evidence for audit trail)"
+            raise ValueError(msg)
+
 
 @dataclass(frozen=True)
 class SystemicFixResult:
@@ -772,4 +779,14 @@ class SystemicFixResult:
             object.__setattr__(self, "files_modified", tuple(self.files_modified))
         if self.duration_seconds < 0:
             msg = "duration_seconds must be non-negative"
+            raise ValueError(msg)
+
+        # Consistency check: success state must align with root_cause_addressed
+        if self.success and not self.root_cause_addressed:
+            msg = "success=True but root_cause_addressed is empty (must explain what was fixed)"
+            raise ValueError(msg)
+
+        # Consistency check: failure without explanation is a data quality gap
+        if not self.success and not self.root_cause_addressed:
+            msg = "success=False but root_cause_addressed is empty (failure must have explanation for audit trail)"
             raise ValueError(msg)

@@ -560,10 +560,15 @@ Return a JSON response with the verification status and any issues found."""
             checks_passed = response_data.get("checks_passed", [])
             checks_failed = response_data.get("checks_failed", [])
 
+            # Ensure unhealthy states have evidence: if healthy=False but checks_failed is empty,
+            # add a default failure reason for audit trail consistency
+            if not healthy and not checks_failed:
+                checks_failed = ["verification_failed"]
+
             verification_result = VerificationResult(
                 healthy=healthy,
                 checks_passed=tuple(checks_passed) if checks_passed else (),
-                checks_failed=tuple(checks_failed) if checks_failed else (),
+                checks_failed=tuple(checks_failed),
                 duration_seconds=duration_seconds,
             )
 

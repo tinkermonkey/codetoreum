@@ -2007,6 +2007,11 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         # This handles the case where pre-configured test results are reused
         actual_iteration = last_test_result.iteration if last_test_result else iteration
 
+        # Ensure failure states have explanations: if cycle did not pass and no error was set,
+        # set a default error message for audit trail consistency
+        if not cycle_passed and error is None:
+            error = f"Max iterations reached ({config.max_iterations}) without resolving failures"
+
         # Emit test cycle completed
         if self._current_project is not None:
             self.emit(

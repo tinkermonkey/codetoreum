@@ -968,12 +968,13 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             # Re-raise circuit breaker errors as specified in docstring
             raise
         except Exception as e:
+            error_msg = str(e)
             logger.error(
                 "Unexpected error in systemic fix",
                 extra={
                     "workflow_run_id": context.workflow_run_id,
                     "work_item_id": context.work_item_id,
-                    "error": str(e),
+                    "error": error_msg,
                     "error_type": type(e).__name__,
                     "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
                 },
@@ -991,7 +992,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     workflow_run_id=context.workflow_run_id,
                     success=False,
                     files_modified=(),
-                    root_cause_addressed="",
+                    root_cause_addressed=error_msg,
                     duration_seconds=duration,
                 )
             )
@@ -999,7 +1000,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             return SystemicFixResult(
                 success=False,
                 files_modified=(),
-                root_cause_addressed="",
+                root_cause_addressed=error_msg,
                 duration_seconds=duration,
             )
 
@@ -2425,6 +2426,11 @@ Return a JSON response with the status of dependency fixes applied."""
                     exc_info=True,
                 )
                 break
+
+        # Ensure failure states have explanations: if cycle did not pass and no error was set,
+        # set a default error message for audit trail consistency
+        if not cycle_passed and error is None:
+            error = f"Max iterations reached ({config.max_iterations}) without resolving failures"
 
         # Emit test cycle completed event
         duration_seconds = (datetime.now(UTC) - start_time).total_seconds()
