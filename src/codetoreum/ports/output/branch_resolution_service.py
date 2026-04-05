@@ -33,28 +33,31 @@ class IBranchResolutionService(IEventEmitter, ABC):
 
     Events emitted:
         - 'branch.resolved' → BranchResolvedEvent
-                             When a branch resolution decision is made
+                             When a branch resolution decision is made (primary audit event)
+        - 'branch.reused' → BranchReusedEvent
+                             When an existing branch is selected for reuse
+        - 'branch.created' → BranchResolutionCreatedEvent
+                             When a new branch is created
 
     Example:
-        async with service as svc:
-            # Resolve branch for a work item
-            resolution = await svc.resolve_branch(
-                project_id="proj-123",
-                issue_id="issue-456",
-                issue_metadata={
-                    "title": "Fix authentication bug",
-                    "description": "Users cannot login via OAuth",
-                    "labels": ["bug", "high-priority"],
-                    "parent_issue": "issue-100"
-                },
-                repo_path="/workspace/my-repo"
-            )
+        # Resolve branch for a work item
+        resolution = await service.resolve_branch(
+            project_id="proj-123",
+            issue_id="issue-456",
+            issue_metadata={
+                "title": "Fix authentication bug",
+                "description": "Users cannot login via OAuth",
+                "labels": ["bug", "high-priority"],
+                "parent_issue": "issue-100"
+            },
+            repo_path="/workspace/my-repo"
+        )
 
-            # Resolution includes action and confidence
-            if resolution.action == "reuse":
-                print(f"Reuse existing: {resolution.branch_name}")
-            else:
-                print(f"Create new: {resolution.branch_name}")
+        # Resolution includes action and confidence
+        if resolution.action == "reuse":
+            print(f"Reuse existing: {resolution.branch_name}")
+        else:
+            print(f"Create new: {resolution.branch_name}")
     """
 
     @abstractmethod
@@ -83,10 +86,11 @@ class IBranchResolutionService(IEventEmitter, ABC):
                              branch name, confidence level, and reasoning
 
         Raises:
-            ResourceNotFoundError: Project or issue doesn't exist
-            ValidationError: Invalid input parameters
-            ExternalServiceError: Service communication failure
+            ExternalServiceError: If ticket system, version control, or other
+                                external service communication fails
 
         Events:
-            Emits 'branch.resolved' event with resolution details
+            Emits events as documented in class docstring: BranchResolvedEvent
+            (always), plus BranchReusedEvent or BranchResolutionCreatedEvent
+            depending on the resolution action (reuse vs. create)
         """
