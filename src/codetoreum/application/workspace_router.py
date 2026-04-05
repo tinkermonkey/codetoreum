@@ -168,6 +168,9 @@ class WorkspaceRouter:
         - Default → Issue workspace with feature branch
         - Validates agent capabilities match work item requirements
 
+        Note: Branch name resolution is deferred to prepare_workspace() where repository_path
+        is available. Here we use a placeholder that will be overridden if resolution is configured.
+
         Args:
             work_item: Work item being processed
             agent: Agent that will execute
@@ -204,7 +207,8 @@ class WorkspaceRouter:
                 discussion_id=work_item.external_id or "",
             )
         # Issue workspace with feature branch
-        branch_name = await self._resolve_branch_name(work_item, project)
+        # Generate a temporary branch name (will be resolved in prepare_workspace if service is configured)
+        branch_name = self._generate_branch_name(work_item, project)
         self._logger.info(f"Routing to ISSUE workspace with branch={branch_name}")
         return WorkspaceContext.for_issue(
             project_id=project.id,
@@ -296,54 +300,62 @@ class WorkspaceRouter:
                 repo_path = Path(repository_path)
                 repo_path_str = str(repo_path)
 
-                # Check if there's a cached branch resolution from route_workspace()
+                # First, attempt intelligent branch resolution if service is configured
+                # This will cache the resolution decision in _branch_resolutions
+                resolved_branch_name = await self._resolve_branch_name(work_item, project, repository_path)
+
+                # Check if there's a cached branch resolution from _resolve_branch_name()
                 resolution = self._branch_resolutions.get(work_item.id)
 
-                if resolution is not None:
-                    # Use resolution service decision
-                    self._logger.info(
-                        f"Using branch resolution decision: action={resolution.action}, "
-                        f"branch={resolution.branch_name}"
-                    )
-
-                    if resolution.action == "reuse":
-                        # Resolution service says to reuse existing branch
-                        self._logger.info(f"Reusing branch (resolved): {context.branch_name}")
-                        await self.vcs.checkout(repo_path_str, context.branch_name or "")
-                        metadata["branch_action"] = "reuse_resolved"
-                        metadata["resolution_strategy"] = resolution.resolution_strategy
-                    else:  # resolution.action == "create"
-                        # Resolution service says to create new branch
-                        self._logger.info(f"Creating new branch (resolved): {context.branch_name}")
-                        await self.vcs.create_branch(
-                            repo_path_str,
-                            context.branch_name or "",
-                            from_branch=project.default_branch,
+                try:
+                    if resolution is not None:
+                        # Use resolution service decision
+                        self._logger.info(
+                            f"Using branch resolution decision: action={resolution.action}, "
+                            f"branch={resolution.branch_name}"
                         )
-                        await self.vcs.checkout(repo_path_str, context.branch_name or "")
-                        metadata["branch_action"] = "create_resolved"
-                        metadata["resolution_strategy"] = resolution.resolution_strategy
-                else:
-                    # No resolution service or service wasn't used: use default logic
-                    # Check if branch exists
-                    branches = await self.vcs.list_branches(repo_path_str, remote=True)
-                    branch_exists = context.branch_name in branches
 
-                    if branch_exists:
-                        # Checkout existing branch
-                        self._logger.info(f"Checking out existing branch: {context.branch_name}")
-                        await self.vcs.checkout(repo_path_str, context.branch_name or "")
-                        metadata["branch_action"] = "checkout_existing"
+                        if resolution.action == "reuse":
+                            # Resolution service says to reuse existing branch
+                            self._logger.info(f"Reusing branch (resolved): {resolution.branch_name}")
+                            await self.vcs.checkout(repo_path_str, resolution.branch_name or "")
+                            metadata["branch_action"] = "reuse_resolved"
+                            metadata["resolution_strategy"] = resolution.resolution_strategy
+                        else:  # resolution.action == "create"
+                            # Resolution service says to create new branch
+                            self._logger.info(f"Creating new branch (resolved): {resolution.branch_name}")
+                            await self.vcs.create_branch(
+                                repo_path_str,
+                                resolution.branch_name or "",
+                                from_branch=project.default_branch,
+                            )
+                            await self.vcs.checkout(repo_path_str, resolution.branch_name or "")
+                            metadata["branch_action"] = "create_resolved"
+                            metadata["resolution_strategy"] = resolution.resolution_strategy
                     else:
-                        # Create new branch from base
-                        self._logger.info(f"Creating new branch: {context.branch_name}")
-                        await self.vcs.create_branch(
-                            repo_path_str,
-                            context.branch_name or "",
-                            from_branch=project.default_branch,
-                        )
-                        await self.vcs.checkout(repo_path_str, context.branch_name or "")
-                        metadata["branch_action"] = "create_new"
+                        # No resolution service or service wasn't used: use default logic
+                        # Check if branch exists
+                        branches = await self.vcs.list_branches(repo_path_str, remote=True)
+                        branch_exists = resolved_branch_name in branches
+
+                        if branch_exists:
+                            # Checkout existing branch
+                            self._logger.info(f"Checking out existing branch: {resolved_branch_name}")
+                            await self.vcs.checkout(repo_path_str, resolved_branch_name or "")
+                            metadata["branch_action"] = "checkout_existing"
+                        else:
+                            # Create new branch from base
+                            self._logger.info(f"Creating new branch: {resolved_branch_name}")
+                            await self.vcs.create_branch(
+                                repo_path_str,
+                                resolved_branch_name or "",
+                                from_branch=project.default_branch,
+                            )
+                            await self.vcs.checkout(repo_path_str, resolved_branch_name or "")
+                            metadata["branch_action"] = "create_new"
+                finally:
+                    # Clean up the cached resolution to prevent memory leaks in long-lived router
+                    self._branch_resolutions.pop(work_item.id, None)
 
                 # Update branch with latest from base
                 self._logger.info(f"Pulling latest changes from {project.default_branch}")
@@ -598,7 +610,9 @@ class WorkspaceRouter:
     # Private Methods
     # ========================================================================
 
-    async def _resolve_branch_name(self, work_item: WorkItem, project: ProjectContext) -> str:
+    async def _resolve_branch_name(
+        self, work_item: WorkItem, project: ProjectContext, repository_path: str
+    ) -> str:
         """
         Resolve branch name using intelligent branch resolution or fallback to generation.
 
@@ -610,6 +624,7 @@ class WorkspaceRouter:
         Args:
             work_item: Work item
             project: Project context
+            repository_path: Actual path to the repository (used by resolution service)
 
         Returns:
             str: Resolved or generated branch name
@@ -623,12 +638,12 @@ class WorkspaceRouter:
                     "labels": work_item.labels or [],
                 }
 
-                # Call branch resolution service
+                # Call branch resolution service with actual repository path
                 resolution = await self.branch_resolution_service.resolve_branch(
                     project_id=project.id,
                     issue_id=work_item.id,
                     issue_metadata=issue_metadata,
-                    repo_path="",  # Repo path not needed for branch name resolution
+                    repo_path=repository_path,
                 )
 
                 # Cache the resolution for prepare_workspace() to use

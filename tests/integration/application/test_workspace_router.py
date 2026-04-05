@@ -644,9 +644,10 @@ async def test_route_workspace_with_branch_resolution_create(
         project=sample_project,
     )
 
-    # Assert
+    # Assert - route_workspace returns generated name, resolution happens in prepare_workspace
     assert context.workspace_type.value == "issue"
-    assert context.branch_name == "feature/issue-123-auth-flow"
+    # Branch name should be generated from work item title
+    assert "issue-123-" in context.branch_name
     assert context.create_pr is True
 
 
@@ -682,9 +683,10 @@ async def test_route_workspace_with_branch_resolution_reuse(
         project=sample_project,
     )
 
-    # Assert
+    # Assert - route_workspace returns generated name, resolution happens in prepare_workspace
     assert context.workspace_type.value == "issue"
-    assert context.branch_name == "feature/issue-100-parent-task"
+    # Branch name should be generated from work item title
+    assert "issue-123-" in context.branch_name
     assert context.create_pr is True
 
 
@@ -843,6 +845,46 @@ async def test_prepare_workspace_without_resolution_service_uses_fallback_logic(
     )
 
     # Assert - should use default logic (create because branch doesn't exist)
+    assert result.success is True
+    assert result.metadata["branch_action"] == "create_new"
+    assert "resolution_strategy" not in result.metadata  # No resolution strategy recorded
+    mock_repository.create_branch.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_prepare_workspace_with_resolution_service_failure_falls_back(
+    workspace_router_with_resolution,
+    sample_work_item,
+    sample_agent,
+    sample_project,
+    mock_repository,
+    mock_branch_resolution_service,
+    repository_path,
+    caplog,
+):
+    """Test that prepare_workspace falls back to default logic when resolution service fails."""
+    # Configure resolution service to raise exception
+    mock_branch_resolution_service.configure_to_raise(ValueError("Service unavailable"))
+
+    # Mock list_branches to return no branches (for fallback logic)
+    mock_repository.list_branches.return_value = []
+
+    # Route to get context with generated branch name
+    context = await workspace_router_with_resolution.route_workspace(
+        work_item=sample_work_item,
+        agent=sample_agent,
+        project=sample_project,
+    )
+
+    # Act - prepare workspace
+    result = await workspace_router_with_resolution.prepare_workspace(
+        context=context,
+        project=sample_project,
+        work_item=sample_work_item,
+        repository_path=repository_path,
+    )
+
+    # Assert - should fall back to default logic (create because branch doesn't exist)
     assert result.success is True
     assert result.metadata["branch_action"] == "create_new"
     assert "resolution_strategy" not in result.metadata  # No resolution strategy recorded

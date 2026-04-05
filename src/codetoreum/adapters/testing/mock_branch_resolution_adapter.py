@@ -81,6 +81,9 @@ class MockBranchResolutionAdapter(MockEventEmitter, IBranchResolutionService):
         # Configured resolutions: (project_id, issue_id) -> BranchResolution
         self._configured_resolutions: dict[tuple[str, str], BranchResolution] = {}
 
+        # Exception to raise on next resolve_branch call (for testing fallback behavior)
+        self._exception_to_raise: Exception | None = None
+
         # Default resolution for unconfigured cases
         self._default_resolution = BranchResolution(
             action="create",
@@ -138,6 +141,7 @@ class MockBranchResolutionAdapter(MockEventEmitter, IBranchResolutionService):
 
         Raises:
             ValueError: If project_id or issue_id is empty
+            Exception: Any exception configured via configure_to_raise()
         """
         if not project_id or not project_id.strip():
             msg = "project_id cannot be empty"
@@ -145,6 +149,13 @@ class MockBranchResolutionAdapter(MockEventEmitter, IBranchResolutionService):
         if not issue_id or not issue_id.strip():
             msg = "issue_id cannot be empty"
             raise ValueError(msg)
+
+        # Check if we should raise an exception (for testing fallback behavior)
+        with self._lock:
+            if self._exception_to_raise is not None:
+                exc = self._exception_to_raise
+                self._exception_to_raise = None  # Clear after raising
+                raise exc
 
         # Get configured or default resolution
         with self._lock:
@@ -219,6 +230,17 @@ class MockBranchResolutionAdapter(MockEventEmitter, IBranchResolutionService):
         """
         with self._lock:
             self._default_resolution = resolution
+
+    def configure_to_raise(self, exception: Exception) -> None:
+        """Configure the adapter to raise an exception on next resolve_branch call.
+
+        Used to test fallback behavior when the resolution service fails.
+
+        Args:
+            exception: Exception to raise on next resolve_branch() call
+        """
+        with self._lock:
+            self._exception_to_raise = exception
 
     def get_configured_count(self) -> int:
         """Get count of configured resolutions.
