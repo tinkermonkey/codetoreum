@@ -10,8 +10,8 @@ from typing import Literal
 from uuid import uuid4
 
 from codetoreum.domain.value_objects import (
-    VALID_REUSE_STRATEGIES,
     VALID_RESOLUTION_STRATEGIES,
+    VALID_REUSE_STRATEGIES,
 )
 
 from .adapter_events import CodetoreumEvent

@@ -11,14 +11,13 @@ from uuid import uuid4
 
 import pytest
 
-from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.events.branch_events import (
     BranchResolutionCreatedEvent,
     BranchResolvedEvent,
     BranchReusedEvent,
 )
+from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.value_objects import BranchResolution
-
 
 # =============================================================================
 # BranchResolution Value Object Tests
