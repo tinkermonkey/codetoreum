@@ -12,43 +12,71 @@ Phase 5 of the intelligent branch resolution feature integrates `BranchResolutio
 - Resolution happens in `prepare_workspace()` where `repo_path` is available
 - Tests verify resolution and fallback behavior
 
-### Production Environment ⏳ (Deferred)
-- `BranchResolutionAdapter` exists and is functional
-- No production bootstrap file currently instantiates `WorkspaceRouter`
-- Wiring needed when production bootstrap is created
+### Production Environment ✅ (Complete)
+- `BranchResolutionAdapter` factory exists in `adapters/primary/factories/production.py:create_branch_resolution_adapter()`
+- `create_workspace_router_with_branch_resolution()` factory wires adapter into WorkspaceRouter
+- `create_workspace_router_with_production_branch_resolution()` convenience factory combines both steps
+- Factories are exported from `adapters/primary/factories/__init__.py` for use in production bootstrap
+- Factories are ready for integration into production application startup
 
 ## Implementation Checklist for Production Bootstrap
 
-When creating or updating the production bootstrap, follow this checklist:
+### Factories Available ✅
 
-### 1. Instantiate BranchResolutionAdapter
+The following factories are now available in `codetoreum.adapters.primary.factories` for use in production bootstrap:
+
+#### Option A: Two-Step Instantiation (Fine-Grained Control)
 ```python
-from codetoreum.adapters.secondary.branch_resolution_adapter import BranchResolutionAdapter
+from codetoreum.adapters.primary.factories import (
+    create_branch_resolution_adapter,
+    create_workspace_router_with_branch_resolution,
+)
 
-branch_resolution_adapter = BranchResolutionAdapter(
+# Step 1: Create adapter
+branch_resolution_adapter = create_branch_resolution_adapter(
     ticket_system=ticket_system_adapter,    # Already resolved
     version_control=vcs_adapter,             # Already resolved
     event_emitter=event_emitter_adapter,     # Already resolved
     min_confidence_threshold=0.7,            # Tunable
     cache_ttl_seconds=30,                    # Tunable
 )
-```
 
-### 2. Wire into WorkspaceRouter
-```python
-workspace_router = WorkspaceRouter(
-    vcs=vcs_adapter,
+# Step 2: Wire into router
+workspace_router = create_workspace_router_with_branch_resolution(
+    version_control=vcs_adapter,
     container=container_adapter,
     event_store=event_store_adapter,
-    config=workspace_router_config,
-    branch_resolution_service=branch_resolution_adapter,  # ← Key addition
+    branch_resolution_service=branch_resolution_adapter,
 )
 ```
 
-### 3. Verification Checklist
-- [ ] `BranchResolutionAdapter` receives correct adapters for `ticket_system`, `version_control`, `event_emitter`
-- [ ] `WorkspaceRouter` is instantiated with `branch_resolution_service` parameter
-- [ ] Application servers and CLI commands use the wired bootstrap
+#### Option B: Single-Call Convenience Factory (Recommended for Production)
+```python
+from codetoreum.adapters.primary.factories import (
+    create_workspace_router_with_production_branch_resolution,
+)
+
+# Create router with adapter in one call
+workspace_router = create_workspace_router_with_production_branch_resolution(
+    ticket_system=ticket_system_adapter,
+    version_control=vcs_adapter,
+    container=container_adapter,
+    event_store=event_store_adapter,
+    event_emitter=event_emitter_adapter,
+    min_confidence_threshold=0.7,  # Optional, defaults to 0.7
+    cache_ttl_seconds=30,          # Optional, defaults to 30
+)
+```
+
+### Production Bootstrap Integration Checklist
+
+When integrating into your production bootstrap:
+
+- [ ] Import factory functions from `codetoreum.adapters.primary.factories`
+- [ ] Ensure `ticket_system`, `version_control`, `container`, `event_store`, and `event_emitter` adapters are fully initialized before factory call
+- [ ] Call factory before agent execution begins (during application startup)
+- [ ] Pass returned `workspace_router` to application services (ExecutionService, ExecutionServiceAgentExecutor, etc.)
+- [ ] Verify branch resolution events are being emitted (check logs for "Instantiated BranchResolutionAdapter" and "Wired BranchResolutionAdapter")
 - [ ] Existing tests for other components continue to pass
 
 ## Technical Details
@@ -78,6 +106,47 @@ The `WorkspaceRouter` includes fallback logic:
 - If resolution service raises exception → logs warning (ERROR_ID: ERR_BRANCH_RESOLUTION_FALLBACK) and falls back to default logic
 - System never fails due to resolution service issues
 
+## Integration in Production Bootstrap
+
+When implementing a production bootstrap (e.g., in a CLI command or application initialization):
+
+```python
+from codetoreum.adapters.primary.factories import (
+    create_workspace_router_with_production_branch_resolution,
+)
+
+# Assuming you have already created the output adapters:
+# - ticket_system_adapter: GitHub ticket system implementation
+# - vcs_adapter: GitHub/Git version control implementation
+# - container_adapter: Docker container runtime
+# - event_store_adapter: Redis or persistent event store
+# - event_emitter_adapter: Event publishing service
+
+# Create workspace router with branch resolution wired in
+workspace_router = create_workspace_router_with_production_branch_resolution(
+    ticket_system=ticket_system_adapter,
+    version_control=vcs_adapter,
+    container=container_adapter,
+    event_store=event_store_adapter,
+    event_emitter=event_emitter_adapter,
+)
+
+# Now pass workspace_router to application services that need it:
+# - ExecutionService
+# - ExecutionServiceAgentExecutor
+# - Any other service that prepares workspaces for agent execution
+
+execution_service = ExecutionService(
+    workspace_router=workspace_router,
+    # ... other dependencies
+)
+```
+
+**Key Integration Points:**
+1. Call factory **after** all output adapters are initialized
+2. Call factory **before** agent execution services are created
+3. Pass the returned `workspace_router` to all services that call `prepare_workspace()` or `finalize_workspace()`
+
 ## Related Files
 
 - **Implementation**: `src/codetoreum/application/workspace_router.py`
@@ -88,7 +157,10 @@ The `WorkspaceRouter` includes fallback logic:
 
 ## Next Steps
 
-1. Create production bootstrap module (if not yet created)
-2. Follow instantiation checklist above
-3. Run existing tests to verify no regressions
-4. Deploy to staging for validation
+1. ✅ **Factories Available** - Production bootstrap factories are now available in `adapters/primary/factories/production.py`
+2. **Integration** - Integrate factories into production application startup code (main entry point, CLI commands)
+3. **Testing** - Run existing tests to verify no regressions
+4. **Validation** - Deploy to staging and verify:
+   - Branch resolution events are emitted correctly
+   - Intelligent branch reuse works for agent executions
+   - Fallback logic activates correctly when branch resolution is unavailable

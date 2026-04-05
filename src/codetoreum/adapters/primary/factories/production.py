@@ -10,6 +10,12 @@ Wires up the application stack in production mode with real adapters:
 
 This bootstrap instantiates BranchResolutionAdapter and wires it into WorkspaceRouter
 to enable intelligent branch reuse in production workflows.
+
+**Key Functions:**
+- `create_branch_resolution_adapter()`: Factory for BranchResolutionAdapter
+- `create_workspace_router_with_branch_resolution()`: Factory for WorkspaceRouter with branch resolution
+- `create_workspace_router_with_production_branch_resolution()`: Convenience function that creates
+  both the adapter and router in one call, ideal for production bootstrap usage
 """
 
 import logging
@@ -159,7 +165,83 @@ def create_workspace_router_with_branch_resolution(
     return router
 
 
+def create_workspace_router_with_production_branch_resolution(
+    ticket_system: ITicketSystem,
+    version_control: IVersionControlService,
+    container: IContainer,
+    event_store: IEventStore,
+    event_emitter: IEventEmitter,
+    min_confidence_threshold: float = 0.7,
+    cache_ttl_seconds: int = 30,
+    config: WorkspaceRouterConfig | None = None,
+) -> WorkspaceRouter:
+    """
+    Create WorkspaceRouter with BranchResolutionAdapter in one call for production.
+
+    This is a convenience function that combines the creation of BranchResolutionAdapter
+    and WorkspaceRouter with proper wiring. Use this function in the production bootstrap
+    path to ensure intelligent branch resolution is enabled.
+
+    **Integration Checklist for Production Bootstrap:**
+    - [ ] Ensure `ticket_system`, `version_control`, `container`, `event_store`, and
+          `event_emitter` adapters are fully initialized and ready
+    - [ ] Call this function before agent execution begins (during application startup)
+    - [ ] Pass the returned `WorkspaceRouter` to application services (ExecutionService, etc.)
+    - [ ] Verify that branch resolution events are being emitted correctly
+
+    **Configuration for Production:**
+    - `min_confidence_threshold=0.7`: Require at least 70% confidence match for fuzzy branch name resolution
+    - `cache_ttl_seconds=30`: Cache branch lists for 30 seconds to reduce VCS API calls
+
+    Args:
+        ticket_system: Ticket system adapter for querying parent/sibling relationships
+        version_control: Version control service for listing branches
+        container: Container orchestration adapter
+        event_store: Event store for persisting state
+        event_emitter: Event emitter for publishing resolution events
+        min_confidence_threshold: Fuzzy match minimum confidence (0.0-1.0)
+        cache_ttl_seconds: Cache duration for branch list queries
+        config: Optional WorkspaceRouter configuration
+
+    Returns:
+        Configured WorkspaceRouter with BranchResolutionAdapter wired in
+
+    Raises:
+        ValueError: If any required adapter is None
+    """
+    # Create the branch resolution adapter
+    branch_resolution_adapter = create_branch_resolution_adapter(
+        ticket_system=ticket_system,
+        version_control=version_control,
+        event_emitter=event_emitter,
+        min_confidence_threshold=min_confidence_threshold,
+        cache_ttl_seconds=cache_ttl_seconds,
+    )
+
+    # Create the workspace router with the adapter wired in
+    workspace_router = create_workspace_router_with_branch_resolution(
+        version_control=version_control,
+        container=container,
+        event_store=event_store,
+        branch_resolution_service=branch_resolution_adapter,
+        config=config,
+    )
+
+    logger.info(
+        "Production bootstrap: WorkspaceRouter created with BranchResolutionAdapter",
+        extra={
+            "bootstrap_phase": "workspace_router_creation",
+            "branch_resolution_enabled": True,
+            "min_confidence_threshold": min_confidence_threshold,
+            "cache_ttl_seconds": cache_ttl_seconds,
+        },
+    )
+
+    return workspace_router
+
+
 __all__ = [
     "create_branch_resolution_adapter",
     "create_workspace_router_with_branch_resolution",
+    "create_workspace_router_with_production_branch_resolution",
 ]

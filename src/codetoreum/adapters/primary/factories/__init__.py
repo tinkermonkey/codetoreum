@@ -15,6 +15,7 @@ from codetoreum.adapters.primary.factories.lifespan import create_lifespan
 from codetoreum.adapters.primary.factories.production import (
     create_branch_resolution_adapter,
     create_workspace_router_with_branch_resolution,
+    create_workspace_router_with_production_branch_resolution,
 )
 from codetoreum.adapters.primary.fastapi_app import create_app, create_development_app
 
@@ -24,4 +25,5 @@ __all__ = [
     "create_lifespan",
     "create_branch_resolution_adapter",
     "create_workspace_router_with_branch_resolution",
+    "create_workspace_router_with_production_branch_resolution",
 ]
