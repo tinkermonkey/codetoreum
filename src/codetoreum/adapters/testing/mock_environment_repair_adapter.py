@@ -9,7 +9,8 @@ The mock adapter:
 2. Emits all 4 environment repair domain events
 3. Integrates with SimulationClock for deterministic timing
 4. Raises error when configured sequence is exhausted (prevents silent test failures)
-5. Defaults to success on first attempt when no results are configured
+5. Raises error on subsequent calls when no results are configured (prevents infinite default successes)
+6. Allows default success on first call only when no results are configured
 """
 
 import logging
@@ -142,8 +143,8 @@ class MockEnvironmentRepairAdapter(IEnvironmentRepairService):
         """Rebuild the test environment (mock implementation).
 
         Returns pre-configured results from the sequence. When no results are configured,
-        defaults to success on first attempt. Raises IndexError if the configured
-        sequence is exhausted (test made more calls than configured results).
+        defaults to success on the first call only. Raises IndexError if the configured
+        sequence is exhausted or if subsequent calls are made without configured results.
 
         Args:
             project: Project identifier/name
@@ -154,7 +155,8 @@ class MockEnvironmentRepairAdapter(IEnvironmentRepairService):
             RebuildResult from configured sequence or default
 
         Raises:
-            IndexError: When configured result sequence is exhausted
+            IndexError: When configured result sequence is exhausted or when no results
+                        are configured and more than one call is made
         """
         # Emit rebuild started event
         if self.event_emitter:
@@ -172,8 +174,17 @@ class MockEnvironmentRepairAdapter(IEnvironmentRepairService):
 
         # Get result from sequence or use default on first call
         if len(self._rebuild_results) == 0:
-            # No results configured: use default for first attempt
-            result = _DEFAULT_REBUILD_RESULT
+            # No results configured: allow default for first call only
+            if self._rebuild_index == 0:
+                result = _DEFAULT_REBUILD_RESULT
+                self._rebuild_index += 1
+            else:
+                # Subsequent calls without configured results: raise error to prevent silent test failures
+                raise IndexError(
+                    f"rebuild_environment sequence exhausted: "
+                    f"0 configured (using default for first call only), "
+                    f"call #{self._rebuild_index + 1} attempted"
+                )
         elif self._rebuild_index < len(self._rebuild_results):
             result = self._rebuild_results[self._rebuild_index]
             self._rebuild_index += 1
@@ -227,8 +238,8 @@ class MockEnvironmentRepairAdapter(IEnvironmentRepairService):
         """Verify that the rebuilt environment is ready for testing (mock implementation).
 
         Returns pre-configured results from the sequence. When no results are configured,
-        defaults to healthy on first attempt. Raises IndexError if the configured
-        sequence is exhausted (test made more calls than configured results).
+        defaults to healthy on the first call only. Raises IndexError if the configured
+        sequence is exhausted or if subsequent calls are made without configured results.
 
         Args:
             project: Project identifier/name
@@ -239,7 +250,8 @@ class MockEnvironmentRepairAdapter(IEnvironmentRepairService):
             VerificationResult from configured sequence or default
 
         Raises:
-            IndexError: When configured result sequence is exhausted
+            IndexError: When configured result sequence is exhausted or when no results
+                        are configured and more than one call is made
         """
         # Emit verification started event
         if self.event_emitter:
@@ -257,8 +269,17 @@ class MockEnvironmentRepairAdapter(IEnvironmentRepairService):
 
         # Get result from sequence or use default on first call
         if len(self._verification_results) == 0:
-            # No results configured: use default for first attempt
-            result = _DEFAULT_VERIFICATION_RESULT
+            # No results configured: allow default for first call only
+            if self._verification_index == 0:
+                result = _DEFAULT_VERIFICATION_RESULT
+                self._verification_index += 1
+            else:
+                # Subsequent calls without configured results: raise error to prevent silent test failures
+                raise IndexError(
+                    f"verify_environment sequence exhausted: "
+                    f"0 configured (using default for first call only), "
+                    f"call #{self._verification_index + 1} attempted"
+                )
         elif self._verification_index < len(self._verification_results):
             result = self._verification_results[self._verification_index]
             self._verification_index += 1

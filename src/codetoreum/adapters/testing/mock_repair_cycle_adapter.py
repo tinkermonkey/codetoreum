@@ -1229,6 +1229,9 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 self.agent_call_count += 1
                 self.total_agent_calls += 1
                 return result.success
+            except TimeoutError:
+                # Re-raise transient timeout errors - retry loop can distinguish and attempt again
+                raise
             except Exception as e:
                 logger.error(
                     "Environment rebuild failed (via service)",
@@ -1292,6 +1295,9 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 self.agent_call_count += 1
                 self.total_agent_calls += 1
                 return result.healthy
+            except TimeoutError:
+                # Re-raise transient timeout errors - retry loop can distinguish and attempt again
+                raise
             except Exception as e:
                 logger.error(
                     "Environment verification failed (via service)",
