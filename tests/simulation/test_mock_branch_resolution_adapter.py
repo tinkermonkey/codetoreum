@@ -18,7 +18,6 @@ class TestMockBranchResolutionAdapter:
     """Tests for MockBranchResolutionAdapter."""
 
     @pytest.mark.asyncio
-    @pytest.mark.asyncio
     async def test_default_behavior_returns_create_action(self):
         """Test default behavior returns action='create' with resolution_strategy='new'."""
         adapter = MockBranchResolutionAdapter()
@@ -29,7 +28,6 @@ class TestMockBranchResolutionAdapter:
         assert result.resolution_strategy == "new"
         assert result.branch_name == "feature/default-branch"
 
-    @pytest.mark.asyncio
     @pytest.mark.asyncio
     async def test_configured_resolution_is_returned(self):
         """Test configured resolution is returned for matching project/issue pair."""
@@ -50,7 +48,6 @@ class TestMockBranchResolutionAdapter:
         assert result.branch_name == "feature/issue-123-auth-fix"
         assert result.resolution_strategy == "exact_match"
 
-    @pytest.mark.asyncio
     @pytest.mark.asyncio
     async def test_different_issues_get_different_resolutions(self):
         """Test different issues can have different configured resolutions."""
@@ -328,9 +325,7 @@ class TestMockBranchResolutionAdapter:
         with pytest.raises(ValueError, match="issue_id cannot be empty"):
             await adapter.resolve_branch("proj-1", "", {})
 
-    @pytest.mark.asyncio
-    @pytest.mark.asyncio
-    async def test_configure_with_empty_project_id_raises_error(self):
+    def test_configure_with_empty_project_id_raises_error(self):
         """Test configure_resolution with empty project_id raises ValueError."""
         adapter = MockBranchResolutionAdapter()
         resolution = BranchResolution(
@@ -344,9 +339,7 @@ class TestMockBranchResolutionAdapter:
         with pytest.raises(ValueError, match="project_id cannot be empty"):
             adapter.configure_resolution("", "123", resolution)
 
-    @pytest.mark.asyncio
-    @pytest.mark.asyncio
-    async def test_configure_with_empty_issue_id_raises_error(self):
+    def test_configure_with_empty_issue_id_raises_error(self):
         """Test configure_resolution with empty issue_id raises ValueError."""
         adapter = MockBranchResolutionAdapter()
         resolution = BranchResolution(

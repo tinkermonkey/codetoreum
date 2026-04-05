@@ -6,8 +6,9 @@ that enables testing branch resolution logic without external dependencies.
 
 import logging
 import threading
+from collections.abc import Mapping
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.domain.events.branch_events import (
@@ -35,10 +36,10 @@ class MockBranchResolutionAdapter(MockEventEmitter, IBranchResolutionService):
     is requested for a project/issue pair that has been pre-configured, the adapter
     returns that configured result. Otherwise, it returns the default result.
 
-    The adapter emits three events on each resolve_branch() call:
+    The adapter emits two events on each resolve_branch() call:
     1. BranchResolvedEvent - Primary audit event (always emitted)
-    2. BranchReusedEvent - When action is "reuse"
-    3. BranchCreatedEvent - When action is "create"
+    2. BranchReusedEvent when action is "reuse", or BranchResolutionCreatedEvent
+       when action is "create"
 
     Example:
         # Setup
@@ -117,7 +118,7 @@ class MockBranchResolutionAdapter(MockEventEmitter, IBranchResolutionService):
         self,
         project_id: str,
         issue_id: str,
-        issue_metadata: dict,
+        issue_metadata: Mapping[str, Any],
     ) -> BranchResolution:
         """Resolve branch for a work item.
 
