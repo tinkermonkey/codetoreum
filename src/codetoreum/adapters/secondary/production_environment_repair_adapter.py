@@ -115,6 +115,35 @@ class ProductionEnvironmentRepairAdapter(IEnvironmentRepairService):
         self.event_emitter = event_emitter or NullEventEmitter()
         self.config = config or EnvironmentRepairAdapterConfig()
         self.circuit_breaker = circuit_breaker
+        self._test_type_descriptions = {
+            RepairTestType.UNIT: "unit tests",
+            RepairTestType.INTEGRATION: "integration tests",
+            RepairTestType.E2E: "end-to-end tests",
+        }
+
+    def _get_test_type_description(self, test_type: RepairTestType) -> str:
+        """Get human-readable description for a test type, logging if unknown.
+
+        Args:
+            test_type: The test type to describe
+
+        Returns:
+            Human-readable description of the test type
+
+        Raises:
+            AssertionError: If test_type is not in the known descriptions dictionary
+        """
+        if test_type not in self._test_type_descriptions:
+            msg = f"Unknown RepairTestType {test_type!r} - this indicates RepairTestType enum was extended but prompt builders were not updated"
+            logger.error(
+                msg,
+                extra={
+                    "test_type": test_type.value if hasattr(test_type, "value") else str(test_type),
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                },
+            )
+            raise ValueError(msg)
+        return self._test_type_descriptions[test_type]
 
     def _build_environment_rebuild_prompt(self, config: RepairTestRunConfig) -> str:
         """Build prompt for LLM to rebuild the test environment.
@@ -124,12 +153,11 @@ class ProductionEnvironmentRepairAdapter(IEnvironmentRepairService):
 
         Returns:
             Prompt for LLM agent
+
+        Raises:
+            ValueError: If test type is unknown (not in RepairTestType enum mappings)
         """
-        test_type_desc = {
-            RepairTestType.UNIT: "unit tests",
-            RepairTestType.INTEGRATION: "integration tests",
-            RepairTestType.E2E: "end-to-end tests",
-        }.get(config.test_type, "tests")
+        test_type_desc = self._get_test_type_description(config.test_type)
 
         return f"""The test environment needs to be rebuilt. Please execute the necessary steps to:
 1. Install or update dependencies (if applicable for this project type)
@@ -148,12 +176,11 @@ Return a JSON response with the status of the environment rebuild."""
 
         Returns:
             Prompt for LLM agent
+
+        Raises:
+            ValueError: If test type is unknown (not in RepairTestType enum mappings)
         """
-        test_type_desc = {
-            RepairTestType.UNIT: "unit tests",
-            RepairTestType.INTEGRATION: "integration tests",
-            RepairTestType.E2E: "end-to-end tests",
-        }.get(config.test_type, "tests")
+        test_type_desc = self._get_test_type_description(config.test_type)
 
         return f"""Please verify that the test environment is correctly configured and ready:
 1. Check that all dependencies are properly installed
