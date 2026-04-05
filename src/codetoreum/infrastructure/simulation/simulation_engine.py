@@ -368,6 +368,25 @@ class SimulationEngine:
         logger.debug("Created RepairCycleEventHandler via SimulationEngine")
         return handler
 
+    def create_branch_resolution_event_handler(
+        self,
+        event_bus: object,
+    ) -> "BranchResolutionEventHandler":
+        """
+        Create branch resolution event handler for audit trail.
+
+        Args:
+            event_bus: EventBus instance
+
+        Returns:
+            BranchResolutionEventHandler instance
+        """
+        from codetoreum.application.event_handlers import BranchResolutionEventHandler
+
+        handler = BranchResolutionEventHandler(event_bus=event_bus)
+        logger.debug("Created BranchResolutionEventHandler via SimulationEngine")
+        return handler
+
     # =========================================================================
     # Clock Lifecycle Management
     # =========================================================================

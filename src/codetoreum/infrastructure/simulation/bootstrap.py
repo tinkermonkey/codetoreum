@@ -1971,6 +1971,14 @@ class SimulationApplicationBootstrap:
         # and invoke the repair cycle when items enter the configured repair cycle stage
         self._register_repair_cycle_handler()
 
+        # Register branch resolution event handler with event bus
+        # This handler logs branch resolution events with structured fields for audit trail
+        self._register_branch_resolution_handler()
+
+        # Wire branch resolution adapter to event bus
+        # This allows the adapter to emit events that are persisted to the event store
+        self._wire_branch_resolution_adapter()
+
         return app
 
     def _register_repair_cycle_handler(self) -> None:
@@ -2001,6 +2009,63 @@ class SimulationApplicationBootstrap:
 
         self.infrastructure.event_bus.register_handler(handler)
         logger.info("Registered RepairCycleEventHandler with event bus")
+
+    def _register_branch_resolution_handler(self) -> None:
+        """
+        Register branch resolution event handler with the event bus.
+
+        Part of Phase 5: Event handler registration for cross-cutting concerns.
+
+        This handler subscribes to all branch resolution events (BranchResolvedEvent,
+        BranchReusedEvent, BranchCreatedEvent) and logs them with structured fields
+        for complete audit trail and metrics tracking.
+
+        Logs a warning if components are not yet initialized, allowing
+        graceful degradation if called before full setup completion.
+        """
+        if not self.infrastructure or not self._engine:
+            logger.warning("Cannot register branch resolution handler: components not ready")
+            return
+
+        handler = self._engine.create_branch_resolution_event_handler(
+            event_bus=self.infrastructure.event_bus,
+        )
+
+        self.infrastructure.event_bus.register_handler(handler)
+        logger.info("Registered BranchResolutionEventHandler with event bus")
+
+    def _wire_branch_resolution_adapter(self) -> None:
+        """
+        Wire branch resolution adapter to the central event bus.
+
+        Part of Phase 5: Adapter wiring for event emission.
+
+        The MockBranchResolutionAdapter emits CodetoreumEvent objects that need
+        to be published to the central event bus for event sourcing and audit trail.
+        This method registers event handlers on the adapter that publish events
+        to the event bus via async tasks, ensuring failures are logged and tracked.
+
+        Logs a warning if components are not yet initialized, allowing
+        graceful degradation if called before full setup completion.
+        """
+        if not self.adapters or not self.infrastructure:
+            logger.warning("Cannot wire branch resolution adapter: components not ready")
+            return
+
+        from codetoreum.infrastructure.event_bus_wiring import (
+            wire_adapters_to_event_bus,
+        )
+
+        event_bus = self.infrastructure.event_bus
+        branch_resolution = self.adapters.branch_resolution_service
+
+        # Wire the branch resolution adapter to publish its events to the event bus
+        wire_adapters_to_event_bus(
+            event_bus=event_bus,
+            branch_resolution_service=branch_resolution,
+        )
+
+        logger.info("Wired MockBranchResolutionAdapter to event bus")
 
     def _register_board_event_bridge(self) -> None:
         """

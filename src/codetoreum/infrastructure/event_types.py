@@ -39,3 +39,8 @@ class EventTypes:
     REPAIR_CYCLE_CHECKPOINT_FAILED = "repair_cycle.checkpoint_failed"
     REPAIR_CYCLE_METRICS_BACKEND_FAILED = "repair_cycle.metrics_backend_failed"
     REPAIR_CYCLE_COMPLETED = "repair_cycle.completed"
+
+    # Branch resolution events
+    BRANCH_RESOLVED = "branch.resolved"
+    BRANCH_REUSED = "branch.reused"
+    BRANCH_CREATED = "branch.created"

@@ -3,6 +3,7 @@
 import logging
 
 from codetoreum.application.event_handlers import (
+    BranchResolutionEventHandler,
     ExecutionEventHandler,
     RepairCycleEventHandler,
     ReviewEventHandler,
@@ -14,6 +15,7 @@ from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.output import IRepairCycle
+from codetoreum.ports.output.branch_resolution_service import IBranchResolutionService
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +64,7 @@ class EventBusRegistry:
         execution_service: ExecutionService | None = None,
         review_service: ReviewService | None = None,
         repair_cycle: IRepairCycle | None = None,
+        branch_resolution_service: IBranchResolutionService | None = None,
         clock: SimulationClock | None = None,
     ) -> None:
         """
@@ -72,6 +75,7 @@ class EventBusRegistry:
             execution_service: Execution service
             review_service: Review service
             repair_cycle: Repair cycle adapter (for repair cycle automation)
+            branch_resolution_service: Branch resolution service (for branch resolution events)
             clock: Simulation clock (for repair cycle)
 
         Raises:
@@ -94,6 +98,10 @@ class EventBusRegistry:
                 self._services["repair_cycle"] = repair_cycle
                 logger.info("Registered repair cycle adapter")
 
+            if branch_resolution_service:
+                self._services["branch_resolution_service"] = branch_resolution_service
+                logger.info("Registered branch resolution service")
+
             if clock:
                 self._services["clock"] = clock
                 logger.info("Registered simulation clock")
@@ -108,6 +116,7 @@ class EventBusRegistry:
         register_execution: bool = True,
         register_review: bool = True,
         register_repair_cycle: bool = False,
+        register_branch_resolution: bool = False,
     ) -> None:
         """
         Register event handlers with the event bus.
@@ -117,6 +126,7 @@ class EventBusRegistry:
             register_execution: Register execution event handler
             register_review: Register review event handler
             register_repair_cycle: Register repair cycle event handler
+            register_branch_resolution: Register branch resolution event handler
 
         Raises:
             EventBusWiringError: If handler registration fails
@@ -133,6 +143,9 @@ class EventBusRegistry:
 
             if register_repair_cycle:
                 self._register_repair_cycle_handler()
+
+            if register_branch_resolution:
+                self._register_branch_resolution_handler()
 
             logger.info(f"Registered {len(self._handlers)} event handlers with event bus")
 
@@ -209,6 +222,17 @@ class EventBusRegistry:
 
         logger.info("Registered RepairCycleEventHandler")
 
+    def _register_branch_resolution_handler(self) -> None:
+        """Register branch resolution event handler."""
+        handler = BranchResolutionEventHandler(
+            event_bus=self.event_bus,
+        )
+
+        self.event_bus.register_handler(handler)
+        self._handlers["branch_resolution"] = handler
+
+        logger.info("Registered BranchResolutionEventHandler")
+
     def unregister_handlers(self) -> None:
         """Unregister all handlers from the event bus."""
         for handler_name, handler in self._handlers.items():
@@ -248,6 +272,7 @@ def setup_event_bus(
     execution_service: ExecutionService | None = None,
     review_service: ReviewService | None = None,
     repair_cycle: IRepairCycle | None = None,
+    branch_resolution_service: IBranchResolutionService | None = None,
     clock: SimulationClock | None = None,
     max_retries: int = 3,
     retry_delay_seconds: float = 1.0,
@@ -260,6 +285,7 @@ def setup_event_bus(
         execution_service: Execution service
         review_service: Review service
         repair_cycle: Repair cycle adapter (for repair cycle automation)
+        branch_resolution_service: Branch resolution service (for branch resolution events)
         clock: Simulation clock (for repair cycle)
         max_retries: Maximum retry attempts for failed handlers
         retry_delay_seconds: Delay between retries
@@ -277,6 +303,7 @@ def setup_event_bus(
         execution_svc = ExecutionService(...)
         review_svc = ReviewService(...)
         repair_cycle = MockRepairCycleAdapter(clock)
+        branch_resolution = MockBranchResolutionAdapter(clock)
 
         # Set up event bus
         registry = setup_event_bus(
@@ -284,6 +311,7 @@ def setup_event_bus(
             execution_service=execution_svc,
             review_service=review_svc,
             repair_cycle=repair_cycle,
+            branch_resolution_service=branch_resolution,
             clock=clock,
         )
 
@@ -302,6 +330,7 @@ def setup_event_bus(
         execution_service=execution_service,
         review_service=review_service,
         repair_cycle=repair_cycle,
+        branch_resolution_service=branch_resolution_service,
         clock=clock,
     )
 
@@ -311,6 +340,7 @@ def setup_event_bus(
         register_execution=execution_service is not None,
         register_review=review_service is not None,
         register_repair_cycle=repair_cycle is not None,
+        register_branch_resolution=branch_resolution_service is not None,
     )
 
     logger.info("Event bus setup complete")

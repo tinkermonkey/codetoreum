@@ -25,6 +25,7 @@ from codetoreum.infrastructure.event_bus_protocols import (
     IDiscussionAdapter,
     IPipelineLockService,
 )
+from codetoreum.ports.output.branch_resolution_service import IBranchResolutionService
 
 logger = logging.getLogger(__name__)
 
@@ -124,12 +125,34 @@ class EventBusWiring:
         self._wired_adapters.add("review_service")
         logger.info("Wired review service to event bus")
 
+    def wire_branch_resolution_service(self, branch_resolution_service: IBranchResolutionService) -> None:
+        """
+        Wire a branch resolution service to the event bus.
+
+        The branch resolution service should have an `on()` method for registering event handlers.
+
+        Args:
+            branch_resolution_service: Branch resolution service implementing event emission
+        """
+        if not self._has_event_method(branch_resolution_service):
+            logger.warning("Branch resolution service does not implement on() method, skipping")
+            return
+
+        # Wire branch resolution events
+        branch_resolution_service.on("branch.resolved", self._create_event_publisher())
+        branch_resolution_service.on("branch.reused", self._create_event_publisher())
+        branch_resolution_service.on("branch.created", self._create_event_publisher())
+
+        self._wired_adapters.add("branch_resolution_service")
+        logger.info("Wired branch resolution service to event bus")
+
     def wire_all_adapters(
         self,
         board_service: IBoardService | None = None,
         discussion_adapter: IDiscussionAdapter | None = None,
         lock_service: IPipelineLockService | None = None,
         review_service: ICodeReviewService | None = None,
+        branch_resolution_service: IBranchResolutionService | None = None,
     ) -> None:
         """
         Wire all provided adapters to the event bus.
@@ -139,6 +162,7 @@ class EventBusWiring:
             discussion_adapter: Discussion adapter (optional)
             lock_service: Lock service (optional)
             review_service: Code review service (optional)
+            branch_resolution_service: Branch resolution service (optional)
         """
         if board_service:
             self.wire_board_service(board_service)
@@ -151,6 +175,9 @@ class EventBusWiring:
 
         if review_service:
             self.wire_review_service(review_service)
+
+        if branch_resolution_service:
+            self.wire_branch_resolution_service(branch_resolution_service)
 
         logger.info(f"Wired {len(self._wired_adapters)} adapters to event bus")
 
@@ -218,6 +245,7 @@ def wire_adapters_to_event_bus(
     discussion_adapter: IDiscussionAdapter | None = None,
     lock_service: IPipelineLockService | None = None,
     review_service: ICodeReviewService | None = None,
+    branch_resolution_service: IBranchResolutionService | None = None,
 ) -> EventBusWiring:
     """
     Wire adapter event emitters to the central event bus.
@@ -230,6 +258,7 @@ def wire_adapters_to_event_bus(
         discussion_adapter: Discussion adapter (optional)
         lock_service: Lock service (optional)
         review_service: Code review service (optional)
+        branch_resolution_service: Branch resolution service (optional)
 
     Returns:
         EventBusWiring instance managing the wired adapters
@@ -242,12 +271,14 @@ def wire_adapters_to_event_bus(
         # Create adapters
         board_service = GitHubBoardAdapter(...)
         discussion_adapter = GitHubDiscussionAdapter(...)
+        branch_resolution = BranchResolutionAdapter(...)
 
         # Wire adapters to event bus
         wiring = wire_adapters_to_event_bus(
             event_bus,
             board_service=board_service,
-            discussion_adapter=discussion_adapter
+            discussion_adapter=discussion_adapter,
+            branch_resolution_service=branch_resolution
         )
 
         # Adapters now emit events to the event bus
@@ -259,5 +290,6 @@ def wire_adapters_to_event_bus(
         discussion_adapter=discussion_adapter,
         lock_service=lock_service,
         review_service=review_service,
+        branch_resolution_service=branch_resolution_service,
     )
     return wiring
