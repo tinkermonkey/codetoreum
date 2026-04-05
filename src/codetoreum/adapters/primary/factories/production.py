@@ -13,12 +13,13 @@ to enable intelligent branch reuse in production workflows.
 """
 
 import logging
-from typing import Any
 
 from codetoreum.adapters.secondary.branch_resolution_adapter import BranchResolutionAdapter
-from codetoreum.application.workspace_router import WorkspaceRouter
+from codetoreum.application.workspace_router import WorkspaceRouter, WorkspaceRouterConfig
 from codetoreum.ports.output.branch_resolution_service import IBranchResolutionService
+from codetoreum.ports.output.container import IContainer
 from codetoreum.ports.output.event_emitter import IEventEmitter
+from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.version_control_service import IVersionControlService
 
@@ -39,6 +40,12 @@ def create_branch_resolution_adapter(
     - [ ] BranchResolutionAdapter receives correct adapters for `ticket_system`, `version_control`, `event_emitter`
     - [ ] All required dependencies are initialized before calling this function
     - [ ] Configuration values (thresholds, cache TTL) are appropriate for production
+
+    **Production Strictness:**
+    This factory enforces strict validation that all adapters must be non-None. While the underlying
+    BranchResolutionAdapter constructor accepts these implicitly, production code should ensure all
+    dependencies are explicitly provided. This factory validates this assumption at wiring time to
+    catch configuration errors early.
 
     Args:
         ticket_system: Ticket system adapter for querying parent/sibling relationships
@@ -86,9 +93,10 @@ def create_branch_resolution_adapter(
 
 def create_workspace_router_with_branch_resolution(
     version_control: IVersionControlService,
-    container: Any,  # IContainer
-    event_store: Any,  # IEventStore
+    container: IContainer,
+    event_store: IEventStore,
     branch_resolution_service: IBranchResolutionService | None = None,
+    config: WorkspaceRouterConfig | None = None,
 ) -> WorkspaceRouter:
     """
     Create WorkspaceRouter with optional BranchResolutionAdapter for production.
@@ -99,12 +107,19 @@ def create_workspace_router_with_branch_resolution(
     - [ ] Application servers and CLI commands use the wired bootstrap
     - [ ] Existing tests for other components continue to pass
 
+    **Production Strictness:**
+    This factory enforces strict validation that version_control, container, and event_store must be
+    non-None. While WorkspaceRouter's constructor accepts optional parameters, production code should
+    ensure all critical adapters are explicitly provided. This factory validates this assumption at
+    wiring time to catch configuration errors early.
+
     Args:
         version_control: Version control service adapter (required)
         container: Container orchestration adapter (required)
         event_store: Event store for emitting events (required)
         branch_resolution_service: Optional branch resolution service for intelligent branch reuse.
                                    When None, falls back to default branch naming logic.
+        config: Optional WorkspaceRouter configuration. If not provided, defaults are used.
 
     Returns:
         Configured WorkspaceRouter instance
@@ -126,6 +141,7 @@ def create_workspace_router_with_branch_resolution(
         vcs=version_control,
         container=container,
         event_store=event_store,
+        config=config,
         branch_resolution_service=branch_resolution_service,
     )
 
