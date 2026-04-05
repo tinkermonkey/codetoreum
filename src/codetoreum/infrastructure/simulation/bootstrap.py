@@ -2024,8 +2024,9 @@ class SimulationApplicationBootstrap:
         ordering bug that must be fixed.
         """
         if not self.infrastructure or not self._engine:
-            logger.error("Cannot register branch resolution handler: components not ready")
-            return
+            error_msg = "Cannot register branch resolution handler: components not ready"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
 
         handler = self._engine.create_branch_resolution_event_handler(
             event_bus=self.infrastructure.event_bus,
@@ -2049,8 +2050,9 @@ class SimulationApplicationBootstrap:
         ordering bug that must be fixed.
         """
         if not self.adapters or not self.infrastructure:
-            logger.error("Cannot wire branch resolution adapter: components not ready")
-            return
+            error_msg = "Cannot wire branch resolution adapter: components not ready"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
 
         from codetoreum.infrastructure.event_bus_wiring import (
             wire_adapters_to_event_bus,
