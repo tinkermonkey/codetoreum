@@ -11,6 +11,8 @@ from codetoreum.domain.project_context import ProjectContext
 from codetoreum.domain.value_objects import BranchResolution
 from codetoreum.domain.work_item import WorkItem
 from codetoreum.domain.workspace_context import WorkspaceContext
+from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.ports.exceptions import ExternalServiceError
 from codetoreum.ports.output import IContainer, IEventStore
 from codetoreum.ports.output.branch_resolution_service import IBranchResolutionService
 from codetoreum.ports.output.version_control_service import IVersionControlService
@@ -127,7 +129,7 @@ class WorkspaceRouter:
         self._logger = logging.getLogger(f"{__name__}.WorkspaceRouter")
 
         # Cache for branch resolutions: work_item_id -> BranchResolution
-        # Used to pass resolution decisions from route_workspace() to prepare_workspace()
+        # Populated and consumed within prepare_workspace() by _resolve_branch_name()
         # Protected by lock for async-safety in concurrent prepare_workspace calls
         self._branch_resolutions: dict[str, BranchResolution] = {}
         # Track which work items fell back due to resolution failure
@@ -707,12 +709,28 @@ class WorkspaceRouter:
                 )
                 return resolution.branch_name
 
+            except ExternalServiceError as e:
+                # External service errors (e.g., GitHub API down) are operational errors
+                error_msg = f"Branch resolution failed: {e}"
+                self._logger.error(
+                    f"Falling back to branch generation. {error_msg}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_BRANCH_RESOLUTION_FALLBACK},
+                )
+                # Record fallback for metadata reporting in prepare_workspace() (async-safe)
+                async with self._branch_resolutions_lock:
+                    self._branch_resolution_fallbacks[work_item.id] = error_msg
+                # Fall through to generate name
+            except (TypeError, AttributeError):
+                # Programming errors should propagate, not silently fall back
+                raise
             except Exception as e:
+                # Other transient errors: log at WARNING and fall back to generation
                 error_msg = f"Branch resolution failed: {e}"
                 self._logger.warning(
                     f"Falling back to branch generation. {error_msg}",
                     exc_info=True,
-                    extra={"error_id": "ERR_BRANCH_RESOLUTION_FALLBACK"},
+                    extra={"error_id": ErrorRegistry.ERR_BRANCH_RESOLUTION_ERROR},
                 )
                 # Record fallback for metadata reporting in prepare_workspace() (async-safe)
                 async with self._branch_resolutions_lock:
