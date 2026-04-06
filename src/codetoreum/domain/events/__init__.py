@@ -26,6 +26,13 @@ from .board_events import (
     WorkItemPositionChangedEvent,
 )
 
+# Branch resolution events
+from .branch_events import (
+    BranchResolutionCreatedEvent,
+    BranchResolvedEvent,
+    BranchReusedEvent,
+)
+
 # Container execution events
 from .container_events import (
     ContainerExecutionCompletedEvent,
@@ -301,6 +308,10 @@ __all__ = [
     "WorkItemPositionChangedEvent",
     "BoardReconciledEvent",
     "ColumnSLAExceededEvent",
+    # Branch resolution events
+    "BranchResolvedEvent",
+    "BranchReusedEvent",
+    "BranchResolutionCreatedEvent",
     # Discussion events
     "Comment",
     "CommentContext",

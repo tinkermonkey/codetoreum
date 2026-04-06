@@ -4,13 +4,23 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Generic, Self, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, Literal, Self, TypeVar, get_args
 from uuid import uuid4
 
 if TYPE_CHECKING:
     from codetoreum.domain.agent import AgentCapability
 
 from codetoreum.domain.exceptions import DomainError
+
+# ============================================================================
+# Branch Resolution Strategy Constants
+# ============================================================================
+
+# Derive valid strategies from the Literal type annotation in BranchResolution
+# This ensures the constants stay synchronized with the type definition
+_RESOLUTION_STRATEGY_LITERAL = Literal["exact_match", "parent_issue", "sibling", "fuzzy", "new"]
+VALID_RESOLUTION_STRATEGIES = set(get_args(_RESOLUTION_STRATEGY_LITERAL))
+VALID_REUSE_STRATEGIES = VALID_RESOLUTION_STRATEGIES - {"new"}
 
 # ============================================================================
 # Project Configuration Value Object
@@ -583,3 +593,115 @@ class TokenUsage:
             "output_tokens": self.output_tokens,
             "total_tokens": self.total_tokens,
         }
+
+
+# ============================================================================
+# Branch Resolution Value Object
+# ============================================================================
+
+
+@dataclass(frozen=True)
+class BranchResolution:
+    """Immutable value object representing a branch resolution decision.
+
+    **IMMUTABILITY**: Frozen dataclass ensuring the resolution decision cannot
+    be modified after creation. This is a value object—it represents a decision
+    result with no lifecycle, immutable from the moment it is created.
+
+    Represents a decision about which branch to use for a work item, including
+    the action (create or reuse), the branch name, confidence level, and reasoning.
+
+    Attributes:
+        action: Literal["create", "reuse"]. Whether to create a new branch or
+               reuse an existing one.
+        branch_name: The name of the branch to use/create.
+        confidence: Float from 0.0 to 1.0 indicating confidence in the decision.
+                   1.0 = certain, 0.5 = uncertain, 0.0 = no confidence.
+        reason: Human-readable explanation of the resolution decision.
+        parent_issue_id: Optional ID of the parent issue if resolved via
+                        parent issue relationship. None if not applicable.
+        resolution_strategy: The strategy used to reach this decision.
+                           Must be one of: "exact_match", "parent_issue",
+                           "sibling", "fuzzy", "new".
+
+    Example:
+        >>> resolution = BranchResolution(
+        ...     action="reuse",
+        ...     branch_name="feature/issue-123-fix-auth",
+        ...     confidence=0.95,
+        ...     reason="Exact match found for issue #123",
+        ...     parent_issue_id=None,
+        ...     resolution_strategy="exact_match"
+        ... )
+        >>> resolution.action = "create"  # ❌ Raises FrozenInstanceError
+    """
+
+    action: Literal["create", "reuse"]
+    branch_name: str
+    confidence: float
+    reason: str
+    resolution_strategy: _RESOLUTION_STRATEGY_LITERAL
+    parent_issue_id: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate branch resolution."""
+        if not self.branch_name or not self.branch_name.strip():
+            msg = "BranchResolution.branch_name cannot be empty"
+            raise DomainError(msg)
+        if not 0.0 <= self.confidence <= 1.0:
+            msg = "BranchResolution.confidence must be between 0.0 and 1.0"
+            raise DomainError(msg)
+        if not self.reason or not self.reason.strip():
+            msg = "BranchResolution.reason cannot be empty"
+            raise DomainError(msg)
+        if self.resolution_strategy not in VALID_RESOLUTION_STRATEGIES:
+            msg = f"BranchResolution.resolution_strategy must be one of {VALID_RESOLUTION_STRATEGIES}, got {self.resolution_strategy}"
+            raise DomainError(msg)
+        # Cross-field validation: action and resolution_strategy must be compatible
+        if self.action == "create" and self.resolution_strategy != "new":
+            msg = f"BranchResolution: action='create' requires resolution_strategy='new', got '{self.resolution_strategy}'"
+            raise DomainError(msg)
+        if self.action == "reuse" and self.resolution_strategy == "new":
+            msg = "BranchResolution: action='reuse' cannot use resolution_strategy='new'"
+            raise DomainError(msg)
+        # Cross-field validation: parent_issue strategy requires parent_issue_id
+        if self.resolution_strategy == "parent_issue" and self.parent_issue_id is None:
+            msg = "BranchResolution: resolution_strategy='parent_issue' requires parent_issue_id to be set"
+            raise DomainError(msg)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "action": self.action,
+            "branch_name": self.branch_name,
+            "confidence": self.confidence,
+            "reason": self.reason,
+            "parent_issue_id": self.parent_issue_id,
+            "resolution_strategy": self.resolution_strategy,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "BranchResolution":
+        """Create from dictionary for deserialization.
+
+        Args:
+            data: Dictionary with resolution fields.
+
+        Returns:
+            BranchResolution instance.
+
+        Raises:
+            ValueError: If required fields are missing or invalid.
+        """
+        try:
+            return cls(
+                action=data["action"],
+                branch_name=data["branch_name"],
+                confidence=data["confidence"],
+                reason=data["reason"],
+                resolution_strategy=data["resolution_strategy"],
+                parent_issue_id=data.get("parent_issue_id"),
+            )
+        except KeyError as e:
+            msg = f"Missing required field: {e}"
+            raise ValueError(msg) from e

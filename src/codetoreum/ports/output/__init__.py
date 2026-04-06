@@ -13,6 +13,7 @@ from codetoreum.ports.output.board_service import (
     ReconciliationResult,
     WorkItemPosition,
 )
+from codetoreum.ports.output.branch_resolution_service import IBranchResolutionService
 from codetoreum.ports.output.code_review_service import (
     Approval,
     CodeReview,
@@ -123,6 +124,8 @@ from codetoreum.ports.output.workflow_config_service import IWorkflowConfigServi
 __all__ = [
     # Agent Executor
     "IAgentExecutor",
+    # Branch Resolution Service
+    "IBranchResolutionService",
     # Container Recovery Service
     "IAgentContainerRecoveryService",
     "ContainerMetadata",

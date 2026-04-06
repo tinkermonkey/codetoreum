@@ -30,7 +30,10 @@ if TYPE_CHECKING:
     from codetoreum.adapters.testing.mock_review_cycle_adapter import (
         MockReviewCycleAdapter,
     )
-    from codetoreum.application.event_handlers import RepairCycleEventHandler
+    from codetoreum.application.event_handlers import (
+        BranchResolutionEventHandler,
+        RepairCycleEventHandler,
+    )
     from codetoreum.ports.output.container import IContainer
     from codetoreum.ports.output.llm_provider import ILLMProvider
     from codetoreum.ports.output.repair_cycle_checkpoint_store import (
@@ -366,6 +369,25 @@ class SimulationEngine:
             event_bus=event_bus,
         )
         logger.debug("Created RepairCycleEventHandler via SimulationEngine")
+        return handler
+
+    def create_branch_resolution_event_handler(
+        self,
+        event_bus: object,
+    ) -> "BranchResolutionEventHandler":
+        """
+        Create branch resolution event handler for audit trail.
+
+        Args:
+            event_bus: EventBus instance
+
+        Returns:
+            BranchResolutionEventHandler instance
+        """
+        from codetoreum.application.event_handlers import BranchResolutionEventHandler
+
+        handler = BranchResolutionEventHandler(event_bus=event_bus)
+        logger.debug("Created BranchResolutionEventHandler via SimulationEngine")
         return handler
 
     # =========================================================================

@@ -772,6 +772,7 @@ class AdapterResolver:
             run_registry=self._resolved["run_registry"],
             branch_tracker=self._resolved["branch_tracker"],
             work_item_service=self._resolved["work_item_service"],
+            branch_resolution_service=self._resolved.get("branch_resolution_service"),  # Created in bootstrap post-processing
             # Container recovery
             container_recovery=self._resolved["container_recovery"],
             # Systemic analysis service (resolved in phase 9)

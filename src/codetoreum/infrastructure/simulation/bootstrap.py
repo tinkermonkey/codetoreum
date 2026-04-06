@@ -102,6 +102,7 @@ from codetoreum.adapters.testing import (
     InMemoryWorkflowConfigService,
     InMemoryWorkItemBranchTracker,
     MockBoardAdapter,
+    MockBranchResolutionAdapter,
     MockDiscussionAdapter,
     MockLLMAdapter,
     MockProjectManagerAdapter,
@@ -205,6 +206,7 @@ from codetoreum.ports.output.active_workflow_run_registry import (
 from codetoreum.ports.output.agent_executor import IAgentExecutor
 from codetoreum.ports.output.agent_repository import IAgentRepository
 from codetoreum.ports.output.board_service import IBoardService
+from codetoreum.ports.output.branch_resolution_service import IBranchResolutionService
 from codetoreum.ports.output.code_review_service import ICodeReviewService
 from codetoreum.ports.output.config_store import IConfigStore
 from codetoreum.ports.output.container import IContainer
@@ -358,6 +360,7 @@ class SimulationAdapters:
     environment_repair_service: IEnvironmentRepairService
 
     # Fields with defaults (must come after fields without defaults)
+    branch_resolution_service: IBranchResolutionService | None = None
     agent_executor: IAgentExecutor | None = None
     tracer: ITracer | None = None
 
@@ -582,6 +585,23 @@ class SimulationAdapters:
             msg = f"work_item_service is {type(self.work_item_service).__name__}, not MockWorkItemService"
             raise TypeError(msg)
         return cast("MockWorkItemService", self.work_item_service)
+
+    def branch_resolution_as_mock(self) -> "MockBranchResolutionAdapter":
+        """Get branch resolution service as MockBranchResolutionAdapter.
+
+        Raises TypeError if branch_resolution_service is not MockBranchResolutionAdapter.
+        """
+        from codetoreum.adapters.testing.mock_branch_resolution_adapter import (
+            MockBranchResolutionAdapter,
+        )
+
+        if self.branch_resolution_service is None:
+            msg = "branch_resolution_service is None, expected MockBranchResolutionAdapter"
+            raise TypeError(msg)
+        if not isinstance(self.branch_resolution_service, MockBranchResolutionAdapter):
+            msg = f"branch_resolution_service is {type(self.branch_resolution_service).__name__}, not MockBranchResolutionAdapter"
+            raise TypeError(msg)
+        return cast("MockBranchResolutionAdapter", self.branch_resolution_service)
 
     def storage_as_memory(self) -> InMemoryStorageAdapter:
         """Get storage as InMemoryStorageAdapter.
@@ -1282,10 +1302,15 @@ class SimulationApplicationBootstrap:
             resolved.repair_cycle.systemic_analysis_service = resolved.systemic_analysis_service
             resolved.repair_cycle.environment_repair_service = resolved.environment_repair_service
 
+        # Create branch resolution adapter (mock adapter for simulation testing)
+        resolved.branch_resolution_service = MockBranchResolutionAdapter(
+            clock=self._engine.get_clock_for_testing()
+        )
+
         # Create audit store (not provided by resolver)
         audit_store = InMemoryAuditStore()
 
-        logger.info("Created 30 simulation adapters (all via AdapterResolver)")
+        logger.info("Created 31 simulation adapters (30 via AdapterResolver + branch_resolution_service)")
 
         # Update audit_store in resolved adapters
         resolved.audit_store = audit_store
@@ -1578,6 +1603,7 @@ class SimulationApplicationBootstrap:
             vcs=self.adapters.version_control,
             container=self.adapters.container,
             event_store=self.adapters.event_store,
+            branch_resolution_service=self.adapters.branch_resolution_service,
         )
 
         # Phase 3a: Create AgentExecutionRecoveryService
@@ -1945,6 +1971,14 @@ class SimulationApplicationBootstrap:
         # and invoke the repair cycle when items enter the configured repair cycle stage
         self._register_repair_cycle_handler()
 
+        # Register branch resolution event handler with event bus
+        # This handler logs branch resolution events with structured fields for audit trail
+        self._register_branch_resolution_handler()
+
+        # Wire branch resolution adapter to event bus
+        # This allows the adapter to emit events that are persisted to the event store
+        self._wire_branch_resolution_adapter()
+
         return app
 
     def _register_repair_cycle_handler(self) -> None:
@@ -1976,6 +2010,65 @@ class SimulationApplicationBootstrap:
         self.infrastructure.event_bus.register_handler(handler)
         logger.info("Registered RepairCycleEventHandler with event bus")
 
+    def _register_branch_resolution_handler(self) -> None:
+        """
+        Register branch resolution event handler with the event bus.
+
+        Part of Phase 5: Event handler registration for cross-cutting concerns.
+
+        This handler subscribes to all branch resolution events (BranchResolvedEvent,
+        BranchReusedEvent, BranchCreatedEvent) and logs them with structured fields
+        for complete audit trail and metrics tracking.
+
+        Raises RuntimeError if components are not yet initialized, indicating a bootstrap
+        ordering bug that must be fixed.
+        """
+        if not self.infrastructure or not self._engine:
+            error_msg = "Cannot register branch resolution handler: components not ready"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+
+        handler = self._engine.create_branch_resolution_event_handler(
+            event_bus=self.infrastructure.event_bus,
+        )
+
+        self.infrastructure.event_bus.register_handler(handler)
+        logger.info("Registered BranchResolutionEventHandler with event bus")
+
+    def _wire_branch_resolution_adapter(self) -> None:
+        """
+        Wire branch resolution adapter to the central event bus.
+
+        Part of Phase 5: Adapter wiring for event emission.
+
+        The MockBranchResolutionAdapter emits CodetoreumEvent objects that need
+        to be published to the central event bus for event sourcing and audit trail.
+        This method registers event handlers on the adapter that publish events
+        to the event bus via async tasks, ensuring failures are logged and tracked.
+
+        Raises RuntimeError if components are not yet initialized, indicating a bootstrap
+        ordering bug that must be fixed.
+        """
+        if not self.adapters or not self.infrastructure:
+            error_msg = "Cannot wire branch resolution adapter: components not ready"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+
+        from codetoreum.infrastructure.event_bus_wiring import (
+            wire_adapters_to_event_bus,
+        )
+
+        event_bus = self.infrastructure.event_bus
+        branch_resolution = self.adapters.branch_resolution_service
+
+        # Wire the branch resolution adapter to publish its events to the event bus
+        wire_adapters_to_event_bus(
+            event_bus=event_bus,
+            branch_resolution_service=branch_resolution,
+        )
+
+        logger.info("Wired MockBranchResolutionAdapter to event bus")
+
     def _register_board_event_bridge(self) -> None:
         """
         Bridge board adapter events to the central EventBus.
@@ -1987,10 +2080,14 @@ class SimulationApplicationBootstrap:
         CRITICAL: Event publishing is awaited (not fire-and-forget) to ensure failures
         are captured by the dead letter queue. Silent failures would disable automation
         for affected work items. See issue #371.
+
+        Raises RuntimeError if components are not yet initialized, indicating a bootstrap
+        ordering bug that must be fixed.
         """
         if not self.adapters or not self.infrastructure:
-            logger.warning("Cannot register board event bridge: components not ready")
-            return
+            error_msg = "Cannot register board event bridge: components not ready"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
 
         event_bus = self.infrastructure.event_bus
         ticket_adapter = self.adapters.ticket_system
