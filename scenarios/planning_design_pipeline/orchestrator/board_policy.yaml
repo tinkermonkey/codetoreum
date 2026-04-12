@@ -1,0 +1,76 @@
+# Planning & Design Pipeline Scenario — Orchestrator: Board Column Policy
+#
+# Port/Interface: IWorkflowConfigService
+# Adapter (sim): InMemoryWorkflowConfigService
+#
+# Derived from Switchyard benchmark run 6a5ddb21 (documentation_robotics #591,
+# 2026-04-08).
+#
+# Board layout:
+#   Backlog (manual)
+#   → Research (automated, PIPELINE TRIGGER, idea_researcher, conversational)
+#   → Requirements (automated, business_analyst, conversational, on_failure → Research)
+#   → Design (automated, software_architect, conversational, on_failure → Research)
+#   → Work Breakdown (automated, work_breakdown_agent, task_queue, on_failure → Backlog)
+#   → In Development (manual, EXIT — lock released here)
+#
+# SLA values derived from benchmark timings with 2x buffer:
+#   Research:       322s × 2 → 600s
+#   Requirements:   277s × 2 → 480s
+#   Design:         248s × 2 → 420s
+#   Work Breakdown:  91s × 2 → 180s
+
+board_policies:
+  - board_id: "planning-board-1"
+    column_configs:
+      - name: "Backlog"
+        type: "manual"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: false
+
+      - name: "Research"
+        type: "automated"
+        agent_id: "idea_researcher"
+        execution_type: "conversational"
+        is_pipeline_trigger: true
+        is_exit_column: false
+        auto_progress_on_completion: true
+        on_failure_column: "Backlog"
+        sla_seconds: 600
+
+      - name: "Requirements"
+        type: "automated"
+        agent_id: "business_analyst"
+        execution_type: "conversational"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: true
+        on_failure_column: "Research"
+        sla_seconds: 480
+
+      - name: "Design"
+        type: "automated"
+        agent_id: "software_architect"
+        execution_type: "conversational"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: true
+        on_failure_column: "Research"
+        sla_seconds: 420
+
+      - name: "Work Breakdown"
+        type: "automated"
+        agent_id: "work_breakdown_agent"
+        execution_type: "task_queue"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: true
+        on_failure_column: "Backlog"
+        sla_seconds: 180
+
+      - name: "In Development"
+        type: "manual"
+        is_pipeline_trigger: false
+        is_exit_column: true
+        auto_progress_on_completion: false

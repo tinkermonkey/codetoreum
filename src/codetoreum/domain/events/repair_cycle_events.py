@@ -1254,6 +1254,13 @@ class RepairCycleCompletedEvent(CodetoreumEvent):
         duration_seconds (float): Total time spent on entire repair cycle
         workflow_run_id (str): ID of the workflow run
         timestamp (str): ISO 8601 timestamp when repair cycle completed
+        commit_history (Tuple[str, ...]): Ordered git commit SHAs produced during
+            the cycle, one per sub-task execution that made file changes.
+        work_item_id (str): ID of the work item being repaired. Defaults to
+            empty string for backward compatibility; falls back to workflow_run_id
+            when not explicitly set by the emitter.
+        board_id (str): ID of the board the work item belongs to. Defaults to
+            empty string for backward compatibility.
     """
 
     overall_success: bool = False
@@ -1261,6 +1268,9 @@ class RepairCycleCompletedEvent(CodetoreumEvent):
     total_agent_calls: int = 0
     duration_seconds: float = 0.0
     workflow_run_id: str = ""
+    commit_history: tuple[str, ...] = ()
+    work_item_id: str = ""
+    board_id: str = ""
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""
@@ -1299,6 +1309,9 @@ class RepairCycleCompletedEvent(CodetoreumEvent):
                 "total_agent_calls": self.total_agent_calls,
                 "duration_seconds": self.duration_seconds,
                 "workflow_run_id": self.workflow_run_id,
+                "commit_history": list(self.commit_history),
+                "work_item_id": self.work_item_id,
+                "board_id": self.board_id,
             }
         )
         return d
@@ -1377,6 +1390,9 @@ class RepairCycleCompletedEvent(CodetoreumEvent):
             total_agent_calls=data.get("total_agent_calls", 0),
             duration_seconds=data.get("duration_seconds", 0.0),
             workflow_run_id=workflow_run_id,
+            commit_history=tuple(data.get("commit_history", [])),
+            work_item_id=data.get("work_item_id", ""),
+            board_id=data.get("board_id", ""),
         )
 
 

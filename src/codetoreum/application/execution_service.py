@@ -10,7 +10,7 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any, cast
 
-from codetoreum.domain.agent import Agent
+from codetoreum.domain.agent import Agent, CommitPolicy
 from codetoreum.domain.agent_execution import AgentExecution, ExecutionStatus
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.types import (
@@ -41,6 +41,7 @@ from codetoreum.ports.exceptions import (
 )
 from codetoreum.ports.output import IContainer, IEventStore, ILLMProvider, IStorage
 from codetoreum.ports.output.llm_provider import ExecutionContext as LLMExecutionContext
+from codetoreum.ports.output.version_control_service import IVersionControlService
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +76,8 @@ class ExecutionServiceResult:
     reason: str | None = None
     error: str | None = None
     failure_reason: ExecutionFailureReason | None = None
+    commit_sha: str | None = None  # Git commit SHA produced; None if no file changes
+    branch: str | None = None  # Branch pushed; None if no commit was made
 
 
 @dataclass
@@ -107,6 +110,7 @@ class ExecutionService:
         storage: IStorage,
         max_retries: int = 3,
         retry_delay_seconds: float = 5,
+        vcs: IVersionControlService | None = None,
     ):
         """
         Initialize ExecutionService.
@@ -118,6 +122,8 @@ class ExecutionService:
             storage: Storage adapter for artifacts
             max_retries: Maximum number of retry attempts
             retry_delay_seconds: Delay between retry attempts
+            vcs: Version control service for post-execution commit+push.
+                 When None the commit step is skipped (e.g. simulation without VCS).
         """
         self.llm_provider = llm_provider
         self.container = container
@@ -125,6 +131,7 @@ class ExecutionService:
         self.storage = storage
         self.max_retries = max_retries
         self.retry_delay_seconds = retry_delay_seconds
+        self.vcs = vcs
 
         # Track active executions for streaming
         self._active_executions: dict[str, AgentExecution] = {}
@@ -435,6 +442,68 @@ class ExecutionService:
         }
         return labels
 
+    async def _commit_workspace(
+        self,
+        context: ExecutionContext,
+        execution: AgentExecution,
+    ) -> tuple[str | None, str | None]:
+        """Commit and push workspace changes after a successful container execution.
+
+        Called synchronously inside execute_with_container() before
+        execution.complete() so that the ExecutionCompleted event carries the
+        commit SHA and downstream handlers (workflow progression, PR creation)
+        see committed code.
+
+        Returns:
+            (commit_sha, branch) — both None when no commit is needed or possible.
+        """
+        if self.vcs is None:
+            return None, None
+        if context.commit_policy == CommitPolicy.NONE:
+            return None, None
+        if not context.can_make_commits:
+            return None, None
+        if not context.repository_path:
+            return None, None
+
+        branch = context.branch_name
+        if not branch:
+            return None, None
+
+        try:
+            vcs_status = await self.vcs.status(context.repository_path)
+            has_changes = vcs_status.is_dirty or bool(vcs_status.staged_files) or bool(vcs_status.unstaged_files)
+            if not has_changes:
+                logger.info(
+                    f"No workspace changes to commit for execution {execution.id}",
+                    extra={"work_item_id": context.work_item_id, "agent_id": context.agent_id},
+                )
+                return None, None
+
+            commit_message = (
+                f"[{context.work_item_id}] {context.stage_name}: agent {context.agent_id}\n\n"
+                f"Co-Authored-By: Codetoreum <noreply@codetoreum.ai>"
+            )
+            commit_sha = await self.vcs.commit(
+                context.repository_path,
+                message=commit_message,
+                author_name="Codetoreum",
+                author_email="noreply@codetoreum.ai",
+            )
+            await self.vcs.push(context.repository_path, branch)
+            logger.info(
+                f"Committed workspace for execution {execution.id}: {commit_sha} → {branch}",
+                extra={"work_item_id": context.work_item_id, "commit_sha": commit_sha, "branch": branch},
+            )
+            return commit_sha, branch
+        except Exception:
+            logger.error(
+                f"Failed to commit workspace for execution {execution.id}",
+                exc_info=True,
+                extra={"error_id": "ERR_EXECUTION_COMMIT_FAILURE", "work_item_id": context.work_item_id},
+            )
+            raise
+
     @instrument_async_function(
         name="execution.execute_with_container",
         attributes={"service": "execution_service", "operation": "execute_container"},
@@ -498,11 +567,27 @@ class ExecutionService:
             input_tokens, output_tokens = self._extract_token_usage(logs)
 
             if exit_code == 0:
-                # Complete execution successfully
+                # Commit workspace changes before firing ExecutionCompleted so that
+                # the event carries the commit SHA and downstream handlers (workflow
+                # progression, PR creation) see committed code.  A transient VCS
+                # failure must not orphan the execution in RUNNING state — degrade
+                # gracefully with commit_sha=None so the execution still completes.
+                commit_sha, branch = None, None
+                try:
+                    commit_sha, branch = await self._commit_workspace(context, execution)
+                except Exception:
+                    logger.error(
+                        f"Commit failed for execution {execution.id}, completing without commit SHA",
+                        exc_info=True,
+                        extra={"error_id": "ERR_EXECUTION_COMMIT_FAILURE", "work_item_id": context.work_item_id},
+                    )
+
                 execution.complete(
                     output=logs,
                     input_tokens=input_tokens,
                     output_tokens=output_tokens,
+                    commit_sha=commit_sha,
+                    branch=branch,
                 )
 
                 # Persist events
@@ -517,8 +602,26 @@ class ExecutionService:
                     success=True,
                     execution=execution,
                     reason="Container execution completed",
+                    commit_sha=commit_sha,
+                    branch=branch,
                 )
-            # Execution failed
+            # Execution failed — commit partial progress for ALWAYS policy agents
+            # so that incremental work is not lost even when the container exits non-zero.
+            failure_commit_sha, failure_branch = None, None
+            if context.commit_policy == CommitPolicy.ALWAYS:
+                try:
+                    failure_commit_sha, failure_branch = await self._commit_workspace(context, execution)
+                except Exception:
+                    logger.warning(
+                        f"Partial commit failed for execution {execution.id} (ALWAYS policy), "
+                        "proceeding with failure result",
+                        exc_info=True,
+                        extra={
+                            "error_id": "ERR_EXECUTION_COMMIT_PARTIAL_FAILURE",
+                            "work_item_id": context.work_item_id,
+                        },
+                    )
+
             error_message = f"Container exited with code {exit_code}"
             execution.fail(error_message=error_message, exit_code=exit_code)
 
@@ -538,6 +641,8 @@ class ExecutionService:
                 execution=execution,
                 error=error_message,
                 failure_reason=ExecutionFailureReason.CONTAINER_ERROR,
+                commit_sha=failure_commit_sha,
+                branch=failure_branch,
             )
 
         except ContainerTimeoutError as e:

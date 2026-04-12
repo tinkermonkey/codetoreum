@@ -40,17 +40,21 @@ class TestRepairTestType:
 
     def test_enum_values(self):
         """Test that all required test types exist."""
+        assert RepairTestType.COMPILATION.value == "COMPILATION"
         assert RepairTestType.UNIT.value == "UNIT"
         assert RepairTestType.INTEGRATION.value == "INTEGRATION"
+        assert RepairTestType.CI.value == "CI"
         assert RepairTestType.E2E.value == "E2E"
 
     def test_enum_ordering(self):
-        """Test execution order is UNIT → INTEGRATION → E2E."""
+        """Test execution order is COMPILATION → UNIT → INTEGRATION → CI → E2E."""
         types = list(RepairTestType)
-        assert len(types) == 3
-        assert types[0] == RepairTestType.UNIT
-        assert types[1] == RepairTestType.INTEGRATION
-        assert types[2] == RepairTestType.E2E
+        assert len(types) == 5
+        assert types[0] == RepairTestType.COMPILATION
+        assert types[1] == RepairTestType.UNIT
+        assert types[2] == RepairTestType.INTEGRATION
+        assert types[3] == RepairTestType.CI
+        assert types[4] == RepairTestType.E2E
 
     def test_enum_comparison(self):
         """Test enum equality."""

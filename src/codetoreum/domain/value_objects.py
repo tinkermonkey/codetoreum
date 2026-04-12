@@ -3,6 +3,7 @@
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from enum import Enum
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Generic, Literal, Self, TypeVar, get_args
 from uuid import uuid4
@@ -11,6 +12,23 @@ if TYPE_CHECKING:
     from codetoreum.domain.agent import AgentCapability
 
 from codetoreum.domain.exceptions import DomainError
+
+
+class CommitPolicy(Enum):
+    """Declares what an agent does with file changes it produces.
+
+    NONE       – analysis/comment-only agents (code_reviewer, systemic_analysis).
+                 ExecutionService skips the commit step entirely.
+    ON_SUCCESS – code-producing agents (senior_software_engineer, qa_engineer, devops).
+                 Commit + push only when the container exits 0.
+    ALWAYS     – partial-progress agents that should checkpoint even on failure
+                 (e.g. a repair-cycle code_fix that commits partial work before retrying).
+    """
+
+    NONE = "none"
+    ON_SUCCESS = "on_success"
+    ALWAYS = "always"
+
 
 # ============================================================================
 # Branch Resolution Strategy Constants
@@ -477,6 +495,13 @@ class ExecutionContext:
 
     # MCP servers - immutable tuple instead of mutable list
     mcp_servers: tuple[str, ...] = ()
+
+    # Commit behaviour — derived from Agent.commit_policy at context build time
+    commit_policy: CommitPolicy = CommitPolicy.ON_SUCCESS
+
+    # Local repository checkout path — set by workspace preparation; used by
+    # ExecutionService to run vcs.status/commit/push after the container exits
+    repository_path: str | None = None
 
     # Session continuity
     previous_session_id: str | None = None

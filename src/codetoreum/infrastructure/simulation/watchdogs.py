@@ -927,12 +927,12 @@ class ColumnProgressionWatchdog:
                         "ColumnProgressionWatchdog: progressing item %s from '%s' to '%s' (clock-driven)",
                         item.work_item_id,
                         item.column_name,
-                        next_column.name,
+                        next_column,
                     )
 
                     await self._board_service.move_item_to_column(
                         work_item_id=item.work_item_id,
-                        target_column=next_column.name,
+                        target_column=next_column,
                         moved_by=MovedByType.ORCHESTRATOR,
                     )
 

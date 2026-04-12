@@ -1,7 +1,14 @@
-# External data: Projects for dev_environment_repair scenario
+# Dev Environment Repair Scenario — External: Projects
 #
-# Represents a development project with environment that may need repair
+# Port/Interface: ITicketSystem, IVersionControlService
+# Adapter (sim): InMemoryTicketAdapter, InMemoryVersionControlAdapter
+# Skipped when using real adapters (project already exists in GitHub/Jira/etc.)
 
 projects:
   - name: "dev_environment_repair_project"
     description: "Project for testing development environment repair workflows"
+    repository_url: "https://github.com/demo-org/dev-env-repair-demo.git"
+    default_branch: "main"
+    metadata:
+      stack: "Python + Docker"
+      team: "platform-engineering"

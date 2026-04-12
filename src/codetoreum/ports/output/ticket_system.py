@@ -46,6 +46,7 @@ class ITicketSystem(ABC):
         assignee: UserId | None = None,
         priority: WorkItemPriority | None = None,
         metadata: dict[str, Any] | None = None,
+        parent_issue_id: str | None = None,
     ) -> WorkItem:
         """
         Create a new work item.
@@ -58,6 +59,7 @@ class ITicketSystem(ABC):
             assignee: Optional assignee user ID
             priority: Optional priority level
             metadata: Optional additional metadata
+            parent_issue_id: Optional parent issue ID for sub-issue creation
 
         Returns:
             WorkItem: Newly created work item
@@ -65,6 +67,22 @@ class ITicketSystem(ABC):
         Raises:
             ValidationError: Invalid input data
             ProjectNotFoundError: Project doesn't exist
+            ExternalServiceError: Service communication failure
+        """
+
+    @abstractmethod
+    async def get_child_issues(self, parent_id: WorkItemId) -> list[WorkItem]:
+        """
+        Retrieve all child work items for a given parent.
+
+        Args:
+            parent_id: ID of the parent work item
+
+        Returns:
+            list[WorkItem]: Child work items (empty list if none exist)
+
+        Raises:
+            WorkItemNotFoundError: Parent work item doesn't exist
             ExternalServiceError: Service communication failure
         """
 

@@ -8,10 +8,12 @@ from codetoreum.application.event_handlers.repair_cycle_event_handler import (
     RepairCycleEventContext,
     RepairCycleEventHandler,
 )
+from codetoreum.domain.board_workflow_template import BoardWorkflowTemplate, ColumnTemplate, ColumnType
 from codetoreum.domain.events import WorkItemColumnChanged
 from codetoreum.domain.repair_cycle_types import (
     CycleResult,
     EnvironmentRepairConfig,
+    RepairCycleAgentConfig,
     RepairCycleResult,
     RepairCycleStageConfig,
     RepairTestResult,
@@ -138,22 +140,54 @@ def simulation_clock():
 
 
 @pytest.fixture
-def handler(repair_cycle_adapter, event_bus):
-    """Create a repair cycle event handler."""
+def workflow_config():
+    """Create a mock IWorkflowConfigService that returns a Testing column with repair_cycle_agents."""
+    testing_column = ColumnTemplate(
+        name="Testing",
+        type=ColumnType.AUTOMATED,
+        agent_id="test_agent",
+        is_pipeline_trigger=False,
+        is_exit_column=False,
+        position=0,
+        auto_progress_on_completion=True,
+        repair_cycle_agents=RepairCycleAgentConfig(),
+    )
+    template = BoardWorkflowTemplate(
+        id="template-1",
+        name="Test Template",
+        board_id="board-1",
+        project_id="proj-1",
+        columns=(testing_column,),
+    )
+
+    async def _get_template(board_id: str) -> BoardWorkflowTemplate | None:
+        # Return a template for any non-empty board_id so tests can exercise the repair cycle path
+        return template if board_id else None
+
+    mock_config = AsyncMock(spec=IWorkflowConfigService)
+    mock_config.get_board_workflow_template.side_effect = _get_template
+    return mock_config
+
+
+@pytest.fixture
+def handler(repair_cycle_adapter, event_bus, workflow_config):
+    """Create a repair cycle event handler with workflow_config for Testing column."""
     return RepairCycleEventHandler(
         repair_cycle=repair_cycle_adapter,
         clock=None,
         event_bus=event_bus,
+        workflow_config=workflow_config,
     )
 
 
 @pytest.fixture
-def handler_with_clock(repair_cycle_adapter, event_bus, simulation_clock):
-    """Create a repair cycle event handler with clock."""
+def handler_with_clock(repair_cycle_adapter, event_bus, simulation_clock, workflow_config):
+    """Create a repair cycle event handler with clock and workflow_config."""
     return RepairCycleEventHandler(
         repair_cycle=repair_cycle_adapter,
         clock=simulation_clock,
         event_bus=event_bus,
+        workflow_config=workflow_config,
     )
 
 
@@ -608,17 +642,25 @@ class TestRepairCycleEventContext:
 class TestAgentConfigExtraction:
     """Tests for agent config extraction from workflow template.
 
-    These tests exercise the 4-level conditional chain in handle_column_change:
-    Level 1: workflow_config is not None
-    Level 2: template is not None
-    Level 3: column is not None
-    Level 4: column.repair_cycle_agents is not None
+    These tests exercise the conditional chain in handle_column_change:
+    - When workflow_config is not provided: handler returns early (no repair cycle)
+    - When workflow_config returns None template: handler returns early
+    - When template has column without repair_cycle_agents: handler returns early
+    - When template has column with repair_cycle_agents: repair cycle executes
     """
 
     @pytest.fixture
     def workflow_config_service(self):
         """Create a mock workflow config service."""
         return AsyncMock(spec=IWorkflowConfigService)
+
+    @pytest.fixture
+    def handler_no_workflow_config(self, repair_cycle_adapter, event_bus):
+        """Create a repair cycle event handler WITHOUT workflow config service."""
+        return RepairCycleEventHandler(
+            repair_cycle=repair_cycle_adapter,
+            event_bus=event_bus,
+        )
 
     @pytest.fixture
     def handler_with_workflow_config(self, repair_cycle_adapter, event_bus, workflow_config_service):
@@ -630,8 +672,10 @@ class TestAgentConfigExtraction:
         )
 
     @pytest.mark.asyncio
-    async def test_no_workflow_config_service_uses_default_agent(self, handler, repair_cycle_adapter, caplog):
-        """Test when workflow_config is None, uses default agent."""
+    async def test_no_workflow_config_service_skips_repair_cycle(
+        self, handler_no_workflow_config, repair_cycle_adapter, caplog
+    ):
+        """Test when workflow_config is None, repair cycle is not executed."""
         import logging
 
         caplog.set_level(logging.DEBUG)
@@ -648,12 +692,11 @@ class TestAgentConfigExtraction:
             },
         )
 
-        await handler.handle_column_change(event)
+        await handler_no_workflow_config.handle_column_change(event)
 
-        # Context should have agent_config=None
-        assert repair_cycle_adapter.last_context.agent_config is None
-        # Should log that workflow_config is not provided
-        assert "workflow config service not provided" in caplog.text.lower()
+        # Without workflow_config the handler cannot determine if the column
+        # triggers a repair cycle, so it returns early without executing.
+        assert not repair_cycle_adapter.executed
 
     @pytest.mark.asyncio
     async def test_no_template_for_board_uses_default_agent(
@@ -679,10 +722,8 @@ class TestAgentConfigExtraction:
 
         await handler_with_workflow_config.handle_column_change(event)
 
-        # Context should have agent_config=None
-        assert repair_cycle_adapter.last_context.agent_config is None
-        # Should log that no template was found
-        assert "no workflow template configured for board" in caplog.text.lower()
+        # When template is None, handler returns early without executing the repair cycle
+        assert not repair_cycle_adapter.executed
 
     @pytest.mark.asyncio
     async def test_column_not_found_in_template_uses_default_agent(
@@ -729,10 +770,8 @@ class TestAgentConfigExtraction:
 
         await handler_with_workflow_config.handle_column_change(event)
 
-        # Context should have agent_config=None
-        assert repair_cycle_adapter.last_context.agent_config is None
-        # Should log warning that column not found
-        assert "column 'testing' not found" in caplog.text.lower()
+        # When column is not found in template, handler returns early without executing
+        assert not repair_cycle_adapter.executed
 
     @pytest.mark.asyncio
     async def test_column_found_but_no_repair_cycle_agents_uses_default_agent(
@@ -780,10 +819,8 @@ class TestAgentConfigExtraction:
 
         await handler_with_workflow_config.handle_column_change(event)
 
-        # Context should have agent_config=None
-        assert repair_cycle_adapter.last_context.agent_config is None
-        # Should log debug message about no repair_cycle_agents
-        assert "has no repair_cycle_agents configured" in caplog.text.lower()
+        # When column has no repair_cycle_agents, handler returns early without executing
+        assert not repair_cycle_adapter.executed
 
     @pytest.mark.asyncio
     async def test_specialized_repair_cycle_agents_extracted(

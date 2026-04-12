@@ -28,6 +28,7 @@ class ExecutionContextBuilder:
         workspace: WorkspaceContext,
         previous_session_id: str | None = None,
         additional_metadata: dict[str, Any] | None = None,
+        repository_path: str | None = None,
     ) -> ExecutionContext:
         """
         Build complete execution context from components.
@@ -41,6 +42,9 @@ class ExecutionContextBuilder:
             workspace: Workspace routing context
             previous_session_id: Previous session ID for continuity (optional)
             additional_metadata: Additional metadata to include (optional)
+            repository_path: Local path to the checked-out repository (optional).
+                Set by the executor after workspace preparation so that
+                ExecutionService can commit without re-querying the workspace router.
 
         Returns:
             Complete execution context
@@ -88,6 +92,8 @@ class ExecutionContextBuilder:
             can_make_commits=can_make_commits,
             requires_docker=agent.requires_docker,
             mcp_servers=tuple(ExecutionContextBuilder._merge_mcp_servers(agent, project)),
+            commit_policy=agent.commit_policy,
+            repository_path=repository_path,
             previous_session_id=previous_session_id,
             metadata=metadata,
         )

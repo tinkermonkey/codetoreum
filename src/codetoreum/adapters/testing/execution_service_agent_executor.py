@@ -388,7 +388,8 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 await self._call_completion(work_item_id, board_id, False)
                 return
 
-            # Step 7: Build execution context
+            # Step 7: Build execution context — pass repo_path so ExecutionService
+            # can commit the workspace without re-querying WorkspaceRouter.
             context = ExecutionContextBuilder.build_context(
                 work_item=work_item,
                 workflow_id=run_info.run_id,
@@ -396,6 +397,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 agent=agent,
                 project=project_context,
                 workspace=workspace,
+                repository_path=repo_path,
             )
 
             # Step 8: Create execution

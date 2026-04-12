@@ -132,6 +132,7 @@ from codetoreum.application.agent_scheduler import (
 )
 from codetoreum.application.configuration_service import ConfigurationService
 from codetoreum.application.container_recovery_service import ContainerRecoveryService
+from codetoreum.application.conversational_loop_orchestrator import ConversationalLoopOrchestrator
 from codetoreum.application.event_handlers.board_event_handler import (
     BoardColumnEventHandler,
 )
@@ -1303,9 +1304,7 @@ class SimulationApplicationBootstrap:
             resolved.repair_cycle.environment_repair_service = resolved.environment_repair_service
 
         # Create branch resolution adapter (mock adapter for simulation testing)
-        resolved.branch_resolution_service = MockBranchResolutionAdapter(
-            clock=self._engine.get_clock_for_testing()
-        )
+        resolved.branch_resolution_service = MockBranchResolutionAdapter(clock=self._engine.get_clock_for_testing())
 
         # Create audit store (not provided by resolver)
         audit_store = InMemoryAuditStore()
@@ -1596,6 +1595,7 @@ class SimulationApplicationBootstrap:
             container=self.adapters.container,
             event_store=self.adapters.event_store,
             storage=self.adapters.storage,
+            vcs=self.adapters.version_control,
         )
 
         # Workspace Router
@@ -1719,6 +1719,15 @@ class SimulationApplicationBootstrap:
         decision_events = SimulationDecisionEvents()
         projects_api = SimulationProjectsAPI()
 
+        # Conversational Loop Orchestrator — manages agent feedback loops in conversational columns
+        conversational_loop_orchestrator = ConversationalLoopOrchestrator(
+            discussion_adapter=self.adapters.discussion_adapter,
+            llm_provider=self.adapters.llm_provider,
+            event_store=self.adapters.event_store,
+            event_emitter=self.adapters.event_emitter,
+        )
+        self.conversational_loop_orchestrator = conversational_loop_orchestrator
+
         workflow_orchestrator = WorkflowOrchestrator(
             task_queue=task_queue,  # Reuse same task queue
             config=project_config,  # Reuse same config
@@ -1727,6 +1736,10 @@ class SimulationApplicationBootstrap:
             event_store=self.adapters.event_store,
             ticket_system=self.adapters.ticket_system,
             projects_api=projects_api,
+            event_bus=self.infrastructure.event_bus,
+            board_service=self.adapters.board,
+            workflow_config=self.adapters.workflow_config,
+            conversational_loop_orchestrator=conversational_loop_orchestrator,
         )
 
         # Work Item Service
@@ -1965,6 +1978,16 @@ class SimulationApplicationBootstrap:
 
         # Register board column event handler for automation (agent execution + auto-progression)
         self._register_board_column_handler()
+
+        # Subscribe ConversationalLoopOrchestrator to workitem.column_changed events
+        # so it can terminate sessions when items leave conversational columns
+        if hasattr(self, "conversational_loop_orchestrator") and self.conversational_loop_orchestrator:
+            # NOTE: EventBus routes callbacks by event.event_type (Python class name), not dot notation.
+            self.infrastructure.event_bus.subscribe(
+                "WorkItemColumnChanged",
+                self.conversational_loop_orchestrator.handle_column_change_event,
+            )
+            logger.info("Subscribed ConversationalLoopOrchestrator to WorkItemColumnChanged events")
 
         # Register repair cycle event handler with event bus
         # This allows the handler to listen for WorkItemColumnChanged events

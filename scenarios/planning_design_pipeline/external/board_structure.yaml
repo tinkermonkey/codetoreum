@@ -1,0 +1,16 @@
+# Planning & Design Pipeline Scenario — External: Board Structure
+#
+# Port/Interface: IBoardService
+# Adapter (sim): MockBoardAdapter
+# Skipped when using real adapters
+
+boards:
+  - board_id: "planning-board-1"
+    board_name: "Planning & Design Board"
+    columns:
+      - "Backlog"
+      - "Research"
+      - "Requirements"
+      - "Design"
+      - "Work Breakdown"
+      - "In Development"

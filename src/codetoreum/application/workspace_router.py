@@ -442,124 +442,36 @@ class WorkspaceRouter:
         execution_result: dict[str, Any],
         repository_path: str,
     ) -> WorkspaceFinalizationResult:
-        """
-        Finalize workspace after agent execution.
+        """Clean up workspace resources after agent execution.
 
-        For ISSUE workspaces:
-        - Commit changes if any
-        - Push branch to remote (using resolved branch name from cache)
-        - Optionally create pull request
+        Evicts the resolved branch name from the internal cache to prevent
+        memory leaks.  **Commit and push are no longer performed here** —
+        they happen inside ExecutionService._commit_workspace() before the
+        ExecutionCompleted event fires, so downstream handlers always see
+        committed code.
 
-        For DISCUSSION workspaces:
-        - No-op (output already posted via ticket system)
-
-        **Expected Call Order**: This method should be called AFTER prepare_workspace()
-        and prepare_container_environment(). It cleans up the resolved branch name cache
-        in the finally block to prevent memory leaks. The cache is thread-safe via asyncio.Lock.
+        **Expected Call Order**: Call AFTER prepare_workspace() /
+        prepare_container_environment() / execute_with_container().
 
         Args:
             context: Workspace context
-            project: Project context
-            execution_result: Result from agent execution
-            repository_path: Local path to cloned repository
+            project: Project context (kept for API compat; currently unused)
+            execution_result: Execution result (kept for API compat; currently unused)
+            repository_path: Local path to repository (kept for API compat; unused)
 
         Returns:
-            WorkspaceFinalizationResult: Result of finalization operation
-
-        Raises:
-            RepositoryError: If repository operations fail
+            WorkspaceFinalizationResult with commit_sha=None (commit is
+            handled by ExecutionService).
         """
         self._logger.info(f"Finalizing workspace type={context.workspace_type.value}, project={project.id}")
 
-        if self.vcs is None:
-            return WorkspaceFinalizationResult(
-                success=False,
-                commit_sha=None,
-                pr_url=None,
-                reason="No VCS adapter configured",
-                metadata={},
-            )
-
-        metadata: dict[str, Any] = {}
-        commit_sha = None
-        pr_url = None
-
         try:
-            if context.is_issue_workspace() and context.create_commits:
-                repo_path = Path(repository_path)
-                repo_path_str = str(repo_path)
-
-                # Check if there are changes to commit
-                vcs_status = await self.vcs.status(repo_path_str)
-                has_changes = vcs_status.is_dirty or vcs_status.staged_files or vcs_status.unstaged_files
-
-                if has_changes:
-                    # Commit changes
-                    commit_message = self._generate_commit_message(context, execution_result)
-                    self._logger.info(f"Committing changes: {commit_message}")
-
-                    # Get author info, use config defaults if not in project
-                    author_name = getattr(project, "author_name", self.config.default_author_name)
-                    author_email = getattr(project, "author_email", self.config.default_author_email)
-
-                    commit_sha = await self.vcs.commit(
-                        repo_path_str,
-                        message=commit_message,
-                        author_name=author_name,
-                        author_email=author_email,
-                        files=None,  # Commit all changes
-                    )
-                    metadata["commit_sha"] = commit_sha
-                    metadata["commit_message"] = commit_message
-
-                    # Push branch - use resolved name if available, fall back to context name
-                    branch_to_push = await self._get_resolved_branch_name(context.work_item_id, context.branch_name or "")
-                    self._logger.info(f"Pushing branch: {branch_to_push}")
-                    await self.vcs.push(repo_path_str, branch_to_push)
-                    metadata["pushed"] = True
-
-                    # TODO: Create PR if needed (requires ticket system integration)
-                    if context.create_pr:
-                        self._logger.info("PR creation would happen here")
-                        metadata["pr_requested"] = True
-
-                    return WorkspaceFinalizationResult(
-                        success=True,
-                        commit_sha=commit_sha,
-                        pr_url=pr_url,
-                        reason="Issue workspace finalized successfully with commit",
-                        metadata=metadata,
-                    )
-                self._logger.info("No changes to commit")
-                return WorkspaceFinalizationResult(
-                    success=True,
-                    commit_sha=None,
-                    pr_url=None,
-                    reason="Issue workspace finalized successfully (no changes)",
-                    metadata=metadata,
-                )
-            # Discussion workspace or no commits needed
-            self._logger.info("Discussion workspace - no finalization needed")
             return WorkspaceFinalizationResult(
                 success=True,
                 commit_sha=None,
                 pr_url=None,
-                reason="Discussion workspace finalized successfully",
-                metadata=metadata,
-            )
-
-        except Exception as e:
-            self._logger.error(
-                f"Failed to finalize workspace: {e}",
-                exc_info=True,
-                extra={"error_id": "ERR_WORKSPACE_FINALIZE_FAILURE"},
-            )
-            return WorkspaceFinalizationResult(
-                success=False,
-                commit_sha=None,
-                pr_url=None,
-                reason=f"Workspace finalization failed: {e!s}",
-                metadata={"error": str(e)},
+                reason="Workspace cleaned up (commit handled by ExecutionService)",
+                metadata={},
             )
         finally:
             # Clean up resolved branch name cache to prevent memory leaks (async-safe)
@@ -669,9 +581,7 @@ class WorkspaceRouter:
     # Private Methods
     # ========================================================================
 
-    async def _resolve_branch_name(
-        self, work_item: WorkItem, project: ProjectContext, repository_path: str
-    ) -> str:
+    async def _resolve_branch_name(self, work_item: WorkItem, project: ProjectContext, repository_path: str) -> str:
         """
         Resolve branch name using intelligent branch resolution or fallback to generation.
 

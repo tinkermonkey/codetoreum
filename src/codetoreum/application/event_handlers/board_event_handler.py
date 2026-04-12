@@ -220,8 +220,17 @@ class BoardColumnEventHandler(EventHandler):
         if column_config.is_exit_column:
             await self._handle_exit_column(work_item_id, project_id, board_id, column_config, config)
 
-        # Trigger agent if column has one and is automated
-        if column_config.agent_id and column_config.type == ColumnType.AUTOMATED:
+        # Trigger agent if column has one, is automated, NOT a repair cycle column, and NOT
+        # a conversational column.  Repair cycle columns are driven entirely by
+        # RepairCycleEventHandler; conversational columns are driven by WorkflowOrchestrator
+        # via ConversationalLoopOrchestrator.  Dispatching the agent executor here for either
+        # type would cause a double-dispatch race condition or an immediate execution failure.
+        if (
+            column_config.agent_id
+            and column_config.type == ColumnType.AUTOMATED
+            and not column_config.repair_cycle_agents
+            and getattr(column_config, "execution_type", "task_queue") != "conversational"
+        ):
             await self._trigger_agent(work_item_id, column_config, board_id)
 
     async def _handle_pipeline_trigger(
@@ -314,8 +323,11 @@ class BoardColumnEventHandler(EventHandler):
             # Start workflow run lifecycle tracking
             await self._start_workflow_run(work_item_id, project_id, board_id, column_config, workflow_config)
 
-            # Trigger agent if column has one
-            if column_config.agent_id:
+            # Trigger agent if column has one and is NOT a conversational column.
+            # Conversational columns are handled by WorkflowOrchestrator via
+            # ConversationalLoopOrchestrator — dispatching the executor here would
+            # cause a double-dispatch failure.
+            if column_config.agent_id and getattr(column_config, "execution_type", "task_queue") != "conversational":
                 await self._trigger_agent(work_item_id, column_config, board_id)
 
         elif result.status == LockStatus.QUEUED:
@@ -330,8 +342,9 @@ class BoardColumnEventHandler(EventHandler):
                 f"Re-triggering agent if configured."
             )
             # Even though the lock is already held, we should still trigger the agent
-            # when re-entering the column (e.g., after reviewer rejection in maker-checker flow)
-            if column_config.agent_id:
+            # when re-entering the column (e.g., after reviewer rejection in maker-checker flow).
+            # Skip conversational columns — handled by WorkflowOrchestrator via CLO.
+            if column_config.agent_id and getattr(column_config, "execution_type", "task_queue") != "conversational":
                 await self._trigger_agent(work_item_id, column_config, board_id)
 
     async def _handle_exit_column(

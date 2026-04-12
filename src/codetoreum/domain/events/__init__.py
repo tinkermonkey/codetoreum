@@ -52,6 +52,9 @@ from .discussion_events import (
     CommentContext,
     CommentNeedsResponseEvent,
     CommentPostedEvent,
+    ConversationalLoopStartedEvent,
+    FeedbackListeningStartedEvent,
+    FeedbackListeningStoppedEvent,
 )
 
 # Execution events
@@ -318,6 +321,9 @@ __all__ = [
     "CommentNeedsResponseEvent",
     "CommentPostedEvent",
     "AgentResponsePostedEvent",
+    "ConversationalLoopStartedEvent",
+    "FeedbackListeningStartedEvent",
+    "FeedbackListeningStoppedEvent",
     # Code review events
     "CodeReviewStatus",
     "ReviewStatusChangedEvent",

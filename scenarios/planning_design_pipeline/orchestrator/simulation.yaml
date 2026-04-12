@@ -1,0 +1,40 @@
+# Planning & Design Pipeline Scenario — Orchestrator: Simulation Settings
+#
+# Models Switchyard benchmark run 6a5ddb21 (documentation_robotics #591, 2026-04-08):
+# 4-agent Planning & Design pipeline operating entirely through a shared GitHub
+# Discussion thread. No VCS operations; agents post research, requirements,
+# architecture design, and work breakdown to the discussion.
+# Benchmark duration: 946 s real time | At 100x: ~9.5 seconds simulated
+
+name: "Planning & Design Pipeline"
+description: |
+  4-agent discussion-only planning pipeline: idea_researcher → business_analyst
+  → software_architect → work_breakdown_agent. No VCS operations; all output
+  posted to a shared GitHub Discussion thread. Pipeline exits when work_breakdown_agent
+  creates 5 child sub-issues and the item graduates to In Development.
+version: "1.0"
+
+speed_multiplier: 100.0
+auto_advance: false
+
+metadata:
+  scenario_type: "planning_design_pipeline"
+  fidelity: "low"
+  author: "codetoreum-team"
+  benchmark_run_id: "6a5ddb21-f7ac-45e4-be3a-8c98000db2d7"
+  benchmark_project: "documentation_robotics"
+  benchmark_issue: 591
+  benchmark_date: "2026-04-08"
+  benchmark_duration_seconds: 946
+  discussion_id: "D_kwDOQaznN84Ali-E"
+  workspace_type: "discussion"
+  vcs_operations: false
+  sub_issues_created: 5
+  tags:
+    - "planning"
+    - "design"
+    - "discussion-only"
+    - "no-vcs"
+    - "conversational"
+    - "task-queue"
+    - "child-issue-creation"

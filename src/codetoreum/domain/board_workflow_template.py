@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 
-from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig
+from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig, RepairTestType
 
 
 class ColumnType(Enum):
@@ -46,6 +46,13 @@ class ColumnTemplate:
         repair_cycle_agents: Optional specialized agent configuration for repair cycle
                            stages on this column. When set, maps sub-task types to
                            specific agents. None means use default stage agent.
+        repair_cycle_test_types: Optional ordered tuple of RepairTestType values defining
+                                 which test types to run when this column triggers a repair
+                                 cycle. When None, the handler falls back to the default
+                                 sequence (UNIT → INTEGRATION → E2E).
+        execution_type: Execution mode for the agent on this column. One of "task_queue"
+                       (default, standard container execution) or "conversational"
+                       (multi-turn dialogue via IDiscussionAdapter).
     """
 
     name: str
@@ -59,6 +66,8 @@ class ColumnTemplate:
     on_failure_column: str | None = None
     sla_escalation_column: str | None = None
     repair_cycle_agents: RepairCycleAgentConfig | None = None
+    repair_cycle_test_types: tuple[RepairTestType, ...] | None = None
+    execution_type: str = "task_queue"
 
     def __post_init__(self) -> None:
         """Validate column template invariants."""
@@ -102,6 +111,11 @@ class ColumnTemplate:
 
         if self.sla_escalation_column and self.sla_escalation_column == self.name:
             msg = f"Column '{self.name}': sla_escalation_column cannot reference itself"
+            raise ValueError(msg)
+
+        valid_execution_types = {"task_queue", "conversational"}
+        if self.execution_type not in valid_execution_types:
+            msg = f"execution_type must be one of {valid_execution_types}, got {self.execution_type!r}"
             raise ValueError(msg)
 
 

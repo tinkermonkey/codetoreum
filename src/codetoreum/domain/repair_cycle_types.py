@@ -59,15 +59,19 @@ class RepairTestType(Enum):
     """Test types in execution order.
 
     The repair cycle must execute test types in strict order:
-    1. UNIT - Unit tests (fastest, most isolated)
-    2. INTEGRATION - Integration tests (medium speed, component interaction)
-    3. E2E - End-to-end tests (slowest, full system validation)
+    1. COMPILATION - Compilation/type-check step (fastest, catches syntax and type errors)
+    2. UNIT - Unit tests (fast, most isolated)
+    3. INTEGRATION - Integration tests (medium speed, component interaction)
+    4. CI - CI pipeline gate (aggregated checks, e.g. lint + security scans)
+    5. E2E - End-to-end tests (slowest, full system validation)
 
     This ordering ensures fast feedback on basic issues before running slower tests.
     """
 
+    COMPILATION = "COMPILATION"
     UNIT = "UNIT"
     INTEGRATION = "INTEGRATION"
+    CI = "CI"
     E2E = "E2E"
 
 
@@ -267,6 +271,9 @@ class RepairCycleResult:
         total_agent_calls: Total number of agent calls made during entire cycle
         duration_seconds: Total time spent on entire repair cycle
         timestamp: ISO 8601 timestamp when cycle started
+        commit_history: Ordered tuple of git commit SHAs produced during the cycle,
+            one per sub-task execution that made file changes.  Empty when no VCS is
+            configured (simulation) or when no file changes were produced.
     """
 
     stage: str
@@ -275,6 +282,7 @@ class RepairCycleResult:
     total_agent_calls: int
     duration_seconds: float
     timestamp: str
+    commit_history: tuple[str, ...] = ()  # Ordered commit SHAs, one per sub-task
 
     def __post_init__(self) -> None:
         """Validate cycle result after initialization."""
@@ -561,7 +569,9 @@ class RepairCycleStageConfig:
     checkpoint_interval: int = 5  # Save state every N iterations
     agent_config: RepairCycleAgentConfig | None = None  # Optional specialized agents
     systemic_fix_failure_ceiling: int = 50  # Max failures for systemic fix dispatch
-    environment_repair_config: EnvironmentRepairConfig = field(default_factory=EnvironmentRepairConfig)  # Co-located config
+    environment_repair_config: EnvironmentRepairConfig = field(
+        default_factory=EnvironmentRepairConfig
+    )  # Co-located config
 
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""
@@ -769,7 +779,9 @@ class SystemicFixResult:
     """
 
     success: bool
-    files_modified: tuple[str, ...]  # Immutable tuple (spec requires list[str], but tuple maintains frozen dataclass immutability contract)
+    files_modified: tuple[
+        str, ...
+    ]  # Immutable tuple (spec requires list[str], but tuple maintains frozen dataclass immutability contract)
     root_cause_addressed: str
     duration_seconds: float
 

@@ -422,6 +422,13 @@ class ExecutionCompleted(DomainEvent):
         - output: str - Execution result/output
         - duration_seconds: float - Total execution duration
         - completed_at: str - ISO timestamp when completed
+        - input_tokens: int - LLM input tokens consumed
+        - output_tokens: int - LLM output tokens generated
+        - session_id: str | None - Session ID for continuity
+        - commit_sha: str | None - Git commit SHA produced by this execution;
+          None when the agent made no file changes (CommitPolicy.NONE) or
+          when the workspace had no dirty files.
+        - branch: str | None - Branch that was pushed; None when no commit was made.
     """
 
     def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):

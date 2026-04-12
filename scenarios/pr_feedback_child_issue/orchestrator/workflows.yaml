@@ -1,0 +1,39 @@
+# PR Feedback Child Issue Scenario — Orchestrator: Workflow Definitions
+#
+# Port/Interface: IWorkflowConfigService (workflow domain model)
+# Adapter (sim): InMemoryConfigStore
+#
+# 3-stage pipeline: development → code-review → testing.
+# The repair cycle is triggered by the Testing column config and managed by
+# IRepairCycleService — it is not a workflow stage.
+# Code review runs a single iteration (approved on first pass in the benchmark).
+
+workflows:
+  - name: "pr-feedback-workflow"
+    description: |
+      PR feedback child issue pipeline: development on parent branch,
+      single-iteration code review, then 4-type repair cycle in Testing.
+      Derived from Switchyard run 5d4a562b (context-library #438, 2026-04-12).
+    stages:
+      - name: "development"
+        agent_type: "senior_software_engineer"
+        description: "Implement PR feedback changes on the parent feature branch"
+        order: 1
+        max_retries: 3
+        timeout_seconds: 7200
+
+      - name: "code-review"
+        agent_type: "code_reviewer"
+        description: "Review code quality; 1-iteration approval routes to Testing"
+        order: 2
+        max_retries: 1
+        timeout_seconds: 3600
+
+      - name: "testing"
+        agent_type: "qa_engineer"
+        description: |
+          Run 4-type repair cycle (compilation → unit → integration → ci).
+          All types pass on the first attempt in the benchmark.
+        order: 3
+        max_retries: 2
+        timeout_seconds: 3600

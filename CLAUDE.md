@@ -209,6 +209,15 @@ Database-backed configuration with web UI:
 - **Frontend**: React or Vue (configuration dashboard)
 - **LLM Integration**: Claude Code API/CLI (primary), pluggable for others
 
+## Python Virtual Environment
+
+**IMPORTANT**: A virtual environment already exists at `.venv/` in the project root. **Do NOT create a new virtual environment.** Always use the existing one.
+
+- **Run Python**: `.venv/bin/python`
+- **Run tests**: `poetry run pytest` (poetry uses `.venv` automatically)
+- **Install packages**: `poetry add <package>` or `.venv/bin/pip install <package>`
+- **Never run**: `python -m venv`, `virtualenv`, `conda create`, or any command that creates a new environment
+
 ## Development Workflow
 
 1. **Local Development**: Docker Compose with mock adapters

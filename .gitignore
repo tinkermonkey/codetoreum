@@ -1,6 +1,8 @@
 # Project specific
 documentation/claude_thoughts/
 .dr/
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -141,13 +143,8 @@ celerybeat.pid
 # Environments
 .env
 .envrc
-.venv
-env/
-venv/
-venv_integration/
-ENV/
-env.bak/
-venv.bak/
+**/.venv*
+**/venv*
 
 # Spyder project settings
 .spyderproject

@@ -20,6 +20,7 @@ from codetoreum.domain.events import (
     DomainEvent,
 )
 from codetoreum.domain.exceptions import DomainError
+from codetoreum.domain.value_objects import CommitPolicy
 
 
 class AgentType(Enum):
@@ -96,6 +97,7 @@ class Agent:
     temperature: float = 0.7  # LLM temperature (0.0-2.0)
     max_tokens: int = 4096  # Maximum tokens for LLM responses
     system_prompt: str = ""  # System prompt for the agent
+    commit_policy: CommitPolicy = CommitPolicy.ON_SUCCESS  # When to commit file changes
 
     # Event tracking
     _events: list[DomainEvent] = field(default_factory=list, init=False, repr=False)
@@ -165,6 +167,7 @@ class Agent:
         makes_code_changes: bool = False,
         filesystem_write_allowed: bool = True,
         mcp_servers: list[str] | None = None,
+        commit_policy: CommitPolicy = CommitPolicy.ON_SUCCESS,
     ) -> "Agent":
         """
         Factory method to create a new agent.
@@ -211,6 +214,7 @@ class Agent:
             filesystem_write_allowed=filesystem_write_allowed,
             mcp_servers=mcp_servers or [],
             metadata={},
+            commit_policy=commit_policy,
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
         )

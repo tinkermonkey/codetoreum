@@ -154,3 +154,17 @@ class IWorkItemService(IEventEmitter, IMonitoredService, ABC):
         Events:
             Emits 'workitem.created' event with new work item
         """
+
+    @abstractmethod
+    async def get_child_issues(self, parent_id: WorkItemId) -> list[WorkItem]:
+        """Retrieve all child work items created under a parent.
+
+        Args:
+            parent_id: ID of the parent work item
+
+        Returns:
+            list[WorkItem]: Child work items in creation order (empty if none)
+
+        Raises:
+            WorkItemNotFoundError: Parent work item doesn't exist
+        """

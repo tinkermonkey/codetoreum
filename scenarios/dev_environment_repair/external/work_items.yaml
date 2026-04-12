@@ -1,3 +1,54 @@
-# External data: Work items for dev_environment_repair scenario
+# Dev Environment Repair Scenario — External: Work Items
+#
+# Port/Interface: IWorkItemService, ITicketSystem
+# Adapter (sim): InMemoryTicketAdapter, MockWorkItemService
+# Skipped when using real adapters (work items already exist in the ticket system)
+#
+# Modeled on Switchyard benchmark run db1dbf2a (context-studio #376):
+# persistence layer refactors that surface test failures in Testing and
+# trigger the repair cycle, including environment rebuild.
 
-work_items: []
+work_items:
+  - title: "Refactor persistence layer adapter reset"
+    description: |
+      Implement reset_adapter() method for the DocumentStore class.
+
+      Requirements:
+      - reset_adapter() method that resets all adapter state
+      - Sync log inserts using executemany() for performance
+      - 10 test cases covering reset, concurrency, error handling
+      - Thread safety and proper error handling
+
+      This work item exercises the full pipeline including the repair
+      cycle in Testing when initial test runs surface failures.
+    labels:
+      - "feature"
+      - "persistence"
+      - "repair-cycle-target"
+    priority: "high"
+    status: "new"
+    metadata:
+      expected_test_failures: true
+      parent_feature: "coordinated-adapter-reset"
+
+  - title: "Add persistence layer integration tests"
+    description: |
+      Add integration tests for the persistence layer components.
+
+      Requirements:
+      - Integration tests for adapter lifecycle
+      - Database migration validation
+      - Environment setup verification tests
+      - CI-compatible test runner configuration
+
+      Tests will verify environment health after repair cycle completes.
+      Requires dev environment setup before tests can execute.
+    labels:
+      - "testing"
+      - "persistence"
+      - "env-verification"
+    priority: "medium"
+    status: "new"
+    metadata:
+      expected_test_failures: true
+      requires_environment_setup: true
