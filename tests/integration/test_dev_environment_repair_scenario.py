@@ -82,8 +82,8 @@ async def test_dev_environment_repair_scenario_loads_without_errors(
     created_items = simulation_seeder.created_items
     assert len(created_items.projects) == 1, "Expected 1 project"
     assert (
-        len(created_items.agents) == 4
-    ), "Expected 4 agents (qa_engineer, senior_software_engineer, devops_engineer, code_reviewer)"
+        len(created_items.agents) == 6
+    ), "Expected 6 agents (qa_engineer, senior_software_engineer, devops_engineer, code_reviewer, dev_environment_setup, dev_environment_verifier)"
     assert len(created_items.boards) == 1, "Expected 1 board"
 
 

@@ -267,6 +267,9 @@ class RepairCycleResult:
         total_agent_calls: Total number of agent calls made during entire cycle
         duration_seconds: Total time spent on entire repair cycle
         timestamp: ISO 8601 timestamp when cycle started
+        commit_history: Ordered tuple of git commit SHAs produced during the cycle,
+            one per sub-task execution that made file changes.  Empty when no VCS is
+            configured (simulation) or when no file changes were produced.
     """
 
     stage: str
@@ -275,6 +278,7 @@ class RepairCycleResult:
     total_agent_calls: int
     duration_seconds: float
     timestamp: str
+    commit_history: tuple[str, ...] = ()  # Ordered commit SHAs, one per sub-task
 
     def __post_init__(self) -> None:
         """Validate cycle result after initialization."""
@@ -561,7 +565,9 @@ class RepairCycleStageConfig:
     checkpoint_interval: int = 5  # Save state every N iterations
     agent_config: RepairCycleAgentConfig | None = None  # Optional specialized agents
     systemic_fix_failure_ceiling: int = 50  # Max failures for systemic fix dispatch
-    environment_repair_config: EnvironmentRepairConfig = field(default_factory=EnvironmentRepairConfig)  # Co-located config
+    environment_repair_config: EnvironmentRepairConfig = field(
+        default_factory=EnvironmentRepairConfig
+    )  # Co-located config
 
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""
@@ -769,7 +775,9 @@ class SystemicFixResult:
     """
 
     success: bool
-    files_modified: tuple[str, ...]  # Immutable tuple (spec requires list[str], but tuple maintains frozen dataclass immutability contract)
+    files_modified: tuple[
+        str, ...
+    ]  # Immutable tuple (spec requires list[str], but tuple maintains frozen dataclass immutability contract)
     root_cause_addressed: str
     duration_seconds: float
 

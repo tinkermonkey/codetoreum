@@ -183,6 +183,8 @@ class AgentExecution:
         input_tokens: int,
         output_tokens: int,
         session_id: str | None = None,
+        commit_sha: str | None = None,
+        branch: str | None = None,
     ) -> None:
         """
         Mark execution as completed successfully.
@@ -192,6 +194,8 @@ class AgentExecution:
             input_tokens: Number of input tokens used
             output_tokens: Number of output tokens generated
             session_id: Optional session ID for continuity
+            commit_sha: Git commit SHA produced by this execution (None if no file changes)
+            branch: Branch that was pushed (None if no commit was made)
 
         Raises:
             DomainError: If execution is not in RUNNING status
@@ -223,6 +227,8 @@ class AgentExecution:
                 "output_tokens": output_tokens,
                 "duration_seconds": self.duration_seconds,
                 "session_id": session_id,
+                "commit_sha": commit_sha,
+                "branch": branch,
             },
         )
         self._add_event(event)

@@ -1303,9 +1303,7 @@ class SimulationApplicationBootstrap:
             resolved.repair_cycle.environment_repair_service = resolved.environment_repair_service
 
         # Create branch resolution adapter (mock adapter for simulation testing)
-        resolved.branch_resolution_service = MockBranchResolutionAdapter(
-            clock=self._engine.get_clock_for_testing()
-        )
+        resolved.branch_resolution_service = MockBranchResolutionAdapter(clock=self._engine.get_clock_for_testing())
 
         # Create audit store (not provided by resolver)
         audit_store = InMemoryAuditStore()
@@ -1596,6 +1594,7 @@ class SimulationApplicationBootstrap:
             container=self.adapters.container,
             event_store=self.adapters.event_store,
             storage=self.adapters.storage,
+            vcs=self.adapters.version_control,
         )
 
         # Workspace Router

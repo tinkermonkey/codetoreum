@@ -388,23 +388,12 @@ async def test_finalize_workspace_with_changes(
     mock_repository,
     repository_path,
 ):
-    """Test finalizing workspace with code changes."""
+    """Test finalizing workspace cleans up branch cache (commit/push are now in ExecutionService)."""
     # Arrange
     context = await workspace_router.route_workspace(
         work_item=sample_work_item,
         agent=sample_agent,
         project=sample_project,
-    )
-
-    # Mock repository status with changes
-    mock_repository.status.return_value = RepositoryStatus(
-        current_branch=BranchName(context.branch_name),
-        is_dirty=True,
-        staged_files=("file1.py",),
-        unstaged_files=("file2.py",),
-        untracked_files=(),
-        ahead_count=0,
-        behind_count=0,
     )
 
     execution_result = {
@@ -420,12 +409,11 @@ async def test_finalize_workspace_with_changes(
         repository_path=repository_path,
     )
 
-    # Assert
+    # Assert — finalize_workspace is now cleanup-only; commit/push happen in ExecutionService
     assert result.success is True
-    assert result.commit_sha == "abc123"
-    assert result.metadata["pushed"] is True
-    mock_repository.commit.assert_called_once()
-    mock_repository.push.assert_called_once()
+    assert result.commit_sha is None
+    mock_repository.commit.assert_not_called()
+    mock_repository.push.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -602,9 +590,7 @@ def mock_branch_resolution_service():
 
 
 @pytest.fixture
-def workspace_router_with_resolution(
-    mock_repository, mock_container, mock_event_store, mock_branch_resolution_service
-):
+def workspace_router_with_resolution(mock_repository, mock_container, mock_event_store, mock_branch_resolution_service):
     """Create WorkspaceRouter with branch resolution service."""
     return WorkspaceRouter(
         repository=mock_repository,
@@ -634,9 +620,7 @@ async def test_route_workspace_with_branch_resolution_create(
         resolution_strategy="new",
         parent_issue_id=None,
     )
-    mock_branch_resolution_service.configure_resolution(
-        sample_project.id, sample_work_item.id, resolution
-    )
+    mock_branch_resolution_service.configure_resolution(sample_project.id, sample_work_item.id, resolution)
 
     # Act
     context = await workspace_router_with_resolution.route_workspace(
@@ -673,9 +657,7 @@ async def test_route_workspace_with_branch_resolution_reuse(
         resolution_strategy="parent_issue",
         parent_issue_id=parent_issue_id,
     )
-    mock_branch_resolution_service.configure_resolution(
-        sample_project.id, sample_work_item.id, resolution
-    )
+    mock_branch_resolution_service.configure_resolution(sample_project.id, sample_work_item.id, resolution)
 
     # Act
     context = await workspace_router_with_resolution.route_workspace(
@@ -713,9 +695,7 @@ async def test_prepare_workspace_with_branch_resolution_create(
         resolution_strategy="new",
         parent_issue_id=None,
     )
-    mock_branch_resolution_service.configure_resolution(
-        sample_project.id, sample_work_item.id, resolution
-    )
+    mock_branch_resolution_service.configure_resolution(sample_project.id, sample_work_item.id, resolution)
 
     # Mock list_branches to return no existing branches
     mock_repository.list_branches.return_value = []
@@ -766,9 +746,7 @@ async def test_prepare_workspace_with_branch_resolution_reuse(
         resolution_strategy="parent_issue",
         parent_issue_id="100",
     )
-    mock_branch_resolution_service.configure_resolution(
-        sample_project.id, sample_work_item.id, resolution
-    )
+    mock_branch_resolution_service.configure_resolution(sample_project.id, sample_work_item.id, resolution)
 
     # Route the workspace to populate the branch resolution cache
     context = await workspace_router_with_resolution.route_workspace(
@@ -934,9 +912,7 @@ async def test_finalize_workspace_with_branch_resolution_reuse_pushes_resolved_b
         resolution_strategy="parent_issue",
         parent_issue_id="100",
     )
-    mock_branch_resolution_service.configure_resolution(
-        sample_project.id, sample_work_item.id, resolution
-    )
+    mock_branch_resolution_service.configure_resolution(sample_project.id, sample_work_item.id, resolution)
 
     # Mock repository status with changes
     mock_repository.status.return_value = RepositoryStatus(
@@ -978,7 +954,7 @@ async def test_finalize_workspace_with_branch_resolution_reuse_pushes_resolved_b
         "summary": "Completed parent task work",
     }
 
-    # Finalize workspace - should push to resolved branch, not context.branch_name
+    # Finalize workspace - clears the resolution cache (commit/push now in ExecutionService)
     finalize_result = await workspace_router_with_resolution.finalize_workspace(
         context=context,
         project=sample_project,
@@ -986,14 +962,14 @@ async def test_finalize_workspace_with_branch_resolution_reuse_pushes_resolved_b
         repository_path=repository_path,
     )
 
-    # Assert finalization succeeded
+    # finalize_workspace is now cleanup-only; commit/push happen in ExecutionService
     assert finalize_result.success is True
-    assert finalize_result.commit_sha == "abc123"
-    assert finalize_result.metadata["pushed"] is True
+    assert finalize_result.commit_sha is None
+    mock_repository.commit.assert_not_called()
+    mock_repository.push.assert_not_called()
 
-    # CRITICAL ASSERTION: Verify push was called with the resolved branch,
-    # not the placeholder branch from context
-    mock_repository.push.assert_called_once_with(repository_path, parent_branch)
+    # prepare_workspace still resolves and surfaces the branch name correctly
+    assert prep_result.metadata["resolved_branch_name"] == parent_branch
 
 
 @pytest.mark.asyncio
@@ -1029,9 +1005,7 @@ async def test_finalize_workspace_with_branch_resolution_create_pushes_resolved_
         resolution_strategy="new",
         parent_issue_id=None,
     )
-    mock_branch_resolution_service.configure_resolution(
-        sample_project.id, sample_work_item.id, resolution
-    )
+    mock_branch_resolution_service.configure_resolution(sample_project.id, sample_work_item.id, resolution)
 
     # Mock repository status with changes
     mock_repository.status.return_value = RepositoryStatus(
@@ -1075,7 +1049,7 @@ async def test_finalize_workspace_with_branch_resolution_create_pushes_resolved_
         "summary": "Implemented authentication flow",
     }
 
-    # Finalize workspace - should push to resolved branch, not context.branch_name
+    # Finalize workspace - clears the resolution cache (commit/push now in ExecutionService)
     finalize_result = await workspace_router_with_resolution.finalize_workspace(
         context=context,
         project=sample_project,
@@ -1083,11 +1057,11 @@ async def test_finalize_workspace_with_branch_resolution_create_pushes_resolved_
         repository_path=repository_path,
     )
 
-    # Assert finalization succeeded
+    # finalize_workspace is now cleanup-only; commit/push happen in ExecutionService
     assert finalize_result.success is True
-    assert finalize_result.commit_sha == "abc123"
-    assert finalize_result.metadata["pushed"] is True
+    assert finalize_result.commit_sha is None
+    mock_repository.commit.assert_not_called()
+    mock_repository.push.assert_not_called()
 
-    # CRITICAL ASSERTION: Verify push was called with the resolved branch,
-    # not the placeholder branch from context
-    mock_repository.push.assert_called_once_with(repository_path, resolved_branch)
+    # prepare_workspace still resolves and surfaces the branch name correctly
+    assert prep_result.metadata["resolved_branch_name"] == resolved_branch

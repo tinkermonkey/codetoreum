@@ -162,7 +162,7 @@ def simulation_clock() -> SimulationClock:
     Yields:
         SimulationClock instance configured for fast execution
     """
-    clock = SimulationClock(speed_multiplier=100.0)
+    clock = SimulationClock(speed_multiplier=100_000.0)
     clock.start_at(datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC))
     return clock
 
@@ -237,7 +237,7 @@ def fast_simulation_config() -> SimulationConfig:
     """
     return SimulationConfig.create_fast_config(
         scenario_name="test_scenario",
-        speed_multiplier=100.0,
+        speed_multiplier=100_000.0,
     )
 
 

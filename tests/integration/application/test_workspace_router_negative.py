@@ -249,27 +249,19 @@ async def test_finalize_workspace_commit_fails(
     mock_repository,
     repository_path,
 ):
-    """Test workspace finalization when commit fails."""
-    from codetoreum.ports.output.repository import RepositoryStatus
+    """Test finalize_workspace always succeeds — commit/push errors are now in ExecutionService.
 
+    Commit and push were moved from WorkspaceRouter.finalize_workspace() to
+    ExecutionService._commit_workspace() so that the commit happens synchronously
+    before ExecutionCompleted fires.  finalize_workspace() is now cleanup-only.
+    """
     context = await workspace_router.route_workspace(
         work_item=code_work_item,
         agent=developer_agent,
         project=sample_project,
     )
 
-    # Mock repository with changes
-    mock_repository.status.return_value = RepositoryStatus(
-        current_branch=context.branch_name,
-        is_dirty=True,
-        staged_files=("file.py",),
-        unstaged_files=(),
-        untracked_files=(),
-        ahead_count=0,
-        behind_count=0,
-    )
-
-    # Mock commit failure
+    # Even if the repository raises on commit, finalize_workspace doesn't call it
     mock_repository.commit.side_effect = Exception("Commit failed: merge conflict")
 
     result = await workspace_router.finalize_workspace(
@@ -279,8 +271,9 @@ async def test_finalize_workspace_commit_fails(
         repository_path=repository_path,
     )
 
-    assert result.success is False
-    assert "merge conflict" in result.reason.lower()
+    # finalize_workspace is cleanup-only — always succeeds, never calls commit
+    assert result.success is True
+    mock_repository.commit.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -292,28 +285,17 @@ async def test_finalize_workspace_push_fails(
     mock_repository,
     repository_path,
 ):
-    """Test workspace finalization when push fails."""
-    from codetoreum.ports.output.repository import RepositoryStatus
+    """Test finalize_workspace always succeeds — commit/push errors are now in ExecutionService.
 
+    See test_finalize_workspace_commit_fails for background.
+    """
     context = await workspace_router.route_workspace(
         work_item=code_work_item,
         agent=developer_agent,
         project=sample_project,
     )
 
-    # Mock repository with changes
-    mock_repository.status.return_value = RepositoryStatus(
-        current_branch=context.branch_name,
-        is_dirty=True,
-        staged_files=("file.py",),
-        unstaged_files=(),
-        untracked_files=(),
-        ahead_count=0,
-        behind_count=0,
-    )
-
-    # Mock successful commit but failed push
-    mock_repository.commit.return_value = "abc123"
+    # Even if the repository raises on push, finalize_workspace doesn't call it
     mock_repository.push.side_effect = Exception("Push failed: authentication required")
 
     result = await workspace_router.finalize_workspace(
@@ -323,8 +305,9 @@ async def test_finalize_workspace_push_fails(
         repository_path=repository_path,
     )
 
-    assert result.success is False
-    assert "authentication required" in result.reason.lower()
+    # finalize_workspace is cleanup-only — always succeeds, never calls push
+    assert result.success is True
+    mock_repository.push.assert_not_called()
 
 
 # ============================================================================

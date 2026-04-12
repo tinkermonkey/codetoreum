@@ -150,8 +150,10 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         # Default factory returns MockLLMAdapter for any agent
         if llm_factory is None:
             _mock_llm = MockLLMAdapter()
+
             async def llm_factory(agent_name):
                 return _mock_llm
+
         self._llm_factory = llm_factory
         # Use a very fast clock by default (100,000x speed) to prevent test timeouts
         # This ensures that await self.clock.advance() calls don't cause real delays
@@ -490,6 +492,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             self._elapsed_time = 0.0
             self._files_fixed = 0
             self._warnings_reviewed = 0
+            self._commit_history: list[str] = []  # Simulated SHAs, one per code-fix sub-task
 
             # Emit start event
             cycle_start_timestamp = start_time.isoformat()
@@ -572,6 +575,9 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                     extra={"error_id": ErrorRegistry.ERR_STORAGE_ERROR},
                 )
 
+        # Collect commit history accumulated across all sub-tasks this cycle
+        commit_history = tuple(getattr(self, "_commit_history", []))
+
         # Emit cycle completed event (only if we have results)
         if self._current_project is not None and cycle_results:
             cycle_start_timestamp = start_time.isoformat()
@@ -585,12 +591,14 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                     total_agent_calls=self.total_agent_calls or self.agent_call_count,
                     duration_seconds=duration_seconds,
                     workflow_run_id=context.workflow_run_id,
+                    commit_history=commit_history,
                 )
             )
             self._log_event(
                 {
                     "type": "REPAIR_CYCLE_COMPLETED",
                     "overall_success": overall_success,
+                    "commit_count": len(commit_history),
                 }
             )
 
@@ -601,6 +609,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             total_agent_calls=self.total_agent_calls or self.agent_call_count,
             duration_seconds=duration_seconds,
             timestamp=cycle_start_timestamp if self._current_project else start_time.isoformat(),
+            commit_history=commit_history,
         )
 
     async def try_resume_from_checkpoint(
@@ -911,6 +920,12 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             self.total_agent_calls += 1
             await self.clock.advance(timedelta(minutes=2))
 
+            # Record a simulated commit SHA for this code-fix sub-task
+            if not hasattr(self, "_commit_history"):
+                self._commit_history = []
+            _item_ref = getattr(context, "work_item_id", context.workflow_run_id)
+            self._commit_history.append(f"mock-{_item_ref}-code_fix-{len(self._commit_history):04d}")
+
             if self._current_project is not None:
                 self.emit(
                     RepairCycleFileFixStartedEvent(
@@ -1068,6 +1083,12 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         self.agent_call_count += 1
         self.total_agent_calls += 1
         self._apply_systemic_fixes_call_count += 1
+
+        # Record a simulated commit SHA for this systemic-fix sub-task
+        if not hasattr(self, "_commit_history"):
+            self._commit_history = []
+        _item_ref = getattr(context, "work_item_id", context.workflow_run_id)
+        self._commit_history.append(f"mock-{_item_ref}-systemic_fix-{len(self._commit_history):04d}")
 
         logger.info(
             "Mock systemic fixes applied",
@@ -1719,9 +1740,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
         actual = calls[-1]["agent_name"]  # Check most recent call
         if actual != expected_agent:
-            msg = (
-                f"Sub-task '{sub_task}': expected agent '{expected_agent}', got '{actual}'"
-            )
+            msg = f"Sub-task '{sub_task}': expected agent '{expected_agent}', got '{actual}'"
             raise AssertionError(msg)
 
     # Private helper methods
@@ -1978,12 +1997,24 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 retest_result = await self.run_tests(config, context)
 
                 if retest_result.failed == 0:
-                    # All tests passed
-                    cycle_passed = True
+                    # All tests passed after fix — handle warnings if configured
+                    if config.review_warnings and retest_result.warnings > 0:
+                        warnings_reviewed += await self.handle_warnings(retest_result, config, context)
+                        final_retest = await self.run_tests(config, context)
+                        last_test_result = final_retest
+                        if final_retest.failed > 0:
+                            # Warning fixes broke something; continue outer loop
+                            cycle_passed = False
+                        else:
+                            cycle_passed = True
+                            break
+                    else:
+                        cycle_passed = True
+                        last_test_result = retest_result
+                        break
+                else:
+                    # Tests still failing, save for next iteration without calling run_tests
                     last_test_result = retest_result
-                    break
-                # Tests still failing, save for next iteration without calling run_tests
-                last_test_result = retest_result
 
             # Checkpoint at interval
             if iteration % context.checkpoint_interval == 0:

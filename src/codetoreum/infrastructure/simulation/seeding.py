@@ -19,7 +19,7 @@ import yaml
 from codetoreum.adapters.testing.in_memory_config_store import InMemoryConfigStore
 from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
-from codetoreum.domain.agent import Agent, AgentCapability, AgentType
+from codetoreum.domain.agent import Agent, AgentCapability, AgentType, CommitPolicy
 from codetoreum.domain.board_workflow_template import (
     BoardWorkflowTemplate,
     ColumnTemplate,
@@ -372,6 +372,12 @@ class SimulationDataSeeder:
                     cap: AgentCapability(skill=cap, proficiency=1.0, description=cap)
                     for cap in (cap_list if cap_list else ["code_generation"])
                 }
+                commit_policy_str = agent_def.get("commit_policy", "on_success")
+                try:
+                    commit_policy = CommitPolicy(commit_policy_str)
+                except ValueError:
+                    commit_policy = CommitPolicy.ON_SUCCESS
+
                 agent_domain = Agent(
                     id=agent_name,  # Use agent_name as ID so column_config.agent_id matches
                     name=agent_name,
@@ -390,6 +396,7 @@ class SimulationDataSeeder:
                     metadata={},
                     created_at=datetime.now(UTC),
                     updated_at=datetime.now(UTC),
+                    commit_policy=commit_policy,
                 )
                 await self._agent_repository.save(agent_domain, project_id)
 
