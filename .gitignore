@@ -1,6 +1,8 @@
 # Project specific
 documentation/claude_thoughts/
 .dr/
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
