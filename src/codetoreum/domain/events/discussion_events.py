@@ -527,3 +527,244 @@ class AgentResponsePostedEvent(CodetoreumEvent):
             agent_name=data.get("agent_name", ""),
             conversation_id=data.get("conversation_id"),
         )
+
+
+@dataclass(frozen=True)
+class ConversationalLoopStartedEvent(CodetoreumEvent):
+    """Emitted when a conversational loop session starts for a work item.
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Events represent immutable facts—attempting to modify any field
+    will raise `FrozenInstanceError`. This immutability is essential because
+    events are the permanent record of state changes in the system and must
+    never be altered once created.
+
+    Attributes:
+        type (str): Fixed to "conversational_loop.started"
+        work_item_id (str): ID of the work item for which the loop started
+        project_id (str): ID of the project containing the work item
+        session_id (str): Unique identifier for this conversational session
+        agent_assignment (str): The agent assigned to this conversational loop
+        column_name (Optional[str]): Name of the board column where the loop started
+
+    Example:
+        >>> event = ConversationalLoopStartedEvent(
+        ...     type="conversational_loop.started",
+        ...     timestamp="2025-01-14T10:30:00+00:00",
+        ...     source="orchestrator",
+        ...     work_item_id="issue-1",
+        ...     project_id="proj-1",
+        ...     session_id="session-abc",
+        ...     agent_assignment="code-reviewer"
+        ... )
+        >>> event.session_id = "new-session"  # ❌ Raises FrozenInstanceError
+    """
+
+    work_item_id: str = ""
+    project_id: str = ""
+    session_id: str = ""
+    agent_assignment: str = ""
+    column_name: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.work_item_id:
+            msg = "work_item_id is required"
+            raise ValueError(msg)
+        if not self.project_id:
+            msg = "project_id is required"
+            raise ValueError(msg)
+        if not self.session_id:
+            msg = "session_id is required"
+            raise ValueError(msg)
+        if not self.agent_assignment:
+            msg = "agent_assignment is required"
+            raise ValueError(msg)
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update(
+            {
+                "work_item_id": self.work_item_id,
+                "project_id": self.project_id,
+                "session_id": self.session_id,
+                "agent_assignment": self.agent_assignment,
+                "column_name": self.column_name,
+            }
+        )
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ConversationalLoopStartedEvent":
+        """Deserialize from dictionary."""
+        return cls(
+            type=data.get("type", "conversational_loop.started"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            work_item_id=data.get("work_item_id", ""),
+            project_id=data.get("project_id", ""),
+            session_id=data.get("session_id", ""),
+            agent_assignment=data.get("agent_assignment", ""),
+            column_name=data.get("column_name"),
+        )
+
+
+@dataclass(frozen=True)
+class FeedbackListeningStartedEvent(CodetoreumEvent):
+    """Emitted when the system begins listening for feedback on a work item session.
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Events represent immutable facts—attempting to modify any field
+    will raise `FrozenInstanceError`. This immutability is essential because
+    events are the permanent record of state changes in the system and must
+    never be altered once created.
+
+    Attributes:
+        type (str): Fixed to "feedback_listening.started"
+        work_item_id (str): ID of the work item being listened for
+        project_id (str): ID of the project containing the work item
+        session_id (str): Unique identifier for the conversational session
+
+    Example:
+        >>> event = FeedbackListeningStartedEvent(
+        ...     type="feedback_listening.started",
+        ...     timestamp="2025-01-14T10:30:00+00:00",
+        ...     source="orchestrator",
+        ...     work_item_id="issue-1",
+        ...     project_id="proj-1",
+        ...     session_id="session-abc"
+        ... )
+        >>> event.session_id = "new-session"  # ❌ Raises FrozenInstanceError
+    """
+
+    work_item_id: str = ""
+    project_id: str = ""
+    session_id: str = ""
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.work_item_id:
+            msg = "work_item_id is required"
+            raise ValueError(msg)
+        if not self.project_id:
+            msg = "project_id is required"
+            raise ValueError(msg)
+        if not self.session_id:
+            msg = "session_id is required"
+            raise ValueError(msg)
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update(
+            {
+                "work_item_id": self.work_item_id,
+                "project_id": self.project_id,
+                "session_id": self.session_id,
+            }
+        )
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "FeedbackListeningStartedEvent":
+        """Deserialize from dictionary."""
+        return cls(
+            type=data.get("type", "feedback_listening.started"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            work_item_id=data.get("work_item_id", ""),
+            project_id=data.get("project_id", ""),
+            session_id=data.get("session_id", ""),
+        )
+
+
+@dataclass(frozen=True)
+class FeedbackListeningStoppedEvent(CodetoreumEvent):
+    """Emitted when the system stops listening for feedback on a work item session.
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Events represent immutable facts—attempting to modify any field
+    will raise `FrozenInstanceError`. This immutability is essential because
+    events are the permanent record of state changes in the system and must
+    never be altered once created.
+
+    Attributes:
+        type (str): Fixed to "feedback_listening.stopped"
+        work_item_id (str): ID of the work item being listened for
+        project_id (str): ID of the project containing the work item
+        session_id (str): Unique identifier for the conversational session
+        feedback_type (str): Reason listening stopped. One of "card_advance",
+                             "error", or "manual".
+
+    Example:
+        >>> event = FeedbackListeningStoppedEvent(
+        ...     type="feedback_listening.stopped",
+        ...     timestamp="2025-01-14T10:30:00+00:00",
+        ...     source="orchestrator",
+        ...     work_item_id="issue-1",
+        ...     project_id="proj-1",
+        ...     session_id="session-abc",
+        ...     feedback_type="card_advance"
+        ... )
+        >>> event.feedback_type = "manual"  # ❌ Raises FrozenInstanceError
+    """
+
+    work_item_id: str = ""
+    project_id: str = ""
+    session_id: str = ""
+    feedback_type: str = ""
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.work_item_id:
+            msg = "work_item_id is required"
+            raise ValueError(msg)
+        if not self.project_id:
+            msg = "project_id is required"
+            raise ValueError(msg)
+        if not self.session_id:
+            msg = "session_id is required"
+            raise ValueError(msg)
+        valid_feedback_types = {"card_advance", "error", "manual"}
+        if self.feedback_type not in valid_feedback_types:
+            msg = f"feedback_type must be one of {valid_feedback_types}, got {self.feedback_type!r}"
+            raise ValueError(msg)
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update(
+            {
+                "work_item_id": self.work_item_id,
+                "project_id": self.project_id,
+                "session_id": self.session_id,
+                "feedback_type": self.feedback_type,
+            }
+        )
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "FeedbackListeningStoppedEvent":
+        """Deserialize from dictionary."""
+        return cls(
+            type=data.get("type", "feedback_listening.stopped"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            work_item_id=data.get("work_item_id", ""),
+            project_id=data.get("project_id", ""),
+            session_id=data.get("session_id", ""),
+            feedback_type=data.get("feedback_type", ""),
+        )

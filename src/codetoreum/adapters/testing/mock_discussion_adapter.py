@@ -16,6 +16,8 @@ from codetoreum.domain.events.discussion_events import (
     CommentContext,
     CommentNeedsResponseEvent,
     CommentPostedEvent,
+    FeedbackListeningStartedEvent,
+    FeedbackListeningStoppedEvent,
 )
 from codetoreum.ports.output.discussion_adapter import (
     DiscussionMonitoringConfig,
@@ -113,6 +115,7 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
         self._threads: dict[str, list[Comment]] = {}  # work_item_id -> comments
         self._monitoring: dict[str, DiscussionMonitoringConfig] = {}  # work_item_id -> config
         self._processed_comment_ids: dict[str, set] = {}  # work_item_id -> set of comment IDs
+        self._discussion_id_map: dict[str, str] = {}  # work_item_id -> external discussion ID
         self._identity_service = identity_service
         self._time_source = time_source or (lambda: datetime.now(UTC))
 
@@ -216,6 +219,20 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
         if work_item_id not in self._threads:
             self._threads[work_item_id] = []
 
+        # Emit lifecycle event if session_id is available in config
+        session_id = getattr(config, "session_id", "") or ""
+        if session_id:
+            self.emit(
+                FeedbackListeningStartedEvent(
+                    type="feedback_listening.started",
+                    work_item_id=work_item_id,
+                    project_id=config.project_id,
+                    session_id=session_id,
+                    timestamp=self._get_iso_timestamp(),
+                    source="mock",
+                )
+            )
+
     def stop_monitoring(self, work_item_id: str) -> None:
         """Stop monitoring a specific work item for new comments.
 
@@ -228,7 +245,21 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
         if work_item_id not in self._monitoring:
             msg = f"Not monitoring work item: {work_item_id}"
             raise ValueError(msg)
+        config = self._monitoring[work_item_id]
+        session_id = getattr(config, "session_id", "") or ""
         del self._monitoring[work_item_id]
+        if session_id:
+            self.emit(
+                FeedbackListeningStoppedEvent(
+                    type="feedback_listening.stopped",
+                    work_item_id=work_item_id,
+                    project_id=config.project_id,
+                    session_id=session_id,
+                    feedback_type="card_advance",
+                    timestamp=self._get_iso_timestamp(),
+                    source="mock",
+                )
+            )
 
     # Test Helper Methods
 
@@ -381,6 +412,34 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
         self._threads[work_item_id].append(comment)
         return comment
 
+    def create_named_thread(
+        self, work_item_id: str, discussion_id: str, initial_body: str = "", author: str = "requester"
+    ) -> None:
+        """Test helper: Associate a named discussion_id with a work item thread.
+
+        Records the external discussion ID for a work item so get_thread_info()
+        can surface it. Optionally creates an initial comment.
+
+        Args:
+            work_item_id: Work item to associate
+            discussion_id: External discussion node ID (e.g., D_kwDOQaznN84Ali-E)
+            initial_body: Optional initial comment body
+            author: Author of the initial comment
+        """
+        self._discussion_id_map[work_item_id] = discussion_id
+        if work_item_id not in self._threads:
+            self._threads[work_item_id] = []
+        if initial_body:
+            comment = Comment(
+                id=f"comment-{len(self._threads[work_item_id])}",
+                author=author,
+                body=initial_body,
+                created_at=self._get_iso_timestamp(),
+                parent_id=None,
+                is_bot=self._identity_service.is_bot_user(author),
+            )
+            self._threads[work_item_id].append(comment)
+
     def get_comments_by_author(self, work_item_id: str, author: str) -> list[Comment]:
         """Test helper: Get all comments from a specific author.
 
@@ -455,6 +514,7 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
             assert adapter.get_comment_count("item-1") == 0
         """
         self._threads.clear()
+        self._discussion_id_map.clear()
 
     def clear_monitoring(self) -> None:
         """Test helper: Clear all monitoring state.
@@ -488,6 +548,7 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
             "comment_count": len(self._threads.get(work_item_id, [])),
             "is_monitored": work_item_id in self._monitoring,
             "authors": list(set(c.author for c in self._threads.get(work_item_id, []))),
+            "discussion_id": self._discussion_id_map.get(work_item_id),
         }
 
     def simulate_column_change(self, work_item_id: str, from_column: str, to_column: str) -> None:

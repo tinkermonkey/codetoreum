@@ -1,0 +1,74 @@
+# PR Feedback Child Issue Scenario — External: Work Items
+#
+# Port/Interface: IWorkItemService, ITicketSystem
+# Adapter (sim): InMemoryTicketAdapter, MockWorkItemService
+# Skipped when using real adapters (work items already exist in the ticket system)
+#
+# Modeled on Switchyard benchmark run 5d4a562b (context-library #438, 2026-04-12).
+#
+# Two items:
+#   1. Issue #415 — parent issue; NOT placed on the board. Exists only as a
+#      branch anchor so work item #438 can inherit its feature branch.
+#   2. Issue #438 — the active child item; placed in Backlog by board_placements.yaml.
+#
+# SCHEMA NOTE: ScenarioWorkItemModel does not have a native parent_issue_id field.
+# The parent relationship is expressed via metadata.parent_issue_id. Seeder code
+# that wires the parent-child branch link reads this metadata key explicitly.
+#
+# SCHEMA NOTE: `labels` is a supported field (list[str]) per ScenarioWorkItemModel.
+
+work_items:
+  - title: "Coordinated adapter reset — feature implementation"
+    description: |
+      Parent issue for the coordinated adapter reset feature.
+      This item is a branch anchor only — it is not placed on the board
+      and is not the active work item for this scenario.
+
+      The active child issue (#438) inherits the branch created for this
+      feature: feature/issue-415-feat-coordinated-adapter-rese.
+    labels:
+      - "feature"
+    priority: "high"
+    status: "in_progress"
+    metadata:
+      github_issue_number: 415
+      branch: "feature/issue-415-feat-coordinated-adapter-rese"
+      role: "parent_branch_anchor"
+      note: "Not placed on the board; exists for branch inheritance by child issue #438"
+
+  - title: "[PR Feedback] Test Coverage Gaps"
+    description: |
+      PR feedback child issue for the coordinated adapter reset feature.
+      Addresses test coverage gaps identified during code review of the
+      parent issue (#415) pull request.
+
+      Requirements:
+      - Expand unit test coverage for the adapter reset code paths
+      - Add edge-case tests identified by the reviewer
+      - Ensure compilation, unit, integration, and CI checks all pass
+
+      Inherits parent feature branch:
+        feature/issue-415-feat-coordinated-adapter-rese
+
+      Dispatched via the lock-release queue after the parent pipeline slot
+      becomes available. Runs 1-iteration code review (approved) followed by
+      a 4-type repair cycle (compilation → unit → integration → ci), all
+      passing on the first attempt.
+    labels:
+      - "pr-feedback"
+      - "testing"
+      - "child-issue"
+    priority: "medium"
+    status: "new"
+    metadata:
+      github_issue_number: 438
+      parent_issue_id: 415
+      parent_branch: "feature/issue-415-feat-coordinated-adapter-rese"
+      dispatch_mode: "lock_release_queue"
+      commit_policy: "auto"
+      repair_cycle_test_types:
+        - "compilation"
+        - "unit"
+        - "integration"
+        - "ci"
+      expected_repair_iterations: 1

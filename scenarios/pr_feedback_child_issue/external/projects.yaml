@@ -1,0 +1,15 @@
+# PR Feedback Child Issue Scenario — External: Projects
+#
+# Port/Interface: ITicketSystem, IVersionControlService
+# Adapter (sim): InMemoryTicketAdapter, InMemoryVersionControlAdapter
+# Skipped when using real adapters (project already exists in GitHub/etc.)
+
+projects:
+  - name: "context-library"
+    description: "Context library project — source of PR feedback issue #438"
+    repository_url: "https://github.com/demo-org/context-library.git"
+    default_branch: "main"
+    metadata:
+      stack: "Python"
+      team: "platform-engineering"
+      active_feature_branch: "feature/issue-415-feat-coordinated-adapter-rese"

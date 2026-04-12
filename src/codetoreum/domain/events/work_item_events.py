@@ -51,6 +51,7 @@ class WorkItemCreatedEvent(CodetoreumEvent):
     project_id: str = ""
     title: str = ""
     initial_column: str | None = None
+    parent_issue_id: str | None = None
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""
@@ -74,6 +75,7 @@ class WorkItemCreatedEvent(CodetoreumEvent):
                 "project_id": self.project_id,
                 "title": self.title,
                 "initial_column": self.initial_column,
+                "parent_issue_id": self.parent_issue_id,
             }
         )
         return d
@@ -95,6 +97,7 @@ class WorkItemCreatedEvent(CodetoreumEvent):
             project_id=data["project_id"],
             title=data["title"],
             initial_column=data.get("initial_column"),
+            parent_issue_id=data.get("parent_issue_id"),
         )
 
 

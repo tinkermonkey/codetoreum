@@ -201,6 +201,17 @@ class ScenarioColumnConfig(BaseModel):
         default=None,
         description="Per-sub-task agent assignments for the repair cycle on this column",
     )
+    repair_cycle_test_types: list[str] | None = Field(
+        default=None,
+        description=(
+            "Ordered list of test type names to run when this column triggers a repair cycle. "
+            "Valid values: COMPILATION, UNIT, INTEGRATION, CI, E2E. "
+            "When omitted, the handler uses the default sequence (UNIT, INTEGRATION, E2E)."
+        ),
+    )
+    execution_type: str = Field(
+        default="task_queue", description="Execution mode: 'task_queue' (default) or 'conversational'"
+    )
 
     @field_validator("type")
     @classmethod
@@ -208,6 +219,15 @@ class ScenarioColumnConfig(BaseModel):
         """Validate column type is manual or automated."""
         if v not in ("manual", "automated"):
             message = f"Invalid column type: {v!r}. Valid values: manual, automated"
+            raise ValueError(message)
+        return v
+
+    @field_validator("execution_type")
+    @classmethod
+    def validate_execution_type(cls, v: str) -> str:
+        """Validate execution type is task_queue or conversational."""
+        if v not in ("task_queue", "conversational"):
+            message = f"Invalid execution_type: {v!r}. Valid values: task_queue, conversational"
             raise ValueError(message)
         return v
 
@@ -271,6 +291,7 @@ class ScenarioWorkItemModel(BaseModel):
     labels: list[str] = Field(default_factory=list, description="Labels")
     priority: str = Field(default="medium", description="Priority level")
     status: str = Field(default="new", description="Initial status")
+    parent_issue_id: int | None = Field(default=None, description="Parent issue ID for child-issue relationships")
     metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
 
     @field_validator("priority")

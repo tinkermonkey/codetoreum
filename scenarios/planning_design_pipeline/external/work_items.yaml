@@ -1,0 +1,34 @@
+# Planning & Design Pipeline Scenario — External: Work Items
+#
+# Port/Interface: IWorkItemService, ITicketSystem
+# Adapter (sim): InMemoryTicketAdapter, MockWorkItemService
+# Skipped when using real adapters
+
+work_items:
+  - title: "Optimize the Regression Test Cycle"
+    description: |
+      Research and design a plan to optimise the regression test cycle for
+      the documentation robotics system.
+
+      Objectives:
+      - Identify bottlenecks in the current regression test execution pipeline
+      - Propose a prioritised test selection strategy to reduce cycle time
+      - Define a modular test architecture that supports incremental execution
+      - Produce a work breakdown of concrete implementation tasks for the SDLC board
+
+      This item will flow through the Planning & Design pipeline:
+        Research → Requirements → Design → Work Breakdown
+
+      On completion, work_breakdown_agent will create 5 child sub-issues on the
+      SDLC board and the item will graduate to In Development.
+    labels:
+      - "planning"
+      - "design"
+      - "regression-testing"
+    priority: "high"
+    status: "new"
+    metadata:
+      github_issue_number: 591
+      discussion_id: "D_kwDOQaznN84Ali-E"
+      expected_sub_issues: 5
+      benchmark_run_id: "6a5ddb21-f7ac-45e4-be3a-8c98000db2d7"

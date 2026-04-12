@@ -25,6 +25,7 @@ from codetoreum.domain.board_workflow_template import (
     ColumnTemplate,
     ColumnType,
 )
+from codetoreum.domain.repair_cycle_types import RepairTestType
 from codetoreum.domain.work_item import WorkItemPriority, WorkItemStatus
 from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationAdapters,
@@ -669,6 +670,10 @@ class SimulationDataSeeder:
             repair_cycle_agents = None
             if cfg.repair_cycle_agents:
                 repair_cycle_agents = cfg.repair_cycle_agents.to_domain()
+            # Parse repair_cycle_test_types strings to RepairTestType enum values
+            repair_cycle_test_types: tuple[RepairTestType, ...] | None = None
+            if cfg.repair_cycle_test_types:
+                repair_cycle_test_types = tuple(RepairTestType(t) for t in cfg.repair_cycle_test_types)
             columns.append(
                 ColumnTemplate(
                     name=cfg.name,
@@ -682,6 +687,8 @@ class SimulationDataSeeder:
                     on_failure_column=cfg.on_failure_column,
                     sla_escalation_column=cfg.sla_escalation_column,
                     repair_cycle_agents=repair_cycle_agents,
+                    repair_cycle_test_types=repair_cycle_test_types,
+                    execution_type=cfg.execution_type,
                 )
             )
 
@@ -1420,13 +1427,16 @@ class SimulationDataSeeder:
         for work_item_model in ext.work_items:
             priority = priority_map.get(work_item_model.priority, WorkItemPriority.MEDIUM)
             status = status_map.get(work_item_model.status, WorkItemStatus.NEW)
+            item_metadata = dict(work_item_model.metadata)
+            if work_item_model.parent_issue_id is not None:
+                item_metadata.setdefault("parent_issue_id", work_item_model.parent_issue_id)
             await self.create_work_items(
                 count=1,
                 title_prefix=work_item_model.title,
                 labels=work_item_model.labels,
                 priority=priority,
                 status=status,
-                metadata=work_item_model.metadata,
+                metadata=item_metadata,
             )
 
         # Seed board structures
@@ -1596,13 +1606,16 @@ class SimulationDataSeeder:
         for work_item_model in scenario.work_items:
             priority = priority_map.get(work_item_model.priority, WorkItemPriority.MEDIUM)
             status = status_map.get(work_item_model.status, WorkItemStatus.NEW)
+            item_metadata = dict(work_item_model.metadata)
+            if work_item_model.parent_issue_id is not None:
+                item_metadata.setdefault("parent_issue_id", work_item_model.parent_issue_id)
             await self.create_work_items(
                 count=1,
                 title_prefix=work_item_model.title,
                 labels=work_item_model.labels,
                 priority=priority,
                 status=status,
-                metadata=work_item_model.metadata,
+                metadata=item_metadata,
             )
 
         # Seed boards and register workflow templates

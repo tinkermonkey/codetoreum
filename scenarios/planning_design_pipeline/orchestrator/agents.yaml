@@ -1,0 +1,124 @@
+# Planning & Design Pipeline Scenario — Orchestrator: Agent Configurations
+#
+# Port/Interface: IAgentRepository, ILLMProvider
+# Adapter (sim): InMemoryAgentRepository, MockAgentExecutor
+#
+# Four planning-phase agents derived from Switchyard run 6a5ddb21
+# (documentation_robotics #591, 2026-04-08).
+
+agents:
+  - name: "idea_researcher"
+    agent_type: "idea_researcher"
+    description: |
+      Conducts deep research on the issue domain using web search and file
+      operations. Operates in conversational mode with a large context window
+      (~167K tokens in benchmark). Posts research summary to the shared GitHub
+      Discussion thread.
+    capabilities:
+      - "documentation"
+      - "security_analysis"
+    llm_model: "claude-sonnet-4-6"
+    temperature: 0.7
+    max_tokens: 16384
+    enabled: true
+    metadata:
+      execution_type: "conversational"
+      workspace_type: "discussion"
+      discussion_id: "D_kwDOQaznN84Ali-E"
+      tools:
+        - "file_operations"
+        - "web_search"
+      mcp_servers:
+        - "context7"
+      benchmark_agent_time_seconds: 228
+      benchmark_feedback_wait_seconds: 92
+      benchmark_tokens: 167000
+      context_output_file: "initial_request.md"
+
+  - name: "business_analyst"
+    agent_type: "business_analyst"
+    description: |
+      Structures and formalises requirements from the research output. Operates
+      in conversational mode; fast execution (~35 s, 29K tokens in benchmark).
+      Posts requirements summary to the shared GitHub Discussion thread and
+      emits business_analyst_output.md.
+    capabilities:
+      - "documentation"
+    llm_model: "claude-sonnet-4-6"
+    temperature: 0.5
+    max_tokens: 8192
+    enabled: true
+    metadata:
+      execution_type: "conversational"
+      workspace_type: "discussion"
+      discussion_id: "D_kwDOQaznN84Ali-E"
+      tools:
+        - "file_operations"
+      mcp_servers:
+        - "context7"
+      benchmark_agent_time_seconds: 35
+      benchmark_feedback_wait_seconds: 239
+      benchmark_tokens: 29000
+      context_input_files:
+        - "initial_request.md"
+      context_output_file: "business_analyst_output.md"
+
+  - name: "software_architect"
+    agent_type: "software_architect"
+    description: |
+      Produces a technical design from the requirements documents. Operates in
+      conversational mode with a large context window (~143K tokens in benchmark).
+      Posts architecture design to the shared GitHub Discussion thread.
+    capabilities:
+      - "documentation"
+      - "performance_analysis"
+    llm_model: "claude-sonnet-4-6"
+    temperature: 0.7
+    max_tokens: 16384
+    enabled: true
+    metadata:
+      execution_type: "conversational"
+      workspace_type: "discussion"
+      discussion_id: "D_kwDOQaznN84Ali-E"
+      tools:
+        - "file_operations"
+        - "web_search"
+      mcp_servers:
+        - "context7"
+      benchmark_agent_time_seconds: 196
+      benchmark_feedback_wait_seconds: 61
+      benchmark_tokens: 143000
+      context_input_files:
+        - "initial_request.md"
+        - "business_analyst_output.md"
+      context_output_file: "software_architect_output.md"
+
+  - name: "work_breakdown_agent"
+    agent_type: "work_breakdown_agent"
+    description: |
+      Decomposes the design into concrete child sub-issues on the SDLC board.
+      Operates in task_queue mode — receives context files from all prior agents
+      and executes as a single atomic task. Creates 5 child sub-issues; the
+      orchestrator promotes the parent item to In Development on completion.
+    capabilities:
+      - "documentation"
+    llm_model: "claude-sonnet-4-6"
+    temperature: 0.4
+    max_tokens: 8192
+    enabled: true
+    metadata:
+      execution_type: "task_queue"
+      workspace_type: "discussion"
+      discussion_id: "D_kwDOQaznN84Ali-E"
+      tools:
+        - "file_operations"
+      mcp_servers:
+        - "context7"
+      benchmark_agent_time_seconds: 49
+      benchmark_feedback_wait_seconds: 0
+      context_input_files:
+        - "initial_request.md"
+        - "business_analyst_output.md"
+        - "software_architect_output.md"
+      sub_issues_to_create: 5
+      exit_trigger: "sub_issue_creation_complete"

@@ -59,15 +59,19 @@ class RepairTestType(Enum):
     """Test types in execution order.
 
     The repair cycle must execute test types in strict order:
-    1. UNIT - Unit tests (fastest, most isolated)
-    2. INTEGRATION - Integration tests (medium speed, component interaction)
-    3. E2E - End-to-end tests (slowest, full system validation)
+    1. COMPILATION - Compilation/type-check step (fastest, catches syntax and type errors)
+    2. UNIT - Unit tests (fast, most isolated)
+    3. INTEGRATION - Integration tests (medium speed, component interaction)
+    4. CI - CI pipeline gate (aggregated checks, e.g. lint + security scans)
+    5. E2E - End-to-end tests (slowest, full system validation)
 
     This ordering ensures fast feedback on basic issues before running slower tests.
     """
 
+    COMPILATION = "COMPILATION"
     UNIT = "UNIT"
     INTEGRATION = "INTEGRATION"
+    CI = "CI"
     E2E = "E2E"
 
 

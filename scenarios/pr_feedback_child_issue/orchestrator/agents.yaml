@@ -1,0 +1,71 @@
+# PR Feedback Child Issue Scenario — Orchestrator: Agent Configurations
+#
+# Port/Interface: IAgentRepository, ILLMProvider
+# Adapter (sim): InMemoryAgentRepository, MockAgentExecutor
+#
+# Three agents: senior_software_engineer (Development + repair sub-tasks),
+# code_reviewer (Code Review — tools-restricted: no web_search, no playwright),
+# qa_engineer (Testing + repair test_execution).
+#
+# Tool set differentiation is a key validation of this scenario:
+#   - senior_software_engineer: file_operations, git_integration, web_search; MCP: context7 + playwright
+#   - code_reviewer: file_operations, git_integration ONLY; MCP: context7 only
+#   - qa_engineer: default capabilities
+
+agents:
+  - name: "senior_software_engineer"
+    agent_type: "senior_software_engineer"
+    description: |
+      Implements PR feedback changes on the parent feature branch.
+      Handles code_fix, systemic_analysis, and systemic_fix repair sub-tasks.
+      Commit policy: auto (commits after each successful completion).
+    capabilities:
+      - "code_generation"
+      - "code_review"
+    llm_model: "claude-sonnet-4-6"
+    temperature: 0.7
+    max_tokens: 8192
+    enabled: true
+    metadata:
+      tools:
+        - "file_operations"
+        - "git_integration"
+        - "web_search"
+      mcp_servers:
+        - "context7"
+        - "playwright"
+      commit_policy: "auto"
+
+  - name: "code_reviewer"
+    agent_type: "code_reviewer"
+    description: |
+      Reviews code quality in a single iteration; approval routes to Testing,
+      rejection routes back to Development.
+      Tools-restricted: no web_search, no playwright MCP.
+    capabilities:
+      - "code_review"
+    llm_model: "claude-sonnet-4-6"
+    temperature: 0.5
+    max_tokens: 4096
+    enabled: true
+    metadata:
+      tools:
+        - "file_operations"
+        - "git_integration"
+      mcp_servers:
+        - "context7"
+      note: "web_search and playwright explicitly excluded per Switchyard benchmark"
+
+  - name: "qa_engineer"
+    agent_type: "qa_engineer"
+    description: |
+      Runs tests in Testing column and orchestrates the repair cycle.
+      Handles test_execution repair sub-task.
+      Dispatches compilation, unit, integration, and ci test types in sequence.
+    capabilities:
+      - "testing"
+      - "code_generation"
+    llm_model: "claude-sonnet-4-6"
+    temperature: 0.6
+    max_tokens: 6144
+    enabled: true

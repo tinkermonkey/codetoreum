@@ -220,10 +220,33 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         """Configure exact test result sequence for a test type (FR-11.2).
 
         Args:
-            test_type: Type of test (UNIT, INTEGRATION, E2E)
+            test_type: Type of test (UNIT, INTEGRATION, E2E, COMPILATION, CI)
             results: List of test results in sequence order
         """
         self.test_results[test_type] = results
+
+    def set_pass_immediately(self, test_type: RepairTestType, total_tests: int = 1) -> None:
+        """Configure a test type to pass immediately on the first call with the given test count.
+
+        Convenience shorthand for seeding a single-entry success sequence so the
+        repair cycle completes in one iteration without any fix agent calls.
+
+        Args:
+            test_type: Type of test to configure (UNIT, INTEGRATION, E2E, COMPILATION, CI)
+            total_tests: Number of tests reported as passed (default 1)
+        """
+        result = RepairTestResult(
+            test_type=test_type,
+            iteration=1,
+            passed=total_tests,
+            failed=0,
+            warnings=0,
+            failures=(),
+            warning_list=(),
+            raw_output="All tests passed",
+            timestamp=self.clock.now().isoformat(),
+        )
+        self.test_results[test_type] = [result]
 
     def set_interrupt_after_iteration(self, iteration: int, test_type: RepairTestType | None = None) -> None:
         """Configure adapter to simulate interruption after specified iteration.

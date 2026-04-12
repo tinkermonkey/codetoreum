@@ -28,6 +28,9 @@ from codetoreum.domain.events.discussion_events import (
     Comment,
     CommentContext,
     CommentNeedsResponseEvent,
+    ConversationalLoopStartedEvent,
+    FeedbackListeningStartedEvent,
+    FeedbackListeningStoppedEvent,
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.exceptions import (
@@ -40,6 +43,7 @@ from codetoreum.ports.input.conversational_loop_service import (
 )
 from codetoreum.ports.output import (
     IDiscussionAdapter,
+    IEventEmitter,
     IEventStore,
     ILLMProvider,
 )
@@ -86,6 +90,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
         discussion_adapter: IDiscussionAdapter,
         llm_provider: ILLMProvider,
         event_store: IEventStore,
+        event_emitter: IEventEmitter | None = None,
     ):
         """
         Initialize ConversationalLoopOrchestrator.
@@ -94,10 +99,12 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
             discussion_adapter: Adapter for comment monitoring and posting
             llm_provider: LLM provider for agent execution
             event_store: Event store for session state persistence
+            event_emitter: Optional event emitter for domain event publication
         """
         self.discussion_adapter = discussion_adapter
         self.llm_provider = llm_provider
         self.event_store = event_store
+        self._event_emitter = event_emitter
 
     async def initialize_loop(
         self,
@@ -206,6 +213,33 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                     extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
                 )
             raise
+
+        if self._event_emitter:
+            now = datetime.now(UTC).isoformat()
+            self._event_emitter.emit(
+                ConversationalLoopStartedEvent(
+                    type="conversational_loop.started",
+                    work_item_id=work_item_id,
+                    project_id=project_id,
+                    session_id=session_id,
+                    agent_assignment=agent_assignment,
+                    column_name=column_name,
+                    timestamp=now,
+                    source="orchestrator",
+                )
+            )
+
+        if self._event_emitter:
+            self._event_emitter.emit(
+                FeedbackListeningStartedEvent(
+                    type="feedback_listening.started",
+                    work_item_id=work_item_id,
+                    project_id=project_id,
+                    session_id=session_id,
+                    timestamp=datetime.now(UTC).isoformat(),
+                    source="orchestrator",
+                )
+            )
 
         logger.info(
             "Initialized conversational loop for work item %s with session %s",
@@ -582,8 +616,16 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
         # Load current session if exists
         session_state = await self.load_session_state(work_item_id)
 
-        # Check if we're exiting a conversational column
-        if session_state and session_state.status != "terminated":
+        # Check if we're exiting a conversational column.
+        # Guard: only terminate the session if it belongs to the column we are LEAVING.
+        # Without this check, when WO initializes the new column's session first and CLO
+        # fires second (due to subscription order), CLO would incorrectly terminate the
+        # freshly-created session for the destination column.
+        if (
+            session_state
+            and session_state.status != "terminated"
+            and (not from_column or session_state.column_name == from_column)
+        ):
             # Stop monitoring (work item leaving the conversational context)
             try:
                 self.discussion_adapter.stop_monitoring(work_item_id)
@@ -636,70 +678,18 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
                 work_item_id,
             )
 
-        # Check if we're entering a conversational column (new session)
-        elif not session_state and to_column.lower() in ["conversational", "feedback"]:
-            # Initialize new session for this column
-            try:
-                await self.initialize_loop(
-                    work_item_id=work_item_id,
-                    project_id=project_id,
-                    column_config={
-                        "column_name": to_column,
-                        "agent_assignment": (
-                            getattr(event.context, "agent_assignment", "default-agent")
-                            if hasattr(event, "context")
-                            else "default-agent"
-                        ),
-                    },
-                )
-                logger.info(
-                    "Initialized conversational session on column entry for work item %s",
-                    work_item_id,
-                )
-            except (PortError, ValueError) as e:
-                logger.error(
-                    "Failed to initialize conversational loop on column entry for work item %s: %s",
-                    work_item_id,
-                    str(e),
-                    exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_CONVERSATIONAL_LOOP_ERROR},
-                )
-
-                # Post error comment to work item so user is notified
-                try:
-                    error_comment = (
-                        f"❌ **Conversational Mode Failed to Initialize**\n\n"
-                        f"The AI agent failed to start monitoring this work item for conversational feedback.\n\n"
-                        f"**Error Details**: {e!s}\n\n"
-                        f"**Next Steps**:\n"
-                        f"1. Move the work item to a different column\n"
-                        f"2. Contact support if the issue persists\n\n"
-                        f"*This notification was generated because monitoring initialization failed.*"
-                    )
-                    await self.discussion_adapter.add_comment(
+            if self._event_emitter:
+                self._event_emitter.emit(
+                    FeedbackListeningStoppedEvent(
+                        type="feedback_listening.stopped",
                         work_item_id=work_item_id,
-                        content=error_comment,
+                        project_id=project_id,
+                        session_id=session_state.session_id,
+                        feedback_type="card_advance",
+                        timestamp=datetime.now(UTC).isoformat(),
+                        source="orchestrator",
                     )
-                except PortError as comment_error:
-                    logger.error(
-                        "Failed to post error notification comment for work item %s: %s",
-                        work_item_id,
-                        str(comment_error),
-                        exc_info=True,
-                        extra={"error_id": ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR},
-                    )
-                except Exception as comment_error:
-                    # Unexpected error posting comment - log but continue
-                    logger.error(
-                        "UNEXPECTED error posting error notification comment for work item %s: %s",
-                        work_item_id,
-                        str(comment_error),
-                        exc_info=True,
-                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
-                    )
-
-                # Re-raise to trigger alerts and prevent execution from continuing
-                raise
+                )
 
     async def cleanup_loop(
         self,

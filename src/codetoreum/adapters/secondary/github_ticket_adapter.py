@@ -334,6 +334,7 @@ class GitHubTicketAdapter(ITicketSystem):
         assignee: UserId | None = None,
         priority: WorkItemPriority | None = None,
         metadata: dict[str, Any] | None = None,
+        parent_issue_id: str | None = None,
     ) -> WorkItem:
         """Create a new work item."""
         if not title:
@@ -370,6 +371,15 @@ class GitHubTicketAdapter(ITicketSystem):
 
         issue = response.json()
         return self._map_github_issue_to_work_item(issue, project_id)
+
+    async def get_child_issues(self, parent_id: WorkItemId) -> list[WorkItem]:
+        """Retrieve child issues for a parent work item.
+
+        GitHub does not natively expose sub-issue relationships via the REST API.
+        This implementation returns an empty list; a full implementation would
+        require the GitHub GraphQL API or a tracking label convention.
+        """
+        return []
 
     async def update_work_item(self, item_id: WorkItemId, updates: dict[str, Any]) -> WorkItem:
         """Update an existing work item."""

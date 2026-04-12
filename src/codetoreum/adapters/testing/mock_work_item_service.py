@@ -74,6 +74,7 @@ class MockWorkItemService(MockEventEmitter, IWorkItemService):
         super().__init__()
         self._work_items: dict[str, WorkItem] = {}
         self._monitoring_status: dict[str, MonitoringStatus] = {}
+        self._children: dict[str, list[str]] = {}
         self._lock = threading.Lock()
         self._time_source = time_source or (lambda: datetime.now(UTC))
 
@@ -241,6 +242,14 @@ class MockWorkItemService(MockEventEmitter, IWorkItemService):
 
             self._work_items[work_item.id] = work_item
 
+            # Track parent-child relationship
+            parent_issue_id = kwargs.get("parent_issue_id")
+            if parent_issue_id is not None:
+                parent_key = str(parent_issue_id)
+                if parent_key not in self._children:
+                    self._children[parent_key] = []
+                self._children[parent_key].append(work_item.id)
+
             # Emit creation event
             event = WorkItemCreatedEvent(
                 type="workitem.created",
@@ -249,6 +258,7 @@ class MockWorkItemService(MockEventEmitter, IWorkItemService):
                 work_item_id=work_item.id,
                 project_id=str(project_id),
                 title=title,
+                parent_issue_id=str(parent_issue_id) if parent_issue_id is not None else None,
             )
 
             # Clear events from the domain model and emit the domain event
@@ -256,6 +266,19 @@ class MockWorkItemService(MockEventEmitter, IWorkItemService):
             self.emit(event)
 
             return work_item
+
+    async def get_child_issues(self, parent_id) -> list[WorkItem]:
+        """Get all child work items for a parent.
+
+        Args:
+            parent_id: Parent work item ID
+
+        Returns:
+            List of child work items in creation order
+        """
+        with self._lock:
+            child_ids = self._children.get(str(parent_id), [])
+            return [self._work_items[cid] for cid in child_ids if cid in self._work_items]
 
     async def update_work_item(self, item_id: WorkItemId, updates: dict) -> WorkItem:
         """Update a work item and emit update event.
@@ -331,6 +354,7 @@ class MockWorkItemService(MockEventEmitter, IWorkItemService):
         with self._lock:
             self._work_items.clear()
             self._monitoring_status.clear()
+            self._children.clear()
             self._handlers.clear()
 
     def reset_monitoring(self) -> None:

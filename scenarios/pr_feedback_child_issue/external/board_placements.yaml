@@ -1,0 +1,13 @@
+# PR Feedback Child Issue Scenario — External: Board Item Placements
+#
+# Port/Interface: IBoardService
+# Adapter (sim): MockBoardAdapter
+# Skipped when using real adapters (items are already on the board)
+#
+# Only issue #438 is placed on the board, in Backlog.
+# Issue #415 (parent) is NOT placed — it is a branch anchor only.
+# The test harness moves #438 to Ready to trigger the pipeline.
+
+board_placements:
+  - work_item_title: "[PR Feedback] Test Coverage Gaps"
+    column: "Backlog"

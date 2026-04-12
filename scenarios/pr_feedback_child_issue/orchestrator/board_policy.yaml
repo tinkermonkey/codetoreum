@@ -1,0 +1,74 @@
+# PR Feedback Child Issue Scenario — Orchestrator: Board Column Policy
+#
+# Port/Interface: IWorkflowConfigService
+# Adapter (sim): InMemoryWorkflowConfigService
+#
+# Derived from Switchyard benchmark run 5d4a562b (context-library #438, 2026-04-12).
+#
+# Board layout (Codetoreum simulation pattern — pipeline trigger must be automated):
+#   Backlog (manual)
+#   → Development (automated, PIPELINE TRIGGER, senior_software_engineer)
+#   → Code Review (automated, code_reviewer, on_failure → Development)
+#   → Testing (automated, qa_engineer, repair cycle, on_failure → Development)
+#   → Staged (manual, EXIT — lock released here)
+#
+# Repair cycle: code-only (test types: compilation, unit, integration, ci).
+# env_rebuild and env_verification sub-tasks are null (no environment rebuild needed).
+# All 4 test types pass on the first attempt in the benchmark.
+#
+# NOTE: In Codetoreum simulation, the pipeline trigger column must be type: automated
+# with an agent_id so that BoardColumnEventHandler fires agent dispatch on entry.
+# The "Ready" column from Switchyard is represented here as "Development" being the
+# trigger — the human moves the item directly from Backlog to Development to start.
+
+board_policies:
+  - board_id: "pr-feedback-board-1"
+    column_configs:
+      - name: "Backlog"
+        type: "manual"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: false
+
+      - name: "Development"
+        type: "automated"
+        agent_id: "senior_software_engineer"
+        is_pipeline_trigger: true
+        is_exit_column: false
+        auto_progress_on_completion: true
+        on_failure_column: "Backlog"
+        sla_seconds: 7200
+
+      - name: "Code Review"
+        type: "automated"
+        agent_id: "code_reviewer"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: true
+        on_failure_column: "Development"
+        sla_seconds: 3600
+
+      - name: "Testing"
+        type: "automated"
+        agent_id: "qa_engineer"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: true
+        on_failure_column: "Development"
+        sla_seconds: 3600
+        # Repair cycle agent assignments — code-only repair (no env_rebuild/env_verification)
+        # Test types run in sequence: compilation → unit → integration → ci
+        # All pass on first attempt in the benchmark.
+        repair_cycle_agents:
+          test_execution: "qa_engineer"
+          code_fix: "senior_software_engineer"
+          systemic_analysis: "senior_software_engineer"
+          systemic_fix: "senior_software_engineer"
+          env_rebuild: null
+          env_verification: null
+
+      - name: "Staged"
+        type: "manual"
+        is_pipeline_trigger: false
+        is_exit_column: true
+        auto_progress_on_completion: false

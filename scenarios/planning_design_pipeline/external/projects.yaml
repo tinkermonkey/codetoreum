@@ -1,0 +1,16 @@
+# Planning & Design Pipeline Scenario — External: Projects
+#
+# Port/Interface: ITicketSystem, IVersionControlService
+# Adapter (sim): InMemoryTicketAdapter, InMemoryVersionControlAdapter
+# Skipped when using real adapters
+
+projects:
+  - name: "documentation-robotics"
+    description: "Documentation robotics project — source of planning issue #591"
+    repository_url: "https://github.com/demo-org/documentation-robotics.git"
+    default_branch: "main"
+    metadata:
+      stack: "Python"
+      team: "platform-engineering"
+      vcs_operations: false
+      discussion_id: "D_kwDOQaznN84Ali-E"

@@ -7,9 +7,11 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
+from codetoreum.domain.board_workflow_template import ColumnTemplate
 from codetoreum.domain.events import (
     DomainEvent,
 )
+from codetoreum.domain.events.repair_cycle_events import RepairCycleCompletedEvent
 from codetoreum.domain.work_item import WorkItemPriority
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.event_types import EventTypes
@@ -17,7 +19,10 @@ from codetoreum.infrastructure.observability.instrumentation import (
     instrument_async_function,
 )
 from codetoreum.ports.exceptions import TimeoutError as PortTimeoutError
+from codetoreum.ports.input.conversational_loop_service import IConversationalLoopService
 from codetoreum.ports.output import IBoardService, IEventStore, ITicketSystem
+from codetoreum.ports.output.board_service import MovedByType
+from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 logger = logging.getLogger(__name__)
 
@@ -305,6 +310,8 @@ class WorkflowOrchestrator:
         event_bus: EventBus | None = None,
         projects_api: IProjectsAPI | None = None,
         board_service: IBoardService | None = None,
+        workflow_config: IWorkflowConfigService | None = None,
+        conversational_loop_orchestrator: IConversationalLoopService | None = None,
     ):
         """
         Initialize workflow orchestrator.
@@ -319,6 +326,8 @@ class WorkflowOrchestrator:
             event_bus: Event bus for subscribing to adapter events (optional)
             projects_api: Projects API for card movement (optional)
             board_service: Board service for querying item positions (optional)
+            workflow_config: Workflow config service for column templates (optional)
+            conversational_loop_orchestrator: CLO for conversational columns (optional)
         """
         self.task_queue = task_queue
         self.config = config
@@ -329,6 +338,8 @@ class WorkflowOrchestrator:
         self.event_bus = event_bus
         self.projects_api = projects_api
         self.board_service = board_service
+        self._workflow_config = workflow_config
+        self._conversational_loop_orchestrator = conversational_loop_orchestrator
 
         # Subscribe to adapter events if event bus is available
         if self.event_bus:
@@ -874,8 +885,11 @@ class WorkflowOrchestrator:
         if not self.event_bus:
             return
 
-        # Subscribe to board events
-        self.event_bus.subscribe(EventTypes.WORKITEM_COLUMN_CHANGED, self._handle_column_change)
+        # Subscribe to board events.
+        # NOTE: EventBus routes callbacks by event.event_type, which is the Python class name
+        # ("WorkItemColumnChanged"), not the dot-notation constant in EventTypes.
+        # Using the class name here ensures this callback actually receives the event.
+        self.event_bus.subscribe("WorkItemColumnChanged", self._handle_column_change)
 
         # Subscribe to discussion events
         self.event_bus.subscribe(EventTypes.COMMENT_NEEDS_RESPONSE, self._handle_comment_needs_response)
@@ -885,6 +899,9 @@ class WorkflowOrchestrator:
 
         # Subscribe to review events
         self.event_bus.subscribe(EventTypes.REVIEW_STATUS_CHANGED, self._handle_review_status_changed)
+
+        # Subscribe to repair cycle events (keyed by class name — EventBus routes by event.event_type)
+        self.event_bus.subscribe("RepairCycleCompletedEvent", self._handle_repair_cycle_completed)
 
         logger.info("WorkflowOrchestrator subscribed to adapter events")
 
@@ -916,7 +933,6 @@ class WorkflowOrchestrator:
         project_id: str = event.payload.get("project_id") or ""
         board_id: str = event.payload.get("board_id") or ""
         to_column: str = event.payload.get("to_column") or ""
-        from_column: str = event.payload.get("from_column") or ""
         moved_by: str = event.payload.get("moved_by") or "unknown"
 
         if not all([work_item_id, project_id, board_id, to_column]):
@@ -930,25 +946,38 @@ class WorkflowOrchestrator:
             return
 
         try:
-            # Get workflow configuration
-            try:
-                workflow_config = await self.config.get_workflow_config(project_id, board_id)
-            except PortTimeoutError as e:
-                logger.error(
-                    f"Failed to get workflow config for project={project_id}, board={board_id}: {e}",
-                    exc_info=True,
-                    extra={
-                        "error_id": "ERR_ORCHESTRATOR_CONFIG_TIMEOUT",
-                        "project_id": project_id,
-                        "board_id": board_id,
-                        "work_item_id": work_item_id,
-                        "error_type": type(e).__name__,
-                    },
-                )
-                return
+            # Find target column configuration.
+            # Prefer IWorkflowConfigService (new Gen2 YAML-seeded config) because it
+            # returns ColumnTemplate with execution_type and agent_id.  Fall back to the
+            # old MockProjectConfiguration path for backwards compatibility.
+            target_column_config: ColumnConfig | ColumnTemplate | None = None
+            if self._workflow_config:
+                try:
+                    board_template = await self._workflow_config.get_board_workflow_template(board_id)
+                    if board_template:
+                        target_column_config = board_template.get_column_config(to_column)
+                except Exception:
+                    pass  # fall through to legacy path
 
-            # Find target column configuration
-            target_column_config = self._find_column_config(workflow_config, to_column)
+            if target_column_config is None:
+                # Legacy path: old-style WorkflowConfig
+                try:
+                    workflow_config = await self.config.get_workflow_config(project_id, board_id)
+                except PortTimeoutError as e:
+                    logger.error(
+                        f"Failed to get workflow config for project={project_id}, board={board_id}: {e}",
+                        exc_info=True,
+                        extra={
+                            "error_id": "ERR_ORCHESTRATOR_CONFIG_TIMEOUT",
+                            "project_id": project_id,
+                            "board_id": board_id,
+                            "work_item_id": work_item_id,
+                            "error_type": type(e).__name__,
+                        },
+                    )
+                    return
+                target_column_config = self._find_column_config(workflow_config, to_column)
+
             if not target_column_config:
                 logger.warning(
                     f"Column '{to_column}' not found in workflow config",
@@ -956,45 +985,50 @@ class WorkflowOrchestrator:
                 )
                 return
 
-            # Case 1: Automated column - trigger agent
-            if target_column_config.agent:
-                # Create task context
-                task_context = {
-                    "work_item_id": work_item_id,
-                    "column": to_column,
-                    "project_id": project_id,
-                    "board_id": board_id,
-                    "moved_by": moved_by,
-                }
+            # Resolve agent ID — ColumnTemplate uses agent_id; legacy ColumnConfig uses agent
+            agent_id = getattr(target_column_config, "agent_id", None) or getattr(target_column_config, "agent", None)
 
-                # Create and enqueue task
-                task = Task(
-                    id=f"auto_{project_id}_{work_item_id}_{int(time.time())}",
-                    agent=target_column_config.agent,
-                    project=project_id,
-                    priority=WorkItemPriority.MEDIUM,
-                    context=task_context,
-                    created_at=datetime.now(UTC),
-                )
+            # Case 1: Automated column — dispatch based on execution_type
+            if agent_id:
+                execution_type = getattr(target_column_config, "execution_type", "task_queue")
 
-                try:
-                    task_id = await self.task_queue.enqueue(task)
-                    logger.info(f"Enqueued agent task {task_id} for column '{to_column}'")
-                except Exception as e:
-                    logger.error(
-                        f"CRITICAL: Failed to enqueue agent task for work_item={work_item_id}, "
-                        f"column='{to_column}', agent='{target_column_config.agent}'. "
-                        f"Work item has been moved to column but will not be processed automatically.",
-                        exc_info=True,
-                        extra={
-                            "error_id": "ERR_ORCHESTRATOR_TASK_ENQUEUE_FAILURE",
-                            "work_item_id": work_item_id,
-                            "project_id": project_id,
-                            "board_id": board_id,
-                            "column": to_column,
-                            "agent": target_column_config.agent,
-                            "error_type": type(e).__name__,
-                        },
+                if execution_type == "conversational":
+                    # Conversational column: initialize loop via ConversationalLoopOrchestrator
+                    if self._conversational_loop_orchestrator:
+                        try:
+                            await self._conversational_loop_orchestrator.initialize_loop(
+                                work_item_id=work_item_id,
+                                project_id=project_id,
+                                column_config={
+                                    "agent_assignment": agent_id,
+                                    "column_name": to_column,
+                                },
+                            )
+                            logger.info(
+                                f"Initialized conversational loop for work_item={work_item_id}, "
+                                f"column='{to_column}', agent='{agent_id}'"
+                            )
+                        except Exception as e:
+                            logger.error(
+                                f"Failed to initialize conversational loop for work_item={work_item_id}, "
+                                f"column='{to_column}': {e}",
+                                exc_info=True,
+                                extra={"error_id": "ERR_ORCHESTRATOR_CONVERSATIONAL_LOOP_INIT_FAILURE"},
+                            )
+                    else:
+                        logger.warning(
+                            f"Column '{to_column}' is conversational but no ConversationalLoopOrchestrator is wired. "
+                            f"Falling back to task queue.",
+                            extra={"error_id": "ERR_ORCHESTRATOR_CLO_NOT_WIRED"},
+                        )
+                        # Fall back to task queue
+                        await self._enqueue_agent_task(
+                            work_item_id, project_id, board_id, to_column, moved_by, target_column_config
+                        )
+                else:
+                    # Standard task_queue: enqueue agent task
+                    await self._enqueue_agent_task(
+                        work_item_id, project_id, board_id, to_column, moved_by, target_column_config
                     )
 
             # Case 2: Exit column - log for reference
@@ -1004,18 +1038,6 @@ class WorkflowOrchestrator:
                 # This ensures all lock cleanup and next-item queue processing happens
                 # in one coordinated place. WorkflowOrchestrator reacts to lock.released
                 # events via _handle_lock_released().
-
-            # Case 3: Conversational column - start monitoring (if implemented)
-            if getattr(target_column_config, "discussion_category", None):
-                logger.debug(f"Column '{to_column}' has discussion, would start monitoring (implementation pending)")
-
-            # Case 4: Leaving conversational column - stop monitoring
-            if from_column:
-                from_column_config = self._find_column_config(workflow_config, from_column)
-                if from_column_config and getattr(from_column_config, "discussion_category", None):
-                    logger.debug(
-                        f"Leaving discussion column '{from_column}', would stop monitoring (implementation pending)"
-                    )
 
         except Exception as e:
             logger.error(
@@ -1027,6 +1049,65 @@ class WorkflowOrchestrator:
                     "work_item_id": work_item_id,
                     "project_id": project_id,
                     "board_id": board_id,
+                    "error_type": type(e).__name__,
+                },
+            )
+
+    async def _enqueue_agent_task(
+        self,
+        work_item_id: str,
+        project_id: str,
+        board_id: str,
+        to_column: str,
+        moved_by: str,
+        column_config: "ColumnConfig | ColumnTemplate",
+    ) -> None:
+        """Enqueue an agent task for standard task_queue execution.
+
+        Args:
+            work_item_id: The work item to process
+            project_id: The project context
+            board_id: The board context
+            to_column: Target column name
+            moved_by: Actor who triggered the move
+            column_config: Column configuration with agent assignment (ColumnConfig
+                uses .agent; ColumnTemplate uses .agent_id)
+        """
+        # Resolve agent name: ColumnConfig uses .agent, ColumnTemplate uses .agent_id
+        agent_name = getattr(column_config, "agent", None) or getattr(column_config, "agent_id", None) or ""
+        task_context = {
+            "work_item_id": work_item_id,
+            "column": to_column,
+            "project_id": project_id,
+            "board_id": board_id,
+            "moved_by": moved_by,
+        }
+
+        task = Task(
+            id=f"auto_{project_id}_{work_item_id}_{int(time.time())}",
+            agent=agent_name,
+            project=project_id,
+            priority=WorkItemPriority.MEDIUM,
+            context=task_context,
+            created_at=datetime.now(UTC),
+        )
+
+        try:
+            task_id = await self.task_queue.enqueue(task)
+            logger.info(f"Enqueued agent task {task_id} for column '{to_column}'")
+        except Exception as e:
+            logger.error(
+                f"CRITICAL: Failed to enqueue agent task for work_item={work_item_id}, "
+                f"column='{to_column}', agent='{agent_name}'. "
+                f"Work item has been moved to column but will not be processed automatically.",
+                exc_info=True,
+                extra={
+                    "error_id": "ERR_ORCHESTRATOR_TASK_ENQUEUE_FAILURE",
+                    "work_item_id": work_item_id,
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "column": to_column,
+                    "agent": agent_name,
                     "error_type": type(e).__name__,
                 },
             )
@@ -1336,3 +1417,134 @@ class WorkflowOrchestrator:
                         },
                     )
                     raise
+
+    @instrument_async_function(
+        name="workflow.handle_repair_cycle_completed",
+        attributes={"service": "workflow_orchestrator", "event_handler": "true"},
+    )
+    async def _handle_repair_cycle_completed(self, event: DomainEvent) -> None:
+        """
+        Handle repair cycle completed event.
+
+        Progresses work item based on repair cycle outcome:
+        - overall_success=True: Move to next column (auto-progress)
+        - overall_success=False: Move to failure column if configured, else log warning
+
+        Args:
+            event: repair_cycle.completed DomainEvent whose payload is deserialized
+                   into a RepairCycleCompletedEvent
+        """
+        # The event arrives as a RepairCycleCompletedEvent (CodetoreumEvent duck-typed via EventBus).
+        # Access fields directly — no payload deserialization needed.
+        if not isinstance(event, RepairCycleCompletedEvent):
+            logger.error(
+                f"_handle_repair_cycle_completed received unexpected event type: {type(event).__name__}",
+                extra={"error_id": "ERR_ORCHESTRATOR_REPAIR_CYCLE_EVENT_DESERIALIZATION_FAILURE"},
+            )
+            return
+
+        typed_event = event
+
+        # Resolve work_item_id: prefer explicit field, fall back to workflow_run_id
+        work_item_id: str = typed_event.work_item_id or typed_event.workflow_run_id
+        board_id: str = typed_event.board_id
+
+        if not work_item_id or not board_id:
+            logger.warning(
+                "RepairCycleCompletedEvent missing work_item_id or board_id — cannot advance workflow",
+                extra={
+                    "error_id": "ERR_ORCHESTRATOR_REPAIR_CYCLE_EVENT_MISSING_IDS",
+                    "work_item_id": work_item_id,
+                    "board_id": board_id,
+                    "workflow_run_id": typed_event.workflow_run_id,
+                },
+            )
+            return
+
+        if not self.board_service:
+            logger.warning(
+                "Board service not configured, cannot process repair cycle completion",
+                extra={"error_id": "ERR_ORCHESTRATOR_BOARD_SERVICE_NOT_CONFIGURED"},
+            )
+            return
+
+        if not self.board_service or not self._workflow_config:
+            logger.warning(
+                "board_service or workflow_config not configured — cannot advance workflow after repair cycle",
+                extra={"error_id": "ERR_ORCHESTRATOR_REPAIR_CYCLE_MISSING_DEPS"},
+            )
+            return
+
+        try:
+            item_position = await self.board_service.get_item_position(work_item_id)
+            if not item_position:
+                logger.warning(
+                    f"Could not find position for item {work_item_id} after repair cycle",
+                    extra={
+                        "error_id": "ERR_ORCHESTRATOR_REPAIR_CYCLE_ITEM_POSITION_NOT_FOUND",
+                        "work_item_id": work_item_id,
+                        "board_id": board_id,
+                    },
+                )
+                return
+
+            current_column_name: str = item_position.column_name
+
+            # Load column template for progression rules (on_failure_column, position ordering)
+            template = await self._workflow_config.get_board_workflow_template(board_id)
+            if not template:
+                logger.warning(
+                    f"No workflow template for board '{board_id}' — cannot advance after repair cycle",
+                    extra={
+                        "error_id": "ERR_ORCHESTRATOR_REPAIR_CYCLE_COLUMN_CONFIG_NOT_FOUND",
+                        "work_item_id": work_item_id,
+                        "board_id": board_id,
+                    },
+                )
+                return
+
+            if typed_event.overall_success:
+                next_column_name = template.get_next_column(current_column_name)
+                if next_column_name:
+                    logger.info(
+                        f"Repair cycle succeeded for {work_item_id}: "
+                        f"advancing from '{current_column_name}' to '{next_column_name}'"
+                    )
+                    await self.board_service.move_item_to_column(
+                        work_item_id, next_column_name, MovedByType.ORCHESTRATOR
+                    )
+                else:
+                    logger.info(
+                        f"Repair cycle succeeded for {work_item_id}: "
+                        f"no next column after '{current_column_name}', workflow complete"
+                    )
+            else:
+                current_column = template.get_column_config(current_column_name)
+                failure_column: str | None = (
+                    getattr(current_column, "on_failure_column", None) if current_column else None
+                )
+
+                if failure_column:
+                    logger.warning(
+                        f"Repair cycle failed for {work_item_id}: "
+                        f"moving from '{current_column_name}' to failure column '{failure_column}'"
+                    )
+                    await self.board_service.move_item_to_column(work_item_id, failure_column, MovedByType.ORCHESTRATOR)
+                else:
+                    logger.warning(
+                        f"Repair cycle failed for {work_item_id} in column '{current_column_name}': "
+                        "no failure column configured, item remains in current column"
+                    )
+
+        except Exception as e:
+            logger.error(
+                f"Error handling repair cycle completed for work_item={work_item_id}, board={board_id}: {e}",
+                exc_info=True,
+                extra={
+                    "error_id": "ERR_ORCHESTRATOR_REPAIR_CYCLE_HANDLER_FAILURE",
+                    "work_item_id": work_item_id,
+                    "board_id": board_id,
+                    "overall_success": typed_event.overall_success,
+                    "error_type": type(e).__name__,
+                },
+            )

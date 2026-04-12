@@ -50,6 +50,7 @@ class InMemoryTicketAdapter(MockEventEmitter, ITicketSystem):
         self._comments: dict[str, list[Comment]] = {}  # work_item_id -> comments
         self._webhooks: dict[str, dict[str, Any]] = {}
         self._relationships: dict[str, list[tuple[str, str]]] = {}  # source_id -> [(target_id, relationship)]
+        self._children: dict[str, list[str]] = {}  # parent_id -> list of child work_item_ids
         self._next_work_item_number = 1
         self._lock = threading.Lock()  # Thread safety for concurrent test execution
 
@@ -84,6 +85,7 @@ class InMemoryTicketAdapter(MockEventEmitter, ITicketSystem):
         assignee: UserId | None = None,
         priority: WorkItemPriority | None = None,
         metadata: dict[str, Any] | None = None,
+        parent_issue_id: str | None = None,
     ) -> WorkItem:
         """
         Create a new work item.
@@ -129,6 +131,13 @@ class InMemoryTicketAdapter(MockEventEmitter, ITicketSystem):
             self._work_items[work_item.id] = work_item
             self._comments[work_item.id] = []
 
+            # Track parent-child relationship
+            if parent_issue_id is not None:
+                parent_key = str(parent_issue_id)
+                if parent_key not in self._children:
+                    self._children[parent_key] = []
+                self._children[parent_key].append(work_item.id)
+
             # Clear events after storage
             work_item.clear_events()
 
@@ -140,10 +149,17 @@ class InMemoryTicketAdapter(MockEventEmitter, ITicketSystem):
                 work_item_id=work_item.id,
                 project_id=str(project_id),
                 title=title,
+                parent_issue_id=parent_issue_id,
             )
             self.emit(event)
 
             return work_item
+
+    async def get_child_issues(self, parent_id) -> list[WorkItem]:
+        """Get all child work items for a parent."""
+        with self._lock:
+            child_ids = self._children.get(str(parent_id), [])
+            return [self._work_items[cid] for cid in child_ids if cid in self._work_items]
 
     async def update_work_item(self, item_id: WorkItemId, updates: dict[str, Any]) -> WorkItem:
         """
@@ -635,6 +651,7 @@ class InMemoryTicketAdapter(MockEventEmitter, ITicketSystem):
             self._comments.clear()
             self._webhooks.clear()
             self._relationships.clear()
+            self._children.clear()
             self._handlers.clear()
             self._next_work_item_number = 1
 

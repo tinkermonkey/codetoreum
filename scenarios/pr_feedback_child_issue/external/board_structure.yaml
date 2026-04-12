@@ -1,0 +1,18 @@
+# PR Feedback Child Issue Scenario — External: Board Structure
+#
+# Port/Interface: IBoardService
+# Adapter (sim): MockBoardAdapter
+# Skipped when using real adapters (board already exists in GitHub Projects/Linear/etc.)
+#
+# 5-column board (Codetoreum simulation pattern — Development is the pipeline trigger):
+#   Backlog → Development* → Code Review → Testing → Staged
+
+boards:
+  - board_id: "pr-feedback-board-1"
+    board_name: "PR Feedback Child Issue Board"
+    columns:
+      - "Backlog"
+      - "Development"
+      - "Code Review"
+      - "Testing"
+      - "Staged"

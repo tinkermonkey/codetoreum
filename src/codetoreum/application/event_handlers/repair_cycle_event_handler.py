@@ -8,8 +8,10 @@ Subscribes to workitem.column_changed events and orchestrates:
 
 import logging
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from codetoreum.domain.events import DomainEvent, WorkItemColumnChanged
+from codetoreum.domain.events.repair_cycle_events import RepairCycleCompletedEvent
 from codetoreum.domain.repair_cycle_types import (
     EnvironmentRepairConfig,
     RepairCycleAgentConfig,
@@ -19,6 +21,7 @@ from codetoreum.domain.repair_cycle_types import (
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus, EventHandler, event_handler
+from codetoreum.infrastructure.event_types import EventTypes
 from codetoreum.infrastructure.observability.instrumentation import (
     instrument_async_function,
 )
@@ -177,54 +180,46 @@ class RepairCycleEventHandler(EventHandler):
         project_id: str = event.payload.get("project_id") or ""
         to_column: str = event.payload.get("to_column") or ""
 
-        # Only process if work item is entering the configured repair cycle stage
-        if to_column != "Testing":
+        # Retrieve column template to check if this column triggers a repair cycle
+        # (columns with repair_cycle_agents configured are repair cycle columns)
+        column = None
+        if self._workflow_config:
+            template = await self._workflow_config.get_board_workflow_template(board_id)
+            if template:
+                column = template.get_column_config(to_column)
+
+        # Only process if the column has repair_cycle_agents configured
+        if column is None or not column.repair_cycle_agents:
             return
 
         logger.info(f"Work item {work_item_id} entered configured repair cycle stage, initiating repair cycle")
 
         try:
-            # Retrieve column template to extract repair_cycle_agents if available
-            agent_config: RepairCycleAgentConfig | None = None
-            if self._workflow_config:
-                template = await self._workflow_config.get_board_workflow_template(board_id)
-                if template:
-                    column = template.get_column_config(to_column)
-                    if column:
-                        if column.repair_cycle_agents:
-                            agent_config = column.repair_cycle_agents
-                            logger.info(
-                                f"Using specialized repair cycle agents for column '{to_column}': "
-                                f"test_execution={agent_config.test_execution}, "
-                                f"code_fix={agent_config.code_fix}, "
-                                f"systemic_analysis={agent_config.systemic_analysis}, "
-                                f"systemic_fix={agent_config.systemic_fix}, "
-                                f"env_rebuild={agent_config.env_rebuild}, "
-                                f"env_verification={agent_config.env_verification}"
-                            )
-                        else:
-                            logger.debug(
-                                f"Column '{to_column}' in board '{board_id}' has no repair_cycle_agents configured, "
-                                f"will use default agent"
-                            )
-                    else:
-                        logger.warning(
-                            f"Column '{to_column}' not found in board workflow template for board '{board_id}', "
-                            f"will use default agent"
-                        )
-                else:
-                    logger.debug(f"No workflow template configured for board '{board_id}', will use default agent")
-            else:
-                logger.debug("Workflow config service not provided, will use default agent for repair cycle")
-
-            # Create repair cycle context
-            test_configs = (
-                RepairTestRunConfig(test_type=RepairTestType.UNIT),
-                RepairTestRunConfig(test_type=RepairTestType.INTEGRATION),
-                RepairTestRunConfig(test_type=RepairTestType.E2E),
+            # Extract repair_cycle_agents from column config (checked non-None above)
+            agent_config = column.repair_cycle_agents
+            assert agent_config is not None
+            logger.info(
+                f"Using specialized repair cycle agents for column '{to_column}': "
+                f"test_execution={agent_config.test_execution}, "
+                f"code_fix={agent_config.code_fix}, "
+                f"systemic_analysis={agent_config.systemic_analysis}, "
+                f"systemic_fix={agent_config.systemic_fix}, "
+                f"env_rebuild={agent_config.env_rebuild}, "
+                f"env_verification={agent_config.env_verification}"
             )
+
+            # Build test configs: use column's configured types, or fall back to default
+            if column.repair_cycle_test_types:
+                test_configs = tuple(RepairTestRunConfig(test_type=t) for t in column.repair_cycle_test_types)
+            else:
+                test_configs = (
+                    RepairTestRunConfig(test_type=RepairTestType.UNIT),
+                    RepairTestRunConfig(test_type=RepairTestType.INTEGRATION),
+                    RepairTestRunConfig(test_type=RepairTestType.E2E),
+                )
+
             stage_config = RepairCycleStageConfig(
-                name="Testing",
+                name=to_column,
                 test_configs=test_configs,
                 agent_name="senior_software_engineer",
                 max_total_agent_calls=100,
@@ -234,7 +229,7 @@ class RepairCycleEventHandler(EventHandler):
                 environment_repair_config=EnvironmentRepairConfig(),
             )
             context = RepairCycleEventContext(
-                stage_name="Testing",
+                stage_name=to_column,
                 workflow_run_id=work_item_id,  # TODO: derive actual workflow_run_id once pipeline run tracking is available
                 work_item_id=work_item_id,
                 test_configs=test_configs,
@@ -254,15 +249,27 @@ class RepairCycleEventHandler(EventHandler):
                 f"iterations={sum(tr.iterations for tr in result.test_results)}"
             )
 
-            # Emit appropriate event based on result
+            # Emit RepairCycleCompletedEvent on both success and failure paths
+            completed_event = RepairCycleCompletedEvent(
+                type=EventTypes.REPAIR_CYCLE_COMPLETED,
+                timestamp=datetime.now(UTC).isoformat(),
+                source="repair_cycle_event_handler",
+                overall_success=result.overall_success,
+                test_results=result.test_results,
+                total_agent_calls=result.total_agent_calls,
+                duration_seconds=result.duration_seconds,
+                workflow_run_id=work_item_id,
+                commit_history=result.commit_history,
+                work_item_id=work_item_id,
+                board_id=board_id,
+            )
+            if self._event_bus:
+                await self._event_bus.publish(completed_event)  # type: ignore[arg-type]
+
             if result.overall_success:
                 logger.info(f"Repair cycle succeeded for {work_item_id}, moving to next column")
-                # In a full implementation, this would emit an event to move the item
-                # to the next column (e.g., "Staged" or "Ready for Deploy")
             else:
                 logger.warning(f"Repair cycle failed for {work_item_id}, escalating for human review")
-                # In a full implementation, this would emit an event to escalate
-                # the item for human review or move to an escalation column
 
         except Exception as e:
             logger.error(
