@@ -274,7 +274,7 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             pr_node = result.get("repository", {}).get("pullRequest")
 
             if not pr_node:
-                msg = "PR"
+                msg = "Pull request not found on GitHub"
                 raise ResourceNotFoundError(msg, pr_id)
 
             # Extract and aggregate check runs
@@ -349,8 +349,7 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
                     "error_type": "unexpected",
                 },
             )
-            msg = "github"
-            raise ExternalServiceError(msg, f"Failed to query PR CI status: {e}")
+            raise ExternalServiceError("GitHub", f"Failed to query PR CI status: {e}") from e
 
     async def run_ci_checks(
         self, project_id: str, working_directory: str, timeout_seconds: int = 600
@@ -430,7 +429,8 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
                 for run in check_runs:
                     name = run.get("name", "unnamed-check")
                     status_str = run.get("status", "QUEUED").lower()
-                    conclusion_str = run.get("conclusion", "").lower()
+                    conclusion = run.get("conclusion")
+                    conclusion_str = conclusion.lower() if conclusion else ""
                     details_url = run.get("detailsUrl", "")
 
                     # Map GitHub status/conclusion to CICheckStatus
@@ -487,8 +487,7 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             return check_results, overall_status, pipeline_url, status_counts
 
         except (KeyError, TypeError) as e:
-            msg = "github"
-            raise ExternalServiceError(msg, f"Invalid check runs response format: {e!s}")
+            raise ExternalServiceError("GitHub", f"Invalid check runs response format: {e!s}") from e
 
     async def _get_owner_repo(self) -> tuple[str, str]:
         """Get GitHub owner and repo from ticket adapter.
@@ -499,8 +498,8 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
         Raises:
             ExternalServiceError: If unable to determine owner/repo
         """
-        if hasattr(self._ticket_adapter, "_owner") and hasattr(self._ticket_adapter, "_repo"):
-            return (self._ticket_adapter._owner, self._ticket_adapter._repo)
-
-        msg = "github"
-        raise ExternalServiceError(msg, "Unable to determine GitHub owner/repo from adapter")
+        try:
+            return self._ticket_adapter.get_owner_repo()
+        except (ValueError, AttributeError) as e:
+            msg = f"GitHub integration: {e}"
+            raise ExternalServiceError("GitHub", msg) from e

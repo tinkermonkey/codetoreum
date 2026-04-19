@@ -96,6 +96,20 @@ class GitHubTicketAdapter(ITicketSystem):
             await self._http_client.aclose()
             self._http_client = None
 
+    def get_owner_repo(self) -> tuple[str, str]:
+        """Get GitHub owner (organization) and repository name.
+
+        Returns:
+            Tuple of (owner, repo) from the adapter configuration
+
+        Raises:
+            ValueError: If owner or repo is not configured
+        """
+        if not self.config.organization or not self.config.repository:
+            msg = "GitHub owner (organization) and repository must be configured"
+            raise ValueError(msg)
+        return (self.config.organization, self.config.repository)
+
     def _evict_cache_if_needed(self) -> None:
         """Evict oldest cache entries if cache is full."""
         if len(self._cache) >= self.config.cache_max_entries:
