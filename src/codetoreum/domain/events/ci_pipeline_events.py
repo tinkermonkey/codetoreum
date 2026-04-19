@@ -11,7 +11,7 @@ CI operations—they cannot be modified after creation.
 from dataclasses import dataclass
 from uuid import uuid4
 
-from .adapter_events import CodetoreumEvent, now_iso
+from .adapter_events import CodetoreumEvent
 
 
 @dataclass(frozen=True)
@@ -55,13 +55,13 @@ class CIPipelineStatusCheckedEvent(CodetoreumEvent):
         if not self.status:
             msg = "status is required"
             raise ValueError(msg)
-        if not isinstance(self.check_count, int) or self.check_count < 0:
+        if self.check_count < 0:
             msg = "check_count must be a non-negative integer"
             raise ValueError(msg)
-        if not isinstance(self.passed_count, int) or self.passed_count < 0:
+        if self.passed_count < 0:
             msg = "passed_count must be a non-negative integer"
             raise ValueError(msg)
-        if not isinstance(self.failed_count, int) or self.failed_count < 0:
+        if self.failed_count < 0:
             msg = "failed_count must be a non-negative integer"
             raise ValueError(msg)
 
@@ -82,16 +82,20 @@ class CIPipelineStatusCheckedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "CIPipelineStatusCheckedEvent":
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary.
+
+        Raises:
+            KeyError: If required fields (pr_id, project_id, status) are missing.
+        """
         return cls(
             type=data.get("type", "ci.pipeline_status_checked"),
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
-            pr_id=data.get("pr_id", ""),
-            project_id=data.get("project_id", ""),
-            status=data.get("status", ""),
+            pr_id=data["pr_id"],
+            project_id=data["project_id"],
+            status=data["status"],
             check_count=data.get("check_count", 0),
             passed_count=data.get("passed_count", 0),
             failed_count=data.get("failed_count", 0),
@@ -135,7 +139,7 @@ class CIRunStartedEvent(CodetoreumEvent):
         if not self.working_directory:
             msg = "working_directory is required"
             raise ValueError(msg)
-        if not isinstance(self.timeout_seconds, int) or self.timeout_seconds <= 0:
+        if self.timeout_seconds <= 0:
             msg = "timeout_seconds must be a positive integer"
             raise ValueError(msg)
 
@@ -154,17 +158,22 @@ class CIRunStartedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "CIRunStartedEvent":
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary.
+
+        Raises:
+            KeyError: If required fields (project_id, workflow_run_id,
+                     working_directory, timeout_seconds) are missing.
+        """
         return cls(
             type=data.get("type", "ci.run_started"),
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
-            project_id=data.get("project_id", ""),
-            workflow_run_id=data.get("workflow_run_id", ""),
-            working_directory=data.get("working_directory", ""),
-            timeout_seconds=data.get("timeout_seconds", 0),
+            project_id=data["project_id"],
+            workflow_run_id=data["workflow_run_id"],
+            working_directory=data["working_directory"],
+            timeout_seconds=data["timeout_seconds"],
         )
 
 
@@ -204,14 +213,11 @@ class CIRunCompletedEvent(CodetoreumEvent):
         if not self.workflow_run_id:
             msg = "workflow_run_id is required"
             raise ValueError(msg)
-        if not isinstance(self.passed, int) or self.passed < 0:
+        if self.passed < 0:
             msg = "passed must be a non-negative integer"
             raise ValueError(msg)
-        if not isinstance(self.failed, int) or self.failed < 0:
+        if self.failed < 0:
             msg = "failed must be a non-negative integer"
-            raise ValueError(msg)
-        if not isinstance(self.output, str):
-            msg = "output must be a string"
             raise ValueError(msg)
 
     def to_dict(self) -> dict:
@@ -230,16 +236,21 @@ class CIRunCompletedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "CIRunCompletedEvent":
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary.
+
+        Raises:
+            KeyError: If required fields (project_id, workflow_run_id, passed,
+                     failed) are missing.
+        """
         return cls(
             type=data.get("type", "ci.run_completed"),
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
-            project_id=data.get("project_id", ""),
-            workflow_run_id=data.get("workflow_run_id", ""),
-            passed=data.get("passed", 0),
-            failed=data.get("failed", 0),
+            project_id=data["project_id"],
+            workflow_run_id=data["workflow_run_id"],
+            passed=data["passed"],
+            failed=data["failed"],
             output=data.get("output", ""),
         )
