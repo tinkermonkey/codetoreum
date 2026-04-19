@@ -372,7 +372,7 @@ class MockCIPipelineAdapter(ICIPipelineService):
             timestamp=self._get_iso_timestamp(),
             source="mock",
         )
-        self._event_emitter.emit(event)
+        self.emit(event)
 
         return ci_status
 
@@ -408,7 +408,7 @@ class MockCIPipelineAdapter(ICIPipelineService):
             timestamp=self._get_iso_timestamp(),
             source="mock",
         )
-        self._event_emitter.emit(started_event)
+        self.emit(started_event)
 
         async with self._lock:
             # Track that this project had a CI run
@@ -454,7 +454,7 @@ class MockCIPipelineAdapter(ICIPipelineService):
             timestamp=self._get_iso_timestamp(),
             source="mock",
         )
-        self._event_emitter.emit(completed_event)
+        self.emit(completed_event)
 
         return result
 
@@ -534,13 +534,14 @@ class MockCIPipelineAdapter(ICIPipelineService):
         """Get list of PR IDs that had CI status checked.
 
         Returns:
-            List of PR IDs in the order they were checked
+            List of PR IDs (order not guaranteed)
 
         Example:
             await adapter.get_pr_ci_status("pr-1", "proj-1")
             await adapter.get_pr_ci_status("pr-2", "proj-1")
             calls = adapter.get_pr_ci_calls()
-            assert calls == ["pr-1", "pr-2"]
+            assert "pr-1" in calls
+            assert "pr-2" in calls
         """
         return list(self._pr_ci_checked)
 
@@ -548,12 +549,13 @@ class MockCIPipelineAdapter(ICIPipelineService):
         """Get list of project IDs that had CI runs executed.
 
         Returns:
-            List of project IDs in the order they were run
+            List of project IDs (order not guaranteed)
 
         Example:
             await adapter.run_ci_checks("proj-1", "/workspace")
             await adapter.run_ci_checks("proj-2", "/workspace")
             calls = adapter.get_ci_run_calls()
-            assert calls == ["proj-1", "proj-2"]
+            assert "proj-1" in calls
+            assert "proj-2" in calls
         """
         return list(self._ci_runs_executed)
