@@ -33,6 +33,13 @@ from .branch_events import (
     BranchReusedEvent,
 )
 
+# CI pipeline events
+from .ci_pipeline_events import (
+    CIPipelineStatusCheckedEvent,
+    CIRunCompletedEvent,
+    CIRunStartedEvent,
+)
+
 # Container execution events
 from .container_events import (
     ContainerExecutionCompletedEvent,
@@ -315,6 +322,10 @@ __all__ = [
     "BranchResolvedEvent",
     "BranchReusedEvent",
     "BranchResolutionCreatedEvent",
+    # CI pipeline events
+    "CIPipelineStatusCheckedEvent",
+    "CIRunStartedEvent",
+    "CIRunCompletedEvent",
     # Discussion events
     "Comment",
     "CommentContext",
