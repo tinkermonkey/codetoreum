@@ -71,7 +71,8 @@ class CIPipelineStatus:
 
     All fields are validated at construction to ensure contract boundary integrity.
     Frozen to prevent accidental mutation after creation. Check results are converted
-    to a tuple for true immutability.
+    to a tuple for true immutability. Cross-field consistency is enforced: the counts
+    (passed, failed, pending) must match the actual check results.
 
     Attributes:
         pr_id: Pull request identifier
@@ -94,7 +95,7 @@ class CIPipelineStatus:
     pipeline_url: str = ""
 
     def __post_init__(self) -> None:
-        """Validate all fields at construction time."""
+        """Validate all fields at construction time and cross-field consistency."""
         if not isinstance(self.pr_id, str) or not self.pr_id:
             msg = "pr_id must be a non-empty string"
             raise ValueError(msg)
@@ -135,6 +136,31 @@ class CIPipelineStatus:
             msg = "pipeline_url must be a string"
             raise ValueError(msg)
 
+        # Cross-field consistency: validate that total_checks equals sum of status counts
+        # Note: skipped checks don't contribute to passed/failed/pending, but are still in check_results
+        skipped_results = sum(1 for r in self.check_results if r.status == CICheckStatus.SKIPPED)
+        sum_of_counts = self.passed + self.failed + self.pending + skipped_results
+        if self.total_checks != sum_of_counts:
+            msg = f"total_checks ({self.total_checks}) must equal sum of status counts (passed={self.passed} + failed={self.failed} + pending={self.pending} + skipped={skipped_results} = {sum_of_counts})"
+            raise ValueError(msg)
+
+        # Validate that counts match the actual check_results from external system
+        passed_results = sum(1 for r in self.check_results if r.status == CICheckStatus.PASSED)
+        failed_results = sum(1 for r in self.check_results if r.status == CICheckStatus.FAILED)
+        pending_results = sum(1 for r in self.check_results if r.status in (CICheckStatus.PENDING, CICheckStatus.RUNNING))
+
+        if self.passed != passed_results:
+            msg = f"passed count ({self.passed}) does not match check_results ({passed_results} checks are PASSED)"
+            raise ValueError(msg)
+
+        if self.failed != failed_results:
+            msg = f"failed count ({self.failed}) does not match check_results ({failed_results} checks are FAILED)"
+            raise ValueError(msg)
+
+        if self.pending != pending_results:
+            msg = f"pending count ({self.pending}) does not match check_results ({pending_results} checks are PENDING/RUNNING)"
+            raise ValueError(msg)
+
 
 @dataclass(frozen=True)
 class CIRunResult:
@@ -144,6 +170,8 @@ class CIRunResult:
     (typically in a container). All fields are validated at construction to
     ensure contract boundary integrity. Frozen to prevent accidental mutation
     after creation. Check results are converted to a tuple for true immutability.
+    Cross-field consistency is enforced: the passed/failed counts must match
+    the actual check results.
 
     Attributes:
         passed: Number of checks that passed
@@ -162,7 +190,7 @@ class CIRunResult:
     output: str = ""
 
     def __post_init__(self) -> None:
-        """Validate all fields at construction time."""
+        """Validate all fields at construction time and cross-field consistency."""
         if not isinstance(self.passed, int) or self.passed < 0:
             msg = "passed must be a non-negative integer"
             raise ValueError(msg)
@@ -211,6 +239,18 @@ class CIRunResult:
             msg = "output must be a string"
             raise ValueError(msg)
 
+        # Cross-field consistency: validate that passed/failed counts match check_results
+        passed_results = sum(1 for r in self.check_results if r.status == CICheckStatus.PASSED)
+        failed_results = sum(1 for r in self.check_results if r.status == CICheckStatus.FAILED)
+
+        if self.passed != passed_results:
+            msg = f"passed count ({self.passed}) does not match check_results ({passed_results} checks are PASSED)"
+            raise ValueError(msg)
+
+        if self.failed != failed_results:
+            msg = f"failed count ({self.failed}) does not match check_results ({failed_results} checks are FAILED)"
+            raise ValueError(msg)
+
 
 class ICIPipelineService(IEventEmitter, IMonitoredService, ABC):
     """CI pipeline management with event emission and monitoring.
@@ -244,7 +284,7 @@ class ICIPipelineService(IEventEmitter, IMonitoredService, ABC):
 
             # Run local CI checks
             result = await svc.run_ci_checks("proj-123", "/workspace", 600)
-            if result.passed:
+            if result.failed == 0:
                 print("All checks passed!")
             else:
                 for check in result.check_results:

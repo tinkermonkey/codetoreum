@@ -287,7 +287,7 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
                 total_checks=len(check_results),
                 passed=status_counts["passed"],
                 failed=status_counts["failed"],
-                pending=status_counts["pending"],
+                pending=status_counts["pending"] + status_counts["running"],
                 pipeline_url=pipeline_url,
             )
 
