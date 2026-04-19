@@ -4,17 +4,23 @@ Subscribes to workitem.column_changed events and orchestrates:
 - Detection of work items entering the configured repair cycle stage
 - Invocation of the repair cycle (test-fix-validate loop)
 - Coordination with repair cycle adapters for test execution
+- CI pipeline integration (routes CI checks to ICIPipelineService)
 """
 
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from codetoreum.application.repair_cycle_ci_integration import (
+    convert_ci_run_result_to_repair_test_result,
+)
 from codetoreum.domain.events import DomainEvent, WorkItemColumnChanged
 from codetoreum.domain.events.repair_cycle_events import RepairCycleCompletedEvent
 from codetoreum.domain.repair_cycle_types import (
+    CycleResult,
     EnvironmentRepairConfig,
     RepairCycleAgentConfig,
+    RepairCycleResult,
     RepairCycleStageConfig,
     RepairTestRunConfig,
     RepairTestType,
@@ -26,6 +32,7 @@ from codetoreum.infrastructure.observability.instrumentation import (
     instrument_async_function,
 )
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
+from codetoreum.ports.output.ci_pipeline_service import ICIPipelineService
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
@@ -88,6 +95,7 @@ class RepairCycleEventHandler(EventHandler):
         workflow_config: IWorkflowConfigService | None = None,
         clock: SimulationClock | None = None,
         event_bus: EventBus | None = None,
+        ci_pipeline_service: ICIPipelineService | None = None,
     ):
         """
         Initialize repair cycle event handler.
@@ -97,11 +105,13 @@ class RepairCycleEventHandler(EventHandler):
             workflow_config: Workflow config service to retrieve column templates
             clock: Optional simulation clock for deterministic test execution
             event_bus: Event bus for publishing events
+            ci_pipeline_service: Optional CI pipeline service for executing CI checks
         """
         self._repair_cycle = repair_cycle
         self._workflow_config = workflow_config
         self._clock = clock
         self._event_bus = event_bus
+        self._ci_pipeline_service = ci_pipeline_service
 
     @property
     def repair_cycle(self) -> IRepairCycle:
@@ -210,13 +220,21 @@ class RepairCycleEventHandler(EventHandler):
 
             # Build test configs: use column's configured types, or fall back to default
             if column.repair_cycle_test_types:
-                test_configs = tuple(RepairTestRunConfig(test_type=t) for t in column.repair_cycle_test_types)
+                all_test_types = column.repair_cycle_test_types
             else:
-                test_configs = (
-                    RepairTestRunConfig(test_type=RepairTestType.UNIT),
-                    RepairTestRunConfig(test_type=RepairTestType.INTEGRATION),
-                    RepairTestRunConfig(test_type=RepairTestType.E2E),
+                all_test_types = (
+                    RepairTestType.UNIT,
+                    RepairTestType.INTEGRATION,
+                    RepairTestType.E2E,
                 )
+
+            # Split CI tests from agent-executor tests
+            # FR-5.2: CI configs are filtered out before IRepairCycle.execute() is called
+            ci_test_types = tuple(t for t in all_test_types if t == RepairTestType.CI)
+            agent_test_types = tuple(t for t in all_test_types if t != RepairTestType.CI)
+
+            # Build test configs only for agent-executor tests (exclude CI)
+            test_configs = tuple(RepairTestRunConfig(test_type=t) for t in agent_test_types)
 
             stage_config = RepairCycleStageConfig(
                 name=to_column,
@@ -240,8 +258,75 @@ class RepairCycleEventHandler(EventHandler):
                 agent_config=agent_config,
             )
 
-            # Execute repair cycle
+            # Execute repair cycle with agent-executor tests only
             result = await self._repair_cycle.execute(context)
+
+            # Execute CI tests separately if configured
+            # FR-5.2: Route RepairTestType.CI to ICIPipelineService.run_ci_checks()
+            ci_results: list[CycleResult] = []
+            if ci_test_types and self._ci_pipeline_service:
+                logger.info(f"Executing CI checks for {work_item_id}")
+                try:
+                    ci_run_result = await self._ci_pipeline_service.run_ci_checks(
+                        project_id=project_id,
+                        working_directory="/workspace",  # Standard workspace path
+                        timeout_seconds=600,
+                    )
+
+                    # FR-5.3: Convert CIRunResult to RepairTestResult for downstream aggregation
+                    ci_test_result = convert_ci_run_result_to_repair_test_result(ci_run_result)
+
+                    # Create a CycleResult for the CI test type
+                    ci_cycle_result = CycleResult(
+                        test_type=RepairTestType.CI,
+                        passed=ci_run_result.failed == 0,
+                        iterations=1,
+                        final_result=ci_test_result if ci_run_result.failed == 0 else None,
+                        error=None if ci_run_result.failed == 0 else f"CI checks failed: {len(ci_run_result.failures)} failures",
+                        files_fixed=0,
+                        warnings_reviewed=0,
+                        duration_seconds=0.0,
+                    )
+                    ci_results.append(ci_cycle_result)
+
+                    logger.info(
+                        f"CI checks completed for {work_item_id}: "
+                        f"passed={ci_run_result.passed}, failed={ci_run_result.failed}"
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"CI pipeline execution failed for {work_item_id}: {e}",
+                        exc_info=True,
+                        extra={
+                            "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                            "work_item_id": work_item_id,
+                            "project_id": project_id,
+                        },
+                    )
+                    # Add failed CI result to overall results
+                    ci_cycle_result = CycleResult(
+                        test_type=RepairTestType.CI,
+                        passed=False,
+                        iterations=1,
+                        final_result=None,
+                        error=f"CI pipeline execution failed: {str(e)}",
+                        files_fixed=0,
+                        warnings_reviewed=0,
+                        duration_seconds=0.0,
+                    )
+                    ci_results.append(ci_cycle_result)
+
+            # Merge CI results with agent-executor results
+            all_test_results = list(result.test_results) + ci_results
+            result = RepairCycleResult(
+                stage=result.stage,
+                test_results=tuple(all_test_results),
+                overall_success=result.overall_success and all(r.passed for r in ci_results),
+                total_agent_calls=result.total_agent_calls,
+                duration_seconds=result.duration_seconds,
+                timestamp=result.timestamp,
+                commit_history=result.commit_history,
+            )
 
             logger.info(
                 f"Repair cycle completed for {work_item_id}: "

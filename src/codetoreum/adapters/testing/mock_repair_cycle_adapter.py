@@ -21,8 +21,12 @@ from typing import TYPE_CHECKING, Any
 
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
+from codetoreum.application.repair_cycle_ci_integration import (
+    convert_ci_run_result_to_repair_test_result,
+)
 
 if TYPE_CHECKING:
+    from codetoreum.ports.output.ci_pipeline_service import ICIPipelineService
     from codetoreum.ports.output.container import IContainer
     from codetoreum.ports.output.environment_repair_service import (
         IEnvironmentRepairService,
@@ -124,6 +128,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         container_adapter: "IContainer | None" = None,
         systemic_analysis_service: "ISystemicAnalysisService | None" = None,
         environment_repair_service: "IEnvironmentRepairService | None" = None,
+        ci_pipeline_service: "ICIPipelineService | None" = None,
     ) -> None:
         """Initialize the repair cycle adapter with SimulationClock.
 
@@ -145,6 +150,9 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             environment_repair_service: Optional environment repair service for rebuilding and verifying
                                        test environments. If provided, enables environment rebuild retry
                                        loop dispatch during ENVIRONMENT_ISSUE failures.
+            ci_pipeline_service: Optional CI pipeline service for executing CI checks.
+                                If provided, enables CI check routing (FR-6.1-6.2).
+                                Required when RepairTestType.CI is in test configs.
         """
         super().__init__()
         # Default factory returns MockLLMAdapter for any agent
@@ -163,6 +171,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         self._container_adapter = container_adapter
         self._systemic_analysis_service = systemic_analysis_service
         self._environment_repair_service = environment_repair_service
+        self._ci_pipeline_service = ci_pipeline_service
         self._current_project: str | None = None
         self._repair_state: dict[str, Any] = {}
         self._test_type_index: dict[str, int] = {}
@@ -445,6 +454,20 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             service: IEnvironmentRepairService instance for environment repair operations
         """
         self._environment_repair_service = service
+
+    @property
+    def ci_pipeline_service(self) -> "ICIPipelineService | None":
+        """Get the CI pipeline service."""
+        return self._ci_pipeline_service
+
+    @ci_pipeline_service.setter
+    def ci_pipeline_service(self, service: "ICIPipelineService | None") -> None:
+        """Set the CI pipeline service.
+
+        Args:
+            service: ICIPipelineService instance for CI checks
+        """
+        self._ci_pipeline_service = service
 
     @property
     def current_project(self) -> str | None:
@@ -826,8 +849,8 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
         Clock advances 30 seconds per test execution.
 
-        Uses container adapter test results if available (causal linking FR-2/US-2.4),
-        otherwise falls back to pre-configured sequences.
+        For RepairTestType.CI, delegates to ICIPipelineService.run_ci_checks() if available
+        (FR-6.1-6.2). Otherwise, uses container adapter test results or pre-configured sequences.
 
         Args:
             config: Test run configuration
@@ -835,7 +858,85 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
         Returns:
             RepairTestResult with pass/fail counts and failure details
+
+        Raises:
+            ValueError: If RepairTestType.CI is requested but no ICIPipelineService is injected
         """
+        # FR-6.2: Handle CI test type routing
+        if config.test_type == RepairTestType.CI:
+            if not self._ci_pipeline_service:
+                msg = (
+                    f"RepairTestType.CI was requested but no ICIPipelineService is injected. "
+                    f"Provide ci_pipeline_service to MockRepairCycleAdapter to enable CI routing."
+                )
+                raise ValueError(msg)
+
+            # FR-6.1: Delegate CI execution to ICIPipelineService.run_ci_checks()
+            logger.debug(
+                "Delegating CI test execution to ICIPipelineService",
+                extra={"workflow_run_id": context.workflow_run_id},
+            )
+
+            # Record which agent was going to execute (for consistency)
+            _, agent_name = await self._resolve_and_record_agent("test_execution", context)
+
+            self.agent_call_count += 1
+            self.total_agent_calls += 1
+            await self.clock.advance(timedelta(seconds=30))
+
+            iteration = self._get_iteration_for_test_type(config.test_type)
+
+            # Call CI service and convert result
+            # FR-5.3: Convert CIRunResult to RepairTestResult
+            ci_run_result = await self._ci_pipeline_service.run_ci_checks(
+                project_id=context.work_item_id,
+                working_directory="/workspace",
+                timeout_seconds=config.timeout,
+            )
+
+            result = convert_ci_run_result_to_repair_test_result(ci_run_result, iteration=iteration)
+
+            logger.debug(
+                "CI test execution completed",
+                extra={
+                    "workflow_run_id": context.workflow_run_id,
+                    "passed": result.passed,
+                    "failed": result.failed,
+                    "agent_name": agent_name,
+                },
+            )
+
+            self._log_event(
+                {
+                    "type": "TEST_EXECUTION_COMPLETED",
+                    "test_type": config.test_type.value,
+                    "iteration": iteration,
+                    "passed": result.passed,
+                    "failed": result.failed,
+                }
+            )
+
+            if self._current_project is not None:
+                self.emit(
+                    RepairCycleTestExecutionCompletedEvent(
+                        type="repair_cycle.test_execution_completed",
+                        timestamp=self.clock.now().isoformat(),
+                        source="mock_repair_cycle",
+                        test_type=config.test_type,
+                        test_type_index=self._test_type_index.get(config.test_type.value, 1),
+                        test_cycle_iteration=iteration,
+                        passed=result.passed,
+                        failed=result.failed,
+                        warnings=result.warnings,
+                        has_failures=(result.failed > 0),
+                        failures=result.failures,
+                        agent_name=agent_name,
+                        workflow_run_id=context.workflow_run_id,
+                    )
+                )
+
+            return result
+
         # Resolve and record which agent is executing this sub-task
         _, agent_name = await self._resolve_and_record_agent("test_execution", context)
 
