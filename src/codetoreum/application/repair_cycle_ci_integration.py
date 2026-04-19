@@ -7,7 +7,7 @@ ICIPipelineService rather than the agent executor path.
 
 from datetime import UTC, datetime
 
-from codetoreum.domain.repair_cycle_types import RepairTestFailure, RepairTestResult, RepairTestType
+from codetoreum.domain.repair_cycle_types import RepairTestFailure, RepairTestResult, RepairTestType, RepairTestWarning
 from codetoreum.ports.output.ci_pipeline_service import CIRunResult
 
 
@@ -44,6 +44,17 @@ def convert_ci_run_result_to_repair_test_result(
         for i, failure in enumerate(ci_result.failures)
     )
 
+    # Convert CI warnings to RepairTestWarning objects
+    # Each warning string becomes a separate RepairTestWarning with file="ci"
+    # to maintain consistency with failure conversion
+    warnings = tuple(
+        RepairTestWarning(
+            file="ci",
+            message=warning,
+        )
+        for warning in ci_result.warnings
+    )
+
     return RepairTestResult(
         test_type=RepairTestType.CI,
         iteration=iteration,
@@ -51,7 +62,7 @@ def convert_ci_run_result_to_repair_test_result(
         failed=ci_result.failed,
         warnings=len(ci_result.warnings),
         failures=failures,
-        warning_list=ci_result.warnings,
+        warning_list=warnings,
         raw_output=ci_result.output,
         timestamp=datetime.now(UTC).isoformat(),
     )
