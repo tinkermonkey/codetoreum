@@ -1710,6 +1710,18 @@ class TestRepairCycleAgentConfig:
         assert config.systemic_fix is None
         assert config.env_rebuild is None
         assert config.env_verification == "qa_engineer"
+        assert config.ci_check is None
+
+    def test_create_with_ci_check_agent(self):
+        """Test creating config with ci_check agent set."""
+        config = RepairCycleAgentConfig(ci_check="lint_fixer")
+        assert config.test_execution is None
+        assert config.code_fix is None
+        assert config.systemic_analysis is None
+        assert config.systemic_fix is None
+        assert config.env_rebuild is None
+        assert config.env_verification is None
+        assert config.ci_check == "lint_fixer"
 
     def test_create_with_all_agents(self):
         """Test creating config with all agents set."""
@@ -1720,6 +1732,7 @@ class TestRepairCycleAgentConfig:
             systemic_fix="architect",
             env_rebuild="devops_engineer",
             env_verification="qa_engineer",
+            ci_check="lint_fixer",
         )
         assert config.test_execution == "qa_engineer"
         assert config.code_fix == "senior_software_engineer"
@@ -1727,6 +1740,7 @@ class TestRepairCycleAgentConfig:
         assert config.systemic_fix == "architect"
         assert config.env_rebuild == "devops_engineer"
         assert config.env_verification == "qa_engineer"
+        assert config.ci_check == "lint_fixer"
 
     def test_config_immutability_raises_frozen_error(self):
         """Test that frozen dataclass prevents modification."""
@@ -1761,6 +1775,7 @@ class TestRepairCycleAgentConfig:
             systemic_fix="architect",
             env_rebuild="devops_engineer",
             env_verification="qa_engineer",
+            ci_check="lint_fixer",
         )
         default = "default_agent"
 
@@ -1771,6 +1786,7 @@ class TestRepairCycleAgentConfig:
         assert config.resolve_agent("systemic_fix", default) == "architect"
         assert config.resolve_agent("env_rebuild", default) == "devops_engineer"
         assert config.resolve_agent("env_verification", default) == "qa_engineer"
+        assert config.resolve_agent("ci_check", default) == "lint_fixer"
 
     def test_resolve_agent_fallback_chain(self):
         """Test resolve_agent fallback chain with partial config."""
@@ -1884,10 +1900,11 @@ class TestRepairCycleAgentConfig:
         assert "systemic_fix" in RepairCycleAgentConfig.KNOWN_SUB_TASKS
         assert "env_rebuild" in RepairCycleAgentConfig.KNOWN_SUB_TASKS
         assert "env_verification" in RepairCycleAgentConfig.KNOWN_SUB_TASKS
+        assert "ci_check" in RepairCycleAgentConfig.KNOWN_SUB_TASKS
 
     def test_known_sub_tasks_constant_count(self):
-        """Test KNOWN_SUB_TASKS has exactly 6 sub-tasks."""
-        assert len(RepairCycleAgentConfig.KNOWN_SUB_TASKS) == 6
+        """Test KNOWN_SUB_TASKS has exactly 7 sub-tasks."""
+        assert len(RepairCycleAgentConfig.KNOWN_SUB_TASKS) == 7
 
     def test_known_sub_tasks_is_frozenset(self):
         """Test KNOWN_SUB_TASKS is immutable."""
