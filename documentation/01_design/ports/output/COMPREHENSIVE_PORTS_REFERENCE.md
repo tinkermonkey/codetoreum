@@ -300,13 +300,13 @@ CI pipeline management with event emission and monitoring. Provides vendor-agnos
   - **Returns**: `CIPipelineStatus` with check results and pipeline URL
 - `run_ci_checks()` - Execute CI checks locally in a working directory
   - **Parameters**: `project_id` (str), `working_directory` (str), `timeout_seconds` (int, default 600)
-  - **Returns**: `CIRunResult` with pass/fail counts and detailed output
+  - **Returns**: `CIRunResult` with boolean success flag, check results, and detailed output
 
 **Value Objects**:
 - `CICheckStatus` (Enum) - Status of individual CI check (PENDING, RUNNING, PASSED, FAILED, SKIPPED)
-- `CICheckResult` - Result of single CI check execution (name, status, details, error_message)
-- `CIPipelineStatus` - Status of CI pipeline for pull request (pr_id, status, check_results tuple, pipeline_url)
-- `CIRunResult` - Result of running CI checks locally (passed count, failed count, failures tuple, warnings tuple, output)
+- `CICheckResult` - Result of single CI check execution (name, status, conclusion, url)
+- `CIPipelineStatus` - Status of CI pipeline for pull request (pr_id, status, check_results tuple, pipeline_url, total_checks, passed, failed, pending)
+- `CIRunResult` - Result of running CI checks locally (passed bool, check_results tuple, warnings tuple, output)
 
 **Events**:
 - `ci.pipeline_status_checked` → CIPipelineStatusCheckedEvent (PR CI status queried)
