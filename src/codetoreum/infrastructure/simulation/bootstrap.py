@@ -5,13 +5,13 @@ Wires up the entire application stack in simulation mode through 6 phases:
 
 **Phase 0**: Create simulation engine (encapsulates clock and timing)
 **Phase 1**: Create infrastructure (event bus, logger, error registry) - EARLY for event subscriptions
-**Phase 2**: Create adapters (30 adapters all via AdapterResolver)
+**Phase 2**: Create adapters (32 adapters all via AdapterResolver)
            Includes: ticket system, LLM, container, repository, event store, metrics, storage, config,
            notifier, encryption, board, repair cycle, project manager, lock service, workflow config,
            agent executor, version control, message broker, discussion, review cycle, identity service,
            checkpoint store, queue service, event emitter, code review, container recovery, work item
            service, agent repository, active workflow run registry, work item branch tracker, audit store,
-           and systemic analysis service
+           systemic analysis service, environment repair service, and CI pipeline service
 **Phase 3**: Create services (11 application services with their dependencies: workflow orchestrator,
            execution service, agent scheduler, pipeline manager, review service, feedback processor,
            workspace router, configuration service, work item service, multi-project orchestrator,
@@ -908,8 +908,8 @@ class SimulationApplicationBootstrap:
             logger.info("Phase 1: Creating infrastructure...")
             self.infrastructure = self._create_infrastructure()
 
-            # Phase 2: Create adapters (30 total: 29 via resolver + systemic_analysis) with event bus subscriptions
-            logger.info("Phase 2: Creating 30 adapters...")
+            # Phase 2: Create adapters (32 total: 30 via resolver + systemic_analysis + environment_repair + ci_pipeline) with event bus subscriptions
+            logger.info("Phase 2: Creating 32 adapters...")
             self.adapters = await self._create_adapters()
 
             # Register causal links between adapters and domain events
@@ -1222,7 +1222,7 @@ class SimulationApplicationBootstrap:
 
     async def _create_adapters(self) -> SimulationAdapters:
         """
-        Create all 30 adapters using AdapterResolver in dependency order.
+        Create all 32 adapters using AdapterResolver in dependency order.
 
         Phase 2 bootstrap creates adapters following a partial dependency ordering:
         1. Leaf adapters (no dependencies): event_store, config_store, metrics, encryption, identity_service
@@ -1236,7 +1236,7 @@ class SimulationApplicationBootstrap:
         8. Repository: (depends on event_emitter)
         9. Engine-coupled: review_cycle, repair_cycle (use SimulationEngine for clock injection)
         10. Additional services: code_review, container_recovery
-        11. Manual post-processing: systemic_analysis_service (30th adapter)
+        11. Manual post-processing: systemic_analysis_service, environment_repair_service, ci_pipeline (32nd adapter)
 
         AdapterResolver validates credentials before construction and raises aggregated
         configuration errors if any adapter is misconfigured.
@@ -1246,7 +1246,7 @@ class SimulationApplicationBootstrap:
         simulation-specific methods.
 
         Returns:
-            SimulationAdapters with all 30 adapters typed as port interfaces
+            SimulationAdapters with all 32 adapters typed as port interfaces
         """
         if not self._engine:
             message = "SimulationEngine must be created before adapters"
@@ -1325,7 +1325,7 @@ class SimulationApplicationBootstrap:
         # Create audit store (not provided by resolver)
         audit_store = InMemoryAuditStore()
 
-        logger.info("Created 31 simulation adapters (30 via AdapterResolver + branch_resolution_service)")
+        logger.info("Created 33 simulation adapters (32 via AdapterResolver + branch_resolution_service)")
 
         # Update audit_store in resolved adapters
         resolved.audit_store = audit_store

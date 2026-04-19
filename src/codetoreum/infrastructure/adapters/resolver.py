@@ -140,7 +140,7 @@ class AdapterResolver:
         """
         Pre-flight check: aggregate all missing credential errors.
 
-        Validates all 29 adapter slots before constructing any adapter.
+        Validates all 32 adapter slots before constructing any adapter.
         Checks that:
         - Implementation names are registered in factories
         - All required environment variables exist
@@ -197,7 +197,7 @@ class AdapterResolver:
             raise AdapterConfigurationError(errors)
 
     # =========================================================================
-    # Resolve methods for all 29 adapter slots
+    # Resolve methods for all 32 adapter slots
     # =========================================================================
 
     def resolve_event_store(self) -> IEventStore:
@@ -673,7 +673,7 @@ class AdapterResolver:
         are constructed after their dependencies.
 
         Returns:
-            SimulationAdapters instance with all 30 adapters fully typed (includes systemic_analysis_service)
+            SimulationAdapters instance with all 32 adapters fully typed (includes systemic_analysis_service, environment_repair_service, and ci_pipeline)
 
         Raises:
             AdapterConfigurationError: If credentials are missing/invalid

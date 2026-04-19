@@ -1,9 +1,9 @@
 """
 Specific adapter registries for each port interface.
 
-Provides registries for managing implementations of all 29 adapter slots
+Provides registries for managing implementations of all 32 adapter slots
 including ticket systems, LLM providers, containers, repositories, event stores,
-board services, code review services, and more.
+board services, code review services, CI pipeline services, and more.
 """
 
 import inspect
