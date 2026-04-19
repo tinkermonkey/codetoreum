@@ -36,8 +36,10 @@ from codetoreum.infrastructure.simulation.simulation_clock import SimulationCloc
 from codetoreum.ports.exceptions import (
     ExternalServiceError,
     ResourceNotFoundError,
-    TimeoutError as PortTimeoutError,
     ValidationError,
+)
+from codetoreum.ports.exceptions import (
+    TimeoutError as PortTimeoutError,
 )
 from codetoreum.ports.output.ci_pipeline_service import ICIPipelineService
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle
@@ -286,7 +288,7 @@ class RepairCycleEventHandler(EventHandler):
                     extra={"work_item_id": work_item_id, "ci_test_types": ci_test_types},
                 )
                 raise ValueError(msg)
-            elif ci_test_types and self._ci_pipeline_service:
+            if ci_test_types and self._ci_pipeline_service:
                 logger.info(f"Executing CI checks for {work_item_id}")
                 try:
                     working_directory = self._working_directory_resolver(project_id)
