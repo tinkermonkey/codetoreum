@@ -9,9 +9,12 @@ CI operations—they cannot be modified after creation.
 """
 
 from dataclasses import dataclass
+from typing import Literal
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
+
+CIPipelineStatus = Literal["pending", "running", "passed", "failed", "skipped"]
 
 
 @dataclass(frozen=True)
@@ -29,7 +32,7 @@ class CIPipelineStatusCheckedEvent(CodetoreumEvent):
         type (str): Fixed to "ci.pipeline_status_checked"
         pr_id (str): Pull request identifier
         project_id (str): Project containing the PR
-        status (str): CI status at time of check (pending, running, passed, failed, skipped)
+        status (Literal["pending", "running", "passed", "failed", "skipped"]): CI status at time of check
         check_count (int): Number of checks in the pipeline
         passed_count (int): Number of checks that passed
         failed_count (int): Number of checks that failed
@@ -39,7 +42,7 @@ class CIPipelineStatusCheckedEvent(CodetoreumEvent):
 
     pr_id: str = ""
     project_id: str = ""
-    status: str = ""
+    status: CIPipelineStatus = "pending"
     check_count: int = 0
     passed_count: int = 0
     failed_count: int = 0
@@ -57,6 +60,12 @@ class CIPipelineStatusCheckedEvent(CodetoreumEvent):
         if not self.status:
             msg = "status is required"
             raise ValueError(msg)
+
+        valid_statuses = {"pending", "running", "passed", "failed", "skipped"}
+        if self.status not in valid_statuses:
+            msg = f"Invalid status: {self.status}"
+            raise ValueError(msg)
+
         if self.check_count < 0:
             msg = "check_count must be a non-negative integer"
             raise ValueError(msg)

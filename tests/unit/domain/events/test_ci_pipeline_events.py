@@ -119,6 +119,32 @@ class TestCIPipelineStatusCheckedEvent:
                 status="",  # Empty
             )
 
+    def test_invalid_status(self):
+        """Test that invalid status values are rejected."""
+        with pytest.raises(ValueError, match="Invalid status"):
+            CIPipelineStatusCheckedEvent(
+                type="ci.pipeline_status_checked",
+                timestamp=now_iso(),
+                source="github",
+                pr_id="456",
+                project_id="proj-1",
+                status="passsed",  # Typo - not a valid status
+            )
+
+    def test_all_valid_statuses(self):
+        """Test all valid status values are accepted."""
+        valid_statuses = ["pending", "running", "passed", "failed", "skipped"]
+        for status in valid_statuses:
+            event = CIPipelineStatusCheckedEvent(
+                type="ci.pipeline_status_checked",
+                timestamp=now_iso(),
+                source="github",
+                pr_id="456",
+                project_id="proj-1",
+                status=status,  # type: ignore
+            )
+            assert event.status == status
+
     def test_negative_check_count(self):
         """Test that check_count must be non-negative."""
         with pytest.raises(ValueError, match="check_count"):
@@ -292,6 +318,20 @@ class TestCIPipelineStatusCheckedEvent:
         }
 
         with pytest.raises(KeyError):
+            CIPipelineStatusCheckedEvent.from_dict(d)
+
+    def test_status_checked_invalid_status_from_dict(self):
+        """Test that from_dict raises ValueError for invalid status."""
+        d = {
+            "type": "ci.pipeline_status_checked",
+            "timestamp": now_iso(),
+            "source": "github",
+            "pr_id": "456",
+            "project_id": "proj-1",
+            "status": "invalid_status",
+        }
+
+        with pytest.raises(ValueError, match="Invalid status"):
             CIPipelineStatusCheckedEvent.from_dict(d)
 
 
