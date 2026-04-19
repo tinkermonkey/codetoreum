@@ -163,9 +163,7 @@ class LLMSystemicAnalysisAdapter(ISystemicAnalysisService):
         Returns:
             Formatted prompt for LLM
         """
-        failure_lines = "\n".join(
-            f"- {f.file}::{f.test}: {f.message}" for f in failures
-        )
+        failure_lines = "\n".join(f"- {f.file}::{f.test}: {f.message}" for f in failures)
         prior_attempts = "\n".join(context.prior_fix_attempts) if context.prior_fix_attempts else "None"
 
         return f"""Analyze the following test failures and classify the root cause.

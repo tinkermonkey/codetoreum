@@ -1595,9 +1595,7 @@ class AdapterFactory:
 
     def create_ci_pipeline_service(self, adapter_name: str | None = None, **kwargs) -> ICIPipelineService:
         """Create a CI pipeline service adapter instance."""
-        return self._create_adapter(
-            self._ci_pipeline_registry, adapter_name, "CI pipeline service", **kwargs
-        )
+        return self._create_adapter(self._ci_pipeline_registry, adapter_name, "CI pipeline service", **kwargs)
 
     def _apply_resilience_wrapper(
         self,

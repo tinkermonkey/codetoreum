@@ -282,10 +282,7 @@ class MockCIPipelineAdapter(ICIPipelineService):
         """
         config = self._pr_ci_config.get(pr_id)
         if config and config["status"] == CICheckStatus.FAILED:
-            msg = (
-                f"Expected PR {pr_id} to have no failures, "
-                f"but {config['failed_count']} checks are failing"
-            )
+            msg = f"Expected PR {pr_id} to have no failures, " f"but {config['failed_count']} checks are failing"
             raise AssertionError(msg)
 
     # ===== Service Operations =====
@@ -312,11 +309,14 @@ class MockCIPipelineAdapter(ICIPipelineService):
             self._pr_ci_checked.add(pr_id)
 
             # Get configured status or default to passing
-            config = self._pr_ci_config.get(pr_id, {
-                "status": CICheckStatus.PASSED,
-                "failed_count": 0,
-                "pending_count": 0,
-            })
+            config = self._pr_ci_config.get(
+                pr_id,
+                {
+                    "status": CICheckStatus.PASSED,
+                    "failed_count": 0,
+                    "pending_count": 0,
+                },
+            )
 
             status = config["status"]
             failed_count = config.get("failed_count", 0)
@@ -391,9 +391,7 @@ class MockCIPipelineAdapter(ICIPipelineService):
 
         return ci_status
 
-    async def run_ci_checks(
-        self, project_id: str, working_directory: str, timeout_seconds: int = 600
-    ) -> CIRunResult:
+    async def run_ci_checks(self, project_id: str, working_directory: str, timeout_seconds: int = 600) -> CIRunResult:
         """Execute CI checks locally in a working directory.
 
         Returns pre-configured results if set, otherwise defaults to passing result.
@@ -431,10 +429,13 @@ class MockCIPipelineAdapter(ICIPipelineService):
             self._ci_runs_executed.add(project_id)
 
             # Get configured results or default to passing
-            config = self._project_ci_config.get(project_id, {
-                "passed": True,
-                "failures": [],
-            })
+            config = self._project_ci_config.get(
+                project_id,
+                {
+                    "passed": True,
+                    "failures": [],
+                },
+            )
 
             failures = config.get("failures", [])
             all_passed = config.get("passed", True)

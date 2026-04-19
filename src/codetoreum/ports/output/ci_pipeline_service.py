@@ -147,7 +147,9 @@ class CIPipelineStatus:
         # Validate that counts match the actual check_results from external system
         passed_results = sum(1 for r in self.check_results if r.status == CICheckStatus.PASSED)
         failed_results = sum(1 for r in self.check_results if r.status == CICheckStatus.FAILED)
-        pending_results = sum(1 for r in self.check_results if r.status in (CICheckStatus.PENDING, CICheckStatus.RUNNING))
+        pending_results = sum(
+            1 for r in self.check_results if r.status in (CICheckStatus.PENDING, CICheckStatus.RUNNING)
+        )
 
         if self.passed != passed_results:
             msg = f"passed count ({self.passed}) does not match check_results ({passed_results} checks are PASSED)"
@@ -321,9 +323,7 @@ class ICIPipelineService(IEventEmitter, IMonitoredService, ABC):
         """
 
     @abstractmethod
-    async def run_ci_checks(
-        self, project_id: str, working_directory: str, timeout_seconds: int = 600
-    ) -> CIRunResult:
+    async def run_ci_checks(self, project_id: str, working_directory: str, timeout_seconds: int = 600) -> CIRunResult:
         """Execute CI checks locally in a working directory.
 
         Runs CI checks within the provided working directory (typically in a

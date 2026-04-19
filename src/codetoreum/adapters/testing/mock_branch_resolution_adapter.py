@@ -91,9 +91,7 @@ class MockBranchResolutionAdapter(MockEventEmitter, IBranchResolutionService):
             parent_issue_id=None,
         )
 
-    def configure_resolution(
-        self, project_id: str, issue_id: str, resolution: BranchResolution
-    ) -> None:
+    def configure_resolution(self, project_id: str, issue_id: str, resolution: BranchResolution) -> None:
         """Configure resolution for a specific project/issue pair.
 
         Args:
@@ -155,9 +153,7 @@ class MockBranchResolutionAdapter(MockEventEmitter, IBranchResolutionService):
 
         # Get configured or default resolution
         async with self._lock:
-            resolution = self._configured_resolutions.get(
-                (project_id, issue_id), self._default_resolution
-            )
+            resolution = self._configured_resolutions.get((project_id, issue_id), self._default_resolution)
 
         # Get timestamp
         now = self._clock.now() if self._clock else datetime.now(UTC)

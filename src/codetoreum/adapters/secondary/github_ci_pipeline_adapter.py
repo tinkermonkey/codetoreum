@@ -186,9 +186,7 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
 
     # ===== Service Operations =====
 
-    async def get_pr_ci_status(
-        self, pr_id: str, project_id: str, timeout_seconds: int = 300
-    ) -> CIPipelineStatus:
+    async def get_pr_ci_status(self, pr_id: str, project_id: str, timeout_seconds: int = 300) -> CIPipelineStatus:
         """Query CI status for a pull request from GitHub.
 
         Fetches the PR's check runs from GitHub and aggregates them into
@@ -303,7 +301,9 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
                     check_count=len(check_results),
                     passed_count=sum(1 for r in check_results if r.status == CICheckStatus.PASSED),
                     failed_count=sum(1 for r in check_results if r.status == CICheckStatus.FAILED),
-                    pending_count=sum(1 for r in check_results if r.status in (CICheckStatus.PENDING, CICheckStatus.RUNNING)),
+                    pending_count=sum(
+                        1 for r in check_results if r.status in (CICheckStatus.PENDING, CICheckStatus.RUNNING)
+                    ),
                 )
             )
 
@@ -350,9 +350,7 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             )
             raise ExternalServiceError("GitHub", f"Failed to query PR CI status: {e}") from e
 
-    async def run_ci_checks(
-        self, project_id: str, working_directory: str, timeout_seconds: int = 600
-    ) -> CIRunResult:
+    async def run_ci_checks(self, project_id: str, working_directory: str, timeout_seconds: int = 600) -> CIRunResult:
         """Execute CI checks locally in a working directory.
 
         This method is not yet implemented. Use get_pr_ci_status to query CI status
@@ -409,13 +407,18 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
                         "check_count": 0,
                     },
                 )
-                return [], CICheckStatus.PENDING, pipeline_url, {
-                    "pending": 0,
-                    "running": 0,
-                    "passed": 0,
-                    "failed": 0,
-                    "skipped": 0,
-                }
+                return (
+                    [],
+                    CICheckStatus.PENDING,
+                    pipeline_url,
+                    {
+                        "pending": 0,
+                        "running": 0,
+                        "passed": 0,
+                        "failed": 0,
+                        "skipped": 0,
+                    },
+                )
 
             latest_commit = commits[0]
 

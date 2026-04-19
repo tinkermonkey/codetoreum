@@ -2001,9 +2001,7 @@ Return a JSON response with the status of dependency fixes applied."""
             prior_classifications=context.prior_classifications,
         )
 
-        result = await self._systemic_analysis_service.analyze(
-            list(test_result.failures), analysis_context
-        )
+        result = await self._systemic_analysis_service.analyze(list(test_result.failures), analysis_context)
         return result.reasoning
 
     async def _run_test_cycle(
@@ -2201,7 +2199,9 @@ Return a JSON response with the status of dependency fixes applied."""
                                 consecutive_transient_failures = 0  # Reset counter
                                 # Retry loop bounded by max_env_rebuilds
                                 env_rebuild_success = False
-                                for rebuild_attempt in range(1, context.stage_config.environment_repair_config.max_env_rebuilds + 1):
+                                for rebuild_attempt in range(
+                                    1, context.stage_config.environment_repair_config.max_env_rebuilds + 1
+                                ):
                                     try:
                                         rebuild_success = await self.rebuild_environment(config, context)
                                         if rebuild_success:
@@ -2225,14 +2225,20 @@ Return a JSON response with the status of dependency fixes applied."""
                                                     },
                                                     exc_info=False,
                                                 )
-                                                if rebuild_attempt == context.stage_config.environment_repair_config.max_env_rebuilds:
+                                                if (
+                                                    rebuild_attempt
+                                                    == context.stage_config.environment_repair_config.max_env_rebuilds
+                                                ):
                                                     # Exhausted all attempts
                                                     prior_fix_attempts.append(
                                                         f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuilt environment but verification failed (all {context.stage_config.environment_repair_config.max_env_rebuilds} attempts exhausted)"
                                                     )
                                             except TimeoutError:
                                                 # Transient timeout in verification - log and retry
-                                                if rebuild_attempt < context.stage_config.environment_repair_config.max_env_rebuilds:
+                                                if (
+                                                    rebuild_attempt
+                                                    < context.stage_config.environment_repair_config.max_env_rebuilds
+                                                ):
                                                     logger.warning(
                                                         f"Environment verification timed out (attempt {rebuild_attempt}/{context.stage_config.environment_repair_config.max_env_rebuilds}), retrying",
                                                         extra={
@@ -2259,14 +2265,20 @@ Return a JSON response with the status of dependency fixes applied."""
                                                 },
                                                 exc_info=False,
                                             )
-                                        if rebuild_attempt == context.stage_config.environment_repair_config.max_env_rebuilds:
+                                        if (
+                                            rebuild_attempt
+                                            == context.stage_config.environment_repair_config.max_env_rebuilds
+                                        ):
                                             # Exhausted all attempts
                                             prior_fix_attempts.append(
                                                 f"Iteration {iteration}: ENVIRONMENT_ISSUE classified, rebuild failed (all {context.stage_config.environment_repair_config.max_env_rebuilds} attempts exhausted)"
                                             )
                                     except TimeoutError:
                                         # Transient timeout in rebuild - log and retry if attempts remaining
-                                        if rebuild_attempt < context.stage_config.environment_repair_config.max_env_rebuilds:
+                                        if (
+                                            rebuild_attempt
+                                            < context.stage_config.environment_repair_config.max_env_rebuilds
+                                        ):
                                             logger.warning(
                                                 f"Environment rebuild timed out (attempt {rebuild_attempt}/{context.stage_config.environment_repair_config.max_env_rebuilds}), retrying",
                                                 extra={
