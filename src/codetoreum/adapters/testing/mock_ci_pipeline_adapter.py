@@ -90,9 +90,11 @@ class MockCIPipelineAdapter(ICIPipelineService):
         # project_id -> {"passed": bool, "failures": list[str]}
         self._project_ci_config: dict[str, dict] = {}
 
-        # Call history for assertions
-        self._pr_ci_checked: set[str] = set()  # PR IDs that were checked
-        self._ci_runs_executed: set[str] = set()  # Project IDs that had CI runs
+        # Call history for assertions - tracks full call history per key
+        # pr_id -> list of CIPipelineStatus results (allows call count and return value assertions)
+        self._pr_ci_checks: dict[str, list[CIPipelineStatus]] = {}
+        # project_id -> list of CIRunResult results (allows call count and return value assertions)
+        self._ci_run_calls: dict[str, list[CIRunResult]] = {}
 
         # Monitoring state
         self._monitoring: dict[str, MonitoringStatus] = {}  # project_id -> status
@@ -234,7 +236,7 @@ class MockCIPipelineAdapter(ICIPipelineService):
     # ===== Assertion Helpers =====
 
     def assert_pr_ci_checked(self, pr_id: str) -> None:
-        """Assert that PR CI status was checked.
+        """Assert that PR CI status was checked at least once.
 
         Args:
             pr_id: Pull request ID
@@ -246,12 +248,12 @@ class MockCIPipelineAdapter(ICIPipelineService):
             await adapter.get_pr_ci_status("pr-123", "proj-1")
             adapter.assert_pr_ci_checked("pr-123")
         """
-        if pr_id not in self._pr_ci_checked:
+        if pr_id not in self._pr_ci_checks:
             msg = f"Expected PR {pr_id} CI status to have been checked, but it was never checked"
             raise AssertionError(msg)
 
     def assert_ci_run_executed(self, project_id: str) -> None:
-        """Assert that CI run was executed for project.
+        """Assert that CI run was executed at least once for project.
 
         Args:
             project_id: Project ID
@@ -263,7 +265,7 @@ class MockCIPipelineAdapter(ICIPipelineService):
             await adapter.run_ci_checks("proj-1", "/workspace")
             adapter.assert_ci_run_executed("proj-1")
         """
-        if project_id not in self._ci_runs_executed:
+        if project_id not in self._ci_run_calls:
             msg = f"Expected CI run to have been executed for project {project_id}, but it was never executed"
             raise AssertionError(msg)
 
@@ -285,6 +287,90 @@ class MockCIPipelineAdapter(ICIPipelineService):
             msg = f"Expected PR {pr_id} to have no failures, " f"but {config['failed_count']} checks are failing"
             raise AssertionError(msg)
 
+    def assert_pr_ci_checked_count(self, pr_id: str, expected_count: int) -> None:
+        """Assert that PR CI status was checked a specific number of times.
+
+        Args:
+            pr_id: Pull request ID
+            expected_count: Expected number of checks
+
+        Raises:
+            AssertionError: If actual count doesn't match expected
+
+        Example:
+            await adapter.get_pr_ci_status("pr-123", "proj-1")
+            await adapter.get_pr_ci_status("pr-123", "proj-1")  # Check again
+            adapter.assert_pr_ci_checked_count("pr-123", 2)
+        """
+        actual_count = len(self._pr_ci_checks.get(pr_id, []))
+        if actual_count != expected_count:
+            msg = f"Expected PR {pr_id} CI status to have been checked {expected_count} times, but was checked {actual_count} times"
+            raise AssertionError(msg)
+
+    def assert_ci_run_executed_count(self, project_id: str, expected_count: int) -> None:
+        """Assert that CI run was executed a specific number of times for project.
+
+        Args:
+            project_id: Project ID
+            expected_count: Expected number of executions
+
+        Raises:
+            AssertionError: If actual count doesn't match expected
+
+        Example:
+            await adapter.run_ci_checks("proj-1", "/workspace")
+            await adapter.run_ci_checks("proj-1", "/workspace")  # Run again
+            adapter.assert_ci_run_executed_count("proj-1", 2)
+        """
+        actual_count = len(self._ci_run_calls.get(project_id, []))
+        if actual_count != expected_count:
+            msg = f"Expected CI run to have been executed {expected_count} times for project {project_id}, but was executed {actual_count} times"
+            raise AssertionError(msg)
+
+    def get_pr_ci_status_history(self, pr_id: str) -> list[CIPipelineStatus]:
+        """Get full history of CIPipelineStatus results for a PR.
+
+        Returns all return values from calls to get_pr_ci_status() for this PR,
+        allowing verification of return values, call sequences, and status changes.
+
+        Args:
+            pr_id: Pull request ID
+
+        Returns:
+            List of CIPipelineStatus objects in call order (empty if never checked)
+
+        Example:
+            await adapter.get_pr_ci_status("pr-123", "proj-1")
+            await adapter.get_pr_ci_status("pr-123", "proj-1")
+            history = adapter.get_pr_ci_status_history("pr-123")
+            assert len(history) == 2
+            assert history[0].status == CICheckStatus.PASSED
+            assert history[1].status == CICheckStatus.FAILED
+        """
+        return self._pr_ci_checks.get(pr_id, []).copy()
+
+    def get_ci_run_result_history(self, project_id: str) -> list[CIRunResult]:
+        """Get full history of CIRunResult results for a project.
+
+        Returns all return values from calls to run_ci_checks() for this project,
+        allowing verification of return values, call sequences, and result changes.
+
+        Args:
+            project_id: Project ID
+
+        Returns:
+            List of CIRunResult objects in call order (empty if never executed)
+
+        Example:
+            await adapter.run_ci_checks("proj-1", "/workspace")
+            await adapter.run_ci_checks("proj-1", "/workspace")
+            history = adapter.get_ci_run_result_history("proj-1")
+            assert len(history) == 2
+            assert history[0].failed == 0
+            assert history[1].failed == 1
+        """
+        return self._ci_run_calls.get(project_id, []).copy()
+
     # ===== Service Operations =====
 
     async def get_pr_ci_status(self, pr_id: str, project_id: str, timeout_seconds: int = 300) -> CIPipelineStatus:
@@ -304,75 +390,77 @@ class MockCIPipelineAdapter(ICIPipelineService):
         Events:
             Emits 'ci.pipeline_status_checked' event with query result
         """
+        # Get configured status or default to passing
+        config = self._pr_ci_config.get(
+            pr_id,
+            {
+                "status": CICheckStatus.PASSED,
+                "failed_count": 0,
+                "pending_count": 0,
+            },
+        )
+
+        status = config["status"]
+        failed_count = config.get("failed_count", 0)
+        pending_count = config.get("pending_count", 0)
+
+        # Create check results based on counts
+        check_results = []
+
+        # Add failed checks
+        for i in range(failed_count):
+            check_results.append(
+                CICheckResult(
+                    name=f"check-{i}",
+                    status=CICheckStatus.FAILED,
+                    conclusion="failure",
+                    url=f"https://ci.example.com/pr/{pr_id}/check/{i}",
+                )
+            )
+
+        # Add pending checks
+        for i in range(pending_count):
+            check_results.append(
+                CICheckResult(
+                    name=f"check-pending-{i}",
+                    status=CICheckStatus.PENDING,
+                    conclusion=None,
+                    url=f"https://ci.example.com/pr/{pr_id}/check-pending/{i}",
+                )
+            )
+
+        # Add passing check if there are no failures or pending
+        if not check_results:
+            check_results.append(
+                CICheckResult(
+                    name="check-0",
+                    status=CICheckStatus.PASSED,
+                    conclusion="success",
+                    url=f"https://ci.example.com/pr/{pr_id}/check/0",
+                )
+            )
+
+        # Determine counts for aggregation
+        passed_count = len([r for r in check_results if r.status == CICheckStatus.PASSED])
+        total_checks = len(check_results)
+
+        # Create the CI pipeline status
+        ci_status = CIPipelineStatus(
+            pr_id=pr_id,
+            status=status,
+            check_results=tuple(check_results),
+            total_checks=total_checks,
+            passed=passed_count,
+            failed=failed_count,
+            pending=pending_count,
+            pipeline_url=f"https://ci.example.com/pr/{pr_id}",
+        )
+
+        # Track call history under lock
         async with self._lock:
-            # Track that this PR was checked
-            self._pr_ci_checked.add(pr_id)
-
-            # Get configured status or default to passing
-            config = self._pr_ci_config.get(
-                pr_id,
-                {
-                    "status": CICheckStatus.PASSED,
-                    "failed_count": 0,
-                    "pending_count": 0,
-                },
-            )
-
-            status = config["status"]
-            failed_count = config.get("failed_count", 0)
-            pending_count = config.get("pending_count", 0)
-
-            # Create check results based on counts
-            check_results = []
-
-            # Add failed checks
-            for i in range(failed_count):
-                check_results.append(
-                    CICheckResult(
-                        name=f"check-{i}",
-                        status=CICheckStatus.FAILED,
-                        conclusion="failure",
-                        url=f"https://ci.example.com/pr/{pr_id}/check/{i}",
-                    )
-                )
-
-            # Add pending checks
-            for i in range(pending_count):
-                check_results.append(
-                    CICheckResult(
-                        name=f"check-pending-{i}",
-                        status=CICheckStatus.PENDING,
-                        conclusion=None,
-                        url=f"https://ci.example.com/pr/{pr_id}/check-pending/{i}",
-                    )
-                )
-
-            # Add passing check if there are no failures or pending
-            if not check_results:
-                check_results.append(
-                    CICheckResult(
-                        name="check-0",
-                        status=CICheckStatus.PASSED,
-                        conclusion="success",
-                        url=f"https://ci.example.com/pr/{pr_id}/check/0",
-                    )
-                )
-
-            # Determine counts for aggregation
-            passed_count = len([r for r in check_results if r.status == CICheckStatus.PASSED])
-            total_checks = len(check_results)
-
-            # Create and emit event
-            ci_status = CIPipelineStatus(
-                pr_id=pr_id,
-                status=status,
-                check_results=tuple(check_results),
-                total_checks=total_checks,
-                passed=passed_count,
-                failed=failed_count,
-                pending=pending_count,
-                pipeline_url=f"https://ci.example.com/pr/{pr_id}",
-            )
+            if pr_id not in self._pr_ci_checks:
+                self._pr_ci_checks[pr_id] = []
+            self._pr_ci_checks[pr_id].append(ci_status)
 
         # Emit event outside lock
         event = CIPipelineStatusCheckedEvent(
@@ -424,21 +512,17 @@ class MockCIPipelineAdapter(ICIPipelineService):
         )
         self.emit(started_event)
 
-        async with self._lock:
-            # Track that this project had a CI run
-            self._ci_runs_executed.add(project_id)
+        # Get configured results or default to passing
+        config = self._project_ci_config.get(
+            project_id,
+            {
+                "passed": True,
+                "failures": [],
+            },
+        )
 
-            # Get configured results or default to passing
-            config = self._project_ci_config.get(
-                project_id,
-                {
-                    "passed": True,
-                    "failures": [],
-                },
-            )
-
-            failures = config.get("failures", [])
-            all_passed = config.get("passed", True)
+        failures = config.get("failures", [])
+        all_passed = config.get("passed", True)
 
         # Create check results
         check_results = []
@@ -478,6 +562,12 @@ class MockCIPipelineAdapter(ICIPipelineService):
             failures=tuple(failures),
             output=output,
         )
+
+        # Track call history under lock
+        async with self._lock:
+            if project_id not in self._ci_run_calls:
+                self._ci_run_calls[project_id] = []
+            self._ci_run_calls[project_id].append(result)
 
         # Emit run completed event
         completed_event = CIRunCompletedEvent(
@@ -563,8 +653,8 @@ class MockCIPipelineAdapter(ICIPipelineService):
         """
         self._pr_ci_config.clear()
         self._project_ci_config.clear()
-        self._pr_ci_checked.clear()
-        self._ci_runs_executed.clear()
+        self._pr_ci_checks.clear()
+        self._ci_run_calls.clear()
         self._monitoring.clear()
 
     def get_pr_ci_calls(self) -> list[str]:
@@ -580,7 +670,7 @@ class MockCIPipelineAdapter(ICIPipelineService):
             assert "pr-1" in calls
             assert "pr-2" in calls
         """
-        return list(self._pr_ci_checked)
+        return list(self._pr_ci_checks.keys())
 
     def get_ci_run_calls(self) -> list[str]:
         """Get list of project IDs that had CI runs executed.
@@ -595,4 +685,4 @@ class MockCIPipelineAdapter(ICIPipelineService):
             assert "proj-1" in calls
             assert "proj-2" in calls
         """
-        return list(self._ci_runs_executed)
+        return list(self._ci_run_calls.keys())

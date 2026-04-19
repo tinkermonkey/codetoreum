@@ -364,6 +364,124 @@ class TestMockCIPipelineAdapterTestHelpers:
         assert "proj-1" in calls
         assert "proj-2" in calls
 
+    async def test_assert_pr_ci_checked_count(self) -> None:
+        """Test asserting PR CI status was checked a specific number of times."""
+        adapter = MockCIPipelineAdapter()
+        adapter.set_pr_ci_failing("pr-123", failure_count=1)
+
+        await adapter.get_pr_ci_status("pr-123", "proj-1")
+        await adapter.get_pr_ci_status("pr-123", "proj-1")
+
+        # Should pass when count matches
+        adapter.assert_pr_ci_checked_count("pr-123", 2)
+
+        # Should fail when count doesn't match
+        with pytest.raises(AssertionError) as exc_info:
+            adapter.assert_pr_ci_checked_count("pr-123", 1)
+        assert "checked 2 times" in str(exc_info.value)
+
+    async def test_assert_ci_run_executed_count(self) -> None:
+        """Test asserting CI run was executed a specific number of times."""
+        adapter = MockCIPipelineAdapter()
+
+        await adapter.run_ci_checks("proj-1", "/workspace")
+        await adapter.run_ci_checks("proj-1", "/workspace")
+        await adapter.run_ci_checks("proj-1", "/workspace")
+
+        # Should pass when count matches
+        adapter.assert_ci_run_executed_count("proj-1", 3)
+
+        # Should fail when count doesn't match
+        with pytest.raises(AssertionError) as exc_info:
+            adapter.assert_ci_run_executed_count("proj-1", 2)
+        assert "executed 3 times" in str(exc_info.value)
+
+    async def test_get_pr_ci_status_history(self) -> None:
+        """Test retrieving full history of PR CI status results."""
+        adapter = MockCIPipelineAdapter()
+        adapter.set_pr_ci_passing("pr-123")
+        adapter.set_pr_ci_failing("pr-456", failure_count=1)
+
+        # First call - pr-123 passing
+        status1 = await adapter.get_pr_ci_status("pr-123", "proj-1")
+        # Second call - pr-456 failing
+        status2 = await adapter.get_pr_ci_status("pr-456", "proj-1")
+        # Third call - pr-123 again (passing)
+        status3 = await adapter.get_pr_ci_status("pr-123", "proj-1")
+
+        # Get history for pr-123
+        history = adapter.get_pr_ci_status_history("pr-123")
+        assert len(history) == 2
+        assert history[0].status == CICheckStatus.PASSED
+        assert history[1].status == CICheckStatus.PASSED
+
+        # Get history for pr-456
+        history = adapter.get_pr_ci_status_history("pr-456")
+        assert len(history) == 1
+        assert history[0].status == CICheckStatus.FAILED
+
+        # Get history for unchecked PR
+        history = adapter.get_pr_ci_status_history("pr-unchecked")
+        assert history == []
+
+    async def test_get_ci_run_result_history(self) -> None:
+        """Test retrieving full history of CI run results."""
+        adapter = MockCIPipelineAdapter()
+        adapter.set_ci_run_passing("proj-1")
+        adapter.set_ci_run_failing("proj-2", ["error1", "error2"])
+
+        # First run - proj-1 passing
+        result1 = await adapter.run_ci_checks("proj-1", "/workspace")
+        # Second run - proj-2 failing
+        result2 = await adapter.run_ci_checks("proj-2", "/workspace")
+        # Third run - proj-1 again (passing)
+        result3 = await adapter.run_ci_checks("proj-1", "/workspace")
+
+        # Get history for proj-1
+        history = adapter.get_ci_run_result_history("proj-1")
+        assert len(history) == 2
+        assert history[0].failed == 0
+        assert history[1].failed == 0
+
+        # Get history for proj-2
+        history = adapter.get_ci_run_result_history("proj-2")
+        assert len(history) == 1
+        assert history[0].failed == 2
+
+        # Get history for unexecuted project
+        history = adapter.get_ci_run_result_history("proj-unexecuted")
+        assert history == []
+
+    async def test_pr_ci_status_history_returns_copy(self) -> None:
+        """Test that history is returned as a copy to prevent mutation."""
+        adapter = MockCIPipelineAdapter()
+        adapter.set_pr_ci_passing("pr-123")
+
+        await adapter.get_pr_ci_status("pr-123", "proj-1")
+        history1 = adapter.get_pr_ci_status_history("pr-123")
+
+        # Mutate the returned list
+        history1.clear()
+
+        # Verify original is unaffected
+        history2 = adapter.get_pr_ci_status_history("pr-123")
+        assert len(history2) == 1
+
+    async def test_ci_run_result_history_returns_copy(self) -> None:
+        """Test that result history is returned as a copy to prevent mutation."""
+        adapter = MockCIPipelineAdapter()
+        adapter.set_ci_run_passing("proj-1")
+
+        await adapter.run_ci_checks("proj-1", "/workspace")
+        history1 = adapter.get_ci_run_result_history("proj-1")
+
+        # Mutate the returned list
+        history1.clear()
+
+        # Verify original is unaffected
+        history2 = adapter.get_ci_run_result_history("proj-1")
+        assert len(history2) == 1
+
 
 class TestMockCIPipelineAdapterIntegration:
     """Integration tests combining multiple features."""
