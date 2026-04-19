@@ -22,6 +22,7 @@ from codetoreum.domain.repair_cycle_types import (
 )
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
+from codetoreum.ports.exceptions import ExternalServiceError
 from codetoreum.ports.output.ci_pipeline_service import (
     CICheckResult,
     CICheckStatus,
@@ -557,8 +558,8 @@ class TestRepairCycleEventHandlerColumnChange:
         # Should not raise exception
         await handler.handle_column_change(event)
 
-        # Repair cycle may be executed with None values
-        assert repair_cycle_adapter.executed or not repair_cycle_adapter.executed
+        # Repair cycle should not be executed when column cannot be determined
+        assert not repair_cycle_adapter.executed
 
     @pytest.mark.asyncio
     async def test_handle_column_change_exception_includes_error_id(self, handler, repair_cycle_adapter):
@@ -1049,8 +1050,8 @@ class TestCIPipelineIntegration:
             timestamp="2024-01-01T00:00:00Z",
         )
 
-        # CI pipeline raises an exception
-        ci_pipeline_service.run_ci_checks.side_effect = Exception("CI pipeline connection failed")
+        # CI pipeline raises an expected exception (external service error)
+        ci_pipeline_service.run_ci_checks.side_effect = ExternalServiceError("CI service", "Connection failed")
 
         handler = RepairCycleEventHandler(
             repair_cycle=repair_cycle_adapter,
@@ -1176,3 +1177,106 @@ class TestCIPipelineIntegration:
         ci_pipeline_service.run_ci_checks.assert_called_once()
         call_kwargs = ci_pipeline_service.run_ci_checks.call_args[1]
         assert call_kwargs["working_directory"] == "/custom/project/workspace"
+
+    @pytest.mark.asyncio
+    async def test_unexpected_exception_during_ci_is_re_raised(
+        self, repair_cycle_adapter, event_bus, ci_pipeline_service, workflow_config_with_ci
+    ):
+        """Test that unexpected exceptions during CI pipeline execution are re-raised."""
+        # Setup: agent tests pass
+        repair_cycle_adapter.result = RepairCycleResult(
+            stage="Testing",
+            test_results=(
+                CycleResult(
+                    test_type=RepairTestType.UNIT,
+                    passed=True,
+                    iterations=1,
+                    final_result=RepairTestResult(
+                        test_type=RepairTestType.UNIT,
+                        iteration=1,
+                        passed=1,
+                        failed=0,
+                        warnings=0,
+                        failures=(),
+                        warning_list=(),
+                        raw_output="All tests passed",
+                        timestamp="2024-01-01T00:00:00Z",
+                    ),
+                    error=None,
+                    files_fixed=0,
+                    warnings_reviewed=0,
+                    duration_seconds=1.0,
+                ),
+            ),
+            overall_success=True,
+            total_agent_calls=0,
+            duration_seconds=1.0,
+            timestamp="2024-01-01T00:00:00Z",
+        )
+
+        # CI pipeline raises an unexpected exception (programming error)
+        ci_pipeline_service.run_ci_checks.side_effect = TypeError("Unexpected type error in CI pipeline")
+
+        handler = RepairCycleEventHandler(
+            repair_cycle=repair_cycle_adapter,
+            clock=None,
+            event_bus=event_bus,
+            workflow_config=workflow_config_with_ci,
+            ci_pipeline_service=ci_pipeline_service,
+        )
+
+        event = WorkItemColumnChanged(
+            aggregate_id="item-1",
+            payload={
+                "work_item_id": "item-1",
+                "board_id": "board-1",
+                "project_id": "proj-1",
+                "from_column": "Code Review",
+                "to_column": "Testing",
+                "moved_by": "system",
+            },
+        )
+
+        # Unexpected exceptions should be re-raised
+        with pytest.raises(TypeError, match="Unexpected type error in CI pipeline"):
+            await handler.handle_column_change(event)
+
+    @pytest.mark.asyncio
+    async def test_ci_test_types_configured_without_service_raises_error(
+        self, repair_cycle_adapter, event_bus, workflow_config_with_ci
+    ):
+        """Test that CI test types without injected service raises ValueError."""
+        # Setup: agent tests pass
+        repair_cycle_adapter.result = RepairCycleResult(
+            stage="Testing",
+            test_results=(),
+            overall_success=True,
+            total_agent_calls=0,
+            duration_seconds=1.0,
+            timestamp="2024-01-01T00:00:00Z",
+        )
+
+        # Create handler WITHOUT ci_pipeline_service
+        handler = RepairCycleEventHandler(
+            repair_cycle=repair_cycle_adapter,
+            clock=None,
+            event_bus=event_bus,
+            workflow_config=workflow_config_with_ci,
+            ci_pipeline_service=None,  # Service not injected!
+        )
+
+        event = WorkItemColumnChanged(
+            aggregate_id="item-1",
+            payload={
+                "work_item_id": "item-1",
+                "board_id": "board-1",
+                "project_id": "proj-1",
+                "from_column": "Code Review",
+                "to_column": "Testing",
+                "moved_by": "system",
+            },
+        )
+
+        # Should raise ValueError due to configuration wiring error
+        with pytest.raises(ValueError, match="CI test types configured.*no ICIPipelineService"):
+            await handler.handle_column_change(event)

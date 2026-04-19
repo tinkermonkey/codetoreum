@@ -33,6 +33,12 @@ from codetoreum.infrastructure.observability.instrumentation import (
     instrument_async_function,
 )
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
+from codetoreum.ports.exceptions import (
+    ExternalServiceError,
+    ResourceNotFoundError,
+    TimeoutError,
+    ValidationError,
+)
 from codetoreum.ports.output.ci_pipeline_service import ICIPipelineService
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
@@ -270,12 +276,16 @@ class RepairCycleEventHandler(EventHandler):
             # FR-5.2: Route RepairTestType.CI to ICIPipelineService.run_ci_checks()
             ci_results: list[CycleResult] = []
             if ci_test_types and not self._ci_pipeline_service:
-                # Violation of "no silent error handling" principle - must log or raise
-                logger.warning(
+                # Wiring error: CI types requested but service not injected
+                msg = (
                     f"CI test types configured for {work_item_id} but no ICIPipelineService injected. "
-                    "CI checks will not be executed. Provide ci_pipeline_service to the event handler to enable CI routing.",
+                    "This is a configuration wiring error. Provide ci_pipeline_service to the event handler."
+                )
+                logger.error(
+                    msg,
                     extra={"work_item_id": work_item_id, "ci_test_types": ci_test_types},
                 )
+                raise ValueError(msg)
             elif ci_test_types and self._ci_pipeline_service:
                 logger.info(f"Executing CI checks for {work_item_id}")
                 try:
@@ -309,7 +319,13 @@ class RepairCycleEventHandler(EventHandler):
                         f"CI checks completed for {work_item_id}: "
                         f"passed={ci_run_result.passed}, failed={ci_run_result.failed}"
                     )
-                except Exception as e:
+                except (
+                    ResourceNotFoundError,
+                    ValidationError,
+                    ExternalServiceError,
+                    TimeoutError,
+                ) as e:
+                    # Expected failures from CI service
                     logger.error(
                         f"CI pipeline execution failed for {work_item_id}: {e}",
                         exc_info=True,
@@ -331,6 +347,18 @@ class RepairCycleEventHandler(EventHandler):
                         duration_seconds=0.0,
                     )
                     ci_results.append(ci_cycle_result)
+                except Exception as e:
+                    # Unexpected programming error - re-raise after logging
+                    logger.error(
+                        f"Unexpected error during CI pipeline execution for {work_item_id}: {e}",
+                        exc_info=True,
+                        extra={
+                            "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                            "work_item_id": work_item_id,
+                            "project_id": project_id,
+                        },
+                    )
+                    raise
 
             # Merge CI results with agent-executor results
             all_test_results = list(result.test_results) + ci_results
@@ -366,6 +394,11 @@ class RepairCycleEventHandler(EventHandler):
             )
             if self._event_bus:
                 await self._event_bus.publish(completed_event)  # type: ignore[arg-type]
+            else:
+                logger.warning(
+                    f"RepairCycleCompletedEvent not published for {work_item_id}: event_bus not injected",
+                    extra={"work_item_id": work_item_id, "event_type": completed_event.event_type},
+                )
 
             if result.overall_success:
                 logger.info(f"Repair cycle succeeded for {work_item_id}, moving to next column")
