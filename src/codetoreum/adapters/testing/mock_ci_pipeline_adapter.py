@@ -9,6 +9,7 @@ CI interactions.
 import asyncio
 import logging
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from codetoreum.domain.events.ci_pipeline_events import (
@@ -29,6 +30,9 @@ from codetoreum.ports.output.monitoring import (
     MonitoringState,
     MonitoringStatus,
 )
+
+if TYPE_CHECKING:
+    from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 
 logger = logging.getLogger(__name__)
 
