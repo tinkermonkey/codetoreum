@@ -50,7 +50,7 @@ codetoreum/
     ├── application/            # Application services + event handlers
     ├── ports/                  # Port interfaces
     │   ├── input/              # Inbound ports (commands, queries, services)
-    │   └── output/             # Outbound ports (28+ interfaces)
+    │   └── output/             # Outbound ports (29+ interfaces)
     ├── adapters/               # Adapter implementations
     │   ├── primary/            # FastAPI app, REST routers, webhook adapter
     │   │   └── input_port_adapters/mock/  # Mock implementations of all input ports
@@ -354,7 +354,7 @@ async def test_workflow():
 2. `documentation/01_design/03_implementation_plan.md` - Implementation plan
 3. `documentation/01_design/infrastructure/resilience_infrastructure_design.md` - Resilience patterns
 4. `documentation/01_design/ports/output/NEW_INTERFACES_QUICK_REFERENCE.md` - Port interface guide
-5. `documentation/01_design/ports/output/COMPREHENSIVE_PORTS_REFERENCE.md` - Complete port inventory (28+ ports)
+5. `documentation/01_design/ports/output/COMPREHENSIVE_PORTS_REFERENCE.md` - Complete port inventory (29+ ports)
 
 **Testing & Simulation:**
 - `tests/simulation/README.md` - Simulation testing framework
