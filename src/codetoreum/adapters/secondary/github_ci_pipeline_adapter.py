@@ -291,8 +291,8 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
 
             logger.info(f"Queried CI status for PR {pr_id}: {overall_status.value}")
 
-            # Emit event asynchronously after successful CI status retrieval
-            self._emit_event_safely(
+            # Construct and emit event safely — failures won't discard the CI status result
+            self._construct_and_emit_event_safely(
                 pr_id=pr_id,
                 project_id=project_id,
                 overall_status=overall_status,
@@ -363,18 +363,20 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
 
     # ===== Helper Methods =====
 
-    def _emit_event_safely(
+    def _construct_and_emit_event_safely(
         self,
         pr_id: str,
         project_id: str,
         overall_status: CICheckStatus,
         check_results: list[CICheckResult],
     ) -> None:
-        """Emit CI pipeline status checked event with error handling.
+        """Construct and emit CI pipeline status checked event with error handling.
 
-        Wraps event construction and emission in try/except to prevent failures
-        from affecting the primary operation (CI status retrieval). Event emission
-        failures are logged for diagnostics but don't propagate to the caller.
+        Wraps both event construction and emission in try/except to prevent failures
+        from affecting the primary operation (CI status retrieval). Failures during
+        construction or emission are logged for diagnostics but don't propagate to
+        the caller. This ensures the CI status is successfully returned even if the
+        event cannot be created or emitted.
 
         Args:
             pr_id: Pull request ID
@@ -383,25 +385,24 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             check_results: List of individual check results
         """
         try:
-            self.emit(
-                CIPipelineStatusCheckedEvent(
-                    type="ci.pipeline_status_checked",
-                    timestamp=datetime.now(UTC).isoformat(),
-                    source="github",
-                    pr_id=pr_id,
-                    project_id=project_id,
-                    status=overall_status.value,
-                    check_count=len(check_results),
-                    passed_count=sum(1 for r in check_results if r.status == CICheckStatus.PASSED),
-                    failed_count=sum(1 for r in check_results if r.status == CICheckStatus.FAILED),
-                    pending_count=sum(
-                        1 for r in check_results if r.status in (CICheckStatus.PENDING, CICheckStatus.RUNNING)
-                    ),
-                )
+            event = CIPipelineStatusCheckedEvent(
+                type="ci.pipeline_status_checked",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="github",
+                pr_id=pr_id,
+                project_id=project_id,
+                status=overall_status.value,
+                check_count=len(check_results),
+                passed_count=sum(1 for r in check_results if r.status == CICheckStatus.PASSED),
+                failed_count=sum(1 for r in check_results if r.status == CICheckStatus.FAILED),
+                pending_count=sum(
+                    1 for r in check_results if r.status in (CICheckStatus.PENDING, CICheckStatus.RUNNING)
+                ),
             )
+            self.emit(event)
         except Exception as emit_error:
             logger.error(
-                f"Failed to emit CI pipeline status checked event for PR {pr_id}",
+                f"Failed to construct or emit CI pipeline status checked event for PR {pr_id}",
                 extra={
                     "error_id": ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR,
                     "pr_id": pr_id,

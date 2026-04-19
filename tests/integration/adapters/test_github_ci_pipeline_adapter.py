@@ -10,7 +10,7 @@ Tests verify:
 """
 
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -795,3 +795,67 @@ class TestGetPRCIStatus:
 
         assert status.total_checks == 0
         assert status.status == CICheckStatus.PENDING
+
+    async def test_event_construction_failure_does_not_discard_status(
+        self, adapter, mock_graphql_client, caplog
+    ):
+        """Test that event construction failure doesn't prevent returning CI status.
+
+        This is the core requirement: even if event construction fails, the CI status
+        must still be returned successfully. Event failures are logged but isolated
+        from the primary operation.
+        """
+        mock_graphql_client.responses["GetPullRequestCheckRuns"] = {
+            "repository": {
+                "pullRequest": {
+                    "number": 123,
+                    "commits": {
+                        "nodes": [
+                            {
+                                "commit": {
+                                    "oid": "abc123",
+                                    "checkSuites": {
+                                        "nodes": [
+                                            {
+                                                "status": "COMPLETED",
+                                                "conclusion": "SUCCESS",
+                                                "checkRuns": {
+                                                    "nodes": [
+                                                        {
+                                                            "name": "test",
+                                                            "status": "COMPLETED",
+                                                            "conclusion": "SUCCESS",
+                                                            "detailsUrl": "https://github.com",
+                                                        }
+                                                    ]
+                                                },
+                                            }
+                                        ]
+                                    },
+                                }
+                            }
+                        ]
+                    },
+                }
+            }
+        }
+
+        # Force event construction to fail by patching CIPipelineStatusCheckedEvent
+        with patch(
+            "codetoreum.adapters.secondary.github_ci_pipeline_adapter.CIPipelineStatusCheckedEvent",
+            side_effect=ValueError("Simulated event construction failure"),
+        ):
+            # Should NOT raise - status must be returned despite event failure
+            status = await adapter.get_pr_ci_status("123", "proj-1")
+
+        # Verify CI status was returned successfully
+        assert status.pr_id == "123"
+        assert status.status == CICheckStatus.PASSED
+        assert status.total_checks == 1
+
+        # Verify error was logged with proper error ID
+        assert any(
+            "ERR_EVENT_PUBLICATION_ERROR" in record.getMessage()
+            or record.__dict__.get("error_id") == "ERR_EVENT_PUBLICATION_ERROR"
+            for record in caplog.records
+        )
