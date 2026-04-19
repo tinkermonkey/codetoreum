@@ -399,7 +399,7 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
                 return [], CICheckStatus.PENDING, pipeline_url
 
             latest_commit = commits[0]
-            commit_oid = latest_commit.get("commit", {}).get("oid", "")
+            latest_commit.get("commit", {}).get("oid", "")
 
             # Collect all check runs from all check suites
             check_suites = latest_commit.get("commit", {}).get("checkSuites", {}).get("nodes", [])
@@ -413,7 +413,7 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             }
 
             for suite in check_suites:
-                suite_conclusion = suite.get("conclusion")
+                suite.get("conclusion")
                 check_runs = suite.get("checkRuns", {}).get("nodes", [])
 
                 for run in check_runs:
