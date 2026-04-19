@@ -35,14 +35,14 @@ class CICheckResult:
     Attributes:
         name: Name of the CI check (e.g., "unit-tests", "linting")
         status: Status of the check (PENDING, RUNNING, PASSED, FAILED, SKIPPED)
-        details: Human-readable details about the check result
-        error_message: Error message if check failed (None if passed/pending)
+        conclusion: Detailed conclusion of the check result (None if check is still pending)
+        url: URL to the check details in the external CI system (None if not available)
     """
 
     name: str
     status: CICheckStatus
-    details: str = ""
-    error_message: str | None = None
+    conclusion: str | None = None
+    url: str | None = None
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
@@ -54,13 +54,14 @@ class CICheckResult:
             msg = f"status must be a CICheckStatus instance, got {type(self.status)}"
             raise ValueError(msg)
 
-        if not isinstance(self.details, str):
-            msg = "details must be a string"
-            raise ValueError(msg)
+        if self.conclusion is not None:
+            if not isinstance(self.conclusion, str):
+                msg = "conclusion must be a string or None"
+                raise ValueError(msg)
 
-        if self.error_message is not None:
-            if not isinstance(self.error_message, str):
-                msg = "error_message must be a string or None"
+        if self.url is not None:
+            if not isinstance(self.url, str):
+                msg = "url must be a string or None"
                 raise ValueError(msg)
 
 
@@ -76,12 +77,20 @@ class CIPipelineStatus:
         pr_id: Pull request identifier
         status: Overall pipeline status (PENDING, RUNNING, PASSED, FAILED, SKIPPED)
         check_results: Individual check results
+        total_checks: Total number of checks in the pipeline
+        passed: Number of checks that passed
+        failed: Number of checks that failed
+        pending: Number of checks still pending/running
         pipeline_url: URL to the CI pipeline run (if available)
     """
 
     pr_id: str
     status: CICheckStatus
     check_results: tuple[CICheckResult, ...]
+    total_checks: int
+    passed: int
+    failed: int
+    pending: int
     pipeline_url: str = ""
 
     def __post_init__(self) -> None:
@@ -106,6 +115,22 @@ class CIPipelineStatus:
             msg = "all check_results must be CICheckResult instances"
             raise ValueError(msg)
 
+        if not isinstance(self.total_checks, int) or self.total_checks < 0:
+            msg = "total_checks must be a non-negative integer"
+            raise ValueError(msg)
+
+        if not isinstance(self.passed, int) or self.passed < 0:
+            msg = "passed must be a non-negative integer"
+            raise ValueError(msg)
+
+        if not isinstance(self.failed, int) or self.failed < 0:
+            msg = "failed must be a non-negative integer"
+            raise ValueError(msg)
+
+        if not isinstance(self.pending, int) or self.pending < 0:
+            msg = "pending must be a non-negative integer"
+            raise ValueError(msg)
+
         if not isinstance(self.pipeline_url, str):
             msg = "pipeline_url must be a string"
             raise ValueError(msg)
@@ -118,52 +143,36 @@ class CIRunResult:
     Represents the outcome of executing CI checks in a local environment
     (typically in a container). All fields are validated at construction to
     ensure contract boundary integrity. Frozen to prevent accidental mutation
-    after creation. Failures are converted to a tuple for true immutability.
+    after creation. Check results are converted to a tuple for true immutability.
 
     Attributes:
-        passed: Number of checks that passed
-        failed: Number of checks that failed
-        failures: Tuple of failure descriptions from failed checks
+        passed: Boolean flag indicating whether all checks passed
+        check_results: Tuple of detailed results for each CI check
         warnings: Tuple of non-fatal warnings from CI execution
         output: Full output/logs from CI execution
     """
 
-    passed: int
-    failed: int
-    failures: tuple[str, ...]
+    passed: bool
+    check_results: tuple[CICheckResult, ...]
     warnings: tuple[str, ...] = ()
     output: str = ""
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
-        # Explicitly reject bool (subclass of int)
-        if isinstance(self.passed, bool):
-            msg = "passed must be a non-negative integer, got bool"
-            raise ValueError(msg)
-
-        if not isinstance(self.passed, int) or self.passed < 0:
-            msg = "passed must be a non-negative integer"
-            raise ValueError(msg)
-
-        # Explicitly reject bool (subclass of int)
-        if isinstance(self.failed, bool):
-            msg = "failed must be a non-negative integer, got bool"
-            raise ValueError(msg)
-
-        if not isinstance(self.failed, int) or self.failed < 0:
-            msg = "failed must be a non-negative integer"
+        if not isinstance(self.passed, bool):
+            msg = "passed must be a boolean"
             raise ValueError(msg)
 
         # Coerce list to tuple for deep immutability
-        if isinstance(self.failures, list):
-            object.__setattr__(self, "failures", tuple(self.failures))
+        if isinstance(self.check_results, list):
+            object.__setattr__(self, "check_results", tuple(self.check_results))
 
-        if not isinstance(self.failures, tuple):
-            msg = "failures must be a list or tuple of strings"
+        if not isinstance(self.check_results, tuple):
+            msg = "check_results must be a list or tuple of CICheckResult instances"
             raise ValueError(msg)
 
-        if not all(isinstance(f, str) for f in self.failures):
-            msg = "all failures must be strings"
+        if not all(isinstance(result, CICheckResult) for result in self.check_results):
+            msg = "all check_results must be CICheckResult instances"
             raise ValueError(msg)
 
         # Coerce list to tuple for deep immutability
@@ -211,14 +220,16 @@ class ICIPipelineService(IEventEmitter, IMonitoredService, ABC):
             # Get PR CI status from external system
             status = await svc.get_pr_ci_status("pr-456", "proj-123", 300)
             if status.status == CICheckStatus.PASSED:
-                print(f"PR {status.pr_id} passed all checks")
+                print(f"PR {status.pr_id} passed all checks ({status.passed}/{status.total_checks})")
 
             # Run local CI checks
             result = await svc.run_ci_checks("proj-123", "/workspace", 600)
-            if result.failed > 0:
-                print(f"Failed {result.failed} checks")
-                for failure in result.failures:
-                    print(f"  - {failure}")
+            if result.passed:
+                print("All checks passed!")
+            else:
+                for check in result.check_results:
+                    if check.status == CICheckStatus.FAILED:
+                        print(f"  - {check.name}: {check.conclusion}")
 
             # Stop monitoring
             await svc.stop_monitoring("proj-123")

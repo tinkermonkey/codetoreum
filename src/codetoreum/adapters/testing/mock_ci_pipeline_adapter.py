@@ -331,8 +331,8 @@ class MockCIPipelineAdapter(ICIPipelineService):
                     CICheckResult(
                         name=f"check-{i}",
                         status=CICheckStatus.FAILED,
-                        details=f"Check {i} failed",
-                        error_message=f"Check {i} failed",
+                        conclusion="failure",
+                        url=f"https://ci.example.com/pr/{pr_id}/check/{i}",
                     )
                 )
 
@@ -342,7 +342,8 @@ class MockCIPipelineAdapter(ICIPipelineService):
                     CICheckResult(
                         name=f"check-pending-{i}",
                         status=CICheckStatus.PENDING,
-                        details=f"Check {i} pending",
+                        conclusion=None,
+                        url=f"https://ci.example.com/pr/{pr_id}/check-pending/{i}",
                     )
                 )
 
@@ -352,15 +353,24 @@ class MockCIPipelineAdapter(ICIPipelineService):
                     CICheckResult(
                         name="check-0",
                         status=CICheckStatus.PASSED,
-                        details="Check passed",
+                        conclusion="success",
+                        url=f"https://ci.example.com/pr/{pr_id}/check/0",
                     )
                 )
+
+            # Determine counts for aggregation
+            passed_count = len([r for r in check_results if r.status == CICheckStatus.PASSED])
+            total_checks = len(check_results)
 
             # Create and emit event
             ci_status = CIPipelineStatus(
                 pr_id=pr_id,
                 status=status,
                 check_results=tuple(check_results),
+                total_checks=total_checks,
+                passed=passed_count,
+                failed=failed_count,
+                pending=pending_count,
                 pipeline_url=f"https://ci.example.com/pr/{pr_id}",
             )
 
@@ -425,27 +435,44 @@ class MockCIPipelineAdapter(ICIPipelineService):
             })
 
             failures = config.get("failures", [])
-            passed = config.get("passed", True)
+            all_passed = config.get("passed", True)
 
-        # Create result
-        if passed:
-            result = CIRunResult(
-                passed=1,
-                failed=0,
-                failures=(),
-                output="All checks passed",
+        # Create check results
+        check_results = []
+        if all_passed:
+            # Create a single passing check
+            check_results.append(
+                CICheckResult(
+                    name="all-tests",
+                    status=CICheckStatus.PASSED,
+                    conclusion="success",
+                    url="https://ci.example.com/run/all-tests",
+                )
             )
-            failed_count = 0
-            passed_count = 1
+            output = "All checks passed"
         else:
-            result = CIRunResult(
-                passed=0,
-                failed=len(failures),
-                failures=tuple(failures),
-                output="Failed checks:\n" + "\n".join(failures),
-            )
-            failed_count = len(failures)
-            passed_count = 0
+            # Create check results for each failure
+            for i, failure in enumerate(failures):
+                check_results.append(
+                    CICheckResult(
+                        name=f"check-{i}",
+                        status=CICheckStatus.FAILED,
+                        conclusion="failure",
+                        url=f"https://ci.example.com/run/check-{i}",
+                    )
+                )
+            output = "Failed checks:\n" + "\n".join(failures)
+
+        # Create result with new schema
+        result = CIRunResult(
+            passed=all_passed,
+            check_results=tuple(check_results),
+            output=output,
+        )
+
+        # Count results for event
+        passed_count = sum(1 for r in check_results if r.status == CICheckStatus.PASSED)
+        failed_count = sum(1 for r in check_results if r.status == CICheckStatus.FAILED)
 
         # Emit run completed event
         completed_event = CIRunCompletedEvent(

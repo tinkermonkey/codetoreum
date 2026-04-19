@@ -8,7 +8,7 @@ ICIPipelineService rather than the agent executor path.
 from datetime import UTC, datetime
 
 from codetoreum.domain.repair_cycle_types import RepairTestFailure, RepairTestResult, RepairTestType, RepairTestWarning
-from codetoreum.ports.output.ci_pipeline_service import CIRunResult
+from codetoreum.ports.output.ci_pipeline_service import CICheckStatus, CIRunResult
 
 
 def convert_ci_run_result_to_repair_test_result(
@@ -17,7 +17,7 @@ def convert_ci_run_result_to_repair_test_result(
 ) -> RepairTestResult:
     """Convert CIRunResult to RepairTestResult for repair cycle aggregation.
 
-    Maps CI failures to RepairTestFailure with file="ci" and test=<check_name>
+    Maps CI check failures to RepairTestFailure with file="ci" and test=<check_name>
     to enable systemic analysis integration without breaking existing aggregation.
 
     Args:
@@ -30,18 +30,22 @@ def convert_ci_run_result_to_repair_test_result(
     Example:
         ci_result = await ci_service.run_ci_checks("proj-1", "/workspace")
         repair_result = convert_ci_run_result_to_repair_test_result(ci_result)
-        # repair_result.failures contains RepairTestFailure(file="ci", test=<failure>, ...)
+        # repair_result.failures contains RepairTestFailure(file="ci", test=<check_name>, ...)
     """
+    # Extract failed checks from check_results
+    failed_checks = [r for r in ci_result.check_results if r.status == CICheckStatus.FAILED]
+    passed_checks = [r for r in ci_result.check_results if r.status == CICheckStatus.PASSED]
+
     # Convert CI failures to RepairTestFailure objects
-    # Each failure string becomes a separate RepairTestFailure with file="ci"
-    # and test=<failure_detail> to support systemic analysis grouping
+    # Each failed check becomes a separate RepairTestFailure with file="ci"
+    # and test=<check_name> to support systemic analysis grouping
     failures = tuple(
         RepairTestFailure(
             file="ci",
-            test=f"check-{i}",
-            message=failure,
+            test=check.name,
+            message=check.conclusion or "Check failed",
         )
-        for i, failure in enumerate(ci_result.failures)
+        for check in failed_checks
     )
 
     # Convert CI warnings to RepairTestWarning objects
@@ -58,8 +62,8 @@ def convert_ci_run_result_to_repair_test_result(
     return RepairTestResult(
         test_type=RepairTestType.CI,
         iteration=iteration,
-        passed=ci_result.passed,
-        failed=ci_result.failed,
+        passed=len(passed_checks),
+        failed=len(failed_checks),
         warnings=len(ci_result.warnings),
         failures=failures,
         warning_list=warnings,

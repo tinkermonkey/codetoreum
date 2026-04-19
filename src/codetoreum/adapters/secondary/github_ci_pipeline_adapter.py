@@ -278,13 +278,17 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
                 raise ResourceNotFoundError(msg, pr_id)
 
             # Extract and aggregate check runs
-            check_results, overall_status, pipeline_url = self._parse_check_runs(pr_node)
+            check_results, overall_status, pipeline_url, status_counts = self._parse_check_runs(pr_node)
 
             # Create CI pipeline status
             ci_status = CIPipelineStatus(
                 pr_id=pr_id,
                 status=overall_status,
                 check_results=tuple(check_results),
+                total_checks=len(check_results),
+                passed=status_counts["passed"],
+                failed=status_counts["failed"],
+                pending=status_counts["pending"],
                 pipeline_url=pipeline_url,
             )
 
@@ -373,7 +377,7 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
 
     def _parse_check_runs(
         self, pr_node: dict[str, Any]
-    ) -> tuple[list[CICheckResult], CICheckStatus, str]:
+    ) -> tuple[list[CICheckResult], CICheckStatus, str, dict[str, int]]:
         """Parse check runs from GraphQL response into structured format.
 
         Aggregates check runs from all check suites on the PR's latest commit
@@ -384,7 +388,7 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             pr_node: PR node from GraphQL response
 
         Returns:
-            Tuple of (check_results, overall_status, pipeline_url)
+            Tuple of (check_results, overall_status, pipeline_url, status_counts)
 
         Raises:
             ExternalServiceError: If response format is invalid
@@ -396,7 +400,13 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             commits = pr_node.get("commits", {}).get("nodes", [])
             if not commits:
                 # No commits yet - treat as pending
-                return [], CICheckStatus.PENDING, pipeline_url
+                return [], CICheckStatus.PENDING, pipeline_url, {
+                    "pending": 0,
+                    "running": 0,
+                    "passed": 0,
+                    "failed": 0,
+                    "skipped": 0,
+                }
 
             latest_commit = commits[0]
             latest_commit.get("commit", {}).get("oid", "")
@@ -453,8 +463,8 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
                     check_result = CICheckResult(
                         name=name,
                         status=ci_status,
-                        details=f"GitHub check: {name}",
-                        error_message=conclusion_str if ci_status == CICheckStatus.FAILED else None,
+                        conclusion=conclusion_str if conclusion_str else None,
+                        url=details_url if details_url else None,
                     )
                     check_results.append(check_result)
 
@@ -473,7 +483,7 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             else:
                 overall_status = CICheckStatus.SKIPPED
 
-            return check_results, overall_status, pipeline_url
+            return check_results, overall_status, pipeline_url, status_counts
 
         except (KeyError, TypeError) as e:
             msg = "github"

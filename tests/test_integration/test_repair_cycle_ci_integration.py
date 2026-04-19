@@ -29,7 +29,7 @@ from codetoreum.domain.repair_cycle_types import (
 )
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
-from codetoreum.ports.output.ci_pipeline_service import CIRunResult
+from codetoreum.ports.output.ci_pipeline_service import CICheckResult, CICheckStatus, CIRunResult
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 # ====================================================================================
@@ -80,10 +80,17 @@ class TestCIRunResultConversion:
 
     def test_convert_passing_ci_result(self):
         """Test conversion of passing CI result."""
+        check_results = (
+            CICheckResult(
+                name="unit-tests",
+                status=CICheckStatus.PASSED,
+                conclusion="success",
+                url="https://ci.example.com/check/0",
+            ),
+        )
         ci_result = CIRunResult(
-            passed=1,
-            failed=0,
-            failures=(),
+            passed=True,
+            check_results=check_results,
             output="All checks passed",
         )
 
@@ -98,10 +105,23 @@ class TestCIRunResultConversion:
 
     def test_convert_failing_ci_result(self):
         """Test conversion of failing CI result with failures mapped to RepairTestFailure."""
+        check_results = (
+            CICheckResult(
+                name="linting",
+                status=CICheckStatus.FAILED,
+                conclusion="linting failed: line too long",
+                url="https://ci.example.com/check/0",
+            ),
+            CICheckResult(
+                name="security-scan",
+                status=CICheckStatus.FAILED,
+                conclusion="security scan: vulnerability detected",
+                url="https://ci.example.com/check/1",
+            ),
+        )
         ci_result = CIRunResult(
-            passed=0,
-            failed=2,
-            failures=["linting failed: line too long", "security scan: vulnerability detected"],
+            passed=False,
+            check_results=check_results,
             output="CI checks failed",
         )
 
@@ -112,20 +132,30 @@ class TestCIRunResultConversion:
         assert len(repair_result.failures) == 2
 
         # FR-5.3: Failures map to RepairTestFailure(file="ci", test=<check_name>, ...)
-        for i, failure in enumerate(repair_result.failures):
+        failure_tests = {f.test for f in repair_result.failures}
+        assert "linting" in failure_tests
+        assert "security-scan" in failure_tests
+
+        for failure in repair_result.failures:
             assert failure.file == "ci"
-            assert failure.test == f"check-{i}"
-            if i == 0:
+            if failure.test == "linting":
                 assert "linting failed" in failure.message
-            elif i == 1:
+            elif failure.test == "security-scan":
                 assert "security scan" in failure.message
 
     def test_convert_with_custom_iteration(self):
         """Test conversion with custom iteration number."""
+        check_results = (
+            CICheckResult(
+                name="unit-tests",
+                status=CICheckStatus.PASSED,
+                conclusion="success",
+                url="https://ci.example.com/check/0",
+            ),
+        )
         ci_result = CIRunResult(
-            passed=1,
-            failed=0,
-            failures=(),
+            passed=True,
+            check_results=check_results,
             output="All checks passed",
         )
 
