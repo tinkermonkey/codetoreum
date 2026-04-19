@@ -35,8 +35,8 @@ from .branch_events import (
 
 # CI pipeline events
 from .ci_pipeline_events import (
-    CIPipelineStatusValue,
     CIPipelineStatusCheckedEvent,
+    CIPipelineStatusValue,
     CIRunCompletedEvent,
     CIRunStartedEvent,
 )
