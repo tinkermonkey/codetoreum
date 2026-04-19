@@ -546,7 +546,7 @@ class TestGetPRCIStatus:
             await adapter.get_pr_ci_status("999", "proj-1")
 
         assert exc_info.value.resource_id == "999"
-        assert exc_info.value.resource_type == "Pull request not found on GitHub"
+        assert exc_info.value.resource_type == "PullRequest"
 
     async def test_external_service_error_on_graphql_failure(self, adapter, mock_graphql_client):
         """Test ExternalServiceError on GraphQL API failure."""
@@ -592,8 +592,8 @@ class TestGetPRCIStatus:
             await adapter.get_pr_ci_status("123", "proj-1")
 
         assert exc_info.value.service == "GitHub"
-        # Error message contains description of the AttributeError from invalid format
-        assert "has no attribute" in str(exc_info.value).lower() or "failed to query" in str(exc_info.value).lower()
+        # Error message should contain the format error description from _parse_check_runs
+        assert "Invalid check runs response format" in str(exc_info.value)
 
     async def test_check_status_mapping_neutral(self, adapter, mock_graphql_client):
         """Test status mapping for neutral conclusion (treated as passed)."""

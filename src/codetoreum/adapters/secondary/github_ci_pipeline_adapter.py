@@ -274,8 +274,7 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             pr_node = result.get("repository", {}).get("pullRequest")
 
             if not pr_node:
-                msg = "Pull request not found on GitHub"
-                raise ResourceNotFoundError(msg, pr_id)
+                raise ResourceNotFoundError("PullRequest", pr_id)
 
             # Extract and aggregate check runs
             check_results, overall_status, pipeline_url, status_counts = self._parse_check_runs(pr_node)
@@ -409,7 +408,6 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
                 }
 
             latest_commit = commits[0]
-            latest_commit.get("commit", {}).get("oid", "")
 
             # Collect all check runs from all check suites
             check_suites = latest_commit.get("commit", {}).get("checkSuites", {}).get("nodes", [])
@@ -423,7 +421,6 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             }
 
             for suite in check_suites:
-                suite.get("conclusion")
                 check_runs = suite.get("checkRuns", {}).get("nodes", [])
 
                 for run in check_runs:
@@ -486,7 +483,7 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
 
             return check_results, overall_status, pipeline_url, status_counts
 
-        except (KeyError, TypeError) as e:
+        except (KeyError, TypeError, AttributeError) as e:
             raise ExternalServiceError("GitHub", f"Invalid check runs response format: {e!s}") from e
 
     async def _get_owner_repo(self) -> tuple[str, str]:
