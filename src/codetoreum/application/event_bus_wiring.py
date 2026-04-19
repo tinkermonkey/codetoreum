@@ -78,7 +78,7 @@ class EventBusRegistry:
             review_service: Review service
             repair_cycle: Repair cycle adapter (for repair cycle automation)
             branch_resolution_service: Branch resolution service (for branch resolution events)
-            ci_pipeline_service: CI pipeline service (for repair cycle and review cycle)
+            ci_pipeline_service: CI pipeline service (for repair cycle)
             clock: Simulation clock (for repair cycle)
 
         Raises:
@@ -298,7 +298,7 @@ def setup_event_bus(
         review_service: Review service
         repair_cycle: Repair cycle adapter (for repair cycle automation)
         branch_resolution_service: Branch resolution service (for branch resolution events)
-        ci_pipeline_service: CI pipeline service (for repair cycle and review cycle)
+        ci_pipeline_service: CI pipeline service (for repair cycle)
         clock: Simulation clock (for repair cycle)
         max_retries: Maximum retry attempts for failed handlers
         retry_delay_seconds: Delay between retries
