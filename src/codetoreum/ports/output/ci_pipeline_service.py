@@ -146,21 +146,29 @@ class CIRunResult:
     after creation. Check results are converted to a tuple for true immutability.
 
     Attributes:
-        passed: Boolean flag indicating whether all checks passed
+        passed: Number of checks that passed
+        failed: Number of checks that failed
         check_results: Tuple of detailed results for each CI check
+        failures: Tuple of failure descriptions from failed checks
         warnings: Tuple of non-fatal warnings from CI execution
         output: Full output/logs from CI execution
     """
 
-    passed: bool
+    passed: int
+    failed: int
     check_results: tuple[CICheckResult, ...]
+    failures: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
     output: str = ""
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
-        if not isinstance(self.passed, bool):
-            msg = "passed must be a boolean"
+        if not isinstance(self.passed, int) or self.passed < 0:
+            msg = "passed must be a non-negative integer"
+            raise ValueError(msg)
+
+        if not isinstance(self.failed, int) or self.failed < 0:
+            msg = "failed must be a non-negative integer"
             raise ValueError(msg)
 
         # Coerce list to tuple for deep immutability
@@ -173,6 +181,18 @@ class CIRunResult:
 
         if not all(isinstance(result, CICheckResult) for result in self.check_results):
             msg = "all check_results must be CICheckResult instances"
+            raise ValueError(msg)
+
+        # Coerce list to tuple for deep immutability
+        if isinstance(self.failures, list):
+            object.__setattr__(self, "failures", tuple(self.failures))
+
+        if not isinstance(self.failures, tuple):
+            msg = "failures must be a list or tuple of strings"
+            raise ValueError(msg)
+
+        if not all(isinstance(f, str) for f in self.failures):
+            msg = "all failures must be strings"
             raise ValueError(msg)
 
         # Coerce list to tuple for deep immutability

@@ -32,7 +32,7 @@ from codetoreum.infrastructure.observability.instrumentation import (
     instrument_async_function,
 )
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
-from codetoreum.ports.output.ci_pipeline_service import ICIPipelineService
+from codetoreum.ports.output.ci_pipeline_service import CICheckStatus, ICIPipelineService
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
@@ -290,7 +290,7 @@ class RepairCycleEventHandler(EventHandler):
                         passed=ci_run_result.failed == 0,
                         iterations=1,
                         final_result=ci_test_result,
-                        error=None if ci_run_result.failed == 0 else f"CI checks failed: {len(ci_run_result.failures)} failures",
+                        error=None if ci_run_result.failed == 0 else f"CI checks failed: {ci_run_result.failed} failures",
                         files_fixed=0,
                         warnings_reviewed=0,
                         duration_seconds=0.0,

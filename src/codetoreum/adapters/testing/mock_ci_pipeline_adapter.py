@@ -463,16 +463,18 @@ class MockCIPipelineAdapter(ICIPipelineService):
                 )
             output = "Failed checks:\n" + "\n".join(failures)
 
-        # Create result with new schema
-        result = CIRunResult(
-            passed=all_passed,
-            check_results=tuple(check_results),
-            output=output,
-        )
-
-        # Count results for event
+        # Count results for creation
         passed_count = sum(1 for r in check_results if r.status == CICheckStatus.PASSED)
         failed_count = sum(1 for r in check_results if r.status == CICheckStatus.FAILED)
+
+        # Create result with new schema
+        result = CIRunResult(
+            passed=passed_count,
+            failed=failed_count,
+            check_results=tuple(check_results),
+            failures=tuple(failures),
+            output=output,
+        )
 
         # Emit run completed event
         completed_event = CIRunCompletedEvent(
