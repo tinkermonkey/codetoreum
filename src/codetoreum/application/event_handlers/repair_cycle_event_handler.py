@@ -109,7 +109,7 @@ class RepairCycleEventHandler(EventHandler):
             event_bus: Event bus for publishing events
             ci_pipeline_service: Optional CI pipeline service for executing CI checks
             working_directory_resolver: Optional callable(project_id) -> str that returns the
-                working directory for CI checks. Defaults to lambda: "/workspace"
+                working directory for CI checks. Defaults to lambda project_id: "/workspace"
         """
         self._repair_cycle = repair_cycle
         self._workflow_config = workflow_config

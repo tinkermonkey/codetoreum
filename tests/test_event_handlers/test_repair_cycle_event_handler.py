@@ -203,18 +203,6 @@ def ci_pipeline_service():
     return AsyncMock(spec=ICIPipelineService)
 
 
-@pytest.fixture
-def handler_with_ci_service(repair_cycle_adapter, event_bus, workflow_config, ci_pipeline_service):
-    """Create a repair cycle event handler with CI pipeline service."""
-    return RepairCycleEventHandler(
-        repair_cycle=repair_cycle_adapter,
-        clock=None,
-        event_bus=event_bus,
-        workflow_config=workflow_config,
-        ci_pipeline_service=ci_pipeline_service,
-    )
-
-
 # ====================================================================================
 # Tests for RepairCycleEventHandler
 # ====================================================================================
