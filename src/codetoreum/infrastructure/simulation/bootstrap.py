@@ -589,11 +589,15 @@ class SimulationAdapters:
             raise TypeError(msg)
         return cast("MockWorkItemService", self.work_item_service)
 
-    def ci_pipeline_as_mock(self) -> MockCIPipelineAdapter:
+    def ci_pipeline_as_mock(self) -> "MockCIPipelineAdapter":
         """Get CI pipeline service as MockCIPipelineAdapter.
 
         Raises TypeError if ci_pipeline is not MockCIPipelineAdapter.
         """
+        from codetoreum.adapters.testing.mock_ci_pipeline_adapter import (
+            MockCIPipelineAdapter,
+        )
+
         if not isinstance(self.ci_pipeline, MockCIPipelineAdapter):
             msg = f"ci_pipeline is {type(self.ci_pipeline).__name__}, not MockCIPipelineAdapter"
             raise TypeError(msg)
