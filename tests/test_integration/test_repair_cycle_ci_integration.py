@@ -148,8 +148,8 @@ class TestMockRepairCycleAdapterCIDelegation:
         """Test that CI tests are delegated to ICIPipelineService (FR-6.1)."""
         # Setup
         ci_service = MockCIPipelineAdapter()
-        # Configure the service for the work_item_id that will be used
-        ci_service.set_ci_run_passing("item-1")
+        # Configure the service for the project_id that will be used
+        ci_service.set_ci_run_passing("proj-1")
 
         repair_adapter = MockRepairCycleAdapter(ci_pipeline_service=ci_service)
         repair_adapter.current_project = "proj-1"
@@ -174,16 +174,16 @@ class TestMockRepairCycleAdapterCIDelegation:
         assert result.passed == 1
         assert result.failed == 0
 
-        # Verify CI service was called
-        ci_service.assert_ci_run_executed("item-1")
+        # Verify CI service was called with correct project_id
+        ci_service.assert_ci_run_executed("proj-1")
 
     @pytest.mark.asyncio
     async def test_ci_delegation_with_failing_result(self):
         """Test CI delegation with failures."""
         # Setup
         ci_service = MockCIPipelineAdapter()
-        # Configure the service for the work_item_id that will be used
-        ci_service.set_ci_run_failing("item-1", ["linting failed", "tests failed"])
+        # Configure the service for the project_id that will be used
+        ci_service.set_ci_run_failing("proj-1", ["linting failed", "tests failed"])
 
         repair_adapter = MockRepairCycleAdapter(ci_pipeline_service=ci_service)
         repair_adapter.current_project = "proj-1"

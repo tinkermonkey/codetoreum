@@ -49,9 +49,9 @@ def convert_ci_run_result_to_repair_test_result(
         iteration=iteration,
         passed=ci_result.passed,
         failed=ci_result.failed,
-        warnings=0,  # CI checks don't produce warnings in the current model
+        warnings=len(ci_result.warnings),
         failures=failures,
-        warning_list=(),
+        warning_list=ci_result.warnings,
         raw_output=ci_result.output,
         timestamp=datetime.now(UTC).isoformat(),
     )

@@ -264,7 +264,14 @@ class RepairCycleEventHandler(EventHandler):
             # Execute CI tests separately if configured
             # FR-5.2: Route RepairTestType.CI to ICIPipelineService.run_ci_checks()
             ci_results: list[CycleResult] = []
-            if ci_test_types and self._ci_pipeline_service:
+            if ci_test_types and not self._ci_pipeline_service:
+                # Violation of "no silent error handling" principle - must log or raise
+                logger.warning(
+                    f"CI test types configured for {work_item_id} but no ICIPipelineService injected. "
+                    "CI checks will not be executed. Provide ci_pipeline_service to the event handler to enable CI routing.",
+                    extra={"work_item_id": work_item_id, "ci_test_types": ci_test_types},
+                )
+            elif ci_test_types and self._ci_pipeline_service:
                 logger.info(f"Executing CI checks for {work_item_id}")
                 try:
                     ci_run_result = await self._ci_pipeline_service.run_ci_checks(
@@ -277,11 +284,12 @@ class RepairCycleEventHandler(EventHandler):
                     ci_test_result = convert_ci_run_result_to_repair_test_result(ci_run_result)
 
                     # Create a CycleResult for the CI test type
+                    # Always preserve final_result with failure details for systemic analysis
                     ci_cycle_result = CycleResult(
                         test_type=RepairTestType.CI,
                         passed=ci_run_result.failed == 0,
                         iterations=1,
-                        final_result=ci_test_result if ci_run_result.failed == 0 else None,
+                        final_result=ci_test_result,
                         error=None if ci_run_result.failed == 0 else f"CI checks failed: {len(ci_run_result.failures)} failures",
                         files_fixed=0,
                         warnings_reviewed=0,

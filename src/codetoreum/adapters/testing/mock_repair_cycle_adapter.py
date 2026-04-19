@@ -889,7 +889,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             # Call CI service and convert result
             # FR-5.3: Convert CIRunResult to RepairTestResult
             ci_run_result = await self._ci_pipeline_service.run_ci_checks(
-                project_id=context.work_item_id,
+                project_id=self._current_project or context.work_item_id,
                 working_directory="/workspace",
                 timeout_seconds=config.timeout,
             )
