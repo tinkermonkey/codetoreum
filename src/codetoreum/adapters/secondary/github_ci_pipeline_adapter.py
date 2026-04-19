@@ -167,7 +167,7 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
 
         logger.info(f"Stopped monitoring CI status for project {project_id}")
 
-    def get_monitoring_status(self, project_id: str) -> MonitoringStatus:
+    async def get_monitoring_status(self, project_id: str) -> MonitoringStatus:
         """Get current monitoring status for a project.
 
         Args:
@@ -224,9 +224,9 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
         # Convert pr_id to integer
         try:
             pr_number = int(pr_id)
-        except ValueError:
+        except ValueError as e:
             msg = f"pr_id must be numeric, got: {pr_id}"
-            raise ValidationError(msg)
+            raise ValidationError(msg) from e
 
         try:
             # Fetch PR details including check runs from GitHub
@@ -399,6 +399,16 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             commits = pr_node.get("commits", {}).get("nodes", [])
             if not commits:
                 # No commits yet - treat as pending
+                pr_number = pr_node.get("number", "unknown")
+                logger.warning(
+                    f"PR {pr_number} has no commits but is returning PENDING status",
+                    extra={
+                        "error_id": ErrorRegistry.ERR_INVALID_STATE,
+                        "pr_number": pr_number,
+                        "status": "PENDING",
+                        "check_count": 0,
+                    },
+                )
                 return [], CICheckStatus.PENDING, pipeline_url, {
                     "pending": 0,
                     "running": 0,
@@ -443,7 +453,16 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
                             ci_status = CICheckStatus.SKIPPED
                             status_counts["skipped"] += 1
                         else:
-                            # Safe default for unknown conclusion
+                            # Unknown conclusion - log warning and default to FAILED
+                            logger.warning(
+                                f"Unknown GitHub conclusion '{conclusion_str}' for check '{name}', defaulting to FAILED",
+                                extra={
+                                    "error_id": ErrorRegistry.ERR_EXTERNAL_SERVICE_ERROR,
+                                    "check_name": name,
+                                    "conclusion": conclusion_str,
+                                    "status": status_str,
+                                },
+                            )
                             ci_status = CICheckStatus.FAILED
                             status_counts["failed"] += 1
                     elif status_str == "in_progress":
@@ -453,7 +472,16 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
                         ci_status = CICheckStatus.PENDING
                         status_counts["pending"] += 1
                     else:
-                        # Default to pending for unknown status
+                        # Unknown status - log warning and default to PENDING
+                        logger.warning(
+                            f"Unknown GitHub status '{status_str}' for check '{name}', defaulting to PENDING",
+                            extra={
+                                "error_id": ErrorRegistry.ERR_EXTERNAL_SERVICE_ERROR,
+                                "check_name": name,
+                                "status": status_str,
+                                "conclusion": conclusion_str if conclusion_str else None,
+                            },
+                        )
                         ci_status = CICheckStatus.PENDING
                         status_counts["pending"] += 1
 

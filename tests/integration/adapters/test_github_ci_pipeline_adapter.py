@@ -215,7 +215,7 @@ class TestMonitoring:
         config = MonitoringConfig(project_id="proj-1")
         await adapter.start_monitoring("proj-1", config)
 
-        status = adapter.get_monitoring_status("proj-1")
+        status = await adapter.get_monitoring_status("proj-1")
         assert status.state == MonitoringState.ACTIVE
         assert status.project_id == "proj-1"
 
@@ -225,13 +225,13 @@ class TestMonitoring:
         await adapter.start_monitoring("proj-1", config)
         await adapter.stop_monitoring("proj-1")
 
-        status = adapter.get_monitoring_status("proj-1")
+        status = await adapter.get_monitoring_status("proj-1")
         assert status.state == MonitoringState.STOPPED
         assert status.project_id == "proj-1"
 
-    def test_get_monitoring_status_before_start(self, adapter):
+    async def test_get_monitoring_status_before_start(self, adapter):
         """Test getting monitoring status for unstarted project."""
-        status = adapter.get_monitoring_status("proj-1")
+        status = await adapter.get_monitoring_status("proj-1")
 
         assert status.state == MonitoringState.STOPPED
         assert status.project_id == "proj-1"
