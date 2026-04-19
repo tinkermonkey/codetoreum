@@ -208,6 +208,7 @@ from codetoreum.ports.output.agent_executor import IAgentExecutor
 from codetoreum.ports.output.agent_repository import IAgentRepository
 from codetoreum.ports.output.board_service import IBoardService
 from codetoreum.ports.output.branch_resolution_service import IBranchResolutionService
+from codetoreum.ports.output.ci_pipeline_service import ICIPipelineService
 from codetoreum.ports.output.code_review_service import ICodeReviewService
 from codetoreum.ports.output.config_store import IConfigStore
 from codetoreum.ports.output.container import IContainer
@@ -344,6 +345,7 @@ class SimulationAdapters:
     code_review: ICodeReviewService
     identity_service: IIdentityService
     checkpoint_store: IRepairCycleCheckpointStore
+    ci_pipeline: ICIPipelineService
 
     # Phase 3 adapters (ExecutionService chain)
     agent_repository: IAgentRepository
@@ -586,6 +588,16 @@ class SimulationAdapters:
             msg = f"work_item_service is {type(self.work_item_service).__name__}, not MockWorkItemService"
             raise TypeError(msg)
         return cast("MockWorkItemService", self.work_item_service)
+
+    def ci_pipeline_as_mock(self) -> MockCIPipelineAdapter:
+        """Get CI pipeline service as MockCIPipelineAdapter.
+
+        Raises TypeError if ci_pipeline is not MockCIPipelineAdapter.
+        """
+        if not isinstance(self.ci_pipeline, MockCIPipelineAdapter):
+            msg = f"ci_pipeline is {type(self.ci_pipeline).__name__}, not MockCIPipelineAdapter"
+            raise TypeError(msg)
+        return cast("MockCIPipelineAdapter", self.ci_pipeline)
 
     def branch_resolution_as_mock(self) -> "MockBranchResolutionAdapter":
         """Get branch resolution service as MockBranchResolutionAdapter.
@@ -2028,6 +2040,7 @@ class SimulationApplicationBootstrap:
             repair_cycle=self.adapters.repair_cycle,
             workflow_config=self.adapters.workflow_config,
             event_bus=self.infrastructure.event_bus,
+            ci_pipeline_service=self.adapters.ci_pipeline,
         )
 
         self.infrastructure.event_bus.register_handler(handler)

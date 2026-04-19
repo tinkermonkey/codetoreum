@@ -25,6 +25,7 @@ from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
 from codetoreum.ports.output.agent_repository import IAgentRepository
 from codetoreum.ports.output.board_service import IBoardService
+from codetoreum.ports.output.ci_pipeline_service import ICIPipelineService
 from codetoreum.ports.output.code_review_service import ICodeReviewService
 from codetoreum.ports.output.config_store import IConfigStore
 from codetoreum.ports.output.container import IContainer
@@ -394,6 +395,13 @@ class AdapterResolver:
             time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
         )
 
+    def resolve_ci_pipeline(self) -> ICIPipelineService:
+        """Resolve CI pipeline service adapter."""
+        return self._factory.create_ci_pipeline_service(
+            adapter_name=self._config.ci_pipeline,
+            event_emitter=self._resolved["event_emitter"],
+        )
+
     def resolve_systemic_analysis_service(self) -> ISystemicAnalysisService:
         """Resolve systemic analysis service adapter.
 
@@ -691,6 +699,7 @@ class AdapterResolver:
         self._resolved["version_control"] = self.resolve_version_control()
         self._resolved["board"] = self.resolve_board()
         self._resolved["queue_service"] = self.resolve_queue_service()
+        self._resolved["ci_pipeline"] = self.resolve_ci_pipeline()
 
         # 4. External system adapters
         self._resolved["ticket"] = self.resolve_ticket()
@@ -767,6 +776,7 @@ class AdapterResolver:
             code_review=self._resolved["code_review"],
             identity_service=self._resolved["identity_service"],
             checkpoint_store=self._resolved["checkpoint_store"],
+            ci_pipeline=self._resolved["ci_pipeline"],
             # Phase 3 adapters
             agent_repository=self._resolved["agent_repository"],
             run_registry=self._resolved["run_registry"],
