@@ -136,6 +136,9 @@ from codetoreum.application.conversational_loop_orchestrator import Conversation
 from codetoreum.application.event_handlers.board_event_handler import (
     BoardColumnEventHandler,
 )
+from codetoreum.application.event_handlers.review_event_handler import (
+    ReviewEventHandler,
+)
 from codetoreum.application.execution_service import ExecutionService
 from codetoreum.application.feedback_processor import FeedbackProcessor
 from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
@@ -2012,6 +2015,10 @@ class SimulationApplicationBootstrap:
         # and invoke the repair cycle when items enter the configured repair cycle stage
         self._register_repair_cycle_handler()
 
+        # Register review event handler with event bus (FR-7.2)
+        # This handler listens for review cycle events and has CI pipeline service wired
+        self._register_review_event_handler()
+
         # Register branch resolution event handler with event bus
         # This handler logs branch resolution events with structured fields for audit trail
         self._register_branch_resolution_handler()
@@ -2051,6 +2058,34 @@ class SimulationApplicationBootstrap:
 
         self.infrastructure.event_bus.register_handler(handler)
         logger.info("Registered RepairCycleEventHandler with event bus")
+
+    def _register_review_event_handler(self) -> None:
+        """
+        Register review event handler with the event bus.
+
+        Part of Phase 5: Event handler registration for cross-cutting concerns.
+
+        This handler listens for review cycle events (ReviewCycleCreated, ReviewIterationStarted,
+        ReviewFeedbackSubmitted, ReviewCycleApproved, ReviewCycleRejected, ReviewCycleEscalated)
+        and processes them with optional CI pipeline service integration (FR-7.2).
+
+        The CI pipeline service is injected to allow the handler to execute CI checks
+        as part of the review cycle when configured.
+
+        Logs a warning if components are not yet initialized, allowing graceful degradation
+        if called before full setup completion.
+        """
+        if not self.adapters or not self.services:
+            logger.warning("Cannot register review event handler: components not ready")
+            return
+
+        handler = ReviewEventHandler(
+            review_service=self.services.review_service,
+            ci_pipeline_service=self.adapters.ci_pipeline,
+        )
+
+        self.infrastructure.event_bus.register_handler(handler)
+        logger.info("Registered ReviewEventHandler with event bus and CI pipeline service wired (FR-7.2)")
 
     def _register_branch_resolution_handler(self) -> None:
         """
