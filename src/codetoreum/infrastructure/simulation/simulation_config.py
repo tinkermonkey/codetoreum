@@ -21,6 +21,15 @@ class AdapterSelectionConfig:
     implementation to use for that adapter in the simulation.
 
     All fields default to simulation variant names for fully deterministic testing.
+
+    NOTE: These defaults are designed for simulation/testing environments. Production
+    bootstraps MUST explicitly override these defaults to use production implementations.
+    For example, in production you should set:
+    - ci_pipeline = "github" (instead of default "mock")
+    - ticket = "github" (instead of default "in_memory")
+    - version_control = "github" (instead of default "in_memory")
+    - container = "docker" (instead of default "fake")
+    - And other adapters to their production-ready implementations
     """
 
     board: str = "mock"

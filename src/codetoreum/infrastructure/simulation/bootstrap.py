@@ -908,8 +908,8 @@ class SimulationApplicationBootstrap:
             logger.info("Phase 1: Creating infrastructure...")
             self.infrastructure = self._create_infrastructure()
 
-            # Phase 2: Create adapters (32 total: 30 via resolver + systemic_analysis + environment_repair + ci_pipeline) with event bus subscriptions
-            logger.info("Phase 2: Creating 32 adapters...")
+            # Phase 2: Create adapters (33 total: 32 via resolver + branch_resolution_service) with event bus subscriptions
+            logger.info("Phase 2: Creating 33 adapters...")
             self.adapters = await self._create_adapters()
 
             # Register causal links between adapters and domain events
@@ -1222,7 +1222,7 @@ class SimulationApplicationBootstrap:
 
     async def _create_adapters(self) -> SimulationAdapters:
         """
-        Create all 32 adapters using AdapterResolver in dependency order.
+        Create all 33 adapters using AdapterResolver in dependency order.
 
         Phase 2 bootstrap creates adapters following a partial dependency ordering:
         1. Leaf adapters (no dependencies): event_store, config_store, metrics, encryption, identity_service
@@ -1235,8 +1235,9 @@ class SimulationApplicationBootstrap:
         7. Composite: project_manager
         8. Repository: (depends on event_emitter)
         9. Engine-coupled: review_cycle, repair_cycle (use SimulationEngine for clock injection)
-        10. Additional services: code_review, container_recovery
-        11. Manual post-processing: systemic_analysis_service, environment_repair_service, ci_pipeline (32nd adapter)
+        10. Additional services: code_review, container_recovery, systemic_analysis_service,
+            environment_repair_service, ci_pipeline_service (32 total via resolver)
+        11. Manual post-processing: branch_resolution_service (33rd adapter, created separately)
 
         AdapterResolver validates credentials before construction and raises aggregated
         configuration errors if any adapter is misconfigured.
@@ -1246,7 +1247,7 @@ class SimulationApplicationBootstrap:
         simulation-specific methods.
 
         Returns:
-            SimulationAdapters with all 32 adapters typed as port interfaces
+            SimulationAdapters with all 33 adapters typed as port interfaces
         """
         if not self._engine:
             message = "SimulationEngine must be created before adapters"
@@ -1318,6 +1319,7 @@ class SimulationApplicationBootstrap:
         if isinstance(resolved.repair_cycle, MockRepairCycleAdapter):
             resolved.repair_cycle.systemic_analysis_service = resolved.systemic_analysis_service
             resolved.repair_cycle.environment_repair_service = resolved.environment_repair_service
+            resolved.repair_cycle.ci_pipeline_service = resolved.ci_pipeline
 
         # Create branch resolution adapter (mock adapter for simulation testing)
         resolved.branch_resolution_service = MockBranchResolutionAdapter(clock=self._engine.get_clock_for_testing())
