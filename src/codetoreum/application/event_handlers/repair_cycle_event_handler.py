@@ -32,7 +32,7 @@ from codetoreum.infrastructure.observability.instrumentation import (
     instrument_async_function,
 )
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
-from codetoreum.ports.output.ci_pipeline_service import CICheckStatus, ICIPipelineService
+from codetoreum.ports.output.ci_pipeline_service import ICIPipelineService
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
