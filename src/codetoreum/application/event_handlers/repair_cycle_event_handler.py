@@ -8,6 +8,7 @@ Subscribes to workitem.column_changed events and orchestrates:
 """
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -96,6 +97,7 @@ class RepairCycleEventHandler(EventHandler):
         clock: SimulationClock | None = None,
         event_bus: EventBus | None = None,
         ci_pipeline_service: ICIPipelineService | None = None,
+        working_directory_resolver: Callable[[str], str] | None = None,
     ):
         """
         Initialize repair cycle event handler.
@@ -106,12 +108,15 @@ class RepairCycleEventHandler(EventHandler):
             clock: Optional simulation clock for deterministic test execution
             event_bus: Event bus for publishing events
             ci_pipeline_service: Optional CI pipeline service for executing CI checks
+            working_directory_resolver: Optional callable(project_id) -> str that returns the
+                working directory for CI checks. Defaults to lambda: "/workspace"
         """
         self._repair_cycle = repair_cycle
         self._workflow_config = workflow_config
         self._clock = clock
         self._event_bus = event_bus
         self._ci_pipeline_service = ci_pipeline_service
+        self._working_directory_resolver = working_directory_resolver or (lambda project_id: "/workspace")
 
     @property
     def repair_cycle(self) -> IRepairCycle:
@@ -151,7 +156,7 @@ class RepairCycleEventHandler(EventHandler):
             event: Domain event to handle
 
         Raises:
-            Exception: If handling fails (logged but not re-raised)
+            Exception: If handling fails (logged and re-raised)
         """
         if not isinstance(event, WorkItemColumnChanged):
             logger.warning(f"RepairCycleEventHandler received unexpected event type: {event.event_type}")
@@ -179,8 +184,8 @@ class RepairCycleEventHandler(EventHandler):
         Process column movement and trigger repair cycle if entering configured repair stage.
 
         The repair cycle is initiated when a work item enters the configured repair cycle stage.
-        The cycle executes test types sequentially (UNIT → INTEGRATION → E2E) with
-        fast-fail behavior.
+        The cycle executes test types sequentially in the configured order:
+        COMPILATION → UNIT → INTEGRATION → CI → E2E, with fast-fail behavior.
 
         Args:
             event: WorkItemColumnChanged event with column movement details
@@ -274,9 +279,10 @@ class RepairCycleEventHandler(EventHandler):
             elif ci_test_types and self._ci_pipeline_service:
                 logger.info(f"Executing CI checks for {work_item_id}")
                 try:
+                    working_directory = self._working_directory_resolver(project_id)
                     ci_run_result = await self._ci_pipeline_service.run_ci_checks(
                         project_id=project_id,
-                        working_directory="/workspace",  # Standard workspace path
+                        working_directory=working_directory,
                         timeout_seconds=600,
                     )
 

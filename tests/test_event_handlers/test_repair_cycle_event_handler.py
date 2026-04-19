@@ -22,6 +22,12 @@ from codetoreum.domain.repair_cycle_types import (
 )
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
+from codetoreum.ports.output.ci_pipeline_service import (
+    CICheckResult,
+    CICheckStatus,
+    CIRunResult,
+    ICIPipelineService,
+)
 from codetoreum.ports.output.repair_cycle_service import (
     RepairCycleContext,
 )
@@ -188,6 +194,24 @@ def handler_with_clock(repair_cycle_adapter, event_bus, simulation_clock, workfl
         clock=simulation_clock,
         event_bus=event_bus,
         workflow_config=workflow_config,
+    )
+
+
+@pytest.fixture
+def ci_pipeline_service():
+    """Create a mock CI pipeline service."""
+    return AsyncMock(spec=ICIPipelineService)
+
+
+@pytest.fixture
+def handler_with_ci_service(repair_cycle_adapter, event_bus, workflow_config, ci_pipeline_service):
+    """Create a repair cycle event handler with CI pipeline service."""
+    return RepairCycleEventHandler(
+        repair_cycle=repair_cycle_adapter,
+        clock=None,
+        event_bus=event_bus,
+        workflow_config=workflow_config,
+        ci_pipeline_service=ci_pipeline_service,
     )
 
 
@@ -884,3 +908,283 @@ class TestAgentConfigExtraction:
         assert repair_cycle_adapter.last_context.agent_config == agent_config_obj
         # Should log info about specialized agents being used
         assert "using specialized repair cycle agents" in caplog.text.lower()
+
+
+class TestCIPipelineIntegration:
+    """Tests for CI pipeline integration in repair cycle event handler."""
+
+    @pytest.fixture
+    def workflow_config_with_ci(self):
+        """Create a workflow config with CI test type configured."""
+        testing_column = ColumnTemplate(
+            name="Testing",
+            type=ColumnType.AUTOMATED,
+            agent_id="test_agent",
+            is_pipeline_trigger=False,
+            is_exit_column=False,
+            position=0,
+            auto_progress_on_completion=True,
+            repair_cycle_agents=RepairCycleAgentConfig(),
+            repair_cycle_test_types=(RepairTestType.UNIT, RepairTestType.INTEGRATION, RepairTestType.CI),
+        )
+        template = BoardWorkflowTemplate(
+            id="template-1",
+            name="Test Template",
+            board_id="board-1",
+            project_id="proj-1",
+            columns=(testing_column,),
+        )
+
+        async def _get_template(board_id: str) -> BoardWorkflowTemplate | None:
+            return template if board_id else None
+
+        mock_config = AsyncMock(spec=IWorkflowConfigService)
+        mock_config.get_board_workflow_template.side_effect = _get_template
+        return mock_config
+
+    @pytest.mark.asyncio
+    async def test_overall_success_false_when_ci_fails_but_agent_tests_pass(
+        self, repair_cycle_adapter, event_bus, ci_pipeline_service, workflow_config_with_ci
+    ):
+        """Test that overall_success is False when CI fails even if agent tests pass."""
+        # Setup: agent tests pass, CI fails
+        repair_cycle_adapter.result = RepairCycleResult(
+            stage="Testing",
+            test_results=(
+                CycleResult(
+                    test_type=RepairTestType.UNIT,
+                    passed=True,
+                    iterations=1,
+                    final_result=RepairTestResult(
+                        test_type=RepairTestType.UNIT,
+                        iteration=1,
+                        passed=2,
+                        failed=0,
+                        warnings=0,
+                        failures=(),
+                        warning_list=(),
+                        raw_output="All tests passed",
+                        timestamp="2024-01-01T00:00:00Z",
+                    ),
+                    error=None,
+                    files_fixed=0,
+                    warnings_reviewed=0,
+                    duration_seconds=1.0,
+                ),
+            ),
+            overall_success=True,  # Agent tests passed
+            total_agent_calls=0,
+            duration_seconds=1.0,
+            timestamp="2024-01-01T00:00:00Z",
+        )
+
+        # CI checks return failures
+        failed_check = CICheckResult(
+            name="unit-tests",
+            status=CICheckStatus.FAILED,
+            conclusion="Some tests failed",
+            url="https://example.com/check",
+        )
+        ci_pipeline_service.run_ci_checks.return_value = CIRunResult(
+            passed=0,
+            failed=1,
+            check_results=(failed_check,),
+            failures=("Test failed in module_a.py",),
+            warnings=(),
+            output="Test output",
+        )
+
+        handler = RepairCycleEventHandler(
+            repair_cycle=repair_cycle_adapter,
+            clock=None,
+            event_bus=event_bus,
+            workflow_config=workflow_config_with_ci,
+            ci_pipeline_service=ci_pipeline_service,
+        )
+
+        event = WorkItemColumnChanged(
+            aggregate_id="item-1",
+            payload={
+                "work_item_id": "item-1",
+                "board_id": "board-1",
+                "project_id": "proj-1",
+                "from_column": "Code Review",
+                "to_column": "Testing",
+                "moved_by": "system",
+            },
+        )
+
+        await handler.handle_column_change(event)
+
+        # Verify CI service was called
+        assert ci_pipeline_service.run_ci_checks.called
+
+        # Verify the RepairCycleCompletedEvent shows overall_success=False
+        # because CI failed even though agent tests passed
+        assert event_bus.publish.called
+        published_event = event_bus.publish.call_args[0][0]
+        assert published_event.overall_success is False
+
+    @pytest.mark.asyncio
+    async def test_ci_pipeline_exception_creates_failed_cycle_result(
+        self, repair_cycle_adapter, event_bus, ci_pipeline_service, workflow_config_with_ci
+    ):
+        """Test that CI pipeline exceptions are caught and converted to failed cycle results."""
+        # Setup: agent tests pass
+        repair_cycle_adapter.result = RepairCycleResult(
+            stage="Testing",
+            test_results=(
+                CycleResult(
+                    test_type=RepairTestType.UNIT,
+                    passed=True,
+                    iterations=1,
+                    final_result=RepairTestResult(
+                        test_type=RepairTestType.UNIT,
+                        iteration=1,
+                        passed=1,
+                        failed=0,
+                        warnings=0,
+                        failures=(),
+                        warning_list=(),
+                        raw_output="All tests passed",
+                        timestamp="2024-01-01T00:00:00Z",
+                    ),
+                    error=None,
+                    files_fixed=0,
+                    warnings_reviewed=0,
+                    duration_seconds=1.0,
+                ),
+            ),
+            overall_success=True,
+            total_agent_calls=0,
+            duration_seconds=1.0,
+            timestamp="2024-01-01T00:00:00Z",
+        )
+
+        # CI pipeline raises an exception
+        ci_pipeline_service.run_ci_checks.side_effect = Exception("CI pipeline connection failed")
+
+        handler = RepairCycleEventHandler(
+            repair_cycle=repair_cycle_adapter,
+            clock=None,
+            event_bus=event_bus,
+            workflow_config=workflow_config_with_ci,
+            ci_pipeline_service=ci_pipeline_service,
+        )
+
+        event = WorkItemColumnChanged(
+            aggregate_id="item-1",
+            payload={
+                "work_item_id": "item-1",
+                "board_id": "board-1",
+                "project_id": "proj-1",
+                "from_column": "Code Review",
+                "to_column": "Testing",
+                "moved_by": "system",
+            },
+        )
+
+        await handler.handle_column_change(event)
+
+        # Verify CI service was called
+        assert ci_pipeline_service.run_ci_checks.called
+
+        # Verify the RepairCycleCompletedEvent shows:
+        # 1. overall_success=False due to CI pipeline failure
+        # 2. A failed CI cycle result with error message
+        assert event_bus.publish.called
+        published_event = event_bus.publish.call_args[0][0]
+        assert published_event.overall_success is False
+
+        # Verify CI test result exists in test_results
+        ci_results = [r for r in published_event.test_results if r.test_type == RepairTestType.CI]
+        assert len(ci_results) == 1
+        assert ci_results[0].passed is False
+        assert ci_results[0].final_result is None
+        assert "CI pipeline execution failed" in ci_results[0].error
+
+    @pytest.mark.asyncio
+    async def test_working_directory_resolver_is_called(
+        self, repair_cycle_adapter, event_bus, ci_pipeline_service, workflow_config_with_ci
+    ):
+        """Test that custom working_directory_resolver is called with project_id."""
+        # Setup: agent tests pass, CI passes
+        repair_cycle_adapter.result = RepairCycleResult(
+            stage="Testing",
+            test_results=(
+                CycleResult(
+                    test_type=RepairTestType.UNIT,
+                    passed=True,
+                    iterations=1,
+                    final_result=RepairTestResult(
+                        test_type=RepairTestType.UNIT,
+                        iteration=1,
+                        passed=1,
+                        failed=0,
+                        warnings=0,
+                        failures=(),
+                        warning_list=(),
+                        raw_output="All tests passed",
+                        timestamp="2024-01-01T00:00:00Z",
+                    ),
+                    error=None,
+                    files_fixed=0,
+                    warnings_reviewed=0,
+                    duration_seconds=1.0,
+                ),
+            ),
+            overall_success=True,
+            total_agent_calls=0,
+            duration_seconds=1.0,
+            timestamp="2024-01-01T00:00:00Z",
+        )
+
+        # CI checks pass
+        passed_check = CICheckResult(
+            name="unit-tests",
+            status=CICheckStatus.PASSED,
+            conclusion="All checks passed",
+            url="https://example.com/check",
+        )
+        ci_pipeline_service.run_ci_checks.return_value = CIRunResult(
+            passed=1,
+            failed=0,
+            check_results=(passed_check,),
+            failures=(),
+            warnings=(),
+            output="Test output",
+        )
+
+        # Create custom resolver
+        resolver = Mock(return_value="/custom/project/workspace")
+
+        handler = RepairCycleEventHandler(
+            repair_cycle=repair_cycle_adapter,
+            clock=None,
+            event_bus=event_bus,
+            workflow_config=workflow_config_with_ci,
+            ci_pipeline_service=ci_pipeline_service,
+            working_directory_resolver=resolver,
+        )
+
+        event = WorkItemColumnChanged(
+            aggregate_id="item-1",
+            payload={
+                "work_item_id": "item-1",
+                "board_id": "board-1",
+                "project_id": "proj-123",
+                "from_column": "Code Review",
+                "to_column": "Testing",
+                "moved_by": "system",
+            },
+        )
+
+        await handler.handle_column_change(event)
+
+        # Verify the resolver was called with the project_id
+        resolver.assert_called_once_with("proj-123")
+
+        # Verify CI pipeline service was called with the resolved working directory
+        ci_pipeline_service.run_ci_checks.assert_called_once()
+        call_kwargs = ci_pipeline_service.run_ci_checks.call_args[1]
+        assert call_kwargs["working_directory"] == "/custom/project/workspace"
