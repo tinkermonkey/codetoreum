@@ -1,0 +1,559 @@
+"""Mock CI pipeline adapter for testing and simulation.
+
+This module provides a complete in-memory implementation of ICIPipelineService
+for use in simulation tests and integration tests. The adapter provides a
+configuration API for pre-setting outcomes and assertion helpers for verifying
+CI interactions.
+"""
+
+import asyncio
+import logging
+from datetime import UTC, datetime
+from uuid import uuid4
+
+from codetoreum.domain.events.ci_pipeline_events import (
+    CIPipelineStatusCheckedEvent,
+    CIRunCompletedEvent,
+    CIRunStartedEvent,
+)
+from codetoreum.ports.output.ci_pipeline_service import (
+    CICheckResult,
+    CICheckStatus,
+    CIPipelineStatus,
+    CIRunResult,
+    ICIPipelineService,
+)
+from codetoreum.ports.output.event_emitter import IEventEmitter, NullEventEmitter
+from codetoreum.ports.output.monitoring import (
+    MonitoringConfig,
+    MonitoringState,
+    MonitoringStatus,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class MockCIPipelineAdapter(ICIPipelineService):
+    """Mock CI pipeline service for testing.
+
+    Provides a complete in-memory implementation of ICIPipelineService that:
+    1. Stores configured CI outcomes for PRs and projects
+    2. Returns pre-configured status and results without external calls
+    3. Tracks CI status checks and run executions for assertion verification
+    4. Emits domain events on CI operations
+    5. Maintains monitoring state for lifecycle management
+    6. Integrates with SimulationClock for deterministic time in tests
+
+    Intended for testing and simulation without external CI systems
+    (GitHub Actions, GitLab CI, Jenkins, etc.).
+
+    Example:
+        # Setup
+        adapter = MockCIPipelineAdapter()
+        adapter.set_pr_ci_failing("pr-123", failure_count=2)
+
+        # Get configured status
+        status = await adapter.get_pr_ci_status("pr-123", "proj-1")
+        assert status.status == CICheckStatus.FAILED
+        assert sum(1 for r in status.check_results if r.status == CICheckStatus.FAILED) == 2
+
+        # Verify interaction
+        adapter.assert_pr_ci_checked("pr-123")
+
+        # Run local CI checks
+        await adapter.run_ci_checks("proj-1", "/workspace")
+
+        # Verify run was executed
+        adapter.assert_ci_run_executed("proj-1")
+    """
+
+    def __init__(self, event_emitter: IEventEmitter | None = None, clock: "SimulationClock | None" = None) -> None:
+        """Initialize the mock CI pipeline adapter.
+
+        Args:
+            event_emitter: Optional IEventEmitter for emitting domain events
+            clock: Optional SimulationClock for deterministic time in tests
+                   If provided, timestamps use simulation clock; otherwise uses wall clock
+        """
+        self._event_emitter = event_emitter or NullEventEmitter()
+        self._clock = clock
+
+        # Configuration storage for PR CI status
+        # pr_id -> {"status": CICheckStatus, "failed_count": int, "pending_count": int}
+        self._pr_ci_config: dict[str, dict] = {}
+
+        # Configuration storage for project CI runs
+        # project_id -> {"passed": bool, "failures": list[str]}
+        self._project_ci_config: dict[str, dict] = {}
+
+        # Call history for assertions
+        self._pr_ci_checked: set[str] = set()  # PR IDs that were checked
+        self._ci_runs_executed: set[str] = set()  # Project IDs that had CI runs
+
+        # Monitoring state
+        self._monitoring: dict[str, MonitoringStatus] = {}  # project_id -> status
+
+        # Thread safety
+        self._lock = asyncio.Lock()
+
+        # Local event listeners (for IEventEmitter interface)
+        self._event_listeners: dict[str, list] = {}  # Event type -> list of handlers
+
+    # ===== IEventEmitter Implementation =====
+
+    def on(self, event_type: str, handler) -> None:
+        """Register event listener.
+
+        Args:
+            event_type: Type of event to subscribe to
+            handler: Callback function that accepts a CodetoreumEvent parameter
+        """
+        if event_type not in self._event_listeners:
+            self._event_listeners[event_type] = []
+        self._event_listeners[event_type].append(handler)
+
+    def off(self, event_type: str, handler) -> None:
+        """Unregister event listener.
+
+        Args:
+            event_type: Type of event to unsubscribe from
+            handler: Handler function to remove
+        """
+        if event_type in self._event_listeners:
+            self._event_listeners[event_type] = [h for h in self._event_listeners[event_type] if h != handler]
+
+    def emit(self, event) -> None:
+        """Emit event to all registered listeners and event emitter.
+
+        Emits to both:
+        1. Local event listeners (for backwards compatibility)
+        2. Event emitter (for domain event publishing to event bus)
+
+        Args:
+            event: CodetoreumEvent instance to emit
+        """
+        event_type = getattr(event, "type", event.__class__.__name__)
+
+        # Emit to local listeners
+        if event_type in self._event_listeners:
+            for handler in self._event_listeners[event_type]:
+                try:
+                    handler(event)
+                except Exception as e:
+                    logger.error(f"Error in event handler: {e}", exc_info=True)
+
+        # Emit to event emitter if provided (for event bus subscription)
+        if self._event_emitter:
+            try:
+                self._event_emitter.emit(event)
+            except Exception as e:
+                logger.error(f"Error emitting to event emitter: {e}", exc_info=True)
+
+    # ===== Configuration API =====
+
+    def set_pr_ci_passing(self, pr_id: str) -> None:
+        """Configure a PR to have passing CI status.
+
+        Args:
+            pr_id: Pull request ID
+
+        Example:
+            adapter.set_pr_ci_passing("pr-123")
+        """
+        self._pr_ci_config[pr_id] = {
+            "status": CICheckStatus.PASSED,
+            "failed_count": 0,
+            "pending_count": 0,
+        }
+
+    def set_pr_ci_failing(self, pr_id: str, failure_count: int) -> None:
+        """Configure a PR to have failing CI status.
+
+        Args:
+            pr_id: Pull request ID
+            failure_count: Number of checks that failed
+
+        Example:
+            adapter.set_pr_ci_failing("pr-123", failure_count=2)
+        """
+        self._pr_ci_config[pr_id] = {
+            "status": CICheckStatus.FAILED,
+            "failed_count": failure_count,
+            "pending_count": 0,
+        }
+
+    def set_pr_ci_pending(self, pr_id: str, pending_count: int) -> None:
+        """Configure a PR to have pending CI status.
+
+        Args:
+            pr_id: Pull request ID
+            pending_count: Number of checks that are pending
+
+        Example:
+            adapter.set_pr_ci_pending("pr-123", pending_count=3)
+        """
+        self._pr_ci_config[pr_id] = {
+            "status": CICheckStatus.PENDING,
+            "failed_count": 0,
+            "pending_count": pending_count,
+        }
+
+    def set_ci_run_passing(self, project_id: str) -> None:
+        """Configure a project to have passing CI run results.
+
+        Args:
+            project_id: Project ID
+
+        Example:
+            adapter.set_ci_run_passing("proj-1")
+        """
+        self._project_ci_config[project_id] = {
+            "passed": True,
+            "failures": [],
+        }
+
+    def set_ci_run_failing(self, project_id: str, failures: list[str]) -> None:
+        """Configure a project to have failing CI run results.
+
+        Args:
+            project_id: Project ID
+            failures: List of failure descriptions
+
+        Example:
+            adapter.set_ci_run_failing("proj-1", ["lint: line too long", "tests: timeout"])
+        """
+        self._project_ci_config[project_id] = {
+            "passed": False,
+            "failures": failures,
+        }
+
+    # ===== Assertion Helpers =====
+
+    def assert_pr_ci_checked(self, pr_id: str) -> None:
+        """Assert that PR CI status was checked.
+
+        Args:
+            pr_id: Pull request ID
+
+        Raises:
+            AssertionError: If PR CI status was never checked
+
+        Example:
+            await adapter.get_pr_ci_status("pr-123", "proj-1")
+            adapter.assert_pr_ci_checked("pr-123")
+        """
+        if pr_id not in self._pr_ci_checked:
+            msg = f"Expected PR {pr_id} CI status to have been checked, but it was never checked"
+            raise AssertionError(msg)
+
+    def assert_ci_run_executed(self, project_id: str) -> None:
+        """Assert that CI run was executed for project.
+
+        Args:
+            project_id: Project ID
+
+        Raises:
+            AssertionError: If CI run was never executed for project
+
+        Example:
+            await adapter.run_ci_checks("proj-1", "/workspace")
+            adapter.assert_ci_run_executed("proj-1")
+        """
+        if project_id not in self._ci_runs_executed:
+            msg = f"Expected CI run to have been executed for project {project_id}, but it was never executed"
+            raise AssertionError(msg)
+
+    def assert_no_failures(self, pr_id: str) -> None:
+        """Assert that PR has no CI failures.
+
+        Args:
+            pr_id: Pull request ID
+
+        Raises:
+            AssertionError: If PR is configured with failures
+
+        Example:
+            adapter.set_pr_ci_passing("pr-123")
+            adapter.assert_no_failures("pr-123")
+        """
+        config = self._pr_ci_config.get(pr_id)
+        if config and config["status"] == CICheckStatus.FAILED:
+            msg = (
+                f"Expected PR {pr_id} to have no failures, "
+                f"but {config['failed_count']} checks are failing"
+            )
+            raise AssertionError(msg)
+
+    # ===== Service Operations =====
+
+    async def get_pr_ci_status(self, pr_id: str, project_id: str, timeout_seconds: int = 300) -> CIPipelineStatus:
+        """Query CI status for a pull request.
+
+        Returns pre-configured status if set, otherwise defaults to passing status.
+        Emits CIPipelineStatusCheckedEvent.
+
+        Args:
+            pr_id: Pull request identifier
+            project_id: Project containing the PR
+            timeout_seconds: Timeout (for interface compatibility, not used)
+
+        Returns:
+            CIPipelineStatus: Current status of the PR's CI pipeline
+
+        Events:
+            Emits 'ci.pipeline_status_checked' event with query result
+        """
+        async with self._lock:
+            # Track that this PR was checked
+            self._pr_ci_checked.add(pr_id)
+
+            # Get configured status or default to passing
+            config = self._pr_ci_config.get(pr_id, {
+                "status": CICheckStatus.PASSED,
+                "failed_count": 0,
+                "pending_count": 0,
+            })
+
+            status = config["status"]
+            failed_count = config.get("failed_count", 0)
+            pending_count = config.get("pending_count", 0)
+
+            # Create check results based on counts
+            check_results = []
+
+            # Add failed checks
+            for i in range(failed_count):
+                check_results.append(
+                    CICheckResult(
+                        name=f"check-{i}",
+                        status=CICheckStatus.FAILED,
+                        details=f"Check {i} failed",
+                        error_message=f"Check {i} failed",
+                    )
+                )
+
+            # Add pending checks
+            for i in range(pending_count):
+                check_results.append(
+                    CICheckResult(
+                        name=f"check-pending-{i}",
+                        status=CICheckStatus.PENDING,
+                        details=f"Check {i} pending",
+                    )
+                )
+
+            # Add passing check if there are no failures or pending
+            if not check_results:
+                check_results.append(
+                    CICheckResult(
+                        name="check-0",
+                        status=CICheckStatus.PASSED,
+                        details="Check passed",
+                    )
+                )
+
+            # Create and emit event
+            ci_status = CIPipelineStatus(
+                pr_id=pr_id,
+                status=status,
+                check_results=tuple(check_results),
+                pipeline_url=f"https://ci.example.com/pr/{pr_id}",
+            )
+
+        # Emit event outside lock
+        event = CIPipelineStatusCheckedEvent(
+            type="ci.pipeline_status_checked",
+            pr_id=pr_id,
+            project_id=project_id,
+            status=status.value,
+            check_count=len(check_results),
+            passed_count=len([r for r in check_results if r.status == CICheckStatus.PASSED]),
+            failed_count=failed_count,
+            timestamp=self._get_iso_timestamp(),
+            source="mock",
+        )
+        self._event_emitter.emit(event)
+
+        return ci_status
+
+    async def run_ci_checks(
+        self, project_id: str, working_directory: str, timeout_seconds: int = 600
+    ) -> CIRunResult:
+        """Execute CI checks locally in a working directory.
+
+        Returns pre-configured results if set, otherwise defaults to passing result.
+        Emits CIRunStartedEvent and CIRunCompletedEvent.
+
+        Args:
+            project_id: Project being checked
+            working_directory: Directory containing project code to check
+            timeout_seconds: Timeout (for interface compatibility, not used)
+
+        Returns:
+            CIRunResult: Summary of check results with failures and warnings
+
+        Events:
+            Emits 'ci.run_started' event when execution begins
+            Emits 'ci.run_completed' event when execution finishes
+        """
+        workflow_run_id = str(uuid4())
+
+        # Emit run started event
+        started_event = CIRunStartedEvent(
+            type="ci.run_started",
+            project_id=project_id,
+            workflow_run_id=workflow_run_id,
+            working_directory=working_directory,
+            timeout_seconds=timeout_seconds,
+            timestamp=self._get_iso_timestamp(),
+            source="mock",
+        )
+        self._event_emitter.emit(started_event)
+
+        async with self._lock:
+            # Track that this project had a CI run
+            self._ci_runs_executed.add(project_id)
+
+            # Get configured results or default to passing
+            config = self._project_ci_config.get(project_id, {
+                "passed": True,
+                "failures": [],
+            })
+
+            failures = config.get("failures", [])
+            passed = config.get("passed", True)
+
+        # Create result
+        if passed:
+            result = CIRunResult(
+                passed=1,
+                failed=0,
+                failures=(),
+                output="All checks passed",
+            )
+            failed_count = 0
+            passed_count = 1
+        else:
+            result = CIRunResult(
+                passed=0,
+                failed=len(failures),
+                failures=tuple(failures),
+                output=f"Failed checks:\n" + "\n".join(failures),
+            )
+            failed_count = len(failures)
+            passed_count = 0
+
+        # Emit run completed event
+        completed_event = CIRunCompletedEvent(
+            type="ci.run_completed",
+            project_id=project_id,
+            workflow_run_id=workflow_run_id,
+            passed=passed_count,
+            failed=failed_count,
+            output=result.output,
+            timestamp=self._get_iso_timestamp(),
+            source="mock",
+        )
+        self._event_emitter.emit(completed_event)
+
+        return result
+
+    # ===== Monitoring Lifecycle (IMonitoredService) =====
+
+    async def start_monitoring(self, project_id: str, config: MonitoringConfig) -> None:
+        """Begin monitoring for changes.
+
+        Args:
+            project_id: Project to monitor
+            config: Monitoring configuration
+        """
+        async with self._lock:
+            self._monitoring[project_id] = MonitoringStatus(
+                state=MonitoringState.ACTIVE,
+                project_id=project_id,
+                started_at=self._get_iso_timestamp(),
+            )
+
+    async def stop_monitoring(self, project_id: str) -> None:
+        """Stop monitoring for changes.
+
+        Args:
+            project_id: Project to stop monitoring
+        """
+        async with self._lock:
+            if project_id in self._monitoring:
+                status = self._monitoring[project_id]
+                stopped_status = MonitoringStatus(
+                    state=MonitoringState.STOPPED,
+                    project_id=status.project_id,
+                    started_at=status.started_at,
+                    error_message=status.error_message,
+                )
+                self._monitoring[project_id] = stopped_status
+
+    async def get_monitoring_status(self, project_id: str) -> MonitoringStatus:
+        """Query current monitoring state.
+
+        Args:
+            project_id: Project to query status for
+
+        Returns:
+            MonitoringStatus with current state
+        """
+        async with self._lock:
+            return self._monitoring.get(
+                project_id,
+                MonitoringStatus(state=MonitoringState.STOPPED, project_id=project_id),
+            )
+
+    # ===== Helper Methods =====
+
+    def _get_iso_timestamp(self) -> str:
+        """Get current time as ISO 8601 timestamp."""
+        if self._clock:
+            return self._clock.now().isoformat()
+        return datetime.now(UTC).isoformat()
+
+    # ===== Test Helper Methods =====
+
+    def clear(self) -> None:
+        """Clear all configuration and call history for cleanup.
+
+        Useful between test cases to reset state.
+
+        Example:
+            adapter.clear()
+        """
+        self._pr_ci_config.clear()
+        self._project_ci_config.clear()
+        self._pr_ci_checked.clear()
+        self._ci_runs_executed.clear()
+        self._monitoring.clear()
+
+    def get_pr_ci_calls(self) -> list[str]:
+        """Get list of PR IDs that had CI status checked.
+
+        Returns:
+            List of PR IDs in the order they were checked
+
+        Example:
+            await adapter.get_pr_ci_status("pr-1", "proj-1")
+            await adapter.get_pr_ci_status("pr-2", "proj-1")
+            calls = adapter.get_pr_ci_calls()
+            assert calls == ["pr-1", "pr-2"]
+        """
+        return list(self._pr_ci_checked)
+
+    def get_ci_run_calls(self) -> list[str]:
+        """Get list of project IDs that had CI runs executed.
+
+        Returns:
+            List of project IDs in the order they were run
+
+        Example:
+            await adapter.run_ci_checks("proj-1", "/workspace")
+            await adapter.run_ci_checks("proj-2", "/workspace")
+            calls = adapter.get_ci_run_calls()
+            assert calls == ["proj-1", "proj-2"]
+        """
+        return list(self._ci_runs_executed)
