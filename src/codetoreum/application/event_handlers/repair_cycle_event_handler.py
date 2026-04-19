@@ -116,7 +116,7 @@ class RepairCycleEventHandler(EventHandler):
         self._clock = clock
         self._event_bus = event_bus
         self._ci_pipeline_service = ci_pipeline_service
-        self._working_directory_resolver = working_directory_resolver or (lambda project_id: "/workspace")
+        self._working_directory_resolver = working_directory_resolver or (lambda _: "/workspace")
 
     @property
     def repair_cycle(self) -> IRepairCycle:
@@ -296,7 +296,9 @@ class RepairCycleEventHandler(EventHandler):
                         passed=ci_run_result.failed == 0,
                         iterations=1,
                         final_result=ci_test_result,
-                        error=None if ci_run_result.failed == 0 else f"CI checks failed: {ci_run_result.failed} failures",
+                        error=(
+                            None if ci_run_result.failed == 0 else f"CI checks failed: {ci_run_result.failed} failures"
+                        ),
                         files_fixed=0,
                         warnings_reviewed=0,
                         duration_seconds=0.0,
