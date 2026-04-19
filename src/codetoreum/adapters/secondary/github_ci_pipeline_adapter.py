@@ -1,14 +1,10 @@
 """GitHub CI pipeline adapter for querying pull request CI status.
 
 Implements ICIPipelineService interface for GitHub, supporting:
-- PR CI status queries via GitHub GraphQL API or gh pr checks CLI
+- PR CI status queries via GitHub GraphQL API
 - Check run aggregation into pipeline status
 - Event emission for CI operations
 - Monitoring state lifecycle management
-
-This is a Phase 4 stub adapter that provides a functional implementation
-of get_pr_ci_status but raises NotImplementedError for run_ci_checks
-(requires full local CI execution implementation in Phase 5).
 """
 
 import logging
@@ -47,13 +43,9 @@ logger = logging.getLogger(__name__)
 class GitHubCIPipelineAdapter(ICIPipelineService):
     """GitHub CI pipeline adapter for PR status queries.
 
-    Provides CI status queries for GitHub pull requests using the GitHub API.
+    Provides CI status queries for GitHub pull requests using the GitHub GraphQL API.
     Aggregates check runs into a unified CIPipelineStatus for vendor-agnostic
     CI status representation.
-
-    Supports both GitHub Actions checks and statuses via:
-    - GraphQL checkRuns query on pull requests
-    - REST API /repos/{owner}/{repo}/commits/{ref}/check-runs endpoint
 
     Example:
         adapter = GitHubCIPipelineAdapter(
@@ -229,10 +221,16 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             msg = "project_id must be a non-empty string"
             raise ValidationError(msg)
 
+        # Convert pr_id to integer
+        try:
+            pr_number = int(pr_id)
+        except ValueError:
+            msg = f"pr_id must be numeric, got: {pr_id}"
+            raise ValidationError(msg)
+
         try:
             # Fetch PR details including check runs from GitHub
             owner, repo = await self._get_owner_repo()
-            pr_number = int(pr_id)
 
             # Query for PR details and associated check runs
             query = """
@@ -354,15 +352,8 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
     ) -> CIRunResult:
         """Execute CI checks locally in a working directory.
 
-        This method is not yet implemented. Full local CI execution requires
-        a containerized CI runner implementation that will be delivered in Phase 5.
-
-        The future implementation will:
-        1. Prepare the working directory with project code
-        2. Discover CI configuration (GitHub Actions, tox, pytest, etc.)
-        3. Execute checks in an isolated container
-        4. Capture and aggregate results
-        5. Emit CIRunStartedEvent and CIRunCompletedEvent
+        This method is not yet implemented. Use get_pr_ci_status to query CI status
+        from GitHub.
 
         Args:
             project_id: Project being checked
@@ -373,14 +364,9 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             CIRunResult: Summary of check results with failures and warnings
 
         Raises:
-            NotImplementedError: Feature not yet implemented (Phase 5)
+            NotImplementedError: Feature not yet implemented
         """
-        msg = (
-            "Local CI execution is not yet implemented. "
-            "This feature requires Phase 5: Containerized CI Runner implementation. "
-            "For now, use get_pr_ci_status to query CI status from GitHub Actions or other "
-            "CI/CD systems. Local execution will be delivered in a future phase."
-        )
+        msg = "Local CI execution is not yet implemented. Use get_pr_ci_status to query CI status from GitHub."
         raise NotImplementedError(msg)
 
     # ===== Helper Methods =====
@@ -437,18 +423,27 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
                     details_url = run.get("detailsUrl", "")
 
                     # Map GitHub status/conclusion to CICheckStatus
-                    if status_str in ("completed", "neutral", "success"):
-                        ci_status = CICheckStatus.PASSED
-                        status_counts["passed"] += 1
-                    elif status_str in ("completed", "action_required", "timed_out", "failure"):
-                        ci_status = CICheckStatus.FAILED
-                        status_counts["failed"] += 1
-                    elif status_str in ("in_progress", "queued", "requested"):
+                    # First check status field, then branch on conclusion if completed
+                    if status_str == "completed":
+                        if conclusion_str in ("success", "neutral"):
+                            ci_status = CICheckStatus.PASSED
+                            status_counts["passed"] += 1
+                        elif conclusion_str in ("failure", "timed_out", "action_required", "cancelled"):
+                            ci_status = CICheckStatus.FAILED
+                            status_counts["failed"] += 1
+                        elif conclusion_str == "skipped":
+                            ci_status = CICheckStatus.SKIPPED
+                            status_counts["skipped"] += 1
+                        else:
+                            # Safe default for unknown conclusion
+                            ci_status = CICheckStatus.FAILED
+                            status_counts["failed"] += 1
+                    elif status_str == "in_progress":
+                        ci_status = CICheckStatus.RUNNING
+                        status_counts["running"] += 1
+                    elif status_str in ("queued", "requested", "waiting", "pending"):
                         ci_status = CICheckStatus.PENDING
                         status_counts["pending"] += 1
-                    elif status_str == "skipped":
-                        ci_status = CICheckStatus.SKIPPED
-                        status_counts["skipped"] += 1
                     else:
                         # Default to pending for unknown status
                         ci_status = CICheckStatus.PENDING
