@@ -201,10 +201,8 @@ class EventBusRegistry:
             )
             return
 
-        ci_pipeline_service = self._services.get("ci_pipeline_service")
         handler = ReviewEventHandler(
             review_service=self._services["review_service"],
-            ci_pipeline_service=ci_pipeline_service,
         )
 
         self.event_bus.register_handler(handler)

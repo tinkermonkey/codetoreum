@@ -13,7 +13,6 @@ from codetoreum.domain.events import (
     ReviewIterationStarted,
 )
 from codetoreum.infrastructure.event_bus import EventHandler, event_handler
-from codetoreum.ports.output.ci_pipeline_service import ICIPipelineService
 
 logger = logging.getLogger(__name__)
 
@@ -39,16 +38,14 @@ class ReviewEventHandler(EventHandler):
     - ReviewCycleEscalated: Handle escalation to human
     """
 
-    def __init__(self, review_service: ReviewService, ci_pipeline_service: ICIPipelineService | None = None):
+    def __init__(self, review_service: ReviewService):
         """
         Initialize handler.
 
         Args:
             review_service: Review service
-            ci_pipeline_service: Optional CI pipeline service for PR CI status checks
         """
         self.review_service = review_service
-        self._ci_pipeline_service = ci_pipeline_service
 
         # Track review metrics
         self._metrics: dict[str, int] = {
