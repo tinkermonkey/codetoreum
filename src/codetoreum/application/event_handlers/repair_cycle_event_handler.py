@@ -36,7 +36,7 @@ from codetoreum.infrastructure.simulation.simulation_clock import SimulationCloc
 from codetoreum.ports.exceptions import (
     ExternalServiceError,
     ResourceNotFoundError,
-    TimeoutError,
+    TimeoutError as PortTimeoutError,
     ValidationError,
 )
 from codetoreum.ports.output.ci_pipeline_service import ICIPipelineService
@@ -323,7 +323,7 @@ class RepairCycleEventHandler(EventHandler):
                     ResourceNotFoundError,
                     ValidationError,
                     ExternalServiceError,
-                    TimeoutError,
+                    PortTimeoutError,
                 ) as e:
                     # Expected failures from CI service
                     logger.error(
