@@ -57,6 +57,7 @@ class TestRepairCycleAgentConfigModel:
             systemic_fix="platform_engineer",
             env_rebuild="devops_engineer",
             env_verification="qa_engineer",
+            ci_check="lint_fixer",
         )
         assert config.test_execution == "qa_engineer"
         assert config.code_fix == "senior_software_engineer"
@@ -64,6 +65,7 @@ class TestRepairCycleAgentConfigModel:
         assert config.systemic_fix == "platform_engineer"
         assert config.env_rebuild == "devops_engineer"
         assert config.env_verification == "qa_engineer"
+        assert config.ci_check == "lint_fixer"
 
     def test_to_domain_empty(self) -> None:
         """to_domain() produces valid RepairCycleAgentConfig with all None."""
@@ -77,6 +79,7 @@ class TestRepairCycleAgentConfigModel:
         assert domain.systemic_fix is None
         assert domain.env_rebuild is None
         assert domain.env_verification is None
+        assert domain.ci_check is None
 
     def test_to_domain_partial(self) -> None:
         """to_domain() preserves partial field values."""
@@ -93,6 +96,7 @@ class TestRepairCycleAgentConfigModel:
         assert domain.systemic_fix is None
         assert domain.env_rebuild is None
         assert domain.env_verification is None
+        assert domain.ci_check is None
 
     def test_to_domain_full(self) -> None:
         """to_domain() converts all fields correctly."""
@@ -103,6 +107,7 @@ class TestRepairCycleAgentConfigModel:
             systemic_fix="platform_engineer",
             env_rebuild="devops_engineer",
             env_verification="qa_engineer",
+            ci_check="lint_fixer",
         )
         domain = config.to_domain()
 
@@ -113,6 +118,7 @@ class TestRepairCycleAgentConfigModel:
         assert domain.systemic_fix == "platform_engineer"
         assert domain.env_rebuild == "devops_engineer"
         assert domain.env_verification == "qa_engineer"
+        assert domain.ci_check == "lint_fixer"
 
 
 class TestScenarioColumnConfigRepairCycleAgents:

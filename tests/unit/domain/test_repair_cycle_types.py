@@ -1805,6 +1805,7 @@ class TestRepairCycleAgentConfig:
         assert config.resolve_agent("systemic_fix", default) == "stage_default_agent"
         assert config.resolve_agent("env_rebuild", default) == "stage_default_agent"
         assert config.resolve_agent("env_verification", default) == "stage_default_agent"
+        assert config.resolve_agent("ci_check", default) == "stage_default_agent"
 
     def test_resolve_agent_with_different_defaults(self):
         """Test resolve_agent with different default values."""
