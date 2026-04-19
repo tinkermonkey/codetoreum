@@ -438,7 +438,7 @@ class MockCIPipelineAdapter(ICIPipelineService):
                 passed=0,
                 failed=len(failures),
                 failures=tuple(failures),
-                output=f"Failed checks:\n" + "\n".join(failures),
+                output="Failed checks:\n" + "\n".join(failures),
             )
             failed_count = len(failures)
             passed_count = 0

@@ -2,7 +2,7 @@
 
 import pytest
 
-from codetoreum.adapters.testing import MockCIPipelineAdapter, CapturingMockEventEmitter
+from codetoreum.adapters.testing import CapturingMockEventEmitter, MockCIPipelineAdapter
 from codetoreum.domain.events.ci_pipeline_events import (
     CIPipelineStatusCheckedEvent,
     CIRunCompletedEvent,
@@ -286,7 +286,7 @@ class TestMockCIPipelineAdapterSimulationClock:
 
     async def test_uses_simulation_clock_for_timestamps(self) -> None:
         """Test adapter uses SimulationClock for timestamps when provided."""
-        from datetime import datetime, UTC, timedelta
+        from datetime import UTC, datetime, timedelta
 
         clock = SimulationClock(speed_multiplier=100.0)
         start_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
@@ -302,7 +302,7 @@ class TestMockCIPipelineAdapterSimulationClock:
 
     async def test_falls_back_to_wall_clock_without_simulation_clock(self) -> None:
         """Test adapter uses wall clock when SimulationClock not provided."""
-        from datetime import datetime, UTC
+        from datetime import UTC, datetime
 
         emitter = CapturingMockEventEmitter()
         adapter = MockCIPipelineAdapter(event_emitter=emitter, clock=None)
