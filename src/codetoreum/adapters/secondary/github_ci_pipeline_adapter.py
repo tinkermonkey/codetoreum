@@ -289,25 +289,16 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
                 pipeline_url=pipeline_url,
             )
 
-            # Emit status checked event
-            self.emit(
-                CIPipelineStatusCheckedEvent(
-                    type="ci.pipeline_status_checked",
-                    timestamp=datetime.now(UTC).isoformat(),
-                    source="github",
-                    pr_id=pr_id,
-                    project_id=project_id,
-                    status=overall_status.value,
-                    check_count=len(check_results),
-                    passed_count=sum(1 for r in check_results if r.status == CICheckStatus.PASSED),
-                    failed_count=sum(1 for r in check_results if r.status == CICheckStatus.FAILED),
-                    pending_count=sum(
-                        1 for r in check_results if r.status in (CICheckStatus.PENDING, CICheckStatus.RUNNING)
-                    ),
-                )
+            logger.info(f"Queried CI status for PR {pr_id}: {overall_status.value}")
+
+            # Emit event asynchronously after successful CI status retrieval
+            self._emit_event_safely(
+                pr_id=pr_id,
+                project_id=project_id,
+                overall_status=overall_status,
+                check_results=check_results,
             )
 
-            logger.info(f"Queried CI status for PR {pr_id}: {overall_status.value}")
             return ci_status
 
         except (AuthenticationError, ResourceNotFoundError):
@@ -371,6 +362,54 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
         raise NotImplementedError(msg)
 
     # ===== Helper Methods =====
+
+    def _emit_event_safely(
+        self,
+        pr_id: str,
+        project_id: str,
+        overall_status: CICheckStatus,
+        check_results: list[CICheckResult],
+    ) -> None:
+        """Emit CI pipeline status checked event with error handling.
+
+        Wraps event construction and emission in try/except to prevent failures
+        from affecting the primary operation (CI status retrieval). Event emission
+        failures are logged for diagnostics but don't propagate to the caller.
+
+        Args:
+            pr_id: Pull request ID
+            project_id: Project ID
+            overall_status: Overall CI pipeline status
+            check_results: List of individual check results
+        """
+        try:
+            self.emit(
+                CIPipelineStatusCheckedEvent(
+                    type="ci.pipeline_status_checked",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    source="github",
+                    pr_id=pr_id,
+                    project_id=project_id,
+                    status=overall_status.value,
+                    check_count=len(check_results),
+                    passed_count=sum(1 for r in check_results if r.status == CICheckStatus.PASSED),
+                    failed_count=sum(1 for r in check_results if r.status == CICheckStatus.FAILED),
+                    pending_count=sum(
+                        1 for r in check_results if r.status in (CICheckStatus.PENDING, CICheckStatus.RUNNING)
+                    ),
+                )
+            )
+        except Exception as emit_error:
+            logger.error(
+                f"Failed to emit CI pipeline status checked event for PR {pr_id}",
+                extra={
+                    "error_id": ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR,
+                    "pr_id": pr_id,
+                    "project_id": project_id,
+                    "emission_error": str(emit_error),
+                },
+                exc_info=True,
+            )
 
     def _parse_check_runs(
         self, pr_node: dict[str, Any]
