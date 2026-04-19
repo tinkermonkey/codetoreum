@@ -35,6 +35,7 @@ class TestCIPipelineStatusCheckedEvent:
             check_count=5,
             passed_count=5,
             failed_count=0,
+            pending_count=0,
         )
 
         assert event.pr_id == "456"
@@ -43,6 +44,7 @@ class TestCIPipelineStatusCheckedEvent:
         assert event.check_count == 5
         assert event.passed_count == 5
         assert event.failed_count == 0
+        assert event.pending_count == 0
 
     def test_status_pending(self):
         """Test CI status checked with pending status."""
@@ -53,12 +55,14 @@ class TestCIPipelineStatusCheckedEvent:
             pr_id="456",
             project_id="proj-1",
             status="pending",
-            check_count=0,
+            check_count=3,
             passed_count=0,
             failed_count=0,
+            pending_count=3,
         )
 
         assert event.status == "pending"
+        assert event.pending_count == 3
 
     def test_status_failed(self):
         """Test CI status checked with failed status."""
@@ -72,10 +76,12 @@ class TestCIPipelineStatusCheckedEvent:
             check_count=5,
             passed_count=2,
             failed_count=3,
+            pending_count=0,
         )
 
         assert event.status == "failed"
         assert event.failed_count == 3
+        assert event.pending_count == 0
 
     def test_missing_pr_id(self):
         """Test that pr_id is required."""
@@ -152,6 +158,19 @@ class TestCIPipelineStatusCheckedEvent:
                 failed_count=-1,  # Invalid
             )
 
+    def test_negative_pending_count(self):
+        """Test that pending_count must be non-negative."""
+        with pytest.raises(ValueError, match="pending_count"):
+            CIPipelineStatusCheckedEvent(
+                type="ci.pipeline_status_checked",
+                timestamp=now_iso(),
+                source="github",
+                pr_id="456",
+                project_id="proj-1",
+                status="pending",
+                pending_count=-1,  # Invalid
+            )
+
     def test_status_checked_serialization(self):
         """Test CI status checked event serialization."""
         timestamp = now_iso()
@@ -166,6 +185,7 @@ class TestCIPipelineStatusCheckedEvent:
             check_count=5,
             passed_count=5,
             failed_count=0,
+            pending_count=0,
         )
 
         d = event.to_dict()
@@ -177,6 +197,7 @@ class TestCIPipelineStatusCheckedEvent:
         assert d["check_count"] == 5
         assert d["passed_count"] == 5
         assert d["failed_count"] == 0
+        assert d["pending_count"] == 0
 
     def test_status_checked_deserialization(self):
         """Test CI status checked event deserialization."""
@@ -192,6 +213,7 @@ class TestCIPipelineStatusCheckedEvent:
             "check_count": 5,
             "passed_count": 5,
             "failed_count": 0,
+            "pending_count": 0,
         }
 
         event = CIPipelineStatusCheckedEvent.from_dict(d)
@@ -203,6 +225,7 @@ class TestCIPipelineStatusCheckedEvent:
         assert event.check_count == 5
         assert event.passed_count == 5
         assert event.failed_count == 0
+        assert event.pending_count == 0
 
     def test_status_checked_roundtrip(self):
         """Test CI status checked event roundtrip serialization."""
@@ -218,6 +241,7 @@ class TestCIPipelineStatusCheckedEvent:
             check_count=5,
             passed_count=5,
             failed_count=0,
+            pending_count=0,
         )
 
         d = original.to_dict()
@@ -229,6 +253,7 @@ class TestCIPipelineStatusCheckedEvent:
         assert restored.check_count == original.check_count
         assert restored.passed_count == original.passed_count
         assert restored.failed_count == original.failed_count
+        assert restored.pending_count == original.pending_count
 
     def test_status_checked_missing_pr_id_from_dict(self):
         """Test that from_dict raises KeyError when pr_id is missing."""
@@ -284,12 +309,14 @@ class TestCIRunStartedEvent:
             workflow_run_id="wf-123",
             working_directory="/workspace",
             timeout_seconds=600,
+            checks_planned=3,
         )
 
         assert event.project_id == "proj-1"
         assert event.workflow_run_id == "wf-123"
         assert event.working_directory == "/workspace"
         assert event.timeout_seconds == 600
+        assert event.checks_planned == 3
 
     def test_different_timeout(self):
         """Test CI run started with different timeout."""
@@ -301,9 +328,11 @@ class TestCIRunStartedEvent:
             workflow_run_id="wf-123",
             working_directory="/workspace",
             timeout_seconds=300,
+            checks_planned=5,
         )
 
         assert event.timeout_seconds == 300
+        assert event.checks_planned == 5
 
     def test_missing_project_id(self):
         """Test that project_id is required."""
@@ -370,6 +399,20 @@ class TestCIRunStartedEvent:
                 timeout_seconds=-1,  # Invalid
             )
 
+    def test_negative_checks_planned(self):
+        """Test that checks_planned must be non-negative."""
+        with pytest.raises(ValueError, match="checks_planned"):
+            CIRunStartedEvent(
+                type="ci.run_started",
+                timestamp=now_iso(),
+                source="orchestrator",
+                project_id="proj-1",
+                workflow_run_id="wf-123",
+                working_directory="/workspace",
+                timeout_seconds=600,
+                checks_planned=-1,  # Invalid
+            )
+
     def test_run_started_serialization(self):
         """Test CI run started event serialization."""
         timestamp = now_iso()
@@ -382,6 +425,7 @@ class TestCIRunStartedEvent:
             workflow_run_id="wf-123",
             working_directory="/workspace",
             timeout_seconds=600,
+            checks_planned=3,
         )
 
         d = event.to_dict()
@@ -391,6 +435,7 @@ class TestCIRunStartedEvent:
         assert d["workflow_run_id"] == "wf-123"
         assert d["working_directory"] == "/workspace"
         assert d["timeout_seconds"] == 600
+        assert d["checks_planned"] == 3
 
     def test_run_started_deserialization(self):
         """Test CI run started event deserialization."""
@@ -404,6 +449,7 @@ class TestCIRunStartedEvent:
             "workflow_run_id": "wf-123",
             "working_directory": "/workspace",
             "timeout_seconds": 600,
+            "checks_planned": 3,
         }
 
         event = CIRunStartedEvent.from_dict(d)
@@ -413,6 +459,7 @@ class TestCIRunStartedEvent:
         assert event.workflow_run_id == "wf-123"
         assert event.working_directory == "/workspace"
         assert event.timeout_seconds == 600
+        assert event.checks_planned == 3
 
     def test_run_started_roundtrip(self):
         """Test CI run started event roundtrip serialization."""
@@ -426,6 +473,7 @@ class TestCIRunStartedEvent:
             workflow_run_id="wf-123",
             working_directory="/workspace",
             timeout_seconds=600,
+            checks_planned=3,
         )
 
         d = original.to_dict()
@@ -435,6 +483,7 @@ class TestCIRunStartedEvent:
         assert restored.workflow_run_id == original.workflow_run_id
         assert restored.working_directory == original.working_directory
         assert restored.timeout_seconds == original.timeout_seconds
+        assert restored.checks_planned == original.checks_planned
 
     def test_run_started_missing_project_id_from_dict(self):
         """Test that from_dict raises KeyError when project_id is missing."""
@@ -477,15 +526,17 @@ class TestCIRunCompletedEvent:
             source="orchestrator",
             project_id="proj-1",
             workflow_run_id="wf-123",
-            passed=5,
-            failed=0,
+            passed_count=5,
+            failure_count=0,
+            warning_count=0,
             output="All tests passed!",
         )
 
         assert event.project_id == "proj-1"
         assert event.workflow_run_id == "wf-123"
-        assert event.passed == 5
-        assert event.failed == 0
+        assert event.passed_count == 5
+        assert event.failure_count == 0
+        assert event.warning_count == 0
         assert event.output == "All tests passed!"
 
     def test_run_completed_with_failures(self):
@@ -496,13 +547,15 @@ class TestCIRunCompletedEvent:
             source="orchestrator",
             project_id="proj-1",
             workflow_run_id="wf-123",
-            passed=3,
-            failed=2,
+            passed_count=3,
+            failure_count=2,
+            warning_count=1,
             output="Some tests failed",
         )
 
-        assert event.passed == 3
-        assert event.failed == 2
+        assert event.passed_count == 3
+        assert event.failure_count == 2
+        assert event.warning_count == 1
 
     def test_run_completed_empty_output(self):
         """Test CI run completed with empty output."""
@@ -512,8 +565,9 @@ class TestCIRunCompletedEvent:
             source="orchestrator",
             project_id="proj-1",
             workflow_run_id="wf-123",
-            passed=0,
-            failed=0,
+            passed_count=0,
+            failure_count=0,
+            warning_count=0,
             output="",
         )
 
@@ -528,8 +582,8 @@ class TestCIRunCompletedEvent:
                 source="orchestrator",
                 project_id="",  # Empty
                 workflow_run_id="wf-123",
-                passed=5,
-                failed=0,
+                passed_count=5,
+                failure_count=0,
             )
 
     def test_missing_workflow_run_id(self):
@@ -541,34 +595,48 @@ class TestCIRunCompletedEvent:
                 source="orchestrator",
                 project_id="proj-1",
                 workflow_run_id="",  # Empty
-                passed=5,
-                failed=0,
+                passed_count=5,
+                failure_count=0,
             )
 
     def test_negative_passed(self):
-        """Test that passed must be non-negative."""
-        with pytest.raises(ValueError, match="passed"):
+        """Test that passed_count must be non-negative."""
+        with pytest.raises(ValueError, match="passed_count"):
             CIRunCompletedEvent(
                 type="ci.run_completed",
                 timestamp=now_iso(),
                 source="orchestrator",
                 project_id="proj-1",
                 workflow_run_id="wf-123",
-                passed=-1,  # Invalid
-                failed=0,
+                passed_count=-1,  # Invalid
+                failure_count=0,
             )
 
     def test_negative_failed(self):
-        """Test that failed must be non-negative."""
-        with pytest.raises(ValueError, match="failed"):
+        """Test that failure_count must be non-negative."""
+        with pytest.raises(ValueError, match="failure_count"):
             CIRunCompletedEvent(
                 type="ci.run_completed",
                 timestamp=now_iso(),
                 source="orchestrator",
                 project_id="proj-1",
                 workflow_run_id="wf-123",
-                passed=5,
-                failed=-1,  # Invalid
+                passed_count=5,
+                failure_count=-1,  # Invalid
+            )
+
+    def test_negative_warning_count(self):
+        """Test that warning_count must be non-negative."""
+        with pytest.raises(ValueError, match="warning_count"):
+            CIRunCompletedEvent(
+                type="ci.run_completed",
+                timestamp=now_iso(),
+                source="orchestrator",
+                project_id="proj-1",
+                workflow_run_id="wf-123",
+                passed_count=5,
+                failure_count=0,
+                warning_count=-1,  # Invalid
             )
 
     def test_run_completed_serialization(self):
@@ -581,8 +649,9 @@ class TestCIRunCompletedEvent:
             correlation_id="corr-123",
             project_id="proj-1",
             workflow_run_id="wf-123",
-            passed=5,
-            failed=0,
+            passed_count=5,
+            failure_count=0,
+            warning_count=0,
             output="All tests passed!",
         )
 
@@ -591,8 +660,9 @@ class TestCIRunCompletedEvent:
         assert d["type"] == "ci.run_completed"
         assert d["project_id"] == "proj-1"
         assert d["workflow_run_id"] == "wf-123"
-        assert d["passed"] == 5
-        assert d["failed"] == 0
+        assert d["passed_count"] == 5
+        assert d["failure_count"] == 0
+        assert d["warning_count"] == 0
         assert d["output"] == "All tests passed!"
 
     def test_run_completed_deserialization(self):
@@ -605,8 +675,9 @@ class TestCIRunCompletedEvent:
             "correlation_id": "corr-123",
             "project_id": "proj-1",
             "workflow_run_id": "wf-123",
-            "passed": 5,
-            "failed": 0,
+            "passed_count": 5,
+            "failure_count": 0,
+            "warning_count": 0,
             "output": "All tests passed!",
         }
 
@@ -615,8 +686,9 @@ class TestCIRunCompletedEvent:
         assert event.type == "ci.run_completed"
         assert event.project_id == "proj-1"
         assert event.workflow_run_id == "wf-123"
-        assert event.passed == 5
-        assert event.failed == 0
+        assert event.passed_count == 5
+        assert event.failure_count == 0
+        assert event.warning_count == 0
         assert event.output == "All tests passed!"
 
     def test_run_completed_roundtrip(self):
@@ -629,8 +701,9 @@ class TestCIRunCompletedEvent:
             correlation_id="corr-123",
             project_id="proj-1",
             workflow_run_id="wf-123",
-            passed=5,
-            failed=0,
+            passed_count=5,
+            failure_count=0,
+            warning_count=0,
             output="All tests passed!",
         )
 
@@ -639,8 +712,9 @@ class TestCIRunCompletedEvent:
 
         assert restored.project_id == original.project_id
         assert restored.workflow_run_id == original.workflow_run_id
-        assert restored.passed == original.passed
-        assert restored.failed == original.failed
+        assert restored.passed_count == original.passed_count
+        assert restored.failure_count == original.failure_count
+        assert restored.warning_count == original.warning_count
         assert restored.output == original.output
 
     def test_run_completed_missing_project_id_from_dict(self):
@@ -650,36 +724,36 @@ class TestCIRunCompletedEvent:
             "timestamp": now_iso(),
             "source": "orchestrator",
             "workflow_run_id": "wf-123",
-            "passed": 5,
-            "failed": 0,
+            "passed_count": 5,
+            "failure_count": 0,
         }
 
         with pytest.raises(KeyError):
             CIRunCompletedEvent.from_dict(d)
 
     def test_run_completed_missing_passed_from_dict(self):
-        """Test that from_dict raises KeyError when passed is missing."""
+        """Test that from_dict raises KeyError when passed_count is missing."""
         d = {
             "type": "ci.run_completed",
             "timestamp": now_iso(),
             "source": "orchestrator",
             "project_id": "proj-1",
             "workflow_run_id": "wf-123",
-            "failed": 0,
+            "failure_count": 0,
         }
 
         with pytest.raises(KeyError):
             CIRunCompletedEvent.from_dict(d)
 
     def test_run_completed_missing_failed_from_dict(self):
-        """Test that from_dict raises KeyError when failed is missing."""
+        """Test that from_dict raises KeyError when failure_count is missing."""
         d = {
             "type": "ci.run_completed",
             "timestamp": now_iso(),
             "source": "orchestrator",
             "project_id": "proj-1",
             "workflow_run_id": "wf-123",
-            "passed": 5,
+            "passed_count": 5,
         }
 
         with pytest.raises(KeyError):

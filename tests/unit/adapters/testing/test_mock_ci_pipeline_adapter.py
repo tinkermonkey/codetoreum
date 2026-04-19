@@ -213,8 +213,8 @@ class TestMockCIPipelineAdapterEventEmission:
         event = events[0]
         assert isinstance(event, CIRunCompletedEvent)
         assert event.project_id == "proj-1"
-        assert event.passed == 0
-        assert event.failed == 1
+        assert event.passed_count == 0
+        assert event.failure_count == 1
 
     async def test_emit_events_have_timestamp(self) -> None:
         """Test all emitted events have timestamps."""
@@ -417,8 +417,8 @@ class TestMockCIPipelineAdapterIntegration:
 
         # Verify completed event has correct failure count
         completed_event = completed_events[0]
-        assert completed_event.failed == 2
-        assert completed_event.passed == 0
+        assert completed_event.failure_count == 2
+        assert completed_event.passed_count == 0
 
     async def test_multiple_prs_and_projects(self) -> None:
         """Test handling multiple PRs and projects independently."""

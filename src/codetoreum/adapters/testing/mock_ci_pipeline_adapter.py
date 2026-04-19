@@ -383,6 +383,7 @@ class MockCIPipelineAdapter(ICIPipelineService):
             check_count=len(check_results),
             passed_count=len([r for r in check_results if r.status == CICheckStatus.PASSED]),
             failed_count=failed_count,
+            pending_count=len([r for r in check_results if r.status in (CICheckStatus.PENDING, CICheckStatus.RUNNING)]),
             timestamp=self._get_iso_timestamp(),
             source="mock",
         )
@@ -419,6 +420,7 @@ class MockCIPipelineAdapter(ICIPipelineService):
             workflow_run_id=workflow_run_id,
             working_directory=working_directory,
             timeout_seconds=timeout_seconds,
+            checks_planned=0,  # Mock doesn't know checks planned ahead of time
             timestamp=self._get_iso_timestamp(),
             source="mock",
         )
@@ -481,8 +483,9 @@ class MockCIPipelineAdapter(ICIPipelineService):
             type="ci.run_completed",
             project_id=project_id,
             workflow_run_id=workflow_run_id,
-            passed=passed_count,
-            failed=failed_count,
+            passed_count=passed_count,
+            failure_count=failed_count,
+            warning_count=len(result.warnings),
             output=result.output,
             timestamp=self._get_iso_timestamp(),
             source="mock",

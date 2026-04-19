@@ -304,6 +304,7 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
                     check_count=len(check_results),
                     passed_count=sum(1 for r in check_results if r.status == CICheckStatus.PASSED),
                     failed_count=sum(1 for r in check_results if r.status == CICheckStatus.FAILED),
+                    pending_count=sum(1 for r in check_results if r.status in (CICheckStatus.PENDING, CICheckStatus.RUNNING)),
                 )
             )
 
