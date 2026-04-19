@@ -14,7 +14,7 @@ from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
 
-CIPipelineStatus = Literal["pending", "running", "passed", "failed", "skipped"]
+CIPipelineStatusValue = Literal["pending", "running", "passed", "failed", "skipped"]
 
 
 @dataclass(frozen=True)
@@ -42,7 +42,7 @@ class CIPipelineStatusCheckedEvent(CodetoreumEvent):
 
     pr_id: str = ""
     project_id: str = ""
-    status: CIPipelineStatus = "pending"
+    status: CIPipelineStatusValue = "pending"
     check_count: int = 0
     passed_count: int = 0
     failed_count: int = 0

@@ -35,7 +35,7 @@ from .branch_events import (
 
 # CI pipeline events
 from .ci_pipeline_events import (
-    CIPipelineStatus,
+    CIPipelineStatusValue,
     CIPipelineStatusCheckedEvent,
     CIRunCompletedEvent,
     CIRunStartedEvent,
@@ -324,7 +324,7 @@ __all__ = [
     "BranchReusedEvent",
     "BranchResolutionCreatedEvent",
     # CI pipeline events
-    "CIPipelineStatus",
+    "CIPipelineStatusValue",
     "CIPipelineStatusCheckedEvent",
     "CIRunStartedEvent",
     "CIRunCompletedEvent",
