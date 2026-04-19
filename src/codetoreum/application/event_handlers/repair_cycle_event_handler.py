@@ -317,7 +317,7 @@ class RepairCycleEventHandler(EventHandler):
                         passed=False,
                         iterations=1,
                         final_result=None,
-                        error=f"CI pipeline execution failed: {str(e)}",
+                        error=f"CI pipeline execution failed: {e!s}",
                         files_fixed=0,
                         warnings_reviewed=0,
                         duration_seconds=0.0,

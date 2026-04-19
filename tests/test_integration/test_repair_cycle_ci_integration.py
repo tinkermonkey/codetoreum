@@ -32,7 +32,6 @@ from codetoreum.infrastructure.simulation.simulation_clock import SimulationCloc
 from codetoreum.ports.output.ci_pipeline_service import CIRunResult
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
-
 # ====================================================================================
 # Test Helpers
 # ====================================================================================

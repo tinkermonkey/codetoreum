@@ -866,8 +866,8 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         if config.test_type == RepairTestType.CI:
             if not self._ci_pipeline_service:
                 msg = (
-                    f"RepairTestType.CI was requested but no ICIPipelineService is injected. "
-                    f"Provide ci_pipeline_service to MockRepairCycleAdapter to enable CI routing."
+                    "RepairTestType.CI was requested but no ICIPipelineService is injected. "
+                    "Provide ci_pipeline_service to MockRepairCycleAdapter to enable CI routing."
                 )
                 raise ValueError(msg)
 
