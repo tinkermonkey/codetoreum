@@ -1120,7 +1120,28 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
         Returns:
             Test command to execute
+
+        Raises:
+            ValueError: If test_type is CI (routed to ICIPipelineService) or COMPILATION (not yet supported)
         """
+        # CI tests are routed through ICIPipelineService and should be filtered out
+        # before reaching this adapter (see RepairCycleEventHandler.handle() FR-5.2)
+        if config.test_type == RepairTestType.CI:
+            msg = (
+                "CI tests must be routed through ICIPipelineService and filtered out "
+                "before IRepairCycle.execute() is called. Direct adapter invocation with "
+                "RepairTestType.CI indicates a routing error."
+            )
+            raise ValueError(msg)
+
+        # COMPILATION tests are not yet implemented in the adapter
+        if config.test_type == RepairTestType.COMPILATION:
+            msg = (
+                "RepairTestType.COMPILATION is not yet supported by ProductionRepairCycleAdapter. "
+                "Type-checking/compilation must be implemented as a separate test type handler."
+            )
+            raise ValueError(msg)
+
         # Try to detect based on project files (simplified)
         # In production, this would scan for package.json, Cargo.toml, go.mod, etc.
 
