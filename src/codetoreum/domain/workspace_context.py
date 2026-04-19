@@ -8,8 +8,7 @@ class WorkspaceType(Enum):
     """Type of workspace for execution."""
 
     ISSUE = "issue"  # Feature branches + PRs
-    DISCUSSION = "discussion"  # Discussion comments only
-    HYBRID = "hybrid"  # Can use both
+    HYBRID = "hybrid"  # Feature branches + PRs + discussion posting
 
 
 @dataclass(frozen=True)
@@ -49,9 +48,9 @@ class WorkspaceContext:
                 msg = f"branch_name is required for {self.workspace_type.value} workspace"
                 raise ValueError(msg)
 
-        if self.workspace_type in [WorkspaceType.DISCUSSION, WorkspaceType.HYBRID]:
+        if self.workspace_type == WorkspaceType.HYBRID:
             if not self.discussion_id:
-                msg = f"discussion_id is required for {self.workspace_type.value} workspace"
+                msg = "discussion_id is required for hybrid workspace"
                 raise ValueError(msg)
 
         # Validate project and work item IDs
@@ -95,34 +94,6 @@ class WorkspaceContext:
         )
 
     @classmethod
-    def for_discussion(cls, project_id: str, work_item_id: str, discussion_id: str) -> "WorkspaceContext":
-        """
-        Create workspace context for discussion-based work.
-
-        Discussion workspaces only post comments, do not create
-        branches or make code changes.
-
-        Args:
-            project_id: Project identifier
-            work_item_id: Work item identifier
-            discussion_id: Discussion/issue identifier in external system
-
-        Returns:
-            WorkspaceContext configured for discussion-based work
-        """
-        return cls(
-            workspace_type=WorkspaceType.DISCUSSION,
-            project_id=project_id,
-            work_item_id=work_item_id,
-            branch_name=None,
-            create_pr=False,
-            discussion_id=discussion_id,
-            allow_code_changes=False,
-            create_commits=False,
-            post_comments=True,
-        )
-
-    @classmethod
     def for_hybrid(cls, project_id: str, work_item_id: str, branch_name: str, discussion_id: str) -> "WorkspaceContext":
         """
         Create workspace context for hybrid work.
@@ -162,12 +133,12 @@ class WorkspaceContext:
 
     def is_discussion_workspace(self) -> bool:
         """
-        Check if this is discussion-based workspace.
+        Check if this workspace posts to discussion threads.
 
         Returns:
             True if workspace supports discussion operations (comments)
         """
-        return self.workspace_type in [WorkspaceType.DISCUSSION, WorkspaceType.HYBRID]
+        return self.workspace_type == WorkspaceType.HYBRID
 
     def can_make_code_changes(self) -> bool:
         """
@@ -185,7 +156,7 @@ class WorkspaceContext:
         Returns:
             True if branch creation is needed
         """
-        return self.workspace_type != WorkspaceType.DISCUSSION
+        return self.branch_name is not None
 
     def should_post_to_discussion(self) -> bool:
         """

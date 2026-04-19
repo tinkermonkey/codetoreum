@@ -72,48 +72,6 @@ class TestIssueWorkspace:
             WorkspaceContext.for_issue(project_id="proj-1", work_item_id="", branch_name="feature/test")
 
 
-class TestDiscussionWorkspace:
-    """Tests for discussion-based workspace context."""
-
-    def test_create_discussion_workspace(self):
-        """Test creating discussion workspace context."""
-        context = WorkspaceContext.for_discussion(
-            project_id="proj-1", work_item_id="item-1", discussion_id="discussion-123"
-        )
-
-        assert context.workspace_type == WorkspaceType.DISCUSSION
-        assert context.project_id == "proj-1"
-        assert context.work_item_id == "item-1"
-        assert context.branch_name is None
-        assert context.create_pr is False
-        assert context.discussion_id == "discussion-123"
-        assert context.allow_code_changes is False
-        assert context.create_commits is False
-        assert context.post_comments is True
-
-    def test_discussion_workspace_query_methods(self):
-        """Test query methods on discussion workspace."""
-        context = WorkspaceContext.for_discussion(
-            project_id="proj-1", work_item_id="item-1", discussion_id="discussion-123"
-        )
-
-        assert context.is_issue_workspace() is False
-        assert context.is_discussion_workspace() is True
-        assert context.can_make_code_changes() is False
-        assert context.should_create_branch() is False
-        assert context.should_post_to_discussion() is True
-
-    def test_discussion_workspace_with_empty_discussion_id_raises_error(self):
-        """Test that creating discussion workspace with empty discussion ID raises error."""
-        with pytest.raises(ValueError, match="discussion_id is required"):
-            WorkspaceContext.for_discussion(project_id="proj-1", work_item_id="item-1", discussion_id="")
-
-    def test_discussion_workspace_with_empty_project_id_raises_error(self):
-        """Test that creating discussion workspace with empty project ID raises error."""
-        with pytest.raises(ValueError, match="project_id cannot be empty"):
-            WorkspaceContext.for_discussion(project_id="", work_item_id="item-1", discussion_id="discussion-123")
-
-
 class TestHybridWorkspace:
     """Tests for hybrid workspace context."""
 
@@ -178,15 +136,14 @@ class TestWorkspaceTypeEnum:
     def test_workspace_type_values(self):
         """Test WorkspaceType enum values."""
         assert WorkspaceType.ISSUE.value == "issue"
-        assert WorkspaceType.DISCUSSION.value == "discussion"
         assert WorkspaceType.HYBRID.value == "hybrid"
 
     def test_workspace_type_comparison(self):
         """Test WorkspaceType enum comparison."""
         issue_type = WorkspaceType.ISSUE
-        discussion_type = WorkspaceType.DISCUSSION
+        hybrid_type = WorkspaceType.HYBRID
         assert issue_type == WorkspaceType.ISSUE
-        assert issue_type != discussion_type
+        assert issue_type != hybrid_type
 
 
 class TestImmutability:
@@ -229,16 +186,16 @@ class TestEquality:
 
         assert context1 != context2
 
-    def test_issue_and_discussion_workspaces_are_not_equal(self):
+    def test_issue_and_hybrid_workspaces_are_not_equal(self):
         """Test that different workspace types are not equal."""
         issue_context = WorkspaceContext.for_issue(
             project_id="proj-1", work_item_id="item-1", branch_name="feature/test"
         )
-        discussion_context = WorkspaceContext.for_discussion(
-            project_id="proj-1", work_item_id="item-1", discussion_id="discussion-123"
+        hybrid_context = WorkspaceContext.for_hybrid(
+            project_id="proj-1", work_item_id="item-1", branch_name="feature/test", discussion_id="disc-1"
         )
 
-        assert issue_context != discussion_context
+        assert issue_context != hybrid_context
 
 
 class TestEdgeCases:

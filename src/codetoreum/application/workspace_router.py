@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -43,9 +43,6 @@ class WorkspaceRouterConfig:
         "\n🤖 Generated with Codetoreum\n"
         "Co-Authored-By: Codetoreum <noreply@codetoreum.ai>\n"
     )
-
-    # Workspace labels
-    discussion_labels: set[str] = field(default_factory=lambda: {"discussion", "research", "question", "analysis"})
 
     # Author info defaults
     default_author_name: str = "Codetoreum"
@@ -172,13 +169,11 @@ class WorkspaceRouter:
         project: ProjectContext,
     ) -> WorkspaceContext:
         """
-        Determine workspace type for work item and agent.
+        Determine workspace for a work item and agent.
 
-        Business rules:
-        - Issues with 'discussion', 'research', or 'question' labels → Discussion workspace
-        - Agents that don't make code changes → Discussion workspace
-        - Default → Issue workspace with feature branch
-        - Validates agent capabilities match work item requirements
+        Always produces an ISSUE workspace (feature branch + optional PR).
+        Whether the work item maps to a GitHub Issue or Discussion is an
+        adapter-internal detail resolved inside IDiscussionAdapter.add_comment().
 
         Note: Branch name resolution is deferred to prepare_workspace() where repository_path
         is available. Here we use a placeholder that will be overridden if resolution is configured.
@@ -190,35 +185,9 @@ class WorkspaceRouter:
 
         Returns:
             WorkspaceContext: Configured workspace context
-
-        Raises:
-            ValueError: If work item or agent configuration is invalid
         """
         self._logger.info(f"Routing workspace for work_item={work_item.id}, agent={agent.id}, project={project.id}")
 
-        # Check for discussion labels
-        has_discussion_label = any(label.lower() in self.config.discussion_labels for label in work_item.labels)
-
-        # Check if agent makes code changes
-        agent_makes_code_changes = agent.makes_code_changes
-
-        # Validate agent capabilities match work item
-        self._validate_agent_capabilities(work_item, agent, has_discussion_label)
-
-        # Determine workspace type
-        if has_discussion_label or not agent_makes_code_changes:
-            # Discussion workspace
-            self._logger.info(
-                f"Routing to DISCUSSION workspace: "
-                f"discussion_label={has_discussion_label}, "
-                f"agent_makes_code_changes={agent_makes_code_changes}"
-            )
-            return WorkspaceContext.for_discussion(
-                project_id=project.id,
-                work_item_id=work_item.id,
-                discussion_id=work_item.external_id or "",
-            )
-        # Issue workspace with feature branch
         # Generate a temporary branch name (will be resolved in prepare_workspace if service is configured)
         branch_name = self._generate_branch_name(work_item, project)
         self._logger.info(f"Routing to ISSUE workspace with branch={branch_name}")
@@ -228,36 +197,6 @@ class WorkspaceRouter:
             branch_name=branch_name,
             create_pr=True,
         )
-
-    def _validate_agent_capabilities(
-        self,
-        work_item: WorkItem,
-        agent: Agent,
-        has_discussion_label: bool,
-    ) -> None:
-        """
-        Validate agent capabilities match work item requirements.
-
-        Args:
-            work_item: Work item being processed
-            agent: Agent to validate
-            has_discussion_label: Whether work item has discussion label
-
-        Raises:
-            ValueError: If agent capabilities don't match work item
-        """
-        # If work item is discussion-only, agent shouldn't make code changes
-        if has_discussion_label and agent.makes_code_changes:
-            self._logger.warning(
-                f"Code-changing agent {agent.id} assigned to discussion work item {work_item.id}. "
-                f"This may not be optimal.",
-                extra={"error_id": "ERR_WORKSPACE_SUBOPTIMAL_AGENT_ASSIGNMENT"},
-            )
-
-        # If work item needs code changes, agent must have that capability
-        if not has_discussion_label and not agent.makes_code_changes:
-            message = f"Agent {agent.id} cannot make code changes but is assigned to code work item {work_item.id}"
-            raise ValueError(message)
 
     async def prepare_workspace(
         self,
@@ -269,14 +208,10 @@ class WorkspaceRouter:
         """
         Prepare workspace for agent execution.
 
-        For ISSUE workspaces:
+        For ISSUE and HYBRID workspaces:
         - Create or checkout feature branch
         - Ensure branch is up-to-date with base branch
         - Set up file mounts for container execution
-
-        For DISCUSSION workspaces:
-        - No branch operations needed
-        - Minimal setup
 
         **Expected Call Order**: Call this method BEFORE prepare_container_environment() and
         finalize_workspace(). The resolved branch name is cached internally and returned in
@@ -408,16 +343,17 @@ class WorkspaceRouter:
                     success=True,
                     workspace_context=context,
                     workspace_dir=repo_path,
-                    reason="Issue workspace prepared successfully",
+                    reason="Workspace prepared successfully",
                     metadata=metadata,
                 )
-            # Discussion workspace - minimal setup
-            self._logger.info("Discussion workspace - minimal setup")
+
+            # should_create_branch() is always True for ISSUE/HYBRID workspaces.
+            # This path is unreachable in practice but required for type-completeness.
             return WorkspacePreparationResult(
                 success=True,
                 workspace_context=context,
                 workspace_dir=Path(repository_path),
-                reason="Discussion workspace prepared successfully",
+                reason="No branch operations required",
                 metadata=metadata,
             )
 
@@ -529,10 +465,6 @@ class WorkspaceRouter:
             # fall back to context branch name (placeholder from route_workspace)
             branch_name = await self._get_resolved_branch_name(context.work_item_id, context.branch_name or "")
             env_vars["CODETOREUM_BRANCH_NAME"] = branch_name
-
-        # Add discussion info for discussion workspaces
-        if context.is_discussion_workspace():
-            env_vars["CODETOREUM_DISCUSSION_ID"] = context.discussion_id or ""
 
         # Merge with project-level environment variables
         if hasattr(project, "environment_variables"):

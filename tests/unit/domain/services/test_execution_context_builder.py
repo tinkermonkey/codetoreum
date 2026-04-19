@@ -169,12 +169,19 @@ class TestBuildContext:
         assert context.filesystem_write_allowed is False
         assert context.can_make_commits is False
 
-    def test_sets_permissions_for_discussion_workspace(self, work_item, developer_agent, project_context):
-        """Test that permissions respect workspace type."""
-        discussion_workspace = WorkspaceContext.for_discussion(
+    def test_sets_permissions_for_read_only_workspace(self, work_item, developer_agent, project_context):
+        """Test that permissions respect workspace allow_code_changes flag."""
+        # Construct a workspace that explicitly disallows code changes
+        read_only_workspace = WorkspaceContext(
+            workspace_type=WorkspaceType.ISSUE,
             project_id=project_context.id,
             work_item_id=work_item.id,
-            discussion_id="123",
+            branch_name="feature/readonly-test",
+            create_pr=False,
+            discussion_id=None,
+            allow_code_changes=False,
+            create_commits=False,
+            post_comments=True,
         )
 
         context = ExecutionContextBuilder.build_context(
@@ -183,7 +190,7 @@ class TestBuildContext:
             stage_name="implementation",
             agent=developer_agent,
             project=project_context,
-            workspace=discussion_workspace,
+            workspace=read_only_workspace,
         )
 
         # Even though agent can make changes, workspace doesn't allow it

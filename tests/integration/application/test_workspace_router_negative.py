@@ -187,24 +187,6 @@ def repository_path(tmp_path):
 
 
 # ============================================================================
-# Negative Tests: Agent Validation
-# ============================================================================
-
-
-@pytest.mark.asyncio
-async def test_route_workspace_analyst_on_code_work_fails(
-    workspace_router, code_work_item, analyst_agent, sample_project
-):
-    """Test that analyst agent cannot be assigned to code work item."""
-    with pytest.raises(ValueError, match="cannot make code changes"):
-        await workspace_router.route_workspace(
-            work_item=code_work_item,
-            agent=analyst_agent,
-            project=sample_project,
-        )
-
-
-# ============================================================================
 # Negative Tests: Repository Operations
 # ============================================================================
 

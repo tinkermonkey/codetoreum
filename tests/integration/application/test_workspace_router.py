@@ -237,35 +237,6 @@ async def test_route_workspace_issue_type(workspace_router, sample_work_item, sa
 
 
 @pytest.mark.asyncio
-async def test_route_workspace_discussion_label(workspace_router, discussion_work_item, sample_agent, sample_project):
-    """Test routing to discussion workspace when work item has discussion label."""
-    context = await workspace_router.route_workspace(
-        work_item=discussion_work_item,
-        agent=sample_agent,
-        project=sample_project,
-    )
-
-    assert context.workspace_type == WorkspaceType.DISCUSSION
-    assert context.can_make_code_changes() is False
-    assert context.should_create_branch() is False
-    assert context.discussion_id == "124"
-
-
-@pytest.mark.asyncio
-async def test_route_workspace_analyst_agent(workspace_router, discussion_work_item, analyst_agent, sample_project):
-    """Test routing to discussion workspace when agent doesn't make code changes."""
-    # Analyst agent should work on discussion work items
-    context = await workspace_router.route_workspace(
-        work_item=discussion_work_item,
-        agent=analyst_agent,
-        project=sample_project,
-    )
-
-    assert context.workspace_type == WorkspaceType.DISCUSSION
-    assert context.can_make_code_changes() is False
-
-
-@pytest.mark.asyncio
 async def test_branch_name_generation(workspace_router, sample_work_item, sample_agent, sample_project):
     """Test branch name is generated correctly."""
     context = await workspace_router.route_workspace(
@@ -347,31 +318,6 @@ async def test_prepare_workspace_existing_branch(
     assert result.metadata["branch_action"] == "checkout_existing"
     mock_repository.create_branch.assert_not_called()
     mock_repository.checkout.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_prepare_workspace_discussion(
-    workspace_router, discussion_work_item, analyst_agent, sample_project, repository_path
-):
-    """Test preparing discussion workspace requires no git operations."""
-    # Arrange
-    context = await workspace_router.route_workspace(
-        work_item=discussion_work_item,
-        agent=analyst_agent,
-        project=sample_project,
-    )
-
-    # Act
-    result = await workspace_router.prepare_workspace(
-        context=context,
-        project=sample_project,
-        work_item=discussion_work_item,
-        repository_path=repository_path,
-    )
-
-    # Assert
-    assert result.success is True
-    assert "branch_action" not in result.metadata
 
 
 # ============================================================================
@@ -461,33 +407,6 @@ async def test_finalize_workspace_no_changes(
     mock_repository.push.assert_not_called()
 
 
-@pytest.mark.asyncio
-async def test_finalize_workspace_discussion(
-    workspace_router, discussion_work_item, analyst_agent, sample_project, repository_path
-):
-    """Test finalizing discussion workspace is no-op."""
-    # Arrange
-    context = await workspace_router.route_workspace(
-        work_item=discussion_work_item,
-        agent=analyst_agent,
-        project=sample_project,
-    )
-
-    execution_result = {"agent_id": "analyst-agent"}
-
-    # Act
-    result = await workspace_router.finalize_workspace(
-        context=context,
-        project=sample_project,
-        execution_result=execution_result,
-        repository_path=repository_path,
-    )
-
-    # Assert
-    assert result.success is True
-    assert result.commit_sha is None
-
-
 # ============================================================================
 # Tests: Container Environment & Volumes
 # ============================================================================
@@ -539,27 +458,6 @@ async def test_prepare_container_volumes_read_write(
 
     # Should have read-write mount
     assert any(":rw" in v for v in volumes.values())
-
-
-@pytest.mark.asyncio
-async def test_prepare_container_volumes_read_only(
-    workspace_router, discussion_work_item, analyst_agent, sample_project, repository_path
-):
-    """Test volume mounts for non-code-changing agents."""
-    context = await workspace_router.route_workspace(
-        work_item=discussion_work_item,
-        agent=analyst_agent,
-        project=sample_project,
-    )
-
-    volumes = workspace_router.prepare_container_volumes(
-        context=context,
-        project=sample_project,
-        repository_path=repository_path,
-    )
-
-    # Should have read-only mount
-    assert any(":ro" in v for v in volumes.values())
 
 
 # ============================================================================

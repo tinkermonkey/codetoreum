@@ -262,25 +262,27 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
         content: str,
         parent_id: str | None = None,
     ) -> Comment:
-        """Post a comment to a work item (GitHub issue).
+        """Post a comment to a work item.
 
-        Adds a comment to the issue's discussion thread via REST API.
-        Parent_id is ignored for GitHub issues (flat thread model).
+        Routes to the GitHub Discussions API (GraphQL) when work_item_id starts
+        with "D_" (a Discussion node ID), or the Issues comments REST API for
+        numeric issue numbers. This routing is an internal implementation detail
+        — callers use only the work_item_id and are unaware of the distinction.
 
         Args:
-            work_item_id: GitHub issue number
+            work_item_id: GitHub issue number (digits) or Discussion node ID (D_...)
             content: Comment text
-            parent_id: Ignored for GitHub issues (unsupported)
+            parent_id: Ignored (GitHub flat thread model for issues; top-level for discussions)
 
         Returns:
             Comment: Newly posted comment with server-assigned ID
 
         Raises:
-            ResourceNotFoundError: Issue doesn't exist
+            ResourceNotFoundError: Issue/discussion doesn't exist
             ValidationError: Invalid content or work_item_id
             ExternalServiceError: API communication failure
         """
-        if not work_item_id or not work_item_id.isdigit():
+        if not work_item_id:
             msg = f"Invalid work_item_id: {work_item_id}"
             raise ValidationError(msg)
 
@@ -292,6 +294,17 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             msg = "Comment content exceeds maximum length (65536 chars)"
             raise ValidationError(msg)
 
+        if work_item_id.startswith("D_"):
+            return await self._add_discussion_comment(work_item_id, content)
+
+        if not work_item_id.isdigit():
+            msg = f"Invalid work_item_id: {work_item_id}"
+            raise ValidationError(msg)
+
+        return await self._add_issue_comment(work_item_id, content)
+
+    async def _add_issue_comment(self, work_item_id: str, content: str) -> Comment:
+        """Post a comment to a GitHub issue via REST API."""
         client = await self._get_client()
 
         try:
@@ -325,25 +338,60 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
                 is_bot=self._identity_service.is_bot_user(data["user"]["login"]),
             )
 
-            # Emit comment.posted event if monitoring
-            if work_item_id in self._monitoring:
-                config = self._monitoring[work_item_id]
-                self.emit(
-                    CommentPostedEvent(
-                        type="comment.posted",
-                        work_item_id=work_item_id,
-                        project_id=config.project_id,
-                        comment=comment,
-                        timestamp=self._get_iso_timestamp(),
-                        source="github",
-                    )
-                )
-
-            return comment
-
         except (httpx.RequestError, httpx.HTTPError) as e:
             msg = f"GitHub API request failed: {e!s}"
             raise ExternalServiceError(msg)
+
+        self._emit_comment_posted(work_item_id, comment)
+        return comment
+
+    async def _add_discussion_comment(self, discussion_id: str, content: str) -> Comment:
+        """Post a comment to a GitHub Discussion via GraphQL API."""
+        if self._graphql_client is None:
+            msg = "GraphQL client required to post comments on GitHub Discussions"
+            raise ExternalServiceError(msg)
+
+        mutation = """
+        mutation AddDiscussionComment($discussionId: ID!, $body: String!) {
+          addDiscussionComment(input: {discussionId: $discussionId, body: $body}) {
+            comment {
+              id
+              body
+              author { login }
+              createdAt
+            }
+          }
+        }
+        """
+
+        result = await self._graphql_client.execute(mutation, {"discussionId": discussion_id, "body": content})
+        data = result["addDiscussionComment"]["comment"]
+        comment = Comment(
+            id=data["id"],
+            author=data["author"]["login"],
+            body=data["body"],
+            created_at=data["createdAt"],
+            parent_id=None,
+            is_bot=self._identity_service.is_bot_user(data["author"]["login"]),
+        )
+
+        self._emit_comment_posted(discussion_id, comment)
+        return comment
+
+    def _emit_comment_posted(self, work_item_id: str, comment: Comment) -> None:
+        """Emit a CommentPostedEvent if this work item is being monitored."""
+        if work_item_id in self._monitoring:
+            config = self._monitoring[work_item_id]
+            self.emit(
+                CommentPostedEvent(
+                    type="comment.posted",
+                    work_item_id=work_item_id,
+                    project_id=config.project_id,
+                    comment=comment,
+                    timestamp=self._get_iso_timestamp(),
+                    source="github",
+                )
+            )
 
     # Work-Item-Specific Monitoring
 
