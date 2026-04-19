@@ -171,21 +171,32 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
     async def get_thread(self, work_item_id: str) -> DiscussionThread:
         """Retrieve full discussion thread for a work item.
 
-        Fetches all comments on the GitHub issue using REST API pagination.
+        Routes to the GitHub Discussions API (GraphQL) when work_item_id starts
+        with "D_" (a Discussion node ID), or the Issues comments REST API for
+        numeric issue numbers.
 
         Args:
-            work_item_id: GitHub issue number (as string)
+            work_item_id: GitHub issue number (digits) or Discussion node ID (D_...)
 
         Returns:
             DiscussionThread: Complete thread with all comments
 
         Raises:
-            ResourceNotFoundError: Issue doesn't exist
+            ResourceNotFoundError: Issue/discussion doesn't exist
             ExternalServiceError: API communication failure
             ValidationError: Invalid work_item_id
         """
-        if not work_item_id or not work_item_id.isdigit():
+        if not work_item_id:
             msg = f"Invalid work_item_id: {work_item_id}"
+            raise ValidationError(msg)
+
+        if work_item_id.startswith("D_"):
+            return await self._get_discussion_thread(work_item_id)
+
+        if not work_item_id.isdigit():
+            msg = (
+                f"Invalid work_item_id '{work_item_id}': must be a numeric issue number or a Discussion node ID (D_...)"
+            )
             raise ValidationError(msg)
 
         client = await self._get_client()
@@ -251,8 +262,67 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             )
 
         except (httpx.RequestError, httpx.HTTPError) as e:
-            msg = f"GitHub API request failed: {e!s}"
-            raise ExternalServiceError(msg)
+            raise ExternalServiceError("GitHub", f"API request failed: {e!s}")
+
+    async def _get_discussion_thread(self, discussion_id: str) -> DiscussionThread:
+        """Retrieve all comments on a GitHub Discussion via GraphQL API."""
+        if self._graphql_client is None:
+            raise ExternalServiceError("GitHub", "GraphQL client required to fetch GitHub Discussion threads")
+
+        query = """
+        query GetDiscussionComments($id: ID!, $after: String) {
+          node(id: $id) {
+            ... on Discussion {
+              comments(first: 100, after: $after) {
+                pageInfo { hasNextPage endCursor }
+                nodes {
+                  id
+                  body
+                  author { login }
+                  createdAt
+                }
+              }
+            }
+          }
+        }
+        """
+
+        comments: list[Comment] = []
+        cursor: str | None = None
+
+        while True:
+            variables: dict = {"id": discussion_id}
+            if cursor:
+                variables["after"] = cursor
+
+            result = await self._graphql_client.execute(query, variables)
+            node = result.get("node")
+            if not node:
+                raise ResourceNotFoundError("Discussion", discussion_id)
+
+            page = node["comments"]
+            for item in page["nodes"]:
+                comments.append(
+                    Comment(
+                        id=item["id"],
+                        author=item["author"]["login"],
+                        body=item["body"],
+                        created_at=item["createdAt"],
+                        parent_id=None,
+                        is_bot=self._identity_service.is_bot_user(item["author"]["login"]),
+                    )
+                )
+
+            if not page["pageInfo"]["hasNextPage"]:
+                break
+            cursor = page["pageInfo"]["endCursor"]
+
+        return DiscussionThread(
+            id=f"thread-{discussion_id}",
+            work_item_id=discussion_id,
+            comments=comments,
+            thread_type="flat",
+        )
 
     # Command Operations
 
@@ -298,7 +368,9 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             return await self._add_discussion_comment(work_item_id, content)
 
         if not work_item_id.isdigit():
-            msg = f"Invalid work_item_id: {work_item_id}"
+            msg = (
+                f"Invalid work_item_id '{work_item_id}': must be a numeric issue number or a Discussion node ID (D_...)"
+            )
             raise ValidationError(msg)
 
         return await self._add_issue_comment(work_item_id, content)
@@ -339,8 +411,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             )
 
         except (httpx.RequestError, httpx.HTTPError) as e:
-            msg = f"GitHub API request failed: {e!s}"
-            raise ExternalServiceError(msg)
+            raise ExternalServiceError("GitHub", f"API request failed: {e!s}")
 
         self._emit_comment_posted(work_item_id, comment)
         return comment
@@ -348,8 +419,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
     async def _add_discussion_comment(self, discussion_id: str, content: str) -> Comment:
         """Post a comment to a GitHub Discussion via GraphQL API."""
         if self._graphql_client is None:
-            msg = "GraphQL client required to post comments on GitHub Discussions"
-            raise ExternalServiceError(msg)
+            raise ExternalServiceError("GitHub", "GraphQL client required to post comments on GitHub Discussions")
 
         mutation = """
         mutation AddDiscussionComment($discussionId: ID!, $body: String!) {
@@ -364,7 +434,15 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
         }
         """
 
-        result = await self._graphql_client.execute(mutation, {"discussionId": discussion_id, "body": content})
+        try:
+            result = await self._graphql_client.execute(mutation, {"discussionId": discussion_id, "body": content})
+        except ExternalServiceError as exc:
+            # GitHub GraphQL returns "Could not resolve to a node" for unknown IDs.
+            # Translate to the documented ResourceNotFoundError contract.
+            if "could not resolve" in str(exc).lower() or "not_found" in str(exc).lower():
+                raise ResourceNotFoundError("Discussion", discussion_id) from exc
+            raise
+
         data = result["addDiscussionComment"]["comment"]
         comment = Comment(
             id=data["id"],

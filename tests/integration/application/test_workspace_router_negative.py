@@ -73,57 +73,6 @@ def code_work_item():
 
 
 @pytest.fixture
-def discussion_work_item():
-    """Create discussion work item."""
-    return WorkItem(
-        id="work-item-discuss",
-        project_id="test-project",
-        title="Research topic",
-        description="Research and discuss",
-        status=WorkItemStatus.NEW,
-        priority=WorkItemPriority.LOW,
-        labels=["discussion"],
-        external_id="101",
-        external_url="https://github.com/test/repo/issues/101",
-        assigned_agent_id=None,
-        assigned_at=None,
-        current_workflow_id=None,
-        current_stage=None,
-        current_column=None,
-        entered_column_at=None,
-        created_at=datetime.now(UTC),
-        updated_at=datetime.now(UTC),
-        completed_at=None,
-    )
-
-
-@pytest.fixture
-def analyst_agent():
-    """Create analyst agent that doesn't make code changes."""
-    return Agent(
-        id="analyst",
-        name="analyst",
-        display_name="Analyst",
-        agent_type=AgentType.REQUIREMENTS_ANALYST,
-        capabilities={
-            "analysis": AgentCapability(skill="analysis", proficiency=0.9),
-        },
-        role_description="Analyzes requirements",
-        model="claude-sonnet-4-5",
-        timeout_seconds=300,
-        max_retries=3,
-        requires_docker=False,
-        requires_dev_container=False,
-        makes_code_changes=False,
-        filesystem_write_allowed=False,
-        mcp_servers=[],
-        metadata={},
-        created_at=datetime.now(UTC),
-        updated_at=datetime.now(UTC),
-    )
-
-
-@pytest.fixture
 def developer_agent():
     """Create developer agent that makes code changes."""
     return Agent(

@@ -40,6 +40,7 @@ class WorkAssignmentService:
         available_agents: list[Agent],
         requirements: list[Requirement],
         min_score: float = 0.5,
+        requires_code_changes: bool = False,
     ) -> AssignmentResult:
         """
         Assign work item to best available agent.
@@ -57,6 +58,9 @@ class WorkAssignmentService:
             available_agents: List of available agents
             requirements: List of skill requirements
             min_score: Minimum acceptable match score (default: 0.5)
+            requires_code_changes: If True, only agents with makes_code_changes=True
+                are eligible. Callers that know the work item requires writing code
+                should set this to avoid silent misassignment of analysis-only agents.
 
         Returns:
             Assignment result with agent ID, score, and reasoning
@@ -65,7 +69,9 @@ class WorkAssignmentService:
             DomainError: If no capable agents available or no suitable agent found
         """
         # Filter by environment requirements
-        capable_agents = [agent for agent in available_agents if self._can_handle_work_item(agent, work_item)]
+        capable_agents = [
+            agent for agent in available_agents if self._can_handle_work_item(agent, work_item, requires_code_changes)
+        ]
 
         if not capable_agents:
             msg = "No capable agents available"
@@ -92,20 +98,20 @@ class WorkAssignmentService:
 
         return AssignmentResult(agent_id=best_agent.id, match_score=best_score, reason=reason)
 
-    def _can_handle_work_item(self, agent: Agent, work_item: WorkItem) -> bool:
+    def _can_handle_work_item(self, agent: Agent, work_item: WorkItem, requires_code_changes: bool = False) -> bool:
         """
         Check if agent can handle work item.
 
         Args:
             agent: Agent to check
             work_item: Work item to handle
+            requires_code_changes: If True, agent must have makes_code_changes=True
 
         Returns:
             True if agent can handle the work item
         """
-        # For now, all agents can handle all work items
-        # In the future, this could check work item labels or other criteria
-        # to determine if agent has required permissions
+        if requires_code_changes and not agent.makes_code_changes:
+            return False
         return True
 
     def _generate_assignment_reason(self, agent: Agent, score: float, requirements: list[Requirement]) -> str:

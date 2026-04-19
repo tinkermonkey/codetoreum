@@ -100,31 +100,6 @@ def sample_work_item():
 
 
 @pytest.fixture
-def discussion_work_item():
-    """Create work item with discussion label."""
-    return WorkItem(
-        id="work-item-2",
-        project_id="test-project",
-        title="Research API design patterns",
-        description="Explore different API design approaches",
-        status=WorkItemStatus.NEW,
-        priority=WorkItemPriority.LOW,
-        labels=["research", "discussion"],
-        external_id="124",
-        external_url="https://github.com/test/repo/issues/124",
-        assigned_agent_id=None,
-        assigned_at=None,
-        current_workflow_id=None,
-        current_stage=None,
-        current_column=None,
-        entered_column_at=None,
-        created_at=datetime.now(UTC),
-        updated_at=datetime.now(UTC),
-        completed_at=None,
-    )
-
-
-@pytest.fixture
 def sample_agent():
     """Create sample agent that makes code changes."""
     return Agent(
@@ -143,32 +118,6 @@ def sample_agent():
         requires_dev_container=True,
         makes_code_changes=True,
         filesystem_write_allowed=True,
-        mcp_servers=[],
-        metadata={},
-        created_at=datetime.now(UTC),
-        updated_at=datetime.now(UTC),
-    )
-
-
-@pytest.fixture
-def analyst_agent():
-    """Create analyst agent that doesn't make code changes."""
-    return Agent(
-        id="analyst-agent",
-        name="analyst",
-        display_name="Analyst Agent",
-        agent_type=AgentType.REQUIREMENTS_ANALYST,
-        capabilities={
-            "analysis": AgentCapability(skill="analysis", proficiency=0.95),
-        },
-        role_description="Analyzes requirements",
-        model="claude-sonnet-4-5",
-        timeout_seconds=300,
-        max_retries=3,
-        requires_docker=False,
-        requires_dev_container=False,
-        makes_code_changes=False,
-        filesystem_write_allowed=False,
         mcp_servers=[],
         metadata={},
         created_at=datetime.now(UTC),

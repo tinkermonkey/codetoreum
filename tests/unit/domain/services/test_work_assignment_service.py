@@ -266,24 +266,52 @@ class TestAssignWork:
 class TestCanHandleWorkItem:
     """Tests for _can_handle_work_item method."""
 
-    def test_all_agents_can_handle_work_items(
+    def test_all_agents_can_handle_work_items_by_default(
         self, work_assignment_service, code_work_item, developer_agent, reviewer_agent
     ):
-        """Test that all agents can handle work items (no filtering)."""
-        # Both developer and reviewer can handle work
+        """Default (requires_code_changes=False) allows any agent."""
         assert work_assignment_service._can_handle_work_item(developer_agent, code_work_item)
         assert work_assignment_service._can_handle_work_item(reviewer_agent, code_work_item)
 
-    def test_discussion_work_allows_any_agent(
-        self,
-        work_assignment_service,
-        discussion_work_item,
-        developer_agent,
-        reviewer_agent,
+    def test_requires_code_changes_filters_non_code_agents(
+        self, work_assignment_service, code_work_item, developer_agent, reviewer_agent
     ):
-        """Test that discussion work allows any agent."""
-        assert work_assignment_service._can_handle_work_item(developer_agent, discussion_work_item)
-        assert work_assignment_service._can_handle_work_item(reviewer_agent, discussion_work_item)
+        """requires_code_changes=True admits only agents with makes_code_changes=True."""
+        assert work_assignment_service._can_handle_work_item(
+            developer_agent, code_work_item, requires_code_changes=True
+        )
+        assert not work_assignment_service._can_handle_work_item(
+            reviewer_agent, code_work_item, requires_code_changes=True
+        )
+
+    def test_assign_work_requires_code_changes_raises_when_no_eligible_agent(
+        self, work_assignment_service, code_work_item, reviewer_agent
+    ):
+        """assign_work with requires_code_changes=True raises DomainError if only non-code agents available."""
+        requirements = [Requirement("python", 0.8, is_required=True)]
+
+        with pytest.raises(DomainError, match="No capable agents available"):
+            work_assignment_service.assign_work(
+                code_work_item,
+                [reviewer_agent],
+                requirements,
+                requires_code_changes=True,
+            )
+
+    def test_assign_work_requires_code_changes_succeeds_with_code_agent(
+        self, work_assignment_service, code_work_item, developer_agent, reviewer_agent
+    ):
+        """assign_work with requires_code_changes=True selects the code-capable agent."""
+        requirements = [Requirement("python", 0.8, is_required=True)]
+
+        result = work_assignment_service.assign_work(
+            code_work_item,
+            [developer_agent, reviewer_agent],
+            requirements,
+            requires_code_changes=True,
+        )
+
+        assert result.agent_id == developer_agent.id
 
 
 class TestGenerateAssignmentReason:

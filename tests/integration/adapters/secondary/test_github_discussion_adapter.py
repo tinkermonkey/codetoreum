@@ -593,3 +593,211 @@ class TestGitHubDiscussionAdapterEventEmission:
         """emit() validates event type."""
         with pytest.raises(ValueError):
             adapter.emit({"invalid": "object"})
+
+
+class TestGitHubDiscussionAdapterDiscussionNodeId:
+    """Tests for D_... Discussion node ID routing in add_comment and get_thread."""
+
+    @pytest.fixture
+    def graphql_client(self):
+        return AsyncMock()
+
+    @pytest.fixture
+    def adapter(self, graphql_client):
+        config = GitHubDiscussionConfig(
+            token="test-token",
+            organization="test-org",
+            repository="test-repo",
+            graphql_client=graphql_client,
+        )
+        identity = MockIdentityService()
+        return GitHubDiscussionAdapter(config, identity)
+
+    @pytest.fixture
+    def adapter_no_graphql(self):
+        """Adapter without a GraphQL client configured."""
+        config = GitHubDiscussionConfig(
+            token="test-token",
+            organization="test-org",
+            repository="test-repo",
+        )
+        identity = MockIdentityService()
+        return GitHubDiscussionAdapter(config, identity)
+
+    @pytest.fixture
+    def monitoring_config(self):
+        return DiscussionMonitoringConfig(project_id="proj-1")
+
+    # -------------------------------------------------------------------------
+    # add_comment — D_ routing
+    # -------------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_add_comment_discussion_id_calls_graphql(self, adapter, graphql_client):
+        """add_comment with D_... ID uses the addDiscussionComment GraphQL mutation."""
+        graphql_client.execute.return_value = {
+            "addDiscussionComment": {
+                "comment": {
+                    "id": "DC_abc123",
+                    "body": "Great point!",
+                    "author": {"login": "alice"},
+                    "createdAt": "2025-01-08T10:00:00Z",
+                }
+            }
+        }
+
+        comment = await adapter.add_comment("D_kwDOABC123", "Great point!")
+
+        graphql_client.execute.assert_called_once()
+        call_args = graphql_client.execute.call_args
+        variables = call_args[0][1]
+        assert variables["discussionId"] == "D_kwDOABC123"
+        assert variables["body"] == "Great point!"
+        assert comment.id == "DC_abc123"
+        assert comment.body == "Great point!"
+        assert comment.author == "alice"
+        assert comment.created_at == "2025-01-08T10:00:00Z"
+
+    @pytest.mark.asyncio
+    async def test_add_comment_discussion_emits_posted_event_when_monitoring(
+        self, adapter, graphql_client, monitoring_config
+    ):
+        """add_comment on a monitored Discussion emits comment.posted."""
+        adapter.start_monitoring("D_kwDOABC123", monitoring_config)
+        graphql_client.execute.return_value = {
+            "addDiscussionComment": {
+                "comment": {
+                    "id": "DC_new",
+                    "body": "Hello",
+                    "author": {"login": "bot"},
+                    "createdAt": "2025-01-08T10:00:00Z",
+                }
+            }
+        }
+
+        events: list[CommentPostedEvent] = []
+        adapter.on("comment.posted", events.append)
+
+        await adapter.add_comment("D_kwDOABC123", "Hello")
+
+        assert len(events) == 1
+        assert events[0].work_item_id == "D_kwDOABC123"
+        assert events[0].comment.id == "DC_new"
+
+    @pytest.mark.asyncio
+    async def test_add_comment_discussion_no_graphql_client_raises(self, adapter_no_graphql):
+        """add_comment with D_... ID raises ExternalServiceError when no GraphQL client."""
+        from codetoreum.ports.exceptions import ExternalServiceError
+
+        with pytest.raises(ExternalServiceError, match="GraphQL client required"):
+            await adapter_no_graphql.add_comment("D_kwDOABC123", "test")
+
+    @pytest.mark.asyncio
+    async def test_add_comment_discussion_not_found_raises_resource_not_found(self, adapter, graphql_client):
+        """add_comment raises ResourceNotFoundError when GraphQL says the discussion is not found."""
+        from codetoreum.ports.exceptions import ExternalServiceError
+
+        graphql_client.execute.side_effect = ExternalServiceError(
+            "GitHub", "GraphQL errors: Could not resolve to a node with the global id of 'D_invalid'"
+        )
+
+        with pytest.raises(ResourceNotFoundError):
+            await adapter.add_comment("D_invalid", "test")
+
+    @pytest.mark.asyncio
+    async def test_add_comment_invalid_id_clear_error_message(self, adapter):
+        """add_comment with an unrecognised ID format includes guidance in the error."""
+        with pytest.raises(ValidationError, match="D_\\.\\.\\."):
+            await adapter.add_comment("d_lowercase", "content")
+
+    # -------------------------------------------------------------------------
+    # get_thread — D_ routing
+    # -------------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_get_thread_discussion_id_fetches_via_graphql(self, adapter, graphql_client):
+        """get_thread with D_... ID uses the GetDiscussionComments GraphQL query."""
+        graphql_client.execute.return_value = {
+            "node": {
+                "comments": {
+                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                    "nodes": [
+                        {
+                            "id": "DC_1",
+                            "body": "First comment",
+                            "author": {"login": "alice"},
+                            "createdAt": "2025-01-08T10:00:00Z",
+                        },
+                        {
+                            "id": "DC_2",
+                            "body": "Second comment",
+                            "author": {"login": "bob"},
+                            "createdAt": "2025-01-08T10:01:00Z",
+                        },
+                    ],
+                }
+            }
+        }
+
+        thread = await adapter.get_thread("D_kwDOABC123")
+
+        assert thread.work_item_id == "D_kwDOABC123"
+        assert len(thread.comments) == 2
+        assert thread.comments[0].id == "DC_1"
+        assert thread.comments[0].author == "alice"
+        assert thread.comments[1].id == "DC_2"
+
+    @pytest.mark.asyncio
+    async def test_get_thread_discussion_paginates(self, adapter, graphql_client):
+        """get_thread follows hasNextPage to retrieve all Discussion comments."""
+        page1 = {
+            "node": {
+                "comments": {
+                    "pageInfo": {"hasNextPage": True, "endCursor": "cursor_abc"},
+                    "nodes": [
+                        {"id": "DC_1", "body": "p1", "author": {"login": "a"}, "createdAt": "2025-01-08T10:00:00Z"}
+                    ],
+                }
+            }
+        }
+        page2 = {
+            "node": {
+                "comments": {
+                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                    "nodes": [
+                        {"id": "DC_2", "body": "p2", "author": {"login": "b"}, "createdAt": "2025-01-08T10:01:00Z"}
+                    ],
+                }
+            }
+        }
+        graphql_client.execute.side_effect = [page1, page2]
+
+        thread = await adapter.get_thread("D_kwDOABC123")
+
+        assert len(thread.comments) == 2
+        assert graphql_client.execute.call_count == 2
+        # Second call should pass the cursor
+        second_call_vars = graphql_client.execute.call_args_list[1][0][1]
+        assert second_call_vars["after"] == "cursor_abc"
+
+    @pytest.mark.asyncio
+    async def test_get_thread_discussion_not_found_raises_resource_not_found(self, adapter, graphql_client):
+        """get_thread raises ResourceNotFoundError when node is None (discussion not found)."""
+        graphql_client.execute.return_value = {"node": None}
+
+        with pytest.raises(ResourceNotFoundError):
+            await adapter.get_thread("D_invalid")
+
+    @pytest.mark.asyncio
+    async def test_get_thread_discussion_no_graphql_client_raises(self, adapter_no_graphql):
+        """get_thread with D_... ID raises ExternalServiceError when no GraphQL client."""
+        from codetoreum.ports.exceptions import ExternalServiceError
+
+        with pytest.raises(ExternalServiceError, match="GraphQL client required"):
+            await adapter_no_graphql.get_thread("D_kwDOABC123")
+
+    @pytest.mark.asyncio
+    async def test_get_thread_invalid_id_clear_error_message(self, adapter):
+        """get_thread with an unrecognised ID format includes guidance in the error."""
+        with pytest.raises(ValidationError, match="D_\\.\\.\\."):
+            await adapter.get_thread("not-a-valid-id")
