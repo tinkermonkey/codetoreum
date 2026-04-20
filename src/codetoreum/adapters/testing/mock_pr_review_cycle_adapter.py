@@ -152,9 +152,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
 
     # ==================== Configuration Methods ====================
 
-    def set_outcome(
-        self, outcome: PRReviewOutcome, findings: list[PRReviewFinding] | None = None
-    ) -> None:
+    def set_outcome(self, outcome: PRReviewOutcome, findings: list[PRReviewFinding] | None = None) -> None:
         """Configure the cycle outcome.
 
         Args:

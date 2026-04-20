@@ -213,8 +213,7 @@ class TestApprovedPath:
 
         # Check that approved event was emitted
         approved_calls = [
-            call for call in mock_event_emitter.emit.call_args_list
-            if call[0][0].type == "pr_review_cycle.approved"
+            call for call in mock_event_emitter.emit.call_args_list if call[0][0].type == "pr_review_cycle.approved"
         ]
         assert len(approved_calls) > 0
 
@@ -265,7 +264,8 @@ class TestCIFailingPath:
 
         # Find the CI check event
         ci_events = [
-            call for call in mock_event_emitter.emit.call_args_list
+            call
+            for call in mock_event_emitter.emit.call_args_list
             if call[0][0].type == "pr_review_cycle.ci_check_completed"
         ]
         assert len(ci_events) > 0
@@ -293,7 +293,8 @@ class TestCIFailingPath:
 
         # Should not emit consolidation_started event
         consolidation_events = [
-            call for call in mock_event_emitter.emit.call_args_list
+            call
+            for call in mock_event_emitter.emit.call_args_list
             if call[0][0].type == "pr_review_cycle.consolidation_started"
         ]
         assert len(consolidation_events) == 0
@@ -345,7 +346,8 @@ class TestMaxCyclesPath:
 
         # Should emit max_cycles_reached event
         max_cycles_calls = [
-            call for call in mock_event_emitter.emit.call_args_list
+            call
+            for call in mock_event_emitter.emit.call_args_list
             if call[0][0].type == "pr_review_cycle.max_cycles_reached"
         ]
         assert len(max_cycles_calls) > 0
@@ -373,7 +375,8 @@ class TestMaxCyclesPath:
 
         # Should not emit code_review_started event
         code_review_events = [
-            call for call in mock_event_emitter.emit.call_args_list
+            call
+            for call in mock_event_emitter.emit.call_args_list
             if call[0][0].type == "pr_review_cycle.code_review_started"
         ]
         assert len(code_review_events) == 0
