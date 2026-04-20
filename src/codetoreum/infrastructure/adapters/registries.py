@@ -34,6 +34,7 @@ from codetoreum.ports.output.metrics import IMetrics
 from codetoreum.ports.output.notifier import INotifier
 from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
 from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
+from codetoreum.ports.output.pr_review_cycle_service import IPRReviewCycle
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
 from codetoreum.ports.output.repair_cycle_checkpoint_store import IRepairCycleCheckpointStore
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle
@@ -46,7 +47,6 @@ from codetoreum.ports.output.version_control_service import IVersionControlServi
 from codetoreum.ports.output.work_item_branch_tracker import IWorkItemBranchTracker
 from codetoreum.ports.output.work_item_service import IWorkItemService
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
-from codetoreum.ports.output.pr_review_cycle_service import IPRReviewCycle
 
 
 def _get_interface_methods(interface_class: type) -> set[str]:

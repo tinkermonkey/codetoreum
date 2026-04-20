@@ -42,8 +42,8 @@ from codetoreum.ports.output.metrics import IMetrics
 from codetoreum.ports.output.notifier import INotifier
 from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
 from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
-from codetoreum.ports.output.project_manager_service import IProjectManagerService
 from codetoreum.ports.output.pr_review_cycle_service import IPRReviewCycle
+from codetoreum.ports.output.project_manager_service import IProjectManagerService
 from codetoreum.ports.output.repair_cycle_checkpoint_store import IRepairCycleCheckpointStore
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle
 from codetoreum.ports.output.repository import IRepository

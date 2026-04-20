@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     from codetoreum.ports.output.repair_cycle_checkpoint_store import (
         IRepairCycleCheckpointStore,
     )
+    from codetoreum.ports.output.ticket_system import ITicketSystem
 
 logger = logging.getLogger(__name__)
 

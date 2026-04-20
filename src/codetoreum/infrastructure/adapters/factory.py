@@ -67,6 +67,8 @@ from codetoreum.adapters.testing import (
     SimpleEncryptionAdapter,
 )
 
+logger = logging.getLogger(__name__)
+
 try:
     from codetoreum.adapters.testing.mock_pr_review_cycle_adapter import (
         MockPRReviewCycleAdapter,
@@ -78,8 +80,6 @@ except ImportError:
         extra={"adapter": "MockPRReviewCycleAdapter"},
     )
     MockPRReviewCycleAdapter = None  # type: ignore
-
-logger = logging.getLogger(__name__)
 
 try:
     from codetoreum.adapters.secondary.prometheus_metrics_adapter import (
@@ -199,8 +199,8 @@ from codetoreum.infrastructure.adapters.registries import (
     NotifierRegistry,
     PipelineLockServiceRegistry,
     PipelineQueueServiceRegistry,
-    PRReviewCycleServiceRegistry,
     ProjectManagerServiceRegistry,
+    PRReviewCycleServiceRegistry,
     RepairCycleCheckpointStoreRegistry,
     RepairCycleRegistry,
     RepositoryRegistry,
@@ -247,9 +247,9 @@ from codetoreum.ports.output.metrics import IMetrics
 from codetoreum.ports.output.notifier import INotifier
 from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
 from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
+from codetoreum.ports.output.pr_review_cycle_service import IPRReviewCycle
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
 from codetoreum.ports.output.repair_cycle_checkpoint_store import IRepairCycleCheckpointStore
-from codetoreum.ports.output.pr_review_cycle_service import IPRReviewCycle
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle
 from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.review_cycle_service import IReviewCycle
