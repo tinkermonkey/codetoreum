@@ -108,14 +108,17 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
     ) -> None:
         """Initialize the PR review cycle adapter.
 
-        All parameters are optional for flexibility during bootstrap initialization.
+        All parameters are required and must be non-None.
         Dependencies can be injected via public properties after construction.
 
         Args:
-            ticket_system: Optional ticket system adapter for creating work items
-            board_service: Optional board service adapter for moving items between columns
-            clock: Optional SimulationClock for deterministic time advancement
-            event_emitter: Optional event emitter for domain event publication
+            ticket_system: Required ticket system adapter for creating work items
+            board_service: Required board service adapter for moving items between columns
+            clock: Required SimulationClock for deterministic time advancement
+            event_emitter: Required event emitter for domain event publication
+
+        Raises:
+            TypeError: If any required parameter is None
 
         Note:
             Dependencies can be set after construction using the public properties:
@@ -124,10 +127,20 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             adapter.clock = clock
             adapter.event_emitter = event_emitter
         """
+        # Validate required parameters
+        if ticket_system is None:
+            raise TypeError("ticket_system is required")
+        if board_service is None:
+            raise TypeError("board_service is required")
+        if clock is None:
+            raise TypeError("clock is required")
+        if event_emitter is None:
+            raise TypeError("event_emitter is required")
+
         super().__init__()
         self._ticket_system = ticket_system
         self._board_service = board_service
-        self._clock = clock or SimulationClock(speed_multiplier=100_000.0)
+        self._clock = clock
         self._event_emitter = event_emitter
 
         # State storage
