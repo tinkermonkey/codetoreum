@@ -168,7 +168,7 @@ class TestCIRunResultConversion:
 
     def test_convert_uses_simulation_clock_when_provided(self):
         """Test that conversion uses simulation clock time instead of wall clock when provided."""
-        from datetime import datetime, UTC
+        from datetime import UTC, datetime
 
         # Setup
         check_results = (
