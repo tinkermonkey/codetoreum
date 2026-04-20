@@ -22,6 +22,26 @@ except ImportError:
 class TestCIPipelineStatusCheckedEvent:
     """Test CIPipelineStatusCheckedEvent."""
 
+    def test_immutability_frozen_instance_error(self):
+        """Test that attempting to modify event fields raises FrozenInstanceError."""
+        event = CIPipelineStatusCheckedEvent(
+            type="ci.pipeline_status_checked",
+            timestamp=now_iso(),
+            source="github",
+            pr_id="456",
+            project_id="proj-1",
+            status="passed",
+        )
+
+        with pytest.raises(FrozenInstanceError):
+            event.pr_id = "789"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.status = "failed"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.check_count = 10  # type: ignore
+
     def test_create_valid_event(self):
         """Test creating a valid CI pipeline status checked event."""
         timestamp = now_iso()
@@ -197,6 +217,56 @@ class TestCIPipelineStatusCheckedEvent:
                 pending_count=-1,  # Invalid
             )
 
+    def test_count_consistency_exceeded(self):
+        """Test that sum of counts cannot exceed check_count."""
+        with pytest.raises(ValueError, match="exceeds check_count"):
+            CIPipelineStatusCheckedEvent(
+                type="ci.pipeline_status_checked",
+                timestamp=now_iso(),
+                source="github",
+                pr_id="456",
+                project_id="proj-1",
+                status="pending",
+                check_count=1,
+                passed_count=999,  # Impossible: exceeds check_count
+                failed_count=0,
+                pending_count=0,
+            )
+
+    def test_count_consistency_valid(self):
+        """Test that valid count combinations are accepted."""
+        # Sum equals check_count
+        event = CIPipelineStatusCheckedEvent(
+            type="ci.pipeline_status_checked",
+            timestamp=now_iso(),
+            source="github",
+            pr_id="456",
+            project_id="proj-1",
+            status="pending",
+            check_count=5,
+            passed_count=2,
+            failed_count=1,
+            pending_count=2,
+        )
+        assert event.check_count == 5
+        assert event.passed_count + event.failed_count + event.pending_count == 5
+
+        # Sum is less than check_count (skipped checks)
+        event2 = CIPipelineStatusCheckedEvent(
+            type="ci.pipeline_status_checked",
+            timestamp=now_iso(),
+            source="github",
+            pr_id="456",
+            project_id="proj-1",
+            status="pending",
+            check_count=5,
+            passed_count=2,
+            failed_count=1,
+            pending_count=1,  # Sum is 4, less than 5
+        )
+        assert event2.check_count == 5
+        assert event2.passed_count + event2.failed_count + event2.pending_count == 4
+
     def test_status_checked_serialization(self):
         """Test CI status checked event serialization."""
         timestamp = now_iso()
@@ -334,9 +404,76 @@ class TestCIPipelineStatusCheckedEvent:
         with pytest.raises(ValueError, match="Invalid status"):
             CIPipelineStatusCheckedEvent.from_dict(d)
 
+    def test_status_checked_empty_timestamp_from_dict(self):
+        """Test that from_dict raises ValueError when timestamp is empty."""
+        d = {
+            "type": "ci.pipeline_status_checked",
+            "timestamp": "",  # Empty timestamp
+            "source": "github",
+            "pr_id": "456",
+            "project_id": "proj-1",
+            "status": "passed",
+        }
+
+        with pytest.raises(ValueError):
+            CIPipelineStatusCheckedEvent.from_dict(d)
+
+    def test_status_checked_empty_source_from_dict(self):
+        """Test that from_dict raises ValueError when source is empty."""
+        d = {
+            "type": "ci.pipeline_status_checked",
+            "timestamp": now_iso(),
+            "source": "",  # Empty source
+            "pr_id": "456",
+            "project_id": "proj-1",
+            "status": "passed",
+        }
+
+        with pytest.raises(ValueError):
+            CIPipelineStatusCheckedEvent.from_dict(d)
+
+    def test_status_checked_count_consistency_from_dict(self):
+        """Test that from_dict raises ValueError for inconsistent counts."""
+        d = {
+            "type": "ci.pipeline_status_checked",
+            "timestamp": now_iso(),
+            "source": "github",
+            "pr_id": "456",
+            "project_id": "proj-1",
+            "status": "pending",
+            "check_count": 1,
+            "passed_count": 999,  # Impossible
+            "failed_count": 0,
+            "pending_count": 0,
+        }
+
+        with pytest.raises(ValueError, match="exceeds check_count"):
+            CIPipelineStatusCheckedEvent.from_dict(d)
+
 
 class TestCIRunStartedEvent:
     """Test CIRunStartedEvent."""
+
+    def test_immutability_frozen_instance_error(self):
+        """Test that attempting to modify event fields raises FrozenInstanceError."""
+        event = CIRunStartedEvent(
+            type="ci.run_started",
+            timestamp=now_iso(),
+            source="orchestrator",
+            project_id="proj-1",
+            workflow_run_id="wf-123",
+            working_directory="/workspace",
+            timeout_seconds=600,
+        )
+
+        with pytest.raises(FrozenInstanceError):
+            event.project_id = "proj-2"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.timeout_seconds = 300  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.workflow_run_id = "wf-456"  # type: ignore
 
     def test_create_valid_event(self):
         """Test creating a valid CI run started event."""
@@ -556,6 +693,27 @@ class TestCIRunStartedEvent:
 
 class TestCIRunCompletedEvent:
     """Test CIRunCompletedEvent."""
+
+    def test_immutability_frozen_instance_error(self):
+        """Test that attempting to modify event fields raises FrozenInstanceError."""
+        event = CIRunCompletedEvent(
+            type="ci.run_completed",
+            timestamp=now_iso(),
+            source="orchestrator",
+            project_id="proj-1",
+            workflow_run_id="wf-123",
+            passed_count=5,
+            failure_count=0,
+        )
+
+        with pytest.raises(FrozenInstanceError):
+            event.project_id = "proj-2"  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.passed_count = 3  # type: ignore
+
+        with pytest.raises(FrozenInstanceError):
+            event.failure_count = 2  # type: ignore
 
     def test_create_valid_event(self):
         """Test creating a valid CI run completed event."""

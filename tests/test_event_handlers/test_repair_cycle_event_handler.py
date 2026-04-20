@@ -975,7 +975,7 @@ class TestCIPipelineIntegration:
             url="https://example.com/check",
         )
         ci_pipeline_service.run_ci_checks.return_value = CIRunResult(
-            passed=0,
+            passed=False,
             failed=1,
             check_results=(failed_check,),
             failures=("Test failed in module_a.py",),
@@ -1136,7 +1136,7 @@ class TestCIPipelineIntegration:
             url="https://example.com/check",
         )
         ci_pipeline_service.run_ci_checks.return_value = CIRunResult(
-            passed=1,
+            passed=True,
             failed=0,
             check_results=(passed_check,),
             failures=(),

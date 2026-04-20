@@ -89,7 +89,7 @@ class TestCIRunResultConversion:
             ),
         )
         ci_result = CIRunResult(
-            passed=1,
+            passed=True,
             failed=0,
             check_results=check_results,
             output="All checks passed",
@@ -121,7 +121,7 @@ class TestCIRunResultConversion:
             ),
         )
         ci_result = CIRunResult(
-            passed=0,
+            passed=False,
             failed=2,
             check_results=check_results,
             output="CI checks failed",
@@ -156,7 +156,7 @@ class TestCIRunResultConversion:
             ),
         )
         ci_result = CIRunResult(
-            passed=1,
+            passed=True,
             failed=0,
             check_results=check_results,
             output="All checks passed",

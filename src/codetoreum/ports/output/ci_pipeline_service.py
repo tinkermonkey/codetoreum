@@ -172,11 +172,11 @@ class CIRunResult:
     (typically in a container). All fields are validated at construction to
     ensure contract boundary integrity. Frozen to prevent accidental mutation
     after creation. Check results are converted to a tuple for true immutability.
-    Cross-field consistency is enforced: the passed/failed counts must match
+    Cross-field consistency is enforced: the passed boolean must match
     the actual check results.
 
     Attributes:
-        passed: Number of checks that passed
+        passed: Boolean indicating whether all CI checks passed (True) or any failed (False)
         failed: Number of checks that failed
         check_results: Tuple of detailed results for each CI check
         failures: Tuple of failure descriptions from failed checks
@@ -184,7 +184,7 @@ class CIRunResult:
         output: Full output/logs from CI execution
     """
 
-    passed: int
+    passed: bool
     failed: int
     check_results: tuple[CICheckResult, ...]
     failures: tuple[str, ...] = ()
@@ -193,8 +193,8 @@ class CIRunResult:
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time and cross-field consistency."""
-        if not isinstance(self.passed, int) or self.passed < 0:
-            msg = "passed must be a non-negative integer"
+        if not isinstance(self.passed, bool):
+            msg = "passed must be a boolean"
             raise ValueError(msg)
 
         if not isinstance(self.failed, int) or self.failed < 0:
@@ -241,16 +241,20 @@ class CIRunResult:
             msg = "output must be a string"
             raise ValueError(msg)
 
-        # Cross-field consistency: validate that passed/failed counts match check_results
-        passed_results = sum(1 for r in self.check_results if r.status == CICheckStatus.PASSED)
+        # Cross-field consistency: validate that passed boolean matches check_results
         failed_results = sum(1 for r in self.check_results if r.status == CICheckStatus.FAILED)
-
-        if self.passed != passed_results:
-            msg = f"passed count ({self.passed}) does not match check_results ({passed_results} checks are PASSED)"
-            raise ValueError(msg)
 
         if self.failed != failed_results:
             msg = f"failed count ({self.failed}) does not match check_results ({failed_results} checks are FAILED)"
+            raise ValueError(msg)
+
+        # Validate that passed boolean is consistent with failed count
+        if self.passed and self.failed != 0:
+            msg = f"passed is True but failed count is {self.failed} (should be 0)"
+            raise ValueError(msg)
+
+        if not self.passed and self.failed == 0:
+            msg = "passed is False but failed count is 0 (should be > 0)"
             raise ValueError(msg)
 
 
@@ -272,29 +276,19 @@ class ICIPipelineService(IEventEmitter, IMonitoredService, ABC):
                               When local CI execution completes
 
     Example:
-        async with service as svc:
-            # Start monitoring CI pipelines
-            await svc.start_monitoring(
-                project_id="proj-123",
-                config=MonitoringConfig(project_id="proj-123")
-            )
+        # Get PR CI status from external system
+        status = await service.get_pr_ci_status("pr-456", "proj-123", 300)
+        if status.status == CICheckStatus.PASSED:
+            print(f"PR {status.pr_id} passed all checks ({status.passed}/{status.total_checks})")
 
-            # Get PR CI status from external system
-            status = await svc.get_pr_ci_status("pr-456", "proj-123", 300)
-            if status.status == CICheckStatus.PASSED:
-                print(f"PR {status.pr_id} passed all checks ({status.passed}/{status.total_checks})")
-
-            # Run local CI checks
-            result = await svc.run_ci_checks("proj-123", "/workspace", 600)
-            if result.failed == 0:
-                print("All checks passed!")
-            else:
-                for check in result.check_results:
-                    if check.status == CICheckStatus.FAILED:
-                        print(f"  - {check.name}: {check.conclusion}")
-
-            # Stop monitoring
-            await svc.stop_monitoring("proj-123")
+        # Run local CI checks
+        result = await service.run_ci_checks("proj-123", "/workspace", 600)
+        if result.failed == 0:
+            print("All checks passed!")
+        else:
+            for check in result.check_results:
+                if check.status == CICheckStatus.FAILED:
+                    print(f"  - {check.name}: {check.conclusion}")
     """
 
     @abstractmethod

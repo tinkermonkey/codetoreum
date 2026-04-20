@@ -556,7 +556,7 @@ class MockCIPipelineAdapter(ICIPipelineService):
 
         # Create result with new schema
         result = CIRunResult(
-            passed=passed_count,
+            passed=(failed_count == 0),
             failed=failed_count,
             check_results=tuple(check_results),
             failures=tuple(failures),

@@ -482,12 +482,12 @@ class TestCIRunResult:
         ]
 
         result = CIRunResult(
-            passed=1,
+            passed=True,
             failed=0,
             check_results=check_results,
         )
 
-        assert result.passed == 1
+        assert result.passed is True
         assert result.failed == 0
         assert len(result.check_results) == 1
         assert result.failures == ()
@@ -501,7 +501,7 @@ class TestCIRunResult:
         ]
 
         result = CIRunResult(
-            passed=0,
+            passed=False,
             failed=1,
             check_results=check_results,
             failures=("lint: error", "tests: failed"),
@@ -509,7 +509,7 @@ class TestCIRunResult:
             output="Full CI output logs...",
         )
 
-        assert result.passed == 0
+        assert result.passed is False
         assert result.failed == 1
         assert result.failures == ("lint: error", "tests: failed")
         assert result.warnings == ("deprecation: old API", "performance: slow test")
@@ -522,7 +522,7 @@ class TestCIRunResult:
         warnings = ["warning-1"]
 
         result = CIRunResult(
-            passed=1,
+            passed=True,
             failed=0,
             check_results=check_results,  # Pass list, not tuple
             failures=failures,  # Pass list, not tuple
@@ -536,30 +536,30 @@ class TestCIRunResult:
     def test_frozen_prevents_mutation(self) -> None:
         """Test that frozen dataclass prevents mutation."""
         result = CIRunResult(
-            passed=0,
+            passed=True,
             failed=0,
             check_results=(),
         )
 
         with pytest.raises(AttributeError):
-            result.passed = 1  # type: ignore
+            result.passed = False  # type: ignore
 
-    def test_rejects_negative_passed(self) -> None:
-        """Test that negative passed count is rejected."""
+    def test_rejects_non_bool_passed(self) -> None:
+        """Test that non-boolean passed value is rejected."""
         with pytest.raises(ValueError) as exc_info:
             CIRunResult(
-                passed=-1,
+                passed=1,  # type: ignore
                 failed=0,
                 check_results=(),
             )
 
-        assert "passed must be a non-negative integer" in str(exc_info.value)
+        assert "passed must be a boolean" in str(exc_info.value)
 
     def test_rejects_negative_failed(self) -> None:
         """Test that negative failed count is rejected."""
         with pytest.raises(ValueError) as exc_info:
             CIRunResult(
-                passed=0,
+                passed=False,
                 failed=-1,
                 check_results=(),
             )
@@ -570,7 +570,7 @@ class TestCIRunResult:
         """Test that non-sequence check_results are rejected."""
         with pytest.raises(ValueError) as exc_info:
             CIRunResult(
-                passed=0,
+                passed=True,
                 failed=0,
                 check_results="invalid",  # type: ignore
             )
@@ -581,7 +581,7 @@ class TestCIRunResult:
         """Test that non-CICheckResult elements are rejected."""
         with pytest.raises(ValueError) as exc_info:
             CIRunResult(
-                passed=0,
+                passed=True,
                 failed=0,
                 check_results=["not-a-check-result"],  # type: ignore
             )
@@ -592,7 +592,7 @@ class TestCIRunResult:
         """Test that non-sequence failures are rejected."""
         with pytest.raises(ValueError) as exc_info:
             CIRunResult(
-                passed=0,
+                passed=True,
                 failed=0,
                 check_results=(),
                 failures="invalid",  # type: ignore
@@ -604,7 +604,7 @@ class TestCIRunResult:
         """Test that non-string failure elements are rejected."""
         with pytest.raises(ValueError) as exc_info:
             CIRunResult(
-                passed=0,
+                passed=True,
                 failed=0,
                 check_results=(),
                 failures=[123],  # type: ignore
@@ -616,7 +616,7 @@ class TestCIRunResult:
         """Test that non-sequence warnings are rejected."""
         with pytest.raises(ValueError) as exc_info:
             CIRunResult(
-                passed=0,
+                passed=True,
                 failed=0,
                 check_results=(),
                 warnings="invalid",  # type: ignore
@@ -628,7 +628,7 @@ class TestCIRunResult:
         """Test that non-string warning elements are rejected."""
         with pytest.raises(ValueError) as exc_info:
             CIRunResult(
-                passed=0,
+                passed=True,
                 failed=0,
                 check_results=(),
                 warnings=[123],  # type: ignore
@@ -640,7 +640,7 @@ class TestCIRunResult:
         """Test that non-string output is rejected."""
         with pytest.raises(ValueError) as exc_info:
             CIRunResult(
-                passed=0,
+                passed=True,
                 failed=0,
                 check_results=(),
                 output=123,  # type: ignore
@@ -648,24 +648,22 @@ class TestCIRunResult:
 
         assert "output must be a string" in str(exc_info.value)
 
-    def test_cross_field_consistency_passed_count_matches_results(self) -> None:
-        """Test that passed count matches number of passed results."""
+    def test_cross_field_consistency_passed_bool_contradicts_failed(self) -> None:
+        """Test that passed boolean is consistent with failed count."""
         check_results = [
-            CICheckResult(name="check-1", status=CICheckStatus.PASSED),
-            CICheckResult(name="check-2", status=CICheckStatus.PASSED),
-            CICheckResult(name="check-3", status=CICheckStatus.FAILED),
+            CICheckResult(name="check-1", status=CICheckStatus.FAILED),
         ]
 
-        # This should fail: passed=1 but 2 results are passed
+        # This should fail: passed=True but failed=1 (should be 0)
         with pytest.raises(ValueError) as exc_info:
             CIRunResult(
-                passed=1,  # Wrong: should be 2
+                passed=True,  # Contradiction: passed but failed > 0
                 failed=1,
                 check_results=check_results,
             )
 
         error_msg = str(exc_info.value)
-        assert "passed count" in error_msg and "does not match check_results" in error_msg
+        assert "passed is True but failed count is" in error_msg
 
     def test_cross_field_consistency_failed_count_matches_results(self) -> None:
         """Test that failed count matches number of failed results."""
@@ -678,7 +676,7 @@ class TestCIRunResult:
         # This should fail: failed=1 but 2 results are failed
         with pytest.raises(ValueError) as exc_info:
             CIRunResult(
-                passed=1,  # Correct: 1 passed
+                passed=False,  # Correct: failed=1 at least
                 failed=1,  # Wrong: should be 2
                 check_results=check_results,
             )
@@ -686,8 +684,8 @@ class TestCIRunResult:
         error_msg = str(exc_info.value)
         assert "failed count" in error_msg and "does not match check_results" in error_msg
 
-    def test_cross_field_consistency_passes_when_counts_match(self) -> None:
-        """Test that cross-field consistency check passes when counts match."""
+    def test_cross_field_consistency_passes_when_values_match(self) -> None:
+        """Test that cross-field consistency check passes when values match."""
         check_results = [
             CICheckResult(name="check-1", status=CICheckStatus.PASSED),
             CICheckResult(name="check-2", status=CICheckStatus.PASSED),
@@ -695,23 +693,23 @@ class TestCIRunResult:
         ]
 
         result = CIRunResult(
-            passed=2,
+            passed=False,
             failed=1,
             check_results=check_results,
         )
 
-        assert result.passed == 2
+        assert result.passed is False
         assert result.failed == 1
 
     def test_cross_field_consistency_empty_results_allowed(self) -> None:
-        """Test that empty check_results with zero counts is allowed."""
+        """Test that empty check_results with passed=True and failed=0 is allowed."""
         result = CIRunResult(
-            passed=0,
+            passed=True,
             failed=0,
             check_results=(),
         )
 
-        assert result.passed == 0
+        assert result.passed is True
         assert result.failed == 0
         assert len(result.check_results) == 0
 
@@ -723,12 +721,29 @@ class TestCIRunResult:
             CICheckResult(name="check-3", status=CICheckStatus.SKIPPED),
         ]
 
-        # This should succeed: passed=0, failed=0 with 3 non-passed/failed checks
+        # This should succeed: passed=True, failed=0 with 3 non-passed/failed checks
         result = CIRunResult(
-            passed=0,
+            passed=True,
             failed=0,
             check_results=check_results,
         )
 
-        assert result.passed == 0
+        assert result.passed is True
         assert result.failed == 0
+
+    def test_cross_field_consistency_passed_false_requires_failed_gt_zero(self) -> None:
+        """Test that passed=False requires failed > 0."""
+        check_results = [
+            CICheckResult(name="check-1", status=CICheckStatus.PASSED),
+        ]
+
+        # This should fail: passed=False but failed=0 (no checks failed)
+        with pytest.raises(ValueError) as exc_info:
+            CIRunResult(
+                passed=False,  # Contradiction: not passed but failed=0
+                failed=0,
+                check_results=check_results,
+            )
+
+        error_msg = str(exc_info.value)
+        assert "passed is False but failed count is 0" in error_msg

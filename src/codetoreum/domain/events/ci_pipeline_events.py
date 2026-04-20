@@ -79,6 +79,12 @@ class CIPipelineStatusCheckedEvent(CodetoreumEvent):
             msg = "pending_count must be a non-negative integer"
             raise ValueError(msg)
 
+        # Cross-field consistency: validate that sum of counts does not exceed total checks
+        sum_of_counts = self.passed_count + self.failed_count + self.pending_count
+        if sum_of_counts > self.check_count:
+            msg = f"Sum of passed_count ({self.passed_count}) + failed_count ({self.failed_count}) + pending_count ({self.pending_count}) = {sum_of_counts} exceeds check_count ({self.check_count})"
+            raise ValueError(msg)
+
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         d = super().to_dict()
@@ -101,6 +107,8 @@ class CIPipelineStatusCheckedEvent(CodetoreumEvent):
 
         Raises:
             KeyError: If required fields (pr_id, project_id, status) are missing.
+            ValueError: If timestamp/source are empty, or if validation fails
+                       (invalid status, counts consistency, etc.).
         """
         return cls(
             type=data.get("type", "ci.pipeline_status_checked"),
@@ -185,6 +193,8 @@ class CIRunStartedEvent(CodetoreumEvent):
         Raises:
             KeyError: If required fields (project_id, workflow_run_id,
                      working_directory, timeout_seconds) are missing.
+            ValueError: If timestamp/source are empty, or if validation fails
+                       (timeout must be positive, etc.).
         """
         return cls(
             type=data.get("type", "ci.run_started"),
@@ -270,6 +280,8 @@ class CIRunCompletedEvent(CodetoreumEvent):
         Raises:
             KeyError: If required fields (project_id, workflow_run_id, passed_count,
                      failure_count) are missing.
+            ValueError: If timestamp/source are empty, or if validation fails
+                       (counts must be non-negative, etc.).
         """
         return cls(
             type=data.get("type", "ci.run_completed"),
