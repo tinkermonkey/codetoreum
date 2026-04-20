@@ -15,7 +15,6 @@ event sourcing audit trail integrity. Events represent immutable facts
 about review execution and outcomes—they cannot be modified after creation.
 """
 
-import warnings
 from dataclasses import dataclass
 from uuid import uuid4
 

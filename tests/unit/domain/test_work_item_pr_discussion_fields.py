@@ -81,8 +81,7 @@ class TestWorkItemPRAndDiscussionFields:
             pr_id="pr-456",
             discussion_id="disc-789",
         )
-        events = original.get_pending_events()
-        reconstructed = WorkItem.from_events(events + original._apply_event.__self__.get_pending_events())
+        reconstructed = WorkItem.from_events(original.get_pending_events())
 
         # Since from_events reconstructs from the creation event, the fields should be set
         # from the event payload

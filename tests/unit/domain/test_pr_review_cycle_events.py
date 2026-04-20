@@ -528,7 +528,3 @@ class TestPRReviewCycleEscalatedEvent:
         restored = PRReviewCycleEscalatedEvent.from_dict(data)
         assert restored.reason == original.reason
         assert restored.cycle_number == original.cycle_number
-
-
-# Import after class definitions to avoid circular import
-from codetoreum.domain.pr_review_cycle_types import PRReviewOutcome
