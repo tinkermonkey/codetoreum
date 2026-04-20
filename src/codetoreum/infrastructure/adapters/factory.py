@@ -21,6 +21,7 @@ from codetoreum.adapters.secondary import (
     DockerContainerAdapter,
     ElasticsearchConfigStorage,
     GitHubBoardAdapter,
+    GitHubCIPipelineAdapter,
     GitHubCodeReviewAdapter,
     GitHubTicketAdapter,
     GitRepositoryAdapter,
@@ -52,6 +53,7 @@ from codetoreum.adapters.testing import (
     InMemoryWorkItemBranchTracker,
     MockAgentExecutor,
     MockBoardAdapter,
+    MockCIPipelineAdapter,
     MockContainerRecoveryAdapter,
     MockDiscussionAdapter,
     MockEnvironmentRepairAdapter,
@@ -168,6 +170,7 @@ from codetoreum.infrastructure.adapters.registries import (
     AgentExecutorRegistry,
     AgentRepositoryRegistry,
     BoardServiceRegistry,
+    CIPipelineServiceRegistry,
     CodeReviewServiceRegistry,
     ConfigStoreRegistry,
     ContainerRecoveryRegistry,
@@ -214,6 +217,7 @@ from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflow
 from codetoreum.ports.output.agent_executor import IAgentExecutor
 from codetoreum.ports.output.agent_repository import IAgentRepository
 from codetoreum.ports.output.board_service import IBoardService
+from codetoreum.ports.output.ci_pipeline_service import ICIPipelineService
 from codetoreum.ports.output.code_review_service import ICodeReviewService
 from codetoreum.ports.output.config_store import IConfigStore
 from codetoreum.ports.output.container import IContainer
@@ -314,6 +318,7 @@ class AdapterFactory:
         self._active_workflow_run_registry_registry = ActiveWorkflowRunRegistryRegistry()
         self._systemic_analysis_registry = SystemicAnalysisRegistry()
         self._environment_repair_registry = EnvironmentRepairRegistry()
+        self._ci_pipeline_registry = CIPipelineServiceRegistry()
 
         # Dependency injection container
         self._dependencies: dict[str, Any] = {}
@@ -939,6 +944,31 @@ class AdapterFactory:
                 tags=["production", "llm"],
             )
 
+        # CI Pipeline Adapters
+        self._ci_pipeline_registry.register(
+            name="mock",
+            adapter_type=MockCIPipelineAdapter,
+            description="Mock CI pipeline adapter for testing",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
+            set_as_default=True,
+        )
+        self._ci_pipeline_registry.register(
+            name="github",
+            adapter_type=GitHubCIPipelineAdapter,
+            description="GitHub CI pipeline adapter for PR status queries",
+            version="1.0.0",
+            tags=["production", "github"],
+            config_schema=AdapterCredentialRequirement(
+                env_vars=("GITHUB_TOKEN", "GITHUB_ORG"),
+                description="GitHub personal access token with repo scope",
+            ),
+        )
+
     # Registry access methods
 
     @property
@@ -1147,6 +1177,7 @@ class AdapterFactory:
             "repository": self._repository_registry,
             "systemic_analysis": self._systemic_analysis_registry,
             "environment_repair": self._environment_repair_registry,
+            "ci_pipeline": self._ci_pipeline_registry,
         }
 
         if slot_name not in registry_map:
@@ -1396,7 +1427,7 @@ class AdapterFactory:
         """
         Generic helper for creating simple adapters without resilience.
 
-        Eliminates boilerplate code across ~29 create_* methods.
+        Eliminates boilerplate code across 32 create_* methods.
 
         Args:
             registry: The adapter registry to use
@@ -1561,6 +1592,10 @@ class AdapterFactory:
         return self._create_adapter(
             self._environment_repair_registry, adapter_name, "environment repair service", **kwargs
         )
+
+    def create_ci_pipeline_service(self, adapter_name: str | None = None, **kwargs) -> ICIPipelineService:
+        """Create a CI pipeline service adapter instance."""
+        return self._create_adapter(self._ci_pipeline_registry, adapter_name, "CI pipeline service", **kwargs)
 
     def _apply_resilience_wrapper(
         self,

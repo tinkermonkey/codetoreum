@@ -25,6 +25,7 @@ from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
 from codetoreum.ports.output.agent_repository import IAgentRepository
 from codetoreum.ports.output.board_service import IBoardService
+from codetoreum.ports.output.ci_pipeline_service import ICIPipelineService
 from codetoreum.ports.output.code_review_service import ICodeReviewService
 from codetoreum.ports.output.config_store import IConfigStore
 from codetoreum.ports.output.container import IContainer
@@ -139,7 +140,7 @@ class AdapterResolver:
         """
         Pre-flight check: aggregate all missing credential errors.
 
-        Validates all 29 adapter slots before constructing any adapter.
+        Validates all 32 adapter slots before constructing any adapter.
         Checks that:
         - Implementation names are registered in factories
         - All required environment variables exist
@@ -196,7 +197,7 @@ class AdapterResolver:
             raise AdapterConfigurationError(errors)
 
     # =========================================================================
-    # Resolve methods for all 29 adapter slots
+    # Resolve methods for all 32 adapter slots
     # =========================================================================
 
     def resolve_event_store(self) -> IEventStore:
@@ -392,6 +393,13 @@ class AdapterResolver:
         return self._factory.create_container_recovery(
             adapter_name=self._config.container_recovery,
             time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
+        )
+
+    def resolve_ci_pipeline(self) -> ICIPipelineService:
+        """Resolve CI pipeline service adapter."""
+        return self._factory.create_ci_pipeline_service(
+            adapter_name=self._config.ci_pipeline,
+            event_emitter=self._resolved["event_emitter"],
         )
 
     def resolve_systemic_analysis_service(self) -> ISystemicAnalysisService:
@@ -665,7 +673,7 @@ class AdapterResolver:
         are constructed after their dependencies.
 
         Returns:
-            SimulationAdapters instance with all 30 adapters fully typed (includes systemic_analysis_service)
+            SimulationAdapters instance with all 32 adapters fully typed (includes systemic_analysis_service, environment_repair_service, and ci_pipeline)
 
         Raises:
             AdapterConfigurationError: If credentials are missing/invalid
@@ -691,6 +699,7 @@ class AdapterResolver:
         self._resolved["version_control"] = self.resolve_version_control()
         self._resolved["board"] = self.resolve_board()
         self._resolved["queue_service"] = self.resolve_queue_service()
+        self._resolved["ci_pipeline"] = self.resolve_ci_pipeline()
 
         # 4. External system adapters
         self._resolved["ticket"] = self.resolve_ticket()
@@ -767,12 +776,15 @@ class AdapterResolver:
             code_review=self._resolved["code_review"],
             identity_service=self._resolved["identity_service"],
             checkpoint_store=self._resolved["checkpoint_store"],
+            ci_pipeline=self._resolved["ci_pipeline"],
             # Phase 3 adapters
             agent_repository=self._resolved["agent_repository"],
             run_registry=self._resolved["run_registry"],
             branch_tracker=self._resolved["branch_tracker"],
             work_item_service=self._resolved["work_item_service"],
-            branch_resolution_service=self._resolved.get("branch_resolution_service"),  # Created in bootstrap post-processing
+            branch_resolution_service=self._resolved.get(
+                "branch_resolution_service"
+            ),  # Created in bootstrap post-processing
             # Container recovery
             container_recovery=self._resolved["container_recovery"],
             # Systemic analysis service (resolved in phase 9)

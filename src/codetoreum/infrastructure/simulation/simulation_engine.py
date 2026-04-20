@@ -348,17 +348,19 @@ class SimulationEngine:
         repair_cycle: object,
         event_bus: object,
         workflow_config: object | None = None,
+        ci_pipeline_service: object | None = None,
     ) -> "RepairCycleEventHandler":
         """
-        Create repair cycle event handler with injected clock.
+        Create repair cycle event handler with injected clock and CI pipeline service.
 
         Args:
             repair_cycle: MockRepairCycleAdapter instance
             workflow_config: WorkflowConfigService instance for retrieving column templates
             event_bus: EventBus instance
+            ci_pipeline_service: Optional CI pipeline service for executing CI checks
 
         Returns:
-            RepairCycleEventHandler instance with clock already configured
+            RepairCycleEventHandler instance with clock and CI pipeline service configured
         """
         from codetoreum.application.event_handlers import RepairCycleEventHandler
 
@@ -367,6 +369,7 @@ class SimulationEngine:
             workflow_config=workflow_config,
             clock=self._clock,
             event_bus=event_bus,
+            ci_pipeline_service=ci_pipeline_service,
         )
         logger.debug("Created RepairCycleEventHandler via SimulationEngine")
         return handler

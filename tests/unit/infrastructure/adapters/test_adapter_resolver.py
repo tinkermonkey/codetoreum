@@ -282,8 +282,8 @@ class TestAdapterResolver:
 
         # result is a SimulationAdapters dataclass, not a dict
         assert isinstance(result, SimulationAdapters)
-        # The internal _resolved dict should have 31 entries (includes systemic_analysis_service and environment_repair_service)
-        assert len(resolver._resolved) == 31
+        # The internal _resolved dict should have 32 entries (includes systemic_analysis_service, environment_repair_service, and ci_pipeline)
+        assert len(resolver._resolved) == 32
 
     def test_resolve_all_respects_dependency_order(self, factory, dependencies, adapter_config):
         """Test that adapters are resolved in dependency order."""
@@ -411,7 +411,7 @@ class TestAdapterResolver:
         assert "container_adapter" in call_kwargs
 
     def test_all_29_adapter_slots_resolved(self, factory, dependencies, adapter_config):
-        """Test that all 29 adapter slots are successfully resolved."""
+        """Test that all 30 adapter slots are successfully resolved."""
         resolver = AdapterResolver(adapter_config, factory, dependencies)
         result = resolver.resolve_all()
 
@@ -451,9 +451,10 @@ class TestAdapterResolver:
             "work_item_service",
             "repository",
             "container_recovery",
+            "ci_pipeline",
         }
 
-        assert len(expected_fields) == 29
+        assert len(expected_fields) == 30
 
         # Verify all expected fields are present and non-None (except agent_executor which is assigned in Phase 3)
         for field_name in expected_fields:

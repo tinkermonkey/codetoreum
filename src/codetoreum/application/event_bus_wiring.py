@@ -16,6 +16,7 @@ from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.output import IRepairCycle
 from codetoreum.ports.output.branch_resolution_service import IBranchResolutionService
+from codetoreum.ports.output.ci_pipeline_service import ICIPipelineService
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,7 @@ class EventBusRegistry:
         review_service: ReviewService | None = None,
         repair_cycle: IRepairCycle | None = None,
         branch_resolution_service: IBranchResolutionService | None = None,
+        ci_pipeline_service: ICIPipelineService | None = None,
         clock: SimulationClock | None = None,
     ) -> None:
         """
@@ -76,6 +78,7 @@ class EventBusRegistry:
             review_service: Review service
             repair_cycle: Repair cycle adapter (for repair cycle automation)
             branch_resolution_service: Branch resolution service (for branch resolution events)
+            ci_pipeline_service: CI pipeline service (for repair cycle)
             clock: Simulation clock (for repair cycle)
 
         Raises:
@@ -101,6 +104,10 @@ class EventBusRegistry:
             if branch_resolution_service:
                 self._services["branch_resolution_service"] = branch_resolution_service
                 logger.info("Registered branch resolution service")
+
+            if ci_pipeline_service:
+                self._services["ci_pipeline_service"] = ci_pipeline_service
+                logger.info("Registered CI pipeline service")
 
             if clock:
                 self._services["clock"] = clock
@@ -194,7 +201,9 @@ class EventBusRegistry:
             )
             return
 
-        handler = ReviewEventHandler(review_service=self._services["review_service"])
+        handler = ReviewEventHandler(
+            review_service=self._services["review_service"],
+        )
 
         self.event_bus.register_handler(handler)
         self._handlers["review"] = handler
@@ -211,10 +220,12 @@ class EventBusRegistry:
             return
 
         clock = self._services.get("clock")
+        ci_pipeline_service = self._services.get("ci_pipeline_service")
         handler = RepairCycleEventHandler(
             repair_cycle=self._services["repair_cycle"],
             clock=clock,
             event_bus=self.event_bus,
+            ci_pipeline_service=ci_pipeline_service,
         )
 
         self.event_bus.register_handler(handler)
@@ -273,6 +284,7 @@ def setup_event_bus(
     review_service: ReviewService | None = None,
     repair_cycle: IRepairCycle | None = None,
     branch_resolution_service: IBranchResolutionService | None = None,
+    ci_pipeline_service: ICIPipelineService | None = None,
     clock: SimulationClock | None = None,
     max_retries: int = 3,
     retry_delay_seconds: float = 1.0,
@@ -286,6 +298,7 @@ def setup_event_bus(
         review_service: Review service
         repair_cycle: Repair cycle adapter (for repair cycle automation)
         branch_resolution_service: Branch resolution service (for branch resolution events)
+        ci_pipeline_service: CI pipeline service (for repair cycle)
         clock: Simulation clock (for repair cycle)
         max_retries: Maximum retry attempts for failed handlers
         retry_delay_seconds: Delay between retries
@@ -304,6 +317,7 @@ def setup_event_bus(
         review_svc = ReviewService(...)
         repair_cycle = MockRepairCycleAdapter(clock)
         branch_resolution = MockBranchResolutionAdapter(clock)
+        ci_pipeline = MockCIPipelineAdapter(event_emitter)
 
         # Set up event bus
         registry = setup_event_bus(
@@ -312,6 +326,7 @@ def setup_event_bus(
             review_service=review_svc,
             repair_cycle=repair_cycle,
             branch_resolution_service=branch_resolution,
+            ci_pipeline_service=ci_pipeline,
             clock=clock,
         )
 
@@ -331,6 +346,7 @@ def setup_event_bus(
         review_service=review_service,
         repair_cycle=repair_cycle,
         branch_resolution_service=branch_resolution_service,
+        ci_pipeline_service=ci_pipeline_service,
         clock=clock,
     )
 

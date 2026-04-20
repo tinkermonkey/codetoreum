@@ -31,6 +31,9 @@ from codetoreum.adapters.secondary.git_repository_adapter import (
 from codetoreum.adapters.secondary.github_board_adapter import (
     GitHubBoardAdapter,
 )
+from codetoreum.adapters.secondary.github_ci_pipeline_adapter import (
+    GitHubCIPipelineAdapter,
+)
 from codetoreum.adapters.secondary.github_code_review_adapter import (
     GitHubCodeReviewAdapter,
 )
@@ -56,6 +59,8 @@ __all__ = [
     "GitHubBoardAdapter",
     # GitHub Code Review
     "GitHubCodeReviewAdapter",
+    # GitHub CI Pipeline
+    "GitHubCIPipelineAdapter",
     # Claude Code LLM Provider
     "ClaudeCodeAdapter",
     "ClaudeCodeConfig",

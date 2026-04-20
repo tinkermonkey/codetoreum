@@ -100,9 +100,7 @@ class BranchResolutionEventHandler(EventHandler):
             elif isinstance(event, BranchResolutionCreatedEvent):
                 await self._handle_branch_created(event)
             else:
-                logger.warning(
-                    f"BranchResolutionEventHandler received unexpected event type: {event.event_type}"
-                )
+                logger.warning(f"BranchResolutionEventHandler received unexpected event type: {event.event_type}")
         except Exception as e:
             logger.error(
                 f"Error handling branch resolution event: {e}",

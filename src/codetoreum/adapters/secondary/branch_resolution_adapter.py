@@ -170,25 +170,19 @@ class BranchResolutionAdapter(IBranchResolutionService):
                 return resolution
 
             # Strategy 2: Parent issue
-            resolution = await self._strategy_parent_issue(
-                repo_path, issue_id, metadata
-            )
+            resolution = await self._strategy_parent_issue(repo_path, issue_id, metadata)
             if resolution:
                 await self._emit_events(resolution, project_id, issue_id)
                 return resolution
 
             # Strategy 3: Sibling issues
-            resolution = await self._strategy_sibling_issues(
-                repo_path, issue_id, metadata
-            )
+            resolution = await self._strategy_sibling_issues(repo_path, issue_id, metadata)
             if resolution:
                 await self._emit_events(resolution, project_id, issue_id)
                 return resolution
 
             # Strategy 4: Fuzzy matching
-            resolution = await self._strategy_fuzzy_match(
-                repo_path, issue_id, metadata
-            )
+            resolution = await self._strategy_fuzzy_match(repo_path, issue_id, metadata)
             if resolution:
                 await self._emit_events(resolution, project_id, issue_id)
                 return resolution
@@ -224,9 +218,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
             )
             raise ExternalServiceError("branch_resolution", f"Branch resolution failed: {e!s}") from e
 
-    async def _strategy_exact_match(
-        self, repo_path: str, issue_id: str
-    ) -> BranchResolution | None:
+    async def _strategy_exact_match(self, repo_path: str, issue_id: str) -> BranchResolution | None:
         """Strategy 1: Exact match on feature/issue-{issue_id}-* pattern.
 
         Searches for branches matching the pattern feature/issue-{issue_id}-*
@@ -325,9 +317,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
         parent_id = parent_issue.id
 
         # Get siblings
-        sibling_items = await self._ticket_system.get_related_items(
-            parent_id, relationship="parent-of"
-        )
+        sibling_items = await self._ticket_system.get_related_items(parent_id, relationship="parent-of")
 
         # Skip ourselves, look for siblings with branches
         branches = await self._list_branches(repo_path)
@@ -431,9 +421,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
             parent_issue_id=None,
         )
 
-    async def _emit_events(
-        self, resolution: BranchResolution, project_id: str, issue_id: str
-    ) -> None:
+    async def _emit_events(self, resolution: BranchResolution, project_id: str, issue_id: str) -> None:
         """Emit resolution and outcome-specific events.
 
         Emits:
@@ -539,9 +527,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
                 return self._parent_items_cache[issue_id]
 
         # Release lock before I/O call to allow concurrent requests
-        parent_items = await self._ticket_system.get_related_items(
-            issue_id, relationship="child-of"
-        )
+        parent_items = await self._ticket_system.get_related_items(issue_id, relationship="child-of")
 
         # Cache result with lock held to ensure atomic update
         async with self._parent_items_lock:
@@ -687,9 +673,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
         pattern = f"feature/issue-{issue_id}-".lower()
         return branch.lower().startswith(pattern)
 
-    def _generate_branch_name(
-        self, issue_id: str, metadata: dict[str, Any]
-    ) -> str:
+    def _generate_branch_name(self, issue_id: str, metadata: dict[str, Any]) -> str:
         """Generate a new branch name.
 
         Creates feature/issue-{issue_id}-{slugified-title} branch name.

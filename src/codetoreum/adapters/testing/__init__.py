@@ -45,6 +45,7 @@ from codetoreum.adapters.testing.mock_board_adapter import (
 from codetoreum.adapters.testing.mock_branch_resolution_adapter import (
     MockBranchResolutionAdapter,
 )
+from codetoreum.adapters.testing.mock_ci_pipeline_adapter import MockCIPipelineAdapter
 from codetoreum.adapters.testing.mock_container_recovery_adapter import (
     MockContainerRecoveryAdapter,
 )
@@ -94,6 +95,7 @@ __all__ = [
     "MockAgentExecutor",
     "MockBoardAdapter",
     "MockBranchResolutionAdapter",
+    "MockCIPipelineAdapter",
     "MockContainerRecoveryAdapter",
     "MockDiscussionAdapter",
     "MockEnvironmentRepairAdapter",

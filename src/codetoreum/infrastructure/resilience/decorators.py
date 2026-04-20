@@ -95,14 +95,23 @@ class ResilientTicketSystemDecorator(ITicketSystem):
         assignee: UserId | None = None,
         priority: WorkItemPriority | None = None,
         metadata: dict[str, Any] | None = None,
+        parent_issue_id: str | None = None,
     ) -> WorkItem:
         """Create work item with resilience."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.create_work_item(
-                title, description, project_id, labels, assignee, priority, metadata
+                title, description, project_id, labels, assignee, priority, metadata, parent_issue_id
             ),
             operation_name="create_work_item",
             rate_limit_cost=2,  # Writes cost more
+        )
+
+    async def get_child_issues(self, parent_id: WorkItemId) -> list[WorkItem]:
+        """Get child issues with resilience."""
+        return await self._execute_resilient(
+            operation=lambda: self._wrapped.get_child_issues(parent_id),
+            operation_name="get_child_issues",
+            rate_limit_cost=1,
         )
 
     async def update_work_item(self, item_id: WorkItemId, updates: dict[str, Any]) -> WorkItem:

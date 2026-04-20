@@ -119,6 +119,7 @@ class RepairCycleAgentConfigModel(BaseModel):
     - systemic_fix: Applies cross-cutting fixes
     - env_rebuild: Rebuilds test environment
     - env_verification: Verifies rebuilt environment
+    - ci_check: Remediation for CI pipeline check failures (e.g., lint violations)
     """
 
     test_execution: str | None = Field(
@@ -145,6 +146,10 @@ class RepairCycleAgentConfigModel(BaseModel):
         default=None,
         description="Agent for environment verification sub-task",
     )
+    ci_check: str | None = Field(
+        default=None,
+        description="Agent for CI check remediation sub-task",
+    )
 
     def to_domain(self) -> "RepairCycleAgentConfig":
         """Convert this Pydantic model to a domain RepairCycleAgentConfig instance.
@@ -161,6 +166,7 @@ class RepairCycleAgentConfigModel(BaseModel):
             systemic_fix=self.systemic_fix,
             env_rebuild=self.env_rebuild,
             env_verification=self.env_verification,
+            ci_check=self.ci_check,
         )
 
 

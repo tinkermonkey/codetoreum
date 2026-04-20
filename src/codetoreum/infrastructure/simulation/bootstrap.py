@@ -5,13 +5,13 @@ Wires up the entire application stack in simulation mode through 6 phases:
 
 **Phase 0**: Create simulation engine (encapsulates clock and timing)
 **Phase 1**: Create infrastructure (event bus, logger, error registry) - EARLY for event subscriptions
-**Phase 2**: Create adapters (30 adapters all via AdapterResolver)
+**Phase 2**: Create adapters (32 adapters all via AdapterResolver)
            Includes: ticket system, LLM, container, repository, event store, metrics, storage, config,
            notifier, encryption, board, repair cycle, project manager, lock service, workflow config,
            agent executor, version control, message broker, discussion, review cycle, identity service,
            checkpoint store, queue service, event emitter, code review, container recovery, work item
            service, agent repository, active workflow run registry, work item branch tracker, audit store,
-           and systemic analysis service
+           systemic analysis service, environment repair service, and CI pipeline service
 **Phase 3**: Create services (11 application services with their dependencies: workflow orchestrator,
            execution service, agent scheduler, pipeline manager, review service, feedback processor,
            workspace router, configuration service, work item service, multi-project orchestrator,
@@ -136,6 +136,9 @@ from codetoreum.application.conversational_loop_orchestrator import Conversation
 from codetoreum.application.event_handlers.board_event_handler import (
     BoardColumnEventHandler,
 )
+from codetoreum.application.event_handlers.review_event_handler import (
+    ReviewEventHandler,
+)
 from codetoreum.application.execution_service import ExecutionService
 from codetoreum.application.feedback_processor import FeedbackProcessor
 from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
@@ -208,6 +211,7 @@ from codetoreum.ports.output.agent_executor import IAgentExecutor
 from codetoreum.ports.output.agent_repository import IAgentRepository
 from codetoreum.ports.output.board_service import IBoardService
 from codetoreum.ports.output.branch_resolution_service import IBranchResolutionService
+from codetoreum.ports.output.ci_pipeline_service import ICIPipelineService
 from codetoreum.ports.output.code_review_service import ICodeReviewService
 from codetoreum.ports.output.config_store import IConfigStore
 from codetoreum.ports.output.container import IContainer
@@ -344,6 +348,7 @@ class SimulationAdapters:
     code_review: ICodeReviewService
     identity_service: IIdentityService
     checkpoint_store: IRepairCycleCheckpointStore
+    ci_pipeline: ICIPipelineService
 
     # Phase 3 adapters (ExecutionService chain)
     agent_repository: IAgentRepository
@@ -586,6 +591,20 @@ class SimulationAdapters:
             msg = f"work_item_service is {type(self.work_item_service).__name__}, not MockWorkItemService"
             raise TypeError(msg)
         return cast("MockWorkItemService", self.work_item_service)
+
+    def ci_pipeline_as_mock(self) -> "MockCIPipelineAdapter":
+        """Get CI pipeline service as MockCIPipelineAdapter.
+
+        Raises TypeError if ci_pipeline is not MockCIPipelineAdapter.
+        """
+        from codetoreum.adapters.testing.mock_ci_pipeline_adapter import (
+            MockCIPipelineAdapter,
+        )
+
+        if not isinstance(self.ci_pipeline, MockCIPipelineAdapter):
+            msg = f"ci_pipeline is {type(self.ci_pipeline).__name__}, not MockCIPipelineAdapter"
+            raise TypeError(msg)
+        return cast("MockCIPipelineAdapter", self.ci_pipeline)
 
     def branch_resolution_as_mock(self) -> "MockBranchResolutionAdapter":
         """Get branch resolution service as MockBranchResolutionAdapter.
@@ -892,8 +911,8 @@ class SimulationApplicationBootstrap:
             logger.info("Phase 1: Creating infrastructure...")
             self.infrastructure = self._create_infrastructure()
 
-            # Phase 2: Create adapters (30 total: 29 via resolver + systemic_analysis) with event bus subscriptions
-            logger.info("Phase 2: Creating 30 adapters...")
+            # Phase 2: Create adapters (33 total: 32 via resolver + branch_resolution_service) with event bus subscriptions
+            logger.info("Phase 2: Creating 33 adapters...")
             self.adapters = await self._create_adapters()
 
             # Register causal links between adapters and domain events
@@ -1206,7 +1225,7 @@ class SimulationApplicationBootstrap:
 
     async def _create_adapters(self) -> SimulationAdapters:
         """
-        Create all 30 adapters using AdapterResolver in dependency order.
+        Create all 33 adapters using AdapterResolver in dependency order.
 
         Phase 2 bootstrap creates adapters following a partial dependency ordering:
         1. Leaf adapters (no dependencies): event_store, config_store, metrics, encryption, identity_service
@@ -1219,8 +1238,9 @@ class SimulationApplicationBootstrap:
         7. Composite: project_manager
         8. Repository: (depends on event_emitter)
         9. Engine-coupled: review_cycle, repair_cycle (use SimulationEngine for clock injection)
-        10. Additional services: code_review, container_recovery
-        11. Manual post-processing: systemic_analysis_service (30th adapter)
+        10. Additional services: code_review, container_recovery, systemic_analysis_service,
+            environment_repair_service, ci_pipeline_service (32 total via resolver)
+        11. Manual post-processing: branch_resolution_service (33rd adapter, created separately)
 
         AdapterResolver validates credentials before construction and raises aggregated
         configuration errors if any adapter is misconfigured.
@@ -1230,7 +1250,7 @@ class SimulationApplicationBootstrap:
         simulation-specific methods.
 
         Returns:
-            SimulationAdapters with all 30 adapters typed as port interfaces
+            SimulationAdapters with all 33 adapters typed as port interfaces
         """
         if not self._engine:
             message = "SimulationEngine must be created before adapters"
@@ -1302,6 +1322,7 @@ class SimulationApplicationBootstrap:
         if isinstance(resolved.repair_cycle, MockRepairCycleAdapter):
             resolved.repair_cycle.systemic_analysis_service = resolved.systemic_analysis_service
             resolved.repair_cycle.environment_repair_service = resolved.environment_repair_service
+            resolved.repair_cycle.ci_pipeline_service = resolved.ci_pipeline
 
         # Create branch resolution adapter (mock adapter for simulation testing)
         resolved.branch_resolution_service = MockBranchResolutionAdapter(clock=self._engine.get_clock_for_testing())
@@ -1309,7 +1330,7 @@ class SimulationApplicationBootstrap:
         # Create audit store (not provided by resolver)
         audit_store = InMemoryAuditStore()
 
-        logger.info("Created 31 simulation adapters (30 via AdapterResolver + branch_resolution_service)")
+        logger.info("Created 33 simulation adapters (32 via AdapterResolver + branch_resolution_service)")
 
         # Update audit_store in resolved adapters
         resolved.audit_store = audit_store
@@ -1994,6 +2015,10 @@ class SimulationApplicationBootstrap:
         # and invoke the repair cycle when items enter the configured repair cycle stage
         self._register_repair_cycle_handler()
 
+        # Register review event handler with event bus (FR-7.2)
+        # This handler listens for review cycle events and has CI pipeline service wired
+        self._register_review_event_handler()
+
         # Register branch resolution event handler with event bus
         # This handler logs branch resolution events with structured fields for audit trail
         self._register_branch_resolution_handler()
@@ -2028,10 +2053,39 @@ class SimulationApplicationBootstrap:
             repair_cycle=self.adapters.repair_cycle,
             workflow_config=self.adapters.workflow_config,
             event_bus=self.infrastructure.event_bus,
+            ci_pipeline_service=self.adapters.ci_pipeline,
         )
 
         self.infrastructure.event_bus.register_handler(handler)
         logger.info("Registered RepairCycleEventHandler with event bus")
+
+    def _register_review_event_handler(self) -> None:
+        """
+        Register review event handler with the event bus.
+
+        Part of Phase 5: Event handler registration for cross-cutting concerns.
+
+        This handler listens for review cycle events (ReviewCycleCreated, ReviewIterationStarted,
+        ReviewFeedbackSubmitted, ReviewCycleApproved, ReviewCycleRejected, ReviewCycleEscalated)
+        and processes them with optional CI pipeline service integration (FR-7.2).
+
+        The CI pipeline service is injected to allow the handler to execute CI checks
+        as part of the review cycle when configured.
+
+        Logs a warning if components are not yet initialized, allowing graceful degradation
+        if called before full setup completion.
+        """
+        if not self.adapters or not self.services:
+            logger.warning("Cannot register review event handler: components not ready")
+            return
+
+        handler = ReviewEventHandler(
+            review_service=self.services.review_service,
+            ci_pipeline_service=self.adapters.ci_pipeline,
+        )
+
+        self.infrastructure.event_bus.register_handler(handler)
+        logger.info("Registered ReviewEventHandler with event bus and CI pipeline service wired (FR-7.2)")
 
     def _register_branch_resolution_handler(self) -> None:
         """

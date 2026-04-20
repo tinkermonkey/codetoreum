@@ -1,9 +1,9 @@
 """
 Specific adapter registries for each port interface.
 
-Provides registries for managing implementations of all 29 adapter slots
+Provides registries for managing implementations of all 32 adapter slots
 including ticket systems, LLM providers, containers, repositories, event stores,
-board services, code review services, and more.
+board services, code review services, CI pipeline services, and more.
 """
 
 import inspect
@@ -17,6 +17,7 @@ from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflow
 from codetoreum.ports.output.agent_executor import IAgentExecutor
 from codetoreum.ports.output.agent_repository import IAgentRepository
 from codetoreum.ports.output.board_service import IBoardService
+from codetoreum.ports.output.ci_pipeline_service import ICIPipelineService
 from codetoreum.ports.output.code_review_service import ICodeReviewService
 from codetoreum.ports.output.config_store import IConfigStore
 from codetoreum.ports.output.container import IContainer
@@ -726,4 +727,16 @@ class EnvironmentRepairRegistry(AdapterRegistry[IEnvironmentRepairService]):
 
     def _is_valid_adapter(self, adapter_type: type[IEnvironmentRepairService]) -> bool:
         """Validate that an adapter implements IEnvironmentRepairService."""
+        return _validate_adapter_implements_interface(adapter_type, self._port_interface)
+
+
+class CIPipelineServiceRegistry(AdapterRegistry[ICIPipelineService]):
+    """Registry for ICIPipelineService adapter implementations."""
+
+    def __init__(self):
+        """Initialize the CI pipeline service registry."""
+        super().__init__(ICIPipelineService)
+
+    def _is_valid_adapter(self, adapter_type: type[ICIPipelineService]) -> bool:
+        """Validate that an adapter implements ICIPipelineService."""
         return _validate_adapter_implements_interface(adapter_type, self._port_interface)

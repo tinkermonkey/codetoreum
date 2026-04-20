@@ -289,6 +289,32 @@ Container failure recovery. Handles agent execution failures and recovery strate
 - `container.recovered` → ContainerRecoveredEvent
 - `container.recovery.failed` → ContainerRecoveryFailedEvent
 
+### ICIPipelineService
+**Location**: `ports/output/ci_pipeline_service.py`
+
+CI pipeline management with event emission and monitoring. Provides vendor-agnostic abstraction for CI systems (GitHub Actions, GitLab CI, Jenkins, CircleCI, etc.). Enables querying CI status for pull requests and executing local CI checks within containers.
+
+**Key Methods**:
+- `get_pr_ci_status()` - Query CI status for a pull request from external CI system
+  - **Parameters**: `pr_id` (str), `project_id` (str), `timeout_seconds` (int, default 300)
+  - **Returns**: `CIPipelineStatus` with check results and pipeline URL
+- `run_ci_checks()` - Execute CI checks locally in a working directory
+  - **Parameters**: `project_id` (str), `working_directory` (str), `timeout_seconds` (int, default 600)
+  - **Returns**: `CIRunResult` with boolean success flag, check results, and detailed output
+
+**Value Objects**:
+- `CICheckStatus` (Enum) - Status of individual CI check (PENDING, RUNNING, PASSED, FAILED, SKIPPED)
+- `CICheckResult` - Result of single CI check execution (name, status, conclusion, url)
+- `CIPipelineStatus` - Status of CI pipeline for pull request (pr_id, status, check_results tuple, pipeline_url, total_checks, passed, failed, pending)
+- `CIRunResult` - Result of running CI checks locally (passed bool, check_results tuple, warnings tuple, output)
+
+**Events**:
+- `ci.pipeline_status_checked` → CIPipelineStatusCheckedEvent (PR CI status queried)
+- `ci.run_started` → CIRunStartedEvent (Local CI execution starts)
+- `ci.run_completed` → CIRunCompletedEvent (Local CI execution completes)
+
+**Example Implementations**: MockCIPipelineAdapter, GitHubCIPipelineAdapter
+
 ## Port Design Principles
 
 1. **Vendor Agnostic**: Ports hide external system details

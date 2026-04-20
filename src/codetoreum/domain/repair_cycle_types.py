@@ -366,6 +366,7 @@ class RepairCycleAgentConfig:
     - systemic_fix: Applies cross-cutting fixes
     - env_rebuild: Rebuilds test environment
     - env_verification: Verifies rebuilt environment
+    - ci_check: Remediation for CI pipeline check failures (e.g., lint violations)
 
     **Immutability**: Frozen dataclass - all fields read-only after construction.
     Attempting to modify any field raises FrozenInstanceError.
@@ -380,6 +381,7 @@ class RepairCycleAgentConfig:
         systemic_fix: Optional agent name for systemic fix sub-task
         env_rebuild: Optional agent name for environment rebuild sub-task
         env_verification: Optional agent name for environment verification sub-task
+        ci_check: Optional agent name for CI check remediation sub-task
     """
 
     # Known sub-task names (canonical source for validation)
@@ -391,6 +393,7 @@ class RepairCycleAgentConfig:
             "systemic_fix",
             "env_rebuild",
             "env_verification",
+            "ci_check",
         ]
     )
 
@@ -400,6 +403,7 @@ class RepairCycleAgentConfig:
     systemic_fix: str | None = None
     env_rebuild: str | None = None
     env_verification: str | None = None
+    ci_check: str | None = None
 
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""

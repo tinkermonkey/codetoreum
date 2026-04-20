@@ -104,6 +104,7 @@ class NullEventEmitter(IEventEmitter):
         """
         if not self._warned:
             import logging
+
             logger = logging.getLogger(__name__)
             logger.warning(
                 "NullEventEmitter.emit() called - event DI wiring may have failed. "

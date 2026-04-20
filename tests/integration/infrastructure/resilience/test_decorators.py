@@ -63,6 +63,10 @@ class FlakyTicketSystem(ITicketSystem):
             completed_at=None,
         )
 
+    async def get_child_issues(self, parent_id: WorkItemId) -> list[WorkItem]:
+        """Return empty list of child issues for testing."""
+        return []
+
     # Stub implementations for other required methods
     async def create_work_item(
         self,
