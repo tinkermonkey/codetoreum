@@ -8,20 +8,21 @@ Tests cover:
 - Event inheritance from CodetoreumEvent
 """
 
-import pytest
 from datetime import UTC, datetime
 from uuid import uuid4
 
+import pytest
+
 from codetoreum.domain.events.pr_review_cycle_events import (
-    PRReviewCycleStartedEvent,
-    PRReviewCycleCodeReviewStartedEvent,
-    PRReviewCycleVerificationStartedEvent,
-    PRReviewCycleCICheckCompletedEvent,
-    PRReviewCycleConsolidationStartedEvent,
     PRReviewCycleApprovedEvent,
+    PRReviewCycleCICheckCompletedEvent,
+    PRReviewCycleCodeReviewStartedEvent,
+    PRReviewCycleConsolidationStartedEvent,
+    PRReviewCycleEscalatedEvent,
     PRReviewCycleIssuesFoundEvent,
     PRReviewCycleMaxCyclesReachedEvent,
-    PRReviewCycleEscalatedEvent,
+    PRReviewCycleStartedEvent,
+    PRReviewCycleVerificationStartedEvent,
 )
 
 

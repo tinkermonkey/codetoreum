@@ -18,11 +18,6 @@ about review execution and outcomes—they cannot be modified after creation.
 from dataclasses import dataclass
 from uuid import uuid4
 
-from ..pr_review_cycle_types import (
-    PRReviewFinding,
-    PRReviewOutcome,
-    PRReviewPhaseOutput,
-)
 from .adapter_events import CodetoreumEvent
 
 

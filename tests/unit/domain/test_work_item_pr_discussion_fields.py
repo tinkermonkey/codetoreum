@@ -9,6 +9,7 @@ Tests cover:
 """
 
 import pytest
+
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority
 
 

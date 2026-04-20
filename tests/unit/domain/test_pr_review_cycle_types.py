@@ -8,17 +8,18 @@ Tests cover:
 - Consistency checks
 """
 
-import pytest
 from datetime import UTC, datetime
 
+import pytest
+
 from codetoreum.domain.pr_review_cycle_types import (
-    PRReviewOutcome,
-    PRReviewStatus,
-    PRReviewFinding,
-    PRReviewPhaseOutput,
     PRReviewCycleConfig,
     PRReviewCycleResult,
     PRReviewCycleState,
+    PRReviewFinding,
+    PRReviewOutcome,
+    PRReviewPhaseOutput,
+    PRReviewStatus,
 )
 
 

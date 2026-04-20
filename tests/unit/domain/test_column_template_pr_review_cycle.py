@@ -8,6 +8,7 @@ Tests cover:
 """
 
 import pytest
+
 from codetoreum.domain.board_workflow_template import ColumnTemplate, ColumnType
 from codetoreum.domain.pr_review_cycle_types import PRReviewCycleConfig
 from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig, RepairTestType
