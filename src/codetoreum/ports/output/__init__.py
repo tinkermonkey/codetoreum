@@ -95,6 +95,11 @@ from codetoreum.ports.output.pipeline_queue_service import (
     PipelineQueueEntry,
     QueueEntry,  # Backward compatibility alias
 )
+from codetoreum.ports.output.pr_review_cycle_service import (
+    IPRReviewCycle,
+    PRReviewCycleRequest,
+    PRReviewCycleStateData,
+)
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
 from codetoreum.ports.output.repair_cycle_checkpoint_store import (
     IRepairCycleCheckpointStore,
@@ -213,6 +218,10 @@ __all__ = [
     "IPipelineQueueService",
     "PipelineQueueEntry",
     "QueueEntry",  # Backward compatibility alias
+    # PR Review Cycle Service
+    "IPRReviewCycle",
+    "PRReviewCycleRequest",
+    "PRReviewCycleStateData",
     # Repair Cycle Service
     "IRepairCycle",
     "RepairCycleContext",
