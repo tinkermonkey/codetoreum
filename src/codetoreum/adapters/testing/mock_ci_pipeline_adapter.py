@@ -140,20 +140,14 @@ class MockCIPipelineAdapter(ICIPipelineService):
         """
         event_type = getattr(event, "type", event.__class__.__name__)
 
-        # Emit to local listeners
+        # Emit to local listeners - let exceptions propagate for test visibility
         if event_type in self._event_listeners:
             for handler in self._event_listeners[event_type]:
-                try:
-                    handler(event)
-                except Exception as e:
-                    logger.error(f"Error in event handler: {e}", exc_info=True)
+                handler(event)
 
         # Emit to event emitter if provided (for event bus subscription)
         if self._event_emitter:
-            try:
-                self._event_emitter.emit(event)
-            except Exception as e:
-                logger.error(f"Error emitting to event emitter: {e}", exc_info=True)
+            self._event_emitter.emit(event)
 
     # ===== Configuration API =====
 
