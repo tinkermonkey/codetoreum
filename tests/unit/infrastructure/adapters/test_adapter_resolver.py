@@ -288,7 +288,7 @@ class TestAdapterResolver:
 
         # result is a SimulationAdapters dataclass, not a dict
         assert isinstance(result, SimulationAdapters)
-        # The internal _resolved dict should have 33 entries (includes systemic_analysis_service, environment_repair_service, ci_pipeline, and pr_review_cycle)
+        # The internal _resolved dict should have 33 entries (all adapters resolved, includes pr_review_cycle)
         assert len(resolver._resolved) == 33
 
     def test_resolve_all_respects_dependency_order(self, factory, dependencies, adapter_config):

@@ -108,17 +108,18 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
     ) -> None:
         """Initialize the PR review cycle adapter.
 
-        All parameters are required and must be non-None.
-        Dependencies can be injected via public properties after construction.
+        All parameters are optional and can be injected after construction via public properties.
+        The clock is required at construction time to support time-aware behavior.
 
         Args:
-            ticket_system: Required ticket system adapter for creating work items
-            board_service: Required board service adapter for moving items between columns
-            clock: Required SimulationClock for deterministic time advancement
-            event_emitter: Required event emitter for domain event publication
-
-        Raises:
-            TypeError: If any required parameter is None
+            ticket_system: Optional ticket system adapter for creating work items.
+                          Can be injected via public property after construction.
+            board_service: Optional board service adapter for moving items between columns.
+                          Can be injected via public property after construction.
+            clock: Optional SimulationClock for deterministic time advancement.
+                  Can be injected via public property after construction.
+            event_emitter: Optional event emitter for domain event publication.
+                          Can be injected via public property after construction.
 
         Note:
             Dependencies can be set after construction using the public properties:
@@ -127,16 +128,6 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             adapter.clock = clock
             adapter.event_emitter = event_emitter
         """
-        # Validate required parameters
-        if ticket_system is None:
-            raise TypeError("ticket_system is required")
-        if board_service is None:
-            raise TypeError("board_service is required")
-        if clock is None:
-            raise TypeError("clock is required")
-        if event_emitter is None:
-            raise TypeError("event_emitter is required")
-
         super().__init__()
         self._ticket_system = ticket_system
         self._board_service = board_service

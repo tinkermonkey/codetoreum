@@ -82,53 +82,13 @@ def adapter(mock_ticket_system, mock_board_service, simulation_clock, mock_event
 
 
 class TestConstructor:
-    """Test constructor validation."""
-
-    def test_requires_ticket_system(self, mock_board_service, simulation_clock, mock_event_emitter):
-        """Test that missing ticket_system raises TypeError."""
-        with pytest.raises(TypeError, match="ticket_system is required"):
-            MockPRReviewCycleAdapter(
-                ticket_system=None,
-                board_service=mock_board_service,
-                clock=simulation_clock,
-                event_emitter=mock_event_emitter,
-            )
-
-    def test_requires_board_service(self, mock_ticket_system, simulation_clock, mock_event_emitter):
-        """Test that missing board_service raises TypeError."""
-        with pytest.raises(TypeError, match="board_service is required"):
-            MockPRReviewCycleAdapter(
-                ticket_system=mock_ticket_system,
-                board_service=None,
-                clock=simulation_clock,
-                event_emitter=mock_event_emitter,
-            )
-
-    def test_requires_clock(self, mock_ticket_system, mock_board_service, mock_event_emitter):
-        """Test that missing clock raises TypeError."""
-        with pytest.raises(TypeError, match="clock is required"):
-            MockPRReviewCycleAdapter(
-                ticket_system=mock_ticket_system,
-                board_service=mock_board_service,
-                clock=None,
-                event_emitter=mock_event_emitter,
-            )
-
-    def test_requires_event_emitter(self, mock_ticket_system, mock_board_service, simulation_clock):
-        """Test that missing event_emitter raises TypeError."""
-        with pytest.raises(TypeError, match="event_emitter is required"):
-            MockPRReviewCycleAdapter(
-                ticket_system=mock_ticket_system,
-                board_service=mock_board_service,
-                clock=simulation_clock,
-                event_emitter=None,
-            )
+    """Test constructor creation."""
 
     @pytest.mark.asyncio
     async def test_successful_creation_with_all_deps(
         self, mock_ticket_system, mock_board_service, simulation_clock, mock_event_emitter
     ):
-        """Test successful creation with all required dependencies."""
+        """Test successful creation with all dependencies."""
         adapter = MockPRReviewCycleAdapter(
             ticket_system=mock_ticket_system,
             board_service=mock_board_service,
@@ -137,6 +97,45 @@ class TestConstructor:
         )
         assert adapter is not None
         assert adapter.clock is simulation_clock
+
+    @pytest.mark.asyncio
+    async def test_creation_with_minimal_deps(self, simulation_clock):
+        """Test creation with only required clock dependency."""
+        adapter = MockPRReviewCycleAdapter(clock=simulation_clock)
+        assert adapter is not None
+        assert adapter.clock is simulation_clock
+        assert adapter.ticket_system is None
+        assert adapter.board_service is None
+        assert adapter.event_emitter is None
+
+    @pytest.mark.asyncio
+    async def test_creation_with_no_deps(self):
+        """Test creation with no dependencies (all None)."""
+        adapter = MockPRReviewCycleAdapter()
+        assert adapter is not None
+        assert adapter.ticket_system is None
+        assert adapter.board_service is None
+        assert adapter.clock is None
+        assert adapter.event_emitter is None
+
+    @pytest.mark.asyncio
+    async def test_property_injection_after_construction(
+        self, mock_ticket_system, mock_board_service, simulation_clock, mock_event_emitter
+    ):
+        """Test that dependencies can be injected via properties after construction."""
+        adapter = MockPRReviewCycleAdapter()
+
+        # Inject dependencies via properties
+        adapter.ticket_system = mock_ticket_system
+        adapter.board_service = mock_board_service
+        adapter.clock = simulation_clock
+        adapter.event_emitter = mock_event_emitter
+
+        # Verify they were set
+        assert adapter.ticket_system is mock_ticket_system
+        assert adapter.board_service is mock_board_service
+        assert adapter.clock is simulation_clock
+        assert adapter.event_emitter is mock_event_emitter
 
 
 class TestDefaultBehavior:
