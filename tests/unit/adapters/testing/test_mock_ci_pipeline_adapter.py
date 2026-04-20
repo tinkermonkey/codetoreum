@@ -569,3 +569,40 @@ class TestMockCIPipelineAdapterIntegration:
         adapter.assert_pr_ci_checked("pr-2")
         adapter.assert_ci_run_executed("proj-1")
         adapter.assert_ci_run_executed("proj-2")
+
+
+class TestMockCIPipelineAdapterExceptionPropagation:
+    """Test that exceptions from event handlers and emitters propagate."""
+
+    async def test_emit_propagates_handler_exceptions(self) -> None:
+        """Test that exceptions from event handlers propagate instead of being swallowed.
+
+        This test ensures the critical invariant that exceptions in event handlers
+        (like AssertionError from test assertions) are not silently suppressed.
+        If this test fails, it indicates a regression where try/except blocks were
+        re-introduced around event handler invocations.
+        """
+        adapter = MockCIPipelineAdapter()
+
+        def failing_handler(event):
+            raise AssertionError("handler assertion should propagate")
+
+        adapter.on("ci.pipeline_status_checked", failing_handler)
+
+        with pytest.raises(AssertionError, match="handler assertion should propagate"):
+            await adapter.get_pr_ci_status("pr-123", "proj-1")
+
+    async def test_emit_propagates_event_emitter_exceptions(self) -> None:
+        """Test that exceptions from the event emitter propagate.
+
+        This test ensures that exceptions raised by the injected event_emitter's
+        emit() method are not suppressed, maintaining visibility of event bus failures.
+        """
+        class FailingEmitter:
+            def emit(self, event):
+                raise RuntimeError("emitter failure should propagate")
+
+        adapter = MockCIPipelineAdapter(event_emitter=FailingEmitter())
+
+        with pytest.raises(RuntimeError, match="emitter failure should propagate"):
+            await adapter.get_pr_ci_status("pr-123", "proj-1")
