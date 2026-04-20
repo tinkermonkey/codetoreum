@@ -283,7 +283,7 @@ class ICIPipelineService(IEventEmitter, IMonitoredService, ABC):
 
         # Run local CI checks
         result = await service.run_ci_checks("proj-123", "/workspace", 600)
-        if result.failed == 0:
+        if result.passed:
             print("All checks passed!")
         else:
             for check in result.check_results:
