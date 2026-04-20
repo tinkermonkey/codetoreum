@@ -43,6 +43,7 @@ from codetoreum.ports.output.notifier import INotifier
 from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
 from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
+from codetoreum.ports.output.pr_review_cycle_service import IPRReviewCycle
 from codetoreum.ports.output.repair_cycle_checkpoint_store import IRepairCycleCheckpointStore
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle
 from codetoreum.ports.output.repository import IRepository
@@ -345,6 +346,25 @@ class AdapterResolver:
             return self._deps.engine.create_review_cycle_adapter(llm_adapter=llm_adapter)
         # Real adapter: bypass engine, use factory directly
         return self._factory.create_review_cycle_service(adapter_name=self._config.review_cycle)
+
+    def resolve_pr_review_cycle(self) -> IPRReviewCycle:
+        """
+        Resolve PR review cycle adapter.
+
+        Special handling for SimulationEngine-coupled adapters:
+        - If mock variant selected: use engine to create time-aware mock
+        - If real variant: create directly without engine
+
+        Dependencies (ticket_system, board_service) are resolved separately
+        in resolve_all() before PR review cycle creation and injected in
+        bootstrap post-processing to ensure proper initialization order.
+        """
+        if self._config.pr_review_cycle == "mock":
+            # Engine creates time-aware mock with None dependencies initially
+            # Dependencies are injected in bootstrap post-processing
+            return self._deps.engine.create_pr_review_cycle_adapter()
+        # Real adapter: bypass engine, use factory directly
+        return self._factory.create_pr_review_cycle_service(adapter_name=self._config.pr_review_cycle)
 
     def resolve_repair_cycle(self) -> IRepairCycle:
         """
@@ -734,6 +754,7 @@ class AdapterResolver:
         # (review_cycle depends on llm, repair_cycle depends on checkpoint_store, container, and systemic_analysis_service)
         self._resolved["review_cycle"] = self.resolve_review_cycle()
         self._resolved["repair_cycle"] = self.resolve_repair_cycle()
+        self._resolved["pr_review_cycle"] = self.resolve_pr_review_cycle()
 
         # 11. Code review and container recovery adapters
         self._resolved["code_review"] = self.resolve_code_review()
@@ -773,6 +794,7 @@ class AdapterResolver:
             message_broker=self._resolved["message_broker"],
             discussion_adapter=self._resolved["discussion_adapter"],
             review_cycle=self._resolved["review_cycle"],
+            pr_review_cycle=self._resolved["pr_review_cycle"],
             code_review=self._resolved["code_review"],
             identity_service=self._resolved["identity_service"],
             checkpoint_store=self._resolved["checkpoint_store"],

@@ -46,6 +46,7 @@ from codetoreum.ports.output.version_control_service import IVersionControlServi
 from codetoreum.ports.output.work_item_branch_tracker import IWorkItemBranchTracker
 from codetoreum.ports.output.work_item_service import IWorkItemService
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
+from codetoreum.ports.output.pr_review_cycle_service import IPRReviewCycle
 
 
 def _get_interface_methods(interface_class: type) -> set[str]:
@@ -739,4 +740,16 @@ class CIPipelineServiceRegistry(AdapterRegistry[ICIPipelineService]):
 
     def _is_valid_adapter(self, adapter_type: type[ICIPipelineService]) -> bool:
         """Validate that an adapter implements ICIPipelineService."""
+        return _validate_adapter_implements_interface(adapter_type, self._port_interface)
+
+
+class PRReviewCycleServiceRegistry(AdapterRegistry[IPRReviewCycle]):
+    """Registry for IPRReviewCycle adapter implementations."""
+
+    def __init__(self):
+        """Initialize the PR review cycle service registry."""
+        super().__init__(IPRReviewCycle)
+
+    def _is_valid_adapter(self, adapter_type: type[IPRReviewCycle]) -> bool:
+        """Validate that an adapter implements IPRReviewCycle."""
         return _validate_adapter_implements_interface(adapter_type, self._port_interface)

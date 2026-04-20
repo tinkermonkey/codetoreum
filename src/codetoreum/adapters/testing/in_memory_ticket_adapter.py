@@ -86,6 +86,8 @@ class InMemoryTicketAdapter(MockEventEmitter, ITicketSystem):
         priority: WorkItemPriority | None = None,
         metadata: dict[str, Any] | None = None,
         parent_issue_id: str | None = None,
+        pr_id: str | None = None,
+        discussion_id: str | None = None,
     ) -> WorkItem:
         """
         Create a new work item.
@@ -98,6 +100,9 @@ class InMemoryTicketAdapter(MockEventEmitter, ITicketSystem):
             assignee: Optional assignee user ID
             priority: Optional priority level
             metadata: Optional metadata dictionary
+            parent_issue_id: Optional parent issue ID for sub-issues
+            pr_id: Optional PR identifier (e.g., GitHub PR number)
+            discussion_id: Optional discussion thread identifier
 
         Returns:
             The created work item
@@ -125,6 +130,8 @@ class InMemoryTicketAdapter(MockEventEmitter, ITicketSystem):
                 priority=priority or WorkItemPriority.MEDIUM,
                 external_id=f"#{self._next_work_item_number}",
                 external_url=f"http://example.com/issues/{self._next_work_item_number}",
+                pr_id=pr_id,
+                discussion_id=discussion_id,
             )
 
             self._next_work_item_number += 1

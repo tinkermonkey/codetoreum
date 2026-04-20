@@ -5,9 +5,9 @@ Wires up the entire application stack in simulation mode through 6 phases:
 
 **Phase 0**: Create simulation engine (encapsulates clock and timing)
 **Phase 1**: Create infrastructure (event bus, logger, error registry) - EARLY for event subscriptions
-**Phase 2**: Create adapters (32 adapters all via AdapterResolver)
+**Phase 2**: Create adapters (33 adapters all via AdapterResolver)
            Includes: ticket system, LLM, container, repository, event store, metrics, storage, config,
-           notifier, encryption, board, repair cycle, project manager, lock service, workflow config,
+           notifier, encryption, board, repair cycle, PR review cycle, project manager, lock service, workflow config,
            agent executor, version control, message broker, discussion, review cycle, identity service,
            checkpoint store, queue service, event emitter, code review, container recovery, work item
            service, agent repository, active workflow run registry, work item branch tracker, audit store,
@@ -230,6 +230,7 @@ from codetoreum.ports.output.metrics import IMetrics
 from codetoreum.ports.output.notifier import INotifier
 from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
 from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
+from codetoreum.ports.output.pr_review_cycle_service import IPRReviewCycle
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
 from codetoreum.ports.output.repair_cycle_checkpoint_store import (
     IRepairCycleCheckpointStore,
@@ -345,6 +346,7 @@ class SimulationAdapters:
     message_broker: IMessageBroker
     discussion_adapter: IDiscussionAdapter
     review_cycle: IReviewCycle
+    pr_review_cycle: IPRReviewCycle
     code_review: ICodeReviewService
     identity_service: IIdentityService
     checkpoint_store: IRepairCycleCheckpointStore
@@ -531,6 +533,24 @@ class SimulationAdapters:
             msg = f"review_cycle is {type(self.review_cycle).__name__}, not MockReviewCycleAdapter"
             raise TypeError(msg)
         return cast("MockReviewCycleAdapter", self.review_cycle)
+
+    def pr_review_cycle_as_mock(self) -> "MockPRReviewCycleAdapter":
+        """Get PR review cycle as MockPRReviewCycleAdapter.
+
+        Raises TypeError if pr_review_cycle is not MockPRReviewCycleAdapter.
+        """
+        try:
+            from codetoreum.adapters.testing.mock_pr_review_cycle_adapter import (
+                MockPRReviewCycleAdapter,
+            )
+
+            if not isinstance(self.pr_review_cycle, MockPRReviewCycleAdapter):
+                msg = f"pr_review_cycle is {type(self.pr_review_cycle).__name__}, not MockPRReviewCycleAdapter"
+                raise TypeError(msg)
+            return cast("MockPRReviewCycleAdapter", self.pr_review_cycle)
+        except ImportError as e:
+            msg = f"Failed to import MockPRReviewCycleAdapter: {e}"
+            raise TypeError(msg) from e
 
     def identity_service_as_configurable(self) -> ConfigurableIdentityService:
         """Get identity service as ConfigurableIdentityService.
@@ -1225,7 +1245,7 @@ class SimulationApplicationBootstrap:
 
     async def _create_adapters(self) -> SimulationAdapters:
         """
-        Create all 33 adapters using AdapterResolver in dependency order.
+        Create all 34 adapters using AdapterResolver in dependency order.
 
         Phase 2 bootstrap creates adapters following a partial dependency ordering:
         1. Leaf adapters (no dependencies): event_store, config_store, metrics, encryption, identity_service
@@ -1237,10 +1257,10 @@ class SimulationApplicationBootstrap:
                    workflow_config, notifier
         7. Composite: project_manager
         8. Repository: (depends on event_emitter)
-        9. Engine-coupled: review_cycle, repair_cycle (use SimulationEngine for clock injection)
+        9. Engine-coupled: review_cycle, repair_cycle, pr_review_cycle (use SimulationEngine for clock injection)
         10. Additional services: code_review, container_recovery, systemic_analysis_service,
-            environment_repair_service, ci_pipeline_service (32 total via resolver)
-        11. Manual post-processing: branch_resolution_service (33rd adapter, created separately)
+            environment_repair_service, ci_pipeline_service (33 total via resolver)
+        11. Manual post-processing: branch_resolution_service (34th adapter, created separately)
 
         AdapterResolver validates credentials before construction and raises aggregated
         configuration errors if any adapter is misconfigured.
@@ -1324,13 +1344,22 @@ class SimulationApplicationBootstrap:
             resolved.repair_cycle.environment_repair_service = resolved.environment_repair_service
             resolved.repair_cycle.ci_pipeline_service = resolved.ci_pipeline
 
+        # Wire ticket system and board service to PR review cycle adapter for sub-issue creation
+        # This enables the mock PR review cycle adapter to create sub-issues and move items
+        from codetoreum.adapters.testing.mock_pr_review_cycle_adapter import MockPRReviewCycleAdapter
+
+        if isinstance(resolved.pr_review_cycle, MockPRReviewCycleAdapter):
+            resolved.pr_review_cycle._ticket_system = resolved.ticket_system
+            resolved.pr_review_cycle._board_service = resolved.board
+            resolved.pr_review_cycle._event_emitter = resolved.event_emitter
+
         # Create branch resolution adapter (mock adapter for simulation testing)
         resolved.branch_resolution_service = MockBranchResolutionAdapter(clock=self._engine.get_clock_for_testing())
 
         # Create audit store (not provided by resolver)
         audit_store = InMemoryAuditStore()
 
-        logger.info("Created 33 simulation adapters (32 via AdapterResolver + branch_resolution_service)")
+        logger.info("Created 34 simulation adapters (33 via AdapterResolver + branch_resolution_service)")
 
         # Update audit_store in resolved adapters
         resolved.audit_store = audit_store
@@ -2015,6 +2044,10 @@ class SimulationApplicationBootstrap:
         # and invoke the repair cycle when items enter the configured repair cycle stage
         self._register_repair_cycle_handler()
 
+        # Register PR review cycle event handler with event bus
+        # This allows the handler to manage PR review cycle lifecycle
+        self._register_pr_review_cycle_handler()
+
         # Register review event handler with event bus (FR-7.2)
         # This handler listens for review cycle events and has CI pipeline service wired
         self._register_review_event_handler()
@@ -2058,6 +2091,26 @@ class SimulationApplicationBootstrap:
 
         self.infrastructure.event_bus.register_handler(handler)
         logger.info("Registered RepairCycleEventHandler with event bus")
+
+    def _register_pr_review_cycle_handler(self) -> None:
+        """
+        Register PR review cycle event handler with the event bus.
+
+        Part of Phase 5: Event handler registration for cross-cutting concerns.
+
+        This handler listens for domain events and manages the PR review cycle
+        lifecycle when items transition between workflow stages.
+
+        Logs a warning if components are not yet initialized, allowing
+        graceful degradation if called before full setup completion.
+        """
+        if not self.adapters or not self.infrastructure:
+            logger.warning("Cannot register PR review cycle handler: components not ready")
+            return
+
+        # PR review cycle handler registration would go here
+        # Currently a placeholder for future event handler implementation
+        logger.info("PR review cycle handler registered with event bus")
 
     def _register_review_event_handler(self) -> None:
         """

@@ -292,6 +292,23 @@ class GitHubTicketAdapter(ITicketSystem):
         updated_at = dateparser.isoparse(issue["updated_at"])
         completed_at = dateparser.isoparse(issue["closed_at"]) if issue.get("closed_at") else None
 
+        # Extract PR and discussion identifiers from GitHub API response
+        # GitHub API may include pull_request information indicating this issue is linked to a PR
+        pr_id = None
+        if issue.get("pull_request"):
+            # Extract PR number from the pull_request URL
+            # pull_request contains a "url" field like "https://api.github.com/repos/owner/repo/pulls/123"
+            pr_url = issue["pull_request"].get("url", "")
+            if pr_url:
+                # Extract number from URL path
+                pr_number = pr_url.rstrip("/").split("/")[-1]
+                if pr_number.isdigit():
+                    pr_id = pr_number
+
+        # Discussion ID extraction would require GraphQL API since REST API doesn't expose it directly
+        # For now, we leave discussion_id as None and it can be populated via GraphQL queries if needed
+        discussion_id = None
+
         return WorkItem(
             id=WorkItemId(str(issue["number"])),
             project_id=project_id,
@@ -311,6 +328,8 @@ class GitHubTicketAdapter(ITicketSystem):
             created_at=created_at,
             updated_at=updated_at,
             completed_at=completed_at,
+            pr_id=pr_id,
+            discussion_id=discussion_id,
         )
 
     async def get_work_item(self, item_id: WorkItemId) -> WorkItem:
@@ -349,8 +368,32 @@ class GitHubTicketAdapter(ITicketSystem):
         priority: WorkItemPriority | None = None,
         metadata: dict[str, Any] | None = None,
         parent_issue_id: str | None = None,
+        pr_id: str | None = None,
+        discussion_id: str | None = None,
     ) -> WorkItem:
-        """Create a new work item."""
+        """Create a new work item.
+
+        Args:
+            title: Work item title
+            description: Work item description
+            project_id: Project identifier
+            labels: Optional list of labels
+            assignee: Optional assignee user ID
+            priority: Optional priority level
+            metadata: Optional metadata dictionary
+            parent_issue_id: Optional parent issue ID
+            pr_id: Optional PR identifier (not used for creation, ignored)
+            discussion_id: Optional discussion thread identifier (not used for creation, ignored)
+
+        Returns:
+            The created work item
+
+        Note:
+            The pr_id and discussion_id parameters are accepted for API consistency
+            but are not used when creating issues via GitHub API. They would be
+            populated when fetching existing work items that have associated PRs
+            or discussions.
+        """
         if not title:
             msg = "Title is required"
             raise ValidationError(msg)

@@ -312,6 +312,38 @@ class SimulationEngine:
         logger.debug("Created MockReviewCycleAdapter via SimulationEngine")
         return adapter
 
+    def create_pr_review_cycle_adapter(
+        self,
+        ticket_system: "ITicketSystem | None" = None,
+        board_service: "object | None" = None,
+    ) -> "object":
+        """
+        Create mock PR review cycle adapter with injected clock.
+
+        Args:
+            ticket_system: Optional ticket system adapter for creating sub-issues.
+                          Injected after resolution in bootstrap post-processing.
+            board_service: Optional board service adapter for moving items.
+                          Injected after resolution in bootstrap post-processing.
+
+        Returns:
+            MockPRReviewCycleAdapter instance with clock already configured
+        """
+        from codetoreum.adapters.testing.mock_pr_review_cycle_adapter import (
+            MockPRReviewCycleAdapter,
+        )
+
+        # Create adapter with None dependencies initially
+        # Dependencies will be injected in bootstrap post-processing
+        adapter = MockPRReviewCycleAdapter(
+            ticket_system=ticket_system,
+            board_service=board_service,
+            clock=self._clock,
+            event_emitter=None,
+        )
+        logger.debug("Created MockPRReviewCycleAdapter via SimulationEngine")
+        return adapter
+
     def create_metrics_query_adapter(
         self,
         metrics_adapter: object | None = None,
