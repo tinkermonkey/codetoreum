@@ -299,7 +299,7 @@ class RepairCycleEventHandler(EventHandler):
                     )
 
                     # FR-5.3: Convert CIRunResult to RepairTestResult for downstream aggregation
-                    ci_test_result = convert_ci_run_result_to_repair_test_result(ci_run_result)
+                    ci_test_result = convert_ci_run_result_to_repair_test_result(ci_run_result, clock=self._clock)
 
                     # Create a CycleResult for the CI test type
                     # Always preserve final_result with failure details for systemic analysis

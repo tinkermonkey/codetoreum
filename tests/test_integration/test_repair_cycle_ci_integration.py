@@ -166,6 +166,43 @@ class TestCIRunResultConversion:
 
         assert repair_result.iteration == 5
 
+    def test_convert_uses_simulation_clock_when_provided(self):
+        """Test that conversion uses simulation clock time instead of wall clock when provided."""
+        from datetime import datetime, timedelta, UTC
+
+        # Setup
+        check_results = (
+            CICheckResult(
+                name="unit-tests",
+                status=CICheckStatus.PASSED,
+                conclusion="success",
+                url="https://ci.example.com/check/0",
+            ),
+        )
+        ci_result = CIRunResult(
+            passed=True,
+            failed=0,
+            check_results=check_results,
+            output="All checks passed",
+        )
+
+        # Create a simulation clock at a specific time
+        clock = SimulationClock(speed_multiplier=1.0)
+        test_time = datetime(2025, 3, 15, 10, 30, 45, tzinfo=UTC)
+        clock.start_at(test_time)
+
+        # Convert with the clock
+        repair_result = convert_ci_run_result_to_repair_test_result(ci_result, clock=clock)
+
+        # Verify timestamp uses simulation clock time, not wall clock
+        assert repair_result.timestamp == test_time.isoformat()
+        # The timestamp should be exactly what we set, not current wall clock time
+        wall_clock_now = datetime.now(UTC)
+        # Timestamps should match our simulation time, not wall clock
+        parsed_timestamp = datetime.fromisoformat(repair_result.timestamp.replace("Z", "+00:00"))
+        # Should be exactly our test time (with microsecond precision)
+        assert parsed_timestamp == test_time
+
 
 # ====================================================================================
 # Integration Tests: MockRepairCycleAdapter CI Delegation

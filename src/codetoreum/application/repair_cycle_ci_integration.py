@@ -6,14 +6,19 @@ ICIPipelineService rather than the agent executor path.
 """
 
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from codetoreum.domain.repair_cycle_types import RepairTestFailure, RepairTestResult, RepairTestType, RepairTestWarning
 from codetoreum.ports.output.ci_pipeline_service import CICheckStatus, CIRunResult
+
+if TYPE_CHECKING:
+    from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 
 
 def convert_ci_run_result_to_repair_test_result(
     ci_result: CIRunResult,
     iteration: int = 1,
+    clock: "SimulationClock | None" = None,
 ) -> RepairTestResult:
     """Convert CIRunResult to RepairTestResult for repair cycle aggregation.
 
@@ -23,6 +28,8 @@ def convert_ci_run_result_to_repair_test_result(
     Args:
         ci_result: CIRunResult from ICIPipelineService.run_ci_checks()
         iteration: Iteration number (defaults to 1 for single CI check)
+        clock: Optional SimulationClock for deterministic time in tests.
+               If provided, uses simulation clock time; otherwise uses wall clock time.
 
     Returns:
         RepairTestResult with CI results converted to repair cycle format
@@ -59,6 +66,12 @@ def convert_ci_run_result_to_repair_test_result(
         for warning in ci_result.warnings
     )
 
+    # Get current timestamp from simulation clock if available, otherwise use wall clock
+    if clock:
+        timestamp = clock.now().isoformat()
+    else:
+        timestamp = datetime.now(UTC).isoformat()
+
     return RepairTestResult(
         test_type=RepairTestType.CI,
         iteration=iteration,
@@ -68,5 +81,5 @@ def convert_ci_run_result_to_repair_test_result(
         failures=failures,
         warning_list=warnings,
         raw_output=ci_result.output,
-        timestamp=datetime.now(UTC).isoformat(),
+        timestamp=timestamp,
     )

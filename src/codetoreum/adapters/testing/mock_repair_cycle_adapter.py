@@ -894,7 +894,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 timeout_seconds=config.timeout,
             )
 
-            result = convert_ci_run_result_to_repair_test_result(ci_run_result, iteration=iteration)
+            result = convert_ci_run_result_to_repair_test_result(ci_run_result, iteration=iteration, clock=self._clock)
 
             logger.debug(
                 "CI test execution completed",
