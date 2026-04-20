@@ -168,7 +168,7 @@ class TestCIRunResultConversion:
 
     def test_convert_uses_simulation_clock_when_provided(self):
         """Test that conversion uses simulation clock time instead of wall clock when provided."""
-        from datetime import datetime, timedelta, UTC
+        from datetime import datetime, UTC
 
         # Setup
         check_results = (
@@ -196,12 +196,6 @@ class TestCIRunResultConversion:
 
         # Verify timestamp uses simulation clock time, not wall clock
         assert repair_result.timestamp == test_time.isoformat()
-        # The timestamp should be exactly what we set, not current wall clock time
-        wall_clock_now = datetime.now(UTC)
-        # Timestamps should match our simulation time, not wall clock
-        parsed_timestamp = datetime.fromisoformat(repair_result.timestamp.replace("Z", "+00:00"))
-        # Should be exactly our test time (with microsecond precision)
-        assert parsed_timestamp == test_time
 
 
 # ====================================================================================
