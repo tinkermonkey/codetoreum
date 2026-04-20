@@ -267,7 +267,13 @@ class TestAdapterResolver:
         import dataclasses
 
         # Optional fields are injected by bootstrap post-processing
-        optional_fields = {"agent_executor", "audit_store", "tracer", "systemic_analysis_service", "branch_resolution_service"}
+        optional_fields = {
+            "agent_executor",
+            "audit_store",
+            "tracer",
+            "systemic_analysis_service",
+            "branch_resolution_service",
+        }
         for field in dataclasses.fields(result):
             adapter = getattr(result, field.name)
             if field.name not in optional_fields:
@@ -896,9 +902,7 @@ class TestAdapterResolver:
         # Should implement IEnvironmentRepairService interface
         assert isinstance(service, IEnvironmentRepairService)
 
-    def test_resolve_environment_repair_service_production_raises_without_agent_repository(
-        self, factory, dependencies
-    ):
+    def test_resolve_environment_repair_service_production_raises_without_agent_repository(self, factory, dependencies):
         """Test that production environment_repair adapter raises error without agent_repository."""
         # Configure to use production environment repair adapter
         config = AdapterSelectionConfig(environment_repair="production")
@@ -912,9 +916,7 @@ class TestAdapterResolver:
         assert "environment_repair" in error_msg.lower()
         assert "agent_repository" in error_msg.lower()
 
-    def test_resolve_environment_repair_service_production_with_agent_repository(
-        self, factory, dependencies
-    ):
+    def test_resolve_environment_repair_service_production_with_agent_repository(self, factory, dependencies):
         """Test that production environment_repair adapter resolves with agent_repository."""
         # Configure to use production environment repair adapter
         config = AdapterSelectionConfig(environment_repair="production")
@@ -932,9 +934,7 @@ class TestAdapterResolver:
         # Should implement IEnvironmentRepairService interface
         assert isinstance(service, IEnvironmentRepairService)
 
-    def test_resolve_environment_repair_service_production_uses_agent_llm_factory(
-        self, factory, dependencies
-    ):
+    def test_resolve_environment_repair_service_production_uses_agent_llm_factory(self, factory, dependencies):
         """Test that production adapter receives correct LLM factory signature.
 
         Verifies that the factory passed to production adapter:
@@ -997,7 +997,13 @@ class TestAdapterResolverIntegration:
         import dataclasses
 
         # Optional fields are injected by bootstrap post-processing
-        optional_fields = {"agent_executor", "audit_store", "tracer", "systemic_analysis_service", "branch_resolution_service"}
+        optional_fields = {
+            "agent_executor",
+            "audit_store",
+            "tracer",
+            "systemic_analysis_service",
+            "branch_resolution_service",
+        }
         for field in dataclasses.fields(result):
             adapter = getattr(result, field.name)
             if field.name not in optional_fields:

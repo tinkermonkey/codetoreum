@@ -536,11 +536,7 @@ class TestGetPRCIStatus:
 
     async def test_resource_not_found_error(self, adapter, mock_graphql_client):
         """Test ResourceNotFoundError when PR doesn't exist."""
-        mock_graphql_client.responses["GetPullRequestCheckRuns"] = {
-            "repository": {
-                "pullRequest": None
-            }
-        }
+        mock_graphql_client.responses["GetPullRequestCheckRuns"] = {"repository": {"pullRequest": None}}
 
         with pytest.raises(ResourceNotFoundError) as exc_info:
             await adapter.get_pr_ci_status("999", "proj-1")
@@ -550,6 +546,7 @@ class TestGetPRCIStatus:
 
     async def test_external_service_error_on_graphql_failure(self, adapter, mock_graphql_client):
         """Test ExternalServiceError on GraphQL API failure."""
+
         async def failing_execute(*args, **kwargs):
             raise RuntimeError("GraphQL API unavailable")
 
@@ -784,9 +781,7 @@ class TestGetPRCIStatus:
             "repository": {
                 "pullRequest": {
                     "number": 123,
-                    "commits": {
-                        "nodes": []  # No commits yet
-                    },
+                    "commits": {"nodes": []},  # No commits yet
                 }
             }
         }
@@ -796,9 +791,7 @@ class TestGetPRCIStatus:
         assert status.total_checks == 0
         assert status.status == CICheckStatus.PENDING
 
-    async def test_event_construction_failure_does_not_discard_status(
-        self, adapter, mock_graphql_client, caplog
-    ):
+    async def test_event_construction_failure_does_not_discard_status(self, adapter, mock_graphql_client, caplog):
         """Test that event construction failure doesn't prevent returning CI status.
 
         This is the core requirement: even if event construction fails, the CI status

@@ -876,9 +876,7 @@ class TestAdapterFactoryWithNewRegistries:
             return llm_adapter
 
         # Mock repair cycle should succeed with factory provided
-        repair_cycle = factory.create_repair_cycle(
-            adapter_name="mock", llm_factory=llm_factory
-        )
+        repair_cycle = factory.create_repair_cycle(adapter_name="mock", llm_factory=llm_factory)
         assert repair_cycle is not None
 
         # Review cycle

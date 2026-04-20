@@ -37,18 +37,18 @@ async def test_repair_cycle_agents_from_yaml_to_context(
 
     # Verify the agents match what was in the YAML
     agent_config = testing_column.repair_cycle_agents
-    assert agent_config.test_execution == "qa_engineer", (
-        f"Expected test_execution='qa_engineer', got '{agent_config.test_execution}'"
-    )
-    assert agent_config.code_fix == "senior_software_engineer", (
-        f"Expected code_fix='senior_software_engineer', got '{agent_config.code_fix}'"
-    )
-    assert agent_config.env_rebuild == "devops_engineer", (
-        f"Expected env_rebuild='devops_engineer', got '{agent_config.env_rebuild}'"
-    )
-    assert agent_config.env_verification == "qa_engineer", (
-        f"Expected env_verification='qa_engineer', got '{agent_config.env_verification}'"
-    )
+    assert (
+        agent_config.test_execution == "qa_engineer"
+    ), f"Expected test_execution='qa_engineer', got '{agent_config.test_execution}'"
+    assert (
+        agent_config.code_fix == "senior_software_engineer"
+    ), f"Expected code_fix='senior_software_engineer', got '{agent_config.code_fix}'"
+    assert (
+        agent_config.env_rebuild == "devops_engineer"
+    ), f"Expected env_rebuild='devops_engineer', got '{agent_config.env_rebuild}'"
+    assert (
+        agent_config.env_verification == "qa_engineer"
+    ), f"Expected env_verification='qa_engineer', got '{agent_config.env_verification}'"
     # These were not specified in the YAML
     assert agent_config.systemic_analysis is None
     assert agent_config.systemic_fix is None
@@ -100,18 +100,18 @@ async def test_repair_cycle_handler_extracts_agents_from_column_template(
     assert captured_contexts, "Expected repair cycle to be invoked"
     context = captured_contexts[0]
     assert context.agent_config is not None, "Expected agent_config in RepairCycleContext"
-    assert context.agent_config.test_execution == "qa_engineer", (
-        f"Expected test_execution='qa_engineer', got '{context.agent_config.test_execution}'"
-    )
-    assert context.agent_config.code_fix == "senior_software_engineer", (
-        f"Expected code_fix='senior_software_engineer', got '{context.agent_config.code_fix}'"
-    )
-    assert context.agent_config.env_rebuild == "devops_engineer", (
-        f"Expected env_rebuild='devops_engineer', got '{context.agent_config.env_rebuild}'"
-    )
-    assert context.agent_config.env_verification == "qa_engineer", (
-        f"Expected env_verification='qa_engineer', got '{context.agent_config.env_verification}'"
-    )
+    assert (
+        context.agent_config.test_execution == "qa_engineer"
+    ), f"Expected test_execution='qa_engineer', got '{context.agent_config.test_execution}'"
+    assert (
+        context.agent_config.code_fix == "senior_software_engineer"
+    ), f"Expected code_fix='senior_software_engineer', got '{context.agent_config.code_fix}'"
+    assert (
+        context.agent_config.env_rebuild == "devops_engineer"
+    ), f"Expected env_rebuild='devops_engineer', got '{context.agent_config.env_rebuild}'"
+    assert (
+        context.agent_config.env_verification == "qa_engineer"
+    ), f"Expected env_verification='qa_engineer', got '{context.agent_config.env_verification}'"
 
 
 @pytest.mark.asyncio
@@ -133,6 +133,5 @@ async def test_repair_cycle_agents_backward_compatible_without_config(
     # All columns should have repair_cycle_agents=None
     for column in template.columns:
         assert column.repair_cycle_agents is None, (
-            f"Column '{column.name}' should have repair_cycle_agents=None, "
-            f"got {column.repair_cycle_agents}"
+            f"Column '{column.name}' should have repair_cycle_agents=None, " f"got {column.repair_cycle_agents}"
         )

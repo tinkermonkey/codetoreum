@@ -24,6 +24,7 @@ class TestIEnvironmentRepairServiceInterface:
     def test_interface_is_abstract_base_class(self):
         """Test that IEnvironmentRepairService is an ABC."""
         from abc import ABC
+
         assert issubclass(IEnvironmentRepairService, ABC)
 
     def test_rebuild_environment_is_abstract_method(self):
@@ -38,6 +39,7 @@ class TestIEnvironmentRepairServiceInterface:
 
     def test_concrete_implementation_requires_both_methods(self):
         """Test that concrete implementations must implement both methods."""
+
         # Try to create a partial implementation
         class PartialImplementation(IEnvironmentRepairService):
             async def rebuild_environment(self, project, config, context):
@@ -53,6 +55,7 @@ class TestIEnvironmentRepairServiceInterface:
         class ConcreteImplementation(IEnvironmentRepairService):
             async def rebuild_environment(self, project, config, context):
                 from codetoreum.domain.repair_cycle_types import RebuildResult
+
                 return RebuildResult(
                     success=True,
                     duration_seconds=30.0,
@@ -62,6 +65,7 @@ class TestIEnvironmentRepairServiceInterface:
 
             async def verify_environment(self, project, config, context):
                 from codetoreum.domain.repair_cycle_types import VerificationResult
+
                 return VerificationResult(
                     healthy=True,
                     checks_passed=(),

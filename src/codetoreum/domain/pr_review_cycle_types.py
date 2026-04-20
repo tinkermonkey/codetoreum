@@ -221,7 +221,9 @@ class PRReviewCycleConfig:
 
         # Only validate ci_check_timeout_seconds > 0 if ci_check is enabled
         if self.ci_check_enabled and self.ci_check_timeout_seconds <= 0:
-            msg = f"ci_check_timeout_seconds must be > 0 when ci_check_enabled=True, got {self.ci_check_timeout_seconds}"
+            msg = (
+                f"ci_check_timeout_seconds must be > 0 when ci_check_enabled=True, got {self.ci_check_timeout_seconds}"
+            )
             raise ValueError(msg)
 
         if self.code_review_timeout_seconds <= 0:

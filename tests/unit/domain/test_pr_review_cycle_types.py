@@ -182,11 +182,7 @@ class TestPRReviewPhaseOutput:
 
     def test_create_successful_phase(self):
         """Test creating output for successful phase."""
-        findings = (
-            PRReviewFinding(
-                type="bug", severity="high", file="app.py", line_number=10, message="Issue"
-            ),
-        )
+        findings = (PRReviewFinding(type="bug", severity="high", file="app.py", line_number=10, message="Issue"),)
         output = PRReviewPhaseOutput(
             phase_name="code_review",
             success=True,
@@ -385,9 +381,7 @@ class TestPRReviewCycleResult:
 
     def test_create_issues_found_result(self):
         """Test creating a result with issues found."""
-        finding = PRReviewFinding(
-            type="bug", severity="high", file="app.py", line_number=10, message="Issue"
-        )
+        finding = PRReviewFinding(type="bug", severity="high", file="app.py", line_number=10, message="Issue")
         phase_output = PRReviewPhaseOutput(
             phase_name="code_review",
             success=True,
@@ -561,9 +555,7 @@ class TestPRReviewCycleState:
             updated_at=now,
         )
         # Should be able to append
-        new_finding = PRReviewFinding(
-            type="bug", severity="high", file="app.py", line_number=10, message="Issue"
-        )
+        new_finding = PRReviewFinding(type="bug", severity="high", file="app.py", line_number=10, message="Issue")
         state.findings.append(new_finding)
         assert len(state.findings) == 1
 

@@ -195,6 +195,7 @@ class MockRepairCycle:
     ):
         """Apply a coordinated holistic fix addressing the root cause across all affected files."""
         from codetoreum.domain.repair_cycle_types import SystemicFixResult
+
         return SystemicFixResult(
             success=True,
             files_modified=(),

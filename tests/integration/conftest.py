@@ -20,20 +20,22 @@ async def seeded_simulation_bootstrap(simulation_bootstrap, simulation_seeder):
     """
     # Seed default project and agents required for repair cycles
     await simulation_seeder.create_project("repair-cycle-test")
-    await simulation_seeder.create_agents([
-        {
-            "name": "senior_software_engineer",
-            "description": "Senior Software Engineer",
-            "capabilities": ["code_generation", "testing", "debugging"],
-            "agent_type": "maker",
-        },
-        {
-            "name": "code_reviewer",
-            "description": "Code Reviewer",
-            "capabilities": ["review", "analysis"],
-            "agent_type": "reviewer",
-        },
-    ])
+    await simulation_seeder.create_agents(
+        [
+            {
+                "name": "senior_software_engineer",
+                "description": "Senior Software Engineer",
+                "capabilities": ["code_generation", "testing", "debugging"],
+                "agent_type": "maker",
+            },
+            {
+                "name": "code_reviewer",
+                "description": "Code Reviewer",
+                "capabilities": ["review", "analysis"],
+                "agent_type": "reviewer",
+            },
+        ]
+    )
 
     # Wire systemic analysis service to repair cycle adapter for dispatch logic
     repair_cycle = simulation_bootstrap.adapters.repair_cycle_as_mock()
