@@ -17,15 +17,14 @@ The mock adapter:
 import logging
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
-from uuid import uuid4
 
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.domain.events.pr_review_cycle_events import (
     PRReviewCycleApprovedEvent,
-    PRReviewCycleCodeReviewStartedEvent,
     PRReviewCycleCICheckCompletedEvent,
+    PRReviewCycleCodeReviewStartedEvent,
     PRReviewCycleConsolidationStartedEvent,
     PRReviewCycleEscalatedEvent,
     PRReviewCycleIssuesFoundEvent,
@@ -34,8 +33,6 @@ from codetoreum.domain.events.pr_review_cycle_events import (
     PRReviewCycleVerificationStartedEvent,
 )
 from codetoreum.domain.pr_review_cycle_types import (
-    PRReviewCycleConfig,
-    PRReviewCycleResult,
     PRReviewCycleState,
     PRReviewFinding,
     PRReviewOutcome,
@@ -709,12 +706,12 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                     return
                 msg = f"Expected outcome {expected_outcome.value} for {work_item_id}, got APPROVED"
                 raise AssertionError(msg)
-            elif event_type == "pr_review_cycle.issues_found":
+            if event_type == "pr_review_cycle.issues_found":
                 if expected_outcome == PRReviewOutcome.ISSUES_FOUND:
                     return
                 msg = f"Expected outcome {expected_outcome.value} for {work_item_id}, got ISSUES_FOUND"
                 raise AssertionError(msg)
-            elif event_type == "pr_review_cycle.max_cycles_reached":
+            if event_type == "pr_review_cycle.max_cycles_reached":
                 if expected_outcome == PRReviewOutcome.MAX_CYCLES_REACHED:
                     return
                 msg = f"Expected outcome {expected_outcome.value} for {work_item_id}, got MAX_CYCLES_REACHED"

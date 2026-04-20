@@ -1,8 +1,9 @@
 """Unit tests for MockPRReviewCycleAdapter."""
 
-import pytest
-from datetime import timedelta, datetime, UTC
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from codetoreum.adapters.testing.mock_pr_review_cycle_adapter import MockPRReviewCycleAdapter
 from codetoreum.domain.pr_review_cycle_types import (
