@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 
+from codetoreum.domain.pr_review_cycle_types import PRReviewCycleConfig
 from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig, RepairTestType
 
 
@@ -50,6 +51,9 @@ class ColumnTemplate:
                                  which test types to run when this column triggers a repair
                                  cycle. When None, the handler falls back to the default
                                  sequence (UNIT → INTEGRATION → E2E).
+        pr_review_cycle_config: Optional configuration for PR review cycle on this column.
+                               When set, triggers PR review cycle instead of agent execution.
+                               Mutually exclusive with repair_cycle_agents.
         execution_type: Execution mode for the agent on this column. One of "task_queue"
                        (default, standard container execution) or "conversational"
                        (multi-turn dialogue via IDiscussionAdapter).
@@ -67,6 +71,7 @@ class ColumnTemplate:
     sla_escalation_column: str | None = None
     repair_cycle_agents: RepairCycleAgentConfig | None = None
     repair_cycle_test_types: tuple[RepairTestType, ...] | None = None
+    pr_review_cycle_config: PRReviewCycleConfig | None = None
     execution_type: str = "task_queue"
 
     def __post_init__(self) -> None:
@@ -116,6 +121,14 @@ class ColumnTemplate:
         valid_execution_types = {"task_queue", "conversational"}
         if self.execution_type not in valid_execution_types:
             msg = f"execution_type must be one of {valid_execution_types}, got {self.execution_type!r}"
+            raise ValueError(msg)
+
+        # Mutual exclusivity: cannot have both repair_cycle_agents and pr_review_cycle_config
+        if self.repair_cycle_agents is not None and self.pr_review_cycle_config is not None:
+            msg = (
+                f"Column '{self.name}': cannot have both repair_cycle_agents and "
+                "pr_review_cycle_config (mutually exclusive)"
+            )
             raise ValueError(msg)
 
 
