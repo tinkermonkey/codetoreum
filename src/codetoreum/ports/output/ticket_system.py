@@ -47,6 +47,8 @@ class ITicketSystem(ABC):
         priority: WorkItemPriority | None = None,
         metadata: dict[str, Any] | None = None,
         parent_issue_id: str | None = None,
+        pr_id: str | None = None,
+        discussion_id: str | None = None,
     ) -> WorkItem:
         """
         Create a new work item.
@@ -60,6 +62,8 @@ class ITicketSystem(ABC):
             priority: Optional priority level
             metadata: Optional additional metadata
             parent_issue_id: Optional parent issue ID for sub-issue creation
+            pr_id: Optional pull request ID for PR-related work items
+            discussion_id: Optional discussion ID for discussion-related work items
 
         Returns:
             WorkItem: Newly created work item

@@ -1344,14 +1344,14 @@ class SimulationApplicationBootstrap:
             resolved.repair_cycle.environment_repair_service = resolved.environment_repair_service
             resolved.repair_cycle.ci_pipeline_service = resolved.ci_pipeline
 
-        # Wire ticket system and board service to PR review cycle adapter for sub-issue creation
-        # This enables the mock PR review cycle adapter to create sub-issues and move items
+        # Wire ticket system, board service, and event emitter to PR review cycle adapter
+        # This enables the mock PR review cycle adapter to create sub-issues, move items, and emit events
         from codetoreum.adapters.testing.mock_pr_review_cycle_adapter import MockPRReviewCycleAdapter
 
         if isinstance(resolved.pr_review_cycle, MockPRReviewCycleAdapter):
-            resolved.pr_review_cycle._ticket_system = resolved.ticket_system
-            resolved.pr_review_cycle._board_service = resolved.board
-            resolved.pr_review_cycle._event_emitter = resolved.event_emitter
+            resolved.pr_review_cycle.ticket_system = resolved.ticket_system
+            resolved.pr_review_cycle.board_service = resolved.board
+            resolved.pr_review_cycle.event_emitter = resolved.event_emitter
 
         # Create branch resolution adapter (mock adapter for simulation testing)
         resolved.branch_resolution_service = MockBranchResolutionAdapter(clock=self._engine.get_clock_for_testing())
@@ -2103,6 +2103,10 @@ class SimulationApplicationBootstrap:
 
         Logs a warning if components are not yet initialized, allowing
         graceful degradation if called before full setup completion.
+
+        Note:
+            PR review cycle event handler implementation is pending. This method
+            is a placeholder for future event handler registration.
         """
         if not self.adapters or not self.infrastructure:
             logger.warning("Cannot register PR review cycle handler: components not ready")
@@ -2110,7 +2114,7 @@ class SimulationApplicationBootstrap:
 
         # PR review cycle handler registration would go here
         # Currently a placeholder for future event handler implementation
-        logger.info("PR review cycle handler registered with event bus")
+        logger.debug("PR review cycle handler not yet implemented, skipping registration")
 
     def _register_review_event_handler(self) -> None:
         """

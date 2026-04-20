@@ -101,37 +101,33 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
 
     def __init__(
         self,
-        ticket_system: ITicketSystem,
-        board_service: IBoardService,
-        clock: SimulationClock,
-        event_emitter: IEventEmitter,
+        ticket_system: ITicketSystem | None = None,
+        board_service: IBoardService | None = None,
+        clock: SimulationClock | None = None,
+        event_emitter: IEventEmitter | None = None,
     ) -> None:
         """Initialize the PR review cycle adapter.
 
-        All four parameters are required. Missing any raises TypeError.
+        All parameters are optional for flexibility during bootstrap initialization.
+        Dependencies can be injected via public properties after construction.
 
         Args:
-            ticket_system: Ticket system adapter for creating work items
-            board_service: Board service adapter for moving items between columns
-            clock: SimulationClock for deterministic time advancement
-            event_emitter: Event emitter for domain event publication
+            ticket_system: Optional ticket system adapter for creating work items
+            board_service: Optional board service adapter for moving items between columns
+            clock: Optional SimulationClock for deterministic time advancement
+            event_emitter: Optional event emitter for domain event publication
 
-        Raises:
-            TypeError: If any required parameter is missing
+        Note:
+            Dependencies can be set after construction using the public properties:
+            adapter.ticket_system = ticket_system
+            adapter.board_service = board_service
+            adapter.clock = clock
+            adapter.event_emitter = event_emitter
         """
         super().__init__()
-        if ticket_system is None:
-            raise TypeError("ticket_system is required")
-        if board_service is None:
-            raise TypeError("board_service is required")
-        if clock is None:
-            raise TypeError("clock is required")
-        if event_emitter is None:
-            raise TypeError("event_emitter is required")
-
         self._ticket_system = ticket_system
         self._board_service = board_service
-        self._clock = clock
+        self._clock = clock or SimulationClock(speed_multiplier=100_000.0)
         self._event_emitter = event_emitter
 
         # State storage
@@ -149,6 +145,57 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
     def clock(self) -> SimulationClock:
         """Get simulation clock for time advancement."""
         return self._clock
+
+    @clock.setter
+    def clock(self, clock: SimulationClock) -> None:
+        """Set simulation clock for time advancement.
+
+        Args:
+            clock: SimulationClock instance for deterministic time advancement
+        """
+        self._clock = clock
+
+    @property
+    def ticket_system(self) -> ITicketSystem | None:
+        """Get the ticket system adapter."""
+        return self._ticket_system
+
+    @ticket_system.setter
+    def ticket_system(self, ticket_system: ITicketSystem | None) -> None:
+        """Set the ticket system adapter.
+
+        Args:
+            ticket_system: ITicketSystem instance for creating sub-issues
+        """
+        self._ticket_system = ticket_system
+
+    @property
+    def board_service(self) -> IBoardService | None:
+        """Get the board service adapter."""
+        return self._board_service
+
+    @board_service.setter
+    def board_service(self, board_service: IBoardService | None) -> None:
+        """Set the board service adapter.
+
+        Args:
+            board_service: IBoardService instance for moving items between columns
+        """
+        self._board_service = board_service
+
+    @property
+    def event_emitter(self) -> IEventEmitter | None:
+        """Get the event emitter."""
+        return self._event_emitter
+
+    @event_emitter.setter
+    def event_emitter(self, event_emitter: IEventEmitter | None) -> None:
+        """Set the event emitter.
+
+        Args:
+            event_emitter: IEventEmitter instance for domain event publication
+        """
+        self._event_emitter = event_emitter
 
     # ==================== Configuration Methods ====================
 

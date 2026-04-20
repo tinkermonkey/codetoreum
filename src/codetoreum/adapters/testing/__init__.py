@@ -55,6 +55,9 @@ from codetoreum.adapters.testing.mock_environment_repair_adapter import (
 )
 from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
 from codetoreum.adapters.testing.mock_notifier_adapter import MockNotifierAdapter
+from codetoreum.adapters.testing.mock_pr_review_cycle_adapter import (
+    MockPRReviewCycleAdapter,
+)
 from codetoreum.adapters.testing.mock_project_manager_adapter import (
     MockProjectManagerAdapter,
 )
@@ -101,6 +104,7 @@ __all__ = [
     "MockEnvironmentRepairAdapter",
     "MockLLMAdapter",
     "MockNotifierAdapter",
+    "MockPRReviewCycleAdapter",
     "MockProjectManagerAdapter",
     "MockReviewCycleAdapter",
     "MockRepairCycleAdapter",

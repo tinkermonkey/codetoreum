@@ -24,6 +24,9 @@ if TYPE_CHECKING:
     from codetoreum.adapters.testing.mock_metrics_query_adapter import (
         MockMetricsQueryAdapter,
     )
+    from codetoreum.adapters.testing.mock_pr_review_cycle_adapter import (
+        MockPRReviewCycleAdapter,
+    )
     from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
         MockRepairCycleAdapter,
     )
@@ -34,7 +37,9 @@ if TYPE_CHECKING:
         BranchResolutionEventHandler,
         RepairCycleEventHandler,
     )
+    from codetoreum.ports.output.board_service import IBoardService
     from codetoreum.ports.output.container import IContainer
+    from codetoreum.ports.output.event_emitter import IEventEmitter
     from codetoreum.ports.output.llm_provider import ILLMProvider
     from codetoreum.ports.output.repair_cycle_checkpoint_store import (
         IRepairCycleCheckpointStore,
@@ -315,8 +320,9 @@ class SimulationEngine:
     def create_pr_review_cycle_adapter(
         self,
         ticket_system: "ITicketSystem | None" = None,
-        board_service: "object | None" = None,
-    ) -> "object":
+        board_service: "IBoardService | None" = None,
+        event_emitter: "IEventEmitter | None" = None,
+    ) -> "MockPRReviewCycleAdapter":
         """
         Create mock PR review cycle adapter with injected clock.
 
@@ -324,6 +330,8 @@ class SimulationEngine:
             ticket_system: Optional ticket system adapter for creating sub-issues.
                           Injected after resolution in bootstrap post-processing.
             board_service: Optional board service adapter for moving items.
+                          Injected after resolution in bootstrap post-processing.
+            event_emitter: Optional event emitter for domain event publication.
                           Injected after resolution in bootstrap post-processing.
 
         Returns:
@@ -333,13 +341,13 @@ class SimulationEngine:
             MockPRReviewCycleAdapter,
         )
 
-        # Create adapter with None dependencies initially
-        # Dependencies will be injected in bootstrap post-processing
+        # Create adapter with optional dependencies initially
+        # Dependencies will be injected via public properties in bootstrap post-processing
         adapter = MockPRReviewCycleAdapter(
             ticket_system=ticket_system,
             board_service=board_service,
             clock=self._clock,
-            event_emitter=None,
+            event_emitter=event_emitter,
         )
         logger.debug("Created MockPRReviewCycleAdapter via SimulationEngine")
         return adapter
