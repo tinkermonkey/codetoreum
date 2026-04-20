@@ -2220,3 +2220,121 @@ class TestBackwardCompatibleNoClassifierFallback:
 
         # Now that classifier is set, it should be called
         systemic_service.analyze.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Guard Clauses: CI and COMPILATION Test Types
+# ---------------------------------------------------------------------------
+
+
+class TestGuardClausesForUnsupportedTestTypes:
+    """Test guard clauses in _detect_and_build_test_command that reject CI and COMPILATION test types.
+
+    These guard clauses are critical safeguards:
+    - CI tests must be routed through ICIPipelineService (not handled by this adapter)
+    - COMPILATION tests are not yet implemented in the adapter
+
+    A regression that weakens these guards could allow invalid test types to be processed,
+    so these tests ensure the guards remain in place.
+    """
+
+    def test_detect_and_build_test_command_rejects_ci_test_type(self):
+        """_detect_and_build_test_command raises ValueError for RepairTestType.CI.
+
+        CI tests must be routed through ICIPipelineService and filtered out before
+        reaching IRepairCycle.execute(). Direct adapter invocation with RepairTestType.CI
+        indicates a routing error that should be caught by this guard.
+        """
+        adapter, _ = _make_adapter()
+        config = RepairTestRunConfig(
+            test_type=RepairTestType.CI,
+            timeout=30,
+            max_iterations=1,
+            review_warnings=False,
+        )
+
+        with pytest.raises(ValueError) as exc_info:
+            adapter._detect_and_build_test_command(config)
+
+        error_msg = str(exc_info.value)
+        assert "CI tests must be routed through ICIPipelineService" in error_msg
+        assert "RepairTestType.CI indicates a routing error" in error_msg
+
+    def test_detect_and_build_test_command_rejects_compilation_test_type(self):
+        """_detect_and_build_test_command raises ValueError for RepairTestType.COMPILATION.
+
+        COMPILATION tests are not yet implemented in the ProductionRepairCycleAdapter.
+        Type-checking/compilation handling must be implemented as a separate test type handler.
+        This guard ensures attempts to use COMPILATION tests are caught early.
+        """
+        adapter, _ = _make_adapter()
+        config = RepairTestRunConfig(
+            test_type=RepairTestType.COMPILATION,
+            timeout=30,
+            max_iterations=1,
+            review_warnings=False,
+        )
+
+        with pytest.raises(ValueError) as exc_info:
+            adapter._detect_and_build_test_command(config)
+
+        error_msg = str(exc_info.value)
+        assert "RepairTestType.COMPILATION is not yet supported" in error_msg
+        assert "Type-checking/compilation must be implemented" in error_msg
+
+    def test_detect_and_build_test_command_accepts_unit_test_type(self):
+        """_detect_and_build_test_command successfully handles RepairTestType.UNIT.
+
+        Verifies that UNIT test type passes the guard clauses and returns a valid command.
+        """
+        adapter, _ = _make_adapter()
+        config = RepairTestRunConfig(
+            test_type=RepairTestType.UNIT,
+            timeout=30,
+            max_iterations=1,
+            review_warnings=False,
+        )
+
+        command = adapter._detect_and_build_test_command(config)
+
+        assert isinstance(command, str)
+        assert "pytest" in command
+        assert "tests/unit" in command
+
+    def test_detect_and_build_test_command_accepts_integration_test_type(self):
+        """_detect_and_build_test_command successfully handles RepairTestType.INTEGRATION.
+
+        Verifies that INTEGRATION test type passes the guard clauses and returns a valid command.
+        """
+        adapter, _ = _make_adapter()
+        config = RepairTestRunConfig(
+            test_type=RepairTestType.INTEGRATION,
+            timeout=30,
+            max_iterations=1,
+            review_warnings=False,
+        )
+
+        command = adapter._detect_and_build_test_command(config)
+
+        assert isinstance(command, str)
+        assert "pytest" in command
+        assert "tests/integration" in command
+
+    def test_detect_and_build_test_command_accepts_e2e_test_type(self):
+        """_detect_and_build_test_command successfully handles RepairTestType.E2E.
+
+        Verifies that E2E test type passes the guard clauses and returns a valid command.
+        """
+        adapter, _ = _make_adapter()
+        config = RepairTestRunConfig(
+            test_type=RepairTestType.E2E,
+            timeout=30,
+            max_iterations=1,
+            review_warnings=False,
+        )
+
+        command = adapter._detect_and_build_test_command(config)
+
+        assert isinstance(command, str)
+        assert "pytest" in command
+        assert "tests/e2e" in command
