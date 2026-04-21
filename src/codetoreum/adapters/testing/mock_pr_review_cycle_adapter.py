@@ -532,7 +532,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
 
         # Emit outcome event and create sub-issues if needed
         outcome = config.outcome
-        next_column = "Testing"  # Default next column
+        next_column = request.config.on_approved_column or "Done"  # Use config or default to Done
         sub_issue_ids: list[str] = []
 
         if config.approved_immediately or outcome == PRReviewOutcome.APPROVED:
@@ -572,7 +572,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                     logger.error(
                         f"Error creating sub-issue for finding: {e}",
                         exc_info=True,
-                        extra={"error_id": ErrorRegistry.ERR_WORK_ITEM_CREATION},
+                        extra={"error_id": "ERR_SUB_ISSUE_CREATION"},
                     )
 
             with self._lock:
@@ -587,7 +587,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 finding_count=len(config.findings),
                 sub_issue_count=len(sub_issue_ids),
                 cycle_duration_seconds=(self._clock.now() - phase1_start).total_seconds(),
-                next_column="Fix Issues",
+                next_column=request.config.on_issues_found_column or "In Development",
                 workflow_run_id=request.workflow_run_id,
             )
             self._event_emitter.emit(outcome_event)
@@ -599,7 +599,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                     "sub_issue_count": len(sub_issue_ids),
                 }
             )
-            next_column = "Fix Issues"
+            next_column = request.config.on_issues_found_column or "In Development"
 
         # Build phase outputs
         phase_outputs = [

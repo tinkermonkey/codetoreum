@@ -6,10 +6,11 @@ Exercises the PR review cycle with two paths:
 
 Modeled on Switchyard benchmark runs 854460d9 (issues found) and fe4fa87f (approved).
 
-Note: These tests include assertions for acceptance criteria that require the PR review cycle
-handler to be fully implemented. Currently (Phase 7), the handler is a placeholder in
-_register_pr_review_cycle_handler(). These assertions are marked with xfail() to indicate
-the dependency on handler implementation in Phase 8 or later.
+All acceptance criteria are fully implemented and tested:
+- PR review cycle handler properly injects adapters into event handlers
+- Event handlers listen for cycle completion events and move items accordingly
+- Sub-issues are created with proper parent linkage and labels
+- Domain events are emitted for audit trail and state changes
 """
 
 from pathlib import Path
@@ -186,49 +187,40 @@ async def test_issues_found_path(pr_review_env):
     )
 
     # ========================================================================
-    # ACCEPTANCE CRITERIA (PENDING): PR review cycle executes and emits events
-    # These assertions are pending _register_pr_review_cycle_handler() implementation.
-    # The handler is currently a placeholder in the bootstrap, so this path
-    # cannot complete. The assertions below document what will be validated
-    # once the handler is implemented in Phase 8 or later.
+    # ACCEPTANCE CRITERIA: PR review cycle executes and emits events
+    # Handler is fully implemented in _register_pr_review_cycle_handler() and
+    # event handlers are properly registered with the event bus.
+    # The assertions below validate the complete PR review cycle workflow.
     # ========================================================================
 
-    # PENDING AC-1: Item should move to "In Development" (issues found path)
-    pytest.skip(
-        reason=(
-            "PR review cycle handler not yet implemented. "
-            "Pending: _register_pr_review_cycle_handler() to orchestrate cycle, "
-            "and handler should move item from 'In Review' to 'In Development' on issues found."
-        )
-    )
-
+    # AC-1: Item should move to "In Development" (issues found path)
     in_development_reached = await wait_for_column(
         board, work_item_id, "In Development", timeout=10.0
     )
     assert in_development_reached, "Item did not reach 'In Development' after PR review cycle"
 
-    # PENDING AC-2: PRReviewCycleStartedEvent should be fired
+    # AC-2: PRReviewCycleStartedEvent should be fired
     cycle_events = [
         e for e in event_store.events
         if "pr_review_cycle" in str(type(e).__name__).lower()
     ]
     assert len(cycle_events) > 0, "No PR review cycle events found in event store"
 
-    # PENDING AC-3: PRReviewCycleStartedEvent with correct attributes
+    # AC-3: PRReviewCycleStartedEvent with correct attributes
     started_events = [
         e for e in cycle_events
         if isinstance(e, PRReviewCycleStartedEvent)
     ]
     assert len(started_events) > 0, "PRReviewCycleStartedEvent not fired"
 
-    # PENDING AC-4: Phase events in order (Phase 1 → 2.1 → 3 → 4)
+    # AC-4: Phase events in order (Phase 1 → 2.1 → 3 → 4)
     # Verify phase events are emitted in expected order
     phase_events = [e for e in cycle_events if "started" in str(type(e).__name__).lower()]
     assert len(phase_events) >= 4, (
         f"Expected at least 4 phase started events (Phase 1, 2.1, 3, 4), got {len(phase_events)}"
     )
 
-    # PENDING AC-5: PRReviewCycleSubIssuesCreatedEvent with count=6
+    # AC-5: PRReviewCycleSubIssuesCreatedEvent with count=6
     sub_issue_events = [
         e for e in cycle_events
         if isinstance(e, PRReviewCycleSubIssuesCreatedEvent)
@@ -238,7 +230,7 @@ async def test_issues_found_path(pr_review_env):
         f"Expected 6 sub-issues created, got {sub_issue_events[0].count}"
     )
 
-    # PENDING AC-6: 6 child work items created with parent_issue_id and pr-review label
+    # AC-6: 6 child work items created with parent_issue_id and pr-review label
     child_items = [
         item for item in seeder._ticket_adapter._work_items.values()
         if item.parent_issue_id == int(parent_external_id)
@@ -298,26 +290,17 @@ async def test_approved_path(pr_review_env):
     )
 
     # ========================================================================
-    # ACCEPTANCE CRITERIA (PENDING): PR review cycle approves without creating sub-issues
-    # These assertions are pending _register_pr_review_cycle_handler() implementation.
-    # The handler is currently a placeholder in the bootstrap, so this path
-    # cannot complete. The assertions below document what will be validated
-    # once the handler is implemented in Phase 8 or later.
+    # ACCEPTANCE CRITERIA: PR review cycle approves without creating sub-issues
+    # Handler is fully implemented in _register_pr_review_cycle_handler() and
+    # event handlers are properly registered with the event bus.
+    # The assertions below validate the approved path of the PR review cycle.
     # ========================================================================
 
-    # PENDING AC-1: Item should move to "Done" (approved path)
-    pytest.skip(
-        reason=(
-            "PR review cycle handler not yet implemented. "
-            "Pending: _register_pr_review_cycle_handler() to orchestrate cycle, "
-            "and handler should move item from 'In Review' to 'Done' when approved."
-        )
-    )
-
+    # AC-1: Item should move to "Done" (approved path)
     done_reached = await wait_for_column(board, work_item_id, "Done", timeout=10.0)
     assert done_reached, "Item did not reach 'Done' after PR review cycle approval"
 
-    # PENDING AC-2: PRReviewCycleApprovedEvent should be present
+    # AC-2: PRReviewCycleApprovedEvent should be present
     cycle_events = [
         e for e in event_store.events
         if "pr_review_cycle" in str(type(e).__name__).lower()
@@ -328,7 +311,7 @@ async def test_approved_path(pr_review_env):
     ]
     assert len(approved_events) > 0, "PRReviewCycleApprovedEvent not fired"
 
-    # PENDING AC-3: PRReviewCycleSubIssuesCreatedEvent should be absent (no issues found)
+    # AC-3: PRReviewCycleSubIssuesCreatedEvent should be absent (no issues found)
     sub_issue_events = [
         e for e in cycle_events
         if isinstance(e, PRReviewCycleSubIssuesCreatedEvent)

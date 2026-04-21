@@ -1356,6 +1356,19 @@ class SimulationApplicationBootstrap:
             resolved.pr_review_cycle.board_service = resolved.board
             resolved.pr_review_cycle.event_emitter = resolved.event_emitter
 
+            # Wire event emitter to publish CodetoreumEvents to event bus
+            # This ensures that events emitted by the adapter reach the event bus handlers
+            def _publish_codetoreum_event_to_bus(event):  # type: ignore
+                import asyncio
+                # Create an async task to publish to event bus (fire and forget)
+                try:
+                    asyncio.create_task(self.infrastructure.event_bus.publish(event))
+                except Exception as e:
+                    logger.warning(f"Failed to publish CodetoreumEvent to event bus: {e}")
+
+            resolved.event_emitter.on("*", _publish_codetoreum_event_to_bus)
+            logger.info("Wired PR review cycle event emitter to event bus")
+
         # Create branch resolution adapter (mock adapter for simulation testing)
         resolved.branch_resolution_service = MockBranchResolutionAdapter(clock=self._engine.get_clock_for_testing())
 
@@ -2037,10 +2050,10 @@ class SimulationApplicationBootstrap:
         if hasattr(self, "conversational_loop_orchestrator") and self.conversational_loop_orchestrator:
             # NOTE: EventBus routes callbacks by event.event_type (Python class name), not dot notation.
             self.infrastructure.event_bus.subscribe(
-                "WorkItemColumnChanged",
+                "WorkItemColumnChangedEvent",
                 self.conversational_loop_orchestrator.handle_column_change_event,
             )
-            logger.info("Subscribed ConversationalLoopOrchestrator to WorkItemColumnChanged events")
+            logger.info("Subscribed ConversationalLoopOrchestrator to WorkItemColumnChangedEvent events")
 
         # Register repair cycle event handler with event bus
         # This allows the handler to listen for WorkItemColumnChanged events

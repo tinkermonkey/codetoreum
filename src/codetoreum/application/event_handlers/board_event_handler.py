@@ -31,8 +31,8 @@ from codetoreum.domain.events import (
     WorkflowFailed,
     WorkflowStageAdvanced,
     WorkflowStarted,
-    WorkItemColumnChanged,
 )
+from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.domain.events.pr_review_cycle_events import (
     PRReviewCycleMaxCyclesReachedEvent,
 )
@@ -76,7 +76,7 @@ class _WorkflowRunMetadata:
     stage_index: int
 
 
-@event_handler("WorkItemColumnChanged")
+@event_handler("WorkItemColumnChangedEvent")
 class BoardColumnEventHandler(EventHandler):
     """Handles workitem.column_changed events for board automation.
 
@@ -163,7 +163,7 @@ class BoardColumnEventHandler(EventHandler):
         Returns:
             List of event type names
         """
-        return ["WorkItemColumnChanged"]
+        return ["WorkItemColumnChangedEvent"]
 
     async def handle(self, event: DomainEvent) -> None:
         """
@@ -175,7 +175,7 @@ class BoardColumnEventHandler(EventHandler):
         Raises:
             Exception: If handling fails
         """
-        if not isinstance(event, WorkItemColumnChanged):
+        if not isinstance(event, WorkItemColumnChangedEvent):
             logger.warning(f"BoardColumnEventHandler received unexpected event type: {event.event_type}")
             return
 
@@ -183,13 +183,13 @@ class BoardColumnEventHandler(EventHandler):
             await self.handle_column_change(event)
         except Exception as e:
             logger.error(
-                f"Error handling column change for {event.payload.get('work_item_id')}: {e}",
+                f"Error handling column change for {event.work_item_id}: {e}",
                 exc_info=True,
                 extra={"error_id": "ERR_BOARD_EVENT_HANDLE_COLUMN_CHANGE_FAILURE"},
             )
             raise
 
-    async def handle_column_change(self, event: WorkItemColumnChanged) -> None:
+    async def handle_column_change(self, event: WorkItemColumnChangedEvent) -> None:
         """
         Process column movement and trigger appropriate actions.
 
@@ -203,13 +203,13 @@ class BoardColumnEventHandler(EventHandler):
         5. If automated column: trigger agent (independent of steps 3 and 4)
 
         Args:
-            event: WorkItemColumnChanged event with column movement details
+            event: WorkItemColumnChangedEvent with column movement details
         """
-        work_item_id: str = event.payload.get("work_item_id") or ""
-        board_id: str = event.payload.get("board_id") or ""
-        project_id: str = event.payload.get("project_id") or ""
-        from_column: str = event.payload.get("from_column") or ""
-        to_column: str = event.payload.get("to_column") or ""
+        work_item_id: str = event.work_item_id or ""
+        board_id: str = event.board_id or ""
+        project_id: str = event.project_id or ""
+        from_column: str = event.from_column or ""
+        to_column: str = event.to_column or ""
 
         logger.info(f"Processing column change for {work_item_id}: {from_column} -> {to_column}")
 
@@ -229,28 +229,29 @@ class BoardColumnEventHandler(EventHandler):
         # Check if this is a pipeline trigger column (requires lock)
         if column_config.is_pipeline_trigger:
             await self._handle_pipeline_trigger(work_item_id, project_id, board_id, column_config, config)
-            return
+            # Continue to check for PR review cycle (don't return here)
+        else:
+            # Check if this is an exit column (releases lock)
+            if column_config.is_exit_column:
+                await self._handle_exit_column(work_item_id, project_id, board_id, column_config, config)
 
-        # Check if this is an exit column (releases lock)
-        if column_config.is_exit_column:
-            await self._handle_exit_column(work_item_id, project_id, board_id, column_config, config)
-
-        # Trigger agent if column has one, is automated, NOT a repair cycle column,
-        # NOT a PR review cycle column, and NOT a conversational column. Repair cycle columns
-        # and PR review cycle columns are driven by their respective handlers; conversational
-        # columns are driven by WorkflowOrchestrator via ConversationalLoopOrchestrator.
-        # Dispatching the agent executor here for these types would cause double-dispatch
-        # race conditions or immediate execution failure.
-        if (
-            column_config.agent_id
-            and column_config.type == ColumnType.AUTOMATED
-            and not column_config.repair_cycle_agents
-            and not column_config.pr_review_cycle_config
-            and getattr(column_config, "execution_type", "task_queue") != "conversational"
-        ):
-            await self._trigger_agent(work_item_id, column_config, board_id)
+            # Trigger agent if column has one, is automated, NOT a repair cycle column,
+            # NOT a PR review cycle column, and NOT a conversational column. Repair cycle columns
+            # and PR review cycle columns are driven by their respective handlers; conversational
+            # columns are driven by WorkflowOrchestrator via ConversationalLoopOrchestrator.
+            # Dispatching the agent executor here for these types would cause double-dispatch
+            # race conditions or immediate execution failure.
+            if (
+                column_config.agent_id
+                and column_config.type == ColumnType.AUTOMATED
+                and not column_config.repair_cycle_agents
+                and not column_config.pr_review_cycle_config
+                and getattr(column_config, "execution_type", "task_queue") != "conversational"
+            ):
+                await self._trigger_agent(work_item_id, column_config, board_id)
 
         # Dispatch PR review cycle if column has pr_review_cycle_config set
+        # This is done for all column types (pipeline trigger, normal, etc.)
         if column_config.pr_review_cycle_config:
             await self._handle_pr_review_cycle(work_item_id, project_id, board_id, column_config)
 
