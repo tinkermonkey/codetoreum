@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { io } from 'socket.io-client'
 import { SocketContext } from './SocketContextValue'
 
@@ -15,11 +15,52 @@ export function SocketProvider({ children }) {
   })
 
   // Use refs to persist data across renders
-  const activeTasksRef = useState(new Set())[0]
-  const apiLatenciesRef = useState([])[0]
+  const activeTasksRef = useRef(new Set())
+  const apiLatenciesRef = useRef([])
 
   // Load history and calculate initial stats
-  const loadHistoryAndStats = () => {
+  const loadHistoryAndStats = useCallback(() => {
+    // Helper function to calculate stats from historical events
+    const calculateStatsFromHistory = (historicalEvents) => {
+      let totalEvents = 0
+      let totalTokens = 0
+      const latencies = []
+
+      historicalEvents.forEach(event => {
+        totalEvents++
+
+        if (event.event_type === 'task_received') {
+          activeTasksRef.current.add(event.task_id)
+        } else if (event.event_type === 'agent_completed' || event.event_type === 'agent_failed') {
+          activeTasksRef.current.delete(event.task_id)
+        }
+
+        if (event.event_type === 'claude_api_call_completed') {
+          totalTokens += event.data?.total_tokens || 0
+          const latency = event.data?.duration_ms || 0
+          if (latency > 0) {
+            latencies.push(latency)
+          }
+        }
+      })
+
+      // Keep only last 10 latencies for average
+      const recentLatencies = latencies.slice(-10)
+      apiLatenciesRef.current.length = 0
+      apiLatenciesRef.current.push(...recentLatencies)
+
+      const avgLatency = recentLatencies.length > 0
+        ? Math.round(recentLatencies.reduce((a, b) => a + b, 0) / recentLatencies.length)
+        : 0
+
+      setStats({
+        totalEvents,
+        activeTasks: activeTasksRef.current.size,
+        totalTokens,
+        avgLatency,
+      })
+    }
+
     // Load event history
     fetch('/history?count=50')
       .then(res => res.json())
@@ -41,47 +82,34 @@ export function SocketProvider({ children }) {
         }
       })
       .catch(err => console.error('Failed to load log history:', err))
-  }
+  }, [])
 
-  const calculateStatsFromHistory = (historicalEvents) => {
-    let totalEvents = 0
-    let totalTokens = 0
-    const latencies = []
-
-    historicalEvents.forEach(event => {
-      totalEvents++
+  const updateStatsFromEvent = useCallback((event) => {
+    setStats(prev => {
+      const newStats = { ...prev }
+      newStats.totalEvents = prev.totalEvents + 1
 
       if (event.event_type === 'task_received') {
-        activeTasksRef.add(event.task_id)
+        activeTasksRef.current.add(event.task_id)
+        newStats.activeTasks = activeTasksRef.current.size
       } else if (event.event_type === 'agent_completed' || event.event_type === 'agent_failed') {
-        activeTasksRef.delete(event.task_id)
+        activeTasksRef.current.delete(event.task_id)
+        newStats.activeTasks = activeTasksRef.current.size
       }
 
       if (event.event_type === 'claude_api_call_completed') {
-        totalTokens += event.data?.total_tokens || 0
-        const latency = event.data?.duration_ms || 0
-        if (latency > 0) {
-          latencies.push(latency)
-        }
+        const tokens = event.data?.total_tokens || 0
+        newStats.totalTokens = prev.totalTokens + tokens
+
+        apiLatenciesRef.current.push(event.data?.duration_ms || 0)
+        if (apiLatenciesRef.current.length > 10) apiLatenciesRef.current.shift()
+        const avgLatency = apiLatenciesRef.current.reduce((a, b) => a + b, 0) / apiLatenciesRef.current.length
+        newStats.avgLatency = Math.round(avgLatency)
       }
+
+      return newStats
     })
-
-    // Keep only last 10 latencies for average
-    const recentLatencies = latencies.slice(-10)
-    apiLatenciesRef.length = 0
-    apiLatenciesRef.push(...recentLatencies)
-
-    const avgLatency = recentLatencies.length > 0
-      ? Math.round(recentLatencies.reduce((a, b) => a + b, 0) / recentLatencies.length)
-      : 0
-
-    setStats({
-      totalEvents,
-      activeTasks: activeTasksRef.size,
-      totalTokens,
-      avgLatency,
-    })
-  }
+  }, [])
 
   useEffect(() => {
     // In development, Vite proxies /socket.io to the observability server
@@ -123,34 +151,7 @@ export function SocketProvider({ children }) {
     return () => {
       socketInstance.close()
     }
-  }, [])
-
-  const updateStatsFromEvent = (event) => {
-    setStats(prev => {
-      const newStats = { ...prev }
-      newStats.totalEvents = prev.totalEvents + 1
-
-      if (event.event_type === 'task_received') {
-        activeTasksRef.add(event.task_id)
-        newStats.activeTasks = activeTasksRef.size
-      } else if (event.event_type === 'agent_completed' || event.event_type === 'agent_failed') {
-        activeTasksRef.delete(event.task_id)
-        newStats.activeTasks = activeTasksRef.size
-      }
-
-      if (event.event_type === 'claude_api_call_completed') {
-        const tokens = event.data?.total_tokens || 0
-        newStats.totalTokens = prev.totalTokens + tokens
-
-        apiLatenciesRef.push(event.data?.duration_ms || 0)
-        if (apiLatenciesRef.length > 10) apiLatenciesRef.shift()
-        const avgLatency = apiLatenciesRef.reduce((a, b) => a + b, 0) / apiLatenciesRef.length
-        newStats.avgLatency = Math.round(avgLatency)
-      }
-
-      return newStats
-    })
-  }
+  }, [loadHistoryAndStats, updateStatsFromEvent])
 
   const clearEvents = () => setEvents([])
   const clearLogs = () => setLogs([])
