@@ -2094,27 +2094,30 @@ class SimulationApplicationBootstrap:
 
     def _register_pr_review_cycle_handler(self) -> None:
         """
-        Register PR review cycle event handler with the event bus.
+        Inject PR review cycle dependencies into BoardColumnEventHandler.
 
         Part of Phase 5: Event handler registration for cross-cutting concerns.
 
-        This handler listens for domain events and manages the PR review cycle
-        lifecycle when items transition between workflow stages.
+        Injects the pr_review_cycle and work_item_service adapters into the
+        BoardColumnEventHandler so it can dispatch PR review cycles when items
+        enter columns with pr_review_cycle_config.
 
         Logs a warning if components are not yet initialized, allowing
         graceful degradation if called before full setup completion.
-
-        Note:
-            PR review cycle event handler implementation is pending. This method
-            is a placeholder for future event handler registration.
         """
-        if not self.adapters or not self.infrastructure:
+        if not self.adapters or not self.infrastructure or not self._board_event_handler:
             logger.warning("Cannot register PR review cycle handler: components not ready")
             return
 
-        # PR review cycle handler registration would go here
-        # Currently a placeholder for future event handler implementation
-        logger.debug("PR review cycle handler not yet implemented, skipping registration")
+        # Inject pr_review_cycle adapter into the handler
+        self._board_event_handler.pr_review_cycle = self.adapters.pr_review_cycle
+        logger.info("Injected pr_review_cycle adapter into BoardColumnEventHandler")
+
+        # Inject work_item_service adapter into the handler
+        self._board_event_handler.work_item_service = self.adapters.work_item_service
+        logger.info("Injected work_item_service adapter into BoardColumnEventHandler")
+
+        logger.info("PR review cycle dependencies registered with BoardColumnEventHandler")
 
     def _register_review_event_handler(self) -> None:
         """
