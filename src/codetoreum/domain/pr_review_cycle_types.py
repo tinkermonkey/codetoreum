@@ -82,28 +82,29 @@ class PRReviewFinding:
     Attempting to modify any field raises FrozenInstanceError.
 
     Attributes:
-        type: Category of finding (e.g., "bug", "style", "security", "performance")
+        title: Short title of the finding
+        description: Detailed description of the finding
         severity: Severity level (must be one of: "critical", "high", "medium", "low")
-        file: File path where finding occurs
-        line_number: Line number in file (0-based), or None for file-level findings
-        message: Description of the finding
-        suggestion: Optional suggested fix or improvement
+        phase: Name of the phase where finding was discovered (e.g., "code_review", "verification")
+        context_source: Optional source context for the finding (e.g., "parent_issue", "ba_output")
     """
 
-    type: str
+    title: str
+    description: str
     severity: str
-    file: str
-    line_number: int | None
-    message: str
-    suggestion: str | None = None
+    phase: str
+    context_source: str | None = None
 
     # Allowed severity values
     ALLOWED_SEVERITIES = frozenset(["critical", "high", "medium", "low"])
 
     def __post_init__(self) -> None:
         """Validate finding after initialization."""
-        if not self.type:
-            msg = "type is required"
+        if not self.title:
+            msg = "title is required"
+            raise ValueError(msg)
+        if not self.description:
+            msg = "description is required"
             raise ValueError(msg)
         if not self.severity:
             msg = "severity is required"
@@ -111,14 +112,8 @@ class PRReviewFinding:
         if self.severity not in self.ALLOWED_SEVERITIES:
             msg = f"severity must be one of {sorted(self.ALLOWED_SEVERITIES)}, got '{self.severity}'"
             raise ValueError(msg)
-        if not self.file:
-            msg = "file is required"
-            raise ValueError(msg)
-        if self.line_number is not None and self.line_number < 0:
-            msg = "line_number must be non-negative or None"
-            raise ValueError(msg)
-        if not self.message:
-            msg = "message is required"
+        if not self.phase:
+            msg = "phase is required"
             raise ValueError(msg)
 
 
@@ -133,24 +128,33 @@ class PRReviewPhaseOutput:
 
     Attributes:
         phase_name: Name of the phase (e.g., "code_review", "verification", "ci_check", "consolidation")
+        phase_index: Position in phase sequence (1-based)
         success: Whether the phase completed successfully
         findings: Immutable tuple of PRReviewFinding objects discovered in this phase
         summary: Human-readable summary of phase results
         duration_seconds: Time taken to execute this phase (non-negative)
+        context_source: Optional context source for this phase (e.g., "parent_issue", "ba_output")
+        comment_id: Optional ID of comment associated with this phase
         error: Optional error message if phase failed, None if successful
     """
 
     phase_name: str
+    phase_index: int
     success: bool
     findings: tuple[PRReviewFinding, ...]
     summary: str
     duration_seconds: float
+    context_source: str | None = None
+    comment_id: str | None = None
     error: str | None = None
 
     def __post_init__(self) -> None:
         """Validate phase output after initialization."""
         if not self.phase_name:
             msg = "phase_name is required"
+            raise ValueError(msg)
+        if self.phase_index < 1:
+            msg = "phase_index must be >= 1"
             raise ValueError(msg)
         if not isinstance(self.findings, tuple):
             msg = "findings must be a tuple (immutable)"
@@ -185,7 +189,7 @@ class PRReviewCycleConfig:
 
     Attributes:
         max_outer_cycles: Maximum number of complete cycles before escalation
-                         (must be >= 1)
+                         (must be >= 1, default 3)
         verifier_context_sources: Immutable tuple of context sources to use during
                                  verification phase (e.g., "parent_issue", "ba_output",
                                  "arch_spec"). Must be non-empty.
@@ -196,6 +200,9 @@ class PRReviewCycleConfig:
                                  Must be > 0 when ci_check_enabled=True.
         consolidation_timeout_seconds: Timeout for Phase 4 consolidation (default 600)
         sub_issue_target_board: Board ID where sub-issues will be created (optional)
+        sub_issue_creation: Whether to create sub-issues when findings are found (default True)
+        sub_issue_labels: Immutable tuple of labels to apply to created sub-issues
+        sub_issue_initial_column: Column to place created sub-issues in (optional)
         on_issues_found_column: Column to move item to when issues are found (optional)
         on_approved_column: Column to move item to when approved (optional)
         agents: Immutable mapping of phase names to agent IDs as ordered tuples
@@ -203,7 +210,7 @@ class PRReviewCycleConfig:
                 Preserves insertion order and allows O(1) iteration for phase->agent lookups
     """
 
-    max_outer_cycles: int = 1
+    max_outer_cycles: int = 3
     verifier_context_sources: tuple[str, ...] = ("parent_issue",)
     code_review_timeout_seconds: int = 600
     verification_timeout_seconds: int = 300
@@ -211,6 +218,9 @@ class PRReviewCycleConfig:
     ci_check_timeout_seconds: int = 300
     consolidation_timeout_seconds: int = 600
     sub_issue_target_board: str | None = None
+    sub_issue_creation: bool = True
+    sub_issue_labels: tuple[str, ...] = ()
+    sub_issue_initial_column: str | None = None
     on_issues_found_column: str | None = None
     on_approved_column: str | None = None
     agents: tuple[tuple[str, str], ...] | None = None
@@ -227,6 +237,10 @@ class PRReviewCycleConfig:
 
         if not isinstance(self.verifier_context_sources, tuple):
             msg = "verifier_context_sources must be a tuple (immutable)"
+            raise ValueError(msg)
+
+        if not isinstance(self.sub_issue_labels, tuple):
+            msg = "sub_issue_labels must be a tuple (immutable)"
             raise ValueError(msg)
 
         # Only validate ci_check_timeout_seconds > 0 if ci_check is enabled
@@ -267,6 +281,11 @@ class PRReviewCycleResult:
         all_findings: Immutable tuple of all PRReviewFinding objects from all phases
         sub_issue_ids: Immutable tuple of created sub-issue IDs (empty if approved/max_cycles)
         ci_passed: CI check result (True if passed, False if failed, None if not checked)
+        total_findings: Total number of findings across all phases
+        critical_count: Number of critical severity findings
+        high_count: Number of high severity findings
+        medium_count: Number of medium severity findings
+        low_count: Number of low severity findings
         total_duration_seconds: Total time for entire cycle (non-negative)
         timestamp: ISO 8601 timestamp when cycle started
         next_column: Name of the column to move item to (determined by outcome)
@@ -279,6 +298,11 @@ class PRReviewCycleResult:
     all_findings: tuple[PRReviewFinding, ...]
     sub_issue_ids: tuple[str, ...]
     ci_passed: bool | None
+    total_findings: int
+    critical_count: int
+    high_count: int
+    medium_count: int
+    low_count: int
     total_duration_seconds: float
     timestamp: str
     next_column: str
@@ -311,6 +335,32 @@ class PRReviewCycleResult:
 
         if not isinstance(self.sub_issue_ids, tuple):
             msg = "sub_issue_ids must be a tuple (immutable)"
+            raise ValueError(msg)
+
+        if self.total_findings < 0:
+            msg = f"total_findings must be non-negative, got {self.total_findings}"
+            raise ValueError(msg)
+
+        if self.critical_count < 0:
+            msg = f"critical_count must be non-negative, got {self.critical_count}"
+            raise ValueError(msg)
+
+        if self.high_count < 0:
+            msg = f"high_count must be non-negative, got {self.high_count}"
+            raise ValueError(msg)
+
+        if self.medium_count < 0:
+            msg = f"medium_count must be non-negative, got {self.medium_count}"
+            raise ValueError(msg)
+
+        if self.low_count < 0:
+            msg = f"low_count must be non-negative, got {self.low_count}"
+            raise ValueError(msg)
+
+        # Validate severity counts sum to total
+        severity_total = self.critical_count + self.high_count + self.medium_count + self.low_count
+        if severity_total != self.total_findings:
+            msg = f"Severity counts ({severity_total}) must sum to total_findings ({self.total_findings})"
             raise ValueError(msg)
 
         if self.total_duration_seconds < 0:
@@ -346,24 +396,34 @@ class PRReviewCycleState:
     Attributes:
         cycle_id: Unique identifier for this cycle instance
         pr_id: GitHub PR identifier
+        work_item_id: ID of the work item being reviewed
+        project_id: ID of the project
+        board_id: ID of the project board
         status: Current status (PRReviewStatus enum)
         cycle_number: Iteration count (1-based)
         current_phase: Name of currently executing phase
         findings: Mutable list of findings discovered so far
         phase_outputs: Mutable list of completed phase outputs
+        config: PR review cycle configuration
+        discussion_id: Optional ID of associated discussion/thread
         started_at: ISO 8601 timestamp when cycle started
         updated_at: ISO 8601 timestamp of last status change
     """
 
     cycle_id: str
     pr_id: str
+    work_item_id: str
+    project_id: str
+    board_id: str
     status: PRReviewStatus
     cycle_number: int
     current_phase: str
     findings: list[PRReviewFinding]
     phase_outputs: list[PRReviewPhaseOutput]
+    config: "PRReviewCycleConfig"
     started_at: str
     updated_at: str
+    discussion_id: str | None = None
 
     def __post_init__(self) -> None:
         """Validate state after initialization."""
@@ -372,6 +432,15 @@ class PRReviewCycleState:
             raise ValueError(msg)
         if not self.pr_id:
             msg = "pr_id is required"
+            raise ValueError(msg)
+        if not self.work_item_id:
+            msg = "work_item_id is required"
+            raise ValueError(msg)
+        if not self.project_id:
+            msg = "project_id is required"
+            raise ValueError(msg)
+        if not self.board_id:
+            msg = "board_id is required"
             raise ValueError(msg)
         if not isinstance(self.status, PRReviewStatus):
             msg = "status must be a PRReviewStatus enum"
@@ -387,6 +456,9 @@ class PRReviewCycleState:
             raise ValueError(msg)
         if not isinstance(self.phase_outputs, list):
             msg = "phase_outputs must be a list"
+            raise ValueError(msg)
+        if not isinstance(self.config, PRReviewCycleConfig):
+            msg = "config must be a PRReviewCycleConfig instance"
             raise ValueError(msg)
         if not self.started_at:
             msg = "started_at is required"

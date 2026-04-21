@@ -62,118 +62,88 @@ class TestPRReviewFinding:
     def test_create_valid_finding(self):
         """Test creating a valid finding."""
         finding = PRReviewFinding(
-            type="bug",
+            title="Null pointer exception",
+            description="Missing null check before accessing variable",
             severity="high",
-            file="app.py",
-            line_number=42,
-            message="Null pointer exception",
-            suggestion="Add null check before accessing",
+            phase="code_review",
+            context_source="pr_diff",
         )
-        assert finding.type == "bug"
+        assert finding.title == "Null pointer exception"
+        assert finding.description == "Missing null check before accessing variable"
         assert finding.severity == "high"
-        assert finding.file == "app.py"
-        assert finding.line_number == 42
-        assert finding.message == "Null pointer exception"
-        assert finding.suggestion == "Add null check before accessing"
+        assert finding.phase == "code_review"
+        assert finding.context_source == "pr_diff"
 
     def test_finding_immutable(self):
         """Test finding is immutable (frozen)."""
         finding = PRReviewFinding(
-            type="bug",
+            title="Issue",
+            description="Issue description",
             severity="high",
-            file="app.py",
-            line_number=42,
-            message="Issue",
+            phase="verification",
         )
         with pytest.raises(Exception):  # FrozenInstanceError
             finding.severity = "low"
 
-    def test_finding_without_line_number(self):
-        """Test finding without line number (file-level)."""
+    def test_finding_without_context_source(self):
+        """Test finding without context source."""
         finding = PRReviewFinding(
-            type="style",
+            title="General issue",
+            description="A general finding",
             severity="low",
-            file="app.py",
-            line_number=None,
-            message="File is too long",
+            phase="code_review",
+            context_source=None,
         )
-        assert finding.line_number is None
-
-    def test_finding_without_suggestion(self):
-        """Test finding without suggestion."""
-        finding = PRReviewFinding(
-            type="info",
-            severity="low",
-            file="app.py",
-            line_number=10,
-            message="Info message",
-        )
-        assert finding.suggestion is None
+        assert finding.context_source is None
 
     def test_finding_invalid_severity(self):
         """Test finding rejects invalid severity."""
         with pytest.raises(ValueError, match="severity must be one of"):
             PRReviewFinding(
-                type="bug",
+                title="Issue",
+                description="Description",
                 severity="invalid",
-                file="app.py",
-                line_number=42,
-                message="Issue",
+                phase="code_review",
             )
 
-    def test_finding_empty_type(self):
-        """Test finding rejects empty type."""
-        with pytest.raises(ValueError, match="type is required"):
+    def test_finding_empty_title(self):
+        """Test finding rejects empty title."""
+        with pytest.raises(ValueError, match="title is required"):
             PRReviewFinding(
-                type="",
+                title="",
+                description="Description",
                 severity="high",
-                file="app.py",
-                line_number=42,
-                message="Issue",
+                phase="code_review",
+            )
+
+    def test_finding_empty_description(self):
+        """Test finding rejects empty description."""
+        with pytest.raises(ValueError, match="description is required"):
+            PRReviewFinding(
+                title="Issue",
+                description="",
+                severity="high",
+                phase="code_review",
             )
 
     def test_finding_empty_severity(self):
         """Test finding rejects empty severity."""
         with pytest.raises(ValueError, match="severity is required"):
             PRReviewFinding(
-                type="bug",
+                title="Issue",
+                description="Description",
                 severity="",
-                file="app.py",
-                line_number=42,
-                message="Issue",
+                phase="code_review",
             )
 
-    def test_finding_empty_file(self):
-        """Test finding rejects empty file."""
-        with pytest.raises(ValueError, match="file is required"):
+    def test_finding_empty_phase(self):
+        """Test finding rejects empty phase."""
+        with pytest.raises(ValueError, match="phase is required"):
             PRReviewFinding(
-                type="bug",
+                title="Issue",
+                description="Description",
                 severity="high",
-                file="",
-                line_number=42,
-                message="Issue",
-            )
-
-    def test_finding_empty_message(self):
-        """Test finding rejects empty message."""
-        with pytest.raises(ValueError, match="message is required"):
-            PRReviewFinding(
-                type="bug",
-                severity="high",
-                file="app.py",
-                line_number=42,
-                message="",
-            )
-
-    def test_finding_negative_line_number(self):
-        """Test finding rejects negative line number."""
-        with pytest.raises(ValueError, match="line_number must be non-negative"):
-            PRReviewFinding(
-                type="bug",
-                severity="high",
-                file="app.py",
-                line_number=-1,
-                message="Issue",
+                phase="",
             )
 
 
@@ -182,25 +152,32 @@ class TestPRReviewPhaseOutput:
 
     def test_create_successful_phase(self):
         """Test creating output for successful phase."""
-        findings = (PRReviewFinding(type="bug", severity="high", file="app.py", line_number=10, message="Issue"),)
+        findings = (PRReviewFinding(title="Bug", description="A bug", severity="high", phase="code_review"),)
         output = PRReviewPhaseOutput(
             phase_name="code_review",
+            phase_index=1,
             success=True,
             findings=findings,
             summary="Found 1 issue",
             duration_seconds=600.5,
+            context_source="pr_diff",
+            comment_id="comment-123",
         )
         assert output.phase_name == "code_review"
+        assert output.phase_index == 1
         assert output.success is True
         assert len(output.findings) == 1
         assert output.summary == "Found 1 issue"
         assert output.duration_seconds == 600.5
+        assert output.context_source == "pr_diff"
+        assert output.comment_id == "comment-123"
         assert output.error is None
 
     def test_create_failed_phase(self):
         """Test creating output for failed phase."""
         output = PRReviewPhaseOutput(
             phase_name="ci_check",
+            phase_index=3,
             success=False,
             findings=(),
             summary="CI failed",
@@ -209,11 +186,13 @@ class TestPRReviewPhaseOutput:
         )
         assert output.success is False
         assert output.error == "Connection timeout"
+        assert output.phase_index == 3
 
     def test_phase_output_immutable(self):
         """Test phase output is immutable."""
         output = PRReviewPhaseOutput(
             phase_name="code_review",
+            phase_index=1,
             success=True,
             findings=(),
             summary="OK",
@@ -227,6 +206,19 @@ class TestPRReviewPhaseOutput:
         with pytest.raises(ValueError, match="phase_name is required"):
             PRReviewPhaseOutput(
                 phase_name="",
+                phase_index=1,
+                success=True,
+                findings=(),
+                summary="OK",
+                duration_seconds=0.0,
+            )
+
+    def test_phase_output_invalid_phase_index(self):
+        """Test rejects invalid phase index."""
+        with pytest.raises(ValueError, match="phase_index must be >= 1"):
+            PRReviewPhaseOutput(
+                phase_name="code_review",
+                phase_index=0,
                 success=True,
                 findings=(),
                 summary="OK",
@@ -238,6 +230,7 @@ class TestPRReviewPhaseOutput:
         with pytest.raises(ValueError, match="summary is required"):
             PRReviewPhaseOutput(
                 phase_name="code_review",
+                phase_index=1,
                 success=True,
                 findings=(),
                 summary="",
@@ -249,6 +242,7 @@ class TestPRReviewPhaseOutput:
         with pytest.raises(ValueError, match="duration_seconds must be non-negative"):
             PRReviewPhaseOutput(
                 phase_name="code_review",
+                phase_index=1,
                 success=True,
                 findings=(),
                 summary="OK",
@@ -260,6 +254,7 @@ class TestPRReviewPhaseOutput:
         with pytest.raises(ValueError, match="success=True but error is set"):
             PRReviewPhaseOutput(
                 phase_name="code_review",
+                phase_index=1,
                 success=True,
                 findings=(),
                 summary="OK",
@@ -272,6 +267,7 @@ class TestPRReviewPhaseOutput:
         with pytest.raises(ValueError, match="success=False but error is not set"):
             PRReviewPhaseOutput(
                 phase_name="code_review",
+                phase_index=1,
                 success=False,
                 findings=(),
                 summary="Failed",
@@ -285,28 +281,35 @@ class TestPRReviewCycleConfig:
     def test_create_with_defaults(self):
         """Test creating config with default values."""
         config = PRReviewCycleConfig()
-        assert config.max_outer_cycles == 1
+        assert config.max_outer_cycles == 3
         assert config.verifier_context_sources == ("parent_issue",)
         assert config.code_review_timeout_seconds == 600
         assert config.verification_timeout_seconds == 300
         assert config.ci_check_enabled is True
         assert config.ci_check_timeout_seconds == 300
         assert config.consolidation_timeout_seconds == 600
+        assert config.sub_issue_creation is True
+        assert config.sub_issue_labels == ()
 
     def test_create_with_custom_values(self):
         """Test creating config with custom values."""
         config = PRReviewCycleConfig(
-            max_outer_cycles=3,
+            max_outer_cycles=5,
             verifier_context_sources=("parent_issue", "ba_output", "arch_spec"),
             code_review_timeout_seconds=900,
             verification_timeout_seconds=600,
             ci_check_enabled=True,
             ci_check_timeout_seconds=600,
             consolidation_timeout_seconds=1200,
+            sub_issue_creation=True,
+            sub_issue_labels=("bug", "enhancement"),
+            sub_issue_initial_column="Backlog",
         )
-        assert config.max_outer_cycles == 3
+        assert config.max_outer_cycles == 5
         assert config.verifier_context_sources == ("parent_issue", "ba_output", "arch_spec")
         assert config.code_review_timeout_seconds == 900
+        assert config.sub_issue_labels == ("bug", "enhancement")
+        assert config.sub_issue_initial_column == "Backlog"
 
     def test_config_immutable(self):
         """Test config is immutable."""
@@ -323,6 +326,11 @@ class TestPRReviewCycleConfig:
         """Test verifier_context_sources must not be empty."""
         with pytest.raises(ValueError, match="verifier_context_sources must not be empty"):
             PRReviewCycleConfig(verifier_context_sources=())
+
+    def test_config_sub_issue_labels_tuple(self):
+        """Test sub_issue_labels must be a tuple."""
+        with pytest.raises(ValueError, match="sub_issue_labels must be a tuple"):
+            PRReviewCycleConfig(sub_issue_labels=["bug", "enhancement"])  # type: ignore
 
     def test_config_ci_check_timeout_validation_when_enabled(self):
         """Test ci_check_timeout_seconds must be > 0 when ci_check_enabled=True."""
@@ -358,6 +366,7 @@ class TestPRReviewCycleResult:
         """Test creating an approved result."""
         phase_output = PRReviewPhaseOutput(
             phase_name="code_review",
+            phase_index=1,
             success=True,
             findings=(),
             summary="Approved",
@@ -371,6 +380,11 @@ class TestPRReviewCycleResult:
             all_findings=(),
             sub_issue_ids=(),
             ci_passed=True,
+            total_findings=0,
+            critical_count=0,
+            high_count=0,
+            medium_count=0,
+            low_count=0,
             total_duration_seconds=600.0,
             timestamp=datetime.now(UTC).isoformat(),
             next_column="Done",
@@ -378,12 +392,14 @@ class TestPRReviewCycleResult:
         assert result.outcome == PRReviewOutcome.APPROVED
         assert result.sub_issue_ids == ()
         assert result.ci_passed is True
+        assert result.total_findings == 0
 
     def test_create_issues_found_result(self):
         """Test creating a result with issues found."""
-        finding = PRReviewFinding(type="bug", severity="high", file="app.py", line_number=10, message="Issue")
+        finding = PRReviewFinding(title="Bug", description="A bug", severity="high", phase="code_review")
         phase_output = PRReviewPhaseOutput(
             phase_name="code_review",
+            phase_index=1,
             success=True,
             findings=(finding,),
             summary="Found 1 issue",
@@ -397,17 +413,25 @@ class TestPRReviewCycleResult:
             all_findings=(finding,),
             sub_issue_ids=("issue-1", "issue-2"),
             ci_passed=False,
+            total_findings=1,
+            critical_count=0,
+            high_count=1,
+            medium_count=0,
+            low_count=0,
             total_duration_seconds=600.0,
             timestamp=datetime.now(UTC).isoformat(),
             next_column="In Development",
         )
         assert result.outcome == PRReviewOutcome.ISSUES_FOUND
         assert len(result.sub_issue_ids) == 2
+        assert result.high_count == 1
+        assert result.total_findings == 1
 
     def test_result_immutable(self):
         """Test result is immutable."""
         phase_output = PRReviewPhaseOutput(
             phase_name="code_review",
+            phase_index=1,
             success=True,
             findings=(),
             summary="OK",
@@ -421,6 +445,11 @@ class TestPRReviewCycleResult:
             all_findings=(),
             sub_issue_ids=(),
             ci_passed=True,
+            total_findings=0,
+            critical_count=0,
+            high_count=0,
+            medium_count=0,
+            low_count=0,
             total_duration_seconds=0.0,
             timestamp=datetime.now(UTC).isoformat(),
             next_column="Done",
@@ -428,10 +457,40 @@ class TestPRReviewCycleResult:
         with pytest.raises(Exception):  # FrozenInstanceError
             result.cycle_number = 2
 
+    def test_result_severity_counts_validation(self):
+        """Test severity counts must sum to total_findings."""
+        phase_output = PRReviewPhaseOutput(
+            phase_name="code_review",
+            phase_index=1,
+            success=True,
+            findings=(),
+            summary="OK",
+            duration_seconds=0.0,
+        )
+        with pytest.raises(ValueError, match="Severity counts .* must sum to total_findings"):
+            PRReviewCycleResult(
+                cycle_number=1,
+                workflow_run_id="run-123",
+                outcome=PRReviewOutcome.APPROVED,
+                phase_outputs=(phase_output,),
+                all_findings=(),
+                sub_issue_ids=(),
+                ci_passed=True,
+                total_findings=2,  # Mismatched with severity counts (0)
+                critical_count=0,
+                high_count=0,
+                medium_count=0,
+                low_count=0,
+                total_duration_seconds=0.0,
+                timestamp=datetime.now(UTC).isoformat(),
+                next_column="Done",
+            )
+
     def test_result_issues_found_requires_sub_issues(self):
         """Test ISSUES_FOUND outcome requires sub_issue_ids."""
         phase_output = PRReviewPhaseOutput(
             phase_name="code_review",
+            phase_index=1,
             success=True,
             findings=(),
             summary="OK",
@@ -446,6 +505,11 @@ class TestPRReviewCycleResult:
                 all_findings=(),
                 sub_issue_ids=(),
                 ci_passed=False,
+                total_findings=0,
+                critical_count=0,
+                high_count=0,
+                medium_count=0,
+                low_count=0,
                 total_duration_seconds=0.0,
                 timestamp=datetime.now(UTC).isoformat(),
                 next_column="In Development",
@@ -455,6 +519,7 @@ class TestPRReviewCycleResult:
         """Test APPROVED outcome forbids sub_issue_ids."""
         phase_output = PRReviewPhaseOutput(
             phase_name="code_review",
+            phase_index=1,
             success=True,
             findings=(),
             summary="OK",
@@ -469,6 +534,11 @@ class TestPRReviewCycleResult:
                 all_findings=(),
                 sub_issue_ids=("issue-1",),
                 ci_passed=True,
+                total_findings=0,
+                critical_count=0,
+                high_count=0,
+                medium_count=0,
+                low_count=0,
                 total_duration_seconds=0.0,
                 timestamp=datetime.now(UTC).isoformat(),
                 next_column="Done",
@@ -478,6 +548,7 @@ class TestPRReviewCycleResult:
         """Test cycle_number must be >= 1."""
         phase_output = PRReviewPhaseOutput(
             phase_name="code_review",
+            phase_index=1,
             success=True,
             findings=(),
             summary="OK",
@@ -492,6 +563,11 @@ class TestPRReviewCycleResult:
                 all_findings=(),
                 sub_issue_ids=(),
                 ci_passed=True,
+                total_findings=0,
+                critical_count=0,
+                high_count=0,
+                medium_count=0,
+                low_count=0,
                 total_duration_seconds=0.0,
                 timestamp=datetime.now(UTC).isoformat(),
                 next_column="Done",
@@ -504,34 +580,48 @@ class TestPRReviewCycleState:
     def test_create_state(self):
         """Test creating mutable state."""
         now = datetime.now(UTC).isoformat()
+        config = PRReviewCycleConfig()
         state = PRReviewCycleState(
             cycle_id="cycle-123",
             pr_id="pr-456",
+            work_item_id="item-789",
+            project_id="proj-101",
+            board_id="board-202",
             status=PRReviewStatus.IN_CODE_REVIEW,
             cycle_number=1,
             current_phase="code_review",
             findings=[],
             phase_outputs=[],
+            config=config,
             started_at=now,
             updated_at=now,
         )
         assert state.cycle_id == "cycle-123"
         assert state.pr_id == "pr-456"
+        assert state.work_item_id == "item-789"
+        assert state.project_id == "proj-101"
+        assert state.board_id == "board-202"
         assert state.status == PRReviewStatus.IN_CODE_REVIEW
         assert state.findings == []
         assert state.phase_outputs == []
+        assert state.config == config
 
     def test_state_mutable(self):
         """Test state is mutable (not frozen)."""
         now = datetime.now(UTC).isoformat()
+        config = PRReviewCycleConfig()
         state = PRReviewCycleState(
             cycle_id="cycle-123",
             pr_id="pr-456",
+            work_item_id="item-789",
+            project_id="proj-101",
+            board_id="board-202",
             status=PRReviewStatus.PENDING,
             cycle_number=1,
             current_phase="init",
             findings=[],
             phase_outputs=[],
+            config=config,
             started_at=now,
             updated_at=now,
         )
@@ -542,35 +632,45 @@ class TestPRReviewCycleState:
     def test_state_findings_mutable_list(self):
         """Test findings list is mutable."""
         now = datetime.now(UTC).isoformat()
+        config = PRReviewCycleConfig()
         findings = []
         state = PRReviewCycleState(
             cycle_id="cycle-123",
             pr_id="pr-456",
+            work_item_id="item-789",
+            project_id="proj-101",
+            board_id="board-202",
             status=PRReviewStatus.IN_CODE_REVIEW,
             cycle_number=1,
             current_phase="code_review",
             findings=findings,
             phase_outputs=[],
+            config=config,
             started_at=now,
             updated_at=now,
         )
         # Should be able to append
-        new_finding = PRReviewFinding(type="bug", severity="high", file="app.py", line_number=10, message="Issue")
+        new_finding = PRReviewFinding(title="Bug", description="A bug", severity="high", phase="code_review")
         state.findings.append(new_finding)
         assert len(state.findings) == 1
 
     def test_state_empty_cycle_id(self):
         """Test rejects empty cycle_id."""
         now = datetime.now(UTC).isoformat()
+        config = PRReviewCycleConfig()
         with pytest.raises(ValueError, match="cycle_id is required"):
             PRReviewCycleState(
                 cycle_id="",
                 pr_id="pr-456",
+                work_item_id="item-789",
+                project_id="proj-101",
+                board_id="board-202",
                 status=PRReviewStatus.PENDING,
                 cycle_number=1,
                 current_phase="init",
                 findings=[],
                 phase_outputs=[],
+                config=config,
                 started_at=now,
                 updated_at=now,
             )
@@ -578,15 +678,41 @@ class TestPRReviewCycleState:
     def test_state_empty_pr_id(self):
         """Test rejects empty pr_id."""
         now = datetime.now(UTC).isoformat()
+        config = PRReviewCycleConfig()
         with pytest.raises(ValueError, match="pr_id is required"):
             PRReviewCycleState(
                 cycle_id="cycle-123",
                 pr_id="",
+                work_item_id="item-789",
+                project_id="proj-101",
+                board_id="board-202",
                 status=PRReviewStatus.PENDING,
                 cycle_number=1,
                 current_phase="init",
                 findings=[],
                 phase_outputs=[],
+                config=config,
+                started_at=now,
+                updated_at=now,
+            )
+
+    def test_state_empty_work_item_id(self):
+        """Test rejects empty work_item_id."""
+        now = datetime.now(UTC).isoformat()
+        config = PRReviewCycleConfig()
+        with pytest.raises(ValueError, match="work_item_id is required"):
+            PRReviewCycleState(
+                cycle_id="cycle-123",
+                pr_id="pr-456",
+                work_item_id="",
+                project_id="proj-101",
+                board_id="board-202",
+                status=PRReviewStatus.PENDING,
+                cycle_number=1,
+                current_phase="init",
+                findings=[],
+                phase_outputs=[],
+                config=config,
                 started_at=now,
                 updated_at=now,
             )
@@ -594,15 +720,20 @@ class TestPRReviewCycleState:
     def test_state_cycle_number_min(self):
         """Test cycle_number must be >= 1."""
         now = datetime.now(UTC).isoformat()
+        config = PRReviewCycleConfig()
         with pytest.raises(ValueError, match="cycle_number must be >= 1"):
             PRReviewCycleState(
                 cycle_id="cycle-123",
                 pr_id="pr-456",
+                work_item_id="item-789",
+                project_id="proj-101",
+                board_id="board-202",
                 status=PRReviewStatus.PENDING,
                 cycle_number=0,
                 current_phase="init",
                 findings=[],
                 phase_outputs=[],
+                config=config,
                 started_at=now,
                 updated_at=now,
             )

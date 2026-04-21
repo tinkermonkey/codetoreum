@@ -306,11 +306,10 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
         if config.outcome == PRReviewOutcome.ISSUES_FOUND and not config.findings:
             config.findings = [
                 PRReviewFinding(
-                    type="code_quality",
+                    title="Code quality issue",
+                    description="Code review findings detected",
                     severity="medium",
-                    file="unknown.py",
-                    line_number=None,
-                    message="Code review findings",
+                    phase="code_review",
                 )
             ]
 
@@ -364,11 +363,15 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             cycle_state = PRReviewCycleState(
                 cycle_id=cycle_id,
                 pr_id=request.pr_id or f"pr-{work_item_id}",
+                work_item_id=work_item_id,
+                project_id=project_id,
+                board_id=request.board_id,
                 status=PRReviewStatus.ESCALATED,
                 cycle_number=cycle_number,
                 current_phase="completed",
                 findings=[],
                 phase_outputs=[],
+                config=request.config,
                 started_at=started_at,
                 updated_at=self._clock.now().isoformat(),
             )
@@ -505,25 +508,29 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             phase_outputs = [
                 PRReviewPhaseOutput(
                     phase_name="code_review",
+                    phase_index=1,
                     success=True,
                     findings=tuple(config.findings),
                     summary="Code review completed",
                     duration_seconds=600.0,
                 )
             ]
-            for source in request.config.verifier_context_sources:
+            for idx, source in enumerate(request.config.verifier_context_sources, start=2):
                 phase_outputs.append(
                     PRReviewPhaseOutput(
                         phase_name=f"verification_{source}",
+                        phase_index=idx,
                         success=True,
                         findings=(),
                         summary=f"Verified against {source}",
                         duration_seconds=300.0,
+                        context_source=source,
                     )
                 )
             phase_outputs.append(
                 PRReviewPhaseOutput(
                     phase_name="ci_check",
+                    phase_index=len(request.config.verifier_context_sources) + 2,
                     success=False,
                     findings=tuple(config.findings),
                     summary=f"CI check failed with {config.ci_failures_count} failures",
@@ -535,11 +542,15 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             cycle_state = PRReviewCycleState(
                 cycle_id=cycle_id,
                 pr_id=request.pr_id or f"pr-{work_item_id}",
+                work_item_id=work_item_id,
+                project_id=project_id,
+                board_id=request.board_id,
                 status=PRReviewStatus.COMPLETED,
                 cycle_number=cycle_number,
                 current_phase="ci_check",
                 findings=config.findings.copy(),
                 phase_outputs=phase_outputs,
+                config=request.config,
                 started_at=started_at,
                 updated_at=self._clock.now().isoformat(),
             )
@@ -604,18 +615,19 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             for finding in config.findings:
                 try:
                     work_item = await self._ticket_system.create_work_item(
-                        title=f"Fix: {finding.message}",
-                        description=f"Finding Type: {finding.type}\nSeverity: {finding.severity}\nFile: {finding.file}\nLine: {finding.line_number or 'N/A'}\n\nMessage:\n{finding.message}",
+                        title=finding.title,
+                        description=f"Finding: {finding.title}\nPhase: {finding.phase}\nSeverity: {finding.severity}\nContext Source: {finding.context_source or 'N/A'}\n\nDescription:\n{finding.description}",
                         project_id=project_id,
-                        labels=["pr-review-finding", finding.type, finding.severity],
+                        labels=["pr-review-finding", finding.phase, finding.severity],
                         parent_issue_id=work_item_id,
                     )
                     sub_issue_ids.append(work_item.id)
 
                     # Add to the appropriate column on the board
+                    target_column = request.config.sub_issue_initial_column or "Backlog"
                     await self._board_service.move_item_to_column(
                         work_item.id,
-                        "Backlog",
+                        target_column,
                         MovedByType.ORCHESTRATOR,
                     )
                 except Exception as e:
@@ -717,25 +729,29 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
         phase_outputs = [
             PRReviewPhaseOutput(
                 phase_name="code_review",
+                phase_index=1,
                 success=True,
                 findings=tuple(config.findings),
                 summary="Code review completed",
                 duration_seconds=600.0,
             )
         ]
-        for source in request.config.verifier_context_sources:
+        for idx, source in enumerate(request.config.verifier_context_sources, start=2):
             phase_outputs.append(
                 PRReviewPhaseOutput(
                     phase_name=f"verification_{source}",
+                    phase_index=idx,
                     success=True,
                     findings=(),
                     summary=f"Verified against {source}",
                     duration_seconds=300.0,
+                    context_source=source,
                 )
             )
         phase_outputs.append(
             PRReviewPhaseOutput(
                 phase_name="ci_check",
+                phase_index=len(request.config.verifier_context_sources) + 2,
                 success=True,
                 findings=(),
                 summary="CI check passed",
@@ -745,6 +761,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
         phase_outputs.append(
             PRReviewPhaseOutput(
                 phase_name="consolidation",
+                phase_index=len(request.config.verifier_context_sources) + 3,
                 success=True,
                 findings=tuple(config.findings),
                 summary=f"Consolidation completed, outcome: {outcome.value}",
@@ -756,11 +773,15 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
         cycle_state = PRReviewCycleState(
             cycle_id=cycle_id,
             pr_id=request.pr_id or f"pr-{work_item_id}",
+            work_item_id=work_item_id,
+            project_id=project_id,
+            board_id=request.board_id,
             status=PRReviewStatus.COMPLETED,
             cycle_number=cycle_number,
             current_phase="consolidation",
             findings=config.findings.copy(),
             phase_outputs=phase_outputs,
+            config=request.config,
             started_at=started_at,
             updated_at=self._clock.now().isoformat(),
         )

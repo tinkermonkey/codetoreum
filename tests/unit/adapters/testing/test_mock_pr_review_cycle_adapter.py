@@ -389,11 +389,10 @@ class TestEventOrdering:
         """Test correct event order for ISSUES_FOUND path."""
         findings = [
             PRReviewFinding(
-                type="bug",
+                title="Null pointer exception",
+                description="Null pointer exception",
                 severity="high",
-                file="main.py",
-                line_number=42,
-                message="Null pointer exception",
+                phase="code_review",
             )
         ]
         adapter.set_findings(findings)
@@ -434,18 +433,16 @@ class TestSubIssueCreation:
         """Test that sub-issues call ITicketSystem.create_work_item()."""
         findings = [
             PRReviewFinding(
-                type="bug",
+                title="Null pointer exception",
+                description="Null pointer exception",
                 severity="high",
-                file="main.py",
-                line_number=42,
-                message="Null pointer exception",
+                phase="code_review",
             ),
             PRReviewFinding(
-                type="style",
+                title="Missing docstring",
+                description="Missing docstring",
                 severity="low",
-                file="style.py",
-                line_number=None,
-                message="Missing docstring",
+                phase="code_review",
             ),
         ]
         adapter.set_findings(findings)
@@ -472,11 +469,10 @@ class TestSubIssueCreation:
         """Test that sub-issues are added to board via IBoardService."""
         findings = [
             PRReviewFinding(
-                type="bug",
+                title="Null pointer exception",
+                description="Null pointer exception",
                 severity="high",
-                file="main.py",
-                line_number=42,
-                message="Null pointer exception",
+                phase="code_review",
             )
         ]
         adapter.set_findings(findings)
@@ -503,18 +499,16 @@ class TestSubIssueCreation:
         """Test assert_sub_issues_created passes when correct count."""
         findings = [
             PRReviewFinding(
-                type="bug",
+                title="Null pointer exception",
+                description="Null pointer exception",
                 severity="high",
-                file="main.py",
-                line_number=42,
-                message="Null pointer exception",
+                phase="code_review",
             ),
             PRReviewFinding(
-                type="style",
+                title="Missing docstring",
+                description="Missing docstring",
                 severity="low",
-                file="style.py",
-                line_number=None,
-                message="Missing docstring",
+                phase="code_review",
             ),
         ]
         adapter.set_findings(findings)
@@ -541,11 +535,10 @@ class TestSubIssueCreation:
         """Test assert_sub_issues_created raises AssertionError for wrong count."""
         findings = [
             PRReviewFinding(
-                type="bug",
+                title="Null pointer exception",
+                description="Null pointer exception",
                 severity="high",
-                file="main.py",
-                line_number=42,
-                message="Null pointer exception",
+                phase="code_review",
             )
         ]
         adapter.set_findings(findings)

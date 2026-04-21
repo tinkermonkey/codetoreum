@@ -178,17 +178,20 @@ class PRReviewCycleConfigModel(BaseModel):
     All fields are optional and default to the domain model defaults.
 
     Attributes:
-        max_outer_cycles: Maximum number of complete cycles before escalation (>= 1)
+        max_outer_cycles: Maximum number of complete cycles before escalation (>= 1, default 3)
         verifier_context_sources: Tuple of context sources for verification phase
         code_review_timeout_seconds: Timeout for Phase 1 code review
         verification_timeout_seconds: Timeout per verification context source
         ci_check_enabled: Whether to perform Phase 3 CI check
         ci_check_timeout_seconds: Timeout for CI check
         consolidation_timeout_seconds: Timeout for Phase 4 consolidation
+        sub_issue_creation: Whether to create sub-issues when findings are found
+        sub_issue_labels: Labels to apply to created sub-issues
+        sub_issue_initial_column: Column to place created sub-issues in
     """
 
     max_outer_cycles: int = Field(
-        default=1,
+        default=3,
         description="Maximum number of complete cycles before escalation",
         ge=1,
     )
@@ -224,6 +227,18 @@ class PRReviewCycleConfigModel(BaseModel):
     sub_issue_target_board: str | None = Field(
         default=None,
         description="Board ID where sub-issues will be created",
+    )
+    sub_issue_creation: bool = Field(
+        default=True,
+        description="Whether to create sub-issues when findings are found",
+    )
+    sub_issue_labels: list[str] = Field(
+        default_factory=list,
+        description="Labels to apply to created sub-issues",
+    )
+    sub_issue_initial_column: str | None = Field(
+        default=None,
+        description="Column to place created sub-issues in",
     )
     on_issues_found_column: str | None = Field(
         default=None,
@@ -273,6 +288,9 @@ class PRReviewCycleConfigModel(BaseModel):
             ci_check_timeout_seconds=self.ci_check_timeout_seconds,
             consolidation_timeout_seconds=self.consolidation_timeout_seconds,
             sub_issue_target_board=self.sub_issue_target_board,
+            sub_issue_creation=self.sub_issue_creation,
+            sub_issue_labels=tuple(self.sub_issue_labels),
+            sub_issue_initial_column=self.sub_issue_initial_column,
             on_issues_found_column=self.on_issues_found_column,
             on_approved_column=self.on_approved_column,
             agents=agents_tuple,
