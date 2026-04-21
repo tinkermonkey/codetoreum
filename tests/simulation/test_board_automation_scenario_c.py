@@ -229,7 +229,7 @@ class TestScenarioC_ReviewRejectionLoop:
 
         # Step 1: Set up initial state - work item in Development
         # (Simulating that engineer has already moved from Backlog)
-        board_service.add_item_to_column("board-1", "Development", "work-item-100")
+        board_service.seed_item_to_column("board-1", "Development", "work-item-100")
         board_service.assert_item_in_column("work-item-100", "Development")
 
         # Manually trigger event handler for Development to acquire lock
@@ -402,7 +402,7 @@ class TestScenarioC_ReviewRejectionLoop:
         agent_executor = setup["agent_executor"]
 
         # Setup: Work item in Code Review
-        board_service.add_item_to_column("board-1", "Code Review", "work-item-200")
+        board_service.seed_item_to_column("board-1", "Code Review", "work-item-200")
         board_service.assert_item_in_column("work-item-200", "Code Review")
 
         # Manually trigger event handler for Code Review column
@@ -470,7 +470,7 @@ class TestScenarioC_ReviewRejectionLoop:
         event_handler = setup["event_handler"]
 
         # Setup: Work item in Code Review
-        board_service.add_item_to_column("board-1", "Code Review", "work-item-300")
+        board_service.seed_item_to_column("board-1", "Code Review", "work-item-300")
         board_service.assert_item_in_column("work-item-300", "Code Review")
 
         # Manually trigger event handler for Code Review column
@@ -522,7 +522,7 @@ class TestScenarioC_ReviewRejectionLoop:
         event_handler = setup["event_handler"]
 
         # Setup: Work item in Development
-        board_service.add_item_to_column("board-1", "Development", "work-item-400")
+        board_service.seed_item_to_column("board-1", "Development", "work-item-400")
 
         # Trigger for Development
         await event_handler.handle_column_change(

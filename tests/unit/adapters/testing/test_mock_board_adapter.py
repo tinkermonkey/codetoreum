@@ -91,8 +91,8 @@ class TestAddItemToColumn:
     def test_add_item_to_column_appends_to_end(self, adapter_with_board):
         """Test add_item_to_column() appends to end by default."""
         adapter = adapter_with_board
-        adapter.add_item_to_column("board-1", "Backlog", "item-1")
-        adapter.add_item_to_column("board-1", "Backlog", "item-2")
+        adapter.seed_item_to_column("board-1", "Backlog", "item-1")
+        adapter.seed_item_to_column("board-1", "Backlog", "item-2")
 
         items = asyncio.run(adapter.get_items_in_column("board-1", "Backlog"))
         assert len(items) == 2
@@ -104,9 +104,9 @@ class TestAddItemToColumn:
     def test_add_item_to_column_at_specific_position(self, adapter_with_board):
         """Test add_item_to_column() inserts at specified position."""
         adapter = adapter_with_board
-        adapter.add_item_to_column("board-1", "Backlog", "item-1", position=0)
-        adapter.add_item_to_column("board-1", "Backlog", "item-3", position=1)
-        adapter.add_item_to_column("board-1", "Backlog", "item-2", position=1)
+        adapter.seed_item_to_column("board-1", "Backlog", "item-1", position=0)
+        adapter.seed_item_to_column("board-1", "Backlog", "item-3", position=1)
+        adapter.seed_item_to_column("board-1", "Backlog", "item-2", position=1)
 
         items = asyncio.run(adapter.get_items_in_column("board-1", "Backlog"))
         assert items[0].work_item_id == "item-1"
@@ -116,9 +116,9 @@ class TestAddItemToColumn:
     def test_add_item_to_column_updates_item_positions(self, adapter_with_board):
         """Test add_item_to_column() updates position of later items."""
         adapter = adapter_with_board
-        adapter.add_item_to_column("board-1", "Backlog", "item-1", position=0)
-        adapter.add_item_to_column("board-1", "Backlog", "item-3", position=1)
-        adapter.add_item_to_column("board-1", "Backlog", "item-2", position=1)
+        adapter.seed_item_to_column("board-1", "Backlog", "item-1", position=0)
+        adapter.seed_item_to_column("board-1", "Backlog", "item-3", position=1)
+        adapter.seed_item_to_column("board-1", "Backlog", "item-2", position=1)
 
         # Verify positions are correct
         for item in asyncio.run(adapter.get_items_in_column("board-1", "Backlog")):
@@ -133,18 +133,18 @@ class TestAddItemToColumn:
         """Test add_item_to_column() raises error for non-existent board."""
         adapter = adapter_with_board
         with pytest.raises(ValueError, match="Board.*not found"):
-            adapter.add_item_to_column("board-999", "Backlog", "item-1")
+            adapter.seed_item_to_column("board-999", "Backlog", "item-1")
 
     def test_add_item_to_column_column_not_found(self, adapter_with_board):
         """Test add_item_to_column() raises error for non-existent column."""
         adapter = adapter_with_board
         with pytest.raises(ValueError, match="Column.*not found"):
-            adapter.add_item_to_column("board-1", "NonExistent", "item-1")
+            adapter.seed_item_to_column("board-1", "NonExistent", "item-1")
 
     def test_add_item_to_column_tracks_position(self, adapter_with_board):
         """Test add_item_to_column() tracks item position correctly."""
         adapter = adapter_with_board
-        adapter.add_item_to_column("board-1", "Backlog", "item-1")
+        adapter.seed_item_to_column("board-1", "Backlog", "item-1")
 
         position = asyncio.run(adapter.get_item_position("item-1"))
         assert position.work_item_id == "item-1"
@@ -161,7 +161,7 @@ class TestSimulateHumanMove:
         adapter = MockBoardAdapter()
         adapter.current_project = "proj-1"
         adapter.create_board("proj-1", "board-1", "Board", ["Backlog", "In Progress", "Done"])
-        adapter.add_item_to_column("board-1", "Backlog", "item-1")
+        adapter.seed_item_to_column("board-1", "Backlog", "item-1")
         return adapter
 
     @pytest.mark.asyncio
@@ -222,7 +222,7 @@ class TestAssertItemInColumn:
         adapter = MockBoardAdapter()
         adapter.current_project = "proj-1"
         adapter.create_board("proj-1", "board-1", "Board", ["Backlog", "In Progress", "Done"])
-        adapter.add_item_to_column("board-1", "Backlog", "item-1")
+        adapter.seed_item_to_column("board-1", "Backlog", "item-1")
         return adapter
 
     def test_assert_item_in_column_passes_for_correct_column(self, adapter_with_item):
@@ -264,7 +264,7 @@ class TestGetMovementHistory:
         adapter = MockBoardAdapter()
         adapter.current_project = "proj-1"
         adapter.create_board("proj-1", "board-1", "Board", ["Backlog", "In Progress", "Review", "Done"])
-        adapter.add_item_to_column("board-1", "Backlog", "item-1")
+        adapter.seed_item_to_column("board-1", "Backlog", "item-1")
         return adapter
 
     def test_get_movement_history_returns_empty_for_new_item(self, adapter_with_item):
@@ -315,7 +315,7 @@ class TestGetMovementHistory:
     def test_get_movement_history_isolated_per_item(self, adapter_with_item):
         """Test get_movement_history() only returns history for specific item."""
         adapter = adapter_with_item
-        adapter.add_item_to_column("board-1", "Backlog", "item-2")
+        adapter.seed_item_to_column("board-1", "Backlog", "item-2")
 
         asyncio.run(adapter.move_item_to_column("item-1", "In Progress", MovedByType.HUMAN))
         asyncio.run(adapter.move_item_to_column("item-2", "Review", MovedByType.HUMAN))
@@ -351,8 +351,8 @@ class TestClearMovementLog:
         adapter = MockBoardAdapter()
         adapter.current_project = "proj-1"
         adapter.create_board("proj-1", "board-1", "Board", ["Backlog", "In Progress", "Done"])
-        adapter.add_item_to_column("board-1", "Backlog", "item-1")
-        adapter.add_item_to_column("board-1", "Backlog", "item-2")
+        adapter.seed_item_to_column("board-1", "Backlog", "item-1")
+        adapter.seed_item_to_column("board-1", "Backlog", "item-2")
         asyncio.run(adapter.move_item_to_column("item-1", "In Progress", MovedByType.HUMAN))
         asyncio.run(adapter.move_item_to_column("item-2", "In Progress", MovedByType.HUMAN))
         return adapter
@@ -399,9 +399,9 @@ class TestGetItemsInColumn:
     async def test_get_items_in_column_returns_items_in_order(self, adapter_with_items):
         """Test get_items_in_column() returns items ordered by position."""
         adapter = adapter_with_items
-        adapter.add_item_to_column("board-1", "Backlog", "item-1", position=0)
-        adapter.add_item_to_column("board-1", "Backlog", "item-2", position=1)
-        adapter.add_item_to_column("board-1", "Backlog", "item-3", position=2)
+        adapter.seed_item_to_column("board-1", "Backlog", "item-1", position=0)
+        adapter.seed_item_to_column("board-1", "Backlog", "item-2", position=1)
+        adapter.seed_item_to_column("board-1", "Backlog", "item-3", position=2)
 
         items = await adapter.get_items_in_column("board-1", "Backlog")
 
@@ -422,8 +422,8 @@ class TestGetItemsInColumn:
     async def test_get_items_in_column_topmost_first(self, adapter_with_items):
         """Test get_items_in_column() returns topmost item (position 0) first."""
         adapter = adapter_with_items
-        adapter.add_item_to_column("board-1", "Backlog", "bottom")
-        adapter.add_item_to_column("board-1", "Backlog", "top", position=0)
+        adapter.seed_item_to_column("board-1", "Backlog", "bottom")
+        adapter.seed_item_to_column("board-1", "Backlog", "top", position=0)
 
         items = await adapter.get_items_in_column("board-1", "Backlog")
 
@@ -444,7 +444,7 @@ class TestPositionRecalculationOnRemoval:
         adapter.create_board("proj-1", "board-1", "Board", ["Backlog", "In Progress", "Done"])
         # Add items at positions 0-4
         for i in range(5):
-            adapter.add_item_to_column("board-1", "Backlog", f"item-{i}", position=i)
+            adapter.seed_item_to_column("board-1", "Backlog", f"item-{i}", position=i)
         return adapter
 
     @pytest.mark.asyncio
@@ -554,7 +554,7 @@ class TestThreadSafety:
         # Add items concurrently
         def add_items(start_idx, count):
             for i in range(start_idx, start_idx + count):
-                adapter.add_item_to_column("board-1", "Backlog", f"item-{i}")
+                adapter.seed_item_to_column("board-1", "Backlog", f"item-{i}")
 
         threads = [
             threading.Thread(target=add_items, args=(0, 10)),
@@ -585,7 +585,7 @@ class TestThreadSafety:
 
         # Add items
         for i in range(10):
-            adapter.add_item_to_column("board-1", "Backlog", f"item-{i}")
+            adapter.seed_item_to_column("board-1", "Backlog", f"item-{i}")
 
         # Move items concurrently
         async def move_items():
@@ -610,7 +610,7 @@ class TestPositionChangedEventEmissions:
         adapter.create_board("proj-1", "board-1", "Board", ["Backlog", "In Progress", "Done"])
         # Add items at positions 0-2
         for i in range(3):
-            adapter.add_item_to_column("board-1", "Backlog", f"item-{i}", position=i)
+            adapter.seed_item_to_column("board-1", "Backlog", f"item-{i}", position=i)
         return adapter
 
     @pytest.mark.asyncio
@@ -667,7 +667,7 @@ class TestPositionChangedEventEmissions:
         adapter.on("workitem.position_changed", position_events.append)
 
         # Add new item at position 0 - should shift item-0, item-1, item-2
-        adapter.add_item_to_column("board-1", "Backlog", "item-new", position=0)
+        adapter.seed_item_to_column("board-1", "Backlog", "item-new", position=0)
 
         # Verify position changed events were emitted for all shifted items
         assert len(position_events) == 3
@@ -694,7 +694,7 @@ class TestPositionChangedEventEmissions:
         adapter.on("workitem.position_changed", position_events.append)
 
         # Add item to end (default position) - should not shift any items
-        adapter.add_item_to_column("board-1", "Backlog", "item-new")
+        adapter.seed_item_to_column("board-1", "Backlog", "item-new")
 
         assert len(position_events) == 0
 
@@ -705,7 +705,7 @@ class TestPositionChangedEventEmissions:
         adapter.create_board("proj-1", "board-1", "Board", ["Backlog"])
 
         with pytest.raises(ValueError, match="current_project not set"):
-            adapter.add_item_to_column("board-1", "Backlog", "item-1")
+            adapter.seed_item_to_column("board-1", "Backlog", "item-1")
 
     @pytest.mark.asyncio
     async def test_position_changed_event_has_correct_metadata(self, adapter_with_items):

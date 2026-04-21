@@ -451,8 +451,43 @@ class MockBoardAdapter(IBoardService):
                 msg = "Column"
                 raise ResourceNotFoundError(msg, target_column)
 
+            # Add item to the target column's work_item_ids tuple
+            new_items = list(target_col.work_item_ids)
+            new_items.append(work_item_id)
+            object.__setattr__(target_col, "work_item_ids", tuple(new_items))
+
             # Update item position to the target column
-            self._item_positions[work_item_id] = (board_id, target_column, 0)
+            position = len(target_col.work_item_ids) - 1
+            self._item_positions[work_item_id] = (board_id, target_column, position)
+
+            # Track when item entered this column (for SLA monitoring)
+            self._item_column_entries[work_item_id] = self._get_utc_datetime()
+
+            # Log movement
+            timestamp = self._get_utc_datetime()
+            movement = MovementEvent(
+                work_item_id=work_item_id,
+                from_column=None,
+                to_column=target_column,
+                moved_by=moved_by,
+                timestamp=timestamp,
+            )
+            self._movement_log.append(movement)
+
+            # Emit event
+            self.emit(
+                WorkItemColumnChangedEvent(
+                    type="workitem.column_changed",
+                    work_item_id=work_item_id,
+                    project_id=project_id,
+                    board_id=board_id,
+                    from_column=None,
+                    to_column=target_column,
+                    moved_by=moved_by.value,  # Use enum value
+                    timestamp=self._get_iso_timestamp(),
+                    source="mock",
+                )
+            )
 
         return ColumnMovementResult(
             work_item_id=work_item_id,
@@ -621,7 +656,7 @@ class MockBoardAdapter(IBoardService):
         # Register board -> project mapping for multi-project support
         self._board_project_map[board_id] = project_id
 
-    def add_item_to_column(
+    def seed_item_to_column(
         self,
         board_id: str,
         column_name: str,
@@ -640,7 +675,7 @@ class MockBoardAdapter(IBoardService):
             ValueError: Board, column, or project context doesn't exist
 
         Example:
-            adapter.add_item_to_column("board-1", "Backlog", "item-1", position=0)
+            adapter.seed_item_to_column("board-1", "Backlog", "item-1", position=0)
         """
         if self.current_project is None:
             msg = "current_project not set"

@@ -191,7 +191,7 @@ class TestScenarioB_LockContention:
         event_handler = setup["event_handler"]
 
         # Step 1: Work item #100 in Development (holds lock)
-        board_service.add_item_to_column("board-1", "Development", "work-item-100", position=0)
+        board_service.seed_item_to_column("board-1", "Development", "work-item-100", position=0)
 
         # Manually trigger event handler to acquire lock
         await event_handler.handle_column_change(
@@ -219,7 +219,7 @@ class TestScenarioB_LockContention:
         ), "Engineer should be triggered for first work item"
 
         # Step 2: Human moves #101 to Development → added to queue
-        board_service.add_item_to_column("board-1", "Development", "work-item-101", position=1)
+        board_service.seed_item_to_column("board-1", "Development", "work-item-101", position=1)
 
         # Manually trigger event handler
         await event_handler.handle_column_change(
@@ -241,7 +241,7 @@ class TestScenarioB_LockContention:
         ), f"Expected first queue item to be 'work-item-101', got '{queue_state.queue[0].work_item_id}'"
 
         # Step 3: Human moves #102 to Development → added to queue (position 2)
-        board_service.add_item_to_column("board-1", "Development", "work-item-102", position=2)
+        board_service.seed_item_to_column("board-1", "Development", "work-item-102", position=2)
 
         # Manually trigger event handler
         await event_handler.handle_column_change(
@@ -317,9 +317,9 @@ class TestScenarioB_LockContention:
         event_handler = setup["event_handler"]
 
         # Set up: #100 holds lock, #101 and #102 queued
-        board_service.add_item_to_column("board-1", "Development", "work-item-100", position=0)
-        board_service.add_item_to_column("board-1", "Development", "work-item-101", position=1)
-        board_service.add_item_to_column("board-1", "Development", "work-item-102", position=2)
+        board_service.seed_item_to_column("board-1", "Development", "work-item-100", position=0)
+        board_service.seed_item_to_column("board-1", "Development", "work-item-101", position=1)
+        board_service.seed_item_to_column("board-1", "Development", "work-item-102", position=2)
 
         # Simulate moves to trigger lock logic
         await event_handler.handle_column_change(

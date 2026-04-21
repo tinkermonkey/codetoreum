@@ -62,7 +62,7 @@ class TestMockBoardAdapter:
 
     async def test_add_work_item(self, adapter):
         """Test adding work item to board."""
-        adapter.add_item_to_column("board-1", "Backlog", "item-1")
+        adapter.seed_item_to_column("board-1", "Backlog", "item-1")
         item_pos = await adapter.get_item_position("item-1")
         assert item_pos.column_name == "Backlog"
         assert item_pos.position == 0
@@ -71,7 +71,7 @@ class TestMockBoardAdapter:
         """Test move_item_to_column emits correct event."""
         from codetoreum.ports.output.board_service import MovedByType
 
-        adapter.add_item_to_column("board-1", "Backlog", "item-1")
+        adapter.seed_item_to_column("board-1", "Backlog", "item-1")
         events: list[Any] = []
         adapter.on("workitem.column_changed", events.append)
 
@@ -90,7 +90,7 @@ class TestMockBoardAdapter:
         """Test move_item_to_column with orchestrator as mover."""
         from codetoreum.ports.output.board_service import MovedByType
 
-        adapter.add_item_to_column("board-1", "Backlog", "item-1")
+        adapter.seed_item_to_column("board-1", "Backlog", "item-1")
         events: list[Any] = []
         adapter.on("workitem.column_changed", events.append)
 
@@ -103,7 +103,7 @@ class TestMockBoardAdapter:
         """Test move_item_to_column emits event."""
         from codetoreum.ports.output.board_service import MovedByType
 
-        adapter.add_item_to_column("board-1", "Backlog", "item-1")
+        adapter.seed_item_to_column("board-1", "Backlog", "item-1")
         events: list[Any] = []
         adapter.on("workitem.column_changed", events.append)
 
@@ -133,7 +133,7 @@ class TestMockBoardAdapter:
         """Test that emitted events have valid ISO 8601 timestamps."""
         from codetoreum.ports.output.board_service import MovedByType
 
-        adapter.add_item_to_column("board-1", "Backlog", "item-1")
+        adapter.seed_item_to_column("board-1", "Backlog", "item-1")
         events: list[Any] = []
         adapter.on("workitem.column_changed", events.append)
 

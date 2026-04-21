@@ -245,7 +245,7 @@ class TestScenarioD_HumanIntervention:
         event_handler = setup["event_handler"]
 
         # Setup: Work item progresses to Testing column
-        board_service.add_item_to_column("board-1", "Development", "work-item-100")
+        board_service.seed_item_to_column("board-1", "Development", "work-item-100")
 
         # Trigger event handler for Development entry
         await event_handler.handle_column_change(
@@ -353,7 +353,7 @@ class TestScenarioD_HumanIntervention:
         event_handler = setup["event_handler"]
 
         # Setup: Work item in Code Review
-        board_service.add_item_to_column("board-1", "Code Review", "work-item-100")
+        board_service.seed_item_to_column("board-1", "Code Review", "work-item-100")
 
         # Trigger event handler for Code Review entry
         await event_handler.handle_column_change(
@@ -423,7 +423,7 @@ class TestScenarioD_HumanIntervention:
         event_handler = setup["event_handler"]
 
         # Setup: Work item in Development
-        board_service.add_item_to_column("board-1", "Development", "work-item-100")
+        board_service.seed_item_to_column("board-1", "Development", "work-item-100")
 
         # Trigger event handler for Development entry
         await event_handler.handle_column_change(

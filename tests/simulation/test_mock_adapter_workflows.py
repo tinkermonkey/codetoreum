@@ -52,7 +52,7 @@ class TestBoardWorkflow:
         board_adapter.on("workitem.column_changed", events.append)
 
         # Add work item to backlog
-        board_adapter.add_item_to_column("main-board", "Backlog", "PROJ-42")
+        board_adapter.seed_item_to_column("main-board", "Backlog", "PROJ-42")
 
         # Simulate progression through workflow
         transitions = [
@@ -87,7 +87,7 @@ class TestBoardWorkflow:
 
         # Create multiple work items
         for i in range(3):
-            board_adapter.add_item_to_column("main-board", "Backlog", f"PROJ-{i}")
+            board_adapter.seed_item_to_column("main-board", "Backlog", f"PROJ-{i}")
 
         # Move them independently
         await board_adapter.move_item_to_column("PROJ-0", "In Progress", MovedByType.HUMAN)
@@ -279,7 +279,7 @@ class TestCombinedWorkflow:
 
         # Workflow:
         # 1. Item in Backlog
-        board.add_item_to_column("main", "Backlog", "ACME-1")
+        board.seed_item_to_column("main", "Backlog", "ACME-1")
 
         # 2. Move to Dev, acquire lock
         await board.move_item_to_column("ACME-1", "Dev", MovedByType.ORCHESTRATOR)

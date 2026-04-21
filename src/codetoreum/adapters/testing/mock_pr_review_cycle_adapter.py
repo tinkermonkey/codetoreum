@@ -559,13 +559,44 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 )
             )
 
+            # Create sub-issues for CI failures to satisfy domain invariant
+            # (ISSUES_FOUND requires non-empty sub_issue_ids)
+            sub_issue_ids: list[str] = []
+            for finding in config.findings:
+                try:
+                    work_item = await self._ticket_system.create_work_item(
+                        title=finding.title,
+                        description=f"CI Finding: {finding.title}\nPhase: {finding.phase}\nSeverity: {finding.severity}\nContext Source: {finding.context_source or 'N/A'}\n\nDescription:\n{finding.description}",
+                        project_id=project_id,
+                        labels=["pr-review-finding", "ci-failure", finding.phase, finding.severity],
+                        parent_issue_id=work_item_id,
+                    )
+                    sub_issue_ids.append(work_item.id)
+
+                    # Add to the appropriate column on the board
+                    target_column = request.config.sub_issue_initial_column or "Backlog"
+                    await self._board_service.add_item_to_column(
+                        work_item.id,
+                        target_column,
+                        MovedByType.ORCHESTRATOR,
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"Error creating sub-issue for CI finding: {e}",
+                        exc_info=True,
+                        extra={"error_id": "ERR_SUB_ISSUE_CREATION"},
+                    )
+
+            with self._lock:
+                self._sub_issues_created[work_item_id] = sub_issue_ids
+
             result = PRReviewCycleResult(
                 cycle_number=cycle_number,
                 workflow_run_id=request.workflow_run_id,
                 outcome=PRReviewOutcome.ISSUES_FOUND,
                 phase_outputs=tuple(phase_outputs),
                 all_findings=tuple(config.findings),
-                sub_issue_ids=(),
+                sub_issue_ids=tuple(sub_issue_ids),
                 ci_passed=False,
                 total_findings=len(config.findings),
                 critical_count=sum(1 for f in config.findings if f.severity == "critical"),

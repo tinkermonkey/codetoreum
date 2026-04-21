@@ -100,7 +100,7 @@ class TestObservabilityIntegration:
         )
 
         # Add item to Backlog
-        board_adapter.add_item_to_column(
+        board_adapter.seed_item_to_column(
             board_id="board-1",
             column_name="Backlog",
             work_item_id=work_item.id,
@@ -187,12 +187,12 @@ class TestObservabilityIntegration:
         )
 
         # Add items to board columns
-        board_adapter.add_item_to_column(
+        board_adapter.seed_item_to_column(
             board_id="board-1",
             column_name="Backlog",
             work_item_id=item1.id,
         )
-        board_adapter.add_item_to_column(
+        board_adapter.seed_item_to_column(
             board_id="board-1",
             column_name="In Progress",
             work_item_id=item2.id,
@@ -243,7 +243,7 @@ class TestObservabilityIntegration:
         )
 
         # Add item to Backlog column
-        board_adapter.add_item_to_column(
+        board_adapter.seed_item_to_column(
             board_id="board-1",
             column_name="Backlog",
             work_item_id=work_item.id,
@@ -518,7 +518,7 @@ class TestObservabilityIntegration:
         )
 
         # Add item to board
-        board_adapter.add_item_to_column(
+        board_adapter.seed_item_to_column(
             board_id="board-1",
             column_name="Backlog",
             work_item_id=work_item.id,

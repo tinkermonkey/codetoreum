@@ -158,7 +158,7 @@ async def test_sla_detection_single_item(board_adapter, workflow_config_service,
     board_adapter.create_board(
         "proj-1", "board-1", "Test Board", ["Backlog", "In Progress", "Code Review", "Testing", "Done"]
     )
-    board_adapter.add_item_to_column("board-1", "Backlog", "item-1")
+    board_adapter.seed_item_to_column("board-1", "Backlog", "item-1")
 
     # Move item to Code Review
     await board_adapter.move_item_to_column("item-1", "Code Review", MovedByType.ORCHESTRATOR)
@@ -190,7 +190,7 @@ async def test_sla_deduplication(board_adapter, workflow_config_service, event_e
     board_adapter.create_board(
         "proj-1", "board-1", "Test Board", ["Backlog", "In Progress", "Code Review", "Testing", "Done"]
     )
-    board_adapter.add_item_to_column("board-1", "Backlog", "item-1")
+    board_adapter.seed_item_to_column("board-1", "Backlog", "item-1")
     await board_adapter.move_item_to_column("item-1", "Code Review", MovedByType.ORCHESTRATOR)
 
     # Fast-forward beyond SLA
@@ -216,8 +216,8 @@ async def test_sla_multiple_columns(board_adapter, workflow_config_service, even
     )
 
     # Add two items: one in Code Review (2hr SLA), one in Testing (4hr SLA)
-    board_adapter.add_item_to_column("board-1", "Code Review", "item-1")
-    board_adapter.add_item_to_column("board-1", "Testing", "item-2")
+    board_adapter.seed_item_to_column("board-1", "Code Review", "item-1")
+    board_adapter.seed_item_to_column("board-1", "Testing", "item-2")
 
     # Fast-forward 3 hours (exceeds Code Review SLA but not Testing SLA)
     clock.start_at(clock.now() + timedelta(hours=3))
@@ -248,7 +248,7 @@ async def test_sla_no_sla_column(board_adapter, workflow_config_service, event_e
     )
 
     # Add item to Backlog (no SLA configured)
-    board_adapter.add_item_to_column("board-1", "Backlog", "item-1")
+    board_adapter.seed_item_to_column("board-1", "Backlog", "item-1")
 
     # Fast-forward 10 hours (more than any SLA threshold)
     clock.start_at(clock.now() + timedelta(hours=10))
@@ -268,7 +268,7 @@ async def test_sla_item_without_entry_time(board_adapter, workflow_config_servic
     )
 
     # Add item to column (will set entry time)
-    board_adapter.add_item_to_column("board-1", "Code Review", "item-1")
+    board_adapter.seed_item_to_column("board-1", "Code Review", "item-1")
 
     # Manually clear entry time to simulate broken state
     watchdog._board_service._item_column_entries.clear()
@@ -298,7 +298,7 @@ async def test_sla_error_handling(board_adapter, workflow_config_service, event_
     board_adapter.create_board(
         "proj-1", "board-1", "Test Board", ["Backlog", "In Progress", "Code Review", "Testing", "Done"]
     )
-    board_adapter.add_item_to_column("board-1", "Code Review", "item-1")
+    board_adapter.seed_item_to_column("board-1", "Code Review", "item-1")
     clock.start_at(clock.now() + timedelta(hours=3))
 
     # Check should log error but not crash
@@ -321,7 +321,7 @@ async def test_sla_event_fields(board_adapter, workflow_config_service, event_em
     board_adapter.create_board(
         "proj-1", "board-1", "Test Board", ["Backlog", "In Progress", "Code Review", "Testing", "Done"]
     )
-    board_adapter.add_item_to_column("board-1", "Code Review", "item-1")
+    board_adapter.seed_item_to_column("board-1", "Code Review", "item-1")
 
     # Record entry time for verification
     item_pos = await board_adapter.get_item_position("item-1")
@@ -383,7 +383,7 @@ async def test_sla_clock_integration(board_adapter, workflow_config_service, eve
     board_adapter.create_board(
         "proj-1", "board-1", "Test Board", ["Backlog", "In Progress", "Code Review", "Testing", "Done"]
     )
-    board_adapter.add_item_to_column("board-1", "Code Review", "item-1")
+    board_adapter.seed_item_to_column("board-1", "Code Review", "item-1")
 
     # Record wall time
     wall_time_before = datetime.now(UTC)
@@ -457,7 +457,7 @@ async def test_sla_escalation_moves_item_when_column_configured(clock, event_emi
     board_adapter = MockBoardAdapter(event_emitter, clock)
     board_adapter.current_project = "proj-1"
     board_adapter.create_board("proj-1", "board-1", "T", ["Backlog", "Code Review", "Done"])
-    board_adapter.add_item_to_column("board-1", "Backlog", "item-1")
+    board_adapter.seed_item_to_column("board-1", "Backlog", "item-1")
     await board_adapter.move_item_to_column("item-1", "Code Review", MovedByType.ORCHESTRATOR)
 
     svc = InMemoryWorkflowConfigService()
@@ -490,7 +490,7 @@ async def test_sla_escalation_no_move_when_column_not_configured(clock, event_em
     board_adapter = MockBoardAdapter(event_emitter, clock)
     board_adapter.current_project = "proj-1"
     board_adapter.create_board("proj-1", "board-1", "T", ["Backlog", "Code Review", "Done"])
-    board_adapter.add_item_to_column("board-1", "Backlog", "item-1")
+    board_adapter.seed_item_to_column("board-1", "Backlog", "item-1")
     await board_adapter.move_item_to_column("item-1", "Code Review", MovedByType.ORCHESTRATOR)
 
     svc = InMemoryWorkflowConfigService()
@@ -525,7 +525,7 @@ async def test_sla_escalation_error_is_logged_not_raised(clock, event_emitter, c
     board_adapter = MockBoardAdapter(event_emitter, clock)
     board_adapter.current_project = "proj-1"
     board_adapter.create_board("proj-1", "board-1", "T", ["Backlog", "Code Review", "Done"])
-    board_adapter.add_item_to_column("board-1", "Backlog", "item-1")
+    board_adapter.seed_item_to_column("board-1", "Backlog", "item-1")
     await board_adapter.move_item_to_column("item-1", "Code Review", MovedByType.ORCHESTRATOR)
 
     svc = InMemoryWorkflowConfigService()
