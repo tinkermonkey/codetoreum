@@ -34,8 +34,6 @@ from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationApplicationBootstrap,
 )
 from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
-from codetoreum.ports.output.board_service import MovedByType
-from tests.conftest import wait_for_condition
 from tests.simulation.helpers import wait_for_column
 
 SCENARIO_DIR = Path(__file__).resolve().parent.parent.parent / "scenarios" / "planning_design_review_cycle"
