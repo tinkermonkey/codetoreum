@@ -12,6 +12,7 @@ from codetoreum.domain.events.pr_review_cycle_events import (
     PRReviewCycleIssuesFoundEvent,
     PRReviewCycleMaxCyclesReachedEvent,
 )
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventHandler, event_handler
 from codetoreum.ports.exceptions import ExternalServiceError, ResourceNotFoundError
 from codetoreum.ports.output.board_service import IBoardService, MovedByType
@@ -142,28 +143,31 @@ class PRReviewCycleEventHandler(EventHandler):
                 f"Cannot move {work_item_id} to '{next_column}': work item not found",
                 exc_info=True,
                 extra={
-                    "error_id": "ERR_PR_REVIEW_CYCLE_ITEM_NOT_FOUND",
+                    "error_id": ErrorRegistry.ERR_PR_REVIEW_CYCLE_ITEM_NOT_FOUND,
                     "work_item_id": work_item_id,
                     "next_column": next_column,
                 },
             )
+            raise
         except ExternalServiceError as e:
             logger.error(
                 f"Board service error while moving {work_item_id} to '{next_column}': {e}",
                 exc_info=True,
                 extra={
-                    "error_id": "ERR_PR_REVIEW_CYCLE_BOARD_SERVICE_ERROR",
+                    "error_id": ErrorRegistry.ERR_PR_REVIEW_CYCLE_BOARD_SERVICE_ERROR,
                     "work_item_id": work_item_id,
                     "next_column": next_column,
                 },
             )
+            raise
         except Exception as e:
             logger.error(
                 f"Error moving {work_item_id} to '{next_column}': {e}",
                 exc_info=True,
                 extra={
-                    "error_id": "ERR_PR_REVIEW_CYCLE_MOVE_FAILURE",
+                    "error_id": ErrorRegistry.ERR_PR_REVIEW_CYCLE_MOVE_FAILURE,
                     "work_item_id": work_item_id,
                     "next_column": next_column,
                 },
             )
+            raise

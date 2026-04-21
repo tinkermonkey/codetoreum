@@ -204,7 +204,7 @@ class TestPRReviewCycleEventHandlerErrorHandling:
     """Test PRReviewCycleEventHandler error handling paths."""
 
     async def test_resource_not_found_error_handling(self):
-        """Test handler logs error when work item not found."""
+        """Test handler raises error when work item not found."""
         mock_service = AsyncMock(spec=IBoardService)
         mock_service.move_item_to_column.side_effect = ResourceNotFoundError(
             "WorkItem", "item-1"
@@ -221,14 +221,15 @@ class TestPRReviewCycleEventHandlerErrorHandling:
             workflow_run_id="item-1",
         )
 
-        # Should not raise, just log error
-        await handler.handle(event)
+        # Should raise error after logging
+        with pytest.raises(ResourceNotFoundError):
+            await handler.handle(event)
 
         # Verify move_item_to_column was attempted
         mock_service.move_item_to_column.assert_called_once()
 
     async def test_external_service_error_handling(self):
-        """Test handler logs error when board service fails."""
+        """Test handler raises error when board service fails."""
         mock_service = AsyncMock(spec=IBoardService)
         mock_service.move_item_to_column.side_effect = ExternalServiceError(
             "BoardService", "Board service unavailable"
@@ -251,14 +252,15 @@ class TestPRReviewCycleEventHandlerErrorHandling:
             workflow_run_id="item-2",
         )
 
-        # Should not raise, just log error
-        await handler.handle(event)
+        # Should raise error after logging
+        with pytest.raises(ExternalServiceError):
+            await handler.handle(event)
 
         # Verify move_item_to_column was attempted
         mock_service.move_item_to_column.assert_called_once()
 
     async def test_generic_exception_handling(self):
-        """Test handler logs error for generic exceptions."""
+        """Test handler raises error for generic exceptions."""
         mock_service = AsyncMock(spec=IBoardService)
         mock_service.move_item_to_column.side_effect = Exception("Unexpected error")
         handler = PRReviewCycleEventHandler(mock_service)
@@ -274,8 +276,9 @@ class TestPRReviewCycleEventHandlerErrorHandling:
             workflow_run_id="item-3",
         )
 
-        # Should not raise, just log error
-        await handler.handle(event)
+        # Should raise error after logging
+        with pytest.raises(Exception, match="Unexpected error"):
+            await handler.handle(event)
 
         # Verify move_item_to_column was attempted
         mock_service.move_item_to_column.assert_called_once()
