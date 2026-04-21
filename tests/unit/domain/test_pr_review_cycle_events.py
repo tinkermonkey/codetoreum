@@ -474,13 +474,13 @@ class TestPRReviewCycleCICheckCompletedEvent:
             timestamp=ts,
             source="mock",
             pr_id="pr-123",
-            ci_passed=True,
+            passed=True,
             failures_count=0,
             pending_count=0,
             duration_seconds=30.5,
             workflow_run_id="run-456",
         )
-        assert event.ci_passed is True
+        assert event.passed is True
         assert event.failures_count == 0
         assert event.pending_count == 0
         assert event.duration_seconds == 30.5
@@ -493,13 +493,13 @@ class TestPRReviewCycleCICheckCompletedEvent:
             timestamp=ts,
             source="mock",
             pr_id="pr-123",
-            ci_passed=False,
+            passed=False,
             failures_count=2,
             pending_count=1,
             duration_seconds=30.5,
             workflow_run_id="run-456",
         )
-        assert event.ci_passed is False
+        assert event.passed is False
         assert event.failures_count == 2
         assert event.pending_count == 1
 
@@ -511,7 +511,7 @@ class TestPRReviewCycleCICheckCompletedEvent:
             timestamp=ts,
             source="mock",
             pr_id="pr-123",
-            ci_passed=False,
+            passed=False,
             failures_count=2,
             pending_count=1,
             duration_seconds=30.5,
@@ -519,7 +519,7 @@ class TestPRReviewCycleCICheckCompletedEvent:
         )
         data = original.to_dict()
         restored = PRReviewCycleCICheckCompletedEvent.from_dict(data)
-        assert restored.ci_passed == original.ci_passed
+        assert restored.passed == original.passed
         assert restored.failures_count == original.failures_count
         assert restored.pending_count == original.pending_count
         assert restored.duration_seconds == original.duration_seconds
@@ -608,20 +608,20 @@ class TestPRReviewCycleIssuesFoundEvent:
             pr_id="pr-123",
             cycle_number=1,
             total=3,
-            critical_count=1,
-            high_count=1,
-            medium_count=1,
-            low_count=0,
+            critical=1,
+            high=1,
+            medium=1,
+            low=0,
             sub_issue_count=3,
             cycle_duration_seconds=600.0,
             next_column="In Development",
             workflow_run_id="run-456",
         )
         assert event.total == 3
-        assert event.critical_count == 1
-        assert event.high_count == 1
-        assert event.medium_count == 1
-        assert event.low_count == 0
+        assert event.critical == 1
+        assert event.high == 1
+        assert event.medium == 1
+        assert event.low == 0
         assert event.sub_issue_count == 3
 
     def test_validation_finding_count_min(self):
@@ -635,10 +635,10 @@ class TestPRReviewCycleIssuesFoundEvent:
                 pr_id="pr-123",
                 cycle_number=1,
                 total=0,
-                critical_count=0,
-                high_count=0,
-                medium_count=0,
-                low_count=0,
+                critical=0,
+                high=0,
+                medium=0,
+                low=0,
                 sub_issue_count=0,
                 cycle_duration_seconds=600.0,
                 next_column="In Development",
@@ -655,10 +655,10 @@ class TestPRReviewCycleIssuesFoundEvent:
             pr_id="pr-123",
             cycle_number=1,
             total=3,
-            critical_count=1,
-            high_count=1,
-            medium_count=1,
-            low_count=0,
+            critical=1,
+            high=1,
+            medium=1,
+            low=0,
             sub_issue_count=3,
             cycle_duration_seconds=600.0,
             next_column="In Development",
@@ -667,10 +667,10 @@ class TestPRReviewCycleIssuesFoundEvent:
         data = original.to_dict()
         restored = PRReviewCycleIssuesFoundEvent.from_dict(data)
         assert restored.total == original.total
-        assert restored.critical_count == original.critical_count
-        assert restored.high_count == original.high_count
-        assert restored.medium_count == original.medium_count
-        assert restored.low_count == original.low_count
+        assert restored.critical == original.critical
+        assert restored.high == original.high
+        assert restored.medium == original.medium
+        assert restored.low == original.low
         assert restored.sub_issue_count == original.sub_issue_count
 
 
@@ -867,18 +867,18 @@ class TestPRReviewCycleConsolidationCompletedEvent:
             source="mock",
             pr_id="pr-123",
             total_findings=5,
-            critical_count=2,
-            high_count=2,
-            medium_count=1,
-            low_count=0,
+            critical=2,
+            high=2,
+            medium=1,
+            low=0,
             consolidation_duration_seconds=300.0,
             workflow_run_id="run-456",
         )
         assert event.total_findings == 5
-        assert event.critical_count == 2
-        assert event.high_count == 2
-        assert event.medium_count == 1
-        assert event.low_count == 0
+        assert event.critical == 2
+        assert event.high == 2
+        assert event.medium == 1
+        assert event.low == 0
 
     def test_event_type_correct(self):
         """Test event type is correct."""
@@ -889,10 +889,10 @@ class TestPRReviewCycleConsolidationCompletedEvent:
             source="mock",
             pr_id="pr-123",
             total_findings=0,
-            critical_count=0,
-            high_count=0,
-            medium_count=0,
-            low_count=0,
+            critical=0,
+            high=0,
+            medium=0,
+            low=0,
             consolidation_duration_seconds=100.0,
             workflow_run_id="run-456",
         )
@@ -907,10 +907,10 @@ class TestPRReviewCycleConsolidationCompletedEvent:
             source="mock",
             pr_id="pr-123",
             total_findings=5,
-            critical_count=2,
-            high_count=2,
-            medium_count=1,
-            low_count=0,
+            critical=2,
+            high=2,
+            medium=1,
+            low=0,
             consolidation_duration_seconds=300.0,
             workflow_run_id="run-456",
         )
@@ -927,10 +927,10 @@ class TestPRReviewCycleConsolidationCompletedEvent:
                 source="mock",
                 pr_id="pr-123",
                 total_findings=5,
-                critical_count=2,
-                high_count=2,
-                medium_count=0,
-                low_count=0,  # Sum is 4, not 5
+                critical=2,
+                high=2,
+                medium=0,
+                low=0,  # Sum is 4, not 5
                 consolidation_duration_seconds=300.0,
                 workflow_run_id="run-456",
             )
@@ -944,10 +944,10 @@ class TestPRReviewCycleConsolidationCompletedEvent:
             source="mock",
             pr_id="pr-123",
             total_findings=0,
-            critical_count=0,
-            high_count=0,
-            medium_count=0,
-            low_count=0,
+            critical=0,
+            high=0,
+            medium=0,
+            low=0,
             consolidation_duration_seconds=100.0,
             workflow_run_id="run-456",
         )
@@ -962,18 +962,18 @@ class TestPRReviewCycleConsolidationCompletedEvent:
             source="mock",
             pr_id="pr-123",
             total_findings=5,
-            critical_count=1,
-            high_count=2,
-            medium_count=2,
-            low_count=0,
+            critical=1,
+            high=2,
+            medium=2,
+            low=0,
             consolidation_duration_seconds=450.0,
             workflow_run_id="run-456",
         )
         data = original.to_dict()
         restored = PRReviewCycleConsolidationCompletedEvent.from_dict(data)
         assert restored.total_findings == original.total_findings
-        assert restored.critical_count == original.critical_count
-        assert restored.high_count == original.high_count
-        assert restored.medium_count == original.medium_count
-        assert restored.low_count == original.low_count
+        assert restored.critical == original.critical
+        assert restored.high == original.high
+        assert restored.medium == original.medium
+        assert restored.low == original.low
         assert restored.consolidation_duration_seconds == original.consolidation_duration_seconds

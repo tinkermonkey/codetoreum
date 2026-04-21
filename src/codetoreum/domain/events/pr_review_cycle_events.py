@@ -387,7 +387,7 @@ class PRReviewCycleCICheckCompletedEvent(CodetoreumEvent):
     def from_dict(cls, data: dict) -> "PRReviewCycleCICheckCompletedEvent":
         """Deserialize from dictionary with backward compatibility."""
         # Support both 'passed' and 'ci_passed' for backward compatibility
-        passed = data.get("passed") if "passed" in data else data.get("ci_passed", False)
+        passed = bool(data.get("passed") if "passed" in data else data.get("ci_passed", False))
         return cls(
             type=data.get("type", "pr_review_cycle.ci_check_completed"),
             timestamp=data.get("timestamp", ""),
@@ -396,9 +396,9 @@ class PRReviewCycleCICheckCompletedEvent(CodetoreumEvent):
             event_id=data.get("event_id") or str(uuid4()),
             pr_id=data.get("pr_id", ""),
             passed=passed,
-            failures_count=data.get("failures_count", 0),
-            pending_count=data.get("pending_count", 0),
-            duration_seconds=data.get("duration_seconds", 0.0),
+            failures_count=int(data.get("failures_count", 0)),
+            pending_count=int(data.get("pending_count", 0)),
+            duration_seconds=float(data.get("duration_seconds", 0.0)),
             workflow_run_id=data.get("workflow_run_id", ""),
         )
 

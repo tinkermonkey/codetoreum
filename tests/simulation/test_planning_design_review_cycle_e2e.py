@@ -231,8 +231,8 @@ async def test_issues_found_path(pr_review_env):
         if isinstance(e, PRReviewCycleIssuesFoundEvent)
     ]
     assert len(issues_found_events) > 0, "PRReviewCycleIssuesFoundEvent not fired"
-    assert issues_found_events[0].critical_count >= 1, (
-        f"Expected critical_count >= 1 in PRReviewCycleIssuesFoundEvent, got {issues_found_events[0].critical_count}"
+    assert issues_found_events[0].critical >= 1, (
+        f"Expected critical_count >= 1 in PRReviewCycleIssuesFoundEvent, got {issues_found_events[0].critical}"
     )
 
 
