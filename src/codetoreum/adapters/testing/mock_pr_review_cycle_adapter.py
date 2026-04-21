@@ -932,14 +932,14 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
         with self._lock:
             return self._cycles.get(work_item_id)
 
-    async def save_cycle_state(self, state: PRReviewCycleStateData) -> None:
+    async def save_cycle_state(self, data: PRReviewCycleStateData) -> None:
         """Persist PR review cycle state.
 
         Args:
-            state: PR review cycle state to persist
+            data: PR review cycle state to persist
         """
         with self._lock:
-            self._cycles[state.work_item_id] = state
+            self._cycles[data.work_item_id] = data
 
     async def remove_cycle_state(self, work_item_id: str, project_id: str) -> None:
         """Remove completed cycle state.

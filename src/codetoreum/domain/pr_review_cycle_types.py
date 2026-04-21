@@ -222,12 +222,12 @@ class PRReviewCycleConfig:
     sub_issue_creation: bool = True
     sub_issue_labels: tuple[str, ...] = ()
     sub_issue_initial_column: str = "Backlog"
-    on_issues_found_column: str = ""
-    on_approved_column: str = ""
+    on_issues_found_column: str = "In Development"
+    on_approved_column: str = "Done"
     on_failure_column: str | None = None
-    code_review_agent: str = ""
-    verifier_agent: str = ""
-    consolidation_agent: str = ""
+    code_review_agent: str = "default-code-reviewer"
+    verifier_agent: str = "default-verifier"
+    consolidation_agent: str = "default-consolidation"
 
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""

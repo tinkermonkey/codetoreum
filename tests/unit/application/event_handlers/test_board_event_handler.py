@@ -1496,7 +1496,7 @@ class TestPRReviewCycleDispatch:
             work_item_id="item-1",
             project_id="proj-1",
             board_id="board-1",
-            status=PRReviewStatus.IN_CODE_REVIEW,
+            status=PRReviewStatus.PHASE_1_CODE_REVIEW,
             cycle_number=1,
             current_phase="code_review",
             findings=[],
@@ -1663,7 +1663,7 @@ class TestPRReviewCycleDispatch:
             work_item_id="item-1",
             project_id="proj-1",
             board_id="board-1",
-            status=PRReviewStatus.IN_CODE_REVIEW,
+            status=PRReviewStatus.PHASE_1_CODE_REVIEW,
             cycle_number=3,
             current_phase="code_review",
             findings=[],
@@ -1871,7 +1871,7 @@ class TestPRReviewCycleDispatch:
         call_args = mock_event_emitter.emit.call_args[0][0]
         assert call_args.type == "pr_review_cycle.max_cycles_reached"
         assert call_args.cycle_number == 3  # Would be 2 + 1
-        assert call_args.max_outer_cycles == 2
+        assert call_args.max_cycles == 2
         assert call_args.next_column == "Approved"  # Escalation column is next column in workflow
 
     @pytest.mark.asyncio
