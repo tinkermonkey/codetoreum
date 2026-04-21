@@ -550,13 +550,6 @@ class BoardColumnEventHandler(EventHandler):
             )
             return
 
-        if not column_config.pr_review_cycle_config:
-            logger.warning(
-                f"Column {column_config.name} has no pr_review_cycle_config despite being selected",
-                extra={"work_item_id": work_item_id},
-            )
-            return
-
         logger.info(f"Initiating PR review cycle for {work_item_id} in column '{column_config.name}'")
 
         try:
@@ -639,7 +632,12 @@ class BoardColumnEventHandler(EventHandler):
             # Initiate PR review cycle
             # The cycle will run (synchronously in mock, potentially async in real adapters)
             # and emit outcome events (PRReviewCycleApprovedEvent, PRReviewCycleIssuesFoundEvent, etc.)
-            # that drive further column movement
+            # with `next_column` information.
+            #
+            # DESIGN NOTE: Column movement is driven by outcome events, not by the synchronous
+            # return value from start_pr_review_cycle(). The port interface PRReviewCycleStateData
+            # doesn't expose next_column, but the outcome domain events do. Event handlers for
+            # PRReviewCycleApprovedEvent and PRReviewCycleIssuesFoundEvent handle column transitions.
             result = await self.pr_review_cycle.start_pr_review_cycle(request)
 
             logger.info(
