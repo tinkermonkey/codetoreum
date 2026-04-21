@@ -332,6 +332,11 @@ class TestPRReviewCycleConfig:
         with pytest.raises(ValueError, match="sub_issue_labels must be a tuple"):
             PRReviewCycleConfig(sub_issue_labels=["bug", "enhancement"])  # type: ignore
 
+    def test_config_agents_tuple(self):
+        """Test agents must be a tuple."""
+        with pytest.raises(ValueError, match="agents must be a tuple"):
+            PRReviewCycleConfig(agents=[("code_review", "reviewer"), ("verification", "verifier")])  # type: ignore
+
     def test_config_ci_check_timeout_validation_when_enabled(self):
         """Test ci_check_timeout_seconds must be > 0 when ci_check_enabled=True."""
         with pytest.raises(ValueError, match="ci_check_timeout_seconds must be > 0"):
@@ -484,6 +489,38 @@ class TestPRReviewCycleResult:
                 total_duration_seconds=0.0,
                 timestamp=datetime.now(UTC).isoformat(),
                 next_column="Done",
+            )
+
+    def test_result_total_findings_matches_all_findings_length(self):
+        """Test total_findings must match len(all_findings)."""
+        finding = PRReviewFinding(title="Bug", description="A bug", severity="high", phase="code_review")
+        phase_output = PRReviewPhaseOutput(
+            phase_name="code_review",
+            phase_index=1,
+            success=True,
+            findings=(finding,),
+            summary="Found 1 issue",
+            duration_seconds=600.0,
+        )
+        # total_findings (2) doesn't match len(all_findings) (1)
+        # Severity counts must sum to total_findings, so we need to make them match
+        with pytest.raises(ValueError, match="total_findings .* must match len\\(all_findings\\)"):
+            PRReviewCycleResult(
+                cycle_number=1,
+                workflow_run_id="run-123",
+                outcome=PRReviewOutcome.ISSUES_FOUND,
+                phase_outputs=(phase_output,),
+                all_findings=(finding,),
+                sub_issue_ids=("issue-1",),
+                ci_passed=False,
+                total_findings=2,  # Mismatched with actual findings count (1)
+                critical_count=0,
+                high_count=2,  # Severity counts sum to 2 (matching total_findings)
+                medium_count=0,
+                low_count=0,
+                total_duration_seconds=600.0,
+                timestamp=datetime.now(UTC).isoformat(),
+                next_column="In Development",
             )
 
     def test_result_issues_found_requires_sub_issues(self):

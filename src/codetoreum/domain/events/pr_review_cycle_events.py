@@ -125,7 +125,7 @@ class PRReviewCyclePhaseStartedEvent(CodetoreumEvent):
         phase_name (str): Name of the phase starting (e.g., "code_review", "verification", "ci_check", "consolidation")
         phase_index (int): Position in phase sequence (1-based)
         agent_id (str): ID of the agent executing this phase
-        context_source (str): Context source for this phase (e.g., "pr_diff", "parent_issue", "ba_output", None for CI/consolidation)
+        context_source (str): Context source for this phase (e.g., "pr_diff", "parent_issue", "ba_output", or empty string for CI/consolidation)
         workflow_run_id (str): ID of the workflow run
         timestamp (str): ISO 8601 timestamp
     """

@@ -23,6 +23,7 @@ from codetoreum.domain.events.pr_review_cycle_events import (
     PRReviewCycleIssuesFoundEvent,
     PRReviewCycleMaxCyclesReachedEvent,
     PRReviewCyclePhaseCompletedEvent,
+    PRReviewCyclePhaseStartedEvent,
     PRReviewCycleStartedEvent,
     PRReviewCycleVerificationStartedEvent,
 )
@@ -185,6 +186,192 @@ class TestPRReviewCycleStartedEvent:
                 phases_planned=4,
                 workflow_run_id="run-456",
             )
+
+
+class TestPRReviewCyclePhaseStartedEvent:
+    """Tests for PRReviewCyclePhaseStartedEvent."""
+
+    def test_create_event(self):
+        """Test creating the event."""
+        ts = get_iso_timestamp()
+        event = PRReviewCyclePhaseStartedEvent(
+            type="pr_review_cycle.phase_started",
+            timestamp=ts,
+            source="mock",
+            pr_id="pr-123",
+            phase_name="code_review",
+            phase_index=1,
+            agent_id="agent-456",
+            context_source="pr_diff",
+            workflow_run_id="run-789",
+        )
+        assert event.pr_id == "pr-123"
+        assert event.phase_name == "code_review"
+        assert event.phase_index == 1
+        assert event.agent_id == "agent-456"
+        assert event.context_source == "pr_diff"
+        assert event.workflow_run_id == "run-789"
+
+    def test_event_immutable(self):
+        """Test event is immutable."""
+        ts = get_iso_timestamp()
+        event = PRReviewCyclePhaseStartedEvent(
+            type="pr_review_cycle.phase_started",
+            timestamp=ts,
+            source="mock",
+            pr_id="pr-123",
+            phase_name="code_review",
+            phase_index=1,
+            agent_id="agent-456",
+            context_source="pr_diff",
+            workflow_run_id="run-789",
+        )
+        with pytest.raises(Exception):  # FrozenInstanceError
+            event.phase_name = "verification"
+
+    def test_to_dict_from_dict_round_trip(self):
+        """Test serialization round-trip."""
+        ts = get_iso_timestamp()
+        event_id = str(uuid4())
+        original = PRReviewCyclePhaseStartedEvent(
+            type="pr_review_cycle.phase_started",
+            timestamp=ts,
+            source="mock",
+            correlation_id="corr-123",
+            event_id=event_id,
+            pr_id="pr-123",
+            phase_name="verification",
+            phase_index=2,
+            agent_id="agent-789",
+            context_source="parent_issue",
+            workflow_run_id="run-456",
+        )
+        data = original.to_dict()
+        restored = PRReviewCyclePhaseStartedEvent.from_dict(data)
+
+        assert restored.type == original.type
+        assert restored.timestamp == original.timestamp
+        assert restored.source == original.source
+        assert restored.correlation_id == original.correlation_id
+        assert restored.event_id == original.event_id
+        assert restored.pr_id == original.pr_id
+        assert restored.phase_name == original.phase_name
+        assert restored.phase_index == original.phase_index
+        assert restored.agent_id == original.agent_id
+        assert restored.context_source == original.context_source
+        assert restored.workflow_run_id == original.workflow_run_id
+
+    def test_validation_empty_pr_id(self):
+        """Test validation rejects empty pr_id."""
+        ts = get_iso_timestamp()
+        with pytest.raises(ValueError, match="pr_id is required"):
+            PRReviewCyclePhaseStartedEvent(
+                type="pr_review_cycle.phase_started",
+                timestamp=ts,
+                source="mock",
+                pr_id="",
+                phase_name="code_review",
+                phase_index=1,
+                agent_id="agent-456",
+                context_source="pr_diff",
+                workflow_run_id="run-789",
+            )
+
+    def test_validation_empty_phase_name(self):
+        """Test validation rejects empty phase_name."""
+        ts = get_iso_timestamp()
+        with pytest.raises(ValueError, match="phase_name is required"):
+            PRReviewCyclePhaseStartedEvent(
+                type="pr_review_cycle.phase_started",
+                timestamp=ts,
+                source="mock",
+                pr_id="pr-123",
+                phase_name="",
+                phase_index=1,
+                agent_id="agent-456",
+                context_source="pr_diff",
+                workflow_run_id="run-789",
+            )
+
+    def test_validation_phase_index_min(self):
+        """Test validation requires phase_index >= 1."""
+        ts = get_iso_timestamp()
+        with pytest.raises(ValueError, match="phase_index must be >= 1"):
+            PRReviewCyclePhaseStartedEvent(
+                type="pr_review_cycle.phase_started",
+                timestamp=ts,
+                source="mock",
+                pr_id="pr-123",
+                phase_name="code_review",
+                phase_index=0,
+                agent_id="agent-456",
+                context_source="pr_diff",
+                workflow_run_id="run-789",
+            )
+
+    def test_validation_empty_agent_id(self):
+        """Test validation rejects empty agent_id."""
+        ts = get_iso_timestamp()
+        with pytest.raises(ValueError, match="agent_id is required"):
+            PRReviewCyclePhaseStartedEvent(
+                type="pr_review_cycle.phase_started",
+                timestamp=ts,
+                source="mock",
+                pr_id="pr-123",
+                phase_name="code_review",
+                phase_index=1,
+                agent_id="",
+                context_source="pr_diff",
+                workflow_run_id="run-789",
+            )
+
+    def test_validation_context_source_must_be_string(self):
+        """Test validation requires context_source to be a string."""
+        ts = get_iso_timestamp()
+        with pytest.raises(ValueError, match="context_source must be a string"):
+            PRReviewCyclePhaseStartedEvent(
+                type="pr_review_cycle.phase_started",
+                timestamp=ts,
+                source="mock",
+                pr_id="pr-123",
+                phase_name="code_review",
+                phase_index=1,
+                agent_id="agent-456",
+                context_source=None,  # type: ignore
+                workflow_run_id="run-789",
+            )
+
+    def test_validation_empty_workflow_run_id(self):
+        """Test validation rejects empty workflow_run_id."""
+        ts = get_iso_timestamp()
+        with pytest.raises(ValueError, match="workflow_run_id is required"):
+            PRReviewCyclePhaseStartedEvent(
+                type="pr_review_cycle.phase_started",
+                timestamp=ts,
+                source="mock",
+                pr_id="pr-123",
+                phase_name="code_review",
+                phase_index=1,
+                agent_id="agent-456",
+                context_source="pr_diff",
+                workflow_run_id="",
+            )
+
+    def test_context_source_can_be_empty_string(self):
+        """Test context_source can be empty string for CI/consolidation phases."""
+        ts = get_iso_timestamp()
+        event = PRReviewCyclePhaseStartedEvent(
+            type="pr_review_cycle.phase_started",
+            timestamp=ts,
+            source="mock",
+            pr_id="pr-123",
+            phase_name="ci_check",
+            phase_index=3,
+            agent_id="agent-456",
+            context_source="",  # Empty string for CI/consolidation
+            workflow_run_id="run-789",
+        )
+        assert event.context_source == ""
 
 
 class TestPRReviewCycleCodeReviewStartedEvent:
