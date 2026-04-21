@@ -684,7 +684,7 @@ class BoardColumnEventHandler(EventHandler):
             result = await self.pr_review_cycle.start_pr_review_cycle(request)
 
             logger.info(
-                f"PR review cycle {cycle_number} started for {work_item_id}, " f"status: {result.cycle_state.status}"
+                f"PR review cycle {cycle_number} started for {work_item_id}, " f"outcome: {result.outcome}"
             )
 
         except Exception as e:

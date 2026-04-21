@@ -1482,7 +1482,7 @@ class TestPRReviewCycleDispatch:
         pr_review_cycle_mock.get_cycle_state.return_value = None  # First cycle
 
         # Create state data response
-        from codetoreum.domain.pr_review_cycle_types import PRReviewCycleConfig, PRReviewCycleState, PRReviewStatus
+        from codetoreum.domain.pr_review_cycle_types import PRReviewCycleState, PRReviewStatus
         from codetoreum.ports.output.pr_review_cycle_service import PRReviewCycleStateData
 
         cycle_config = PRReviewCycleConfig()
