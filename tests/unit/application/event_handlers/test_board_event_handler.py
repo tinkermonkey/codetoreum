@@ -1673,7 +1673,7 @@ class TestPRReviewCycleDispatch:
             updated_at=now.isoformat(),
         )
 
-        from codetoreum.domain.pr_review_cycle_types import PRReviewCycleResult, PRReviewPhaseOutput, PRReviewOutcome
+        from codetoreum.domain.pr_review_cycle_types import PRReviewCycleResult, PRReviewOutcome, PRReviewPhaseOutput
 
         phase_output_cycle3 = PRReviewPhaseOutput(
             phase_name="code_review",
