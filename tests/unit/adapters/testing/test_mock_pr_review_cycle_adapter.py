@@ -795,7 +795,11 @@ class TestStateManagement:
             workflow_run_id="run-1",
         )
 
-        state_data = await adapter.start_pr_review_cycle(request)
+        await adapter.start_pr_review_cycle(request)
+
+        # Get the state that was created
+        state_data = await adapter.get_cycle_state("item-1", "proj-1")
+        assert state_data is not None
 
         # Modify and save
         await adapter.save_cycle_state(state_data)
