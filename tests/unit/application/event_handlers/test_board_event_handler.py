@@ -1779,6 +1779,15 @@ class TestPRReviewCycleDispatch:
                     auto_progress_on_completion=False,
                     pr_review_cycle_config=PRReviewCycleConfig(max_outer_cycles=2),
                 ),
+                ColumnTemplate(
+                    name="Approved",
+                    type=ColumnType.MANUAL,
+                    agent_id=None,
+                    is_pipeline_trigger=False,
+                    is_exit_column=True,
+                    position=1,
+                    auto_progress_on_completion=False,
+                ),
             ),
         )
 
@@ -1804,3 +1813,4 @@ class TestPRReviewCycleDispatch:
         assert call_args.type == "pr_review_cycle.max_cycles_reached"
         assert call_args.cycle_number == 3  # Would be 2 + 1
         assert call_args.max_outer_cycles == 2
+        assert call_args.next_column == "Approved"  # Escalation column is next column in workflow

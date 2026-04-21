@@ -136,6 +136,9 @@ from codetoreum.application.conversational_loop_orchestrator import Conversation
 from codetoreum.application.event_handlers.board_event_handler import (
     BoardColumnEventHandler,
 )
+from codetoreum.application.event_handlers.pr_review_cycle_event_handler import (
+    PRReviewCycleEventHandler,
+)
 from codetoreum.application.event_handlers.review_event_handler import (
     ReviewEventHandler,
 )
@@ -2048,6 +2051,11 @@ class SimulationApplicationBootstrap:
         # This allows the handler to manage PR review cycle lifecycle
         self._register_pr_review_cycle_handler()
 
+        # Register PR review cycle outcome event handler with event bus
+        # This handler listens for PR review cycle completion events and moves work items
+        # to the appropriate next column based on cycle outcome
+        self._register_pr_review_cycle_outcome_event_handler()
+
         # Register review event handler with event bus (FR-7.2)
         # This handler listens for review cycle events and has CI pipeline service wired
         self._register_review_event_handler()
@@ -2118,6 +2126,30 @@ class SimulationApplicationBootstrap:
         logger.info("Injected work_item_service adapter into BoardColumnEventHandler")
 
         logger.info("PR review cycle dependencies registered with BoardColumnEventHandler")
+
+    def _register_pr_review_cycle_outcome_event_handler(self) -> None:
+        """
+        Register PR review cycle outcome event handler with the event bus.
+
+        Part of Phase 5: Event handler registration for cross-cutting concerns.
+
+        This handler listens for PR review cycle outcome events (PRReviewCycleApprovedEvent,
+        PRReviewCycleIssuesFoundEvent, PRReviewCycleMaxCyclesReachedEvent) and moves work
+        items to the appropriate next column based on cycle outcome.
+
+        Logs a warning if components are not yet initialized, allowing graceful degradation
+        if called before full setup completion.
+        """
+        if not self.adapters or not self.infrastructure:
+            logger.warning("Cannot register PR review cycle outcome handler: components not ready")
+            return
+
+        handler = PRReviewCycleEventHandler(
+            board_service=self.adapters.board,
+        )
+
+        self.infrastructure.event_bus.register_handler(handler)
+        logger.info("Registered PRReviewCycleEventHandler with event bus")
 
     def _register_review_event_handler(self) -> None:
         """

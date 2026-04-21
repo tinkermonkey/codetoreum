@@ -585,6 +585,36 @@ class BoardColumnEventHandler(EventHandler):
                     work_item = await self.work_item_service.get_work_item(WorkItemId(work_item_id))
                     pr_id = work_item.pr_id or ""
 
+                    # Get workflow config to determine escalation column
+                    workflow_config = await self.workflow_config.get_board_workflow_template(board_id)
+                    if not workflow_config:
+                        logger.error(
+                            f"Cannot determine escalation column for {work_item_id}: "
+                            f"workflow config not found for board {board_id}",
+                            exc_info=False,
+                            extra={
+                                "error_id": "ERR_BOARD_EVENT_WORKFLOW_CONFIG_NOT_FOUND",
+                                "work_item_id": work_item_id,
+                                "board_id": board_id,
+                            },
+                        )
+                        return
+
+                    # Determine escalation column: next column in workflow after PR review cycle column
+                    escalation_column = workflow_config.get_next_column(column_config.name)
+                    if not escalation_column:
+                        logger.error(
+                            f"Cannot determine escalation column for {work_item_id}: "
+                            f"no column after '{column_config.name}'",
+                            exc_info=False,
+                            extra={
+                                "error_id": "ERR_BOARD_EVENT_NO_ESCALATION_COLUMN",
+                                "work_item_id": work_item_id,
+                                "current_column": column_config.name,
+                            },
+                        )
+                        return
+
                     max_cycles_event = PRReviewCycleMaxCyclesReachedEvent(
                         type="pr_review_cycle.max_cycles_reached",
                         timestamp=datetime.now(UTC).isoformat(),
@@ -592,7 +622,7 @@ class BoardColumnEventHandler(EventHandler):
                         pr_id=pr_id,
                         cycle_number=cycle_number,
                         max_outer_cycles=max_outer_cycles,
-                        next_column=column_config.name,  # Escalation column TBD
+                        next_column=escalation_column,
                         workflow_run_id=work_item_id,
                     )
 
@@ -651,9 +681,8 @@ class BoardColumnEventHandler(EventHandler):
             # DESIGN NOTE: Column movement is driven by outcome events, not by the synchronous
             # return value from start_pr_review_cycle(). The port interface PRReviewCycleStateData
             # doesn't expose next_column, but the outcome domain events do. Event handlers for
-            # PRReviewCycleApprovedEvent and PRReviewCycleIssuesFoundEvent handle column transitions.
-            # TODO: Implement event handlers for PRReviewCycleApprovedEvent and
-            # PRReviewCycleIssuesFoundEvent to move work items to next_column.
+            # PRReviewCycleApprovedEvent and PRReviewCycleIssuesFoundEvent (in PRReviewCycleEventHandler)
+            # handle column transitions.
             result = await self.pr_review_cycle.start_pr_review_cycle(request)
 
             logger.info(
