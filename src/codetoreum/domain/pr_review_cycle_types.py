@@ -423,7 +423,7 @@ class PRReviewCycleState:
 
     Attributes:
         cycle_id: Unique identifier for this cycle instance
-        pr_id: GitHub PR identifier
+        pr_id: GitHub PR identifier (None for work items without an associated PR)
         work_item_id: ID of the work item being reviewed
         project_id: ID of the project
         board_id: ID of the project board
