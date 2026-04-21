@@ -342,7 +342,8 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
 
         # Create cycle state
         cycle_id = f"cycle-{work_item_id}-{cycle_number}"
-        started_at = self._clock.now().isoformat()
+        started_at_dt = self._clock.now()
+        started_at_str = started_at_dt.isoformat()
 
         # Calculate phases_planned dynamically based on config
         phases_planned = 1 + len(request.config.verifier_context_sources) + (1 if request.config.ci_check_enabled else 0) + 1
@@ -350,7 +351,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
         # Emit PRReviewCycleStartedEvent
         started_event = PRReviewCycleStartedEvent(
             type="pr_review_cycle.started",
-            timestamp=started_at,
+            timestamp=started_at_str,
             source="mock_pr_review_cycle",
             pr_id=request.pr_id or f"pr-{work_item_id}",
             work_item_id=work_item_id,
@@ -409,7 +410,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 outcome=PRReviewOutcome.MAX_CYCLES_REACHED,
                 phase_outputs=(escalation_phase,),
                 all_findings=(),
-                sub_issue_ids=(),
+                sub_issues_created=(),
                 ci_passed=None,
                 total_findings=0,
                 critical_count=0,
@@ -417,13 +418,13 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 medium_count=0,
                 low_count=0,
                 total_duration_seconds=0.0,
-                timestamp=started_at,
+                timestamp=started_at_str,
                 next_column="Human Review",
             )
 
             # Still store state for recovery purposes
             cycle_state = PRReviewCycleState(
-                cycle_id=cycle_id,
+                id=cycle_id,
                 pr_id=request.pr_id or f"pr-{work_item_id}",
                 work_item_id=work_item_id,
                 project_id=project_id,
@@ -434,8 +435,8 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 findings=[],
                 phase_outputs=[],
                 config=request.config,
-                started_at=started_at,
-                updated_at=self._clock.now().isoformat(),
+                started_at=started_at_dt,
+                updated_at=self._clock.now(),
             )
             state_data = PRReviewCycleStateData(
                 work_item_id=work_item_id,
@@ -443,7 +444,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 board_id=request.board_id,
                 cycle_number=cycle_number,
                 cycle_state=cycle_state,
-                created_at=started_at,
+                created_at=started_at_str,
                 updated_at=self._clock.now().isoformat(),
             )
             with self._lock:
@@ -537,7 +538,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 timestamp=self._clock.now().isoformat(),
                 source="mock_pr_review_cycle",
                 pr_id=request.pr_id or f"pr-{work_item_id}",
-                ci_passed=ci_passed,
+                passed=ci_passed,
                 failures_count=config.ci_failures_count if config.ci_failing else 0,
                 pending_count=0,
                 duration_seconds=0.5,
@@ -668,7 +669,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 outcome=PRReviewOutcome.ISSUES_FOUND,
                 phase_outputs=tuple(phase_outputs),
                 all_findings=tuple(config.findings),
-                sub_issue_ids=tuple(sub_issue_ids),
+                sub_issues_created=tuple(sub_issue_ids),
                 ci_passed=False,
                 total_findings=len(config.findings),
                 critical_count=sum(1 for f in config.findings if f.severity == "critical"),
@@ -676,13 +677,13 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 medium_count=sum(1 for f in config.findings if f.severity == "medium"),
                 low_count=sum(1 for f in config.findings if f.severity == "low"),
                 total_duration_seconds=(self._clock.now() - phase1_start).total_seconds(),
-                timestamp=started_at,
+                timestamp=started_at_str,
                 next_column=request.config.on_failure_column or "In Development",
             )
 
             # Still store state for recovery purposes
             cycle_state = PRReviewCycleState(
-                cycle_id=cycle_id,
+                id=cycle_id,
                 pr_id=request.pr_id or f"pr-{work_item_id}",
                 work_item_id=work_item_id,
                 project_id=project_id,
@@ -693,8 +694,8 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 findings=config.findings.copy(),
                 phase_outputs=phase_outputs,
                 config=request.config,
-                started_at=started_at,
-                updated_at=self._clock.now().isoformat(),
+                started_at=started_at_dt,
+                updated_at=self._clock.now(),
             )
             state_data = PRReviewCycleStateData(
                 work_item_id=work_item_id,
@@ -702,7 +703,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 board_id=request.board_id,
                 cycle_number=cycle_number,
                 cycle_state=cycle_state,
-                created_at=started_at,
+                created_at=started_at_str,
                 updated_at=self._clock.now().isoformat(),
             )
             with self._lock:
@@ -822,10 +823,10 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 pr_id=request.pr_id or f"pr-{work_item_id}",
                 cycle_number=cycle_number,
                 total=len(config.findings),
-                critical_count=critical_count,
-                high_count=high_count,
-                medium_count=medium_count,
-                low_count=low_count,
+                critical=critical_count,
+                high=high_count,
+                medium=medium_count,
+                low=low_count,
                 sub_issue_count=len(sub_issue_ids),
                 cycle_duration_seconds=(self._clock.now() - phase1_start).total_seconds(),
                 next_column=request.config.on_issues_found_column or "In Development",
@@ -857,10 +858,10 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             source="mock_pr_review_cycle",
             pr_id=request.pr_id or f"pr-{work_item_id}",
             total_findings=len(config.findings),
-            critical_count=consolidation_critical,
-            high_count=consolidation_high,
-            medium_count=consolidation_medium,
-            low_count=consolidation_low,
+            critical=consolidation_critical,
+            high=consolidation_high,
+            medium=consolidation_medium,
+            low=consolidation_low,
             consolidation_duration_seconds=consolidation_duration,
             workflow_run_id=request.workflow_run_id,
         )
@@ -930,7 +931,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             outcome=outcome,
             phase_outputs=tuple(phase_outputs),
             all_findings=tuple(config.findings),
-            sub_issue_ids=tuple(sub_issue_ids),
+            sub_issues_created=tuple(sub_issue_ids),
             ci_passed=ci_passed,
             total_findings=len(config.findings),
             critical_count=sum(1 for f in config.findings if f.severity == "critical"),
@@ -938,13 +939,13 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             medium_count=sum(1 for f in config.findings if f.severity == "medium"),
             low_count=sum(1 for f in config.findings if f.severity == "low"),
             total_duration_seconds=(self._clock.now() - phase1_start).total_seconds(),
-            timestamp=started_at,
+            timestamp=started_at_str,
             next_column=next_column,
         )
 
         # Still store state for recovery purposes
         cycle_state = PRReviewCycleState(
-            cycle_id=cycle_id,
+            id=cycle_id,
             pr_id=request.pr_id or f"pr-{work_item_id}",
             work_item_id=work_item_id,
             project_id=project_id,
@@ -955,8 +956,8 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             findings=config.findings.copy(),
             phase_outputs=phase_outputs,
             config=request.config,
-            started_at=started_at,
-            updated_at=self._clock.now().isoformat(),
+            started_at=started_at_dt,
+            updated_at=self._clock.now(),
         )
         state_data = PRReviewCycleStateData(
             work_item_id=work_item_id,
@@ -964,7 +965,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             board_id=request.board_id,
             cycle_number=cycle_number,
             cycle_state=cycle_state,
-            created_at=started_at,
+            created_at=started_at_str,
             updated_at=self._clock.now().isoformat(),
         )
 

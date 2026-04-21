@@ -334,7 +334,7 @@ class PRReviewCycleCICheckCompletedEvent(CodetoreumEvent):
     Attributes:
         type (str): Fixed to "pr_review_cycle.ci_check_completed"
         pr_id (str): GitHub PR identifier
-        ci_passed (bool): Whether CI check passed
+        passed (bool): Whether CI check passed
         failures_count (int): Number of failing CI checks
         pending_count (int): Number of pending CI checks
         duration_seconds (float): Time taken for CI check
@@ -343,7 +343,7 @@ class PRReviewCycleCICheckCompletedEvent(CodetoreumEvent):
     """
 
     pr_id: str = ""
-    ci_passed: bool = False
+    passed: bool = False
     failures_count: int = 0
     pending_count: int = 0
     duration_seconds: float = 0.0
@@ -374,7 +374,7 @@ class PRReviewCycleCICheckCompletedEvent(CodetoreumEvent):
         d.update(
             {
                 "pr_id": self.pr_id,
-                "ci_passed": self.ci_passed,
+                "passed": self.passed,
                 "failures_count": self.failures_count,
                 "pending_count": self.pending_count,
                 "duration_seconds": self.duration_seconds,
@@ -385,7 +385,9 @@ class PRReviewCycleCICheckCompletedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "PRReviewCycleCICheckCompletedEvent":
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary with backward compatibility."""
+        # Support both 'passed' and 'ci_passed' for backward compatibility
+        passed = data.get("passed") if "passed" in data else data.get("ci_passed", False)
         return cls(
             type=data.get("type", "pr_review_cycle.ci_check_completed"),
             timestamp=data.get("timestamp", ""),
@@ -393,7 +395,7 @@ class PRReviewCycleCICheckCompletedEvent(CodetoreumEvent):
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
             pr_id=data.get("pr_id", ""),
-            ci_passed=data.get("ci_passed", False),
+            passed=passed,
             failures_count=data.get("failures_count", 0),
             pending_count=data.get("pending_count", 0),
             duration_seconds=data.get("duration_seconds", 0.0),
@@ -542,10 +544,10 @@ class PRReviewCycleIssuesFoundEvent(CodetoreumEvent):
         pr_id (str): GitHub PR identifier
         cycle_number (int): Iteration number (1-based)
         total (int): Total number of findings
-        critical_count (int): Number of critical severity findings
-        high_count (int): Number of high severity findings
-        medium_count (int): Number of medium severity findings
-        low_count (int): Number of low severity findings
+        critical (int): Number of critical severity findings
+        high (int): Number of high severity findings
+        medium (int): Number of medium severity findings
+        low (int): Number of low severity findings
         sub_issue_count (int): Number of created sub-issues
         cycle_duration_seconds (float): Total time for this cycle
         next_column (str): Column to move item to
@@ -556,10 +558,10 @@ class PRReviewCycleIssuesFoundEvent(CodetoreumEvent):
     pr_id: str = ""
     cycle_number: int = 0
     total: int = 0
-    critical_count: int = 0
-    high_count: int = 0
-    medium_count: int = 0
-    low_count: int = 0
+    critical: int = 0
+    high: int = 0
+    medium: int = 0
+    low: int = 0
     sub_issue_count: int = 0
     cycle_duration_seconds: float = 0.0
     next_column: str = ""
@@ -577,19 +579,19 @@ class PRReviewCycleIssuesFoundEvent(CodetoreumEvent):
         if self.total < 1:
             msg = "total must be >= 1 when issues found"
             raise ValueError(msg)
-        if self.critical_count < 0:
-            msg = "critical_count must be non-negative"
+        if self.critical < 0:
+            msg = "critical must be non-negative"
             raise ValueError(msg)
-        if self.high_count < 0:
-            msg = "high_count must be non-negative"
+        if self.high < 0:
+            msg = "high must be non-negative"
             raise ValueError(msg)
-        if self.medium_count < 0:
-            msg = "medium_count must be non-negative"
+        if self.medium < 0:
+            msg = "medium must be non-negative"
             raise ValueError(msg)
-        if self.low_count < 0:
-            msg = "low_count must be non-negative"
+        if self.low < 0:
+            msg = "low must be non-negative"
             raise ValueError(msg)
-        severity_total = self.critical_count + self.high_count + self.medium_count + self.low_count
+        severity_total = self.critical + self.high + self.medium + self.low
         if severity_total != self.total:
             msg = f"Severity counts ({severity_total}) must sum to total ({self.total})"
             raise ValueError(msg)
@@ -614,10 +616,10 @@ class PRReviewCycleIssuesFoundEvent(CodetoreumEvent):
                 "pr_id": self.pr_id,
                 "cycle_number": self.cycle_number,
                 "total": self.total,
-                "critical_count": self.critical_count,
-                "high_count": self.high_count,
-                "medium_count": self.medium_count,
-                "low_count": self.low_count,
+                "critical": self.critical,
+                "high": self.high,
+                "medium": self.medium,
+                "low": self.low,
                 "sub_issue_count": self.sub_issue_count,
                 "cycle_duration_seconds": self.cycle_duration_seconds,
                 "next_column": self.next_column,
@@ -640,10 +642,10 @@ class PRReviewCycleIssuesFoundEvent(CodetoreumEvent):
             pr_id=data.get("pr_id", ""),
             cycle_number=data.get("cycle_number", 0),
             total=total,
-            critical_count=data.get("critical_count", 0),
-            high_count=data.get("high_count", 0),
-            medium_count=data.get("medium_count", 0),
-            low_count=data.get("low_count", 0),
+            critical=data.get("critical", data.get("critical_count", 0)),
+            high=data.get("high", data.get("high_count", 0)),
+            medium=data.get("medium", data.get("medium_count", 0)),
+            low=data.get("low", data.get("low_count", 0)),
             sub_issue_count=data.get("sub_issue_count", 0),
             cycle_duration_seconds=data.get("cycle_duration_seconds", 0.0),
             next_column=data.get("next_column", ""),
@@ -960,10 +962,10 @@ class PRReviewCycleConsolidationCompletedEvent(CodetoreumEvent):
         type (str): Fixed to "pr_review_cycle.consolidation_completed"
         pr_id (str): GitHub PR identifier
         total_findings (int): Total number of findings across all phases
-        critical_count (int): Number of critical severity findings
-        high_count (int): Number of high severity findings
-        medium_count (int): Number of medium severity findings
-        low_count (int): Number of low severity findings
+        critical (int): Number of critical severity findings
+        high (int): Number of high severity findings
+        medium (int): Number of medium severity findings
+        low (int): Number of low severity findings
         consolidation_duration_seconds (float): Time taken for consolidation
         workflow_run_id (str): ID of the workflow run
         timestamp (str): ISO 8601 timestamp
@@ -971,10 +973,10 @@ class PRReviewCycleConsolidationCompletedEvent(CodetoreumEvent):
 
     pr_id: str = ""
     total_findings: int = 0
-    critical_count: int = 0
-    high_count: int = 0
-    medium_count: int = 0
-    low_count: int = 0
+    critical: int = 0
+    high: int = 0
+    medium: int = 0
+    low: int = 0
     consolidation_duration_seconds: float = 0.0
     workflow_run_id: str = ""
 
@@ -987,19 +989,19 @@ class PRReviewCycleConsolidationCompletedEvent(CodetoreumEvent):
         if self.total_findings < 0:
             msg = "total_findings must be non-negative"
             raise ValueError(msg)
-        if self.critical_count < 0:
-            msg = "critical_count must be non-negative"
+        if self.critical < 0:
+            msg = "critical must be non-negative"
             raise ValueError(msg)
-        if self.high_count < 0:
-            msg = "high_count must be non-negative"
+        if self.high < 0:
+            msg = "high must be non-negative"
             raise ValueError(msg)
-        if self.medium_count < 0:
-            msg = "medium_count must be non-negative"
+        if self.medium < 0:
+            msg = "medium must be non-negative"
             raise ValueError(msg)
-        if self.low_count < 0:
-            msg = "low_count must be non-negative"
+        if self.low < 0:
+            msg = "low must be non-negative"
             raise ValueError(msg)
-        severity_total = self.critical_count + self.high_count + self.medium_count + self.low_count
+        severity_total = self.critical + self.high + self.medium + self.low
         if severity_total != self.total_findings:
             msg = f"Severity counts ({severity_total}) must sum to total_findings ({self.total_findings})"
             raise ValueError(msg)
@@ -1017,10 +1019,10 @@ class PRReviewCycleConsolidationCompletedEvent(CodetoreumEvent):
             {
                 "pr_id": self.pr_id,
                 "total_findings": self.total_findings,
-                "critical_count": self.critical_count,
-                "high_count": self.high_count,
-                "medium_count": self.medium_count,
-                "low_count": self.low_count,
+                "critical": self.critical,
+                "high": self.high,
+                "medium": self.medium,
+                "low": self.low,
                 "consolidation_duration_seconds": self.consolidation_duration_seconds,
                 "workflow_run_id": self.workflow_run_id,
             }
@@ -1029,7 +1031,7 @@ class PRReviewCycleConsolidationCompletedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "PRReviewCycleConsolidationCompletedEvent":
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary with backward compatibility."""
         return cls(
             type=data.get("type", "pr_review_cycle.consolidation_completed"),
             timestamp=data.get("timestamp", ""),
@@ -1038,10 +1040,10 @@ class PRReviewCycleConsolidationCompletedEvent(CodetoreumEvent):
             event_id=data.get("event_id") or str(uuid4()),
             pr_id=data.get("pr_id", ""),
             total_findings=data.get("total_findings", 0),
-            critical_count=data.get("critical_count", 0),
-            high_count=data.get("high_count", 0),
-            medium_count=data.get("medium_count", 0),
-            low_count=data.get("low_count", 0),
+            critical=data.get("critical", data.get("critical_count", 0)),
+            high=data.get("high", data.get("high_count", 0)),
+            medium=data.get("medium", data.get("medium_count", 0)),
+            low=data.get("low", data.get("low_count", 0)),
             consolidation_duration_seconds=data.get("consolidation_duration_seconds", 0.0),
             workflow_run_id=data.get("workflow_run_id", ""),
         )

@@ -1491,7 +1491,7 @@ class TestPRReviewCycleDispatch:
 
         cycle_config = PRReviewCycleConfig()
         cycle_state = PRReviewCycleState(
-            cycle_id="cycle-1",
+            id="cycle-1",
             pr_id="123",
             work_item_id="item-1",
             project_id="proj-1",
@@ -1523,7 +1523,7 @@ class TestPRReviewCycleDispatch:
             outcome=PRReviewOutcome.APPROVED,
             phase_outputs=(phase_output,),
             all_findings=(),
-            sub_issue_ids=(),
+            sub_issues_created=(),
             ci_passed=None,
             total_findings=0,
             critical_count=0,
@@ -1636,7 +1636,7 @@ class TestPRReviewCycleDispatch:
             board_id="board-1",
             cycle_number=2,
             cycle_state=PRReviewCycleState(
-                cycle_id="cycle-2",
+                id="cycle-2",
                 pr_id="123",
                 work_item_id="item-1",
                 project_id="proj-1",
@@ -1658,7 +1658,7 @@ class TestPRReviewCycleDispatch:
 
         # Create response for new cycle
         new_cycle_state = PRReviewCycleState(
-            cycle_id="cycle-3",
+            id="cycle-3",
             pr_id="123",
             work_item_id="item-1",
             project_id="proj-1",
@@ -1690,7 +1690,7 @@ class TestPRReviewCycleDispatch:
             outcome=PRReviewOutcome.APPROVED,
             phase_outputs=(phase_output_cycle3,),
             all_findings=(),
-            sub_issue_ids=(),
+            sub_issues_created=(),
             ci_passed=None,
             total_findings=0,
             critical_count=0,
@@ -1796,7 +1796,7 @@ class TestPRReviewCycleDispatch:
             board_id="board-1",
             cycle_number=2,
             cycle_state=PRReviewCycleState(
-                cycle_id="cycle-2",
+                id="cycle-2",
                 pr_id="123",
                 work_item_id="item-1",
                 project_id="proj-1",
@@ -1926,7 +1926,7 @@ class TestPRReviewCycleDispatch:
             board_id="board-1",
             cycle_number=2,
             cycle_state=PRReviewCycleState(
-                cycle_id="cycle-2",
+                id="cycle-2",
                 pr_id="123",
                 work_item_id="item-1",
                 project_id="proj-1",
@@ -2050,7 +2050,7 @@ class TestPRReviewCycleDispatch:
             board_id="board-1",
             cycle_number=2,
             cycle_state=PRReviewCycleState(
-                cycle_id="cycle-2",
+                id="cycle-2",
                 pr_id="123",
                 work_item_id="item-1",
                 project_id="proj-1",

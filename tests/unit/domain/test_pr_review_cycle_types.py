@@ -482,7 +482,7 @@ class TestPRReviewCycleResult:
             outcome=PRReviewOutcome.APPROVED,
             phase_outputs=(phase_output,),
             all_findings=(),
-            sub_issue_ids=(),
+            sub_issues_created=(),
             ci_passed=True,
             total_findings=0,
             critical_count=0,
@@ -494,7 +494,7 @@ class TestPRReviewCycleResult:
             next_column="Done",
         )
         assert result.outcome == PRReviewOutcome.APPROVED
-        assert result.sub_issue_ids == ()
+        assert result.sub_issues_created == ()
         assert result.ci_passed is True
         assert result.total_findings == 0
 
@@ -515,7 +515,7 @@ class TestPRReviewCycleResult:
             outcome=PRReviewOutcome.ISSUES_FOUND,
             phase_outputs=(phase_output,),
             all_findings=(finding,),
-            sub_issue_ids=("issue-1", "issue-2"),
+            sub_issues_created=("issue-1", "issue-2"),
             ci_passed=False,
             total_findings=1,
             critical_count=0,
@@ -527,7 +527,7 @@ class TestPRReviewCycleResult:
             next_column="In Development",
         )
         assert result.outcome == PRReviewOutcome.ISSUES_FOUND
-        assert len(result.sub_issue_ids) == 2
+        assert len(result.sub_issues_created) == 2
         assert result.high_count == 1
         assert result.total_findings == 1
 
@@ -547,7 +547,7 @@ class TestPRReviewCycleResult:
             outcome=PRReviewOutcome.APPROVED,
             phase_outputs=(phase_output,),
             all_findings=(),
-            sub_issue_ids=(),
+            sub_issues_created=(),
             ci_passed=True,
             total_findings=0,
             critical_count=0,
@@ -578,7 +578,7 @@ class TestPRReviewCycleResult:
                 outcome=PRReviewOutcome.APPROVED,
                 phase_outputs=(phase_output,),
                 all_findings=(),
-                sub_issue_ids=(),
+                sub_issues_created=(),
                 ci_passed=True,
                 total_findings=2,  # Mismatched with severity counts (0)
                 critical_count=0,
@@ -610,7 +610,7 @@ class TestPRReviewCycleResult:
                 outcome=PRReviewOutcome.ISSUES_FOUND,
                 phase_outputs=(phase_output,),
                 all_findings=(finding,),
-                sub_issue_ids=("issue-1",),
+                sub_issues_created=("issue-1",),
                 ci_passed=False,
                 total_findings=2,  # Mismatched with actual findings count (1)
                 critical_count=0,
@@ -639,7 +639,7 @@ class TestPRReviewCycleResult:
             outcome=PRReviewOutcome.ISSUES_FOUND,
             phase_outputs=(phase_output,),
             all_findings=(),
-            sub_issue_ids=(),
+            sub_issues_created=(),
             ci_passed=False,
             total_findings=0,
             critical_count=0,
@@ -651,7 +651,7 @@ class TestPRReviewCycleResult:
             next_column="In Development",
         )
         assert result.outcome == PRReviewOutcome.ISSUES_FOUND
-        assert result.sub_issue_ids == ()
+        assert result.sub_issues_created == ()
 
     def test_result_approved_forbids_sub_issues(self):
         """Test APPROVED outcome forbids sub_issue_ids."""
@@ -663,14 +663,14 @@ class TestPRReviewCycleResult:
             summary="OK",
             duration_seconds=0.0,
         )
-        with pytest.raises(ValueError, match="outcome=APPROVED but sub_issue_ids is non-empty"):
+        with pytest.raises(ValueError, match="outcome=APPROVED but sub_issues_created is non-empty"):
             PRReviewCycleResult(
                 cycle_number=1,
                 workflow_run_id="run-123",
                 outcome=PRReviewOutcome.APPROVED,
                 phase_outputs=(phase_output,),
                 all_findings=(),
-                sub_issue_ids=("issue-1",),
+                sub_issues_created=("issue-1",),
                 ci_passed=True,
                 total_findings=0,
                 critical_count=0,
@@ -699,7 +699,7 @@ class TestPRReviewCycleResult:
                 outcome=PRReviewOutcome.APPROVED,
                 phase_outputs=(phase_output,),
                 all_findings=(),
-                sub_issue_ids=(),
+                sub_issues_created=(),
                 ci_passed=True,
                 total_findings=0,
                 critical_count=0,
@@ -728,10 +728,10 @@ class TestPRReviewCycleState:
 
     def test_create_state(self):
         """Test creating mutable state."""
-        now = datetime.now(UTC).isoformat()
+        now = datetime.now(UTC)
         config = self._create_test_config()
         state = PRReviewCycleState(
-            cycle_id="cycle-123",
+            id="cycle-123",
             pr_id="pr-456",
             work_item_id="item-789",
             project_id="proj-101",
@@ -745,7 +745,7 @@ class TestPRReviewCycleState:
             started_at=now,
             updated_at=now,
         )
-        assert state.cycle_id == "cycle-123"
+        assert state.id == "cycle-123"
         assert state.pr_id == "pr-456"
         assert state.work_item_id == "item-789"
         assert state.project_id == "proj-101"
@@ -757,10 +757,10 @@ class TestPRReviewCycleState:
 
     def test_state_mutable(self):
         """Test state is mutable (not frozen)."""
-        now = datetime.now(UTC).isoformat()
+        now = datetime.now(UTC)
         config = self._create_test_config()
         state = PRReviewCycleState(
-            cycle_id="cycle-123",
+            id="cycle-123",
             pr_id="pr-456",
             work_item_id="item-789",
             project_id="proj-101",
@@ -780,11 +780,11 @@ class TestPRReviewCycleState:
 
     def test_state_findings_mutable_list(self):
         """Test findings list is mutable."""
-        now = datetime.now(UTC).isoformat()
+        now = datetime.now(UTC)
         config = self._create_test_config()
         findings = []
         state = PRReviewCycleState(
-            cycle_id="cycle-123",
+            id="cycle-123",
             pr_id="pr-456",
             work_item_id="item-789",
             project_id="proj-101",
@@ -805,11 +805,11 @@ class TestPRReviewCycleState:
 
     def test_state_empty_cycle_id(self):
         """Test rejects empty cycle_id."""
-        now = datetime.now(UTC).isoformat()
+        now = datetime.now(UTC)
         config = self._create_test_config()
         with pytest.raises(ValueError, match="cycle_id is required"):
             PRReviewCycleState(
-                cycle_id="",
+                id="",
                 pr_id="pr-456",
                 work_item_id="item-789",
                 project_id="proj-101",
@@ -826,10 +826,10 @@ class TestPRReviewCycleState:
 
     def test_state_optional_pr_id(self):
         """Test accepts None for pr_id (work items without associated PR)."""
-        now = datetime.now(UTC).isoformat()
+        now = datetime.now(UTC)
         config = self._create_test_config()
         state = PRReviewCycleState(
-            cycle_id="cycle-123",
+            id="cycle-123",
             pr_id=None,
             work_item_id="item-789",
             project_id="proj-101",
@@ -847,11 +847,11 @@ class TestPRReviewCycleState:
 
     def test_state_empty_pr_id(self):
         """Test rejects empty string pr_id."""
-        now = datetime.now(UTC).isoformat()
+        now = datetime.now(UTC)
         config = self._create_test_config()
         with pytest.raises(ValueError, match="pr_id must be a non-empty string or None"):
             PRReviewCycleState(
-                cycle_id="cycle-123",
+                id="cycle-123",
                 pr_id="",
                 work_item_id="item-789",
                 project_id="proj-101",
@@ -868,11 +868,11 @@ class TestPRReviewCycleState:
 
     def test_state_empty_work_item_id(self):
         """Test rejects empty work_item_id."""
-        now = datetime.now(UTC).isoformat()
+        now = datetime.now(UTC)
         config = self._create_test_config()
         with pytest.raises(ValueError, match="work_item_id is required"):
             PRReviewCycleState(
-                cycle_id="cycle-123",
+                id="cycle-123",
                 pr_id="pr-456",
                 work_item_id="",
                 project_id="proj-101",
@@ -889,11 +889,11 @@ class TestPRReviewCycleState:
 
     def test_state_cycle_number_min(self):
         """Test cycle_number must be >= 1."""
-        now = datetime.now(UTC).isoformat()
+        now = datetime.now(UTC)
         config = self._create_test_config()
         with pytest.raises(ValueError, match="cycle_number must be >= 1"):
             PRReviewCycleState(
-                cycle_id="cycle-123",
+                id="cycle-123",
                 pr_id="pr-456",
                 work_item_id="item-789",
                 project_id="proj-101",

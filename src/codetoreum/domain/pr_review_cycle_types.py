@@ -23,6 +23,7 @@ Reference: repair_cycle_types.py for enum and dataclass patterns
 """
 
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 
 
@@ -307,7 +308,7 @@ class PRReviewCycleResult:
         outcome: Final outcome (PRReviewOutcome enum)
         phase_outputs: Immutable tuple of PRReviewPhaseOutput for each executed phase
         all_findings: Immutable tuple of all PRReviewFinding objects from all phases
-        sub_issue_ids: Immutable tuple of created sub-issue IDs (empty if approved/max_cycles)
+        sub_issues_created: Immutable tuple of created sub-issue IDs (empty if approved/max_cycles)
         ci_passed: CI check result (True if passed, False if failed, None if not checked)
         total_findings: Total number of findings across all phases
         critical_count: Number of critical severity findings
@@ -324,7 +325,7 @@ class PRReviewCycleResult:
     outcome: PRReviewOutcome
     phase_outputs: tuple[PRReviewPhaseOutput, ...]
     all_findings: tuple[PRReviewFinding, ...]
-    sub_issue_ids: tuple[str, ...]
+    sub_issues_created: tuple[str, ...]
     ci_passed: bool | None
     total_findings: int
     critical_count: int
@@ -361,8 +362,8 @@ class PRReviewCycleResult:
             msg = "all_findings must be a tuple (immutable)"
             raise ValueError(msg)
 
-        if not isinstance(self.sub_issue_ids, tuple):
-            msg = "sub_issue_ids must be a tuple (immutable)"
+        if not isinstance(self.sub_issues_created, tuple):
+            msg = "sub_issues_created must be a tuple (immutable)"
             raise ValueError(msg)
 
         if self.total_findings < 0:
@@ -408,9 +409,9 @@ class PRReviewCycleResult:
             msg = "next_column is required"
             raise ValueError(msg)
 
-        # Consistency check: APPROVED should have no sub_issue_ids
-        if self.outcome == PRReviewOutcome.APPROVED and self.sub_issue_ids:
-            msg = f"outcome=APPROVED but sub_issue_ids is non-empty: {self.sub_issue_ids} (contradiction)"
+        # Consistency check: APPROVED should have no sub_issues_created
+        if self.outcome == PRReviewOutcome.APPROVED and self.sub_issues_created:
+            msg = f"outcome=APPROVED but sub_issues_created is non-empty: {self.sub_issues_created} (contradiction)"
             raise ValueError(msg)
 
 
@@ -422,7 +423,7 @@ class PRReviewCycleState:
     This is a mutable dataclass (not frozen) since state changes during execution.
 
     Attributes:
-        cycle_id: Unique identifier for this cycle instance
+        id: Unique identifier for this cycle instance
         pr_id: GitHub PR identifier (None for work items without an associated PR)
         work_item_id: ID of the work item being reviewed
         project_id: ID of the project
@@ -434,11 +435,11 @@ class PRReviewCycleState:
         phase_outputs: Mutable list of completed phase outputs
         config: PR review cycle configuration
         discussion_id: Optional ID of associated discussion/thread
-        started_at: ISO 8601 timestamp when cycle started
-        updated_at: ISO 8601 timestamp of last status change
+        started_at: Timestamp when cycle started
+        updated_at: Timestamp of last status change
     """
 
-    cycle_id: str
+    id: str
     pr_id: str | None
     work_item_id: str
     project_id: str
@@ -449,13 +450,13 @@ class PRReviewCycleState:
     findings: list[PRReviewFinding]
     phase_outputs: list[PRReviewPhaseOutput]
     config: "PRReviewCycleConfig"
-    started_at: str
-    updated_at: str
+    started_at: datetime
+    updated_at: datetime
     discussion_id: str | None = None
 
     def __post_init__(self) -> None:
         """Validate state after initialization."""
-        if not self.cycle_id:
+        if not self.id:
             msg = "cycle_id is required"
             raise ValueError(msg)
         if self.pr_id is not None and (not isinstance(self.pr_id, str) or not self.pr_id):
@@ -488,9 +489,9 @@ class PRReviewCycleState:
         if not isinstance(self.config, PRReviewCycleConfig):
             msg = "config must be a PRReviewCycleConfig instance"
             raise ValueError(msg)
-        if not self.started_at:
-            msg = "started_at is required"
+        if not isinstance(self.started_at, datetime):
+            msg = "started_at must be a datetime object"
             raise ValueError(msg)
-        if not self.updated_at:
-            msg = "updated_at is required"
+        if not isinstance(self.updated_at, datetime):
+            msg = "updated_at must be a datetime object"
             raise ValueError(msg)

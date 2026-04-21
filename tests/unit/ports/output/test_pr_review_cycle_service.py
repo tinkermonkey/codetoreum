@@ -304,10 +304,11 @@ class TestPRReviewCycleStateData:
 
     def test_create_valid_state_data(self):
         """Test creating valid state data."""
-        now = datetime.now(UTC).isoformat()
+        now_dt = datetime.now(UTC)
+        now = now_dt.isoformat()
         config = self._create_test_config()
         cycle_state = PRReviewCycleState(
-            cycle_id="cycle-1",
+            id="cycle-1",
             pr_id="pr-123",
             work_item_id="item-1",
             project_id="proj-1",
@@ -318,8 +319,8 @@ class TestPRReviewCycleStateData:
             findings=[],
             phase_outputs=[],
             config=config,
-            started_at=now,
-            updated_at=now,
+            started_at=now_dt,
+            updated_at=now_dt,
         )
         state = PRReviewCycleStateData(
             work_item_id="item-1",
@@ -340,10 +341,11 @@ class TestPRReviewCycleStateData:
 
     def test_state_data_frozen(self):
         """Test state data is immutable (frozen)."""
-        now = datetime.now(UTC).isoformat()
+        now_dt = datetime.now(UTC)
+        now = now_dt.isoformat()
         config = self._create_test_config()
         cycle_state = PRReviewCycleState(
-            cycle_id="cycle-1",
+            id="cycle-1",
             pr_id="pr-123",
             work_item_id="item-1",
             project_id="proj-1",
@@ -354,8 +356,8 @@ class TestPRReviewCycleStateData:
             findings=[],
             phase_outputs=[],
             config=config,
-            started_at=now,
-            updated_at=now,
+            started_at=now_dt,
+            updated_at=now_dt,
         )
         state = PRReviewCycleStateData(
             work_item_id="item-1",
@@ -371,10 +373,11 @@ class TestPRReviewCycleStateData:
 
     def test_state_data_empty_work_item_id(self):
         """Test state data rejects empty work_item_id."""
-        now = datetime.now(UTC).isoformat()
+        now_dt = datetime.now(UTC)
+        now = now_dt.isoformat()
         config = self._create_test_config()
         cycle_state = PRReviewCycleState(
-            cycle_id="cycle-1",
+            id="cycle-1",
             pr_id="pr-123",
             work_item_id="item-1",
             project_id="proj-1",
@@ -385,8 +388,8 @@ class TestPRReviewCycleStateData:
             findings=[],
             phase_outputs=[],
             config=config,
-            started_at=now,
-            updated_at=now,
+            started_at=now_dt,
+            updated_at=now_dt,
         )
         with pytest.raises(ValueError, match="work_item_id must be a non-empty string"):
             PRReviewCycleStateData(
@@ -401,10 +404,11 @@ class TestPRReviewCycleStateData:
 
     def test_state_data_empty_project_id(self):
         """Test state data rejects empty project_id."""
-        now = datetime.now(UTC).isoformat()
+        now_dt = datetime.now(UTC)
+        now = now_dt.isoformat()
         config = self._create_test_config()
         cycle_state = PRReviewCycleState(
-            cycle_id="cycle-1",
+            id="cycle-1",
             pr_id="pr-123",
             work_item_id="item-1",
             project_id="proj-1",
@@ -415,8 +419,8 @@ class TestPRReviewCycleStateData:
             findings=[],
             phase_outputs=[],
             config=config,
-            started_at=now,
-            updated_at=now,
+            started_at=now_dt,
+            updated_at=now_dt,
         )
         with pytest.raises(ValueError, match="project_id must be a non-empty string"):
             PRReviewCycleStateData(
@@ -431,10 +435,11 @@ class TestPRReviewCycleStateData:
 
     def test_state_data_empty_board_id(self):
         """Test state data rejects empty board_id."""
-        now = datetime.now(UTC).isoformat()
+        now_dt = datetime.now(UTC)
+        now = now_dt.isoformat()
         config = self._create_test_config()
         cycle_state = PRReviewCycleState(
-            cycle_id="cycle-1",
+            id="cycle-1",
             pr_id="pr-123",
             work_item_id="item-1",
             project_id="proj-1",
@@ -445,8 +450,8 @@ class TestPRReviewCycleStateData:
             findings=[],
             phase_outputs=[],
             config=config,
-            started_at=now,
-            updated_at=now,
+            started_at=now_dt,
+            updated_at=now_dt,
         )
         with pytest.raises(ValueError, match="board_id must be a non-empty string"):
             PRReviewCycleStateData(
@@ -461,10 +466,11 @@ class TestPRReviewCycleStateData:
 
     def test_state_data_cycle_number_zero(self):
         """Test state data rejects cycle_number of 0."""
-        now = datetime.now(UTC).isoformat()
+        now_dt = datetime.now(UTC)
+        now = now_dt.isoformat()
         config = self._create_test_config()
         cycle_state = PRReviewCycleState(
-            cycle_id="cycle-1",
+            id="cycle-1",
             pr_id="pr-123",
             work_item_id="item-1",
             project_id="proj-1",
@@ -475,8 +481,8 @@ class TestPRReviewCycleStateData:
             findings=[],
             phase_outputs=[],
             config=config,
-            started_at=now,
-            updated_at=now,
+            started_at=now_dt,
+            updated_at=now_dt,
         )
         with pytest.raises(ValueError, match="cycle_number must be a positive integer \\(1-based\\)"):
             PRReviewCycleStateData(
@@ -491,10 +497,11 @@ class TestPRReviewCycleStateData:
 
     def test_state_data_cycle_number_negative(self):
         """Test state data rejects negative cycle_number."""
-        now = datetime.now(UTC).isoformat()
+        now_dt = datetime.now(UTC)
+        now = now_dt.isoformat()
         config = self._create_test_config()
         cycle_state = PRReviewCycleState(
-            cycle_id="cycle-1",
+            id="cycle-1",
             pr_id="pr-123",
             work_item_id="item-1",
             project_id="proj-1",
@@ -505,8 +512,8 @@ class TestPRReviewCycleStateData:
             findings=[],
             phase_outputs=[],
             config=config,
-            started_at=now,
-            updated_at=now,
+            started_at=now_dt,
+            updated_at=now_dt,
         )
         with pytest.raises(ValueError, match="cycle_number must be a positive integer \\(1-based\\)"):
             PRReviewCycleStateData(
@@ -521,10 +528,11 @@ class TestPRReviewCycleStateData:
 
     def test_state_data_cycle_number_as_bool(self):
         """Test state data rejects boolean value for cycle_number."""
-        now = datetime.now(UTC).isoformat()
+        now_dt = datetime.now(UTC)
+        now = now_dt.isoformat()
         config = self._create_test_config()
         cycle_state = PRReviewCycleState(
-            cycle_id="cycle-1",
+            id="cycle-1",
             pr_id="pr-123",
             work_item_id="item-1",
             project_id="proj-1",
@@ -535,8 +543,8 @@ class TestPRReviewCycleStateData:
             findings=[],
             phase_outputs=[],
             config=config,
-            started_at=now,
-            updated_at=now,
+            started_at=now_dt,
+            updated_at=now_dt,
         )
         with pytest.raises(ValueError, match="cycle_number must be a positive integer \\(1-based\\)"):
             PRReviewCycleStateData(
@@ -551,7 +559,8 @@ class TestPRReviewCycleStateData:
 
     def test_state_data_invalid_cycle_state_type(self):
         """Test state data rejects invalid cycle_state type."""
-        now = datetime.now(UTC).isoformat()
+        now_dt = datetime.now(UTC)
+        now = now_dt.isoformat()
         with pytest.raises(ValueError, match="cycle_state must be a PRReviewCycleState instance"):
             PRReviewCycleStateData(
                 work_item_id="item-1",
@@ -565,10 +574,11 @@ class TestPRReviewCycleStateData:
 
     def test_state_data_empty_created_at(self):
         """Test state data rejects empty created_at."""
-        now = datetime.now(UTC).isoformat()
+        now_dt = datetime.now(UTC)
+        now = now_dt.isoformat()
         config = self._create_test_config()
         cycle_state = PRReviewCycleState(
-            cycle_id="cycle-1",
+            id="cycle-1",
             pr_id="pr-123",
             work_item_id="item-1",
             project_id="proj-1",
@@ -579,8 +589,8 @@ class TestPRReviewCycleStateData:
             findings=[],
             phase_outputs=[],
             config=config,
-            started_at=now,
-            updated_at=now,
+            started_at=now_dt,
+            updated_at=now_dt,
         )
         with pytest.raises(ValueError, match="created_at must be a non-empty ISO timestamp string"):
             PRReviewCycleStateData(
@@ -595,10 +605,11 @@ class TestPRReviewCycleStateData:
 
     def test_state_data_empty_updated_at(self):
         """Test state data rejects empty updated_at."""
-        now = datetime.now(UTC).isoformat()
+        now_dt = datetime.now(UTC)
+        now = now_dt.isoformat()
         config = self._create_test_config()
         cycle_state = PRReviewCycleState(
-            cycle_id="cycle-1",
+            id="cycle-1",
             pr_id="pr-123",
             work_item_id="item-1",
             project_id="proj-1",
@@ -609,8 +620,8 @@ class TestPRReviewCycleStateData:
             findings=[],
             phase_outputs=[],
             config=config,
-            started_at=now,
-            updated_at=now,
+            started_at=now_dt,
+            updated_at=now_dt,
         )
         with pytest.raises(ValueError, match="updated_at must be a non-empty ISO timestamp string"):
             PRReviewCycleStateData(
@@ -625,10 +636,11 @@ class TestPRReviewCycleStateData:
 
     def test_state_data_consistency_work_item_id_mismatch(self):
         """Test rejects mismatched work_item_id between wrapper and cycle_state."""
-        now = datetime.now(UTC).isoformat()
+        now_dt = datetime.now(UTC)
+        now = now_dt.isoformat()
         config = self._create_test_config()
         cycle_state = PRReviewCycleState(
-            cycle_id="cycle-1",
+            id="cycle-1",
             pr_id="pr-123",
             work_item_id="item-1",
             project_id="proj-1",
@@ -639,8 +651,8 @@ class TestPRReviewCycleStateData:
             findings=[],
             phase_outputs=[],
             config=config,
-            started_at=now,
-            updated_at=now,
+            started_at=now_dt,
+            updated_at=now_dt,
         )
         with pytest.raises(ValueError, match="work_item_id mismatch"):
             PRReviewCycleStateData(
@@ -655,10 +667,11 @@ class TestPRReviewCycleStateData:
 
     def test_state_data_consistency_project_id_mismatch(self):
         """Test rejects mismatched project_id between wrapper and cycle_state."""
-        now = datetime.now(UTC).isoformat()
+        now_dt = datetime.now(UTC)
+        now = now_dt.isoformat()
         config = self._create_test_config()
         cycle_state = PRReviewCycleState(
-            cycle_id="cycle-1",
+            id="cycle-1",
             pr_id="pr-123",
             work_item_id="item-1",
             project_id="proj-1",
@@ -669,8 +682,8 @@ class TestPRReviewCycleStateData:
             findings=[],
             phase_outputs=[],
             config=config,
-            started_at=now,
-            updated_at=now,
+            started_at=now_dt,
+            updated_at=now_dt,
         )
         with pytest.raises(ValueError, match="project_id mismatch"):
             PRReviewCycleStateData(
@@ -685,10 +698,11 @@ class TestPRReviewCycleStateData:
 
     def test_state_data_consistency_board_id_mismatch(self):
         """Test rejects mismatched board_id between wrapper and cycle_state."""
-        now = datetime.now(UTC).isoformat()
+        now_dt = datetime.now(UTC)
+        now = now_dt.isoformat()
         config = self._create_test_config()
         cycle_state = PRReviewCycleState(
-            cycle_id="cycle-1",
+            id="cycle-1",
             pr_id="pr-123",
             work_item_id="item-1",
             project_id="proj-1",
@@ -699,8 +713,8 @@ class TestPRReviewCycleStateData:
             findings=[],
             phase_outputs=[],
             config=config,
-            started_at=now,
-            updated_at=now,
+            started_at=now_dt,
+            updated_at=now_dt,
         )
         with pytest.raises(ValueError, match="board_id mismatch"):
             PRReviewCycleStateData(
@@ -715,10 +729,11 @@ class TestPRReviewCycleStateData:
 
     def test_state_data_consistency_cycle_number_mismatch(self):
         """Test rejects mismatched cycle_number between wrapper and cycle_state."""
-        now = datetime.now(UTC).isoformat()
+        now_dt = datetime.now(UTC)
+        now = now_dt.isoformat()
         config = self._create_test_config()
         cycle_state = PRReviewCycleState(
-            cycle_id="cycle-1",
+            id="cycle-1",
             pr_id="pr-123",
             work_item_id="item-1",
             project_id="proj-1",
@@ -729,8 +744,8 @@ class TestPRReviewCycleStateData:
             findings=[],
             phase_outputs=[],
             config=config,
-            started_at=now,
-            updated_at=now,
+            started_at=now_dt,
+            updated_at=now_dt,
         )
         with pytest.raises(ValueError, match="cycle_number mismatch"):
             PRReviewCycleStateData(

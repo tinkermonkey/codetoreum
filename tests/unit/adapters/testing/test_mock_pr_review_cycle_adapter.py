@@ -283,7 +283,7 @@ class TestCIFailingPath:
         ]
         assert len(ci_events) > 0
         ci_event = ci_events[0][0][0]
-        assert ci_event.ci_passed is False
+        assert ci_event.passed is False
 
     @pytest.mark.asyncio
     async def test_ci_failing_blocks_phase_4(self, adapter, mock_event_emitter):
