@@ -1482,17 +1482,22 @@ class TestPRReviewCycleDispatch:
         pr_review_cycle_mock.get_cycle_state.return_value = None  # First cycle
 
         # Create state data response
-        from codetoreum.domain.pr_review_cycle_types import PRReviewCycleState, PRReviewStatus
+        from codetoreum.domain.pr_review_cycle_types import PRReviewCycleConfig, PRReviewCycleState, PRReviewStatus
         from codetoreum.ports.output.pr_review_cycle_service import PRReviewCycleStateData
 
+        cycle_config = PRReviewCycleConfig()
         cycle_state = PRReviewCycleState(
             cycle_id="cycle-1",
             pr_id="123",
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
             status=PRReviewStatus.IN_CODE_REVIEW,
             cycle_number=1,
             current_phase="code_review",
             findings=[],
             phase_outputs=[],
+            config=cycle_config,
             started_at=now.isoformat(),
             updated_at=now.isoformat(),
         )
@@ -1610,11 +1615,15 @@ class TestPRReviewCycleDispatch:
             cycle_state=PRReviewCycleState(
                 cycle_id="cycle-2",
                 pr_id="123",
+                work_item_id="item-1",
+                project_id="proj-1",
+                board_id="board-1",
                 status=PRReviewStatus.COMPLETED,
                 cycle_number=2,
                 current_phase="completed",
                 findings=[],
                 phase_outputs=[],
+                config=PRReviewCycleConfig(),
                 started_at=now.isoformat(),
                 updated_at=now.isoformat(),
             ),
@@ -1628,11 +1637,15 @@ class TestPRReviewCycleDispatch:
         new_cycle_state = PRReviewCycleState(
             cycle_id="cycle-3",
             pr_id="123",
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
             status=PRReviewStatus.IN_CODE_REVIEW,
             cycle_number=3,
             current_phase="code_review",
             findings=[],
             phase_outputs=[],
+            config=PRReviewCycleConfig(),
             started_at=now.isoformat(),
             updated_at=now.isoformat(),
         )
@@ -1743,11 +1756,15 @@ class TestPRReviewCycleDispatch:
             cycle_state=PRReviewCycleState(
                 cycle_id="cycle-2",
                 pr_id="123",
+                work_item_id="item-1",
+                project_id="proj-1",
+                board_id="board-1",
                 status=PRReviewStatus.COMPLETED,
                 cycle_number=2,
                 current_phase="completed",
                 findings=[],
                 phase_outputs=[],
+                config=PRReviewCycleConfig(),
                 started_at=now.isoformat(),
                 updated_at=now.isoformat(),
             ),
@@ -1869,11 +1886,15 @@ class TestPRReviewCycleDispatch:
             cycle_state=PRReviewCycleState(
                 cycle_id="cycle-2",
                 pr_id="123",
+                work_item_id="item-1",
+                project_id="proj-1",
+                board_id="board-1",
                 status=PRReviewStatus.COMPLETED,
                 cycle_number=2,
                 current_phase="completed",
                 findings=[],
                 phase_outputs=[],
+                config=PRReviewCycleConfig(),
                 started_at=now.isoformat(),
                 updated_at=now.isoformat(),
             ),
@@ -1989,11 +2010,15 @@ class TestPRReviewCycleDispatch:
             cycle_state=PRReviewCycleState(
                 cycle_id="cycle-2",
                 pr_id="123",
+                work_item_id="item-1",
+                project_id="proj-1",
+                board_id="board-1",
                 status=PRReviewStatus.COMPLETED,
                 cycle_number=2,
                 current_phase="completed",
                 findings=[],
                 phase_outputs=[],
+                config=PRReviewCycleConfig(),
                 started_at=now.isoformat(),
                 updated_at=now.isoformat(),
             ),

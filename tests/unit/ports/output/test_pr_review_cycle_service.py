@@ -283,14 +283,19 @@ class TestPRReviewCycleStateData:
     def test_create_valid_state_data(self):
         """Test creating valid state data."""
         now = datetime.now(UTC).isoformat()
+        config = PRReviewCycleConfig()
         cycle_state = PRReviewCycleState(
             cycle_id="cycle-1",
             pr_id="pr-123",
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
             status=PRReviewStatus.PENDING,
             cycle_number=1,
             current_phase="init",
             findings=[],
             phase_outputs=[],
+            config=config,
             started_at=now,
             updated_at=now,
         )
@@ -314,14 +319,19 @@ class TestPRReviewCycleStateData:
     def test_state_data_frozen(self):
         """Test state data is immutable (frozen)."""
         now = datetime.now(UTC).isoformat()
+        config = PRReviewCycleConfig()
         cycle_state = PRReviewCycleState(
             cycle_id="cycle-1",
             pr_id="pr-123",
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
             status=PRReviewStatus.PENDING,
             cycle_number=1,
             current_phase="init",
             findings=[],
             phase_outputs=[],
+            config=config,
             started_at=now,
             updated_at=now,
         )
@@ -340,14 +350,19 @@ class TestPRReviewCycleStateData:
     def test_state_data_empty_work_item_id(self):
         """Test state data rejects empty work_item_id."""
         now = datetime.now(UTC).isoformat()
+        config = PRReviewCycleConfig()
         cycle_state = PRReviewCycleState(
             cycle_id="cycle-1",
             pr_id="pr-123",
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
             status=PRReviewStatus.PENDING,
             cycle_number=1,
             current_phase="init",
             findings=[],
             phase_outputs=[],
+            config=config,
             started_at=now,
             updated_at=now,
         )
@@ -365,14 +380,19 @@ class TestPRReviewCycleStateData:
     def test_state_data_empty_project_id(self):
         """Test state data rejects empty project_id."""
         now = datetime.now(UTC).isoformat()
+        config = PRReviewCycleConfig()
         cycle_state = PRReviewCycleState(
             cycle_id="cycle-1",
             pr_id="pr-123",
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
             status=PRReviewStatus.PENDING,
             cycle_number=1,
             current_phase="init",
             findings=[],
             phase_outputs=[],
+            config=config,
             started_at=now,
             updated_at=now,
         )
@@ -390,14 +410,19 @@ class TestPRReviewCycleStateData:
     def test_state_data_empty_board_id(self):
         """Test state data rejects empty board_id."""
         now = datetime.now(UTC).isoformat()
+        config = PRReviewCycleConfig()
         cycle_state = PRReviewCycleState(
             cycle_id="cycle-1",
             pr_id="pr-123",
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
             status=PRReviewStatus.PENDING,
             cycle_number=1,
             current_phase="init",
             findings=[],
             phase_outputs=[],
+            config=config,
             started_at=now,
             updated_at=now,
         )
@@ -415,14 +440,19 @@ class TestPRReviewCycleStateData:
     def test_state_data_cycle_number_zero(self):
         """Test state data rejects cycle_number of 0."""
         now = datetime.now(UTC).isoformat()
+        config = PRReviewCycleConfig()
         cycle_state = PRReviewCycleState(
             cycle_id="cycle-1",
             pr_id="pr-123",
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
             status=PRReviewStatus.PENDING,
             cycle_number=1,
             current_phase="init",
             findings=[],
             phase_outputs=[],
+            config=config,
             started_at=now,
             updated_at=now,
         )
@@ -440,14 +470,19 @@ class TestPRReviewCycleStateData:
     def test_state_data_cycle_number_negative(self):
         """Test state data rejects negative cycle_number."""
         now = datetime.now(UTC).isoformat()
+        config = PRReviewCycleConfig()
         cycle_state = PRReviewCycleState(
             cycle_id="cycle-1",
             pr_id="pr-123",
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
             status=PRReviewStatus.PENDING,
             cycle_number=1,
             current_phase="init",
             findings=[],
             phase_outputs=[],
+            config=config,
             started_at=now,
             updated_at=now,
         )
@@ -465,14 +500,19 @@ class TestPRReviewCycleStateData:
     def test_state_data_cycle_number_as_bool(self):
         """Test state data rejects boolean value for cycle_number."""
         now = datetime.now(UTC).isoformat()
+        config = PRReviewCycleConfig()
         cycle_state = PRReviewCycleState(
             cycle_id="cycle-1",
             pr_id="pr-123",
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
             status=PRReviewStatus.PENDING,
             cycle_number=1,
             current_phase="init",
             findings=[],
             phase_outputs=[],
+            config=config,
             started_at=now,
             updated_at=now,
         )
@@ -504,14 +544,19 @@ class TestPRReviewCycleStateData:
     def test_state_data_empty_created_at(self):
         """Test state data rejects empty created_at."""
         now = datetime.now(UTC).isoformat()
+        config = PRReviewCycleConfig()
         cycle_state = PRReviewCycleState(
             cycle_id="cycle-1",
             pr_id="pr-123",
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
             status=PRReviewStatus.PENDING,
             cycle_number=1,
             current_phase="init",
             findings=[],
             phase_outputs=[],
+            config=config,
             started_at=now,
             updated_at=now,
         )
@@ -529,14 +574,19 @@ class TestPRReviewCycleStateData:
     def test_state_data_empty_updated_at(self):
         """Test state data rejects empty updated_at."""
         now = datetime.now(UTC).isoformat()
+        config = PRReviewCycleConfig()
         cycle_state = PRReviewCycleState(
             cycle_id="cycle-1",
             pr_id="pr-123",
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
             status=PRReviewStatus.PENDING,
             cycle_number=1,
             current_phase="init",
             findings=[],
             phase_outputs=[],
+            config=config,
             started_at=now,
             updated_at=now,
         )
