@@ -111,6 +111,88 @@ class PRReviewCycleStartedEvent(CodetoreumEvent):
 
 
 @dataclass(frozen=True)
+class PRReviewCyclePhaseStartedEvent(CodetoreumEvent):
+    """Emitted when any PR review cycle phase starts.
+
+    Unified event for phase initiation, replacing phase-specific events.
+    Emitted at the beginning of each phase (code review, verification, CI check, consolidation).
+
+    **Immutability**: This is an immutable event (frozen dataclass).
+
+    Attributes:
+        type (str): Fixed to "pr_review_cycle.phase_started"
+        pr_id (str): GitHub PR identifier
+        phase_name (str): Name of the phase starting (e.g., "code_review", "verification", "ci_check", "consolidation")
+        phase_index (int): Position in phase sequence (1-based)
+        agent_id (str): ID of the agent executing this phase
+        context_source (str): Context source for this phase (e.g., "pr_diff", "parent_issue", "ba_output", None for CI/consolidation)
+        workflow_run_id (str): ID of the workflow run
+        timestamp (str): ISO 8601 timestamp
+    """
+
+    pr_id: str = ""
+    phase_name: str = ""
+    phase_index: int = 0
+    agent_id: str = ""
+    context_source: str = ""
+    workflow_run_id: str = ""
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.pr_id:
+            msg = "pr_id is required"
+            raise ValueError(msg)
+        if not self.phase_name:
+            msg = "phase_name is required"
+            raise ValueError(msg)
+        if self.phase_index < 1:
+            msg = "phase_index must be >= 1"
+            raise ValueError(msg)
+        if not self.agent_id:
+            msg = "agent_id is required"
+            raise ValueError(msg)
+        if not isinstance(self.context_source, str):
+            msg = "context_source must be a string"
+            raise ValueError(msg)
+        if not self.workflow_run_id:
+            msg = "workflow_run_id is required"
+            raise ValueError(msg)
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update(
+            {
+                "pr_id": self.pr_id,
+                "phase_name": self.phase_name,
+                "phase_index": self.phase_index,
+                "agent_id": self.agent_id,
+                "context_source": self.context_source,
+                "workflow_run_id": self.workflow_run_id,
+            }
+        )
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "PRReviewCyclePhaseStartedEvent":
+        """Deserialize from dictionary."""
+        return cls(
+            type=data.get("type", "pr_review_cycle.phase_started"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            pr_id=data.get("pr_id", ""),
+            phase_name=data.get("phase_name", ""),
+            phase_index=data.get("phase_index", 0),
+            agent_id=data.get("agent_id", ""),
+            context_source=data.get("context_source", ""),
+            workflow_run_id=data.get("workflow_run_id", ""),
+        )
+
+
+@dataclass(frozen=True)
 class PRReviewCycleCodeReviewStartedEvent(CodetoreumEvent):
     """Emitted when Phase 1 code review starts.
 

@@ -168,6 +168,7 @@ from .pr_review_cycle_events import (
     PRReviewCycleIssuesFoundEvent,
     PRReviewCycleMaxCyclesReachedEvent,
     PRReviewCyclePhaseCompletedEvent,
+    PRReviewCyclePhaseStartedEvent,
     PRReviewCycleStartedEvent,
     PRReviewCycleSubIssuesCreatedEvent,
     PRReviewCycleVerificationStartedEvent,
@@ -402,6 +403,7 @@ __all__ = [
     "ReviewCycleApprovedEvent",
     # PR Review Cycle events
     "PRReviewCycleStartedEvent",
+    "PRReviewCyclePhaseStartedEvent",
     "PRReviewCycleCodeReviewStartedEvent",
     "PRReviewCycleVerificationStartedEvent",
     "PRReviewCycleCICheckCompletedEvent",

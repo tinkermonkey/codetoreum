@@ -80,14 +80,21 @@ class PRReviewCycleStateData:
     """Complete state of an in-progress PR review cycle.
 
     All fields are validated at construction to ensure contract boundary integrity.
-    Frozen to prevent accidental mutation after creation.
+    Frozen to prevent accidental mutation of this wrapper's attributes after creation.
+
+    **Immutability Limitation**: While PRReviewCycleStateData itself is frozen (preventing
+    assignment to attributes like `data.work_item_id = ...`), the `cycle_state` field
+    holds a reference to a mutable PRReviewCycleState object. Code like
+    `data.cycle_state.status = "new_value"` will succeed, bypassing the frozen constraint.
+    Callers must treat cycle_state as mutable and only modify it through appropriate
+    service interfaces, not by direct field assignment.
 
     Attributes:
         work_item_id: ID of the work item being reviewed
         project_id: ID of the project
         board_id: ID of the project board
         cycle_number: Current iteration count (1-based)
-        cycle_state: Mutable state object tracking phase progression
+        cycle_state: Mutable state object tracking phase progression (see immutability limitation above)
         created_at: ISO timestamp when cycle was created
         updated_at: ISO timestamp when cycle was last updated
     """

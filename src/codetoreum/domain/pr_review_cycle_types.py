@@ -205,6 +205,7 @@ class PRReviewCycleConfig:
         sub_issue_initial_column: Column to place created sub-issues in (optional)
         on_issues_found_column: Column to move item to when issues are found (optional)
         on_approved_column: Column to move item to when approved (optional)
+        on_failure_column: Column to move item to when CI checks fail (optional)
         agents: Immutable mapping of phase names to agent IDs as ordered tuples
                 (e.g., (("code_review", "pr_code_reviewer"), ("verification", "requirements_verifier")))
                 Preserves insertion order and allows O(1) iteration for phase->agent lookups
@@ -223,6 +224,7 @@ class PRReviewCycleConfig:
     sub_issue_initial_column: str | None = None
     on_issues_found_column: str | None = None
     on_approved_column: str | None = None
+    on_failure_column: str | None = None
     agents: tuple[tuple[str, str], ...] | None = None
 
     def __post_init__(self) -> None:
@@ -241,6 +243,10 @@ class PRReviewCycleConfig:
 
         if not isinstance(self.sub_issue_labels, tuple):
             msg = "sub_issue_labels must be a tuple (immutable)"
+            raise ValueError(msg)
+
+        if self.agents is not None and not isinstance(self.agents, tuple):
+            msg = "agents must be a tuple (immutable) or None"
             raise ValueError(msg)
 
         # Only validate ci_check_timeout_seconds > 0 if ci_check is enabled
@@ -361,6 +367,11 @@ class PRReviewCycleResult:
         severity_total = self.critical_count + self.high_count + self.medium_count + self.low_count
         if severity_total != self.total_findings:
             msg = f"Severity counts ({severity_total}) must sum to total_findings ({self.total_findings})"
+            raise ValueError(msg)
+
+        # Validate total_findings matches actual findings count
+        if self.total_findings != len(self.all_findings):
+            msg = f"total_findings ({self.total_findings}) must match len(all_findings) ({len(self.all_findings)})"
             raise ValueError(msg)
 
         if self.total_duration_seconds < 0:
