@@ -638,6 +638,8 @@ class BoardColumnEventHandler(EventHandler):
             # return value from start_pr_review_cycle(). The port interface PRReviewCycleStateData
             # doesn't expose next_column, but the outcome domain events do. Event handlers for
             # PRReviewCycleApprovedEvent and PRReviewCycleIssuesFoundEvent handle column transitions.
+            # TODO: Implement event handlers for PRReviewCycleApprovedEvent and
+            # PRReviewCycleIssuesFoundEvent to move work items to next_column.
             result = await self.pr_review_cycle.start_pr_review_cycle(request)
 
             logger.info(

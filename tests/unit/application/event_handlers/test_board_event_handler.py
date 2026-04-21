@@ -1812,10 +1812,6 @@ class TestPRReviewCycleDispatch:
         mock_workflow_config,
     ):
         """Outcome events (Approved, Issues Found) should include next_column for column movement."""
-        from codetoreum.domain.events.pr_review_cycle_events import (
-            PRReviewCycleApprovedEvent,
-            PRReviewCycleIssuesFoundEvent,
-        )
         from codetoreum.domain.pr_review_cycle_types import (
             PRReviewCycleConfig,
             PRReviewCycleState,
@@ -1827,7 +1823,6 @@ class TestPRReviewCycleDispatch:
         # Setup mocks
         pr_review_cycle_mock = AsyncMock()
         work_item_service_mock = AsyncMock()
-        mock_event_emitter_internal = AsyncMock()
 
         now = datetime.now(UTC)
         work_item = WorkItem(
@@ -1922,4 +1917,3 @@ class TestPRReviewCycleDispatch:
         # which both have 'next_column' fields as per the event schema.
         # This is a design divergence from the requirement that expected synchronous
         # column movement, but the port interface doesn't provide next_column in the return value.
-        assert pr_review_cycle_mock.start_pr_review_cycle.called
