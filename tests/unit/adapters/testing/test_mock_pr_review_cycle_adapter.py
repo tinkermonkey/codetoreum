@@ -333,7 +333,7 @@ class TestCIFailingPath:
 
         # Verify CI failed outcome
         assert result.outcome == PRReviewOutcome.ISSUES_FOUND
-        assert result.passed is False
+        assert result.ci_passed is False
 
 
 class TestMaxCyclesPath:
