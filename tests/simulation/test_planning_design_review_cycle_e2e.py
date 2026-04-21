@@ -21,6 +21,7 @@ import pytest
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
 from codetoreum.domain.events import (
     PRReviewCycleApprovedEvent,
+    PRReviewCycleIssuesFoundEvent,
     PRReviewCycleStartedEvent,
     PRReviewCycleSubIssuesCreatedEvent,
 )
@@ -109,9 +110,9 @@ async def test_issues_found_path(pr_review_env):
     work_item_id = _find_work_item_id(seeder, WORK_ITEM_TITLE)
     assert work_item_id, f"Could not find work item '{WORK_ITEM_TITLE}' in seeded items"
 
-    # Confirm starting position (Acceptance: item in Backlog initially)
+    # Confirm starting position (Acceptance: item pre-placed in In Review per FR-12.2)
     pos = await board.get_item_position(work_item_id)
-    assert pos.column_name == "Backlog", f"Expected item in Backlog, got '{pos.column_name}'"
+    assert pos.column_name == "In Review", f"Expected item in In Review, got '{pos.column_name}'"
 
     # Get the external ID of the parent item
     parent_work_item = seeder._ticket_adapter._work_items.get(work_item_id)
@@ -123,52 +124,40 @@ async def test_issues_found_path(pr_review_env):
     # ========================================================================
     findings = [
         PRReviewFinding(
-            type="security",
+            title="Missing CSRF token validation",
+            description="src/auth.py:42 - Missing CSRF token validation. Add CSRF token check.",
             severity="critical",
-            file="src/auth.py",
-            line_number=42,
-            message="Missing CSRF token validation",
-            suggestion="Add CSRF token check",
+            phase="code_review",
         ),
         PRReviewFinding(
-            type="bug",
+            title="Password hash not salted",
+            description="src/auth.py:58 - Password hash not salted. Use bcrypt.",
             severity="high",
-            file="src/auth.py",
-            line_number=58,
-            message="Password hash not salted",
-            suggestion="Use bcrypt",
+            phase="code_review",
         ),
         PRReviewFinding(
-            type="style",
+            title="Inconsistent naming",
+            description="src/auth.py:15 - Inconsistent naming. Rename tokenDict.",
             severity="high",
-            file="src/auth.py",
-            line_number=15,
-            message="Inconsistent naming",
-            suggestion="Rename tokenDict",
+            phase="code_review",
         ),
         PRReviewFinding(
-            type="performance",
+            title="Blocking call in async",
+            description="src/oauth.py:120 - Blocking call in async. Use await.",
             severity="high",
-            file="src/oauth.py",
-            line_number=120,
-            message="Blocking call in async",
-            suggestion="Use await",
+            phase="code_review",
         ),
         PRReviewFinding(
-            type="bug",
+            title="Race condition",
+            description="src/session.py:88 - Race condition. Add mutex lock.",
             severity="high",
-            file="src/session.py",
-            line_number=88,
-            message="Race condition",
-            suggestion="Add mutex lock",
+            phase="code_review",
         ),
         PRReviewFinding(
-            type="security",
+            title="Unencrypted token storage",
+            description="src/oauth.py:45 - Unencrypted token storage. Encrypt tokens.",
             severity="high",
-            file="src/oauth.py",
-            line_number=45,
-            message="Unencrypted token storage",
-            suggestion="Encrypt tokens",
+            phase="code_review",
         ),
     ]
     # Verify at least 1 critical finding (acceptance requirement)
@@ -177,14 +166,8 @@ async def test_issues_found_path(pr_review_env):
 
     pr_cycle.set_outcome(PRReviewOutcome.ISSUES_FOUND, findings)
 
-    # Move item to In Review - this triggers the PR review cycle
-    await board.move_item_to_column(work_item_id, "In Review", MovedByType.HUMAN)
-
-    # ACCEPTANCE: Item should reach In Review column
-    pos = await board.get_item_position(work_item_id)
-    assert pos.column_name == "In Review", (
-        f"Item should be in 'In Review' after human move, got '{pos.column_name}'"
-    )
+    # Item is already in In Review (pre-placed per FR-12.2), so the PR review cycle
+    # should execute automatically since "In Review" has is_pipeline_trigger=true
 
     # ========================================================================
     # ACCEPTANCE CRITERIA: PR review cycle executes and emits events
@@ -244,6 +227,16 @@ async def test_issues_found_path(pr_review_env):
             f"Child item {child_item.title} missing 'pr-review' label. Labels: {child_item.labels}"
         )
 
+    # AC-7: PRReviewCycleIssuesFoundEvent emitted with critical_count >= 1
+    issues_found_events = [
+        e for e in cycle_events
+        if isinstance(e, PRReviewCycleIssuesFoundEvent)
+    ]
+    assert len(issues_found_events) > 0, "PRReviewCycleIssuesFoundEvent not fired"
+    assert issues_found_events[0].critical_count >= 1, (
+        f"Expected critical_count >= 1 in PRReviewCycleIssuesFoundEvent, got {issues_found_events[0].critical_count}"
+    )
+
 
 @pytest.mark.asyncio
 async def test_approved_path(pr_review_env):
@@ -267,9 +260,9 @@ async def test_approved_path(pr_review_env):
     work_item_id = _find_work_item_id(seeder, WORK_ITEM_TITLE)
     assert work_item_id, f"Could not find work item '{WORK_ITEM_TITLE}' in seeded items"
 
-    # Confirm starting position (Acceptance: item in Backlog initially)
+    # Confirm starting position (Acceptance: item pre-placed in In Review per FR-12.2)
     pos = await board.get_item_position(work_item_id)
-    assert pos.column_name == "Backlog", f"Expected item in Backlog, got '{pos.column_name}'"
+    assert pos.column_name == "In Review", f"Expected item in In Review, got '{pos.column_name}'"
 
     # Get the external ID of the parent item
     parent_work_item = seeder._ticket_adapter._work_items.get(work_item_id)
@@ -280,14 +273,8 @@ async def test_approved_path(pr_review_env):
     # ========================================================================
     pr_cycle.set_approved_immediately()
 
-    # Move item to In Review - this triggers the PR review cycle
-    await board.move_item_to_column(work_item_id, "In Review", MovedByType.HUMAN)
-
-    # ACCEPTANCE: Item should reach In Review column
-    pos = await board.get_item_position(work_item_id)
-    assert pos.column_name == "In Review", (
-        f"Item should be in 'In Review' after human move, got '{pos.column_name}'"
-    )
+    # Item is already in In Review (pre-placed per FR-12.2), so the PR review cycle
+    # should execute automatically since "In Review" has is_pipeline_trigger=true
 
     # ========================================================================
     # ACCEPTANCE CRITERIA: PR review cycle approves without creating sub-issues

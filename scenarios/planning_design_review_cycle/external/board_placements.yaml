@@ -7,4 +7,4 @@
 board_placements:
   - work_item_title: "Implement user authentication flow"
     board_id: "planning-board-1"
-    column: "Backlog"
+    column: "In Review"
