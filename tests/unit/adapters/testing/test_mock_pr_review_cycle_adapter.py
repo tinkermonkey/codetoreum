@@ -879,7 +879,7 @@ class TestClockAdvancement:
     @pytest.mark.asyncio
     async def test_max_cycles_does_not_advance_many_phases(self, adapter, simulation_clock):
         """Test max_cycles path doesn't advance time through all phases."""
-        adapter.set_max_cycles_reached()
+        adapter.set_max_cycles_reached("item-1")
         initial_time = simulation_clock.now()
 
         request = PRReviewCycleRequest(
