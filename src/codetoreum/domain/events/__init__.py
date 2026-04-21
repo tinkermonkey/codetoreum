@@ -157,6 +157,13 @@ from .lock_events import (
     WorkItemQueuedEvent,
 )
 
+# PR Review Cycle events
+from .pr_review_cycle_events import (
+    PRReviewCycleApprovedEvent,
+    PRReviewCycleStartedEvent,
+    PRReviewCycleSubIssuesCreatedEvent,
+)
+
 # Project management events
 from .project_events import (
     OrchestrationCycleCompletedEvent,
@@ -207,13 +214,6 @@ from .repository_events import (
     BranchPushedEvent,
     CommitCreatedEvent,
     FilesStagedEvent,
-)
-
-# PR Review Cycle events
-from .pr_review_cycle_events import (
-    PRReviewCycleApprovedEvent,
-    PRReviewCycleStartedEvent,
-    PRReviewCycleSubIssuesCreatedEvent,
 )
 
 # Review cycle events
