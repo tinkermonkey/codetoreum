@@ -562,7 +562,19 @@ class BoardColumnEventHandler(EventHandler):
 
         try:
             # Retrieve current cycle state to derive next cycle number
-            current_state = await self.pr_review_cycle.get_cycle_state(work_item_id, project_id)
+            try:
+                current_state = await self.pr_review_cycle.get_cycle_state(work_item_id, project_id)
+            except Exception as e:
+                logger.error(
+                    f"Failed to retrieve cycle state for {work_item_id}: {e}",
+                    exc_info=True,
+                    extra={
+                        "error_id": "ERR_PR_REVIEW_CYCLE_STATE_RETRIEVAL_FAILURE",
+                        "work_item_id": work_item_id,
+                        "project_id": project_id,
+                    },
+                )
+                raise
 
             # Derive cycle_number: None → 1, existing state → state.cycle_number + 1
             if current_state is None:
@@ -677,14 +689,14 @@ class BoardColumnEventHandler(EventHandler):
             # with `next_column` information.
             #
             # DESIGN NOTE: Column movement is driven by outcome events, not by the synchronous
-            # return value from start_pr_review_cycle(). The port interface PRReviewCycleStateData
-            # doesn't expose next_column, but the outcome domain events do. Event handlers for
-            # PRReviewCycleApprovedEvent and PRReviewCycleIssuesFoundEvent (in PRReviewCycleEventHandler)
-            # handle column transitions.
+            # return value from start_pr_review_cycle(). The port interface returns PRReviewCycleResult
+            # which includes next_column and outcome, but the outcome domain events are the canonical
+            # source for column transitions. Event handlers for PRReviewCycleApprovedEvent and
+            # PRReviewCycleIssuesFoundEvent (in PRReviewCycleEventHandler) handle the actual moves.
             result = await self.pr_review_cycle.start_pr_review_cycle(request)
 
             logger.info(
-                f"PR review cycle {cycle_number} started for {work_item_id}"
+                f"PR review cycle {cycle_number} started for {work_item_id} with outcome: {result.outcome.value}"
             )
 
         except Exception as e:

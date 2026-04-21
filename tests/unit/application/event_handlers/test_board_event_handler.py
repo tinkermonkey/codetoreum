@@ -1481,9 +1481,13 @@ class TestPRReviewCycleDispatch:
         work_item_service_mock.get_work_item.return_value = work_item
         pr_review_cycle_mock.get_cycle_state.return_value = None  # First cycle
 
-        # Create state data response
-        from codetoreum.domain.pr_review_cycle_types import PRReviewCycleState, PRReviewStatus
-        from codetoreum.ports.output.pr_review_cycle_service import PRReviewCycleStateData
+        # Create result response
+        from codetoreum.domain.pr_review_cycle_types import (
+            PRReviewCycleState,
+            PRReviewOutcome,
+            PRReviewPhaseOutput,
+            PRReviewStatus,
+        )
 
         cycle_config = PRReviewCycleConfig()
         cycle_state = PRReviewCycleState(
@@ -1502,17 +1506,36 @@ class TestPRReviewCycleDispatch:
             updated_at=now.isoformat(),
         )
 
-        state_data = PRReviewCycleStateData(
-            work_item_id="item-1",
-            project_id="proj-1",
-            board_id="board-1",
-            cycle_number=1,
-            cycle_state=cycle_state,
-            created_at=now.isoformat(),
-            updated_at=now.isoformat(),
+        phase_output = PRReviewPhaseOutput(
+            phase_name="code_review",
+            phase_index=1,
+            success=True,
+            findings=(),
+            summary="Code review completed successfully",
+            duration_seconds=10.0,
         )
 
-        pr_review_cycle_mock.start_pr_review_cycle.return_value = state_data
+        from codetoreum.domain.pr_review_cycle_types import PRReviewCycleResult
+
+        result = PRReviewCycleResult(
+            cycle_number=1,
+            workflow_run_id="wf-run-1",
+            outcome=PRReviewOutcome.APPROVED,
+            phase_outputs=(phase_output,),
+            all_findings=(),
+            sub_issue_ids=(),
+            ci_passed=None,
+            total_findings=0,
+            critical_count=0,
+            high_count=0,
+            medium_count=0,
+            low_count=0,
+            total_duration_seconds=10.0,
+            timestamp=now.isoformat(),
+            next_column="Approved",
+        )
+
+        pr_review_cycle_mock.start_pr_review_cycle.return_value = result
 
         handler.pr_review_cycle = pr_review_cycle_mock
         handler.work_item_service = work_item_service_mock
@@ -1650,17 +1673,36 @@ class TestPRReviewCycleDispatch:
             updated_at=now.isoformat(),
         )
 
-        new_state_data = PRReviewCycleStateData(
-            work_item_id="item-1",
-            project_id="proj-1",
-            board_id="board-1",
-            cycle_number=3,
-            cycle_state=new_cycle_state,
-            created_at=now.isoformat(),
-            updated_at=now.isoformat(),
+        from codetoreum.domain.pr_review_cycle_types import PRReviewCycleResult, PRReviewPhaseOutput, PRReviewOutcome
+
+        phase_output_cycle3 = PRReviewPhaseOutput(
+            phase_name="code_review",
+            phase_index=1,
+            success=True,
+            findings=(),
+            summary="Code review completed successfully",
+            duration_seconds=10.0,
         )
 
-        pr_review_cycle_mock.start_pr_review_cycle.return_value = new_state_data
+        new_result = PRReviewCycleResult(
+            cycle_number=3,
+            workflow_run_id="wf-run-3",
+            outcome=PRReviewOutcome.APPROVED,
+            phase_outputs=(phase_output_cycle3,),
+            all_findings=(),
+            sub_issue_ids=(),
+            ci_passed=None,
+            total_findings=0,
+            critical_count=0,
+            high_count=0,
+            medium_count=0,
+            low_count=0,
+            total_duration_seconds=10.0,
+            timestamp=now.isoformat(),
+            next_column="Approved",
+        )
+
+        pr_review_cycle_mock.start_pr_review_cycle.return_value = new_result
 
         handler.pr_review_cycle = pr_review_cycle_mock
         handler.work_item_service = work_item_service_mock
@@ -2079,3 +2121,86 @@ class TestPRReviewCycleDispatch:
 
         # PRReviewCycleMaxCyclesReachedEvent should NOT be emitted (handler returned early)
         mock_event_emitter.emit.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_propagates_exception_from_start_pr_review_cycle(
+        self,
+        handler,
+        mock_workflow_config,
+    ):
+        """Should re-raise exceptions from start_pr_review_cycle instead of silently swallowing them."""
+        from codetoreum.domain.pr_review_cycle_types import PRReviewCycleConfig
+        from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
+
+        # Setup mocks
+        pr_review_cycle_mock = AsyncMock()
+        work_item_service_mock = AsyncMock()
+
+        now = datetime.now(UTC)
+        work_item = WorkItem(
+            id="item-1",
+            project_id="proj-1",
+            title="Test Item",
+            description="Test Description",
+            status=WorkItemStatus.NEW,
+            priority=WorkItemPriority.MEDIUM,
+            labels=[],
+            external_id=None,
+            external_url="https://github.com/owner/repo/pull/123",
+            assigned_agent_id=None,
+            assigned_at=None,
+            current_workflow_id=None,
+            current_stage=None,
+            current_column=None,
+            entered_column_at=None,
+            created_at=now,
+            updated_at=now,
+            pr_id="123",
+            discussion_id="disc-1",
+        )
+
+        work_item_service_mock.get_work_item.return_value = work_item
+        pr_review_cycle_mock.get_cycle_state.return_value = None  # First cycle
+
+        # Mock start_pr_review_cycle to raise an exception
+        test_error = RuntimeError("PR review cycle service unavailable")
+        pr_review_cycle_mock.start_pr_review_cycle.side_effect = test_error
+
+        handler.pr_review_cycle = pr_review_cycle_mock
+        handler.work_item_service = work_item_service_mock
+
+        # Create workflow with PR review cycle column
+        workflow_config = BoardWorkflowTemplate(
+            id="workflow-1",
+            name="SDLC Workflow",
+            board_id="board-1",
+            project_id="test-project",
+            columns=(
+                ColumnTemplate(
+                    name="PR Review",
+                    type=ColumnType.AUTOMATED,
+                    agent_id="agent-review",
+                    is_pipeline_trigger=False,
+                    is_exit_column=False,
+                    position=0,
+                    auto_progress_on_completion=False,
+                    pr_review_cycle_config=PRReviewCycleConfig(max_outer_cycles=2),
+                ),
+            ),
+        )
+
+        mock_workflow_config.get_board_workflow_template.return_value = workflow_config
+
+        event = create_column_changed_event(
+            work_item_id="item-1",
+            board_id="board-1",
+            project_id="proj-1",
+            to_column="PR Review",
+        )
+
+        # Act & Assert - exception should be re-raised, not swallowed
+        with pytest.raises(RuntimeError, match="PR review cycle service unavailable"):
+            await handler.handle_column_change(event)
+
+        # Verify the exception was logged with error_id
+        pr_review_cycle_mock.start_pr_review_cycle.assert_called_once()
