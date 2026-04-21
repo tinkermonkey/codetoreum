@@ -55,9 +55,10 @@ class TestPRReviewCycleEventHandlerApprovedPath:
             timestamp="2026-04-21T12:00:00+00:00",
             source="test",
             pr_id="PR-123",
+            work_item_id="item-1",
             cycle_number=1,
             next_column="Done",
-            workflow_run_id="item-1",
+            workflow_run_id="run-1",
         )
 
         await handler.handle(event)
@@ -77,9 +78,10 @@ class TestPRReviewCycleEventHandlerApprovedPath:
             timestamp="2026-04-21T12:00:00+00:00",
             source="test",
             pr_id="PR-999",
+            work_item_id="item-99",
             cycle_number=1,
             next_column="Review",
-            workflow_run_id="item-99",
+            workflow_run_id="run-99",
         )
 
         await handler.handle(event)
@@ -103,6 +105,7 @@ class TestPRReviewCycleEventHandlerIssuesFoundPath:
             timestamp="2026-04-21T12:00:00+00:00",
             source="test",
             pr_id="PR-456",
+            work_item_id="item-2",
             cycle_number=2,
             total=3,
             critical=1,
@@ -111,7 +114,7 @@ class TestPRReviewCycleEventHandlerIssuesFoundPath:
             low=0,
             sub_issue_count=2,
             next_column="In Development",
-            workflow_run_id="item-2",
+            workflow_run_id="run-2",
         )
 
         await handler.handle(event)
@@ -131,6 +134,7 @@ class TestPRReviewCycleEventHandlerIssuesFoundPath:
             timestamp="2026-04-21T12:00:00+00:00",
             source="test",
             pr_id="PR-789",
+            work_item_id="item-3",
             cycle_number=3,
             total=5,
             critical=1,
@@ -139,7 +143,7 @@ class TestPRReviewCycleEventHandlerIssuesFoundPath:
             low=0,
             sub_issue_count=4,
             next_column="Review",
-            workflow_run_id="item-3",
+            workflow_run_id="run-3",
         )
 
         await handler.handle(event)
@@ -162,10 +166,11 @@ class TestPRReviewCycleEventHandlerMaxCyclesPath:
             timestamp="2026-04-21T12:00:00+00:00",
             source="test",
             pr_id="PR-789",
+            work_item_id="item-3",
             cycle_number=3,
             max_cycles=2,
             next_column="Review",
-            workflow_run_id="item-3",
+            workflow_run_id="run-3",
         )
 
         await handler.handle(event)
@@ -185,10 +190,11 @@ class TestPRReviewCycleEventHandlerMaxCyclesPath:
             timestamp="2026-04-21T12:00:00+00:00",
             source="test",
             pr_id="PR-555",
+            work_item_id="item-5",
             cycle_number=5,
             max_cycles=4,
             next_column="Human Review",
-            workflow_run_id="item-5",
+            workflow_run_id="run-5",
         )
 
         await handler.handle(event)
@@ -216,9 +222,10 @@ class TestPRReviewCycleEventHandlerErrorHandling:
             timestamp="2026-04-21T12:00:00+00:00",
             source="test",
             pr_id="PR-123",
+            work_item_id="item-1",
             cycle_number=1,
             next_column="Done",
-            workflow_run_id="item-1",
+            workflow_run_id="run-1",
         )
 
         # Should raise error after logging
@@ -241,6 +248,7 @@ class TestPRReviewCycleEventHandlerErrorHandling:
             timestamp="2026-04-21T12:00:00+00:00",
             source="test",
             pr_id="PR-456",
+            work_item_id="item-2",
             cycle_number=2,
             total=3,
             critical=1,
@@ -249,7 +257,7 @@ class TestPRReviewCycleEventHandlerErrorHandling:
             low=0,
             sub_issue_count=2,
             next_column="In Development",
-            workflow_run_id="item-2",
+            workflow_run_id="run-2",
         )
 
         # Should raise error after logging
@@ -270,10 +278,11 @@ class TestPRReviewCycleEventHandlerErrorHandling:
             timestamp="2026-04-21T12:00:00+00:00",
             source="test",
             pr_id="PR-789",
+            work_item_id="item-3",
             cycle_number=3,
             max_cycles=2,
             next_column="Review",
-            workflow_run_id="item-3",
+            workflow_run_id="run-3",
         )
 
         # Should raise error after logging
@@ -314,15 +323,17 @@ class TestPRReviewCycleEventHandlerMultipleEvents:
                 timestamp="2026-04-21T12:00:00+00:00",
                 source="test",
                 pr_id="PR-1",
+                work_item_id="item-1",
                 cycle_number=1,
                 next_column="Done",
-                workflow_run_id="item-1",
+                workflow_run_id="run-1",
             ),
             PRReviewCycleIssuesFoundEvent(
                 type="pr_review_cycle.issues_found",
                 timestamp="2026-04-21T12:05:00+00:00",
                 source="test",
                 pr_id="PR-2",
+                work_item_id="item-2",
                 cycle_number=1,
                 total=2,
                 critical=1,
@@ -331,17 +342,18 @@ class TestPRReviewCycleEventHandlerMultipleEvents:
                 low=0,
                 sub_issue_count=1,
                 next_column="In Development",
-                workflow_run_id="item-2",
+                workflow_run_id="run-2",
             ),
             PRReviewCycleMaxCyclesReachedEvent(
                 type="pr_review_cycle.max_cycles_reached",
                 timestamp="2026-04-21T12:10:00+00:00",
                 source="test",
                 pr_id="PR-3",
+                work_item_id="item-3",
                 cycle_number=3,
                 max_cycles=2,
                 next_column="Review",
-                workflow_run_id="item-3",
+                workflow_run_id="run-3",
             ),
         ]
 
