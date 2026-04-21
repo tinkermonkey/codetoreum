@@ -1,0 +1,17 @@
+# Planning & Design Review Cycle Scenario — Orchestrator: Workflow Definitions
+#
+# Port/Interface: IWorkflowService
+# Adapter (sim): InMemoryWorkflowService
+#
+# Single-stage review workflow for PR verification.
+
+workflows:
+  - name: "pr-review-workflow"
+    description: "Single-stage review workflow for PR code and requirements verification"
+    stages:
+      - name: "review"
+        agent_type: "pr_code_reviewer"
+        description: "PR code review and requirements verification"
+        order: 1
+        max_retries: 1
+        timeout_seconds: 300

@@ -87,7 +87,12 @@ class ColumnTemplate:
             raise ValueError(msg)
 
         # Validate agent_id correlation with type
-        if self.type == ColumnType.AUTOMATED and not self.agent_id:
+        # Exception: Automated columns with pr_review_cycle_config don't need agent_id
+        if (
+            self.type == ColumnType.AUTOMATED
+            and not self.agent_id
+            and self.pr_review_cycle_config is None
+        ):
             msg = f"Automated column '{self.name}' must have an agent_id"
             raise ValueError(msg)
 

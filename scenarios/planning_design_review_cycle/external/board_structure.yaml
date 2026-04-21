@@ -1,0 +1,25 @@
+# Planning & Design Review Cycle Scenario — External: Board Structure
+#
+# Port/Interface: IBoardService
+# Adapter (sim): MockBoardAdapter
+# Skipped when using real adapters (boards already exist in GitHub)
+
+boards:
+  - board_id: "planning-board-1"
+    board_name: "Planning & Design"
+    project_id: "planning-project-1"
+    columns:
+      - "Backlog"
+      - "In Review"
+      - "In Development"
+      - "Done"
+
+  - board_id: "sdlc-board-1"
+    board_name: "SDLC Execution"
+    project_id: "sdlc-project-1"
+    columns:
+      - "Backlog"
+      - "Development"
+      - "Code Review"
+      - "Testing"
+      - "Done"

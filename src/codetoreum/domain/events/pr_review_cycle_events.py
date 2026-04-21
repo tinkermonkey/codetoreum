@@ -652,3 +652,83 @@ class PRReviewCycleEscalatedEvent(CodetoreumEvent):
             cycle_number=data.get("cycle_number", 0),
             workflow_run_id=data.get("workflow_run_id", ""),
         )
+
+
+@dataclass(frozen=True)
+class PRReviewCycleSubIssuesCreatedEvent(CodetoreumEvent):
+    """Emitted when sub-issues are created during PR review cycle.
+
+    **Immutability**: This is an immutable event (frozen dataclass).
+
+    Attributes:
+        type (str): Fixed to "pr_review_cycle.sub_issues_created"
+        pr_id (str): GitHub PR identifier
+        cycle_number (int): Iteration number (1-based)
+        count (int): Number of sub-issues created
+        sub_issue_ids (tuple[str, ...]): IDs of created sub-issues
+        target_board (str): Board ID where sub-issues were created
+        workflow_run_id (str): ID of the workflow run
+        timestamp (str): ISO 8601 timestamp
+    """
+
+    pr_id: str = ""
+    cycle_number: int = 0
+    count: int = 0
+    sub_issue_ids: tuple[str, ...] = ()
+    target_board: str = ""
+    workflow_run_id: str = ""
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.pr_id:
+            msg = "pr_id is required"
+            raise ValueError(msg)
+        if self.cycle_number < 1:
+            msg = "cycle_number must be >= 1"
+            raise ValueError(msg)
+        if self.count < 1:
+            msg = "count must be >= 1 when sub-issues created"
+            raise ValueError(msg)
+        if len(self.sub_issue_ids) != self.count:
+            msg = f"sub_issue_ids count ({len(self.sub_issue_ids)}) must match count ({self.count})"
+            raise ValueError(msg)
+        if not self.target_board:
+            msg = "target_board is required"
+            raise ValueError(msg)
+        if not self.workflow_run_id:
+            msg = "workflow_run_id is required"
+            raise ValueError(msg)
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update(
+            {
+                "pr_id": self.pr_id,
+                "cycle_number": self.cycle_number,
+                "count": self.count,
+                "sub_issue_ids": list(self.sub_issue_ids),
+                "target_board": self.target_board,
+                "workflow_run_id": self.workflow_run_id,
+            }
+        )
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "PRReviewCycleSubIssuesCreatedEvent":
+        """Deserialize from dictionary."""
+        sub_issue_ids = tuple(data.get("sub_issue_ids", []))
+        return cls(
+            type=data.get("type", "pr_review_cycle.sub_issues_created"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            pr_id=data.get("pr_id", ""),
+            cycle_number=data.get("cycle_number", 0),
+            count=data.get("count", 0),
+            sub_issue_ids=sub_issue_ids,
+            target_board=data.get("target_board", ""),
+            workflow_run_id=data.get("workflow_run_id", ""),
+        )

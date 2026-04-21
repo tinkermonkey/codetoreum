@@ -221,6 +221,22 @@ class PRReviewCycleConfigModel(BaseModel):
         description="Timeout for Phase 4 consolidation in seconds",
         gt=0,
     )
+    sub_issue_target_board: str | None = Field(
+        default=None,
+        description="Board ID where sub-issues will be created",
+    )
+    on_issues_found_column: str | None = Field(
+        default=None,
+        description="Column to move item to when issues are found",
+    )
+    on_approved_column: str | None = Field(
+        default=None,
+        description="Column to move item to when approved",
+    )
+    agents: dict[str, str] | None = Field(
+        default=None,
+        description="Mapping of phase names to agent IDs (e.g., {'code_review': 'pr_code_reviewer'})",
+    )
 
     @field_validator("ci_check_timeout_seconds")
     @classmethod
@@ -242,6 +258,11 @@ class PRReviewCycleConfigModel(BaseModel):
         """
         from codetoreum.domain.pr_review_cycle_types import PRReviewCycleConfig
 
+        # Convert agents dict to frozenset of tuples if provided
+        agents_frozenset = None
+        if self.agents:
+            agents_frozenset = frozenset(self.agents.items())
+
         return PRReviewCycleConfig(
             max_outer_cycles=self.max_outer_cycles,
             verifier_context_sources=tuple(self.verifier_context_sources),
@@ -250,6 +271,10 @@ class PRReviewCycleConfigModel(BaseModel):
             ci_check_enabled=self.ci_check_enabled,
             ci_check_timeout_seconds=self.ci_check_timeout_seconds,
             consolidation_timeout_seconds=self.consolidation_timeout_seconds,
+            sub_issue_target_board=self.sub_issue_target_board,
+            on_issues_found_column=self.on_issues_found_column,
+            on_approved_column=self.on_approved_column,
+            agents=agents_frozenset,
         )
 
 

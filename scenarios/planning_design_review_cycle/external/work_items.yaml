@@ -1,0 +1,28 @@
+# Planning & Design Review Cycle Scenario — External: Work Items
+#
+# Port/Interface: IWorkItemService, ITicketSystem
+# Adapter (sim): InMemoryTicketAdapter, MockWorkItemService
+# Skipped when using real adapters (work items already exist in the ticket system)
+#
+# Single work item for PR review cycle testing.
+
+work_items:
+  - title: "Implement user authentication flow"
+    description: |
+      Implement OAuth 2.0 authentication flow for web application.
+
+      Requirements:
+      - Support GitHub and Google OAuth providers
+      - Secure token storage and rotation
+      - Session management with refresh tokens
+      - Unit tests for authentication logic
+
+      This work item exercises the PR review cycle in the Planning & Design board,
+      testing both the issues-found and approved paths.
+    labels:
+      - "authentication"
+      - "feature"
+    priority: "high"
+    status: "new"
+    metadata:
+      requires_pr_review: true

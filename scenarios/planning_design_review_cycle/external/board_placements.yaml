@@ -1,0 +1,10 @@
+# Planning & Design Review Cycle Scenario — External: Initial Board Placements
+#
+# Port/Interface: IBoardService
+# Adapter (sim): MockBoardAdapter
+# Skipped when using real adapters (board state maintained in GitHub)
+
+board_placements:
+  - work_item_title: "Implement user authentication flow"
+    board_id: "planning-board-1"
+    column: "Backlog"

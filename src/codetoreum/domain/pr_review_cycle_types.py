@@ -195,6 +195,10 @@ class PRReviewCycleConfig:
         ci_check_timeout_seconds: Timeout for CI status check (default 300).
                                  Must be > 0 when ci_check_enabled=True.
         consolidation_timeout_seconds: Timeout for Phase 4 consolidation (default 600)
+        sub_issue_target_board: Board ID where sub-issues will be created (optional)
+        on_issues_found_column: Column to move item to when issues are found (optional)
+        on_approved_column: Column to move item to when approved (optional)
+        agents: Immutable mapping of phase names to agent IDs (e.g., {"code_review": "pr_code_reviewer"})
     """
 
     max_outer_cycles: int = 1
@@ -204,6 +208,10 @@ class PRReviewCycleConfig:
     ci_check_enabled: bool = True
     ci_check_timeout_seconds: int = 300
     consolidation_timeout_seconds: int = 600
+    sub_issue_target_board: str | None = None
+    on_issues_found_column: str | None = None
+    on_approved_column: str | None = None
+    agents: frozenset[tuple[str, str]] | None = None
 
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""

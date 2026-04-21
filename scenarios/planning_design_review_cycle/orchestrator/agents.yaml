@@ -1,0 +1,38 @@
+# Planning & Design Review Cycle Scenario — Orchestrator: Agent Configurations
+#
+# Port/Interface: IAgentRepository, ILLMProvider
+# Adapter (sim): InMemoryAgentRepository, MockAgentExecutor
+#
+# Two PR review agents for code review and requirements verification.
+
+agents:
+  - name: "pr_code_reviewer"
+    agent_type: "code_reviewer"
+    description: |
+      Reviews pull request code for style, logic, and correctness.
+      Operates in Phase 1 of the PR review cycle. Executes code analysis
+      and provides initial findings.
+    capabilities:
+      - "code_review"
+      - "security_analysis"
+    llm_model: "claude-sonnet-4-6"
+    temperature: 0.5
+    max_tokens: 8192
+    enabled: true
+    metadata:
+      execution_type: "task_queue"
+
+  - name: "requirements_verifier"
+    agent_type: "requirements_verifier"
+    description: |
+      Verifies pull request against parent issue requirements.
+      Operates in Phase 2 of the PR review cycle. Checks implementation
+      against specified requirements and context sources.
+    capabilities:
+      - "documentation"
+    llm_model: "claude-sonnet-4-6"
+    temperature: 0.4
+    max_tokens: 4096
+    enabled: true
+    metadata:
+      execution_type: "task_queue"
