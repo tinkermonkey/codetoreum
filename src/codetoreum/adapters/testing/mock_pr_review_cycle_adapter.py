@@ -495,50 +495,52 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
         self._event_emitter.emit(phase2_completed)
         self._log_event({"type": "pr_review_cycle.phase_completed", "cycle_id": cycle_id, "phase_index": 2})
 
-        # ===== PHASE 3: CI Check =====
-        ci_passed = not config.ci_failing
-        ci_event = PRReviewCycleCICheckCompletedEvent(
-            type="pr_review_cycle.ci_check_completed",
-            timestamp=self._clock.now().isoformat(),
-            source="mock_pr_review_cycle",
-            pr_id=request.pr_id or f"pr-{work_item_id}",
-            ci_passed=ci_passed,
-            failures_count=config.ci_failures_count if config.ci_failing else 0,
-            pending_count=0,
-            duration_seconds=0.5,
-            workflow_run_id=request.workflow_run_id,
-        )
-        self._event_emitter.emit(ci_event)
-        self._log_event(
-            {
-                "type": "pr_review_cycle.ci_check_completed",
-                "cycle_id": cycle_id,
-                "ci_passed": ci_passed,
-            }
-        )
-        with self._lock:
-            self._ci_checked.add(work_item_id)
+        # ===== PHASE 3: CI Check (only if enabled) =====
+        ci_passed = True  # Default to passed if CI check is skipped
+        if request.config.ci_check_enabled:
+            ci_passed = not config.ci_failing
+            ci_event = PRReviewCycleCICheckCompletedEvent(
+                type="pr_review_cycle.ci_check_completed",
+                timestamp=self._clock.now().isoformat(),
+                source="mock_pr_review_cycle",
+                pr_id=request.pr_id or f"pr-{work_item_id}",
+                ci_passed=ci_passed,
+                failures_count=config.ci_failures_count if config.ci_failing else 0,
+                pending_count=0,
+                duration_seconds=0.5,
+                workflow_run_id=request.workflow_run_id,
+            )
+            self._event_emitter.emit(ci_event)
+            self._log_event(
+                {
+                    "type": "pr_review_cycle.ci_check_completed",
+                    "cycle_id": cycle_id,
+                    "ci_passed": ci_passed,
+                }
+            )
+            with self._lock:
+                self._ci_checked.add(work_item_id)
 
-        # Advance clock for Phase 3 (~0.5 seconds - already advanced above)
-        await self._clock.advance(timedelta(milliseconds=500))
+            # Advance clock for Phase 3 (~0.5 seconds - already advanced above)
+            await self._clock.advance(timedelta(milliseconds=500))
 
-        # Emit phase completed event for Phase 3
-        phase3_completed = PRReviewCyclePhaseCompletedEvent(
-            type="pr_review_cycle.phase_completed",
-            timestamp=self._clock.now().isoformat(),
-            source="mock_pr_review_cycle",
-            pr_id=request.pr_id or f"pr-{work_item_id}",
-            phase_name="ci_check",
-            phase_index=3,
-            findings_count=len(config.findings) if not ci_passed else 0,
-            comment_id="",
-            workflow_run_id=request.workflow_run_id,
-        )
-        self._event_emitter.emit(phase3_completed)
-        self._log_event({"type": "pr_review_cycle.phase_completed", "cycle_id": cycle_id, "phase_index": 3})
+            # Emit phase completed event for Phase 3
+            phase3_completed = PRReviewCyclePhaseCompletedEvent(
+                type="pr_review_cycle.phase_completed",
+                timestamp=self._clock.now().isoformat(),
+                source="mock_pr_review_cycle",
+                pr_id=request.pr_id or f"pr-{work_item_id}",
+                phase_name="ci_check",
+                phase_index=3,
+                findings_count=len(config.findings) if not ci_passed else 0,
+                comment_id="",
+                workflow_run_id=request.workflow_run_id,
+            )
+            self._event_emitter.emit(phase3_completed)
+            self._log_event({"type": "pr_review_cycle.phase_completed", "cycle_id": cycle_id, "phase_index": 3})
 
         # If CI failed, skip Phase 4 and route to failure column
-        if not ci_passed:
+        if request.config.ci_check_enabled and not ci_passed:
             phase_outputs = [
                 PRReviewPhaseOutput(
                     phase_name="code_review",
@@ -832,20 +834,26 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                     context_source=source,
                 )
             )
-        phase_outputs.append(
-            PRReviewPhaseOutput(
-                phase_name="ci_check",
-                phase_index=len(request.config.verifier_context_sources) + 2,
-                success=True,
-                findings=(),
-                summary="CI check passed",
-                duration_seconds=0.5,
+
+        # Only include CI check phase if enabled
+        next_phase_index = len(request.config.verifier_context_sources) + 2
+        if request.config.ci_check_enabled:
+            phase_outputs.append(
+                PRReviewPhaseOutput(
+                    phase_name="ci_check",
+                    phase_index=next_phase_index,
+                    success=True,
+                    findings=(),
+                    summary="CI check passed",
+                    duration_seconds=0.5,
+                )
             )
-        )
+            next_phase_index += 1
+
         phase_outputs.append(
             PRReviewPhaseOutput(
                 phase_name="consolidation",
-                phase_index=len(request.config.verifier_context_sources) + 3,
+                phase_index=next_phase_index,
                 success=True,
                 findings=tuple(config.findings),
                 summary=f"Consolidation completed, outcome: {outcome.value}",
