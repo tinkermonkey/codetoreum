@@ -25,10 +25,12 @@ from codetoreum.domain.events.pr_review_cycle_events import (
     PRReviewCycleApprovedEvent,
     PRReviewCycleCICheckCompletedEvent,
     PRReviewCycleCodeReviewStartedEvent,
+    PRReviewCycleConsolidationCompletedEvent,
     PRReviewCycleConsolidationStartedEvent,
     PRReviewCycleEscalatedEvent,
     PRReviewCycleIssuesFoundEvent,
     PRReviewCycleMaxCyclesReachedEvent,
+    PRReviewCyclePhaseCompletedEvent,
     PRReviewCycleStartedEvent,
     PRReviewCycleSubIssuesCreatedEvent,
     PRReviewCycleVerificationStartedEvent,
@@ -402,6 +404,21 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
         # Advance clock for Phase 1 (~10 minutes)
         await self._clock.advance(timedelta(minutes=10))
 
+        # Emit phase completed event for Phase 1
+        phase1_completed = PRReviewCyclePhaseCompletedEvent(
+            type="pr_review_cycle.phase_completed",
+            timestamp=self._clock.now().isoformat(),
+            source="mock_pr_review_cycle",
+            pr_id=request.pr_id or f"pr-{work_item_id}",
+            phase_name="code_review",
+            phase_index=1,
+            findings_count=len(config.findings),
+            comment_id="",
+            workflow_run_id=request.workflow_run_id,
+        )
+        self._event_emitter.emit(phase1_completed)
+        self._log_event({"type": "pr_review_cycle.phase_completed", "cycle_id": cycle_id, "phase_index": 1})
+
         # ===== PHASE 2.x: Verification =====
         for idx, source in enumerate(request.config.verifier_context_sources):
             verification_event = PRReviewCycleVerificationStartedEvent(
@@ -425,6 +442,21 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
 
             # Advance clock for each verification (~5 minutes)
             await self._clock.advance(timedelta(minutes=5))
+
+        # Emit phase completed event for Phase 2 (all verifications)
+        phase2_completed = PRReviewCyclePhaseCompletedEvent(
+            type="pr_review_cycle.phase_completed",
+            timestamp=self._clock.now().isoformat(),
+            source="mock_pr_review_cycle",
+            pr_id=request.pr_id or f"pr-{work_item_id}",
+            phase_name="verification",
+            phase_index=2,
+            findings_count=0,
+            comment_id="",
+            workflow_run_id=request.workflow_run_id,
+        )
+        self._event_emitter.emit(phase2_completed)
+        self._log_event({"type": "pr_review_cycle.phase_completed", "cycle_id": cycle_id, "phase_index": 2})
 
         # ===== PHASE 3: CI Check =====
         ci_passed = not config.ci_failing
@@ -452,6 +484,21 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
 
         # Advance clock for Phase 3 (~0.5 seconds - already advanced above)
         await self._clock.advance(timedelta(milliseconds=500))
+
+        # Emit phase completed event for Phase 3
+        phase3_completed = PRReviewCyclePhaseCompletedEvent(
+            type="pr_review_cycle.phase_completed",
+            timestamp=self._clock.now().isoformat(),
+            source="mock_pr_review_cycle",
+            pr_id=request.pr_id or f"pr-{work_item_id}",
+            phase_name="ci_check",
+            phase_index=3,
+            findings_count=len(config.findings) if not ci_passed else 0,
+            comment_id="",
+            workflow_run_id=request.workflow_run_id,
+        )
+        self._event_emitter.emit(phase3_completed)
+        self._log_event({"type": "pr_review_cycle.phase_completed", "cycle_id": cycle_id, "phase_index": 3})
 
         # If CI failed, skip Phase 4 and route to failure column
         if not ci_passed:
@@ -635,6 +682,36 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 }
             )
             next_column = request.config.on_issues_found_column or "In Development"
+
+        # Emit Phase 4 consolidation completed event
+        # Calculate severity counts from findings
+        consolidation_critical = sum(1 for f in config.findings if f.severity == "critical")
+        consolidation_high = sum(1 for f in config.findings if f.severity == "high")
+        consolidation_medium = sum(1 for f in config.findings if f.severity == "medium")
+        consolidation_low = sum(1 for f in config.findings if f.severity == "low")
+        consolidation_duration = (self._clock.now() - phase1_start).total_seconds()
+
+        consolidation_completed = PRReviewCycleConsolidationCompletedEvent(
+            type="pr_review_cycle.consolidation_completed",
+            timestamp=self._clock.now().isoformat(),
+            source="mock_pr_review_cycle",
+            pr_id=request.pr_id or f"pr-{work_item_id}",
+            total_findings=len(config.findings),
+            critical_count=consolidation_critical,
+            high_count=consolidation_high,
+            medium_count=consolidation_medium,
+            low_count=consolidation_low,
+            consolidation_duration_seconds=consolidation_duration,
+            workflow_run_id=request.workflow_run_id,
+        )
+        self._event_emitter.emit(consolidation_completed)
+        self._log_event(
+            {
+                "type": "pr_review_cycle.consolidation_completed",
+                "cycle_id": cycle_id,
+                "total_findings": len(config.findings),
+            }
+        )
 
         # Build phase outputs
         phase_outputs = [

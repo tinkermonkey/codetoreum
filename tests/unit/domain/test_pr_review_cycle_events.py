@@ -17,10 +17,12 @@ from codetoreum.domain.events.pr_review_cycle_events import (
     PRReviewCycleApprovedEvent,
     PRReviewCycleCICheckCompletedEvent,
     PRReviewCycleCodeReviewStartedEvent,
+    PRReviewCycleConsolidationCompletedEvent,
     PRReviewCycleConsolidationStartedEvent,
     PRReviewCycleEscalatedEvent,
     PRReviewCycleIssuesFoundEvent,
     PRReviewCycleMaxCyclesReachedEvent,
+    PRReviewCyclePhaseCompletedEvent,
     PRReviewCycleStartedEvent,
     PRReviewCycleVerificationStartedEvent,
 )
@@ -571,3 +573,220 @@ class TestPRReviewCycleEscalatedEvent:
         restored = PRReviewCycleEscalatedEvent.from_dict(data)
         assert restored.reason == original.reason
         assert restored.cycle_number == original.cycle_number
+
+
+class TestPRReviewCyclePhaseCompletedEvent:
+    """Tests for PRReviewCyclePhaseCompletedEvent."""
+
+    def test_create_event(self):
+        """Test creating the event."""
+        ts = get_iso_timestamp()
+        event = PRReviewCyclePhaseCompletedEvent(
+            type="pr_review_cycle.phase_completed",
+            timestamp=ts,
+            source="mock",
+            pr_id="pr-123",
+            phase_name="code_review",
+            phase_index=1,
+            findings_count=3,
+            comment_id="comment-456",
+            workflow_run_id="run-456",
+        )
+        assert event.phase_name == "code_review"
+        assert event.phase_index == 1
+        assert event.findings_count == 3
+        assert event.comment_id == "comment-456"
+
+    def test_event_type_correct(self):
+        """Test event type is correct."""
+        ts = get_iso_timestamp()
+        event = PRReviewCyclePhaseCompletedEvent(
+            type="pr_review_cycle.phase_completed",
+            timestamp=ts,
+            source="mock",
+            pr_id="pr-123",
+            phase_name="verification",
+            phase_index=2,
+            findings_count=1,
+            comment_id="",
+            workflow_run_id="run-456",
+        )
+        assert event.type == "pr_review_cycle.phase_completed"
+
+    def test_event_immutable(self):
+        """Test event is immutable."""
+        ts = get_iso_timestamp()
+        event = PRReviewCyclePhaseCompletedEvent(
+            type="pr_review_cycle.phase_completed",
+            timestamp=ts,
+            source="mock",
+            pr_id="pr-123",
+            phase_name="code_review",
+            phase_index=1,
+            findings_count=3,
+            comment_id="comment-456",
+            workflow_run_id="run-456",
+        )
+        with pytest.raises(Exception):  # FrozenInstanceError
+            event.phase_name = "verification"
+
+    def test_validation_phase_index_must_be_positive(self):
+        """Test phase_index must be >= 1."""
+        ts = get_iso_timestamp()
+        with pytest.raises(ValueError, match="phase_index must be >= 1"):
+            PRReviewCyclePhaseCompletedEvent(
+                type="pr_review_cycle.phase_completed",
+                timestamp=ts,
+                source="mock",
+                pr_id="pr-123",
+                phase_name="code_review",
+                phase_index=0,
+                findings_count=3,
+                comment_id="comment-456",
+                workflow_run_id="run-456",
+            )
+
+    def test_to_dict_from_dict_round_trip(self):
+        """Test serialization round-trip."""
+        ts = get_iso_timestamp()
+        original = PRReviewCyclePhaseCompletedEvent(
+            type="pr_review_cycle.phase_completed",
+            timestamp=ts,
+            source="mock",
+            pr_id="pr-123",
+            phase_name="verification",
+            phase_index=2,
+            findings_count=2,
+            comment_id="comment-789",
+            workflow_run_id="run-456",
+        )
+        data = original.to_dict()
+        restored = PRReviewCyclePhaseCompletedEvent.from_dict(data)
+        assert restored.phase_name == original.phase_name
+        assert restored.phase_index == original.phase_index
+        assert restored.findings_count == original.findings_count
+        assert restored.comment_id == original.comment_id
+
+
+class TestPRReviewCycleConsolidationCompletedEvent:
+    """Tests for PRReviewCycleConsolidationCompletedEvent."""
+
+    def test_create_event(self):
+        """Test creating the event."""
+        ts = get_iso_timestamp()
+        event = PRReviewCycleConsolidationCompletedEvent(
+            type="pr_review_cycle.consolidation_completed",
+            timestamp=ts,
+            source="mock",
+            pr_id="pr-123",
+            total_findings=5,
+            critical_count=2,
+            high_count=2,
+            medium_count=1,
+            low_count=0,
+            consolidation_duration_seconds=300.0,
+            workflow_run_id="run-456",
+        )
+        assert event.total_findings == 5
+        assert event.critical_count == 2
+        assert event.high_count == 2
+        assert event.medium_count == 1
+        assert event.low_count == 0
+
+    def test_event_type_correct(self):
+        """Test event type is correct."""
+        ts = get_iso_timestamp()
+        event = PRReviewCycleConsolidationCompletedEvent(
+            type="pr_review_cycle.consolidation_completed",
+            timestamp=ts,
+            source="mock",
+            pr_id="pr-123",
+            total_findings=0,
+            critical_count=0,
+            high_count=0,
+            medium_count=0,
+            low_count=0,
+            consolidation_duration_seconds=100.0,
+            workflow_run_id="run-456",
+        )
+        assert event.type == "pr_review_cycle.consolidation_completed"
+
+    def test_event_immutable(self):
+        """Test event is immutable."""
+        ts = get_iso_timestamp()
+        event = PRReviewCycleConsolidationCompletedEvent(
+            type="pr_review_cycle.consolidation_completed",
+            timestamp=ts,
+            source="mock",
+            pr_id="pr-123",
+            total_findings=5,
+            critical_count=2,
+            high_count=2,
+            medium_count=1,
+            low_count=0,
+            consolidation_duration_seconds=300.0,
+            workflow_run_id="run-456",
+        )
+        with pytest.raises(Exception):  # FrozenInstanceError
+            event.total_findings = 10
+
+    def test_validation_severity_counts_must_sum_to_total(self):
+        """Test severity counts must sum to total_findings."""
+        ts = get_iso_timestamp()
+        with pytest.raises(ValueError, match="Severity counts .* must sum to total_findings"):
+            PRReviewCycleConsolidationCompletedEvent(
+                type="pr_review_cycle.consolidation_completed",
+                timestamp=ts,
+                source="mock",
+                pr_id="pr-123",
+                total_findings=5,
+                critical_count=2,
+                high_count=2,
+                medium_count=0,
+                low_count=0,  # Sum is 4, not 5
+                consolidation_duration_seconds=300.0,
+                workflow_run_id="run-456",
+            )
+
+    def test_validation_zero_findings_allowed(self):
+        """Test zero findings is allowed (when no issues found)."""
+        ts = get_iso_timestamp()
+        event = PRReviewCycleConsolidationCompletedEvent(
+            type="pr_review_cycle.consolidation_completed",
+            timestamp=ts,
+            source="mock",
+            pr_id="pr-123",
+            total_findings=0,
+            critical_count=0,
+            high_count=0,
+            medium_count=0,
+            low_count=0,
+            consolidation_duration_seconds=100.0,
+            workflow_run_id="run-456",
+        )
+        assert event.total_findings == 0
+
+    def test_to_dict_from_dict_round_trip(self):
+        """Test serialization round-trip."""
+        ts = get_iso_timestamp()
+        original = PRReviewCycleConsolidationCompletedEvent(
+            type="pr_review_cycle.consolidation_completed",
+            timestamp=ts,
+            source="mock",
+            pr_id="pr-123",
+            total_findings=5,
+            critical_count=1,
+            high_count=2,
+            medium_count=2,
+            low_count=0,
+            consolidation_duration_seconds=450.0,
+            workflow_run_id="run-456",
+        )
+        data = original.to_dict()
+        restored = PRReviewCycleConsolidationCompletedEvent.from_dict(data)
+        assert restored.total_findings == original.total_findings
+        assert restored.critical_count == original.critical_count
+        assert restored.high_count == original.high_count
+        assert restored.medium_count == original.medium_count
+        assert restored.low_count == original.low_count
+        assert restored.consolidation_duration_seconds == original.consolidation_duration_seconds
