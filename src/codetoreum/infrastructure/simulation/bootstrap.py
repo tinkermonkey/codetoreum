@@ -136,6 +136,9 @@ from codetoreum.application.conversational_loop_orchestrator import Conversation
 from codetoreum.application.event_handlers.board_event_handler import (
     BoardColumnEventHandler,
 )
+from codetoreum.application.event_handlers.pr_review_cycle_dispatch_handler import (
+    PRReviewCycleDispatchHandler,
+)
 from codetoreum.application.event_handlers.pr_review_cycle_event_handler import (
     PRReviewCycleEventHandler,
 )
@@ -2159,30 +2162,31 @@ class SimulationApplicationBootstrap:
 
     def _register_pr_review_cycle_handler(self) -> None:
         """
-        Inject PR review cycle dependencies into BoardColumnEventHandler.
+        Register PR review cycle dispatch handler with the event bus.
 
         Part of Phase 5: Event handler registration for cross-cutting concerns.
 
-        Injects the pr_review_cycle and work_item_service adapters into the
-        BoardColumnEventHandler so it can dispatch PR review cycles when items
-        enter columns with pr_review_cycle_config.
+        Creates a PRReviewCycleDispatchHandler that listens for WorkItemColumnChangedEvent
+        and initiates PR review cycles when items enter columns with pr_review_cycle_config.
 
         Logs a warning if components are not yet initialized, allowing
         graceful degradation if called before full setup completion.
         """
-        if not self.adapters or not self.infrastructure or not self._board_event_handler:
+        if not self.adapters or not self.infrastructure:
             logger.warning("Cannot register PR review cycle handler: components not ready")
             return
 
-        # Inject pr_review_cycle adapter into the handler
-        self._board_event_handler.pr_review_cycle = self.adapters.pr_review_cycle
-        logger.info("Injected pr_review_cycle adapter into BoardColumnEventHandler")
+        # Create PR review cycle dispatch handler
+        handler = PRReviewCycleDispatchHandler(
+            pr_review_cycle=self.adapters.pr_review_cycle,
+            workflow_config=self.adapters.workflow_config,
+            work_item_service=self.adapters.work_item_service,
+            active_workflow_run_registry=self.adapters.run_registry,
+        )
 
-        # Inject work_item_service adapter into the handler
-        self._board_event_handler.work_item_service = self.adapters.work_item_service
-        logger.info("Injected work_item_service adapter into BoardColumnEventHandler")
-
-        logger.info("PR review cycle dependencies registered with BoardColumnEventHandler")
+        # Register handler with event bus
+        self.infrastructure.event_bus.register_handler(handler)
+        logger.info("Registered PRReviewCycleDispatchHandler with event bus")
 
     def _register_pr_review_cycle_outcome_event_handler(self) -> None:
         """

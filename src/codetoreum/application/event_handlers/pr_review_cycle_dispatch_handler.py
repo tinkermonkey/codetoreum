@@ -16,6 +16,9 @@ from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.domain.types import WorkItemId
 from codetoreum.infrastructure.event_bus import EventHandler, event_handler
 from codetoreum.ports.exceptions import ExternalServiceError, ResourceNotFoundError
+from codetoreum.ports.output.active_workflow_run_registry import (
+    IActiveWorkflowRunRegistry,
+)
 from codetoreum.ports.output.pr_review_cycle_service import (
     IPRReviewCycle,
     PRReviewCycleRequest,
@@ -45,6 +48,7 @@ class PRReviewCycleDispatchHandler(EventHandler):
             pr_review_cycle=cycle_service,
             workflow_config=config_service,
             work_item_service=item_service,
+            active_workflow_run_registry=run_registry,
         )
         bus.register_handler(handler)
 
@@ -66,6 +70,7 @@ class PRReviewCycleDispatchHandler(EventHandler):
         pr_review_cycle: IPRReviewCycle,
         workflow_config: IWorkflowConfigService,
         work_item_service: IWorkItemService,
+        active_workflow_run_registry: IActiveWorkflowRunRegistry,
     ):
         """
         Initialize PR review cycle dispatch handler.
@@ -74,10 +79,12 @@ class PRReviewCycleDispatchHandler(EventHandler):
             pr_review_cycle: PR review cycle service for initiating cycles
             workflow_config: Configuration service for workflow templates
             work_item_service: Work item service for retrieving work item details
+            active_workflow_run_registry: Registry for retrieving active workflow run IDs
         """
         self.pr_review_cycle = pr_review_cycle
         self.workflow_config = workflow_config
         self.work_item_service = work_item_service
+        self.active_workflow_run_registry = active_workflow_run_registry
 
     def get_event_types(self) -> list[str]:
         """Get list of event types this handler processes.
@@ -197,6 +204,31 @@ class PRReviewCycleDispatchHandler(EventHandler):
                 )
                 raise
 
+            # Retrieve active workflow run ID
+            try:
+                active_run = await self.active_workflow_run_registry.get_active_run(work_item_id)
+                if not active_run:
+                    logger.error(
+                        f"No active workflow run found for {work_item_id}",
+                        exc_info=False,
+                        extra={
+                            "error_id": "ERR_PR_REVIEW_CYCLE_NO_ACTIVE_RUN",
+                            "work_item_id": work_item_id,
+                        },
+                    )
+                    raise RuntimeError(f"No active workflow run for {work_item_id}")
+                workflow_run_id = active_run.run_id
+            except Exception as e:
+                logger.error(
+                    f"Failed to retrieve active workflow run for {work_item_id}: {e}",
+                    exc_info=True,
+                    extra={
+                        "error_id": "ERR_PR_REVIEW_CYCLE_ACTIVE_RUN_RETRIEVAL_FAILURE",
+                        "work_item_id": work_item_id,
+                    },
+                )
+                raise
+
             # Construct PR review cycle request
             pr_review_config = column_config.pr_review_cycle_config
             assert pr_review_config is not None  # For mypy type narrowing
@@ -209,7 +241,7 @@ class PRReviewCycleDispatchHandler(EventHandler):
                 discussion_id=work_item.discussion_id,
                 cycle_number=cycle_number,
                 config=pr_review_config,
-                workflow_run_id=work_item_id,
+                workflow_run_id=workflow_run_id,
             )
 
             # Initiate PR review cycle

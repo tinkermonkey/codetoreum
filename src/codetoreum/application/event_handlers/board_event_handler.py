@@ -327,7 +327,7 @@ class BoardColumnEventHandler(EventHandler):
             # Conversational columns are handled by WorkflowOrchestrator via
             # ConversationalLoopOrchestrator — dispatching the executor here would
             # cause a double-dispatch failure. PR review cycle columns are driven by
-            # _handle_pr_review_cycle; dispatching here would cause double-dispatch.
+            # PRReviewCycleDispatchHandler; dispatching here would cause double-dispatch.
             if (
                 column_config.agent_id
                 and getattr(column_config, "execution_type", "task_queue") != "conversational"
@@ -349,7 +349,7 @@ class BoardColumnEventHandler(EventHandler):
             # Even though the lock is already held, we should still trigger the agent
             # when re-entering the column (e.g., after reviewer rejection in maker-checker flow).
             # Skip conversational columns — handled by WorkflowOrchestrator via CLO.
-            # Skip PR review cycle columns — driven by _handle_pr_review_cycle.
+            # Skip PR review cycle columns — driven by PRReviewCycleDispatchHandler.
             if (
                 column_config.agent_id
                 and getattr(column_config, "execution_type", "task_queue") != "conversational"
