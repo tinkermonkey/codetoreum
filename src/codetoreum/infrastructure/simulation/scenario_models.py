@@ -255,13 +255,14 @@ class PRReviewCycleConfigModel(BaseModel):
         Returns:
             A PRReviewCycleConfig domain instance with the same field values.
             verifier_context_sources is converted from list to tuple.
+            agents is converted from dict to ordered tuple of tuples.
         """
         from codetoreum.domain.pr_review_cycle_types import PRReviewCycleConfig
 
-        # Convert agents dict to frozenset of tuples if provided
-        agents_frozenset = None
+        # Convert agents dict to tuple of tuples if provided, preserving insertion order
+        agents_tuple = None
         if self.agents:
-            agents_frozenset = frozenset(self.agents.items())
+            agents_tuple = tuple(self.agents.items())
 
         return PRReviewCycleConfig(
             max_outer_cycles=self.max_outer_cycles,
@@ -274,7 +275,7 @@ class PRReviewCycleConfigModel(BaseModel):
             sub_issue_target_board=self.sub_issue_target_board,
             on_issues_found_column=self.on_issues_found_column,
             on_approved_column=self.on_approved_column,
-            agents=agents_frozenset,
+            agents=agents_tuple,
         )
 
 

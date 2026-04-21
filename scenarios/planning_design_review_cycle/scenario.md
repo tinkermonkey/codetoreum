@@ -79,5 +79,5 @@ Runs `854460d9` and `fe4fa87f` (requirements_verification workflow):
 |---|---|
 | `projects.yaml` | Planning & Design project |
 | `work_items.yaml` | 1 work item for review |
-| `board_structure.yaml` | 3-column board (Backlog, In Review, Done) |
+| `board_structure.yaml` | 4-column board (Backlog, In Review, In Development, Done) |
 | `board_placements.yaml` | Item starts in Backlog |

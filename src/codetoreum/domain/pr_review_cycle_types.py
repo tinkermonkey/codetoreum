@@ -198,7 +198,9 @@ class PRReviewCycleConfig:
         sub_issue_target_board: Board ID where sub-issues will be created (optional)
         on_issues_found_column: Column to move item to when issues are found (optional)
         on_approved_column: Column to move item to when approved (optional)
-        agents: Immutable mapping of phase names to agent IDs (e.g., {"code_review": "pr_code_reviewer"})
+        agents: Immutable mapping of phase names to agent IDs as ordered tuples
+                (e.g., (("code_review", "pr_code_reviewer"), ("verification", "requirements_verifier")))
+                Preserves insertion order and allows O(1) iteration for phase->agent lookups
     """
 
     max_outer_cycles: int = 1
@@ -211,7 +213,7 @@ class PRReviewCycleConfig:
     sub_issue_target_board: str | None = None
     on_issues_found_column: str | None = None
     on_approved_column: str | None = None
-    agents: frozenset[tuple[str, str]] | None = None
+    agents: tuple[tuple[str, str], ...] | None = None
 
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""

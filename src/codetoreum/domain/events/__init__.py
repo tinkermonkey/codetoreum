@@ -209,6 +209,13 @@ from .repository_events import (
     FilesStagedEvent,
 )
 
+# PR Review Cycle events
+from .pr_review_cycle_events import (
+    PRReviewCycleApprovedEvent,
+    PRReviewCycleStartedEvent,
+    PRReviewCycleSubIssuesCreatedEvent,
+)
+
 # Review cycle events
 from .review_cycle_events import (
     ReviewCycleApprovedEvent,
@@ -384,6 +391,10 @@ __all__ = [
     "ReviewCycleHumanFeedbackReceivedEvent",
     "ReviewCycleMaxIterationsReachedEvent",
     "ReviewCycleApprovedEvent",
+    # PR Review Cycle events
+    "PRReviewCycleStartedEvent",
+    "PRReviewCycleApprovedEvent",
+    "PRReviewCycleSubIssuesCreatedEvent",
     # Container execution events
     "ContainerExecutionCompletedEvent",
     # Execution events
