@@ -517,8 +517,10 @@ class TestGitHubTicketAdapterDiscussionId:
 
             # Should return empty dict on error
             assert result == {}
-            # Should mark as fetched to avoid retry
-            assert adapter._discussions_fetched is True
+            # Should NOT mark as fetched to allow retry on transient failures
+            assert adapter._discussions_fetched is False
+            # Should generate error_id for Sentry tracking
+            assert adapter._discussions_fetch_error_id is not None
 
     @pytest.mark.asyncio
     async def test_fetch_discussions_graceful_fallback_on_generic_error(self):
@@ -540,8 +542,10 @@ class TestGitHubTicketAdapterDiscussionId:
 
             # Should return empty dict on error
             assert result == {}
-            # Should mark as fetched to avoid retry
-            assert adapter._discussions_fetched is True
+            # Should NOT mark as fetched to allow retry on transient failures
+            assert adapter._discussions_fetched is False
+            # Should generate error_id for Sentry tracking
+            assert adapter._discussions_fetch_error_id is not None
 
     @pytest.mark.asyncio
     async def test_regex_contextual_matching_filters_hex_colors(self):
@@ -589,6 +593,57 @@ class TestGitHubTicketAdapterDiscussionId:
             # Hex colors with A-F (like #FF0000, #00FF00) are filtered out
             assert "FF0000" not in result  # Filtered as color
             assert "00FF00" not in result  # Filtered as color
+
+    @pytest.mark.asyncio
+    async def test_fetch_discussions_retries_on_transient_failure(self):
+        """Verify that adapter retries discussion fetch after transient failure."""
+        config = GitHubConfig(
+            token="test_token",
+            organization="test_org",
+            repository="test_repo",
+        )
+        adapter = GitHubTicketAdapter(config)
+
+        mock_graphql_client = AsyncMock()
+
+        # First call fails, second call succeeds
+        first_call_error = ExternalServiceError("GitHub", "Temporary timeout")
+        success_response = {
+            "repository": {
+                "discussions": {
+                    "pageInfo": {
+                        "hasNextPage": False,
+                        "endCursor": None,
+                    },
+                    "nodes": [
+                        {
+                            "id": "discussion_1",
+                            "body": "Fixes issue #123",
+                        },
+                    ],
+                }
+            }
+        }
+
+        mock_graphql_client.execute = AsyncMock(
+            side_effect=[first_call_error, success_response]
+        )
+
+        with patch.object(adapter, "_get_graphql_client", return_value=mock_graphql_client):
+            # First call fails
+            result1 = await adapter._fetch_discussions_for_repository()
+            assert result1 == {}
+            assert adapter._discussions_fetched is False
+            assert adapter._discussions_fetch_error_id is not None
+            first_error_id = adapter._discussions_fetch_error_id
+
+            # Second call retries and succeeds
+            result2 = await adapter._fetch_discussions_for_repository()
+            assert result2 == {"123": "discussion_1"}
+            assert adapter._discussions_fetched is True
+
+            # Should have called execute twice (retry on second call)
+            assert mock_graphql_client.execute.call_count == 2
 
     @pytest.mark.asyncio
     async def test_regex_pattern_avoids_markdown_headings(self):

@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import re
+import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -78,6 +79,7 @@ class GitHubTicketAdapter(ITicketSystem):
         # Discussion cache (issue_number -> discussion_id)
         self._discussion_cache: dict[str, str | None] = {}
         self._discussions_fetched: bool = False
+        self._discussions_fetch_error_id: str | None = None  # Sentry error tracking
 
         # Rate limit tracking
         self._rate_limit_remaining: int | None = None
@@ -241,23 +243,31 @@ class GitHubTicketAdapter(ITicketSystem):
 
         except ExternalServiceError as e:
             # Log but don't fail - discussion fetching is optional
+            # Generate error_id for Sentry tracking and allow retry on transient failures
+            error_id = str(uuid.uuid4())
+            self._discussions_fetch_error_id = error_id
             logger.warning(
                 f"Failed to fetch discussions for repository {self.config.organization}/{self.config.repository}: {e}",
                 exc_info=True,
+                extra={"error_id": error_id},
             )
-            self._discussions_fetched = True  # Mark as fetched to avoid retrying
+            # Don't set _discussions_fetched = True to allow retry on transient failures
             return {}
         except Exception as e:
             # Catch any other errors and log them
+            # Generate error_id for Sentry tracking and allow retry on transient failures
+            error_id = str(uuid.uuid4())
+            self._discussions_fetch_error_id = error_id
             logger.warning(
                 f"Unexpected error fetching discussions: {e}",
                 exc_info=True,
                 extra={
                     "organization": self.config.organization,
                     "repository": self.config.repository,
+                    "error_id": error_id,
                 },
             )
-            self._discussions_fetched = True  # Mark as fetched to avoid retrying
+            # Don't set _discussions_fetched = True to allow retry on transient failures
             return {}
 
     async def _get_discussion_id(self, issue_number: str) -> str | None:
