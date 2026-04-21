@@ -607,7 +607,7 @@ class TestPRReviewCycleIssuesFoundEvent:
             source="mock",
             pr_id="pr-123",
             cycle_number=1,
-            finding_count=3,
+            total=3,
             critical_count=1,
             high_count=1,
             medium_count=1,
@@ -617,7 +617,7 @@ class TestPRReviewCycleIssuesFoundEvent:
             next_column="In Development",
             workflow_run_id="run-456",
         )
-        assert event.finding_count == 3
+        assert event.total == 3
         assert event.critical_count == 1
         assert event.high_count == 1
         assert event.medium_count == 1
@@ -627,14 +627,14 @@ class TestPRReviewCycleIssuesFoundEvent:
     def test_validation_finding_count_min(self):
         """Test finding_count must be >= 1 for issues found."""
         ts = get_iso_timestamp()
-        with pytest.raises(ValueError, match="finding_count must be >= 1"):
+        with pytest.raises(ValueError, match="total must be >= 1 when issues found"):
             PRReviewCycleIssuesFoundEvent(
                 type="pr_review_cycle.issues_found",
                 timestamp=ts,
                 source="mock",
                 pr_id="pr-123",
                 cycle_number=1,
-                finding_count=0,
+                total=0,
                 critical_count=0,
                 high_count=0,
                 medium_count=0,
@@ -654,7 +654,7 @@ class TestPRReviewCycleIssuesFoundEvent:
             source="mock",
             pr_id="pr-123",
             cycle_number=1,
-            finding_count=3,
+            total=3,
             critical_count=1,
             high_count=1,
             medium_count=1,
@@ -666,7 +666,7 @@ class TestPRReviewCycleIssuesFoundEvent:
         )
         data = original.to_dict()
         restored = PRReviewCycleIssuesFoundEvent.from_dict(data)
-        assert restored.finding_count == original.finding_count
+        assert restored.total == original.total
         assert restored.critical_count == original.critical_count
         assert restored.high_count == original.high_count
         assert restored.medium_count == original.medium_count
@@ -686,24 +686,24 @@ class TestPRReviewCycleMaxCyclesReachedEvent:
             source="mock",
             pr_id="pr-123",
             cycle_number=4,
-            max_outer_cycles=3,
+            max_cycles=3,
             next_column="Escalated",
             workflow_run_id="run-456",
         )
         assert event.cycle_number == 4
-        assert event.max_outer_cycles == 3
+        assert event.max_cycles == 3
 
     def test_validation_cycle_number_exceeds_max(self):
-        """Test cycle_number must exceed max_outer_cycles."""
+        """Test cycle_number must exceed max_cycles."""
         ts = get_iso_timestamp()
-        with pytest.raises(ValueError, match="cycle_number must exceed max_outer_cycles"):
+        with pytest.raises(ValueError, match="cycle_number must exceed max_cycles"):
             PRReviewCycleMaxCyclesReachedEvent(
                 type="pr_review_cycle.max_cycles_reached",
                 timestamp=ts,
                 source="mock",
                 pr_id="pr-123",
                 cycle_number=3,
-                max_outer_cycles=3,
+                max_cycles=3,
                 next_column="Escalated",
                 workflow_run_id="run-456",
             )
@@ -717,14 +717,14 @@ class TestPRReviewCycleMaxCyclesReachedEvent:
             source="mock",
             pr_id="pr-123",
             cycle_number=4,
-            max_outer_cycles=3,
+            max_cycles=3,
             next_column="Escalated",
             workflow_run_id="run-456",
         )
         data = original.to_dict()
         restored = PRReviewCycleMaxCyclesReachedEvent.from_dict(data)
         assert restored.cycle_number == original.cycle_number
-        assert restored.max_outer_cycles == original.max_outer_cycles
+        assert restored.max_cycles == original.max_cycles
 
 
 class TestPRReviewCycleEscalatedEvent:
