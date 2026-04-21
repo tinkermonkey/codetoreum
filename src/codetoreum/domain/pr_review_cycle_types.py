@@ -153,8 +153,8 @@ class PRReviewPhaseOutput:
         if not self.phase_name:
             msg = "phase_name is required"
             raise ValueError(msg)
-        if self.phase_index < 1:
-            msg = "phase_index must be >= 1"
+        if self.phase_index < 0:
+            msg = "phase_index must be >= 0 (0 for non-Phase 2 phases, >= 1 for Phase 2.x sub-phases)"
             raise ValueError(msg)
         if not isinstance(self.findings, tuple):
             msg = "findings must be a tuple (immutable)"
@@ -408,11 +408,6 @@ class PRReviewCycleResult:
             msg = "next_column is required"
             raise ValueError(msg)
 
-        # Consistency check: ISSUES_FOUND should have sub_issue_ids and findings
-        if self.outcome == PRReviewOutcome.ISSUES_FOUND and not self.sub_issue_ids:
-            msg = "outcome=ISSUES_FOUND but sub_issue_ids is empty (expected sub-issues)"
-            raise ValueError(msg)
-
         # Consistency check: APPROVED should have no sub_issue_ids
         if self.outcome == PRReviewOutcome.APPROVED and self.sub_issue_ids:
             msg = f"outcome=APPROVED but sub_issue_ids is non-empty: {self.sub_issue_ids} (contradiction)"
@@ -444,7 +439,7 @@ class PRReviewCycleState:
     """
 
     cycle_id: str
-    pr_id: str
+    pr_id: str | None
     work_item_id: str
     project_id: str
     board_id: str
@@ -463,8 +458,8 @@ class PRReviewCycleState:
         if not self.cycle_id:
             msg = "cycle_id is required"
             raise ValueError(msg)
-        if not self.pr_id:
-            msg = "pr_id is required"
+        if self.pr_id is not None and (not isinstance(self.pr_id, str) or not self.pr_id):
+            msg = "pr_id must be a non-empty string or None (None for work items without associated PR)"
             raise ValueError(msg)
         if not self.work_item_id:
             msg = "work_item_id is required"

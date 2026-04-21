@@ -133,6 +133,35 @@ class PRReviewCycleStateData:
             msg = "updated_at must be a non-empty ISO timestamp string"
             raise ValueError(msg)
 
+        # Consistency check: wrapper identity fields must match inner cycle_state
+        if self.work_item_id != self.cycle_state.work_item_id:
+            msg = (
+                f"work_item_id mismatch: wrapper has '{self.work_item_id}' but "
+                f"cycle_state has '{self.cycle_state.work_item_id}'"
+            )
+            raise ValueError(msg)
+
+        if self.project_id != self.cycle_state.project_id:
+            msg = (
+                f"project_id mismatch: wrapper has '{self.project_id}' but "
+                f"cycle_state has '{self.cycle_state.project_id}'"
+            )
+            raise ValueError(msg)
+
+        if self.board_id != self.cycle_state.board_id:
+            msg = (
+                f"board_id mismatch: wrapper has '{self.board_id}' but "
+                f"cycle_state has '{self.cycle_state.board_id}'"
+            )
+            raise ValueError(msg)
+
+        if self.cycle_number != self.cycle_state.cycle_number:
+            msg = (
+                f"cycle_number mismatch: wrapper has {self.cycle_number} but "
+                f"cycle_state has {self.cycle_state.cycle_number}"
+            )
+            raise ValueError(msg)
+
 
 class IPRReviewCycle(ABC):
     """Port interface for PR review cycle operations.

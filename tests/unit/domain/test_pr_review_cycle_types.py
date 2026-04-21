@@ -213,12 +213,24 @@ class TestPRReviewPhaseOutput:
                 duration_seconds=0.0,
             )
 
-    def test_phase_output_invalid_phase_index(self):
-        """Test rejects invalid phase index."""
-        with pytest.raises(ValueError, match="phase_index must be >= 1"):
+    def test_phase_output_zero_phase_index(self):
+        """Test accepts phase_index=0 (valid sentinel for non-Phase 2 phases)."""
+        output = PRReviewPhaseOutput(
+            phase_name="code_review",
+            phase_index=0,
+            success=True,
+            findings=(),
+            summary="OK",
+            duration_seconds=0.0,
+        )
+        assert output.phase_index == 0
+
+    def test_phase_output_invalid_negative_phase_index(self):
+        """Test rejects negative phase index."""
+        with pytest.raises(ValueError, match="phase_index must be >= 0"):
             PRReviewPhaseOutput(
                 phase_name="code_review",
-                phase_index=0,
+                phase_index=-1,
                 success=True,
                 findings=(),
                 summary="OK",
@@ -610,8 +622,8 @@ class TestPRReviewCycleResult:
                 next_column="In Development",
             )
 
-    def test_result_issues_found_requires_sub_issues(self):
-        """Test ISSUES_FOUND outcome requires sub_issue_ids."""
+    def test_result_issues_found_allows_empty_sub_issues(self):
+        """Test ISSUES_FOUND outcome allows empty sub_issue_ids when sub_issue_creation is disabled."""
         phase_output = PRReviewPhaseOutput(
             phase_name="code_review",
             phase_index=1,
@@ -620,24 +632,26 @@ class TestPRReviewCycleResult:
             summary="OK",
             duration_seconds=0.0,
         )
-        with pytest.raises(ValueError, match="outcome=ISSUES_FOUND but sub_issue_ids is empty"):
-            PRReviewCycleResult(
-                cycle_number=1,
-                workflow_run_id="run-123",
-                outcome=PRReviewOutcome.ISSUES_FOUND,
-                phase_outputs=(phase_output,),
-                all_findings=(),
-                sub_issue_ids=(),
-                ci_passed=False,
-                total_findings=0,
-                critical_count=0,
-                high_count=0,
-                medium_count=0,
-                low_count=0,
-                total_duration_seconds=0.0,
-                timestamp=datetime.now(UTC).isoformat(),
-                next_column="In Development",
-            )
+        # Should not raise - sub_issue_ids can be empty if sub-issue creation is disabled
+        result = PRReviewCycleResult(
+            cycle_number=1,
+            workflow_run_id="run-123",
+            outcome=PRReviewOutcome.ISSUES_FOUND,
+            phase_outputs=(phase_output,),
+            all_findings=(),
+            sub_issue_ids=(),
+            ci_passed=False,
+            total_findings=0,
+            critical_count=0,
+            high_count=0,
+            medium_count=0,
+            low_count=0,
+            total_duration_seconds=0.0,
+            timestamp=datetime.now(UTC).isoformat(),
+            next_column="In Development",
+        )
+        assert result.outcome == PRReviewOutcome.ISSUES_FOUND
+        assert result.sub_issue_ids == ()
 
     def test_result_approved_forbids_sub_issues(self):
         """Test APPROVED outcome forbids sub_issue_ids."""
@@ -810,11 +824,32 @@ class TestPRReviewCycleState:
                 updated_at=now,
             )
 
-    def test_state_empty_pr_id(self):
-        """Test rejects empty pr_id."""
+    def test_state_optional_pr_id(self):
+        """Test accepts None for pr_id (work items without associated PR)."""
         now = datetime.now(UTC).isoformat()
         config = self._create_test_config()
-        with pytest.raises(ValueError, match="pr_id is required"):
+        state = PRReviewCycleState(
+            cycle_id="cycle-123",
+            pr_id=None,
+            work_item_id="item-789",
+            project_id="proj-101",
+            board_id="board-202",
+            status=PRReviewStatus.PENDING,
+            cycle_number=1,
+            current_phase="init",
+            findings=[],
+            phase_outputs=[],
+            config=config,
+            started_at=now,
+            updated_at=now,
+        )
+        assert state.pr_id is None
+
+    def test_state_empty_pr_id(self):
+        """Test rejects empty string pr_id."""
+        now = datetime.now(UTC).isoformat()
+        config = self._create_test_config()
+        with pytest.raises(ValueError, match="pr_id must be a non-empty string or None"):
             PRReviewCycleState(
                 cycle_id="cycle-123",
                 pr_id="",

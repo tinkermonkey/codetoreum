@@ -623,6 +623,126 @@ class TestPRReviewCycleStateData:
                 updated_at="",
             )
 
+    def test_state_data_consistency_work_item_id_mismatch(self):
+        """Test rejects mismatched work_item_id between wrapper and cycle_state."""
+        now = datetime.now(UTC).isoformat()
+        config = self._create_test_config()
+        cycle_state = PRReviewCycleState(
+            cycle_id="cycle-1",
+            pr_id="pr-123",
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            status=PRReviewStatus.PENDING,
+            cycle_number=1,
+            current_phase="init",
+            findings=[],
+            phase_outputs=[],
+            config=config,
+            started_at=now,
+            updated_at=now,
+        )
+        with pytest.raises(ValueError, match="work_item_id mismatch"):
+            PRReviewCycleStateData(
+                work_item_id="item-2",  # Different from cycle_state
+                project_id="proj-1",
+                board_id="board-1",
+                cycle_number=1,
+                cycle_state=cycle_state,
+                created_at=now,
+                updated_at=now,
+            )
+
+    def test_state_data_consistency_project_id_mismatch(self):
+        """Test rejects mismatched project_id between wrapper and cycle_state."""
+        now = datetime.now(UTC).isoformat()
+        config = self._create_test_config()
+        cycle_state = PRReviewCycleState(
+            cycle_id="cycle-1",
+            pr_id="pr-123",
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            status=PRReviewStatus.PENDING,
+            cycle_number=1,
+            current_phase="init",
+            findings=[],
+            phase_outputs=[],
+            config=config,
+            started_at=now,
+            updated_at=now,
+        )
+        with pytest.raises(ValueError, match="project_id mismatch"):
+            PRReviewCycleStateData(
+                work_item_id="item-1",
+                project_id="proj-2",  # Different from cycle_state
+                board_id="board-1",
+                cycle_number=1,
+                cycle_state=cycle_state,
+                created_at=now,
+                updated_at=now,
+            )
+
+    def test_state_data_consistency_board_id_mismatch(self):
+        """Test rejects mismatched board_id between wrapper and cycle_state."""
+        now = datetime.now(UTC).isoformat()
+        config = self._create_test_config()
+        cycle_state = PRReviewCycleState(
+            cycle_id="cycle-1",
+            pr_id="pr-123",
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            status=PRReviewStatus.PENDING,
+            cycle_number=1,
+            current_phase="init",
+            findings=[],
+            phase_outputs=[],
+            config=config,
+            started_at=now,
+            updated_at=now,
+        )
+        with pytest.raises(ValueError, match="board_id mismatch"):
+            PRReviewCycleStateData(
+                work_item_id="item-1",
+                project_id="proj-1",
+                board_id="board-2",  # Different from cycle_state
+                cycle_number=1,
+                cycle_state=cycle_state,
+                created_at=now,
+                updated_at=now,
+            )
+
+    def test_state_data_consistency_cycle_number_mismatch(self):
+        """Test rejects mismatched cycle_number between wrapper and cycle_state."""
+        now = datetime.now(UTC).isoformat()
+        config = self._create_test_config()
+        cycle_state = PRReviewCycleState(
+            cycle_id="cycle-1",
+            pr_id="pr-123",
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            status=PRReviewStatus.PENDING,
+            cycle_number=1,
+            current_phase="init",
+            findings=[],
+            phase_outputs=[],
+            config=config,
+            started_at=now,
+            updated_at=now,
+        )
+        with pytest.raises(ValueError, match="cycle_number mismatch"):
+            PRReviewCycleStateData(
+                work_item_id="item-1",
+                project_id="proj-1",
+                board_id="board-1",
+                cycle_number=2,  # Different from cycle_state
+                cycle_state=cycle_state,
+                created_at=now,
+                updated_at=now,
+            )
+
 
 class TestIPRReviewCycle:
     """Tests for IPRReviewCycle abstract base class."""
