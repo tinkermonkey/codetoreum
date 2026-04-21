@@ -450,6 +450,11 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 self._cycles[work_item_id] = state_data
                 if project_id not in self._project_cycles:
                     self._project_cycles[project_id] = []
+                # Remove existing entry for this work_item_id to prevent duplicates
+                self._project_cycles[project_id] = [
+                    cycle for cycle in self._project_cycles[project_id]
+                    if cycle.work_item_id != work_item_id
+                ]
                 self._project_cycles[project_id].append(state_data)
             return result
 
@@ -704,6 +709,11 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 self._cycles[work_item_id] = state_data
                 if project_id not in self._project_cycles:
                     self._project_cycles[project_id] = []
+                # Remove existing entry for this work_item_id to prevent duplicates
+                self._project_cycles[project_id] = [
+                    cycle for cycle in self._project_cycles[project_id]
+                    if cycle.work_item_id != work_item_id
+                ]
                 self._project_cycles[project_id].append(state_data)
             return result
 
@@ -962,6 +972,11 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             self._cycles[work_item_id] = state_data
             if project_id not in self._project_cycles:
                 self._project_cycles[project_id] = []
+            # Remove existing entry for this work_item_id to prevent duplicates
+            self._project_cycles[project_id] = [
+                cycle for cycle in self._project_cycles[project_id]
+                if cycle.work_item_id != work_item_id
+            ]
             self._project_cycles[project_id].append(state_data)
 
         return result
@@ -987,6 +1002,16 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
         """
         with self._lock:
             self._cycles[data.work_item_id] = data
+            # Synchronize with _project_cycles: filter out old entry and add new one
+            project_id = data.project_id
+            if project_id not in self._project_cycles:
+                self._project_cycles[project_id] = []
+            # Remove existing entry for this work_item_id to prevent duplicates
+            self._project_cycles[project_id] = [
+                cycle for cycle in self._project_cycles[project_id]
+                if cycle.work_item_id != data.work_item_id
+            ]
+            self._project_cycles[project_id].append(data)
 
     async def remove_cycle_state(self, work_item_id: str, project_id: str) -> None:
         """Remove completed cycle state.
@@ -997,6 +1022,12 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
         """
         with self._lock:
             self._cycles.pop(work_item_id, None)
+            # Also remove from _project_cycles to maintain consistency
+            if project_id in self._project_cycles:
+                self._project_cycles[project_id] = [
+                    cycle for cycle in self._project_cycles[project_id]
+                    if cycle.work_item_id != work_item_id
+                ]
 
     async def load_active_cycles(self, project_id: str) -> list[PRReviewCycleStateData]:
         """Load all in-progress cycles for a project.

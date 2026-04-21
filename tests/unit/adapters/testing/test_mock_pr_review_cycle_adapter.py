@@ -1009,3 +1009,113 @@ class TestStateManagement:
 
         assert len(cycles) > 0
         assert cycles[0].work_item_id == "item-1"
+
+    @pytest.mark.asyncio
+    async def test_remove_cycle_state_and_load_active_cycles_interaction(self, adapter):
+        """Test that remove_cycle_state removes cycle from load_active_cycles.
+
+        This test verifies the port contract semantics: a removed cycle should no longer
+        appear as active. The bug this tests for was that remove_cycle_state only removed
+        from _cycles but not from _project_cycles, causing load_active_cycles to return
+        stale data after removal.
+        """
+        # Start first cycle
+        request1 = PRReviewCycleRequest(
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            pr_id="pr-123",
+            pr_url=None,
+            discussion_id=None,
+            cycle_number=1,
+            config=PRReviewCycleConfig(max_outer_cycles=3, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
+            workflow_run_id="run-1",
+        )
+        await adapter.start_pr_review_cycle(request1)
+
+        # Start a second item's cycle
+        request2 = PRReviewCycleRequest(
+            work_item_id="item-2",
+            project_id="proj-1",
+            board_id="board-1",
+            pr_id="pr-456",
+            pr_url=None,
+            discussion_id=None,
+            cycle_number=1,
+            config=PRReviewCycleConfig(max_outer_cycles=3, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
+            workflow_run_id="run-2",
+        )
+        await adapter.start_pr_review_cycle(request2)
+
+        # Verify both cycles are in load_active_cycles
+        cycles = await adapter.load_active_cycles("proj-1")
+        assert len(cycles) == 2
+        work_item_ids = {c.work_item_id for c in cycles}
+        assert "item-1" in work_item_ids
+        assert "item-2" in work_item_ids
+
+        # Remove item-1's cycle
+        await adapter.remove_cycle_state("item-1", "proj-1")
+
+        # Verify item-1 is no longer in load_active_cycles, but item-2 still is
+        cycles_after_removal = await adapter.load_active_cycles("proj-1")
+        assert len(cycles_after_removal) == 1
+        assert cycles_after_removal[0].work_item_id == "item-2"
+
+        # Verify get_cycle_state also returns None for removed item
+        state = await adapter.get_cycle_state("item-1", "proj-1")
+        assert state is None
+
+    @pytest.mark.asyncio
+    async def test_multiple_cycles_same_work_item_no_duplicates(self, adapter):
+        """Test that re-triggering cycles for same work item doesn't create duplicates.
+
+        This test verifies that when the same work item goes through multiple cycles
+        (the core re-trigger use case), load_active_cycles doesn't accumulate duplicates
+        in the _project_cycles list. Only the latest cycle should be returned for each
+        work item.
+        """
+        # Start first cycle for item-1
+        request1 = PRReviewCycleRequest(
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            pr_id="pr-123",
+            pr_url=None,
+            discussion_id=None,
+            cycle_number=1,
+            config=PRReviewCycleConfig(max_outer_cycles=3, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
+            workflow_run_id="run-1",
+        )
+        await adapter.start_pr_review_cycle(request1)
+
+        # Verify one cycle
+        cycles = await adapter.load_active_cycles("proj-1")
+        assert len(cycles) == 1
+        assert cycles[0].work_item_id == "item-1"
+        assert cycles[0].cycle_number == 1
+
+        # Start second cycle for same item (re-trigger)
+        request2 = PRReviewCycleRequest(
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            pr_id="pr-123",
+            pr_url=None,
+            discussion_id=None,
+            cycle_number=2,
+            config=PRReviewCycleConfig(max_outer_cycles=3, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
+            workflow_run_id="run-2",
+        )
+        await adapter.start_pr_review_cycle(request2)
+
+        # Verify still only one entry in load_active_cycles (not duplicated), but with cycle 2
+        cycles_after_retrigger = await adapter.load_active_cycles("proj-1")
+        assert len(cycles_after_retrigger) == 1, "Should have exactly one cycle, not duplicates"
+        assert cycles_after_retrigger[0].work_item_id == "item-1"
+        assert cycles_after_retrigger[0].cycle_number == 2, "Should contain the latest cycle (cycle 2)"
+
+        # Verify get_cycle_state returns the latest state
+        state = await adapter.get_cycle_state("item-1", "proj-1")
+        assert state is not None
+        assert state.cycle_number == 2
