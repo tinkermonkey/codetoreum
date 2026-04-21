@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 if TYPE_CHECKING:
+    from codetoreum.domain.pr_review_cycle_types import PRReviewCycleConfig
     from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig
 
 
@@ -170,6 +171,88 @@ class RepairCycleAgentConfigModel(BaseModel):
         )
 
 
+class PRReviewCycleConfigModel(BaseModel):
+    """YAML representation of PR review cycle configuration.
+
+    Mirrors the PRReviewCycleConfig domain model with Pydantic validation.
+    All fields are optional and default to the domain model defaults.
+
+    Attributes:
+        max_outer_cycles: Maximum number of complete cycles before escalation (>= 1)
+        verifier_context_sources: Tuple of context sources for verification phase
+        code_review_timeout_seconds: Timeout for Phase 1 code review
+        verification_timeout_seconds: Timeout per verification context source
+        ci_check_enabled: Whether to perform Phase 3 CI check
+        ci_check_timeout_seconds: Timeout for CI check
+        consolidation_timeout_seconds: Timeout for Phase 4 consolidation
+    """
+
+    max_outer_cycles: int = Field(
+        default=1,
+        description="Maximum number of complete cycles before escalation",
+        ge=1,
+    )
+    verifier_context_sources: list[str] = Field(
+        default_factory=lambda: ["parent_issue"],
+        description="List of context sources to use during verification phase",
+        min_length=1,
+    )
+    code_review_timeout_seconds: int = Field(
+        default=600,
+        description="Timeout for Phase 1 code review in seconds",
+        gt=0,
+    )
+    verification_timeout_seconds: int = Field(
+        default=300,
+        description="Timeout per verification context source in seconds",
+        gt=0,
+    )
+    ci_check_enabled: bool = Field(
+        default=True,
+        description="Whether to perform Phase 3 CI check validation",
+    )
+    ci_check_timeout_seconds: int = Field(
+        default=300,
+        description="Timeout for Phase 3 CI check in seconds (must be > 0 when enabled)",
+        ge=0,
+    )
+    consolidation_timeout_seconds: int = Field(
+        default=600,
+        description="Timeout for Phase 4 consolidation in seconds",
+        gt=0,
+    )
+
+    @field_validator("ci_check_timeout_seconds")
+    @classmethod
+    def validate_ci_check_timeout(cls, v: int, info) -> int:
+        """Validate ci_check_timeout_seconds when ci_check_enabled is True."""
+        # Get the ci_check_enabled value from the data
+        ci_check_enabled = info.data.get("ci_check_enabled", True)
+        if ci_check_enabled and v <= 0:
+            msg = f"ci_check_timeout_seconds must be > 0 when ci_check_enabled=True, got {v}"
+            raise ValueError(msg)
+        return v
+
+    def to_domain(self) -> "PRReviewCycleConfig":
+        """Convert this Pydantic model to a domain PRReviewCycleConfig instance.
+
+        Returns:
+            A PRReviewCycleConfig domain instance with the same field values.
+            verifier_context_sources is converted from list to tuple.
+        """
+        from codetoreum.domain.pr_review_cycle_types import PRReviewCycleConfig
+
+        return PRReviewCycleConfig(
+            max_outer_cycles=self.max_outer_cycles,
+            verifier_context_sources=tuple(self.verifier_context_sources),
+            code_review_timeout_seconds=self.code_review_timeout_seconds,
+            verification_timeout_seconds=self.verification_timeout_seconds,
+            ci_check_enabled=self.ci_check_enabled,
+            ci_check_timeout_seconds=self.ci_check_timeout_seconds,
+            consolidation_timeout_seconds=self.consolidation_timeout_seconds,
+        )
+
+
 class ScenarioColumnConfig(BaseModel):
     """Explicit column configuration for a board workflow template.
 
@@ -213,6 +296,13 @@ class ScenarioColumnConfig(BaseModel):
             "Ordered list of test type names to run when this column triggers a repair cycle. "
             "Valid values: COMPILATION, UNIT, INTEGRATION, CI, E2E. "
             "When omitted, the handler uses the default sequence (UNIT, INTEGRATION, E2E)."
+        ),
+    )
+    pr_review_cycle_config: PRReviewCycleConfigModel | None = Field(
+        default=None,
+        description=(
+            "Configuration for PR review cycle on this column. When set, triggers PR review cycle "
+            "instead of agent execution. Mutually exclusive with repair_cycle_agents."
         ),
     )
     execution_type: str = Field(
