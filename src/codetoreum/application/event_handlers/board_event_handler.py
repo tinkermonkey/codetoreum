@@ -541,7 +541,7 @@ class BoardColumnEventHandler(EventHandler):
                 f"Cannot initiate PR review cycle for {work_item_id}: " "work_item_service not injected",
                 exc_info=False,
                 extra={
-                    "error_id": "ERR_BOARD_EVENT_WORK_ITEM_SERVICE_NOT_AVAILABLE",
+                    "error_id": "ERR_PR_REVIEW_CYCLE_SERVICE_NOT_AVAILABLE",
                     "work_item_id": work_item_id,
                 },
             )
@@ -552,7 +552,7 @@ class BoardColumnEventHandler(EventHandler):
                 f"Cannot initiate PR review cycle for {work_item_id}: " "pr_review_cycle_config is None",
                 exc_info=False,
                 extra={
-                    "error_id": "ERR_BOARD_EVENT_PR_REVIEW_CYCLE_CONFIG_MISSING",
+                    "error_id": "ERR_PR_REVIEW_CYCLE_CONFIG_MISSING",
                     "work_item_id": work_item_id,
                 },
             )
@@ -591,7 +591,7 @@ class BoardColumnEventHandler(EventHandler):
                             f"workflow config not found for board {board_id}",
                             exc_info=False,
                             extra={
-                                "error_id": "ERR_BOARD_EVENT_WORKFLOW_CONFIG_NOT_FOUND",
+                                "error_id": "ERR_PR_REVIEW_CYCLE_WORKFLOW_CONFIG_NOT_FOUND",
                                 "work_item_id": work_item_id,
                                 "board_id": board_id,
                             },
@@ -606,7 +606,7 @@ class BoardColumnEventHandler(EventHandler):
                             f"no column after '{column_config.name}'",
                             exc_info=False,
                             extra={
-                                "error_id": "ERR_BOARD_EVENT_NO_ESCALATION_COLUMN",
+                                "error_id": "ERR_PR_REVIEW_CYCLE_ESCALATION_COLUMN_NOT_FOUND",
                                 "work_item_id": work_item_id,
                                 "current_column": column_config.name,
                             },
@@ -635,7 +635,7 @@ class BoardColumnEventHandler(EventHandler):
                     logger.error(
                         f"Failed to emit PRReviewCycleMaxCyclesReachedEvent for {work_item_id}: {e}",
                         exc_info=True,
-                        extra={"error_id": "ERR_BOARD_EVENT_MAX_CYCLES_EMIT_FAILURE"},
+                        extra={"error_id": "ERR_PR_REVIEW_CYCLE_MAX_CYCLES_EVENT_EMIT_FAILURE"},
                     )
 
                 return
@@ -648,7 +648,7 @@ class BoardColumnEventHandler(EventHandler):
                     f"Failed to retrieve work item {work_item_id}: {e}",
                     exc_info=True,
                     extra={
-                        "error_id": "ERR_BOARD_EVENT_WORK_ITEM_RETRIEVAL_FAILURE",
+                        "error_id": "ERR_PR_REVIEW_CYCLE_WORK_ITEM_RETRIEVAL_FAILURE",
                         "work_item_id": work_item_id,
                     },
                 )
@@ -684,7 +684,7 @@ class BoardColumnEventHandler(EventHandler):
             result = await self.pr_review_cycle.start_pr_review_cycle(request)
 
             logger.info(
-                f"PR review cycle {cycle_number} started for {work_item_id}, " f"outcome: {result.outcome}"
+                f"PR review cycle {cycle_number} started for {work_item_id}"
             )
 
         except Exception as e:
@@ -692,10 +692,11 @@ class BoardColumnEventHandler(EventHandler):
                 f"PR review cycle initiation failed for {work_item_id}: {e}",
                 exc_info=True,
                 extra={
-                    "error_id": "ERR_BOARD_EVENT_PR_REVIEW_CYCLE_FAILURE",
+                    "error_id": "ERR_PR_REVIEW_CYCLE_START_FAILURE",
                     "work_item_id": work_item_id,
                 },
             )
+            raise
 
     # ========================================================================
     # Workflow Run Lifecycle Tracking
