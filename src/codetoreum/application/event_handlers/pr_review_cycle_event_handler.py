@@ -127,12 +127,12 @@ class PRReviewCycleEventHandler(EventHandler):
         elif isinstance(event, PRReviewCycleIssuesFoundEvent):
             logger.info(
                 f"PR review cycle issues found for {work_item_id}, "
-                f"moving to column '{next_column}' (cycle {event.cycle_number}, {event.finding_count} findings)"
+                f"moving to column '{next_column}' (cycle {event.cycle_number}, {event.total} findings)"
             )
         elif isinstance(event, PRReviewCycleMaxCyclesReachedEvent):
             logger.warning(
                 f"PR review cycle max cycles reached for {work_item_id}, "
-                f"escalating to column '{next_column}' (cycle {event.cycle_number}/{event.max_outer_cycles})"
+                f"escalating to column '{next_column}' (cycle {event.cycle_number}/{event.max_cycles})"
             )
 
         try:

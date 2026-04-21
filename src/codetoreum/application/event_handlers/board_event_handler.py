@@ -641,7 +641,7 @@ class BoardColumnEventHandler(EventHandler):
                         source="board_event_handler",
                         pr_id=pr_id,
                         cycle_number=cycle_number,
-                        max_outer_cycles=max_outer_cycles,
+                        max_cycles=max_outer_cycles,
                         next_column=escalation_column,
                         workflow_run_id=work_item_id,
                     )
