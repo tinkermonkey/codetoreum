@@ -1357,16 +1357,35 @@ class SimulationApplicationBootstrap:
             resolved.pr_review_cycle.event_emitter = resolved.event_emitter
 
             # Wire event emitter to publish CodetoreumEvents to event bus
-            # This ensures that events emitted by the adapter reach the event bus handlers
+            # This ensures that PR review cycle events emitted by the adapter reach the event bus handlers
             def _publish_codetoreum_event_to_bus(event):  # type: ignore
                 import asyncio
                 # Create an async task to publish to event bus (fire and forget)
                 try:
-                    asyncio.create_task(self.infrastructure.event_bus.publish(event))
-                except Exception as e:
-                    logger.warning(f"Failed to publish CodetoreumEvent to event bus: {e}")
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(self.infrastructure.event_bus.publish(event))
+                except RuntimeError as e:
+                    logger.error(
+                        f"Failed to schedule PR review cycle event bus publication task: {e}",
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                    )
 
-            resolved.event_emitter.on("*", _publish_codetoreum_event_to_bus)
+            # Subscribe to specific PR review cycle event types (not wildcard "all" events)
+            # This prevents capturing unrelated events from other adapters like board column changes
+            pr_review_cycle_event_types = [
+                "pr_review_cycle.started",
+                "pr_review_cycle.approved",
+                "pr_review_cycle.issues_found",
+                "pr_review_cycle.max_cycles_reached",
+                "pr_review_cycle.escalated",
+                "pr_review_cycle.code_review_started",
+                "pr_review_cycle.verification_started",
+                "pr_review_cycle.ci_check_completed",
+                "pr_review_cycle.consolidation_started",
+            ]
+            for event_type in pr_review_cycle_event_types:
+                resolved.event_emitter.on(event_type, _publish_codetoreum_event_to_bus)
             logger.info("Wired PR review cycle event emitter to event bus")
 
         # Create branch resolution adapter (mock adapter for simulation testing)

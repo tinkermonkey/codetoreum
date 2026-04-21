@@ -96,17 +96,14 @@ class BoardColumnEventHandler(EventHandler):
         )
         bus.register_handler(handler)
 
-        # Now when a WorkItemColumnChanged event is published:
-        event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Backlog",
-                "to_column": "In Development",
-                "moved_by": "human"
-            }
+        # Now when a WorkItemColumnChangedEvent is published:
+        event = WorkItemColumnChangedEvent(
+            work_item_id="item-1",
+            board_id="board-1",
+            project_id="proj-1",
+            from_column="Backlog",
+            to_column="In Development",
+            moved_by="human"
         )
         await bus.publish(event)
         # Handler processes column change, acquires lock, triggers agent if needed
