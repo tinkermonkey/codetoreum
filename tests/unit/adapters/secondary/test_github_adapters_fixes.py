@@ -21,6 +21,7 @@ from codetoreum.adapters.primary.github_webhook_adapter import (
     WebhookProcessingResult,
 )
 from codetoreum.adapters.secondary.github_ticket_adapter import GitHubConfig, GitHubTicketAdapter
+from codetoreum.ports.exceptions import ExternalServiceError
 
 
 class TestGitHubTicketAdapterResilience:
@@ -295,6 +296,341 @@ class TestGitHubWebhookAdapterExceptionChaining:
             assert exc_info.value.__cause__ is not None or isinstance(
                 exc_info.value.__context__, Exception
             ), "Exception should preserve context chain"
+
+
+class TestGitHubTicketAdapterDiscussionId:
+    """Tests for GitHubTicketAdapter discussion_id population from GraphQL API."""
+
+    def test_graphql_client_lazy_initialization(self):
+        """Verify GraphQL client is lazily initialized on first use."""
+        config = GitHubConfig(
+            token="test_token",
+            organization="test_org",
+            repository="test_repo",
+        )
+        adapter = GitHubTicketAdapter(config)
+
+        # Should be None initially
+        assert adapter._graphql_client is None
+
+        # After calling _get_graphql_client, should be initialized
+        client = adapter._get_graphql_client()
+        assert client is not None
+        assert adapter._graphql_client is not None
+
+    @pytest.mark.asyncio
+    async def test_fetch_discussions_with_pagination(self):
+        """Verify _fetch_discussions_for_repository implements cursor-based pagination."""
+        config = GitHubConfig(
+            token="test_token",
+            organization="test_org",
+            repository="test_repo",
+        )
+        adapter = GitHubTicketAdapter(config)
+
+        # Mock the GraphQL client to return paginated results
+        mock_graphql_client = AsyncMock()
+
+        # First page response
+        first_page = {
+            "repository": {
+                "discussions": {
+                    "pageInfo": {
+                        "hasNextPage": True,
+                        "endCursor": "cursor_1",
+                    },
+                    "nodes": [
+                        {
+                            "id": "discussion_1",
+                            "body": "This fixes issue #123",
+                        },
+                        {
+                            "id": "discussion_2",
+                            "body": "Related to #456",
+                        },
+                    ],
+                }
+            }
+        }
+
+        # Second page response (no more pages)
+        second_page = {
+            "repository": {
+                "discussions": {
+                    "pageInfo": {
+                        "hasNextPage": False,
+                        "endCursor": None,
+                    },
+                    "nodes": [
+                        {
+                            "id": "discussion_3",
+                            "body": "Fixes issue #789",
+                        },
+                    ],
+                }
+            }
+        }
+
+        mock_graphql_client.execute = AsyncMock(side_effect=[first_page, second_page])
+
+        with patch.object(adapter, "_get_graphql_client", return_value=mock_graphql_client):
+            result = await adapter._fetch_discussions_for_repository()
+
+            # Should have called execute twice (pagination)
+            assert mock_graphql_client.execute.call_count == 2
+
+            # Should have found all three issues
+            assert "123" in result
+            assert "456" in result
+            assert "789" in result
+            assert result["123"] == "discussion_1"
+            assert result["456"] == "discussion_2"
+            assert result["789"] == "discussion_3"
+
+    @pytest.mark.asyncio
+    async def test_fetch_discussions_caches_result(self):
+        """Verify discussion fetch is cached and only happens once."""
+        config = GitHubConfig(
+            token="test_token",
+            organization="test_org",
+            repository="test_repo",
+        )
+        adapter = GitHubTicketAdapter(config)
+
+        mock_graphql_client = AsyncMock()
+        mock_response = {
+            "repository": {
+                "discussions": {
+                    "pageInfo": {
+                        "hasNextPage": False,
+                        "endCursor": None,
+                    },
+                    "nodes": [
+                        {
+                            "id": "discussion_1",
+                            "body": "Fixes issue #123",
+                        },
+                    ],
+                }
+            }
+        }
+
+        mock_graphql_client.execute = AsyncMock(return_value=mock_response)
+
+        with patch.object(adapter, "_get_graphql_client", return_value=mock_graphql_client):
+            # First call
+            result1 = await adapter._fetch_discussions_for_repository()
+            assert mock_graphql_client.execute.call_count == 1
+
+            # Second call should use cache and not execute GraphQL
+            result2 = await adapter._fetch_discussions_for_repository()
+            assert mock_graphql_client.execute.call_count == 1  # Still 1, not 2
+            assert result1 == result2
+
+    @pytest.mark.asyncio
+    async def test_get_discussion_id_cache_hit(self):
+        """Verify _get_discussion_id returns cached value when available."""
+        config = GitHubConfig(
+            token="test_token",
+            organization="test_org",
+            repository="test_repo",
+        )
+        adapter = GitHubTicketAdapter(config)
+
+        # Manually set up cache to simulate a prior fetch
+        adapter._discussion_cache["123"] = "discussion_abc"
+        adapter._discussions_fetched = True
+
+        result = await adapter._get_discussion_id("123")
+        assert result == "discussion_abc"
+
+    @pytest.mark.asyncio
+    async def test_get_discussion_id_issue_not_found(self):
+        """Verify _get_discussion_id returns None for issues not in discussions."""
+        config = GitHubConfig(
+            token="test_token",
+            organization="test_org",
+            repository="test_repo",
+        )
+        adapter = GitHubTicketAdapter(config)
+
+        # Simulate an empty fetch
+        adapter._discussion_cache = {"123": "discussion_abc"}
+        adapter._discussions_fetched = True
+
+        result = await adapter._get_discussion_id("999")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_discussion_id_triggers_fetch_on_first_call(self):
+        """Verify _get_discussion_id triggers fetch on first call."""
+        config = GitHubConfig(
+            token="test_token",
+            organization="test_org",
+            repository="test_repo",
+        )
+        adapter = GitHubTicketAdapter(config)
+
+        mock_graphql_client = AsyncMock()
+        mock_response = {
+            "repository": {
+                "discussions": {
+                    "pageInfo": {
+                        "hasNextPage": False,
+                        "endCursor": None,
+                    },
+                    "nodes": [
+                        {
+                            "id": "discussion_1",
+                            "body": "Fixes issue #123",
+                        },
+                    ],
+                }
+            }
+        }
+
+        mock_graphql_client.execute = AsyncMock(return_value=mock_response)
+
+        with patch.object(adapter, "_get_graphql_client", return_value=mock_graphql_client):
+            # First call to _get_discussion_id should trigger fetch
+            result = await adapter._get_discussion_id("123")
+            assert result == "discussion_1"
+            assert mock_graphql_client.execute.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_fetch_discussions_graceful_fallback_on_graphql_error(self):
+        """Verify graceful fallback when GraphQL query fails."""
+        config = GitHubConfig(
+            token="test_token",
+            organization="test_org",
+            repository="test_repo",
+        )
+        adapter = GitHubTicketAdapter(config)
+
+        mock_graphql_client = AsyncMock()
+        mock_graphql_client.execute = AsyncMock(
+            side_effect=ExternalServiceError("GitHub", "Query timeout")
+        )
+
+        with patch.object(adapter, "_get_graphql_client", return_value=mock_graphql_client):
+            result = await adapter._fetch_discussions_for_repository()
+
+            # Should return empty dict on error
+            assert result == {}
+            # Should mark as fetched to avoid retry
+            assert adapter._discussions_fetched is True
+
+    @pytest.mark.asyncio
+    async def test_fetch_discussions_graceful_fallback_on_generic_error(self):
+        """Verify graceful fallback on unexpected errors."""
+        config = GitHubConfig(
+            token="test_token",
+            organization="test_org",
+            repository="test_repo",
+        )
+        adapter = GitHubTicketAdapter(config)
+
+        mock_graphql_client = AsyncMock()
+        mock_graphql_client.execute = AsyncMock(
+            side_effect=ValueError("Unexpected error")
+        )
+
+        with patch.object(adapter, "_get_graphql_client", return_value=mock_graphql_client):
+            result = await adapter._fetch_discussions_for_repository()
+
+            # Should return empty dict on error
+            assert result == {}
+            # Should mark as fetched to avoid retry
+            assert adapter._discussions_fetched is True
+
+    @pytest.mark.asyncio
+    async def test_regex_contextual_matching_filters_hex_colors(self):
+        """Verify regex pattern filters hex colors with letter components (A-F)."""
+        config = GitHubConfig(
+            token="test_token",
+            organization="test_org",
+            repository="test_repo",
+        )
+        adapter = GitHubTicketAdapter(config)
+
+        mock_graphql_client = AsyncMock()
+        # Discussion with hex colors and valid issue references
+        # #FF0000 is clearly a color (has A-F)
+        # # 1. is markdown (space between # and number)
+        # #123 and #456 are numeric (could be issues or colors)
+        mock_response = {
+            "repository": {
+                "discussions": {
+                    "pageInfo": {
+                        "hasNextPage": False,
+                        "endCursor": None,
+                    },
+                    "nodes": [
+                        {
+                            "id": "discussion_1",
+                            "body": "Updated color from #FF0000 to #00FF00. Related to #123 and fixes #456.",
+                        },
+                    ],
+                }
+            }
+        }
+
+        mock_graphql_client.execute = AsyncMock(return_value=mock_response)
+
+        with patch.object(adapter, "_get_graphql_client", return_value=mock_graphql_client):
+            result = await adapter._fetch_discussions_for_repository()
+
+            # Should match valid issue references
+            assert "123" in result  # Numeric issue reference
+            assert "456" in result  # Numeric issue reference
+            assert result["123"] == "discussion_1"
+            assert result["456"] == "discussion_1"
+
+            # Hex colors with A-F (like #FF0000, #00FF00) are filtered out
+            assert "FF0000" not in result  # Filtered as color
+            assert "00FF00" not in result  # Filtered as color
+
+    @pytest.mark.asyncio
+    async def test_regex_pattern_avoids_markdown_headings(self):
+        """Verify regex pattern avoids matching markdown headings (# 1 with space)."""
+        config = GitHubConfig(
+            token="test_token",
+            organization="test_org",
+            repository="test_repo",
+        )
+        adapter = GitHubTicketAdapter(config)
+
+        mock_graphql_client = AsyncMock()
+        # Markdown heading (# 1. Title) should not match because there's a space
+        # But #123 without space should match
+        mock_response = {
+            "repository": {
+                "discussions": {
+                    "pageInfo": {
+                        "hasNextPage": False,
+                        "endCursor": None,
+                    },
+                    "nodes": [
+                        {
+                            "id": "discussion_1",
+                            "body": "# 1. Introduction\nThis fixes #123 and references #456.",
+                        },
+                    ],
+                }
+            }
+        }
+
+        mock_graphql_client.execute = AsyncMock(return_value=mock_response)
+
+        with patch.object(adapter, "_get_graphql_client", return_value=mock_graphql_client):
+            result = await adapter._fetch_discussions_for_repository()
+
+            # Should match issue references
+            assert "123" in result
+            assert "456" in result
+
+            # Markdown heading # 1 should not match (space between # and 1)
+            assert "1" not in result
 
 
 if __name__ == "__main__":

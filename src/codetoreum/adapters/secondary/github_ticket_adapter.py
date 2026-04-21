@@ -135,11 +135,12 @@ class GitHubTicketAdapter(ITicketSystem):
             raise ValueError(msg)
         return (self.config.organization, self.config.repository)
 
-    async def _fetch_discussions_for_repository(self) -> dict[str, str]:
+    async def _fetch_discussions_for_repository(self) -> dict[str, str | None]:
         """Fetch all discussions in the repository and build issue->discussion mapping.
 
-        Queries GitHub GraphQL API for discussions in the repository and creates
-        a mapping of issue numbers (mentioned in discussion body) to discussion IDs.
+        Queries GitHub GraphQL API for discussions in the repository using cursor-based
+        pagination. Searches for discussions that reference issue numbers and creates
+        a mapping of issue numbers to discussion IDs.
 
         Returns:
             Dictionary mapping issue_number -> discussion_id (or None if not found)
@@ -147,6 +148,7 @@ class GitHubTicketAdapter(ITicketSystem):
         Note:
             Results are cached in _discussion_cache for the lifetime of the adapter.
             Only fetches once per adapter instance.
+            Uses cursor-based pagination to handle repositories with > 100 discussions.
         """
         if self._discussions_fetched:
             return self._discussion_cache
@@ -154,12 +156,16 @@ class GitHubTicketAdapter(ITicketSystem):
         try:
             graphql_client = self._get_graphql_client()
 
-            # Query for discussions in the repository
-            # We search for discussions that mention issue numbers in their body
+            # Query for discussions in the repository using cursor-based pagination
+            # This follows the same pattern as github_discussion_adapter.py
             query = """
-            query GetDiscussions($owner: String!, $repo: String!, $first: Int!) {
+            query GetDiscussions($owner: String!, $repo: String!, $first: Int!, $after: String) {
               repository(owner: $owner, name: $repo) {
-                discussions(first: $first) {
+                discussions(first: $first, after: $after) {
+                  pageInfo {
+                    hasNextPage
+                    endCursor
+                  }
                   nodes {
                     id
                     body
@@ -169,32 +175,66 @@ class GitHubTicketAdapter(ITicketSystem):
             }
             """
 
-            variables = {
-                "owner": self.config.organization,
-                "repo": self.config.repository,
-                "first": 100,  # Fetch first 100 discussions (GitHub limit)
-            }
+            cursor: str | None = None
+            issues_seen = 0
 
-            result = await graphql_client.execute(query, variables)
+            while True:
+                variables = {
+                    "owner": self.config.organization,
+                    "repo": self.config.repository,
+                    "first": 100,  # Fetch 100 per page (GitHub limit)
+                }
+                if cursor:
+                    variables["after"] = cursor
 
-            # Extract discussions from result
-            repository = result.get("repository", {})
-            discussions = repository.get("discussions", {})
-            nodes = discussions.get("nodes", [])
+                result = await graphql_client.execute(query, variables)
 
-            # Build mapping of issue numbers to discussion IDs
-            # Searches for issue number patterns (#123) in discussion body
-            issue_pattern = r"#(\d+)"
-            for discussion in nodes:
-                body = discussion.get("body", "")
-                discussion_id = discussion.get("id")
+                # Extract discussions from result
+                repository = result.get("repository", {})
+                discussions = repository.get("discussions", {})
+                page_info = discussions.get("pageInfo", {})
+                nodes = discussions.get("nodes", [])
 
-                # Find all issue numbers mentioned in this discussion
-                for match in re.finditer(issue_pattern, body):
-                    issue_number = match.group(1)
-                    # Store first matching discussion for each issue
-                    if issue_number not in self._discussion_cache:
-                        self._discussion_cache[issue_number] = discussion_id
+                # Build mapping of issue numbers to discussion IDs
+                # Searches for issue number references in discussion body
+                for discussion in nodes:
+                    body = discussion.get("body", "")
+                    discussion_id = discussion.get("id")
+
+                    # Find issue number references (#123) in discussion
+                    # Pattern matches #digits when preceded/followed by word boundaries
+                    # Avoids matching markdown headings (# 1) by requiring # to be followed immediately by digits
+                    # Note: Cannot reliably distinguish issue refs from PR refs (same #N syntax) or
+                    # from hex colors in all cases using simple regex. For production use, consider
+                    # GitHub's native linkedFrom/timelineItems GraphQL fields.
+                    issue_pattern = r"(?:^|\s|/|[(\[])?#(\d+)(?=[\s,\.\)\]\-;:!?]|$)"
+
+                    for match in re.finditer(issue_pattern, body, re.MULTILINE):
+                        issue_number = match.group(1)
+
+                        # Skip common CSS color codes (3-6 chars of hex only, e.g., #FFF, #FFFFFF, #000)
+                        # Only filter if it looks like a pure hex color code (letters A-F present)
+                        if len(issue_number) in (3, 6) and any(c in "ABCDEFabcdef" for c in issue_number):
+                            continue
+
+                        issues_seen += 1
+                        # Store first matching discussion for each issue
+                        if issue_number not in self._discussion_cache:
+                            self._discussion_cache[issue_number] = discussion_id
+
+                # Check if there are more pages
+                if not page_info.get("hasNextPage"):
+                    break
+
+                cursor = page_info.get("endCursor")
+
+            # Log if we hit the truncation point (exactly 100 * N discussions)
+            # to indicate pagination is working
+            if cursor is None and len(nodes) == 100:
+                logger.info(
+                    f"Fetched discussions for {self.config.organization}/{self.config.repository}, "
+                    f"found {issues_seen} issue references"
+                )
 
             self._discussions_fetched = True
             return self._discussion_cache
