@@ -693,6 +693,193 @@ class TestAssertionHelpers:
             adapter.assert_cycle_number("item-1", 5)
 
 
+class TestCICheckDisabledPath:
+    """Test behavior when CI check is disabled via ci_check_enabled=False."""
+
+    @pytest.mark.asyncio
+    async def test_ci_disabled_skips_ci_check_event(self, adapter, mock_event_emitter):
+        """Test that CI check is skipped when ci_check_enabled=False."""
+        request = PRReviewCycleRequest(
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            pr_id="pr-123",
+            pr_url=None,
+            discussion_id=None,
+            cycle_number=1,
+            config=PRReviewCycleConfig(max_outer_cycles=3, ci_check_enabled=False),
+            workflow_run_id="run-1",
+        )
+
+        await adapter.start_pr_review_cycle(request)
+
+        # Verify NO CI check event was emitted
+        ci_events = [
+            call
+            for call in mock_event_emitter.emit.call_args_list
+            if call[0][0].type == "pr_review_cycle.ci_check_completed"
+        ]
+        assert len(ci_events) == 0, "Expected no CI check event when ci_check_enabled=False"
+
+    @pytest.mark.asyncio
+    async def test_ci_disabled_skips_ci_check_phase_output(self, adapter):
+        """Test that CI check phase is not in phase_outputs when disabled."""
+        request = PRReviewCycleRequest(
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            pr_id="pr-123",
+            pr_url=None,
+            discussion_id=None,
+            cycle_number=1,
+            config=PRReviewCycleConfig(max_outer_cycles=3, ci_check_enabled=False),
+            workflow_run_id="run-1",
+        )
+
+        result = await adapter.start_pr_review_cycle(request)
+
+        # Verify no CI check phase in outputs
+        ci_phases = [p for p in result.phase_outputs if p.phase_name == "ci_check"]
+        assert len(ci_phases) == 0, "Expected no CI check phase output when ci_check_enabled=False"
+
+    @pytest.mark.asyncio
+    async def test_ci_disabled_produces_correct_phase_count(self, adapter):
+        """Test that phase count is correct when CI is disabled (one fewer phase)."""
+        request = PRReviewCycleRequest(
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            pr_id="pr-123",
+            pr_url=None,
+            discussion_id=None,
+            cycle_number=1,
+            config=PRReviewCycleConfig(
+                max_outer_cycles=3, ci_check_enabled=False, verifier_context_sources=("static_analysis",)
+            ),
+            workflow_run_id="run-1",
+        )
+
+        result = await adapter.start_pr_review_cycle(request)
+
+        # With verifier_context_sources=["static_analysis"] and ci_check_enabled=False:
+        # Phase 1: code_review
+        # Phase 2: verification_static_analysis
+        # Phase 3: consolidation (no CI check phase)
+        # Total: 3 phases
+        assert len(result.phase_outputs) == 3, f"Expected 3 phases when CI disabled, got {len(result.phase_outputs)}"
+
+    @pytest.mark.asyncio
+    async def test_ci_disabled_produces_issues_found(self, adapter):
+        """Test that default outcome is still ISSUES_FOUND when CI is disabled."""
+        request = PRReviewCycleRequest(
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            pr_id="pr-123",
+            pr_url=None,
+            discussion_id=None,
+            cycle_number=1,
+            config=PRReviewCycleConfig(max_outer_cycles=3, ci_check_enabled=False),
+            workflow_run_id="run-1",
+        )
+
+        result = await adapter.start_pr_review_cycle(request)
+
+        # Should still produce ISSUES_FOUND with default findings
+        assert result.outcome == PRReviewOutcome.ISSUES_FOUND
+        assert result.total_findings > 0
+
+    @pytest.mark.asyncio
+    async def test_ci_disabled_proceeds_to_consolidation(self, adapter, mock_event_emitter):
+        """Test that consolidation phase runs when CI is disabled."""
+        request = PRReviewCycleRequest(
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            pr_id="pr-123",
+            pr_url=None,
+            discussion_id=None,
+            cycle_number=1,
+            config=PRReviewCycleConfig(max_outer_cycles=3, ci_check_enabled=False),
+            workflow_run_id="run-1",
+        )
+
+        await adapter.start_pr_review_cycle(request)
+
+        # Verify consolidation started event exists
+        consolidation_events = [
+            call
+            for call in mock_event_emitter.emit.call_args_list
+            if call[0][0].type == "pr_review_cycle.consolidation_started"
+        ]
+        assert len(consolidation_events) > 0, "Expected consolidation phase to run when CI disabled"
+
+    @pytest.mark.asyncio
+    async def test_ci_disabled_assert_ci_not_checked(self, adapter):
+        """Test assert_ci_not_checked passes when CI is disabled."""
+        request = PRReviewCycleRequest(
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            pr_id="pr-123",
+            pr_url=None,
+            discussion_id=None,
+            cycle_number=1,
+            config=PRReviewCycleConfig(max_outer_cycles=3, ci_check_enabled=False),
+            workflow_run_id="run-1",
+        )
+
+        await adapter.start_pr_review_cycle(request)
+
+        # Should not raise
+        adapter.assert_ci_not_checked("item-1")
+
+    @pytest.mark.asyncio
+    async def test_ci_disabled_assert_ci_checked_fails(self, adapter):
+        """Test assert_ci_checked fails when CI is disabled."""
+        request = PRReviewCycleRequest(
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            pr_id="pr-123",
+            pr_url=None,
+            discussion_id=None,
+            cycle_number=1,
+            config=PRReviewCycleConfig(max_outer_cycles=3, ci_check_enabled=False),
+            workflow_run_id="run-1",
+        )
+
+        await adapter.start_pr_review_cycle(request)
+
+        # Should raise with helpful error message
+        with pytest.raises(AssertionError) as exc_info:
+            adapter.assert_ci_checked("item-1")
+        assert "ci_check_enabled=False" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_ci_disabled_with_approved_outcome(self, adapter):
+        """Test CI disabled path with approved outcome."""
+        adapter.set_approved_immediately()
+
+        request = PRReviewCycleRequest(
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            pr_id="pr-123",
+            pr_url=None,
+            discussion_id=None,
+            cycle_number=1,
+            config=PRReviewCycleConfig(max_outer_cycles=3, ci_check_enabled=False),
+            workflow_run_id="run-1",
+        )
+
+        result = await adapter.start_pr_review_cycle(request)
+
+        assert result.outcome == PRReviewOutcome.APPROVED
+        adapter.assert_ci_not_checked("item-1")
+        adapter.assert_outcome("item-1", PRReviewOutcome.APPROVED)
+
+
 class TestClockAdvancement:
     """Test that clock advances by correct durations."""
 

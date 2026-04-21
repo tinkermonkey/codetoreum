@@ -143,6 +143,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
         self._cycle_configs: dict[str, _CycleConfiguration] = {}
         self._sub_issues_created: dict[str, list[str]] = {}
         self._ci_checked: set[str] = set()
+        self._ci_not_checked: set[str] = set()
 
         # Event system
         self._events: list[dict[str, Any]] = []
@@ -520,6 +521,10 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             )
             with self._lock:
                 self._ci_checked.add(work_item_id)
+        else:
+            # Track when CI check is disabled
+            with self._lock:
+                self._ci_not_checked.add(work_item_id)
 
             # Advance clock for Phase 3 (~0.5 seconds - already advanced above)
             await self._clock.advance(timedelta(milliseconds=500))
@@ -1040,7 +1045,21 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
         """
         with self._lock:
             if work_item_id not in self._ci_checked:
-                msg = f"Expected CI check to be performed for {work_item_id}"
+                msg = f"Expected CI check to be performed for {work_item_id}, but CI was not checked (possibly disabled via ci_check_enabled=False)"
+                raise AssertionError(msg)
+
+    def assert_ci_not_checked(self, work_item_id: str) -> None:
+        """Assert that CI check was not performed (due to ci_check_enabled=False).
+
+        Args:
+            work_item_id: Work item ID to check
+
+        Raises:
+            AssertionError: If CI was checked
+        """
+        with self._lock:
+            if work_item_id not in self._ci_not_checked:
+                msg = f"Expected CI check to be skipped for {work_item_id}, but CI was checked (ci_check_enabled=True)"
                 raise AssertionError(msg)
 
     def assert_cycle_number(self, work_item_id: str, expected_cycle_number: int) -> None:
