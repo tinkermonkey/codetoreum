@@ -53,6 +53,7 @@ def mock_board_service():
     """Create a mock board service."""
     adapter = AsyncMock()
     adapter.move_item_to_column = AsyncMock()
+    adapter.add_item_to_column = AsyncMock()
     return adapter
 
 
@@ -158,9 +159,9 @@ class TestDefaultBehavior:
 
         result = await adapter.start_pr_review_cycle(request)
 
-        assert result.work_item_id == "item-1"
         assert result.cycle_number == 1
-        assert result.cycle_state.status == PRReviewStatus.COMPLETED
+        assert result.outcome == PRReviewOutcome.ISSUES_FOUND
+        assert result.total_findings > 0
 
         # Default should create at least one sub-issue
         mock_ticket_system.create_work_item.assert_called()
@@ -188,7 +189,7 @@ class TestApprovedPath:
 
         result = await adapter.start_pr_review_cycle(request)
 
-        assert result.cycle_state.status == PRReviewStatus.COMPLETED
+        assert result.outcome == PRReviewOutcome.APPROVED
         adapter.assert_outcome("item-1", PRReviewOutcome.APPROVED)
 
     @pytest.mark.asyncio
@@ -317,8 +318,9 @@ class TestCIFailingPath:
 
         result = await adapter.start_pr_review_cycle(request)
 
-        # Verify cycle completed (in failure state)
-        assert result.cycle_state.status == PRReviewStatus.COMPLETED
+        # Verify CI failed outcome
+        assert result.outcome == PRReviewOutcome.ISSUES_FOUND
+        assert result.ci_passed is False
 
 
 class TestMaxCyclesPath:
@@ -351,7 +353,7 @@ class TestMaxCyclesPath:
         ]
         assert len(max_cycles_calls) > 0
 
-        assert result.cycle_state.status == PRReviewStatus.ESCALATED
+        assert result.outcome == PRReviewOutcome.MAX_CYCLES_REACHED
 
     @pytest.mark.asyncio
     async def test_max_cycles_short_circuits_phases(self, adapter, mock_event_emitter):

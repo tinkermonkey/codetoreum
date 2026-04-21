@@ -24,6 +24,10 @@ class IBoardService(EventEmitter, Protocol):
         """Move a work item to a specific column."""
         ...
 
+    async def add_item_to_column(self, work_item_id: str, column_name: str, moved_by: str) -> None:
+        """Add newly created work item to initial column."""
+        ...
+
     async def get_item_position(self, work_item_id: str):
         """Get the column and position of a work item."""
         ...

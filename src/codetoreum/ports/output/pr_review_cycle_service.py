@@ -19,7 +19,7 @@ maximum cycle limits to prevent infinite loops.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from codetoreum.domain.pr_review_cycle_types import PRReviewCycleConfig, PRReviewCycleState
+from codetoreum.domain.pr_review_cycle_types import PRReviewCycleConfig, PRReviewCycleResult, PRReviewCycleState
 
 
 @dataclass(frozen=True)
@@ -163,7 +163,7 @@ class IPRReviewCycle(ABC):
     """
 
     @abstractmethod
-    async def start_pr_review_cycle(self, request: PRReviewCycleRequest) -> PRReviewCycleStateData:
+    async def start_pr_review_cycle(self, request: PRReviewCycleRequest) -> PRReviewCycleResult:
         """Start a new PR review cycle.
 
         Initiates a PR review cycle, beginning with Phase 1 (code review).
@@ -174,7 +174,7 @@ class IPRReviewCycle(ABC):
             request: PR review cycle request with configuration
 
         Returns:
-            PRReviewCycleStateData with initial state of the cycle
+            PRReviewCycleResult with complete cycle execution result
 
         Raises:
             ValueError: If request validation fails

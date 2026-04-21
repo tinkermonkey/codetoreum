@@ -36,6 +36,7 @@ from codetoreum.domain.events.pr_review_cycle_events import (
     PRReviewCycleVerificationStartedEvent,
 )
 from codetoreum.domain.pr_review_cycle_types import (
+    PRReviewCycleResult,
     PRReviewCycleState,
     PRReviewFinding,
     PRReviewOutcome,
@@ -264,7 +265,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
 
     # ==================== IPRReviewCycle Implementation ====================
 
-    async def start_pr_review_cycle(self, request: PRReviewCycleRequest) -> PRReviewCycleStateData:
+    async def start_pr_review_cycle(self, request: PRReviewCycleRequest) -> PRReviewCycleResult:
         """Start a new PR review cycle.
 
         Executes all phases in sequence based on configuration:
@@ -280,7 +281,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             request: PR review cycle request with configuration
 
         Returns:
-            PRReviewCycleStateData with cycle state
+            PRReviewCycleResult with complete cycle execution result
 
         Raises:
             ValueError: If request validation fails
@@ -360,6 +361,25 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             self._event_emitter.emit(escalated_event)
             self._log_event({"type": "pr_review_cycle.escalated", "cycle_id": cycle_id})
 
+            result = PRReviewCycleResult(
+                cycle_number=cycle_number,
+                workflow_run_id=request.workflow_run_id,
+                outcome=PRReviewOutcome.MAX_CYCLES_REACHED,
+                phase_outputs=(),
+                all_findings=(),
+                sub_issue_ids=(),
+                ci_passed=None,
+                total_findings=0,
+                critical_count=0,
+                high_count=0,
+                medium_count=0,
+                low_count=0,
+                total_duration_seconds=0.0,
+                timestamp=started_at,
+                next_column="Human Review",
+            )
+
+            # Still store state for recovery purposes
             cycle_state = PRReviewCycleState(
                 cycle_id=cycle_id,
                 pr_id=request.pr_id or f"pr-{work_item_id}",
@@ -389,7 +409,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 if project_id not in self._project_cycles:
                     self._project_cycles[project_id] = []
                 self._project_cycles[project_id].append(state_data)
-            return state_data
+            return result
 
         # ===== PHASE 1: Code Review =====
         phase1_start = self._clock.now()
@@ -539,6 +559,25 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 )
             )
 
+            result = PRReviewCycleResult(
+                cycle_number=cycle_number,
+                workflow_run_id=request.workflow_run_id,
+                outcome=PRReviewOutcome.ISSUES_FOUND,
+                phase_outputs=tuple(phase_outputs),
+                all_findings=tuple(config.findings),
+                sub_issue_ids=(),
+                ci_passed=False,
+                total_findings=len(config.findings),
+                critical_count=sum(1 for f in config.findings if f.severity == "critical"),
+                high_count=sum(1 for f in config.findings if f.severity == "high"),
+                medium_count=sum(1 for f in config.findings if f.severity == "medium"),
+                low_count=sum(1 for f in config.findings if f.severity == "low"),
+                total_duration_seconds=(self._clock.now() - phase1_start).total_seconds(),
+                timestamp=started_at,
+                next_column=request.config.on_issues_found_column or "In Development",
+            )
+
+            # Still store state for recovery purposes
             cycle_state = PRReviewCycleState(
                 cycle_id=cycle_id,
                 pr_id=request.pr_id or f"pr-{work_item_id}",
@@ -568,7 +607,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 if project_id not in self._project_cycles:
                     self._project_cycles[project_id] = []
                 self._project_cycles[project_id].append(state_data)
-            return state_data
+            return result
 
         # ===== PHASE 4: Consolidation =====
         consolidation_event = PRReviewCycleConsolidationStartedEvent(
@@ -625,7 +664,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
 
                     # Add to the appropriate column on the board
                     target_column = request.config.sub_issue_initial_column or "Backlog"
-                    await self._board_service.move_item_to_column(
+                    await self._board_service.add_item_to_column(
                         work_item.id,
                         target_column,
                         MovedByType.ORCHESTRATOR,
@@ -769,7 +808,26 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             )
         )
 
-        # Create final state
+        # Create final result
+        result = PRReviewCycleResult(
+            cycle_number=cycle_number,
+            workflow_run_id=request.workflow_run_id,
+            outcome=outcome,
+            phase_outputs=tuple(phase_outputs),
+            all_findings=tuple(config.findings),
+            sub_issue_ids=tuple(sub_issue_ids),
+            ci_passed=ci_passed,
+            total_findings=len(config.findings),
+            critical_count=sum(1 for f in config.findings if f.severity == "critical"),
+            high_count=sum(1 for f in config.findings if f.severity == "high"),
+            medium_count=sum(1 for f in config.findings if f.severity == "medium"),
+            low_count=sum(1 for f in config.findings if f.severity == "low"),
+            total_duration_seconds=(self._clock.now() - phase1_start).total_seconds(),
+            timestamp=started_at,
+            next_column=next_column,
+        )
+
+        # Still store state for recovery purposes
         cycle_state = PRReviewCycleState(
             cycle_id=cycle_id,
             pr_id=request.pr_id or f"pr-{work_item_id}",
@@ -801,7 +859,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 self._project_cycles[project_id] = []
             self._project_cycles[project_id].append(state_data)
 
-        return state_data
+        return result
 
     async def get_cycle_state(self, work_item_id: str, project_id: str) -> PRReviewCycleStateData | None:
         """Retrieve current state of a PR review cycle.

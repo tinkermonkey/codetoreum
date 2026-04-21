@@ -632,6 +632,14 @@ class ResilientBoardServiceDecorator(IBoardService):
             rate_limit_cost=1,
         )
 
+    async def add_item_to_column(self, work_item_id: str, target_column: str, moved_by: MovedByType):
+        """Add item to initial column with resilience (1 GraphQL mutation)."""
+        return await self._execute_resilient(
+            operation=lambda: self._wrapped.add_item_to_column(work_item_id, target_column, moved_by),
+            operation_name="add_item_to_column",
+            rate_limit_cost=1,
+        )
+
     async def reconcile_board(self, board_id: str, config: BoardConfig) -> ReconciliationResult:
         """Reconcile board with resilience."""
         return await self._execute_resilient(

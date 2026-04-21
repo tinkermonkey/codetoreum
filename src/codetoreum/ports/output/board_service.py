@@ -481,6 +481,33 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
         """
 
     @abstractmethod
+    async def add_item_to_column(
+        self, work_item_id: str, target_column: str, moved_by: MovedByType
+    ) -> ColumnMovementResult:
+        """Add newly created work item to initial column.
+
+        Places a newly created work item in its initial column on a board.
+        This differs from move_item_to_column in that it's the item's first
+        placement, not a transition between columns.
+
+        Args:
+            work_item_id: Item to place (must be newly created)
+            target_column: Target column name (e.g., "Backlog")
+            moved_by: Type of entity initiating the placement (HUMAN or ORCHESTRATOR)
+
+        Returns:
+            ColumnMovementResult: Details of the placement operation
+
+        Raises:
+            ResourceNotFoundError: Work item or target column doesn't exist
+            ValidationError: Invalid target column
+            ExternalServiceError: Service communication failure
+
+        Events:
+            Emits 'workitem.column_changed' event with from_column=None and target column
+        """
+
+    @abstractmethod
     async def reconcile_board(self, board_id: str, config: "BoardConfig") -> ReconciliationResult:
         """Reconcile board structure with expected configuration.
 
