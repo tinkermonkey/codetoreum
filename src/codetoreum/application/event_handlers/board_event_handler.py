@@ -23,6 +23,7 @@ from codetoreum.domain.board_workflow_template import (
     ColumnTemplate,
     ColumnType,
 )
+from codetoreum.domain.types import WorkItemId
 from codetoreum.domain.events import (
     DomainEvent,
     LockStuckEvent,
@@ -532,19 +533,28 @@ class BoardColumnEventHandler(EventHandler):
         """
         if not self.pr_review_cycle:
             logger.warning(
-                f"PR review cycle not available for {work_item_id}, "
-                "pr_review_cycle service not injected",
+                f"PR review cycle not available for {work_item_id}, " "pr_review_cycle service not injected",
                 extra={"work_item_id": work_item_id},
             )
             return
 
         if not self.work_item_service:
             logger.error(
-                f"Cannot initiate PR review cycle for {work_item_id}: "
-                "work_item_service not injected",
+                f"Cannot initiate PR review cycle for {work_item_id}: " "work_item_service not injected",
                 exc_info=False,
                 extra={
                     "error_id": "ERR_BOARD_EVENT_WORK_ITEM_SERVICE_NOT_AVAILABLE",
+                    "work_item_id": work_item_id,
+                },
+            )
+            return
+
+        if not column_config.pr_review_cycle_config:
+            logger.error(
+                f"Cannot initiate PR review cycle for {work_item_id}: " "pr_review_cycle_config is None",
+                exc_info=False,
+                extra={
+                    "error_id": "ERR_BOARD_EVENT_PR_REVIEW_CYCLE_CONFIG_MISSING",
                     "work_item_id": work_item_id,
                 },
             )
@@ -572,7 +582,7 @@ class BoardColumnEventHandler(EventHandler):
 
                 # Emit PRReviewCycleMaxCyclesReachedEvent
                 try:
-                    work_item = await self.work_item_service.get_work_item(work_item_id)
+                    work_item = await self.work_item_service.get_work_item(WorkItemId(work_item_id))
                     pr_id = work_item.pr_id or ""
 
                     max_cycles_event = PRReviewCycleMaxCyclesReachedEvent(
@@ -604,7 +614,7 @@ class BoardColumnEventHandler(EventHandler):
 
             # Retrieve work item to get pr_id, pr_url, and discussion_id
             try:
-                work_item = await self.work_item_service.get_work_item(work_item_id)
+                work_item = await self.work_item_service.get_work_item(WorkItemId(work_item_id))
             except Exception as e:
                 logger.error(
                     f"Failed to retrieve work item {work_item_id}: {e}",
@@ -617,6 +627,10 @@ class BoardColumnEventHandler(EventHandler):
                 return
 
             # Construct PR review cycle request
+            # Note: pr_review_cycle_config is guaranteed to be non-None because of the check
+            # at the beginning of this method
+            pr_review_config = column_config.pr_review_cycle_config
+            assert pr_review_config is not None  # For mypy type narrowing
             request = PRReviewCycleRequest(
                 work_item_id=work_item_id,
                 project_id=project_id,
@@ -625,7 +639,7 @@ class BoardColumnEventHandler(EventHandler):
                 pr_url=work_item.external_url,  # Use external_url for pr_url
                 discussion_id=work_item.discussion_id,
                 cycle_number=cycle_number,
-                config=column_config.pr_review_cycle_config,
+                config=pr_review_config,
                 workflow_run_id=work_item_id,
             )
 
@@ -643,8 +657,7 @@ class BoardColumnEventHandler(EventHandler):
             result = await self.pr_review_cycle.start_pr_review_cycle(request)
 
             logger.info(
-                f"PR review cycle {cycle_number} started for {work_item_id}, "
-                f"status: {result.cycle_state.status}"
+                f"PR review cycle {cycle_number} started for {work_item_id}, " f"status: {result.cycle_state.status}"
             )
 
         except Exception as e:
