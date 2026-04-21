@@ -270,31 +270,43 @@ class PRReviewCycleConfigModel(BaseModel):
         Returns:
             A PRReviewCycleConfig domain instance with the same field values.
             verifier_context_sources is converted from list to tuple.
-            agents is converted from dict to ordered tuple of tuples.
+            agents dict is decomposed into individual code_review_agent, verifier_agent,
+            and consolidation_agent fields.
         """
         from codetoreum.domain.pr_review_cycle_types import PRReviewCycleConfig
 
-        # Convert agents dict to tuple of tuples if provided, preserving insertion order
-        agents_tuple = None
-        if self.agents:
-            agents_tuple = tuple(self.agents.items())
+        # Build kwargs with only the non-None values for optional fields
+        kwargs = {
+            "max_outer_cycles": self.max_outer_cycles,
+            "verifier_context_sources": tuple(self.verifier_context_sources),
+            "code_review_timeout_seconds": self.code_review_timeout_seconds,
+            "verification_timeout_seconds": self.verification_timeout_seconds,
+            "ci_check_enabled": self.ci_check_enabled,
+            "ci_check_timeout_seconds": self.ci_check_timeout_seconds,
+            "consolidation_timeout_seconds": self.consolidation_timeout_seconds,
+            "sub_issue_target_board": self.sub_issue_target_board,
+            "sub_issue_creation": self.sub_issue_creation,
+            "sub_issue_labels": tuple(self.sub_issue_labels),
+        }
 
-        return PRReviewCycleConfig(
-            max_outer_cycles=self.max_outer_cycles,
-            verifier_context_sources=tuple(self.verifier_context_sources),
-            code_review_timeout_seconds=self.code_review_timeout_seconds,
-            verification_timeout_seconds=self.verification_timeout_seconds,
-            ci_check_enabled=self.ci_check_enabled,
-            ci_check_timeout_seconds=self.ci_check_timeout_seconds,
-            consolidation_timeout_seconds=self.consolidation_timeout_seconds,
-            sub_issue_target_board=self.sub_issue_target_board,
-            sub_issue_creation=self.sub_issue_creation,
-            sub_issue_labels=tuple(self.sub_issue_labels),
-            sub_issue_initial_column=self.sub_issue_initial_column,
-            on_issues_found_column=self.on_issues_found_column,
-            on_approved_column=self.on_approved_column,
-            agents=agents_tuple,
-        )
+        # Only add optional column fields if not None, so domain defaults apply
+        if self.sub_issue_initial_column is not None:
+            kwargs["sub_issue_initial_column"] = self.sub_issue_initial_column
+        if self.on_issues_found_column is not None:
+            kwargs["on_issues_found_column"] = self.on_issues_found_column
+        if self.on_approved_column is not None:
+            kwargs["on_approved_column"] = self.on_approved_column
+
+        # Decompose agents dict into individual agent fields
+        if self.agents:
+            if "code_review" in self.agents:
+                kwargs["code_review_agent"] = self.agents["code_review"]
+            if "verification" in self.agents:
+                kwargs["verifier_agent"] = self.agents["verification"]
+            if "consolidation" in self.agents:
+                kwargs["consolidation_agent"] = self.agents["consolidation"]
+
+        return PRReviewCycleConfig(**kwargs)
 
 
 class ScenarioColumnConfig(BaseModel):
