@@ -186,7 +186,7 @@ class TestApprovedPath:
     @pytest.mark.asyncio
     async def test_set_approved_immediately_produces_approved(self, adapter):
         """Test set_approved_immediately produces APPROVED outcome."""
-        adapter.set_approved_immediately()
+        adapter.set_approved_immediately("item-1")
 
         request = PRReviewCycleRequest(
             work_item_id="item-1",
@@ -208,7 +208,7 @@ class TestApprovedPath:
     @pytest.mark.asyncio
     async def test_approved_emits_approved_event(self, adapter, mock_event_emitter):
         """Test that approved outcome emits PRReviewCycleApprovedEvent."""
-        adapter.set_approved_immediately()
+        adapter.set_approved_immediately("item-1")
 
         request = PRReviewCycleRequest(
             work_item_id="item-1",
@@ -233,7 +233,7 @@ class TestApprovedPath:
     @pytest.mark.asyncio
     async def test_approved_creates_zero_sub_issues(self, adapter, mock_ticket_system):
         """Test that approved outcome creates no sub-issues."""
-        adapter.set_approved_immediately()
+        adapter.set_approved_immediately("item-1")
 
         request = PRReviewCycleRequest(
             work_item_id="item-1",
@@ -342,7 +342,7 @@ class TestMaxCyclesPath:
     @pytest.mark.asyncio
     async def test_set_max_cycles_reached(self, adapter, mock_event_emitter):
         """Test set_max_cycles_reached emits PRReviewCycleMaxCyclesReachedEvent."""
-        adapter.set_max_cycles_reached()
+        adapter.set_max_cycles_reached("item-1")
 
         request = PRReviewCycleRequest(
             work_item_id="item-1",
@@ -371,7 +371,7 @@ class TestMaxCyclesPath:
     @pytest.mark.asyncio
     async def test_max_cycles_short_circuits_phases(self, adapter, mock_event_emitter):
         """Test that max_cycles_reached short-circuits before phase events."""
-        adapter.set_max_cycles_reached()
+        adapter.set_max_cycles_reached("item-1")
 
         request = PRReviewCycleRequest(
             work_item_id="item-1",
@@ -402,15 +402,7 @@ class TestEventOrdering:
     @pytest.mark.asyncio
     async def test_issues_found_event_order(self, adapter, mock_event_emitter):
         """Test correct event order for ISSUES_FOUND path."""
-        findings = [
-            PRReviewFinding(
-                title="Null pointer exception",
-                description="Null pointer exception",
-                severity="high",
-                phase="code_review",
-            )
-        ]
-        adapter.set_findings(findings)
+        adapter.set_findings("item-1", critical=0, high=1, medium=0, low=0)
 
         request = PRReviewCycleRequest(
             work_item_id="item-1",
@@ -446,21 +438,7 @@ class TestSubIssueCreation:
     @pytest.mark.asyncio
     async def test_sub_issues_created_calls_ticket_system(self, adapter, mock_ticket_system):
         """Test that sub-issues call ITicketSystem.create_work_item()."""
-        findings = [
-            PRReviewFinding(
-                title="Null pointer exception",
-                description="Null pointer exception",
-                severity="high",
-                phase="code_review",
-            ),
-            PRReviewFinding(
-                title="Missing docstring",
-                description="Missing docstring",
-                severity="low",
-                phase="code_review",
-            ),
-        ]
-        adapter.set_findings(findings)
+        adapter.set_findings("item-1", critical=0, high=1, medium=0, low=1)
 
         request = PRReviewCycleRequest(
             work_item_id="item-1",
@@ -476,21 +454,13 @@ class TestSubIssueCreation:
 
         await adapter.start_pr_review_cycle(request)
 
-        # Verify create_work_item was called for each finding
-        assert mock_ticket_system.create_work_item.call_count >= len(findings)
+        # Verify create_work_item was called for each finding (2 findings: 1 high + 1 low)
+        assert mock_ticket_system.create_work_item.call_count >= 2
 
     @pytest.mark.asyncio
     async def test_sub_issues_added_to_board(self, adapter, mock_board_service, mock_ticket_system):
         """Test that sub-issues are added to board via IBoardService."""
-        findings = [
-            PRReviewFinding(
-                title="Null pointer exception",
-                description="Null pointer exception",
-                severity="high",
-                phase="code_review",
-            )
-        ]
-        adapter.set_findings(findings)
+        adapter.set_findings("item-1", critical=0, high=1, medium=0, low=0)
 
         request = PRReviewCycleRequest(
             work_item_id="item-1",
@@ -506,27 +476,13 @@ class TestSubIssueCreation:
 
         await adapter.start_pr_review_cycle(request)
 
-        # Verify add_item_to_column was called for sub-issues
-        assert mock_board_service.add_item_to_column.call_count >= len(findings)
+        # Verify add_item_to_column was called for sub-issues (1 finding: 1 high)
+        assert mock_board_service.add_item_to_column.call_count >= 1
 
     @pytest.mark.asyncio
     async def test_assert_sub_issues_created_passes(self, adapter):
         """Test assert_sub_issues_created passes when correct count."""
-        findings = [
-            PRReviewFinding(
-                title="Null pointer exception",
-                description="Null pointer exception",
-                severity="high",
-                phase="code_review",
-            ),
-            PRReviewFinding(
-                title="Missing docstring",
-                description="Missing docstring",
-                severity="low",
-                phase="code_review",
-            ),
-        ]
-        adapter.set_findings(findings)
+        adapter.set_findings("item-1", critical=0, high=1, medium=0, low=1)
 
         request = PRReviewCycleRequest(
             work_item_id="item-1",
@@ -548,15 +504,7 @@ class TestSubIssueCreation:
     @pytest.mark.asyncio
     async def test_assert_sub_issues_created_fails(self, adapter):
         """Test assert_sub_issues_created raises AssertionError for wrong count."""
-        findings = [
-            PRReviewFinding(
-                title="Null pointer exception",
-                description="Null pointer exception",
-                severity="high",
-                phase="code_review",
-            )
-        ]
-        adapter.set_findings(findings)
+        adapter.set_findings("item-1", critical=0, high=1, medium=0, low=0)
 
         request = PRReviewCycleRequest(
             work_item_id="item-1",
@@ -583,7 +531,7 @@ class TestAssertionHelpers:
     @pytest.mark.asyncio
     async def test_assert_outcome(self, adapter):
         """Test assert_outcome helper."""
-        adapter.set_approved_immediately()
+        adapter.set_approved_immediately("item-1")
 
         request = PRReviewCycleRequest(
             work_item_id="item-1",
@@ -604,7 +552,7 @@ class TestAssertionHelpers:
     @pytest.mark.asyncio
     async def test_assert_outcome_fails(self, adapter):
         """Test assert_outcome fails for wrong outcome."""
-        adapter.set_approved_immediately()
+        adapter.set_approved_immediately("item-1")
 
         request = PRReviewCycleRequest(
             work_item_id="item-1",
@@ -647,7 +595,7 @@ class TestAssertionHelpers:
     async def test_assert_ci_checked_fails(self, adapter, mock_event_emitter):
         """Test assert_ci_checked fails if CI not checked."""
         # Max cycles path skips CI check
-        adapter.set_max_cycles_reached()
+        adapter.set_max_cycles_reached("item-1")
 
         request = PRReviewCycleRequest(
             work_item_id="item-1",
@@ -879,7 +827,7 @@ class TestCICheckDisabledPath:
     @pytest.mark.asyncio
     async def test_ci_disabled_with_approved_outcome(self, adapter):
         """Test CI disabled path with approved outcome."""
-        adapter.set_approved_immediately()
+        adapter.set_approved_immediately("item-1")
 
         request = PRReviewCycleRequest(
             work_item_id="item-1",

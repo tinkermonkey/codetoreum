@@ -137,7 +137,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
         self._clock = clock
         self._event_emitter = event_emitter
 
-        # State storage
+        # State storage (keyed by work_item_id for multi-item support)
         self._cycles: dict[str, PRReviewCycleStateData] = {}
         self._project_cycles: dict[str, list[PRReviewCycleStateData]] = {}
         self._cycle_configs: dict[str, _CycleConfiguration] = {}
@@ -145,7 +145,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
         self._ci_checked: set[str] = set()
         self._ci_not_checked: set[str] = set()
 
-        # Event system
+        # Event system (includes work_item_id tracking for filtering)
         self._events: list[dict[str, Any]] = []
         self._lock = threading.RLock()
 
@@ -207,10 +207,11 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
 
     # ==================== Configuration Methods ====================
 
-    def set_outcome(self, outcome: PRReviewOutcome, findings: list[PRReviewFinding] | None = None) -> None:
-        """Configure the cycle outcome.
+    def set_outcome(self, work_item_id: str, outcome: PRReviewOutcome, findings: list[PRReviewFinding] | None = None) -> None:
+        """Configure the cycle outcome for a specific work item.
 
         Args:
+            work_item_id: Work item ID to configure
             outcome: The desired outcome (ISSUES_FOUND, APPROVED, MAX_CYCLES_REACHED)
             findings: List of findings if outcome is ISSUES_FOUND
         """
@@ -221,24 +222,44 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             max_cycles_reached=outcome == PRReviewOutcome.MAX_CYCLES_REACHED,
         )
         with self._lock:
-            self._cycle_configs["default"] = config
+            self._cycle_configs[work_item_id] = config
 
-    def set_findings(self, findings: list[PRReviewFinding]) -> None:
+    def set_findings(self, work_item_id: str, critical: int = 0, high: int = 0, medium: int = 0, low: int = 0) -> None:
         """Configure findings for ISSUES_FOUND outcome.
 
         Args:
-            findings: List of findings discovered in review
+            work_item_id: Work item ID to configure
+            critical: Number of critical severity findings
+            high: Number of high severity findings
+            medium: Number of medium severity findings
+            low: Number of low severity findings
         """
+        findings = []
+        severities = [("critical", critical), ("high", high), ("medium", medium), ("low", low)]
+        for severity, count in severities:
+            for i in range(count):
+                findings.append(
+                    PRReviewFinding(
+                        title=f"{severity.capitalize()} severity finding {i+1}",
+                        description=f"Auto-generated {severity} severity finding",
+                        severity=severity,
+                        phase="code_review",
+                    )
+                )
         with self._lock:
-            config = self._cycle_configs.get("default", _CycleConfiguration())
+            config = self._cycle_configs.get(work_item_id, _CycleConfiguration())
             config.findings = findings
             config.outcome = PRReviewOutcome.ISSUES_FOUND
-            self._cycle_configs["default"] = config
+            self._cycle_configs[work_item_id] = config
 
-    def set_approved_immediately(self) -> None:
-        """Configure cycle to approve immediately."""
+    def set_approved_immediately(self, work_item_id: str) -> None:
+        """Configure cycle to approve immediately for a specific work item.
+
+        Args:
+            work_item_id: Work item ID to configure
+        """
         with self._lock:
-            self._cycle_configs["default"] = _CycleConfiguration(
+            self._cycle_configs[work_item_id] = _CycleConfiguration(
                 outcome=PRReviewOutcome.APPROVED,
                 approved_immediately=True,
             )
@@ -247,19 +268,23 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
         """Configure CI to fail with specified failure count.
 
         Args:
-            work_item_id: Work item ID (for tracking)
+            work_item_id: Work item ID to configure
             failure_count: Number of CI failures
         """
         with self._lock:
-            config = self._cycle_configs.get("default", _CycleConfiguration())
+            config = self._cycle_configs.get(work_item_id, _CycleConfiguration())
             config.ci_failing = True
             config.ci_failures_count = failure_count
-            self._cycle_configs["default"] = config
+            self._cycle_configs[work_item_id] = config
 
-    def set_max_cycles_reached(self) -> None:
-        """Configure cycle to report max cycles reached."""
+    def set_max_cycles_reached(self, work_item_id: str) -> None:
+        """Configure cycle to report max cycles reached for a specific work item.
+
+        Args:
+            work_item_id: Work item ID to configure
+        """
         with self._lock:
-            self._cycle_configs["default"] = _CycleConfiguration(
+            self._cycle_configs[work_item_id] = _CycleConfiguration(
                 outcome=PRReviewOutcome.MAX_CYCLES_REACHED,
                 max_cycles_reached=True,
             )
@@ -300,9 +325,9 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
         project_id = request.project_id
         cycle_number = request.cycle_number
 
-        # Get configuration
+        # Get configuration (work_item_id specific, falls back to default if not configured)
         with self._lock:
-            config = self._cycle_configs.get("default", _CycleConfiguration())
+            config = self._cycle_configs.get(work_item_id, self._cycle_configs.get("default", _CycleConfiguration()))
 
         # Provide default findings if outcome is ISSUES_FOUND but no findings configured
         if config.outcome == PRReviewOutcome.ISSUES_FOUND and not config.findings:
@@ -336,22 +361,24 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             workflow_run_id=request.workflow_run_id,
         )
         self._event_emitter.emit(started_event)
-        self._log_event({"type": "pr_review_cycle.started", "cycle_id": cycle_id})
+        self._log_event({"type": "pr_review_cycle.started", "cycle_id": cycle_id, "work_item_id": work_item_id})
 
         # Check max cycles before emitting phase events
         if config.max_cycles_reached:
+            # Use max_cycles + 1 to ensure cycle_number > max_cycles for event validation
+            escalation_cycle_number = request.config.max_outer_cycles + 1
             max_cycles_event = PRReviewCycleMaxCyclesReachedEvent(
                 type="pr_review_cycle.max_cycles_reached",
                 timestamp=self._clock.now().isoformat(),
                 source="mock_pr_review_cycle",
                 pr_id=request.pr_id or f"pr-{work_item_id}",
-                cycle_number=cycle_number,
+                cycle_number=escalation_cycle_number,
                 max_cycles=request.config.max_outer_cycles,
                 next_column="Human Review",
                 workflow_run_id=request.workflow_run_id,
             )
             self._event_emitter.emit(max_cycles_event)
-            self._log_event({"type": "pr_review_cycle.max_cycles_reached", "cycle_id": cycle_id})
+            self._log_event({"type": "pr_review_cycle.max_cycles_reached", "cycle_id": cycle_id, "work_item_id": work_item_id})
 
             escalated_event = PRReviewCycleEscalatedEvent(
                 type="pr_review_cycle.escalated",
@@ -517,10 +544,29 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                     "type": "pr_review_cycle.ci_check_completed",
                     "cycle_id": cycle_id,
                     "ci_passed": ci_passed,
+                    "work_item_id": work_item_id,
                 }
             )
             with self._lock:
                 self._ci_checked.add(work_item_id)
+
+            # Advance clock for Phase 3 (~0.5 seconds)
+            await self._clock.advance(timedelta(milliseconds=500))
+
+            # Emit phase completed event for Phase 3 when CI is enabled
+            phase3_completed = PRReviewCyclePhaseCompletedEvent(
+                type="pr_review_cycle.phase_completed",
+                timestamp=self._clock.now().isoformat(),
+                source="mock_pr_review_cycle",
+                pr_id=request.pr_id or f"pr-{work_item_id}",
+                phase_name="ci_check",
+                phase_index=3,
+                findings_count=0,
+                comment_id="",
+                workflow_run_id=request.workflow_run_id,
+            )
+            self._event_emitter.emit(phase3_completed)
+            self._log_event({"type": "pr_review_cycle.phase_completed", "cycle_id": cycle_id, "phase_index": 3, "work_item_id": work_item_id})
         else:
             # Track when CI check is disabled
             with self._lock:
@@ -529,7 +575,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             # Advance clock for Phase 3 (~0.5 seconds - already advanced above)
             await self._clock.advance(timedelta(milliseconds=500))
 
-            # Emit phase completed event for Phase 3
+            # Emit phase completed event for Phase 3 even when CI is disabled
             phase3_completed = PRReviewCyclePhaseCompletedEvent(
                 type="pr_review_cycle.phase_completed",
                 timestamp=self._clock.now().isoformat(),
@@ -537,12 +583,12 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 pr_id=request.pr_id or f"pr-{work_item_id}",
                 phase_name="ci_check",
                 phase_index=3,
-                findings_count=len(config.findings) if not ci_passed else 0,
+                findings_count=0,
                 comment_id="",
                 workflow_run_id=request.workflow_run_id,
             )
             self._event_emitter.emit(phase3_completed)
-            self._log_event({"type": "pr_review_cycle.phase_completed", "cycle_id": cycle_id, "phase_index": 3})
+            self._log_event({"type": "pr_review_cycle.phase_completed", "cycle_id": cycle_id, "phase_index": 3, "work_item_id": work_item_id})
 
         # If CI failed, skip Phase 4 and route to failure column
         if request.config.ci_check_enabled and not ci_passed:
@@ -626,7 +672,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 low_count=sum(1 for f in config.findings if f.severity == "low"),
                 total_duration_seconds=(self._clock.now() - phase1_start).total_seconds(),
                 timestamp=started_at,
-                next_column=request.config.on_issues_found_column or "In Development",
+                next_column=request.config.on_failure_column or "In Development",
             )
 
             # Still store state for recovery purposes
@@ -699,7 +745,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 workflow_run_id=request.workflow_run_id,
             )
             self._event_emitter.emit(outcome_event)
-            self._log_event({"type": "pr_review_cycle.approved", "cycle_id": cycle_id})
+            self._log_event({"type": "pr_review_cycle.approved", "cycle_id": cycle_id, "work_item_id": work_item_id})
 
         else:  # ISSUES_FOUND
             # Create sub-issues for each finding
@@ -780,6 +826,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 {
                     "type": "pr_review_cycle.issues_found",
                     "cycle_id": cycle_id,
+                    "work_item_id": work_item_id,
                     "finding_count": len(config.findings),
                     "sub_issue_count": len(sub_issue_ids),
                 }
@@ -984,7 +1031,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             raise AssertionError(msg)
 
     def assert_outcome(self, work_item_id: str, expected_outcome: PRReviewOutcome) -> None:
-        """Assert cycle has expected outcome.
+        """Assert cycle has expected outcome for a specific work item.
 
         Args:
             work_item_id: Work item ID to check
@@ -996,9 +1043,15 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
         with self._lock:
             events = list(self._events)
 
-        # Find the last outcome event for this work item
+        # Find the last outcome event for this specific work item
         for event in reversed(events):
             event_type = event.get("type")
+            event_work_item_id = event.get("work_item_id")
+
+            # Only consider events for this specific work_item_id
+            if event_work_item_id != work_item_id:
+                continue
+
             if event_type == "pr_review_cycle.approved":
                 if expected_outcome == PRReviewOutcome.APPROVED:
                     return
@@ -1110,4 +1163,5 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             self._cycle_configs.clear()
             self._sub_issues_created.clear()
             self._ci_checked.clear()
+            self._ci_not_checked.clear()
             self._events.clear()

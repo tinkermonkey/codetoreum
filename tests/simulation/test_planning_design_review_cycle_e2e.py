@@ -162,7 +162,7 @@ async def test_issues_found_path(pr_review_env):
     critical_count = sum(1 for f in findings if f.severity == "critical")
     assert critical_count >= 1, f"Expected at least 1 critical finding, got {critical_count}"
 
-    pr_cycle.set_outcome(PRReviewOutcome.ISSUES_FOUND, findings)
+    pr_cycle.set_outcome(work_item_id, PRReviewOutcome.ISSUES_FOUND, findings)
 
     # Item is already in In Review (pre-placed per FR-12.2), so the PR review cycle
     # should execute automatically since "In Review" has is_pipeline_trigger=true
@@ -269,7 +269,7 @@ async def test_approved_path(pr_review_env):
     # ========================================================================
     # ACCEPTANCE CRITERIA: Configure mock for approved path (no issues)
     # ========================================================================
-    pr_cycle.set_approved_immediately()
+    pr_cycle.set_approved_immediately(work_item_id)
 
     # Item is already in In Review (pre-placed per FR-12.2), so the PR review cycle
     # should execute automatically since "In Review" has is_pipeline_trigger=true
