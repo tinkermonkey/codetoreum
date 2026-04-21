@@ -767,7 +767,14 @@ class TestCICheckDisabledPath:
             discussion_id=None,
             cycle_number=1,
             config=PRReviewCycleConfig(
-                max_outer_cycles=3, ci_check_enabled=False, verifier_context_sources=("static_analysis",)
+                max_outer_cycles=3,
+                ci_check_enabled=False,
+                verifier_context_sources=("static_analysis",),
+                code_review_agent="agent-1",
+                verifier_agent="agent-2",
+                consolidation_agent="agent-3",
+                on_issues_found_column="Review",
+                on_approved_column="Done",
             ),
             workflow_run_id="run-1",
         )
