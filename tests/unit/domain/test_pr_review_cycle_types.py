@@ -30,7 +30,7 @@ class TestPRReviewOutcome:
         """Test enum has correct values."""
         assert PRReviewOutcome.ISSUES_FOUND.value == "issues_found"
         assert PRReviewOutcome.APPROVED.value == "approved"
-        assert PRReviewOutcome.MAX_CYCLES_REACHED.value == "max_cycles_reached"
+        assert PRReviewOutcome.MAX_CYCLES_REACHED.value == "max_cycles"
 
     def test_enum_serializable(self):
         """Test enum is serializable (str, Enum)."""
@@ -48,10 +48,10 @@ class TestPRReviewStatus:
     def test_enum_values(self):
         """Test enum has all seven values."""
         assert PRReviewStatus.PENDING.value == "pending"
-        assert PRReviewStatus.IN_CODE_REVIEW.value == "in_code_review"
-        assert PRReviewStatus.IN_VERIFICATION.value == "in_verification"
-        assert PRReviewStatus.IN_CI_CHECK.value == "in_ci_check"
-        assert PRReviewStatus.IN_CONSOLIDATION.value == "in_consolidation"
+        assert PRReviewStatus.PHASE_1_CODE_REVIEW.value == "phase_1_code_review"
+        assert PRReviewStatus.PHASE_2_VERIFICATION.value == "phase_2_verification"
+        assert PRReviewStatus.PHASE_3_CI_CHECK.value == "phase_3_ci_check"
+        assert PRReviewStatus.PHASE_4_CONSOLIDATION.value == "phase_4_consolidation"
         assert PRReviewStatus.COMPLETED.value == "completed"
         assert PRReviewStatus.ESCALATED.value == "escalated"
 
@@ -279,8 +279,14 @@ class TestPRReviewCycleConfig:
     """Tests for PRReviewCycleConfig frozen dataclass."""
 
     def test_create_with_defaults(self):
-        """Test creating config with default values."""
-        config = PRReviewCycleConfig()
+        """Test creating config with default values (required fields provided)."""
+        config = PRReviewCycleConfig(
+            code_review_agent="agent-1",
+            verifier_agent="agent-2",
+            consolidation_agent="agent-3",
+            on_issues_found_column="Review",
+            on_approved_column="Done",
+        )
         assert config.max_outer_cycles == 3
         assert config.verifier_context_sources == ("parent_issue",)
         assert config.code_review_timeout_seconds == 600
@@ -304,64 +310,145 @@ class TestPRReviewCycleConfig:
             sub_issue_creation=True,
             sub_issue_labels=("bug", "enhancement"),
             sub_issue_initial_column="Backlog",
+            code_review_agent="agent-1",
+            verifier_agent="agent-2",
+            consolidation_agent="agent-3",
+            on_issues_found_column="Review",
+            on_approved_column="Done",
         )
         assert config.max_outer_cycles == 5
         assert config.verifier_context_sources == ("parent_issue", "ba_output", "arch_spec")
         assert config.code_review_timeout_seconds == 900
         assert config.sub_issue_labels == ("bug", "enhancement")
         assert config.sub_issue_initial_column == "Backlog"
+        assert config.code_review_agent == "agent-1"
+        assert config.verifier_agent == "agent-2"
+        assert config.consolidation_agent == "agent-3"
 
     def test_config_immutable(self):
         """Test config is immutable."""
-        config = PRReviewCycleConfig()
+        config = PRReviewCycleConfig(
+            code_review_agent="agent-1",
+            verifier_agent="agent-2",
+            consolidation_agent="agent-3",
+            on_issues_found_column="Review",
+            on_approved_column="Done",
+        )
         with pytest.raises(Exception):  # FrozenInstanceError
             config.max_outer_cycles = 2
 
     def test_config_max_outer_cycles_min(self):
         """Test max_outer_cycles must be >= 1."""
         with pytest.raises(ValueError, match="max_outer_cycles must be >= 1"):
-            PRReviewCycleConfig(max_outer_cycles=0)
+            PRReviewCycleConfig(
+                max_outer_cycles=0,
+                code_review_agent="agent-1",
+                verifier_agent="agent-2",
+                consolidation_agent="agent-3",
+                on_issues_found_column="Review",
+                on_approved_column="Done",
+            )
 
     def test_config_verifier_context_sources_empty(self):
         """Test verifier_context_sources must not be empty."""
         with pytest.raises(ValueError, match="verifier_context_sources must not be empty"):
-            PRReviewCycleConfig(verifier_context_sources=())
+            PRReviewCycleConfig(
+                verifier_context_sources=(),
+                code_review_agent="agent-1",
+                verifier_agent="agent-2",
+                consolidation_agent="agent-3",
+                on_issues_found_column="Review",
+                on_approved_column="Done",
+            )
 
     def test_config_sub_issue_labels_tuple(self):
         """Test sub_issue_labels must be a tuple."""
         with pytest.raises(ValueError, match="sub_issue_labels must be a tuple"):
-            PRReviewCycleConfig(sub_issue_labels=["bug", "enhancement"])  # type: ignore
+            PRReviewCycleConfig(
+                sub_issue_labels=["bug", "enhancement"],  # type: ignore
+                code_review_agent="agent-1",
+                verifier_agent="agent-2",
+                consolidation_agent="agent-3",
+                on_issues_found_column="Review",
+                on_approved_column="Done",
+            )
 
-    def test_config_agents_tuple(self):
-        """Test agents must be a tuple."""
-        with pytest.raises(ValueError, match="agents must be a tuple"):
-            PRReviewCycleConfig(agents=[("code_review", "reviewer"), ("verification", "verifier")])  # type: ignore
+    def test_config_explicit_agent_fields(self):
+        """Test agent fields are explicit and required."""
+        # Spec requires three explicit named fields for agents
+        config = PRReviewCycleConfig(
+            code_review_agent="agent-1",
+            verifier_agent="agent-2",
+            consolidation_agent="agent-3",
+            on_issues_found_column="Issues",
+            on_approved_column="Done",
+        )
+        assert config.code_review_agent == "agent-1"
+        assert config.verifier_agent == "agent-2"
+        assert config.consolidation_agent == "agent-3"
 
     def test_config_ci_check_timeout_validation_when_enabled(self):
         """Test ci_check_timeout_seconds must be > 0 when ci_check_enabled=True."""
         with pytest.raises(ValueError, match="ci_check_timeout_seconds must be > 0"):
-            PRReviewCycleConfig(ci_check_enabled=True, ci_check_timeout_seconds=0)
+            PRReviewCycleConfig(
+                ci_check_enabled=True,
+                ci_check_timeout_seconds=0,
+                code_review_agent="agent-1",
+                verifier_agent="agent-2",
+                consolidation_agent="agent-3",
+                on_issues_found_column="Review",
+                on_approved_column="Done",
+            )
 
     def test_config_ci_check_timeout_validation_when_disabled(self):
         """Test ci_check_timeout_seconds ignored when ci_check_enabled=False."""
         # Should not raise even with ci_check_timeout_seconds=0
-        config = PRReviewCycleConfig(ci_check_enabled=False, ci_check_timeout_seconds=0)
+        config = PRReviewCycleConfig(
+            ci_check_enabled=False,
+            ci_check_timeout_seconds=0,
+            code_review_agent="agent-1",
+            verifier_agent="agent-2",
+            consolidation_agent="agent-3",
+            on_issues_found_column="Review",
+            on_approved_column="Done",
+        )
         assert config.ci_check_timeout_seconds == 0
 
     def test_config_code_review_timeout_positive(self):
         """Test code_review_timeout_seconds must be > 0."""
         with pytest.raises(ValueError, match="code_review_timeout_seconds must be > 0"):
-            PRReviewCycleConfig(code_review_timeout_seconds=0)
+            PRReviewCycleConfig(
+                code_review_timeout_seconds=0,
+                code_review_agent="agent-1",
+                verifier_agent="agent-2",
+                consolidation_agent="agent-3",
+                on_issues_found_column="Review",
+                on_approved_column="Done",
+            )
 
     def test_config_verification_timeout_positive(self):
         """Test verification_timeout_seconds must be > 0."""
         with pytest.raises(ValueError, match="verification_timeout_seconds must be > 0"):
-            PRReviewCycleConfig(verification_timeout_seconds=0)
+            PRReviewCycleConfig(
+                verification_timeout_seconds=0,
+                code_review_agent="agent-1",
+                verifier_agent="agent-2",
+                consolidation_agent="agent-3",
+                on_issues_found_column="Review",
+                on_approved_column="Done",
+            )
 
     def test_config_consolidation_timeout_positive(self):
         """Test consolidation_timeout_seconds must be > 0."""
         with pytest.raises(ValueError, match="consolidation_timeout_seconds must be > 0"):
-            PRReviewCycleConfig(consolidation_timeout_seconds=0)
+            PRReviewCycleConfig(
+                consolidation_timeout_seconds=0,
+                code_review_agent="agent-1",
+                verifier_agent="agent-2",
+                consolidation_agent="agent-3",
+                on_issues_found_column="Review",
+                on_approved_column="Done",
+            )
 
 
 class TestPRReviewCycleResult:
@@ -614,17 +701,28 @@ class TestPRReviewCycleResult:
 class TestPRReviewCycleState:
     """Tests for PRReviewCycleState mutable dataclass."""
 
+    @staticmethod
+    def _create_test_config() -> "PRReviewCycleConfig":
+        """Create a minimal config for testing."""
+        return PRReviewCycleConfig(
+            code_review_agent="agent-1",
+            verifier_agent="agent-2",
+            consolidation_agent="agent-3",
+            on_issues_found_column="Review",
+            on_approved_column="Done",
+        )
+
     def test_create_state(self):
         """Test creating mutable state."""
         now = datetime.now(UTC).isoformat()
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         state = PRReviewCycleState(
             cycle_id="cycle-123",
             pr_id="pr-456",
             work_item_id="item-789",
             project_id="proj-101",
             board_id="board-202",
-            status=PRReviewStatus.IN_CODE_REVIEW,
+            status=PRReviewStatus.PHASE_1_CODE_REVIEW,
             cycle_number=1,
             current_phase="code_review",
             findings=[],
@@ -638,7 +736,7 @@ class TestPRReviewCycleState:
         assert state.work_item_id == "item-789"
         assert state.project_id == "proj-101"
         assert state.board_id == "board-202"
-        assert state.status == PRReviewStatus.IN_CODE_REVIEW
+        assert state.status == PRReviewStatus.PHASE_1_CODE_REVIEW
         assert state.findings == []
         assert state.phase_outputs == []
         assert state.config == config
@@ -646,7 +744,7 @@ class TestPRReviewCycleState:
     def test_state_mutable(self):
         """Test state is mutable (not frozen)."""
         now = datetime.now(UTC).isoformat()
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         state = PRReviewCycleState(
             cycle_id="cycle-123",
             pr_id="pr-456",
@@ -663,13 +761,13 @@ class TestPRReviewCycleState:
             updated_at=now,
         )
         # Should not raise
-        state.status = PRReviewStatus.IN_CODE_REVIEW
-        assert state.status == PRReviewStatus.IN_CODE_REVIEW
+        state.status = PRReviewStatus.PHASE_1_CODE_REVIEW
+        assert state.status == PRReviewStatus.PHASE_1_CODE_REVIEW
 
     def test_state_findings_mutable_list(self):
         """Test findings list is mutable."""
         now = datetime.now(UTC).isoformat()
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         findings = []
         state = PRReviewCycleState(
             cycle_id="cycle-123",
@@ -677,7 +775,7 @@ class TestPRReviewCycleState:
             work_item_id="item-789",
             project_id="proj-101",
             board_id="board-202",
-            status=PRReviewStatus.IN_CODE_REVIEW,
+            status=PRReviewStatus.PHASE_1_CODE_REVIEW,
             cycle_number=1,
             current_phase="code_review",
             findings=findings,
@@ -694,7 +792,7 @@ class TestPRReviewCycleState:
     def test_state_empty_cycle_id(self):
         """Test rejects empty cycle_id."""
         now = datetime.now(UTC).isoformat()
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         with pytest.raises(ValueError, match="cycle_id is required"):
             PRReviewCycleState(
                 cycle_id="",
@@ -715,7 +813,7 @@ class TestPRReviewCycleState:
     def test_state_empty_pr_id(self):
         """Test rejects empty pr_id."""
         now = datetime.now(UTC).isoformat()
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         with pytest.raises(ValueError, match="pr_id is required"):
             PRReviewCycleState(
                 cycle_id="cycle-123",
@@ -736,7 +834,7 @@ class TestPRReviewCycleState:
     def test_state_empty_work_item_id(self):
         """Test rejects empty work_item_id."""
         now = datetime.now(UTC).isoformat()
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         with pytest.raises(ValueError, match="work_item_id is required"):
             PRReviewCycleState(
                 cycle_id="cycle-123",
@@ -757,7 +855,7 @@ class TestPRReviewCycleState:
     def test_state_cycle_number_min(self):
         """Test cycle_number must be >= 1."""
         now = datetime.now(UTC).isoformat()
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         with pytest.raises(ValueError, match="cycle_number must be >= 1"):
             PRReviewCycleState(
                 cycle_id="cycle-123",

@@ -58,6 +58,19 @@ def mock_board_service():
 
 
 @pytest.fixture
+def test_config():
+    """Create a test PR review cycle config with required fields."""
+    return PRReviewCycleConfig(
+        max_outer_cycles=3,
+        code_review_agent="agent-1",
+        verifier_agent="agent-2",
+        consolidation_agent="agent-3",
+        on_issues_found_column="Review",
+        on_approved_column="Done",
+    )
+
+
+@pytest.fixture
 def mock_event_emitter():
     """Create a mock event emitter."""
     emitter = MagicMock()
@@ -153,7 +166,7 @@ class TestDefaultBehavior:
             pr_url="https://github.com/owner/repo/pull/123",
             discussion_id=None,
             cycle_number=1,
-            config=PRReviewCycleConfig(max_outer_cycles=3),
+            config=PRReviewCycleConfig(max_outer_cycles=3, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -183,7 +196,7 @@ class TestApprovedPath:
             pr_url=None,
             discussion_id=None,
             cycle_number=1,
-            config=PRReviewCycleConfig(max_outer_cycles=3),
+            config=PRReviewCycleConfig(max_outer_cycles=3, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -205,7 +218,7 @@ class TestApprovedPath:
             pr_url=None,
             discussion_id=None,
             cycle_number=1,
-            config=PRReviewCycleConfig(max_outer_cycles=3),
+            config=PRReviewCycleConfig(max_outer_cycles=3, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -230,7 +243,7 @@ class TestApprovedPath:
             pr_url=None,
             discussion_id=None,
             cycle_number=1,
-            config=PRReviewCycleConfig(max_outer_cycles=3),
+            config=PRReviewCycleConfig(max_outer_cycles=3, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -256,7 +269,7 @@ class TestCIFailingPath:
             pr_url=None,
             discussion_id=None,
             cycle_number=1,
-            config=PRReviewCycleConfig(max_outer_cycles=3),
+            config=PRReviewCycleConfig(max_outer_cycles=3, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -285,7 +298,7 @@ class TestCIFailingPath:
             pr_url=None,
             discussion_id=None,
             cycle_number=1,
-            config=PRReviewCycleConfig(max_outer_cycles=3),
+            config=PRReviewCycleConfig(max_outer_cycles=3, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -312,7 +325,7 @@ class TestCIFailingPath:
             pr_url=None,
             discussion_id=None,
             cycle_number=1,
-            config=PRReviewCycleConfig(max_outer_cycles=3),
+            config=PRReviewCycleConfig(max_outer_cycles=3, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -339,7 +352,7 @@ class TestMaxCyclesPath:
             pr_url=None,
             discussion_id=None,
             cycle_number=3,
-            config=PRReviewCycleConfig(max_outer_cycles=2),
+            config=PRReviewCycleConfig(max_outer_cycles=2, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -368,7 +381,7 @@ class TestMaxCyclesPath:
             pr_url=None,
             discussion_id=None,
             cycle_number=3,
-            config=PRReviewCycleConfig(max_outer_cycles=2),
+            config=PRReviewCycleConfig(max_outer_cycles=2, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -407,7 +420,7 @@ class TestEventOrdering:
             pr_url=None,
             discussion_id=None,
             cycle_number=1,
-            config=PRReviewCycleConfig(max_outer_cycles=3),
+            config=PRReviewCycleConfig(max_outer_cycles=3, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -457,7 +470,7 @@ class TestSubIssueCreation:
             pr_url=None,
             discussion_id=None,
             cycle_number=1,
-            config=PRReviewCycleConfig(max_outer_cycles=3),
+            config=PRReviewCycleConfig(max_outer_cycles=3, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -487,7 +500,7 @@ class TestSubIssueCreation:
             pr_url=None,
             discussion_id=None,
             cycle_number=1,
-            config=PRReviewCycleConfig(max_outer_cycles=3),
+            config=PRReviewCycleConfig(max_outer_cycles=3, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -523,7 +536,7 @@ class TestSubIssueCreation:
             pr_url=None,
             discussion_id=None,
             cycle_number=1,
-            config=PRReviewCycleConfig(max_outer_cycles=3),
+            config=PRReviewCycleConfig(max_outer_cycles=3, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -553,7 +566,7 @@ class TestSubIssueCreation:
             pr_url=None,
             discussion_id=None,
             cycle_number=1,
-            config=PRReviewCycleConfig(max_outer_cycles=3),
+            config=PRReviewCycleConfig(max_outer_cycles=3, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -580,7 +593,7 @@ class TestAssertionHelpers:
             pr_url=None,
             discussion_id=None,
             cycle_number=1,
-            config=PRReviewCycleConfig(max_outer_cycles=3),
+            config=PRReviewCycleConfig(max_outer_cycles=3, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -601,7 +614,7 @@ class TestAssertionHelpers:
             pr_url=None,
             discussion_id=None,
             cycle_number=1,
-            config=PRReviewCycleConfig(max_outer_cycles=3),
+            config=PRReviewCycleConfig(max_outer_cycles=3, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -621,7 +634,7 @@ class TestAssertionHelpers:
             pr_url=None,
             discussion_id=None,
             cycle_number=1,
-            config=PRReviewCycleConfig(max_outer_cycles=3),
+            config=PRReviewCycleConfig(max_outer_cycles=3, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -644,7 +657,7 @@ class TestAssertionHelpers:
             pr_url=None,
             discussion_id=None,
             cycle_number=3,
-            config=PRReviewCycleConfig(max_outer_cycles=2),
+            config=PRReviewCycleConfig(max_outer_cycles=2, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -664,7 +677,7 @@ class TestAssertionHelpers:
             pr_url=None,
             discussion_id=None,
             cycle_number=2,
-            config=PRReviewCycleConfig(max_outer_cycles=3),
+            config=PRReviewCycleConfig(max_outer_cycles=3, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -683,7 +696,7 @@ class TestAssertionHelpers:
             pr_url=None,
             discussion_id=None,
             cycle_number=2,
-            config=PRReviewCycleConfig(max_outer_cycles=3),
+            config=PRReviewCycleConfig(max_outer_cycles=3, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -707,7 +720,7 @@ class TestCICheckDisabledPath:
             pr_url=None,
             discussion_id=None,
             cycle_number=1,
-            config=PRReviewCycleConfig(max_outer_cycles=3, ci_check_enabled=False),
+            config=PRReviewCycleConfig(max_outer_cycles=3, ci_check_enabled=False, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -732,7 +745,7 @@ class TestCICheckDisabledPath:
             pr_url=None,
             discussion_id=None,
             cycle_number=1,
-            config=PRReviewCycleConfig(max_outer_cycles=3, ci_check_enabled=False),
+            config=PRReviewCycleConfig(max_outer_cycles=3, ci_check_enabled=False, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -779,7 +792,7 @@ class TestCICheckDisabledPath:
             pr_url=None,
             discussion_id=None,
             cycle_number=1,
-            config=PRReviewCycleConfig(max_outer_cycles=3, ci_check_enabled=False),
+            config=PRReviewCycleConfig(max_outer_cycles=3, ci_check_enabled=False, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -800,7 +813,7 @@ class TestCICheckDisabledPath:
             pr_url=None,
             discussion_id=None,
             cycle_number=1,
-            config=PRReviewCycleConfig(max_outer_cycles=3, ci_check_enabled=False),
+            config=PRReviewCycleConfig(max_outer_cycles=3, ci_check_enabled=False, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -825,7 +838,7 @@ class TestCICheckDisabledPath:
             pr_url=None,
             discussion_id=None,
             cycle_number=1,
-            config=PRReviewCycleConfig(max_outer_cycles=3, ci_check_enabled=False),
+            config=PRReviewCycleConfig(max_outer_cycles=3, ci_check_enabled=False, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -845,7 +858,7 @@ class TestCICheckDisabledPath:
             pr_url=None,
             discussion_id=None,
             cycle_number=1,
-            config=PRReviewCycleConfig(max_outer_cycles=3, ci_check_enabled=False),
+            config=PRReviewCycleConfig(max_outer_cycles=3, ci_check_enabled=False, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -869,7 +882,7 @@ class TestCICheckDisabledPath:
             pr_url=None,
             discussion_id=None,
             cycle_number=1,
-            config=PRReviewCycleConfig(max_outer_cycles=3, ci_check_enabled=False),
+            config=PRReviewCycleConfig(max_outer_cycles=3, ci_check_enabled=False, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -896,7 +909,7 @@ class TestClockAdvancement:
             pr_url=None,
             discussion_id=None,
             cycle_number=1,
-            config=PRReviewCycleConfig(max_outer_cycles=3),
+            config=PRReviewCycleConfig(max_outer_cycles=3, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -922,7 +935,7 @@ class TestClockAdvancement:
             pr_url=None,
             discussion_id=None,
             cycle_number=3,
-            config=PRReviewCycleConfig(max_outer_cycles=2),
+            config=PRReviewCycleConfig(max_outer_cycles=2, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -949,7 +962,7 @@ class TestStateManagement:
             pr_url=None,
             discussion_id=None,
             cycle_number=1,
-            config=PRReviewCycleConfig(max_outer_cycles=3),
+            config=PRReviewCycleConfig(max_outer_cycles=3, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -978,7 +991,7 @@ class TestStateManagement:
             pr_url=None,
             discussion_id=None,
             cycle_number=1,
-            config=PRReviewCycleConfig(max_outer_cycles=3),
+            config=PRReviewCycleConfig(max_outer_cycles=3, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -1007,7 +1020,7 @@ class TestStateManagement:
             pr_url=None,
             discussion_id=None,
             cycle_number=1,
-            config=PRReviewCycleConfig(max_outer_cycles=3),
+            config=PRReviewCycleConfig(max_outer_cycles=3, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 
@@ -1031,7 +1044,7 @@ class TestStateManagement:
             pr_url=None,
             discussion_id=None,
             cycle_number=1,
-            config=PRReviewCycleConfig(max_outer_cycles=3),
+            config=PRReviewCycleConfig(max_outer_cycles=3, code_review_agent="agent-1", verifier_agent="agent-2", consolidation_agent="agent-3", on_issues_found_column="Review", on_approved_column="Done"),
             workflow_run_id="run-1",
         )
 

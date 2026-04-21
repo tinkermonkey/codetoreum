@@ -541,7 +541,7 @@ class PRReviewCycleIssuesFoundEvent(CodetoreumEvent):
         type (str): Fixed to "pr_review_cycle.issues_found"
         pr_id (str): GitHub PR identifier
         cycle_number (int): Iteration number (1-based)
-        finding_count (int): Total number of findings
+        total (int): Total number of findings
         critical_count (int): Number of critical severity findings
         high_count (int): Number of high severity findings
         medium_count (int): Number of medium severity findings
@@ -555,7 +555,7 @@ class PRReviewCycleIssuesFoundEvent(CodetoreumEvent):
 
     pr_id: str = ""
     cycle_number: int = 0
-    finding_count: int = 0
+    total: int = 0
     critical_count: int = 0
     high_count: int = 0
     medium_count: int = 0
@@ -574,8 +574,8 @@ class PRReviewCycleIssuesFoundEvent(CodetoreumEvent):
         if self.cycle_number < 1:
             msg = "cycle_number must be >= 1"
             raise ValueError(msg)
-        if self.finding_count < 1:
-            msg = "finding_count must be >= 1 when issues found"
+        if self.total < 1:
+            msg = "total must be >= 1 when issues found"
             raise ValueError(msg)
         if self.critical_count < 0:
             msg = "critical_count must be non-negative"
@@ -590,8 +590,8 @@ class PRReviewCycleIssuesFoundEvent(CodetoreumEvent):
             msg = "low_count must be non-negative"
             raise ValueError(msg)
         severity_total = self.critical_count + self.high_count + self.medium_count + self.low_count
-        if severity_total != self.finding_count:
-            msg = f"Severity counts ({severity_total}) must sum to finding_count ({self.finding_count})"
+        if severity_total != self.total:
+            msg = f"Severity counts ({severity_total}) must sum to total ({self.total})"
             raise ValueError(msg)
         if self.sub_issue_count < 1:
             msg = "sub_issue_count must be >= 1 when issues found"
@@ -613,7 +613,7 @@ class PRReviewCycleIssuesFoundEvent(CodetoreumEvent):
             {
                 "pr_id": self.pr_id,
                 "cycle_number": self.cycle_number,
-                "finding_count": self.finding_count,
+                "total": self.total,
                 "critical_count": self.critical_count,
                 "high_count": self.high_count,
                 "medium_count": self.medium_count,
@@ -628,7 +628,9 @@ class PRReviewCycleIssuesFoundEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "PRReviewCycleIssuesFoundEvent":
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary with backward compatibility."""
+        # Support both 'total' and 'finding_count' for backward compatibility
+        total = data.get("total") or data.get("finding_count", 0)
         return cls(
             type=data.get("type", "pr_review_cycle.issues_found"),
             timestamp=data.get("timestamp", ""),
@@ -637,7 +639,7 @@ class PRReviewCycleIssuesFoundEvent(CodetoreumEvent):
             event_id=data.get("event_id") or str(uuid4()),
             pr_id=data.get("pr_id", ""),
             cycle_number=data.get("cycle_number", 0),
-            finding_count=data.get("finding_count", 0),
+            total=total,
             critical_count=data.get("critical_count", 0),
             high_count=data.get("high_count", 0),
             medium_count=data.get("medium_count", 0),
@@ -659,7 +661,7 @@ class PRReviewCycleMaxCyclesReachedEvent(CodetoreumEvent):
         type (str): Fixed to "pr_review_cycle.max_cycles_reached"
         pr_id (str): GitHub PR identifier
         cycle_number (int): Iteration number (1-based) that exceeded limit
-        max_outer_cycles (int): Maximum cycles configured
+        max_cycles (int): Maximum cycles configured
         next_column (str): Column to move item to (escalation column)
         workflow_run_id (str): ID of the workflow run
         timestamp (str): ISO 8601 timestamp
@@ -667,7 +669,7 @@ class PRReviewCycleMaxCyclesReachedEvent(CodetoreumEvent):
 
     pr_id: str = ""
     cycle_number: int = 0
-    max_outer_cycles: int = 0
+    max_cycles: int = 0
     next_column: str = ""
     workflow_run_id: str = ""
 
@@ -680,11 +682,11 @@ class PRReviewCycleMaxCyclesReachedEvent(CodetoreumEvent):
         if self.cycle_number < 1:
             msg = "cycle_number must be >= 1"
             raise ValueError(msg)
-        if self.max_outer_cycles < 1:
-            msg = "max_outer_cycles must be >= 1"
+        if self.max_cycles < 1:
+            msg = "max_cycles must be >= 1"
             raise ValueError(msg)
-        if self.cycle_number <= self.max_outer_cycles:
-            msg = "cycle_number must exceed max_outer_cycles"
+        if self.cycle_number <= self.max_cycles:
+            msg = "cycle_number must exceed max_cycles"
             raise ValueError(msg)
         if not self.next_column:
             msg = "next_column is required"
@@ -700,7 +702,7 @@ class PRReviewCycleMaxCyclesReachedEvent(CodetoreumEvent):
             {
                 "pr_id": self.pr_id,
                 "cycle_number": self.cycle_number,
-                "max_outer_cycles": self.max_outer_cycles,
+                "max_cycles": self.max_cycles,
                 "next_column": self.next_column,
                 "workflow_run_id": self.workflow_run_id,
             }
@@ -709,7 +711,9 @@ class PRReviewCycleMaxCyclesReachedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "PRReviewCycleMaxCyclesReachedEvent":
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary with backward compatibility."""
+        # Support both 'max_cycles' and 'max_outer_cycles' for backward compatibility
+        max_cycles = data.get("max_cycles") or data.get("max_outer_cycles", 0)
         return cls(
             type=data.get("type", "pr_review_cycle.max_cycles_reached"),
             timestamp=data.get("timestamp", ""),
@@ -718,7 +722,7 @@ class PRReviewCycleMaxCyclesReachedEvent(CodetoreumEvent):
             event_id=data.get("event_id") or str(uuid4()),
             pr_id=data.get("pr_id", ""),
             cycle_number=data.get("cycle_number", 0),
-            max_outer_cycles=data.get("max_outer_cycles", 0),
+            max_cycles=max_cycles,
             next_column=data.get("next_column", ""),
             workflow_run_id=data.get("workflow_run_id", ""),
         )
@@ -800,7 +804,7 @@ class PRReviewCycleSubIssuesCreatedEvent(CodetoreumEvent):
         pr_id (str): GitHub PR identifier
         cycle_number (int): Iteration number (1-based)
         count (int): Number of sub-issues created
-        sub_issue_ids (tuple[str, ...]): IDs of created sub-issues
+        work_item_ids (tuple[str, ...]): IDs of created work items (sub-issues)
         target_board (str): Board ID where sub-issues were created
         workflow_run_id (str): ID of the workflow run
         timestamp (str): ISO 8601 timestamp
@@ -809,7 +813,7 @@ class PRReviewCycleSubIssuesCreatedEvent(CodetoreumEvent):
     pr_id: str = ""
     cycle_number: int = 0
     count: int = 0
-    sub_issue_ids: tuple[str, ...] = ()
+    work_item_ids: tuple[str, ...] = ()
     target_board: str = ""
     workflow_run_id: str = ""
 
@@ -825,8 +829,8 @@ class PRReviewCycleSubIssuesCreatedEvent(CodetoreumEvent):
         if self.count < 1:
             msg = "count must be >= 1 when sub-issues created"
             raise ValueError(msg)
-        if len(self.sub_issue_ids) != self.count:
-            msg = f"sub_issue_ids count ({len(self.sub_issue_ids)}) must match count ({self.count})"
+        if len(self.work_item_ids) != self.count:
+            msg = f"work_item_ids count ({len(self.work_item_ids)}) must match count ({self.count})"
             raise ValueError(msg)
         if not self.target_board:
             msg = "target_board is required"
@@ -843,7 +847,7 @@ class PRReviewCycleSubIssuesCreatedEvent(CodetoreumEvent):
                 "pr_id": self.pr_id,
                 "cycle_number": self.cycle_number,
                 "count": self.count,
-                "sub_issue_ids": list(self.sub_issue_ids),
+                "work_item_ids": list(self.work_item_ids),
                 "target_board": self.target_board,
                 "workflow_run_id": self.workflow_run_id,
             }
@@ -852,8 +856,9 @@ class PRReviewCycleSubIssuesCreatedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict) -> "PRReviewCycleSubIssuesCreatedEvent":
-        """Deserialize from dictionary."""
-        sub_issue_ids = tuple(data.get("sub_issue_ids", []))
+        """Deserialize from dictionary with backward compatibility."""
+        # Support both 'work_item_ids' and 'sub_issue_ids' for backward compatibility
+        work_item_ids = tuple(data.get("work_item_ids") or data.get("sub_issue_ids", []))
         return cls(
             type=data.get("type", "pr_review_cycle.sub_issues_created"),
             timestamp=data.get("timestamp", ""),
@@ -863,7 +868,7 @@ class PRReviewCycleSubIssuesCreatedEvent(CodetoreumEvent):
             pr_id=data.get("pr_id", ""),
             cycle_number=data.get("cycle_number", 0),
             count=data.get("count", 0),
-            sub_issue_ids=sub_issue_ids,
+            work_item_ids=work_item_ids,
             target_board=data.get("target_board", ""),
             workflow_run_id=data.get("workflow_run_id", ""),
         )

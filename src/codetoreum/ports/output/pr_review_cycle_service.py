@@ -157,15 +157,14 @@ class IPRReviewCycle(ABC):
             config=PRReviewCycleConfig(max_outer_cycles=3),
             workflow_run_id="run-1"
         )
-        state = await review_service.start_pr_review_cycle(request)
+        result = await review_service.start_pr_review_cycle(request)
 
         # Retrieve cycle state for monitoring or recovery
-        current_state = await review_service.get_cycle_state(
-            "item-1", "proj-1"
-        )
+        current_state = await review_service.get_cycle_state("item-1", "proj-1")
 
         # Save state for persistence
-        await review_service.save_cycle_state(current_state)
+        if current_state:
+            await review_service.save_cycle_state(current_state)
 
         # Load all active cycles for a project (e.g., during recovery)
         active_cycles = await review_service.load_active_cycles("proj-1")
@@ -200,7 +199,7 @@ class IPRReviewCycle(ABC):
 
         Args:
             work_item_id: Work item ID to get cycle state for
-            project_id: Project ID containing the work item
+            project_id: Project ID that contains the work item
 
         Returns:
             PRReviewCycleStateData if cycle exists, None otherwise
@@ -210,7 +209,7 @@ class IPRReviewCycle(ABC):
         """
 
     @abstractmethod
-    async def save_cycle_state(self, state: PRReviewCycleStateData) -> None:
+    async def save_cycle_state(self, data: PRReviewCycleStateData) -> None:
         """Persist PR review cycle state.
 
         Saves the current state of a PR review cycle for recovery
@@ -218,10 +217,10 @@ class IPRReviewCycle(ABC):
         and enable recovery after failures.
 
         Args:
-            state: PR review cycle state to persist
+            data: Complete PR review cycle state data to persist
 
         Raises:
-            ValueError: If state is invalid
+            ValueError: If state data is invalid
             ExternalServiceError: If state store communication fails
         """
 
@@ -234,7 +233,7 @@ class IPRReviewCycle(ABC):
 
         Args:
             work_item_id: Work item ID of the cycle to remove
-            project_id: Project ID containing the work item
+            project_id: Project ID of the cycle to remove
 
         Raises:
             ExternalServiceError: If state store communication fails

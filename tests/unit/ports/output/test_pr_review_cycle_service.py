@@ -24,9 +24,20 @@ from codetoreum.ports.output.pr_review_cycle_service import (
 class TestPRReviewCycleRequest:
     """Tests for PRReviewCycleRequest frozen dataclass."""
 
+    @staticmethod
+    def _create_test_config() -> PRReviewCycleConfig:
+        """Create a minimal config for testing."""
+        return PRReviewCycleConfig(
+            code_review_agent="agent-1",
+            verifier_agent="agent-2",
+            consolidation_agent="agent-3",
+            on_issues_found_column="Review",
+            on_approved_column="Done",
+        )
+
     def test_create_valid_request(self):
         """Test creating a valid request."""
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         request = PRReviewCycleRequest(
             work_item_id="item-1",
             project_id="proj-1",
@@ -50,7 +61,7 @@ class TestPRReviewCycleRequest:
 
     def test_request_frozen(self):
         """Test request is immutable (frozen)."""
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         request = PRReviewCycleRequest(
             work_item_id="item-1",
             project_id="proj-1",
@@ -67,7 +78,7 @@ class TestPRReviewCycleRequest:
 
     def test_request_with_none_optional_fields(self):
         """Test request accepts None for optional pr_id, pr_url, discussion_id."""
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         request = PRReviewCycleRequest(
             work_item_id="item-1",
             project_id="proj-1",
@@ -85,7 +96,7 @@ class TestPRReviewCycleRequest:
 
     def test_request_empty_work_item_id(self):
         """Test request rejects empty work_item_id."""
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         with pytest.raises(ValueError, match="work_item_id must be a non-empty string"):
             PRReviewCycleRequest(
                 work_item_id="",
@@ -101,7 +112,7 @@ class TestPRReviewCycleRequest:
 
     def test_request_empty_project_id(self):
         """Test request rejects empty project_id."""
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         with pytest.raises(ValueError, match="project_id must be a non-empty string"):
             PRReviewCycleRequest(
                 work_item_id="item-1",
@@ -117,7 +128,7 @@ class TestPRReviewCycleRequest:
 
     def test_request_empty_board_id(self):
         """Test request rejects empty board_id."""
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         with pytest.raises(ValueError, match="board_id must be a non-empty string"):
             PRReviewCycleRequest(
                 work_item_id="item-1",
@@ -133,7 +144,7 @@ class TestPRReviewCycleRequest:
 
     def test_request_empty_workflow_run_id(self):
         """Test request rejects empty workflow_run_id."""
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         with pytest.raises(ValueError, match="workflow_run_id must be a non-empty string"):
             PRReviewCycleRequest(
                 work_item_id="item-1",
@@ -149,7 +160,7 @@ class TestPRReviewCycleRequest:
 
     def test_request_cycle_number_zero(self):
         """Test request rejects cycle_number of 0."""
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         with pytest.raises(ValueError, match="cycle_number must be a positive integer \\(1-based\\)"):
             PRReviewCycleRequest(
                 work_item_id="item-1",
@@ -165,7 +176,7 @@ class TestPRReviewCycleRequest:
 
     def test_request_cycle_number_negative(self):
         """Test request rejects negative cycle_number."""
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         with pytest.raises(ValueError, match="cycle_number must be a positive integer \\(1-based\\)"):
             PRReviewCycleRequest(
                 work_item_id="item-1",
@@ -181,7 +192,7 @@ class TestPRReviewCycleRequest:
 
     def test_request_cycle_number_as_bool(self):
         """Test request rejects boolean value for cycle_number."""
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         # Note: In Python, bool is a subclass of int, but isinstance(True, bool) returns True
         # The validation specifically checks isinstance(self.cycle_number, bool) to reject it
         with pytest.raises(ValueError, match="cycle_number must be a positive integer \\(1-based\\)"):
@@ -200,7 +211,7 @@ class TestPRReviewCycleRequest:
 
     def test_request_empty_pr_id_when_not_none(self):
         """Test request rejects empty string for pr_id when not None."""
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         with pytest.raises(ValueError, match="pr_id must be a non-empty string or None"):
             PRReviewCycleRequest(
                 work_item_id="item-1",
@@ -216,7 +227,7 @@ class TestPRReviewCycleRequest:
 
     def test_request_empty_pr_url_when_not_none(self):
         """Test request rejects empty string for pr_url when not None."""
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         with pytest.raises(ValueError, match="pr_url must be a non-empty string or None"):
             PRReviewCycleRequest(
                 work_item_id="item-1",
@@ -232,7 +243,7 @@ class TestPRReviewCycleRequest:
 
     def test_request_empty_discussion_id_when_not_none(self):
         """Test request rejects empty string for discussion_id when not None."""
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         with pytest.raises(ValueError, match="discussion_id must be a non-empty string or None"):
             PRReviewCycleRequest(
                 work_item_id="item-1",
@@ -280,10 +291,21 @@ class TestPRReviewCycleRequest:
 class TestPRReviewCycleStateData:
     """Tests for PRReviewCycleStateData frozen dataclass."""
 
+    @staticmethod
+    def _create_test_config() -> PRReviewCycleConfig:
+        """Create a minimal config for testing."""
+        return PRReviewCycleConfig(
+            code_review_agent="agent-1",
+            verifier_agent="agent-2",
+            consolidation_agent="agent-3",
+            on_issues_found_column="Review",
+            on_approved_column="Done",
+        )
+
     def test_create_valid_state_data(self):
         """Test creating valid state data."""
         now = datetime.now(UTC).isoformat()
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         cycle_state = PRReviewCycleState(
             cycle_id="cycle-1",
             pr_id="pr-123",
@@ -319,7 +341,7 @@ class TestPRReviewCycleStateData:
     def test_state_data_frozen(self):
         """Test state data is immutable (frozen)."""
         now = datetime.now(UTC).isoformat()
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         cycle_state = PRReviewCycleState(
             cycle_id="cycle-1",
             pr_id="pr-123",
@@ -350,7 +372,7 @@ class TestPRReviewCycleStateData:
     def test_state_data_empty_work_item_id(self):
         """Test state data rejects empty work_item_id."""
         now = datetime.now(UTC).isoformat()
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         cycle_state = PRReviewCycleState(
             cycle_id="cycle-1",
             pr_id="pr-123",
@@ -380,7 +402,7 @@ class TestPRReviewCycleStateData:
     def test_state_data_empty_project_id(self):
         """Test state data rejects empty project_id."""
         now = datetime.now(UTC).isoformat()
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         cycle_state = PRReviewCycleState(
             cycle_id="cycle-1",
             pr_id="pr-123",
@@ -410,7 +432,7 @@ class TestPRReviewCycleStateData:
     def test_state_data_empty_board_id(self):
         """Test state data rejects empty board_id."""
         now = datetime.now(UTC).isoformat()
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         cycle_state = PRReviewCycleState(
             cycle_id="cycle-1",
             pr_id="pr-123",
@@ -440,7 +462,7 @@ class TestPRReviewCycleStateData:
     def test_state_data_cycle_number_zero(self):
         """Test state data rejects cycle_number of 0."""
         now = datetime.now(UTC).isoformat()
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         cycle_state = PRReviewCycleState(
             cycle_id="cycle-1",
             pr_id="pr-123",
@@ -470,7 +492,7 @@ class TestPRReviewCycleStateData:
     def test_state_data_cycle_number_negative(self):
         """Test state data rejects negative cycle_number."""
         now = datetime.now(UTC).isoformat()
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         cycle_state = PRReviewCycleState(
             cycle_id="cycle-1",
             pr_id="pr-123",
@@ -500,7 +522,7 @@ class TestPRReviewCycleStateData:
     def test_state_data_cycle_number_as_bool(self):
         """Test state data rejects boolean value for cycle_number."""
         now = datetime.now(UTC).isoformat()
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         cycle_state = PRReviewCycleState(
             cycle_id="cycle-1",
             pr_id="pr-123",
@@ -544,7 +566,7 @@ class TestPRReviewCycleStateData:
     def test_state_data_empty_created_at(self):
         """Test state data rejects empty created_at."""
         now = datetime.now(UTC).isoformat()
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         cycle_state = PRReviewCycleState(
             cycle_id="cycle-1",
             pr_id="pr-123",
@@ -574,7 +596,7 @@ class TestPRReviewCycleStateData:
     def test_state_data_empty_updated_at(self):
         """Test state data rejects empty updated_at."""
         now = datetime.now(UTC).isoformat()
-        config = PRReviewCycleConfig()
+        config = self._create_test_config()
         cycle_state = PRReviewCycleState(
             cycle_id="cycle-1",
             pr_id="pr-123",

@@ -346,7 +346,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 source="mock_pr_review_cycle",
                 pr_id=request.pr_id or f"pr-{work_item_id}",
                 cycle_number=cycle_number,
-                max_outer_cycles=request.config.max_outer_cycles,
+                max_cycles=request.config.max_outer_cycles,
                 next_column="Human Review",
                 workflow_run_id=request.workflow_run_id,
             )
@@ -740,7 +740,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                     pr_id=request.pr_id or f"pr-{work_item_id}",
                     cycle_number=cycle_number,
                     count=len(sub_issue_ids),
-                    sub_issue_ids=tuple(sub_issue_ids),
+                    work_item_ids=tuple(sub_issue_ids),
                     target_board=request.board_id,
                     workflow_run_id=request.workflow_run_id,
                 )
@@ -765,7 +765,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 source="mock_pr_review_cycle",
                 pr_id=request.pr_id or f"pr-{work_item_id}",
                 cycle_number=cycle_number,
-                finding_count=len(config.findings),
+                total=len(config.findings),
                 critical_count=critical_count,
                 high_count=high_count,
                 medium_count=medium_count,

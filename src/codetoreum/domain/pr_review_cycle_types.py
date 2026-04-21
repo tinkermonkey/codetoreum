@@ -42,7 +42,7 @@ class PRReviewOutcome(str, Enum):
 
     ISSUES_FOUND = "issues_found"
     APPROVED = "approved"
-    MAX_CYCLES_REACHED = "max_cycles_reached"
+    MAX_CYCLES_REACHED = "max_cycles"
 
 
 class PRReviewStatus(str, Enum):
@@ -52,10 +52,10 @@ class PRReviewStatus(str, Enum):
 
     **Enum Values:**
     - PENDING: Waiting to start (queued)
-    - IN_CODE_REVIEW: Phase 1 code review in progress
-    - IN_VERIFICATION: Phase 2 verification in progress
-    - IN_CI_CHECK: Phase 3 CI check in progress
-    - IN_CONSOLIDATION: Phase 4 consolidation in progress
+    - PHASE_1_CODE_REVIEW: Phase 1 code review in progress
+    - PHASE_2_VERIFICATION: Phase 2 verification in progress
+    - PHASE_3_CI_CHECK: Phase 3 CI check in progress
+    - PHASE_4_CONSOLIDATION: Phase 4 consolidation in progress
     - COMPLETED: Cycle completed (has outcome)
     - ESCALATED: Escalated to human reviewer
 
@@ -63,10 +63,10 @@ class PRReviewStatus(str, Enum):
     """
 
     PENDING = "pending"
-    IN_CODE_REVIEW = "in_code_review"
-    IN_VERIFICATION = "in_verification"
-    IN_CI_CHECK = "in_ci_check"
-    IN_CONSOLIDATION = "in_consolidation"
+    PHASE_1_CODE_REVIEW = "phase_1_code_review"
+    PHASE_2_VERIFICATION = "phase_2_verification"
+    PHASE_3_CI_CHECK = "phase_3_ci_check"
+    PHASE_4_CONSOLIDATION = "phase_4_consolidation"
     COMPLETED = "completed"
     ESCALATED = "escalated"
 
@@ -202,13 +202,13 @@ class PRReviewCycleConfig:
         sub_issue_target_board: Board ID where sub-issues will be created (optional)
         sub_issue_creation: Whether to create sub-issues when findings are found (default True)
         sub_issue_labels: Immutable tuple of labels to apply to created sub-issues
-        sub_issue_initial_column: Column to place created sub-issues in (optional)
-        on_issues_found_column: Column to move item to when issues are found (optional)
-        on_approved_column: Column to move item to when approved (optional)
+        sub_issue_initial_column: Column to place created sub-issues in (default "Backlog")
+        on_issues_found_column: Column to move item to when issues are found (required)
+        on_approved_column: Column to move item to when approved (required)
         on_failure_column: Column to move item to when CI checks fail (optional)
-        agents: Immutable mapping of phase names to agent IDs as ordered tuples
-                (e.g., (("code_review", "pr_code_reviewer"), ("verification", "requirements_verifier")))
-                Preserves insertion order and allows O(1) iteration for phase->agent lookups
+        code_review_agent: ID of the agent to execute Phase 1 code review
+        verifier_agent: ID of the agent to execute Phase 2 verification
+        consolidation_agent: ID of the agent to execute Phase 4 consolidation
     """
 
     max_outer_cycles: int = 3
@@ -221,11 +221,13 @@ class PRReviewCycleConfig:
     sub_issue_target_board: str | None = None
     sub_issue_creation: bool = True
     sub_issue_labels: tuple[str, ...] = ()
-    sub_issue_initial_column: str | None = None
-    on_issues_found_column: str | None = None
-    on_approved_column: str | None = None
+    sub_issue_initial_column: str = "Backlog"
+    on_issues_found_column: str = ""
+    on_approved_column: str = ""
     on_failure_column: str | None = None
-    agents: tuple[tuple[str, str], ...] | None = None
+    code_review_agent: str = ""
+    verifier_agent: str = ""
+    consolidation_agent: str = ""
 
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""
@@ -245,8 +247,28 @@ class PRReviewCycleConfig:
             msg = "sub_issue_labels must be a tuple (immutable)"
             raise ValueError(msg)
 
-        if self.agents is not None and not isinstance(self.agents, tuple):
-            msg = "agents must be a tuple (immutable) or None"
+        if not self.on_issues_found_column:
+            msg = "on_issues_found_column is required"
+            raise ValueError(msg)
+
+        if not self.on_approved_column:
+            msg = "on_approved_column is required"
+            raise ValueError(msg)
+
+        if not self.code_review_agent:
+            msg = "code_review_agent is required"
+            raise ValueError(msg)
+
+        if not self.verifier_agent:
+            msg = "verifier_agent is required"
+            raise ValueError(msg)
+
+        if not self.consolidation_agent:
+            msg = "consolidation_agent is required"
+            raise ValueError(msg)
+
+        if not self.sub_issue_initial_column:
+            msg = "sub_issue_initial_column is required"
             raise ValueError(msg)
 
         # Only validate ci_check_timeout_seconds > 0 if ci_check is enabled
