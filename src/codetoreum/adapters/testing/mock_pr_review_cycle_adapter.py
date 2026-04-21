@@ -318,6 +318,9 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
         cycle_id = f"cycle-{work_item_id}-{cycle_number}"
         started_at = self._clock.now().isoformat()
 
+        # Calculate phases_planned dynamically based on config
+        phases_planned = 1 + len(request.config.verifier_context_sources) + (1 if request.config.ci_check_enabled else 0) + 1
+
         # Emit PRReviewCycleStartedEvent
         started_event = PRReviewCycleStartedEvent(
             type="pr_review_cycle.started",
@@ -328,7 +331,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             cycle_number=cycle_number,
             max_outer_cycles=request.config.max_outer_cycles,
             verifier_context_sources=request.config.verifier_context_sources,
-            phases_planned=4,
+            phases_planned=phases_planned,
             workflow_run_id=request.workflow_run_id,
         )
         self._event_emitter.emit(started_event)
