@@ -635,12 +635,12 @@ class TestGitHubTicketAdapterDiscussionId:
             assert result1 == {}
             assert adapter._discussions_fetched is False
             assert adapter._discussions_fetch_error_id is not None
-            first_error_id = adapter._discussions_fetch_error_id
 
             # Second call retries and succeeds
             result2 = await adapter._fetch_discussions_for_repository()
             assert result2 == {"123": "discussion_1"}
             assert adapter._discussions_fetched is True
+            assert adapter._discussions_fetch_error_id is None  # Error ID should be cleared on success
 
             # Should have called execute twice (retry on second call)
             assert mock_graphql_client.execute.call_count == 2

@@ -80,6 +80,7 @@ class GitHubTicketAdapter(ITicketSystem):
         self._discussion_cache: dict[str, str | None] = {}
         self._discussions_fetched: bool = False
         self._discussions_fetch_error_id: str | None = None  # Sentry error tracking
+        self._discussions_retry_count: int = 0  # Retry limit for persistent failures (max 3)
 
         # Rate limit tracking
         self._rate_limit_remaining: int | None = None
@@ -154,6 +155,11 @@ class GitHubTicketAdapter(ITicketSystem):
         """
         if self._discussions_fetched:
             return self._discussion_cache
+
+        # Stop retrying after 3 failures to prevent API call storms on persistent errors
+        if self._discussions_retry_count >= 3:
+            self._discussions_fetched = True
+            return {}
 
         try:
             graphql_client = self._get_graphql_client()
@@ -239,6 +245,8 @@ class GitHubTicketAdapter(ITicketSystem):
                 )
 
             self._discussions_fetched = True
+            self._discussions_fetch_error_id = None  # Clear error ID on successful fetch
+            self._discussions_retry_count = 0  # Reset retry count on success
             return self._discussion_cache
 
         except ExternalServiceError as e:
@@ -246,6 +254,7 @@ class GitHubTicketAdapter(ITicketSystem):
             # Generate error_id for Sentry tracking and allow retry on transient failures
             error_id = str(uuid.uuid4())
             self._discussions_fetch_error_id = error_id
+            self._discussions_retry_count += 1
             logger.warning(
                 f"Failed to fetch discussions for repository {self.config.organization}/{self.config.repository}: {e}",
                 exc_info=True,
@@ -258,6 +267,7 @@ class GitHubTicketAdapter(ITicketSystem):
             # Generate error_id for Sentry tracking and allow retry on transient failures
             error_id = str(uuid.uuid4())
             self._discussions_fetch_error_id = error_id
+            self._discussions_retry_count += 1
             logger.warning(
                 f"Unexpected error fetching discussions: {e}",
                 exc_info=True,
