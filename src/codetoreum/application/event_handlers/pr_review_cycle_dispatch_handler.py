@@ -9,13 +9,11 @@ separately by PRReviewCycleEventHandler, which listens for outcome events.
 """
 
 import logging
-from datetime import UTC, datetime
 
 from codetoreum.domain.events import DomainEvent
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.domain.types import WorkItemId
 from codetoreum.infrastructure.event_bus import EventHandler, event_handler
-from codetoreum.ports.exceptions import ExternalServiceError, ResourceNotFoundError
 from codetoreum.ports.output.active_workflow_run_registry import (
     IActiveWorkflowRunRegistry,
 )

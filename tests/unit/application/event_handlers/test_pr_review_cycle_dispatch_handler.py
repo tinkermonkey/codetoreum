@@ -8,13 +8,13 @@ from codetoreum.application.event_handlers.pr_review_cycle_dispatch_handler impo
     PRReviewCycleDispatchHandler,
 )
 from codetoreum.domain.board_workflow_template import BoardWorkflowTemplate, ColumnTemplate
+from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.domain.pr_review_cycle_types import (
     PRReviewCycleResult,
     PRReviewCycleState,
     PRReviewOutcome,
 )
 from codetoreum.domain.work_item import WorkItem
-from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.ports.exceptions import ExternalServiceError, ResourceNotFoundError
 from codetoreum.ports.output.active_workflow_run_registry import (
     ActiveRunInfo,
@@ -24,15 +24,16 @@ from codetoreum.ports.output.pr_review_cycle_service import (
     IPRReviewCycle,
     PRReviewCycleRequest,
 )
+from codetoreum.ports.output.work_item_service import IWorkItemService
 from codetoreum.ports.output.workflow_config_service import (
     IWorkflowConfigService,
 )
-from codetoreum.ports.output.work_item_service import IWorkItemService
 
 
 def create_pr_review_config():
     """Create a real PR review cycle config with minimal fields."""
     from dataclasses import replace
+
     from codetoreum.domain.pr_review_cycle_types import PRReviewCycleConfig
 
     # Create a config with default values

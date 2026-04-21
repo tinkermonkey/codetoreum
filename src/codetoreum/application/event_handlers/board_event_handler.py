@@ -33,7 +33,6 @@ from codetoreum.domain.events import (
     WorkflowStarted,
 )
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
-from codetoreum.domain.types import WorkItemId
 from codetoreum.infrastructure.event_bus import EventBus, EventHandler, event_handler
 from codetoreum.ports.exceptions import ExternalServiceError, ResourceNotFoundError
 from codetoreum.ports.output.active_workflow_run_registry import (
