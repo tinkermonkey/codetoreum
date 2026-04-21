@@ -39,6 +39,7 @@ from codetoreum.infrastructure.simulation.scenario_models import (
 )
 from codetoreum.ports.exceptions import ValidationError
 from codetoreum.ports.output.agent_repository import IAgentRepository
+from codetoreum.ports.output.board_service import MovedByType
 from codetoreum.ports.output.config_store import (
     AgentConfig,
     PipelineConfig,
@@ -532,7 +533,7 @@ class SimulationDataSeeder:
             raise ValidationError(message)
 
         self._board_adapter.current_project = project_id
-        self._board_adapter.add_item_to_column(board_id, column_name, work_item_id)
+        await self._board_adapter.add_item_to_column(work_item_id, column_name, MovedByType.HUMAN)
 
         logger.info(f"Placed work item {work_item_id} in column '{column_name}' on board {board_id}")
         return self

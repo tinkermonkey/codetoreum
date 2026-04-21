@@ -493,8 +493,8 @@ class TestSubIssueCreation:
 
         await adapter.start_pr_review_cycle(request)
 
-        # Verify move_item_to_column was called
-        assert mock_board_service.move_item_to_column.call_count >= len(findings)
+        # Verify add_item_to_column was called for sub-issues
+        assert mock_board_service.add_item_to_column.call_count >= len(findings)
 
     @pytest.mark.asyncio
     async def test_assert_sub_issues_created_passes(self, adapter):

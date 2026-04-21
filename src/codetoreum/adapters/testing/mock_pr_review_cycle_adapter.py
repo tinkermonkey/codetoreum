@@ -361,11 +361,22 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             self._event_emitter.emit(escalated_event)
             self._log_event({"type": "pr_review_cycle.escalated", "cycle_id": cycle_id})
 
+            # Create placeholder phase output to satisfy non-empty phase_outputs requirement
+            escalation_phase = PRReviewPhaseOutput(
+                phase_name="escalation",
+                phase_index=1,
+                success=False,
+                findings=(),
+                summary="Max cycles reached - escalating to human review",
+                duration_seconds=0.0,
+                error="Max outer cycles reached, escalating for human review",
+            )
+
             result = PRReviewCycleResult(
                 cycle_number=cycle_number,
                 workflow_run_id=request.workflow_run_id,
                 outcome=PRReviewOutcome.MAX_CYCLES_REACHED,
-                phase_outputs=(),
+                phase_outputs=(escalation_phase,),
                 all_findings=(),
                 sub_issue_ids=(),
                 ci_passed=None,

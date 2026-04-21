@@ -72,7 +72,7 @@ class MockBoardAdapter(IBoardService):
         # Setup
         adapter = MockBoardAdapter()
         adapter.create_board("proj-1", "board-1", "My Board", ["Backlog", "In Progress", "Done"])
-        adapter.add_item_to_column("board-1", "Backlog", "item-1")
+        await adapter.add_item_to_column("item-1", "Backlog", MovedByType.HUMAN)
 
         # Subscribe to events
         events = []
@@ -463,18 +463,10 @@ class MockBoardAdapter(IBoardService):
             # Track when item entered this column (for SLA monitoring)
             self._item_column_entries[work_item_id] = self._get_utc_datetime()
 
-            # Log movement
-            timestamp = self._get_utc_datetime()
-            movement = MovementEvent(
-                work_item_id=work_item_id,
-                from_column=None,
-                to_column=target_column,
-                moved_by=moved_by,
-                timestamp=timestamp,
-            )
-            self._movement_log.append(movement)
+            # Note: We do NOT log initial placement as a movement (movement log is for column transitions)
+            # Only actual moves between columns are logged in movement_log
 
-            # Emit event
+            # Emit event (for event handlers/listeners to process)
             self.emit(
                 WorkItemColumnChangedEvent(
                     type="workitem.column_changed",
