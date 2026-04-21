@@ -39,7 +39,6 @@ from codetoreum.domain.pr_review_cycle_types import (
     PRReviewPhaseOutput,
     PRReviewStatus,
 )
-from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.output.board_service import IBoardService, MovedByType
 from codetoreum.ports.output.event_emitter import IEventEmitter

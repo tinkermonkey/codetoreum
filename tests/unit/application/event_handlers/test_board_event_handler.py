@@ -20,7 +20,7 @@ from codetoreum.domain.board_workflow_template import (
     ColumnTemplate,
     ColumnType,
 )
-from codetoreum.domain.events import WorkItemColumnChanged
+from codetoreum.domain.events import WorkItemColumnChangedEvent
 from codetoreum.ports.output.board_service import MovedByType, WorkItemPosition
 
 
@@ -162,18 +162,18 @@ def create_column_changed_event(
     from_column: str = "Backlog",
     to_column: str = "In Development",
     moved_by: str = "human",
-) -> WorkItemColumnChanged:
-    """Create WorkItemColumnChanged event."""
-    return WorkItemColumnChanged(
-        aggregate_id=work_item_id,
-        payload={
-            "work_item_id": work_item_id,
-            "board_id": board_id,
-            "project_id": project_id,
-            "from_column": from_column,
-            "to_column": to_column,
-            "moved_by": moved_by,
-        },
+) -> WorkItemColumnChangedEvent:
+    """Create WorkItemColumnChangedEvent event."""
+    return WorkItemColumnChangedEvent(
+        type="workitem.column_changed",
+        timestamp=datetime.now(UTC).isoformat(),
+        source="test",
+        work_item_id=work_item_id,
+        board_id=board_id,
+        project_id=project_id,
+        from_column=from_column,
+        to_column=to_column,
+        moved_by=moved_by,
     )
 
 
@@ -181,9 +181,9 @@ class TestGetEventTypes:
     """Tests for get_event_types method."""
 
     def test_returns_workitem_column_changed(self, handler):
-        """Should return WorkItemColumnChanged event type."""
+        """Should return WorkItemColumnChangedEvent event type."""
         event_types = handler.get_event_types()
-        assert "WorkItemColumnChanged" in event_types
+        assert "WorkItemColumnChangedEvent" in event_types
 
 
 class TestHandleColumnChangeWithPipelineTrigger:
