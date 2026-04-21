@@ -1814,3 +1814,243 @@ class TestPRReviewCycleDispatch:
         assert call_args.cycle_number == 3  # Would be 2 + 1
         assert call_args.max_outer_cycles == 2
         assert call_args.next_column == "Approved"  # Escalation column is next column in workflow
+
+    @pytest.mark.asyncio
+    async def test_pr_review_max_cycles_workflow_config_not_found(
+        self,
+        handler,
+        mock_workflow_config,
+        mock_event_emitter,
+    ):
+        """Should handle gracefully when workflow config not found when determining escalation column."""
+        from codetoreum.domain.pr_review_cycle_types import (
+            PRReviewCycleConfig,
+            PRReviewCycleState,
+            PRReviewStatus,
+        )
+        from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
+        from codetoreum.ports.output.pr_review_cycle_service import PRReviewCycleStateData
+
+        # Setup mocks
+        pr_review_cycle_mock = AsyncMock()
+        work_item_service_mock = AsyncMock()
+
+        now = datetime.now(UTC)
+        work_item = WorkItem(
+            id="item-1",
+            project_id="proj-1",
+            title="Test Item",
+            description="Test Description",
+            status=WorkItemStatus.NEW,
+            priority=WorkItemPriority.MEDIUM,
+            labels=[],
+            external_id=None,
+            external_url="https://github.com/owner/repo/pull/123",
+            assigned_agent_id=None,
+            assigned_at=None,
+            current_workflow_id=None,
+            current_stage=None,
+            current_column=None,
+            entered_column_at=None,
+            created_at=now,
+            updated_at=now,
+            pr_id="123",
+            discussion_id="disc-1",
+        )
+
+        work_item_service_mock.get_work_item.return_value = work_item
+
+        # Return existing state with cycle_number=2
+        existing_state = PRReviewCycleStateData(
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            cycle_number=2,
+            cycle_state=PRReviewCycleState(
+                cycle_id="cycle-2",
+                pr_id="123",
+                status=PRReviewStatus.COMPLETED,
+                cycle_number=2,
+                current_phase="completed",
+                findings=[],
+                phase_outputs=[],
+                started_at=now.isoformat(),
+                updated_at=now.isoformat(),
+            ),
+            created_at=now.isoformat(),
+            updated_at=now.isoformat(),
+        )
+
+        pr_review_cycle_mock.get_cycle_state.return_value = existing_state
+
+        handler.pr_review_cycle = pr_review_cycle_mock
+        handler.work_item_service = work_item_service_mock
+        handler.event_emitter = mock_event_emitter
+
+        # Return None for workflow config (simulating misconfiguration)
+        mock_workflow_config.get_board_workflow_template.return_value = None
+
+        workflow_config = BoardWorkflowTemplate(
+            id="workflow-1",
+            name="SDLC Workflow",
+            board_id="board-1",
+            project_id="test-project",
+            columns=(
+                ColumnTemplate(
+                    name="PR Review",
+                    type=ColumnType.AUTOMATED,
+                    agent_id="agent-review",
+                    is_pipeline_trigger=False,
+                    is_exit_column=False,
+                    position=0,
+                    auto_progress_on_completion=False,
+                    pr_review_cycle_config=PRReviewCycleConfig(max_outer_cycles=2),
+                ),
+                ColumnTemplate(
+                    name="Approved",
+                    type=ColumnType.MANUAL,
+                    agent_id=None,
+                    is_pipeline_trigger=False,
+                    is_exit_column=True,
+                    position=1,
+                    auto_progress_on_completion=False,
+                ),
+            ),
+        )
+
+        event = create_column_changed_event(
+            work_item_id="item-1",
+            board_id="board-1",
+            project_id="proj-1",
+            to_column="PR Review",
+        )
+
+        # Act
+        await handler.handle_column_change(event)
+
+        # Assert
+        # start_pr_review_cycle should NOT be called
+        pr_review_cycle_mock.start_pr_review_cycle.assert_not_called()
+
+        # PRReviewCycleMaxCyclesReachedEvent should NOT be emitted (handler returned early)
+        mock_event_emitter.emit.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_pr_review_max_cycles_no_escalation_column(
+        self,
+        handler,
+        mock_workflow_config,
+        mock_event_emitter,
+    ):
+        """Should handle gracefully when PR review column is last column (no escalation column)."""
+        from codetoreum.domain.pr_review_cycle_types import (
+            PRReviewCycleConfig,
+            PRReviewCycleState,
+            PRReviewStatus,
+        )
+        from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
+        from codetoreum.ports.output.pr_review_cycle_service import PRReviewCycleStateData
+
+        # Setup mocks
+        pr_review_cycle_mock = AsyncMock()
+        work_item_service_mock = AsyncMock()
+
+        now = datetime.now(UTC)
+        work_item = WorkItem(
+            id="item-1",
+            project_id="proj-1",
+            title="Test Item",
+            description="Test Description",
+            status=WorkItemStatus.NEW,
+            priority=WorkItemPriority.MEDIUM,
+            labels=[],
+            external_id=None,
+            external_url="https://github.com/owner/repo/pull/123",
+            assigned_agent_id=None,
+            assigned_at=None,
+            current_workflow_id=None,
+            current_stage=None,
+            current_column=None,
+            entered_column_at=None,
+            created_at=now,
+            updated_at=now,
+            pr_id="123",
+            discussion_id="disc-1",
+        )
+
+        work_item_service_mock.get_work_item.return_value = work_item
+
+        # Return existing state with cycle_number=2
+        existing_state = PRReviewCycleStateData(
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            cycle_number=2,
+            cycle_state=PRReviewCycleState(
+                cycle_id="cycle-2",
+                pr_id="123",
+                status=PRReviewStatus.COMPLETED,
+                cycle_number=2,
+                current_phase="completed",
+                findings=[],
+                phase_outputs=[],
+                started_at=now.isoformat(),
+                updated_at=now.isoformat(),
+            ),
+            created_at=now.isoformat(),
+            updated_at=now.isoformat(),
+        )
+
+        pr_review_cycle_mock.get_cycle_state.return_value = existing_state
+
+        handler.pr_review_cycle = pr_review_cycle_mock
+        handler.work_item_service = work_item_service_mock
+        handler.event_emitter = mock_event_emitter
+
+        # Create workflow where PR Review is the LAST column (no escalation column)
+        workflow_config = BoardWorkflowTemplate(
+            id="workflow-1",
+            name="SDLC Workflow",
+            board_id="board-1",
+            project_id="test-project",
+            columns=(
+                ColumnTemplate(
+                    name="In Development",
+                    type=ColumnType.AUTOMATED,
+                    agent_id="agent-dev",
+                    is_pipeline_trigger=False,
+                    is_exit_column=False,
+                    position=0,
+                    auto_progress_on_completion=False,
+                ),
+                ColumnTemplate(
+                    name="PR Review",
+                    type=ColumnType.AUTOMATED,
+                    agent_id="agent-review",
+                    is_pipeline_trigger=False,
+                    is_exit_column=False,
+                    position=1,
+                    auto_progress_on_completion=False,
+                    pr_review_cycle_config=PRReviewCycleConfig(max_outer_cycles=2),
+                ),
+            ),
+        )
+
+        mock_workflow_config.get_board_workflow_template.return_value = workflow_config
+
+        event = create_column_changed_event(
+            work_item_id="item-1",
+            board_id="board-1",
+            project_id="proj-1",
+            to_column="PR Review",
+        )
+
+        # Act
+        await handler.handle_column_change(event)
+
+        # Assert
+        # start_pr_review_cycle should NOT be called
+        pr_review_cycle_mock.start_pr_review_cycle.assert_not_called()
+
+        # PRReviewCycleMaxCyclesReachedEvent should NOT be emitted (handler returned early)
+        mock_event_emitter.emit.assert_not_called()
