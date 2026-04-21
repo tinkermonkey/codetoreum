@@ -23,7 +23,6 @@ from codetoreum.domain.board_workflow_template import (
     ColumnTemplate,
     ColumnType,
 )
-from codetoreum.domain.types import WorkItemId
 from codetoreum.domain.events import (
     DomainEvent,
     LockStuckEvent,
@@ -37,6 +36,7 @@ from codetoreum.domain.events import (
 from codetoreum.domain.events.pr_review_cycle_events import (
     PRReviewCycleMaxCyclesReachedEvent,
 )
+from codetoreum.domain.types import WorkItemId
 from codetoreum.infrastructure.event_bus import EventBus, EventHandler, event_handler
 from codetoreum.ports.exceptions import ExternalServiceError, ResourceNotFoundError
 from codetoreum.ports.output.active_workflow_run_registry import (
