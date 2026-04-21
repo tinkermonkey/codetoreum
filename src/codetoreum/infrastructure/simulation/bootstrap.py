@@ -1360,10 +1360,32 @@ class SimulationApplicationBootstrap:
             # This ensures that PR review cycle events emitted by the adapter reach the event bus handlers
             def _publish_codetoreum_event_to_bus(event):  # type: ignore
                 import asyncio
-                # Create an async task to publish to event bus (fire and forget)
+                # Create an async task to publish to event bus (fire and forget with error handling)
                 try:
                     loop = asyncio.get_running_loop()
-                    loop.create_task(self.infrastructure.event_bus.publish(event))
+                    task = loop.create_task(self.infrastructure.event_bus.publish(event))
+
+                    def task_done_callback(task_result: asyncio.Task[None]) -> None:
+                        """Log any unhandled exceptions from the PR review cycle bridge task."""
+                        try:
+                            task_result.result()
+                        except asyncio.CancelledError:
+                            # Task was cancelled - this is normal during shutdown
+                            pass
+                        except Exception as task_exception:
+                            # Unhandled exception in the bridge handler (e.g., event bus failure)
+                            # This logs the failure so it's not silently swallowed
+                            logger.error(
+                                f"Unhandled exception in PR review cycle event bridge for event type "
+                                f"{getattr(event, 'type', 'unknown')}: {task_exception}",
+                                exc_info=True,
+                                extra={
+                                    "error_type": type(task_exception).__name__,
+                                    "error_id": ErrorRegistry.ERR_INTERNAL_ERROR,
+                                },
+                            )
+
+                    task.add_done_callback(task_done_callback)
                 except RuntimeError as e:
                     logger.error(
                         f"Failed to schedule PR review cycle event bus publication task: {e}",
@@ -1383,10 +1405,13 @@ class SimulationApplicationBootstrap:
                 "pr_review_cycle.verification_started",
                 "pr_review_cycle.ci_check_completed",
                 "pr_review_cycle.consolidation_started",
+                "pr_review_cycle.phase_completed",
+                "pr_review_cycle.sub_issues_created",
+                "pr_review_cycle.consolidation_completed",
             ]
             for event_type in pr_review_cycle_event_types:
                 resolved.event_emitter.on(event_type, _publish_codetoreum_event_to_bus)
-            logger.info("Wired PR review cycle event emitter to event bus")
+            logger.info("Wired PR review cycle event emitter to event bus with 12 event types")
 
         # Create branch resolution adapter (mock adapter for simulation testing)
         resolved.branch_resolution_service = MockBranchResolutionAdapter(clock=self._engine.get_clock_for_testing())
