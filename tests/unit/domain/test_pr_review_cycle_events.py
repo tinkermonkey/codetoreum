@@ -42,6 +42,7 @@ class TestPRReviewCycleStartedEvent:
             timestamp=ts,
             source="mock",
             pr_id="pr-123",
+            work_item_id="work-123",
             cycle_number=1,
             max_outer_cycles=3,
             verifier_context_sources=("parent_issue", "ba_output"),
@@ -49,6 +50,7 @@ class TestPRReviewCycleStartedEvent:
             workflow_run_id="run-456",
         )
         assert event.pr_id == "pr-123"
+        assert event.work_item_id == "work-123"
         assert event.cycle_number == 1
         assert event.max_outer_cycles == 3
         assert len(event.verifier_context_sources) == 2
@@ -62,6 +64,7 @@ class TestPRReviewCycleStartedEvent:
             timestamp=ts,
             source="mock",
             pr_id="pr-123",
+            work_item_id="work-123",
             cycle_number=1,
             max_outer_cycles=3,
             verifier_context_sources=("parent_issue",),
@@ -78,6 +81,7 @@ class TestPRReviewCycleStartedEvent:
             timestamp=ts,
             source="mock",
             pr_id="pr-123",
+            work_item_id="work-123",
             cycle_number=1,
             max_outer_cycles=3,
             verifier_context_sources=("parent_issue",),
@@ -95,6 +99,7 @@ class TestPRReviewCycleStartedEvent:
             timestamp=ts,
             source="mock",
             pr_id="pr-123",
+            work_item_id="work-123",
             cycle_number=1,
             max_outer_cycles=3,
             verifier_context_sources=("parent_issue", "ba_output"),
@@ -104,6 +109,7 @@ class TestPRReviewCycleStartedEvent:
         data = event.to_dict()
         assert data["type"] == "pr_review_cycle.started"
         assert data["pr_id"] == "pr-123"
+        assert data["work_item_id"] == "work-123"
         assert data["cycle_number"] == 1
         assert data["max_outer_cycles"] == 3
         assert data["verifier_context_sources"] == ["parent_issue", "ba_output"]
@@ -121,6 +127,7 @@ class TestPRReviewCycleStartedEvent:
             correlation_id="corr-123",
             event_id=event_id,
             pr_id="pr-123",
+            work_item_id="work-123",
             cycle_number=1,
             max_outer_cycles=3,
             verifier_context_sources=("parent_issue", "ba_output"),
@@ -136,6 +143,7 @@ class TestPRReviewCycleStartedEvent:
         assert restored.correlation_id == original.correlation_id
         assert restored.event_id == original.event_id
         assert restored.pr_id == original.pr_id
+        assert restored.work_item_id == original.work_item_id
         assert restored.cycle_number == original.cycle_number
         assert restored.max_outer_cycles == original.max_outer_cycles
         assert restored.verifier_context_sources == original.verifier_context_sources
@@ -151,6 +159,7 @@ class TestPRReviewCycleStartedEvent:
                 timestamp=ts,
                 source="mock",
                 pr_id="",
+                work_item_id="work-123",
                 cycle_number=1,
                 max_outer_cycles=3,
                 verifier_context_sources=("parent_issue",),
@@ -167,6 +176,7 @@ class TestPRReviewCycleStartedEvent:
                 timestamp=ts,
                 source="mock",
                 pr_id="pr-123",
+                work_item_id="work-123",
                 cycle_number=0,
                 max_outer_cycles=3,
                 verifier_context_sources=("parent_issue",),
@@ -276,10 +286,14 @@ class TestPRReviewCycleCICheckCompletedEvent:
             source="mock",
             pr_id="pr-123",
             ci_passed=True,
+            failures_count=0,
+            pending_count=0,
             duration_seconds=30.5,
             workflow_run_id="run-456",
         )
         assert event.ci_passed is True
+        assert event.failures_count == 0
+        assert event.pending_count == 0
         assert event.duration_seconds == 30.5
 
     def test_create_event_failed(self):
@@ -291,10 +305,14 @@ class TestPRReviewCycleCICheckCompletedEvent:
             source="mock",
             pr_id="pr-123",
             ci_passed=False,
+            failures_count=2,
+            pending_count=1,
             duration_seconds=30.5,
             workflow_run_id="run-456",
         )
         assert event.ci_passed is False
+        assert event.failures_count == 2
+        assert event.pending_count == 1
 
     def test_to_dict_from_dict_round_trip(self):
         """Test serialization round-trip."""
@@ -305,12 +323,16 @@ class TestPRReviewCycleCICheckCompletedEvent:
             source="mock",
             pr_id="pr-123",
             ci_passed=False,
+            failures_count=2,
+            pending_count=1,
             duration_seconds=30.5,
             workflow_run_id="run-456",
         )
         data = original.to_dict()
         restored = PRReviewCycleCICheckCompletedEvent.from_dict(data)
         assert restored.ci_passed == original.ci_passed
+        assert restored.failures_count == original.failures_count
+        assert restored.pending_count == original.pending_count
         assert restored.duration_seconds == original.duration_seconds
 
 
@@ -397,12 +419,20 @@ class TestPRReviewCycleIssuesFoundEvent:
             pr_id="pr-123",
             cycle_number=1,
             finding_count=3,
+            critical_count=1,
+            high_count=1,
+            medium_count=1,
+            low_count=0,
             sub_issue_count=3,
             cycle_duration_seconds=600.0,
             next_column="In Development",
             workflow_run_id="run-456",
         )
         assert event.finding_count == 3
+        assert event.critical_count == 1
+        assert event.high_count == 1
+        assert event.medium_count == 1
+        assert event.low_count == 0
         assert event.sub_issue_count == 3
 
     def test_validation_finding_count_min(self):
@@ -416,6 +446,10 @@ class TestPRReviewCycleIssuesFoundEvent:
                 pr_id="pr-123",
                 cycle_number=1,
                 finding_count=0,
+                critical_count=0,
+                high_count=0,
+                medium_count=0,
+                low_count=0,
                 sub_issue_count=0,
                 cycle_duration_seconds=600.0,
                 next_column="In Development",
@@ -432,6 +466,10 @@ class TestPRReviewCycleIssuesFoundEvent:
             pr_id="pr-123",
             cycle_number=1,
             finding_count=3,
+            critical_count=1,
+            high_count=1,
+            medium_count=1,
+            low_count=0,
             sub_issue_count=3,
             cycle_duration_seconds=600.0,
             next_column="In Development",
@@ -440,6 +478,10 @@ class TestPRReviewCycleIssuesFoundEvent:
         data = original.to_dict()
         restored = PRReviewCycleIssuesFoundEvent.from_dict(data)
         assert restored.finding_count == original.finding_count
+        assert restored.critical_count == original.critical_count
+        assert restored.high_count == original.high_count
+        assert restored.medium_count == original.medium_count
+        assert restored.low_count == original.low_count
         assert restored.sub_issue_count == original.sub_issue_count
 
 

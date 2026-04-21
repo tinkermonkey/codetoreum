@@ -30,6 +30,7 @@ from codetoreum.domain.events.pr_review_cycle_events import (
     PRReviewCycleIssuesFoundEvent,
     PRReviewCycleMaxCyclesReachedEvent,
     PRReviewCycleStartedEvent,
+    PRReviewCycleSubIssuesCreatedEvent,
     PRReviewCycleVerificationStartedEvent,
 )
 from codetoreum.domain.pr_review_cycle_types import (
@@ -321,6 +322,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             timestamp=started_at,
             source="mock_pr_review_cycle",
             pr_id=request.pr_id or f"pr-{work_item_id}",
+            work_item_id=work_item_id,
             cycle_number=cycle_number,
             max_outer_cycles=request.config.max_outer_cycles,
             verifier_context_sources=request.config.verifier_context_sources,
@@ -432,6 +434,8 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             source="mock_pr_review_cycle",
             pr_id=request.pr_id or f"pr-{work_item_id}",
             ci_passed=ci_passed,
+            failures_count=config.ci_failures_count if config.ci_failing else 0,
+            pending_count=0,
             duration_seconds=0.5,
             workflow_run_id=request.workflow_run_id,
         )
@@ -577,6 +581,34 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             with self._lock:
                 self._sub_issues_created[work_item_id] = sub_issue_ids
 
+            # Emit sub-issues created event
+            if sub_issue_ids:
+                sub_issues_event = PRReviewCycleSubIssuesCreatedEvent(
+                    type="pr_review_cycle.sub_issues_created",
+                    timestamp=self._clock.now().isoformat(),
+                    source="mock_pr_review_cycle",
+                    pr_id=request.pr_id or f"pr-{work_item_id}",
+                    cycle_number=cycle_number,
+                    count=len(sub_issue_ids),
+                    sub_issue_ids=tuple(sub_issue_ids),
+                    target_board=request.board_id,
+                    workflow_run_id=request.workflow_run_id,
+                )
+                self._event_emitter.emit(sub_issues_event)
+                self._log_event(
+                    {
+                        "type": "pr_review_cycle.sub_issues_created",
+                        "cycle_id": cycle_id,
+                        "count": len(sub_issue_ids),
+                    }
+                )
+
+            # Calculate severity counts from findings
+            critical_count = sum(1 for f in config.findings if f.severity == "critical")
+            high_count = sum(1 for f in config.findings if f.severity == "high")
+            medium_count = sum(1 for f in config.findings if f.severity == "medium")
+            low_count = sum(1 for f in config.findings if f.severity == "low")
+
             outcome_event = PRReviewCycleIssuesFoundEvent(
                 type="pr_review_cycle.issues_found",
                 timestamp=self._clock.now().isoformat(),
@@ -584,6 +616,10 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 pr_id=request.pr_id or f"pr-{work_item_id}",
                 cycle_number=cycle_number,
                 finding_count=len(config.findings),
+                critical_count=critical_count,
+                high_count=high_count,
+                medium_count=medium_count,
+                low_count=low_count,
                 sub_issue_count=len(sub_issue_ids),
                 cycle_duration_seconds=(self._clock.now() - phase1_start).total_seconds(),
                 next_column=request.config.on_issues_found_column or "In Development",

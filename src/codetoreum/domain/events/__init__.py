@@ -160,8 +160,17 @@ from .lock_events import (
 # PR Review Cycle events
 from .pr_review_cycle_events import (
     PRReviewCycleApprovedEvent,
+    PRReviewCycleCICheckCompletedEvent,
+    PRReviewCycleCodeReviewStartedEvent,
+    PRReviewCycleConsolidationCompletedEvent,
+    PRReviewCycleConsolidationStartedEvent,
+    PRReviewCycleEscalatedEvent,
+    PRReviewCycleIssuesFoundEvent,
+    PRReviewCycleMaxCyclesReachedEvent,
+    PRReviewCyclePhaseCompletedEvent,
     PRReviewCycleStartedEvent,
     PRReviewCycleSubIssuesCreatedEvent,
+    PRReviewCycleVerificationStartedEvent,
 )
 
 # Project management events
@@ -393,8 +402,17 @@ __all__ = [
     "ReviewCycleApprovedEvent",
     # PR Review Cycle events
     "PRReviewCycleStartedEvent",
+    "PRReviewCycleCodeReviewStartedEvent",
+    "PRReviewCycleVerificationStartedEvent",
+    "PRReviewCycleCICheckCompletedEvent",
+    "PRReviewCycleConsolidationStartedEvent",
+    "PRReviewCycleConsolidationCompletedEvent",
     "PRReviewCycleApprovedEvent",
+    "PRReviewCycleIssuesFoundEvent",
+    "PRReviewCycleMaxCyclesReachedEvent",
+    "PRReviewCycleEscalatedEvent",
     "PRReviewCycleSubIssuesCreatedEvent",
+    "PRReviewCyclePhaseCompletedEvent",
     # Container execution events
     "ContainerExecutionCompletedEvent",
     # Execution events
