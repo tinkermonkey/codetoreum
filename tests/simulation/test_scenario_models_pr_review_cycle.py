@@ -25,7 +25,7 @@ class TestPRReviewCycleConfigModel:
     def test_empty_pr_review_cycle_config(self) -> None:
         """All fields use defaults when not specified."""
         config = PRReviewCycleConfigModel()
-        assert config.max_outer_cycles == 1
+        assert config.max_outer_cycles == 3
         assert config.verifier_context_sources == ["parent_issue"]
         assert config.code_review_timeout_seconds == 600
         assert config.verification_timeout_seconds == 300
@@ -73,7 +73,7 @@ class TestPRReviewCycleConfigModel:
         domain = config.to_domain()
 
         assert isinstance(domain, PRReviewCycleConfig)
-        assert domain.max_outer_cycles == 1
+        assert domain.max_outer_cycles == 3
         assert domain.verifier_context_sources == ("parent_issue",)
         assert domain.code_review_timeout_seconds == 600
         assert domain.verification_timeout_seconds == 300
@@ -217,7 +217,7 @@ class TestScenarioColumnConfigPRReviewCycle:
             pr_review_cycle_config=PRReviewCycleConfigModel(),
         )
         assert col.pr_review_cycle_config is not None
-        assert col.pr_review_cycle_config.max_outer_cycles == 1
+        assert col.pr_review_cycle_config.max_outer_cycles == 3
 
     def test_column_config_with_pr_review_cycle_config(self) -> None:
         """pr_review_cycle_config can be set with specific values."""
