@@ -33,9 +33,6 @@ from codetoreum.domain.events import (
     WorkflowStarted,
 )
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
-from codetoreum.domain.events.pr_review_cycle_events import (
-    PRReviewCycleMaxCyclesReachedEvent,
-)
 from codetoreum.domain.types import WorkItemId
 from codetoreum.infrastructure.event_bus import EventBus, EventHandler, event_handler
 from codetoreum.ports.exceptions import ExternalServiceError, ResourceNotFoundError
@@ -46,11 +43,6 @@ from codetoreum.ports.output.agent_executor import IAgentExecutor
 from codetoreum.ports.output.board_service import IBoardService, MovedByType
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.event_store import IEventStore
-from codetoreum.ports.output.pr_review_cycle_service import (
-    IPRReviewCycle,
-    PRReviewCycleRequest,
-)
-from codetoreum.ports.output.work_item_service import IWorkItemService
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 logger = logging.getLogger(__name__)
@@ -120,8 +112,6 @@ class BoardColumnEventHandler(EventHandler):
         run_registry: IActiveWorkflowRunRegistry | None = None,
         event_emitter: IEventEmitter | None = None,
         recovery_service: AgentExecutionRecoveryService | None = None,
-        pr_review_cycle: IPRReviewCycle | None = None,
-        work_item_service: IWorkItemService | None = None,
     ):
         """
         Initialize board column event handler.
@@ -136,8 +126,6 @@ class BoardColumnEventHandler(EventHandler):
             run_registry: Optional registry for tracking active workflow runs
             event_emitter: Optional event emitter for CodetoreumEvent instances (e.g. LockStuckEvent)
             recovery_service: Optional recovery service for handling agent execution failures
-            pr_review_cycle: Optional PR review cycle service for initiating PR review cycles
-            work_item_service: Optional work item service for retrieving work item details
         """
         self.board_service = board_service
         self.lock_service = lock_service
@@ -148,8 +136,6 @@ class BoardColumnEventHandler(EventHandler):
         self.run_registry = run_registry
         self.event_emitter = event_emitter
         self.recovery_service = recovery_service
-        self.pr_review_cycle = pr_review_cycle
-        self.work_item_service = work_item_service
         # Tracks active workflow runs: work_item_id -> _WorkflowRunMetadata
         # Provides compile-time key validation and type safety over untyped dict[str, Any]
         self._active_runs: dict[str, _WorkflowRunMetadata] = {}
@@ -226,7 +212,7 @@ class BoardColumnEventHandler(EventHandler):
         # Check if this is a pipeline trigger column (requires lock)
         if column_config.is_pipeline_trigger:
             await self._handle_pipeline_trigger(work_item_id, project_id, board_id, column_config, config)
-            # Continue to check for PR review cycle (don't return here)
+            # Continue to check for other column types (don't return here)
         else:
             # Check if this is an exit column (releases lock)
             if column_config.is_exit_column:
@@ -246,11 +232,6 @@ class BoardColumnEventHandler(EventHandler):
                 and getattr(column_config, "execution_type", "task_queue") != "conversational"
             ):
                 await self._trigger_agent(work_item_id, column_config, board_id)
-
-        # Dispatch PR review cycle if column has pr_review_cycle_config set
-        # This is done for all column types (pipeline trigger, normal, etc.)
-        if column_config.pr_review_cycle_config:
-            await self._handle_pr_review_cycle(work_item_id, project_id, board_id, column_config)
 
     async def _handle_pipeline_trigger(
         self,
@@ -519,206 +500,6 @@ class BoardColumnEventHandler(EventHandler):
                         extra={"work_item_id": release_result.next_work_item_id},
                     )
 
-    async def _handle_pr_review_cycle(
-        self,
-        work_item_id: str,
-        project_id: str,
-        board_id: str,
-        column_config: ColumnTemplate,
-    ) -> None:
-        """
-        Handle PR review cycle dispatch for columns with pr_review_cycle_config.
-
-        Derives the cycle number from existing state (None → 1, existing → state.cycle_number + 1),
-        checks max cycles limit, constructs the request, and initiates the cycle.
-        On completion, moves the work item to the result's next_column.
-
-        Args:
-            work_item_id: ID of work item entering PR review cycle column
-            project_id: ID of project containing the board
-            board_id: ID of board
-            column_config: Configuration of the PR review cycle column
-        """
-        if not self.pr_review_cycle:
-            logger.warning(
-                f"PR review cycle not available for {work_item_id}, " "pr_review_cycle service not injected",
-                extra={"work_item_id": work_item_id},
-            )
-            return
-
-        if not self.work_item_service:
-            logger.error(
-                f"Cannot initiate PR review cycle for {work_item_id}: " "work_item_service not injected",
-                exc_info=True,
-                extra={
-                    "error_id": "ERR_PR_REVIEW_CYCLE_SERVICE_NOT_AVAILABLE",
-                    "work_item_id": work_item_id,
-                },
-            )
-            return
-
-        if not column_config.pr_review_cycle_config:
-            logger.error(
-                f"Cannot initiate PR review cycle for {work_item_id}: " "pr_review_cycle_config is None",
-                exc_info=True,
-                extra={
-                    "error_id": "ERR_PR_REVIEW_CYCLE_CONFIG_MISSING",
-                    "work_item_id": work_item_id,
-                },
-            )
-            return
-
-        logger.info(f"Initiating PR review cycle for {work_item_id} in column '{column_config.name}'")
-
-        try:
-            # Retrieve current cycle state to derive next cycle number
-            try:
-                current_state = await self.pr_review_cycle.get_cycle_state(work_item_id, project_id)
-            except Exception as e:
-                logger.error(
-                    f"Failed to retrieve cycle state for {work_item_id}: {e}",
-                    exc_info=True,
-                    extra={
-                        "error_id": "ERR_PR_REVIEW_CYCLE_STATE_RETRIEVAL_FAILURE",
-                        "work_item_id": work_item_id,
-                        "project_id": project_id,
-                    },
-                )
-                raise
-
-            # Derive cycle_number: None → 1, existing state → state.cycle_number + 1
-            if current_state is None:
-                cycle_number = 1
-            else:
-                cycle_number = current_state.cycle_number + 1
-
-            # Check max cycles limit before proceeding
-            max_outer_cycles = column_config.pr_review_cycle_config.max_outer_cycles
-            if cycle_number > max_outer_cycles:
-                logger.info(
-                    f"PR review cycle {cycle_number} exceeds max_outer_cycles ({max_outer_cycles}) "
-                    f"for {work_item_id}, escalating to reviewer",
-                )
-
-                # Emit PRReviewCycleMaxCyclesReachedEvent
-                try:
-                    work_item = await self.work_item_service.get_work_item(WorkItemId(work_item_id))
-                    pr_id = work_item.pr_id or ""
-
-                    # Get workflow config to determine escalation column
-                    workflow_config = await self.workflow_config.get_board_workflow_template(board_id)
-                    if not workflow_config:
-                        logger.error(
-                            f"Cannot determine escalation column for {work_item_id}: "
-                            f"workflow config not found for board {board_id}",
-                            exc_info=True,
-                            extra={
-                                "error_id": "ERR_PR_REVIEW_CYCLE_WORKFLOW_CONFIG_NOT_FOUND",
-                                "work_item_id": work_item_id,
-                                "board_id": board_id,
-                            },
-                        )
-                        return
-
-                    # Determine escalation column: next column in workflow after PR review cycle column
-                    escalation_column = workflow_config.get_next_column(column_config.name)
-                    if not escalation_column:
-                        logger.error(
-                            f"Cannot determine escalation column for {work_item_id}: "
-                            f"no column after '{column_config.name}'",
-                            exc_info=True,
-                            extra={
-                                "error_id": "ERR_PR_REVIEW_CYCLE_ESCALATION_COLUMN_NOT_FOUND",
-                                "work_item_id": work_item_id,
-                                "current_column": column_config.name,
-                            },
-                        )
-                        return
-
-                    max_cycles_event = PRReviewCycleMaxCyclesReachedEvent(
-                        type="pr_review_cycle.max_cycles_reached",
-                        timestamp=datetime.now(UTC).isoformat(),
-                        source="board_event_handler",
-                        pr_id=pr_id,
-                        cycle_number=cycle_number,
-                        max_cycles=max_outer_cycles,
-                        next_column=escalation_column,
-                        workflow_run_id=work_item_id,
-                    )
-
-                    if self.event_emitter:
-                        self.event_emitter.emit(max_cycles_event)
-                    else:
-                        logger.warning(
-                            f"PRReviewCycleMaxCyclesReachedEvent not emitted for {work_item_id}: "
-                            "event_emitter not available",
-                        )
-                except Exception as e:
-                    logger.error(
-                        f"Failed to emit PRReviewCycleMaxCyclesReachedEvent for {work_item_id}: {e}",
-                        exc_info=True,
-                        extra={"error_id": "ERR_PR_REVIEW_CYCLE_MAX_CYCLES_EVENT_EMIT_FAILURE"},
-                    )
-
-                return
-
-            # Retrieve work item to get pr_id, pr_url, and discussion_id
-            try:
-                work_item = await self.work_item_service.get_work_item(WorkItemId(work_item_id))
-            except Exception as e:
-                logger.error(
-                    f"Failed to retrieve work item {work_item_id}: {e}",
-                    exc_info=True,
-                    extra={
-                        "error_id": "ERR_PR_REVIEW_CYCLE_WORK_ITEM_RETRIEVAL_FAILURE",
-                        "work_item_id": work_item_id,
-                    },
-                )
-                return
-
-            # Construct PR review cycle request
-            # Note: pr_review_cycle_config is guaranteed to be non-None because of the check
-            # at the beginning of this method
-            pr_review_config = column_config.pr_review_cycle_config
-            assert pr_review_config is not None  # For mypy type narrowing
-            request = PRReviewCycleRequest(
-                work_item_id=work_item_id,
-                project_id=project_id,
-                board_id=board_id,
-                pr_id=work_item.pr_id,
-                pr_url=work_item.external_url,  # Use external_url for pr_url
-                discussion_id=work_item.discussion_id,
-                cycle_number=cycle_number,
-                config=pr_review_config,
-                workflow_run_id=work_item_id,
-            )
-
-            # Initiate PR review cycle
-            # The cycle will run (synchronously in mock, potentially async in real adapters)
-            # and emit outcome events (PRReviewCycleApprovedEvent, PRReviewCycleIssuesFoundEvent, etc.)
-            # with `next_column` information.
-            #
-            # DESIGN NOTE: Column movement is driven by outcome events, not by the synchronous
-            # return value from start_pr_review_cycle(). The port interface returns PRReviewCycleResult
-            # which includes next_column and outcome, but the outcome domain events are the canonical
-            # source for column transitions. Event handlers for PRReviewCycleApprovedEvent and
-            # PRReviewCycleIssuesFoundEvent (in PRReviewCycleEventHandler) handle the actual moves.
-            result = await self.pr_review_cycle.start_pr_review_cycle(request)
-
-            logger.info(
-                f"PR review cycle {cycle_number} started for {work_item_id} with outcome: {result.outcome.value}"
-            )
-
-        except Exception as e:
-            logger.error(
-                f"PR review cycle initiation failed for {work_item_id}: {e}",
-                exc_info=True,
-                extra={
-                    "error_id": "ERR_PR_REVIEW_CYCLE_START_FAILURE",
-                    "work_item_id": work_item_id,
-                },
-            )
-            raise
 
     # ========================================================================
     # Workflow Run Lifecycle Tracking

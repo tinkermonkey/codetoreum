@@ -568,12 +568,14 @@ class TestPRReviewCycleApprovedEvent:
             timestamp=ts,
             source="mock",
             pr_id="pr-123",
+            work_item_id="item-456",
             cycle_number=1,
             cycle_duration_seconds=600.0,
             next_column="Done",
             workflow_run_id="run-456",
         )
         assert event.pr_id == "pr-123"
+        assert event.work_item_id == "item-456"
         assert event.next_column == "Done"
 
     def test_to_dict_from_dict_round_trip(self):
@@ -584,6 +586,7 @@ class TestPRReviewCycleApprovedEvent:
             timestamp=ts,
             source="mock",
             pr_id="pr-123",
+            work_item_id="item-456",
             cycle_number=1,
             cycle_duration_seconds=600.0,
             next_column="Done",
@@ -592,6 +595,7 @@ class TestPRReviewCycleApprovedEvent:
         data = original.to_dict()
         restored = PRReviewCycleApprovedEvent.from_dict(data)
         assert restored.cycle_number == original.cycle_number
+        assert restored.work_item_id == original.work_item_id
         assert restored.next_column == original.next_column
 
 
@@ -606,6 +610,7 @@ class TestPRReviewCycleIssuesFoundEvent:
             timestamp=ts,
             source="mock",
             pr_id="pr-123",
+            work_item_id="item-456",
             cycle_number=1,
             total=3,
             critical=1,
@@ -618,6 +623,7 @@ class TestPRReviewCycleIssuesFoundEvent:
             workflow_run_id="run-456",
         )
         assert event.total == 3
+        assert event.work_item_id == "item-456"
         assert event.critical == 1
         assert event.high == 1
         assert event.medium == 1
@@ -633,6 +639,7 @@ class TestPRReviewCycleIssuesFoundEvent:
                 timestamp=ts,
                 source="mock",
                 pr_id="pr-123",
+                work_item_id="item-456",
                 cycle_number=1,
                 total=0,
                 critical=0,
@@ -653,6 +660,7 @@ class TestPRReviewCycleIssuesFoundEvent:
             timestamp=ts,
             source="mock",
             pr_id="pr-123",
+            work_item_id="item-456",
             cycle_number=1,
             total=3,
             critical=1,
@@ -667,6 +675,7 @@ class TestPRReviewCycleIssuesFoundEvent:
         data = original.to_dict()
         restored = PRReviewCycleIssuesFoundEvent.from_dict(data)
         assert restored.total == original.total
+        assert restored.work_item_id == original.work_item_id
         assert restored.critical == original.critical
         assert restored.high == original.high
         assert restored.medium == original.medium
@@ -685,12 +694,14 @@ class TestPRReviewCycleMaxCyclesReachedEvent:
             timestamp=ts,
             source="mock",
             pr_id="pr-123",
+            work_item_id="item-456",
             cycle_number=4,
             max_cycles=3,
             next_column="Escalated",
             workflow_run_id="run-456",
         )
         assert event.cycle_number == 4
+        assert event.work_item_id == "item-456"
         assert event.max_cycles == 3
 
     def test_validation_cycle_number_exceeds_max(self):
@@ -702,6 +713,7 @@ class TestPRReviewCycleMaxCyclesReachedEvent:
                 timestamp=ts,
                 source="mock",
                 pr_id="pr-123",
+                work_item_id="item-456",
                 cycle_number=3,
                 max_cycles=3,
                 next_column="Escalated",
@@ -716,6 +728,7 @@ class TestPRReviewCycleMaxCyclesReachedEvent:
             timestamp=ts,
             source="mock",
             pr_id="pr-123",
+            work_item_id="item-456",
             cycle_number=4,
             max_cycles=3,
             next_column="Escalated",
@@ -724,6 +737,7 @@ class TestPRReviewCycleMaxCyclesReachedEvent:
         data = original.to_dict()
         restored = PRReviewCycleMaxCyclesReachedEvent.from_dict(data)
         assert restored.cycle_number == original.cycle_number
+        assert restored.work_item_id == original.work_item_id
         assert restored.max_cycles == original.max_cycles
 
 

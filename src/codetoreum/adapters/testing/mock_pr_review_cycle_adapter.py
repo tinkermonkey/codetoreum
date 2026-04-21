@@ -373,6 +373,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 timestamp=self._clock.now().isoformat(),
                 source="mock_pr_review_cycle",
                 pr_id=request.pr_id or f"pr-{work_item_id}",
+                work_item_id=work_item_id,
                 cycle_number=escalation_cycle_number,
                 max_cycles=request.config.max_outer_cycles,
                 next_column="Human Review",
@@ -596,127 +597,12 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             self._event_emitter.emit(phase3_completed)
             self._log_event({"type": "pr_review_cycle.phase_completed", "cycle_id": cycle_id, "phase_index": 3, "work_item_id": work_item_id})
 
-        # If CI failed, skip Phase 4 and route to failure column
+        # If CI failed, skip to Phase 4 consolidation (sub-issue creation happens there)
         if request.config.ci_check_enabled and not ci_passed:
-            phase_outputs = [
-                PRReviewPhaseOutput(
-                    phase_name="code_review",
-                    phase_index=1,
-                    success=True,
-                    findings=tuple(config.findings),
-                    summary="Code review completed",
-                    duration_seconds=600.0,
-                )
-            ]
-            for idx, source in enumerate(request.config.verifier_context_sources, start=2):
-                phase_outputs.append(
-                    PRReviewPhaseOutput(
-                        phase_name=f"verification_{source}",
-                        phase_index=idx,
-                        success=True,
-                        findings=(),
-                        summary=f"Verified against {source}",
-                        duration_seconds=300.0,
-                        context_source=source,
-                    )
-                )
-            phase_outputs.append(
-                PRReviewPhaseOutput(
-                    phase_name="ci_check",
-                    phase_index=len(request.config.verifier_context_sources) + 2,
-                    success=False,
-                    findings=tuple(config.findings),
-                    summary=f"CI check failed with {config.ci_failures_count} failures",
-                    duration_seconds=0.5,
-                    error=f"CI pipeline failed with {config.ci_failures_count} failures",
-                )
-            )
-
-            # Create sub-issues for CI failures to satisfy domain invariant
-            # (ISSUES_FOUND requires non-empty sub_issue_ids)
-            sub_issue_ids: list[str] = []
-            for finding in config.findings:
-                try:
-                    work_item = await self._ticket_system.create_work_item(
-                        title=finding.title,
-                        description=f"CI Finding: {finding.title}\nPhase: {finding.phase}\nSeverity: {finding.severity}\nContext Source: {finding.context_source or 'N/A'}\n\nDescription:\n{finding.description}",
-                        project_id=project_id,
-                        labels=["pr-review-finding", "ci-failure", finding.phase, finding.severity],
-                        parent_issue_id=work_item_id,
-                    )
-                    sub_issue_ids.append(work_item.id)
-
-                    # Add to the appropriate column on the board
-                    target_column = request.config.sub_issue_initial_column or "Backlog"
-                    await self._board_service.add_item_to_column(
-                        work_item.id,
-                        target_column,
-                        MovedByType.ORCHESTRATOR,
-                    )
-                except Exception as e:
-                    logger.error(
-                        f"Error creating sub-issue for CI finding: {e}",
-                        exc_info=True,
-                        extra={"error_id": "ERR_SUB_ISSUE_CREATION"},
-                    )
-
-            with self._lock:
-                self._sub_issues_created[work_item_id] = sub_issue_ids
-
-            result = PRReviewCycleResult(
-                cycle_number=cycle_number,
-                workflow_run_id=request.workflow_run_id,
-                outcome=PRReviewOutcome.ISSUES_FOUND,
-                phase_outputs=tuple(phase_outputs),
-                all_findings=tuple(config.findings),
-                sub_issues_created=tuple(sub_issue_ids),
-                ci_passed=False,
-                total_findings=len(config.findings),
-                critical_count=sum(1 for f in config.findings if f.severity == "critical"),
-                high_count=sum(1 for f in config.findings if f.severity == "high"),
-                medium_count=sum(1 for f in config.findings if f.severity == "medium"),
-                low_count=sum(1 for f in config.findings if f.severity == "low"),
-                total_duration_seconds=(self._clock.now() - phase1_start).total_seconds(),
-                timestamp=started_at_str,
-                next_column=request.config.on_failure_column or "In Development",
-            )
-
-            # Still store state for recovery purposes
-            cycle_state = PRReviewCycleState(
-                id=cycle_id,
-                pr_id=request.pr_id or f"pr-{work_item_id}",
-                work_item_id=work_item_id,
-                project_id=project_id,
-                board_id=request.board_id,
-                status=PRReviewStatus.COMPLETED,
-                cycle_number=cycle_number,
-                current_phase="ci_check",
-                findings=config.findings.copy(),
-                phase_outputs=phase_outputs,
-                config=request.config,
-                started_at=started_at_dt,
-                updated_at=self._clock.now(),
-            )
-            state_data = PRReviewCycleStateData(
-                work_item_id=work_item_id,
-                project_id=project_id,
-                board_id=request.board_id,
-                cycle_number=cycle_number,
-                cycle_state=cycle_state,
-                created_at=started_at_str,
-                updated_at=self._clock.now().isoformat(),
-            )
-            with self._lock:
-                self._cycles[work_item_id] = state_data
-                if project_id not in self._project_cycles:
-                    self._project_cycles[project_id] = []
-                # Remove existing entry for this work_item_id to prevent duplicates
-                self._project_cycles[project_id] = [
-                    cycle for cycle in self._project_cycles[project_id]
-                    if cycle.work_item_id != work_item_id
-                ]
-                self._project_cycles[project_id].append(state_data)
-            return result
+            # NOTE: Do NOT create sub-issues on CI failure here in Phase 3.
+            # Sub-issue creation is Phase 4 (consolidation) responsibility.
+            # We proceed to consolidation phase where sub-issues are created.
+            pass  # Continue to Phase 4
 
         # ===== PHASE 4: Consolidation =====
         consolidation_event = PRReviewCycleConsolidationStartedEvent(
@@ -750,6 +636,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 timestamp=self._clock.now().isoformat(),
                 source="mock_pr_review_cycle",
                 pr_id=request.pr_id or f"pr-{work_item_id}",
+                work_item_id=work_item_id,
                 cycle_number=cycle_number,
                 cycle_duration_seconds=(self._clock.now() - phase1_start).total_seconds(),
                 next_column=next_column,
@@ -821,6 +708,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 timestamp=self._clock.now().isoformat(),
                 source="mock_pr_review_cycle",
                 pr_id=request.pr_id or f"pr-{work_item_id}",
+                work_item_id=work_item_id,
                 cycle_number=cycle_number,
                 total=len(config.findings),
                 critical=critical_count,
@@ -905,10 +793,11 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 PRReviewPhaseOutput(
                     phase_name="ci_check",
                     phase_index=next_phase_index,
-                    success=True,
+                    success=ci_passed,
                     findings=(),
-                    summary="CI check passed",
+                    summary="CI check passed" if ci_passed else f"CI check failed with {config.ci_failures_count} failures",
                     duration_seconds=0.5,
+                    error="" if ci_passed else f"CI pipeline failed with {config.ci_failures_count} failures",
                 )
             )
             next_phase_index += 1

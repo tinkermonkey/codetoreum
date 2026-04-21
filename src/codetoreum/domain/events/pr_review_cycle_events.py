@@ -470,6 +470,7 @@ class PRReviewCycleApprovedEvent(CodetoreumEvent):
     Attributes:
         type (str): Fixed to "pr_review_cycle.approved"
         pr_id (str): GitHub PR identifier
+        work_item_id (str): Work item ID being reviewed
         cycle_number (int): Iteration number (1-based)
         cycle_duration_seconds (float): Total time for this cycle
         next_column (str): Column to move item to
@@ -478,6 +479,7 @@ class PRReviewCycleApprovedEvent(CodetoreumEvent):
     """
 
     pr_id: str = ""
+    work_item_id: str = ""
     cycle_number: int = 0
     cycle_duration_seconds: float = 0.0
     next_column: str = ""
@@ -488,6 +490,9 @@ class PRReviewCycleApprovedEvent(CodetoreumEvent):
         super().__post_init__()
         if not self.pr_id:
             msg = "pr_id is required"
+            raise ValueError(msg)
+        if not self.work_item_id:
+            msg = "work_item_id is required"
             raise ValueError(msg)
         if self.cycle_number < 1:
             msg = "cycle_number must be >= 1"
@@ -508,6 +513,7 @@ class PRReviewCycleApprovedEvent(CodetoreumEvent):
         d.update(
             {
                 "pr_id": self.pr_id,
+                "work_item_id": self.work_item_id,
                 "cycle_number": self.cycle_number,
                 "cycle_duration_seconds": self.cycle_duration_seconds,
                 "next_column": self.next_column,
@@ -526,6 +532,7 @@ class PRReviewCycleApprovedEvent(CodetoreumEvent):
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
             pr_id=data.get("pr_id", ""),
+            work_item_id=data.get("work_item_id", ""),
             cycle_number=data.get("cycle_number", 0),
             cycle_duration_seconds=data.get("cycle_duration_seconds", 0.0),
             next_column=data.get("next_column", ""),
@@ -542,6 +549,7 @@ class PRReviewCycleIssuesFoundEvent(CodetoreumEvent):
     Attributes:
         type (str): Fixed to "pr_review_cycle.issues_found"
         pr_id (str): GitHub PR identifier
+        work_item_id (str): Work item ID being reviewed
         cycle_number (int): Iteration number (1-based)
         total (int): Total number of findings
         critical (int): Number of critical severity findings
@@ -556,6 +564,7 @@ class PRReviewCycleIssuesFoundEvent(CodetoreumEvent):
     """
 
     pr_id: str = ""
+    work_item_id: str = ""
     cycle_number: int = 0
     total: int = 0
     critical: int = 0
@@ -572,6 +581,9 @@ class PRReviewCycleIssuesFoundEvent(CodetoreumEvent):
         super().__post_init__()
         if not self.pr_id:
             msg = "pr_id is required"
+            raise ValueError(msg)
+        if not self.work_item_id:
+            msg = "work_item_id is required"
             raise ValueError(msg)
         if self.cycle_number < 1:
             msg = "cycle_number must be >= 1"
@@ -614,6 +626,7 @@ class PRReviewCycleIssuesFoundEvent(CodetoreumEvent):
         d.update(
             {
                 "pr_id": self.pr_id,
+                "work_item_id": self.work_item_id,
                 "cycle_number": self.cycle_number,
                 "total": self.total,
                 "critical": self.critical,
@@ -640,6 +653,7 @@ class PRReviewCycleIssuesFoundEvent(CodetoreumEvent):
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
             pr_id=data.get("pr_id", ""),
+            work_item_id=data.get("work_item_id", ""),
             cycle_number=data.get("cycle_number", 0),
             total=total,
             critical=data.get("critical", data.get("critical_count", 0)),
@@ -662,6 +676,7 @@ class PRReviewCycleMaxCyclesReachedEvent(CodetoreumEvent):
     Attributes:
         type (str): Fixed to "pr_review_cycle.max_cycles_reached"
         pr_id (str): GitHub PR identifier
+        work_item_id (str): Work item ID being reviewed
         cycle_number (int): Iteration number (1-based) that exceeded limit
         max_cycles (int): Maximum cycles configured
         next_column (str): Column to move item to (escalation column)
@@ -670,6 +685,7 @@ class PRReviewCycleMaxCyclesReachedEvent(CodetoreumEvent):
     """
 
     pr_id: str = ""
+    work_item_id: str = ""
     cycle_number: int = 0
     max_cycles: int = 0
     next_column: str = ""
@@ -680,6 +696,9 @@ class PRReviewCycleMaxCyclesReachedEvent(CodetoreumEvent):
         super().__post_init__()
         if not self.pr_id:
             msg = "pr_id is required"
+            raise ValueError(msg)
+        if not self.work_item_id:
+            msg = "work_item_id is required"
             raise ValueError(msg)
         if self.cycle_number < 1:
             msg = "cycle_number must be >= 1"
@@ -703,6 +722,7 @@ class PRReviewCycleMaxCyclesReachedEvent(CodetoreumEvent):
         d.update(
             {
                 "pr_id": self.pr_id,
+                "work_item_id": self.work_item_id,
                 "cycle_number": self.cycle_number,
                 "max_cycles": self.max_cycles,
                 "next_column": self.next_column,
@@ -723,6 +743,7 @@ class PRReviewCycleMaxCyclesReachedEvent(CodetoreumEvent):
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
             pr_id=data.get("pr_id", ""),
+            work_item_id=data.get("work_item_id", ""),
             cycle_number=data.get("cycle_number", 0),
             max_cycles=max_cycles,
             next_column=data.get("next_column", ""),

@@ -97,14 +97,13 @@ class PRReviewCycleEventHandler(EventHandler):
         """
         Process PR review cycle outcome and move work item to next column.
 
-        Extracts the work_item_id from workflow_run_id and moves the work item
+        Extracts the work_item_id from the event and moves the work item
         to the next_column specified in the event.
 
         Args:
-            event: PR review cycle outcome event with next_column and workflow_run_id
+            event: PR review cycle outcome event with work_item_id and next_column
         """
-        # The workflow_run_id field contains the work_item_id in PR review cycle events
-        work_item_id = event.workflow_run_id
+        work_item_id = event.work_item_id
         next_column = event.next_column
 
         if not work_item_id or not next_column:
