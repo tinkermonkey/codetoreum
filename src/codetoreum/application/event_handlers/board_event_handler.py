@@ -368,7 +368,12 @@ class BoardColumnEventHandler(EventHandler):
             # Even though the lock is already held, we should still trigger the agent
             # when re-entering the column (e.g., after reviewer rejection in maker-checker flow).
             # Skip conversational columns — handled by WorkflowOrchestrator via CLO.
-            if column_config.agent_id and getattr(column_config, "execution_type", "task_queue") != "conversational":
+            # Skip PR review cycle columns — driven by _handle_pr_review_cycle.
+            if (
+                column_config.agent_id
+                and getattr(column_config, "execution_type", "task_queue") != "conversational"
+                and not column_config.pr_review_cycle_config
+            ):
                 await self._trigger_agent(work_item_id, column_config, board_id)
 
     async def _handle_exit_column(
