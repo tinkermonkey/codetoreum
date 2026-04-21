@@ -342,11 +342,16 @@ class BoardColumnEventHandler(EventHandler):
             # Start workflow run lifecycle tracking
             await self._start_workflow_run(work_item_id, project_id, board_id, column_config, workflow_config)
 
-            # Trigger agent if column has one and is NOT a conversational column.
+            # Trigger agent if column has one, is NOT a conversational column, and is NOT a PR review cycle column.
             # Conversational columns are handled by WorkflowOrchestrator via
             # ConversationalLoopOrchestrator — dispatching the executor here would
-            # cause a double-dispatch failure.
-            if column_config.agent_id and getattr(column_config, "execution_type", "task_queue") != "conversational":
+            # cause a double-dispatch failure. PR review cycle columns are driven by
+            # _handle_pr_review_cycle; dispatching here would cause double-dispatch.
+            if (
+                column_config.agent_id
+                and getattr(column_config, "execution_type", "task_queue") != "conversational"
+                and not column_config.pr_review_cycle_config
+            ):
                 await self._trigger_agent(work_item_id, column_config, board_id)
 
         elif result.status == LockStatus.QUEUED:
@@ -539,7 +544,7 @@ class BoardColumnEventHandler(EventHandler):
         if not self.work_item_service:
             logger.error(
                 f"Cannot initiate PR review cycle for {work_item_id}: " "work_item_service not injected",
-                exc_info=False,
+                exc_info=True,
                 extra={
                     "error_id": "ERR_PR_REVIEW_CYCLE_SERVICE_NOT_AVAILABLE",
                     "work_item_id": work_item_id,
@@ -550,7 +555,7 @@ class BoardColumnEventHandler(EventHandler):
         if not column_config.pr_review_cycle_config:
             logger.error(
                 f"Cannot initiate PR review cycle for {work_item_id}: " "pr_review_cycle_config is None",
-                exc_info=False,
+                exc_info=True,
                 extra={
                     "error_id": "ERR_PR_REVIEW_CYCLE_CONFIG_MISSING",
                     "work_item_id": work_item_id,
@@ -601,7 +606,7 @@ class BoardColumnEventHandler(EventHandler):
                         logger.error(
                             f"Cannot determine escalation column for {work_item_id}: "
                             f"workflow config not found for board {board_id}",
-                            exc_info=False,
+                            exc_info=True,
                             extra={
                                 "error_id": "ERR_PR_REVIEW_CYCLE_WORKFLOW_CONFIG_NOT_FOUND",
                                 "work_item_id": work_item_id,
@@ -616,7 +621,7 @@ class BoardColumnEventHandler(EventHandler):
                         logger.error(
                             f"Cannot determine escalation column for {work_item_id}: "
                             f"no column after '{column_config.name}'",
-                            exc_info=False,
+                            exc_info=True,
                             extra={
                                 "error_id": "ERR_PR_REVIEW_CYCLE_ESCALATION_COLUMN_NOT_FOUND",
                                 "work_item_id": work_item_id,

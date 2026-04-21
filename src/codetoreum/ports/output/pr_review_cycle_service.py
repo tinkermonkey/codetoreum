@@ -38,7 +38,9 @@ class PRReviewCycleRequest:
         discussion_id: ID of the discussion thread (can be None if no discussion yet)
         cycle_number: Iteration count (1-based) for outer re-trigger tracking
         config: PR review cycle configuration with phase settings and timeouts
-        workflow_run_id: ID of the workflow run executing this cycle
+        workflow_run_id: ID for correlating this cycle with workflow context. Contains the work_item_id
+            for use in outcome events (PRReviewCycleApprovedEvent, etc.) where the event handler
+            extracts this value to determine which work item to move to the next column.
     """
 
     work_item_id: str
