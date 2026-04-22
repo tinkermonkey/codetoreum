@@ -52,8 +52,7 @@ def create_config(scenario_name: str = "scenario_environment_repair") -> Simulat
         speed_multiplier=100.0,
     )
     config.scenario_description = (
-        "Environment repair rebuild and verification with test rerun "
-        "for ENVIRONMENT_ISSUE failures"
+        "Environment repair rebuild and verification with test rerun " "for ENVIRONMENT_ISSUE failures"
     )
     return config
 
@@ -130,9 +129,11 @@ async def test_environment_repair_with_mock_repair_cycle(
     Verifies that the environment repair service can be used by the
     mock repair cycle adapter for ENVIRONMENT_ISSUE classification.
     """
+
     # Setup repair cycle with environment repair service
     async def llm_factory(agent_name: str):
         from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
+
         return MockLLMAdapter()
 
     clock = SimulationClock(speed_multiplier=100.0)

@@ -20,7 +20,7 @@ from codetoreum.domain.board_workflow_template import (
     ColumnTemplate,
     ColumnType,
 )
-from codetoreum.domain.events import WorkItemColumnChanged
+from codetoreum.domain.events import WorkItemColumnChangedEvent
 from codetoreum.ports.output.board_service import MovedByType, WorkItemPosition
 
 
@@ -162,18 +162,18 @@ def create_column_changed_event(
     from_column: str = "Backlog",
     to_column: str = "In Development",
     moved_by: str = "human",
-) -> WorkItemColumnChanged:
-    """Create WorkItemColumnChanged event."""
-    return WorkItemColumnChanged(
-        aggregate_id=work_item_id,
-        payload={
-            "work_item_id": work_item_id,
-            "board_id": board_id,
-            "project_id": project_id,
-            "from_column": from_column,
-            "to_column": to_column,
-            "moved_by": moved_by,
-        },
+) -> WorkItemColumnChangedEvent:
+    """Create WorkItemColumnChangedEvent event."""
+    return WorkItemColumnChangedEvent(
+        type="workitem.column_changed",
+        timestamp=datetime.now(UTC).isoformat(),
+        source="test",
+        work_item_id=work_item_id,
+        board_id=board_id,
+        project_id=project_id,
+        from_column=from_column,
+        to_column=to_column,
+        moved_by=moved_by,
     )
 
 
@@ -181,9 +181,9 @@ class TestGetEventTypes:
     """Tests for get_event_types method."""
 
     def test_returns_workitem_column_changed(self, handler):
-        """Should return WorkItemColumnChanged event type."""
+        """Should return WorkItemColumnChangedEvent event type."""
         event_types = handler.get_event_types()
-        assert "WorkItemColumnChanged" in event_types
+        assert "WorkItemColumnChangedEvent" in event_types
 
 
 class TestHandleColumnChangeWithPipelineTrigger:
@@ -1343,3 +1343,96 @@ class TestTriggerAgentExecutionFailureAndLockRelease:
         call_args = mock_event_emitter.emit.call_args[0][0]
         assert call_args.type == "lock.stuck"
         assert call_args.work_item_id == "item-1"
+
+
+class TestPRReviewCycleExclusion:
+    """Tests for PR review cycle exclusion from normal agent dispatch."""
+
+    @pytest.mark.asyncio
+    async def test_excludes_pr_review_cycle_columns_from_agent_dispatch(
+        self,
+        handler,
+        mock_workflow_config,
+        mock_agent_executor,
+    ):
+        """Should NOT trigger normal agent for columns with pr_review_cycle_config."""
+        from codetoreum.domain.pr_review_cycle_types import PRReviewCycleConfig
+
+        # Create workflow with PR review cycle column
+        workflow_config = BoardWorkflowTemplate(
+            id="workflow-1",
+            name="SDLC Workflow",
+            board_id="board-1",
+            project_id="test-project",
+            columns=(
+                ColumnTemplate(
+                    name="PR Review",
+                    type=ColumnType.AUTOMATED,
+                    agent_id="agent-review",
+                    is_pipeline_trigger=False,
+                    is_exit_column=False,
+                    position=0,
+                    auto_progress_on_completion=False,
+                    pr_review_cycle_config=PRReviewCycleConfig(max_outer_cycles=2),
+                ),
+            ),
+        )
+
+        mock_workflow_config.get_board_workflow_template.return_value = workflow_config
+
+        event = create_column_changed_event(
+            work_item_id="item-1",
+            board_id="board-1",
+            project_id="proj-1",
+            to_column="PR Review",
+        )
+
+        # Act
+        await handler.handle_column_change(event)
+
+        # Assert - normal agent executor should NOT be called
+        mock_agent_executor.execute.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_agent_triggered_for_columns_without_pr_review_config(
+        self,
+        handler,
+        mock_workflow_config,
+        mock_agent_executor,
+    ):
+        """Should trigger normal agent for automated columns without pr_review_cycle_config."""
+        # Create workflow with normal automated column
+        workflow_config = BoardWorkflowTemplate(
+            id="workflow-1",
+            name="SDLC Workflow",
+            board_id="board-1",
+            project_id="test-project",
+            columns=(
+                ColumnTemplate(
+                    name="Review",
+                    type=ColumnType.AUTOMATED,
+                    agent_id="agent-review",
+                    is_pipeline_trigger=False,
+                    is_exit_column=False,
+                    position=0,
+                    auto_progress_on_completion=True,
+                ),
+            ),
+        )
+
+        mock_workflow_config.get_board_workflow_template.return_value = workflow_config
+
+        event = create_column_changed_event(
+            work_item_id="item-1",
+            board_id="board-1",
+            project_id="proj-1",
+            to_column="Review",
+        )
+
+        # Act
+        await handler.handle_column_change(event)
+
+        # Assert - normal agent executor should be called
+        mock_agent_executor.execute.assert_called_once_with(
+            work_item_id="item-1", agent_id="agent-review", board_id="board-1"
+        )

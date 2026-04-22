@@ -70,6 +70,18 @@ from codetoreum.adapters.testing import (
 logger = logging.getLogger(__name__)
 
 try:
+    from codetoreum.adapters.testing.mock_pr_review_cycle_adapter import (
+        MockPRReviewCycleAdapter,
+    )
+except ImportError:
+    logger.warning(
+        "Optional adapter MockPRReviewCycleAdapter not available, skipping registration",
+        exc_info=True,
+        extra={"adapter": "MockPRReviewCycleAdapter"},
+    )
+    MockPRReviewCycleAdapter = None  # type: ignore
+
+try:
     from codetoreum.adapters.secondary.prometheus_metrics_adapter import (
         PrometheusMetricsAdapter,
     )
@@ -188,6 +200,7 @@ from codetoreum.infrastructure.adapters.registries import (
     PipelineLockServiceRegistry,
     PipelineQueueServiceRegistry,
     ProjectManagerServiceRegistry,
+    PRReviewCycleServiceRegistry,
     RepairCycleCheckpointStoreRegistry,
     RepairCycleRegistry,
     RepositoryRegistry,
@@ -234,6 +247,7 @@ from codetoreum.ports.output.metrics import IMetrics
 from codetoreum.ports.output.notifier import INotifier
 from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
 from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
+from codetoreum.ports.output.pr_review_cycle_service import IPRReviewCycle
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
 from codetoreum.ports.output.repair_cycle_checkpoint_store import IRepairCycleCheckpointStore
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle
@@ -302,6 +316,7 @@ class AdapterFactory:
         self._config_store_registry = ConfigStoreRegistry()
         self._repair_cycle_registry = RepairCycleRegistry()
         self._review_cycle_registry = ReviewCycleServiceRegistry()
+        self._pr_review_cycle_registry = PRReviewCycleServiceRegistry()
         self._container_recovery_registry = ContainerRecoveryRegistry()
         self._encryption_registry = EncryptionRegistry()
         self._pipeline_lock_registry = PipelineLockServiceRegistry()
@@ -685,6 +700,21 @@ class AdapterFactory:
             set_as_default=True,
         )
 
+        # PR Review Cycle Service Adapters
+        if MockPRReviewCycleAdapter:
+            self._pr_review_cycle_registry.register(
+                name="mock",
+                adapter_type=MockPRReviewCycleAdapter,
+                description="Mock PR review cycle for testing",
+                version="1.0.0",
+                tags=["testing", "simulation", "mock"],
+                config_schema=AdapterCredentialRequirement(
+                    simulation_only=True,
+                    description="Simulation-only adapter, no credentials required",
+                ),
+                set_as_default=True,
+            )
+
         # Container Recovery Adapters
         self._container_recovery_registry.register(
             name="mock",
@@ -1052,6 +1082,11 @@ class AdapterFactory:
         return self._review_cycle_registry
 
     @property
+    def pr_review_cycle_registry(self) -> PRReviewCycleServiceRegistry:
+        """Get the PR review cycle service registry."""
+        return self._pr_review_cycle_registry
+
+    @property
     def container_recovery_registry(self) -> ContainerRecoveryRegistry:
         """Get the container recovery registry."""
         return self._container_recovery_registry
@@ -1158,6 +1193,7 @@ class AdapterFactory:
             "encryption": self._encryption_registry,
             "discussion_adapter": self._discussion_adapter_registry,
             "review_cycle": self._review_cycle_registry,
+            "pr_review_cycle": self._pr_review_cycle_registry,
             "repair_cycle": self._repair_cycle_registry,
             "code_review": self._code_review_registry,
             "container_recovery": self._container_recovery_registry,
@@ -1514,6 +1550,10 @@ class AdapterFactory:
     def create_review_cycle_service(self, adapter_name: str | None = None, **kwargs) -> IReviewCycle:
         """Create a review cycle service adapter instance."""
         return self._create_adapter(self._review_cycle_registry, adapter_name, "review cycle service", **kwargs)
+
+    def create_pr_review_cycle_service(self, adapter_name: str | None = None, **kwargs) -> "IPRReviewCycle":
+        """Create a PR review cycle service adapter instance."""
+        return self._create_adapter(self._pr_review_cycle_registry, adapter_name, "PR review cycle service", **kwargs)
 
     def create_container_recovery(self, adapter_name: str | None = None, **kwargs) -> IAgentContainerRecoveryService:
         """Create a container recovery adapter instance."""

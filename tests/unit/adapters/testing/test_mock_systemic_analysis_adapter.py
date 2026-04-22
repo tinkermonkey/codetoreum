@@ -55,9 +55,7 @@ class TestMockSystemicAnalysisAdapter:
             prior_classifications=(),
         )
 
-    async def test_default_result_with_no_sequence(
-        self, sample_failures, sample_context
-    ):
+    async def test_default_result_with_no_sequence(self, sample_failures, sample_context):
         """Test that calling analyze() with no sequence returns default result."""
         adapter = MockSystemicAnalysisAdapter()
 
@@ -77,9 +75,7 @@ class TestMockSystemicAnalysisAdapter:
 
         assert result == DEFAULT_RESULT
 
-    async def test_empty_sequence_returns_default(
-        self, sample_failures, sample_context
-    ):
+    async def test_empty_sequence_returns_default(self, sample_failures, sample_context):
         """Test that empty results list returns default on all calls."""
         adapter = MockSystemicAnalysisAdapter(results=[])
 
@@ -109,9 +105,7 @@ class TestMockSystemicAnalysisAdapter:
         result2 = await adapter.analyze(sample_failures, sample_context)
         assert result2 == DEFAULT_RESULT
 
-    async def test_two_element_sequence_exhaustion(
-        self, sample_failures, sample_context
-    ):
+    async def test_two_element_sequence_exhaustion(self, sample_failures, sample_context):
         """Test sequence with two elements and exhaustion."""
         result1_config = SystemicAnalysisResult(
             classification=FailureClassification.ENVIRONMENT_ISSUE,
@@ -235,9 +229,7 @@ class TestMockSystemicAnalysisAdapter:
         assert result3.reasoning == "Third result"
         assert result4 == DEFAULT_RESULT
 
-    async def test_multiple_calls_same_arguments(
-        self, sample_failures, sample_context
-    ):
+    async def test_multiple_calls_same_arguments(self, sample_failures, sample_context):
         """Test multiple calls with same arguments are all recorded."""
         adapter = MockSystemicAnalysisAdapter()
 

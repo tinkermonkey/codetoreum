@@ -491,9 +491,7 @@ class TestRepairCycleEventHandlerCIRouting:
         ci_service.set_ci_run_failing("proj-1", ["linting failed"])
 
         repair_service = MockRepairCycleService()
-        workflow_config = MockWorkflowConfigService(
-            test_types=[RepairTestType.UNIT, RepairTestType.CI]
-        )
+        workflow_config = MockWorkflowConfigService(test_types=[RepairTestType.UNIT, RepairTestType.CI])
 
         handler = RepairCycleEventHandler(
             repair_cycle=repair_service,

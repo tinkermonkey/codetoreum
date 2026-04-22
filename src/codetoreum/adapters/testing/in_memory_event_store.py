@@ -700,6 +700,16 @@ class InMemoryEventStore(IEventStore):
         with self._lock:
             return self._all_events.copy()
 
+    @property
+    def events(self) -> list[DomainEvent]:
+        """
+        Get all events across all streams (property for convenient test access).
+
+        Returns:
+            List of all domain events
+        """
+        return self.get_all_events_list()
+
     async def query_streams_by_latest_event(
         self,
         aggregate_type: str,

@@ -396,7 +396,7 @@ class TestBoardAdapterErrorHandling:
     async def test_move_item_missing_column_raises_error(self, adapter):
         """Test that moving to non-existent column raises ResourceNotFoundError."""
         adapter.create_board("proj-1", "board-1", "Test Board", ["Backlog", "Done"])
-        adapter.add_item_to_column("board-1", "Backlog", "item-1")
+        adapter.seed_item_to_column("board-1", "Backlog", "item-1")
 
         with pytest.raises(ResourceNotFoundError) as exc_info:
             await adapter.move_item_to_column("item-1", "NonExistentColumn", MovedByType.ORCHESTRATOR)
@@ -408,7 +408,7 @@ class TestBoardAdapterErrorHandling:
     async def test_get_item_position_with_existing_item_succeeds(self, adapter):
         """Test that existing item position can be retrieved."""
         adapter.create_board("proj-1", "board-1", "Test Board", ["Backlog", "Done"])
-        adapter.add_item_to_column("board-1", "Backlog", "item-1")
+        adapter.seed_item_to_column("board-1", "Backlog", "item-1")
 
         position = await adapter.get_item_position("item-1")
 
@@ -419,7 +419,7 @@ class TestBoardAdapterErrorHandling:
     async def test_move_item_to_existing_column_succeeds(self, adapter):
         """Test that item can be moved to existing column."""
         adapter.create_board("proj-1", "board-1", "Test Board", ["Backlog", "In Progress", "Done"])
-        adapter.add_item_to_column("board-1", "Backlog", "item-1")
+        adapter.seed_item_to_column("board-1", "Backlog", "item-1")
 
         result = await adapter.move_item_to_column("item-1", "In Progress", MovedByType.ORCHESTRATOR)
 

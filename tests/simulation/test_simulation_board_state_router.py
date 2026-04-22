@@ -100,8 +100,8 @@ class TestSimulationBoardStateRouter:
         )
 
         # Add items to board
-        board_adapter.add_item_to_column("board-1", "Backlog", work_item_1.id)
-        board_adapter.add_item_to_column("board-1", "In Progress", work_item_2.id)
+        board_adapter.seed_item_to_column("board-1", "Backlog", work_item_1.id)
+        board_adapter.seed_item_to_column("board-1", "In Progress", work_item_2.id)
 
         # Query board state
         async with AsyncClient(app=app, base_url="http://test", follow_redirects=True) as client:
@@ -152,7 +152,7 @@ class TestSimulationBoardStateRouter:
         )
 
         # Add item to board
-        board_adapter.add_item_to_column("board-1", "Backlog", work_item.id)
+        board_adapter.seed_item_to_column("board-1", "Backlog", work_item.id)
 
         # Register active run
         await run_registry.set_active_run(
@@ -195,7 +195,7 @@ class TestSimulationBoardStateRouter:
         )
 
         # Add item to board
-        board_adapter.add_item_to_column("board-1", "Backlog", work_item.id)
+        board_adapter.seed_item_to_column("board-1", "Backlog", work_item.id)
 
         # Query board state (no active run registered)
         async with AsyncClient(app=app, base_url="http://test", follow_redirects=True) as client:
@@ -235,7 +235,7 @@ class TestSimulationBoardStateRouter:
         initial_time = engine.now()
 
         # Add item to board
-        board_adapter.add_item_to_column("board-1", "Backlog", work_item.id)
+        board_adapter.seed_item_to_column("board-1", "Backlog", work_item.id)
 
         # Advance time by 10 seconds
         await engine.advance(timedelta(seconds=10))
@@ -276,7 +276,7 @@ class TestSimulationBoardStateRouter:
 
         # Add items to board in order
         for i, item in enumerate(items):
-            board_adapter.add_item_to_column("board-1", "Backlog", item.id)
+            board_adapter.seed_item_to_column("board-1", "Backlog", item.id)
 
         # Query board state
         async with AsyncClient(app=app, base_url="http://test", follow_redirects=True) as client:
@@ -308,7 +308,7 @@ class TestSimulationBoardStateRouter:
             project_id="proj-1",
         )
 
-        board_adapter.add_item_to_column("board-1", "Backlog", work_item.id)
+        board_adapter.seed_item_to_column("board-1", "Backlog", work_item.id)
 
         # Query board state
         async with AsyncClient(app=app, base_url="http://test", follow_redirects=True) as client:
@@ -417,7 +417,7 @@ class TestSimulationBoardStateRouter:
             description="Description",
             project_id="proj-1",
         )
-        board_adapter.add_item_to_column("board-1", "Backlog", work_item.id)
+        board_adapter.seed_item_to_column("board-1", "Backlog", work_item.id)
 
         # Query again - should see the new item
         async with AsyncClient(app=app, base_url="http://test", follow_redirects=True) as client:
@@ -481,7 +481,7 @@ class TestSimulationBoardStateRouter:
                 description=f"Description {i}",
                 project_id="proj-1",
             )
-            board_adapter.add_item_to_column("board-1", "Backlog", work_item.id)
+            board_adapter.seed_item_to_column("board-1", "Backlog", work_item.id)
 
         # Make concurrent requests to the same endpoint
         async def fetch_board_state():

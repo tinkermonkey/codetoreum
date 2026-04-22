@@ -261,6 +261,22 @@ Maker-checker review cycle orchestration. Manages code review feedback loops.
 - `review.cycle.started` → ReviewCycleStartedEvent
 - `review.cycle.completed` → ReviewCycleCompletedEvent
 
+### IPRReviewCycle
+**Location**: `ports/output/pr_review_cycle_service.py`
+
+PR review cycle state management for automated code review pipelines. Manages multi-phase review cycles through a sequential four-phase pipeline (code review, verification, CI check, consolidation) with iteration tracking for re-trigger enforcement and state persistence for recovery scenarios.
+
+**Key Methods**:
+- `start_pr_review_cycle()` - Initiate a new PR review cycle starting with Phase 1
+- `get_cycle_state()` - Retrieve current state of an in-progress cycle
+- `save_cycle_state()` - Persist cycle state for recovery and inspection
+- `remove_cycle_state()` - Remove completed cycle state
+- `load_active_cycles()` - Load all in-progress cycles for a project
+
+**Events**: N/A (state management port; events emitted by orchestrator)
+
+**Example Implementations**: MockPRReviewCycleAdapter, PostgreSQLPRReviewCycleAdapter
+
 ### IRepairCycleService
 **Location**: `ports/output/repair_cycle_service.py`
 

@@ -72,7 +72,7 @@ class MockBoardAdapter(IBoardService):
         # Setup
         adapter = MockBoardAdapter()
         adapter.create_board("proj-1", "board-1", "My Board", ["Backlog", "In Progress", "Done"])
-        adapter.add_item_to_column("board-1", "Backlog", "item-1")
+        await adapter.add_item_to_column("item-1", "Backlog", MovedByType.HUMAN)
 
         # Subscribe to events
         events = []
@@ -384,6 +384,111 @@ class MockBoardAdapter(IBoardService):
             timestamp=self._get_iso_timestamp(),
         )
 
+    async def add_item_to_column(
+        self, work_item_id: str, target_column: str, moved_by: MovedByType
+    ) -> "ColumnMovementResult":
+        """Add newly created work item to initial column.
+
+        Places a newly created work item in its initial column. This differs from
+        move_item_to_column in that it's the item's first placement, not a transition.
+
+        Args:
+            work_item_id: Item to place (must be newly created)
+            target_column: Target column name (e.g., "Backlog")
+            moved_by: Type of entity initiating the placement (HUMAN or ORCHESTRATOR)
+
+        Returns:
+            ColumnMovementResult: Details of the placement operation
+
+        Raises:
+            ResourceNotFoundError: Work item or target column doesn't exist
+            ValueError: current_project not set
+        """
+        from codetoreum.ports.output.board_service import ColumnMovementResult
+
+        async with self._lock:
+            # For newly created items, they should already be tracked by the board
+            # This is just placing them in the initial column
+            if work_item_id not in self._item_positions:
+                # Create initial entry if not exists
+                # Get current_project
+                if self.current_project is None:
+                    msg = "current_project not set"
+                    raise ValueError(msg)
+
+                # Find a board for this project
+                board_id = None
+                for bid, pid in self._board_project_map.items():
+                    if pid == self.current_project:
+                        board_id = bid
+                        break
+
+                if not board_id:
+                    msg = "No board found for project"
+                    raise ResourceNotFoundError(msg, self.current_project)
+
+                # Create initial position
+                self._item_positions[work_item_id] = (board_id, target_column, 0)
+            else:
+                board_id, _, _ = self._item_positions[work_item_id]
+
+            # Resolve project_id
+            project_id = self._board_project_map.get(board_id) or self.current_project
+            if project_id is None:
+                msg = "current_project not set"
+                raise ValueError(msg)
+
+        board = await self.get_board(project_id, board_id)
+
+        async with self._lock:
+            # Validate target column exists
+            target_col = None
+            for col in board.columns:
+                if col.name == target_column:
+                    target_col = col
+                    break
+            if target_col is None:
+                msg = "Column"
+                raise ResourceNotFoundError(msg, target_column)
+
+            # Add item to the target column's work_item_ids tuple
+            new_items = list(target_col.work_item_ids)
+            new_items.append(work_item_id)
+            object.__setattr__(target_col, "work_item_ids", tuple(new_items))
+
+            # Update item position to the target column
+            position = len(target_col.work_item_ids) - 1
+            self._item_positions[work_item_id] = (board_id, target_column, position)
+
+            # Track when item entered this column (for SLA monitoring)
+            self._item_column_entries[work_item_id] = self._get_utc_datetime()
+
+            # Note: We do NOT log initial placement as a movement (movement log is for column transitions)
+            # Only actual moves between columns are logged in movement_log
+
+            # Emit event (for event handlers/listeners to process)
+            self.emit(
+                WorkItemColumnChangedEvent(
+                    type="workitem.column_changed",
+                    work_item_id=work_item_id,
+                    project_id=project_id,
+                    board_id=board_id,
+                    from_column=None,
+                    to_column=target_column,
+                    moved_by=moved_by.value,  # Use enum value
+                    timestamp=self._get_iso_timestamp(),
+                    source="mock",
+                )
+            )
+
+        return ColumnMovementResult(
+            work_item_id=work_item_id,
+            from_column=None,  # Item didn't come from anywhere, this is initial placement
+            to_column=target_column,
+            moved_by=moved_by,
+            timestamp=self._get_iso_timestamp(),
+        )
+
     async def reconcile_board(self, board_id: str, config: BoardConfig) -> ReconciliationResult:
         """Reconcile board structure with expected configuration.
 
@@ -543,7 +648,7 @@ class MockBoardAdapter(IBoardService):
         # Register board -> project mapping for multi-project support
         self._board_project_map[board_id] = project_id
 
-    def add_item_to_column(
+    def seed_item_to_column(
         self,
         board_id: str,
         column_name: str,
@@ -562,7 +667,7 @@ class MockBoardAdapter(IBoardService):
             ValueError: Board, column, or project context doesn't exist
 
         Example:
-            adapter.add_item_to_column("board-1", "Backlog", "item-1", position=0)
+            adapter.seed_item_to_column("board-1", "Backlog", "item-1", position=0)
         """
         if self.current_project is None:
             msg = "current_project not set"

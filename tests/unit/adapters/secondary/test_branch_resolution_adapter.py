@@ -720,9 +720,7 @@ class TestBranchCaching:
         assert version_control.list_branches.call_count == 1
 
         # Mock time passing and second resolution call
-        with patch(
-            "codetoreum.adapters.secondary.branch_resolution_adapter.datetime"
-        ) as mock_datetime:
+        with patch("codetoreum.adapters.secondary.branch_resolution_adapter.datetime") as mock_datetime:
             # Set up mock to advance time
             now = datetime.now(UTC)
             past_time = now
@@ -923,9 +921,7 @@ class TestUtilityMethods:
             event_emitter=MagicMock(),
         )
 
-        name = adapter._generate_branch_name(
-            "123", {"title": "Fix authentication bug"}
-        )
+        name = adapter._generate_branch_name("123", {"title": "Fix authentication bug"})
 
         assert name.startswith("feature/issue-123-")
         assert "fix" in name.lower()

@@ -1253,6 +1253,7 @@ class TestPromptBuilders:
 
         # Create a mock test type that is not in _test_type_descriptions
         from unittest.mock import MagicMock
+
         unknown_test_type = MagicMock(spec=RepairTestType)
         unknown_test_type.value = "UNKNOWN_TYPE"
 
@@ -1288,6 +1289,7 @@ class TestPromptBuilders:
 
         # Create a mock test type that is not in _test_type_descriptions
         from unittest.mock import MagicMock
+
         unknown_test_type = MagicMock(spec=RepairTestType)
         unknown_test_type.value = "NEW_TEST_TYPE"
 
@@ -1319,6 +1321,7 @@ class TestPromptBuilders:
 
         # Create a mock test type that is not in _test_type_descriptions
         from unittest.mock import MagicMock
+
         unknown_test_type = MagicMock(spec=RepairTestType)
         unknown_test_type.value = "FUTURE_TEST_TYPE"
 

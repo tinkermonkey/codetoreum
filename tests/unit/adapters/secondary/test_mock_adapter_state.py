@@ -34,7 +34,7 @@ class TestMockAdapterStateConsistency:
         adapter = mock_board_adapter
 
         # Create item in column A
-        adapter.add_item_to_column("board-1", "Backlog", "item-1")
+        adapter.seed_item_to_column("board-1", "Backlog", "item-1")
 
         # Verify item in Backlog
         position = await adapter.get_item_position("item-1")
@@ -59,7 +59,7 @@ class TestMockAdapterStateConsistency:
 
         # Add multiple items
         for i in range(5):
-            adapter.add_item_to_column("board-1", "Backlog", f"item-{i}")
+            adapter.seed_item_to_column("board-1", "Backlog", f"item-{i}")
 
         # Move items concurrently
         tasks = [adapter.move_item_to_column(f"item-{i}", "In Progress", MovedByType.HUMAN) for i in range(5)]
@@ -79,7 +79,7 @@ class TestMockAdapterStateConsistency:
         adapter = mock_board_adapter
 
         # Add items and move them
-        adapter.add_item_to_column("board-1", "Backlog", "item-1")
+        adapter.seed_item_to_column("board-1", "Backlog", "item-1")
         await adapter.move_item_to_column("item-1", "Done", MovedByType.ORCHESTRATOR)
 
         # Verify item in Done
@@ -102,9 +102,9 @@ class TestMockAdapterStateConsistency:
         adapter = mock_board_adapter
 
         # Add items to multiple columns
-        adapter.add_item_to_column("board-1", "Backlog", "item-1")
-        adapter.add_item_to_column("board-1", "Backlog", "item-2")
-        adapter.add_item_to_column("board-1", "In Progress", "item-3")
+        adapter.seed_item_to_column("board-1", "Backlog", "item-1")
+        adapter.seed_item_to_column("board-1", "Backlog", "item-2")
+        adapter.seed_item_to_column("board-1", "In Progress", "item-3")
 
         # Move items around
         await adapter.move_item_to_column("item-1", "In Progress", MovedByType.HUMAN)

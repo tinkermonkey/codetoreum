@@ -39,6 +39,7 @@ from codetoreum.infrastructure.simulation.scenario_models import (
 )
 from codetoreum.ports.exceptions import ValidationError
 from codetoreum.ports.output.agent_repository import IAgentRepository
+from codetoreum.ports.output.board_service import MovedByType
 from codetoreum.ports.output.config_store import (
     AgentConfig,
     PipelineConfig,
@@ -532,7 +533,7 @@ class SimulationDataSeeder:
             raise ValidationError(message)
 
         self._board_adapter.current_project = project_id
-        self._board_adapter.add_item_to_column(board_id, column_name, work_item_id)
+        await self._board_adapter.add_item_to_column(work_item_id, column_name, MovedByType.HUMAN)
 
         logger.info(f"Placed work item {work_item_id} in column '{column_name}' on board {board_id}")
         return self
@@ -674,6 +675,10 @@ class SimulationDataSeeder:
             repair_cycle_test_types: tuple[RepairTestType, ...] | None = None
             if cfg.repair_cycle_test_types:
                 repair_cycle_test_types = tuple(RepairTestType(t) for t in cfg.repair_cycle_test_types)
+            # Convert pr_review_cycle_config to domain model if present
+            pr_review_cycle_config = None
+            if cfg.pr_review_cycle_config:
+                pr_review_cycle_config = cfg.pr_review_cycle_config.to_domain()
             columns.append(
                 ColumnTemplate(
                     name=cfg.name,
@@ -688,6 +693,7 @@ class SimulationDataSeeder:
                     sla_escalation_column=cfg.sla_escalation_column,
                     repair_cycle_agents=repair_cycle_agents,
                     repair_cycle_test_types=repair_cycle_test_types,
+                    pr_review_cycle_config=pr_review_cycle_config,
                     execution_type=cfg.execution_type,
                 )
             )

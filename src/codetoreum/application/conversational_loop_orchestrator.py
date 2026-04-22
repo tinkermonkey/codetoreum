@@ -597,10 +597,11 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
             PortError: If starting/stopping monitoring fails
             EventStoreError: If persisting state fails
         """
+        # WorkItemColumnChangedEvent is a frozen dataclass with direct attributes
         work_item_id = event.work_item_id
         project_id = event.project_id
-        from_column = getattr(event, "from_column", "")
-        to_column = getattr(event, "to_column", "")
+        from_column = event.from_column
+        to_column = event.to_column
 
         if not work_item_id or not project_id:
             message = "WorkItemColumnChangedEvent must have work_item_id and project_id"

@@ -70,16 +70,18 @@ async def test_systemic_analysis_call_recording(
 ):
     """Test that mock adapter records all analyze() calls for inspection."""
     mock_adapter = simulation_bootstrap.adapters.systemic_analysis_as_mock()
-    mock_adapter.set_results([
-        SystemicAnalysisResult(
-            classification=FailureClassification.CODE_DEFECT,
-            confidence=1.0,
-            reasoning="Test failure in src/main.py",
-            affected_files=("src/main.py",),
-            recommended_action="Fix code defects",
-            cross_cutting=False,
-        ),
-    ])
+    mock_adapter.set_results(
+        [
+            SystemicAnalysisResult(
+                classification=FailureClassification.CODE_DEFECT,
+                confidence=1.0,
+                reasoning="Test failure in src/main.py",
+                affected_files=("src/main.py",),
+                recommended_action="Fix code defects",
+                cross_cutting=False,
+            ),
+        ]
+    )
 
     # Simulate calling the adapter (as repair cycle would)
     failures = [

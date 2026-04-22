@@ -45,9 +45,9 @@ async def test_scenario_09_queue_position_ordering():
     )
 
     # Add work items to "In Progress" column
-    board_service.add_item_to_column("board-1", "In Progress", "item-1")
-    board_service.add_item_to_column("board-1", "In Progress", "item-2")
-    board_service.add_item_to_column("board-1", "In Progress", "item-3")
+    board_service.seed_item_to_column("board-1", "In Progress", "item-1")
+    board_service.seed_item_to_column("board-1", "In Progress", "item-2")
+    board_service.seed_item_to_column("board-1", "In Progress", "item-3")
 
     # Enqueue items with their current positions
     await queue_service.enqueue_item(
@@ -99,7 +99,7 @@ async def test_scenario_09_queue_position_ordering():
 
     # Simulate human reordering: drag item-3 to top
     # This changes board order but queue still has old positions
-    board_service.add_item_to_column("board-1", "In Progress", "item-4")
+    board_service.seed_item_to_column("board-1", "In Progress", "item-4")
     await board_service.simulate_human_move_async("item-4", "In Progress")
 
     # Create updated board with new order
@@ -228,9 +228,9 @@ async def test_scenario_09_with_board_service_sync():
     )
 
     # Add items to trigger column
-    board_service.add_item_to_column("board-1", "Trigger", "item-1")
-    board_service.add_item_to_column("board-1", "Trigger", "item-2")
-    board_service.add_item_to_column("board-1", "Trigger", "item-3")
+    board_service.seed_item_to_column("board-1", "Trigger", "item-1")
+    board_service.seed_item_to_column("board-1", "Trigger", "item-2")
+    board_service.seed_item_to_column("board-1", "Trigger", "item-3")
 
     # Initial enqueue with positions
     await queue_service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)

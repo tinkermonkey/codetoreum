@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Plus, Trash2, Pencil, CheckCircle, XCircle } from 'lucide-react'
 import Header from './Header'
 import NavigationTabs from './NavigationTabs'
@@ -33,7 +33,7 @@ export default function ReviewLearning() {
   }, [])
 
   // Fetch filters
-  const fetchFilters = () => {
+  const fetchFilters = useCallback(() => {
     setLoading(true)
     const url = selectedAgent === 'all'
       ? `${API_BASE}/api/review-filters`
@@ -54,11 +54,11 @@ export default function ReviewLearning() {
         setError(err.message)
         setLoading(false)
       })
-  }
+  }, [selectedAgent])
 
   useEffect(() => {
     fetchFilters()
-  }, [selectedAgent])
+  }, [fetchFilters])
 
   const toggleFilter = async (filterId) => {
     try {

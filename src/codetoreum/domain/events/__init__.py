@@ -157,6 +157,23 @@ from .lock_events import (
     WorkItemQueuedEvent,
 )
 
+# PR Review Cycle events
+from .pr_review_cycle_events import (
+    PRReviewCycleApprovedEvent,
+    PRReviewCycleCICheckCompletedEvent,
+    PRReviewCycleCodeReviewStartedEvent,
+    PRReviewCycleConsolidationCompletedEvent,
+    PRReviewCycleConsolidationStartedEvent,
+    PRReviewCycleEscalatedEvent,
+    PRReviewCycleIssuesFoundEvent,
+    PRReviewCycleMaxCyclesReachedEvent,
+    PRReviewCyclePhaseCompletedEvent,
+    PRReviewCyclePhaseStartedEvent,
+    PRReviewCycleStartedEvent,
+    PRReviewCycleSubIssuesCreatedEvent,
+    PRReviewCycleVerificationStartedEvent,
+)
+
 # Project management events
 from .project_events import (
     OrchestrationCycleCompletedEvent,
@@ -384,6 +401,20 @@ __all__ = [
     "ReviewCycleHumanFeedbackReceivedEvent",
     "ReviewCycleMaxIterationsReachedEvent",
     "ReviewCycleApprovedEvent",
+    # PR Review Cycle events
+    "PRReviewCycleStartedEvent",
+    "PRReviewCyclePhaseStartedEvent",
+    "PRReviewCycleCodeReviewStartedEvent",
+    "PRReviewCycleVerificationStartedEvent",
+    "PRReviewCycleCICheckCompletedEvent",
+    "PRReviewCycleConsolidationStartedEvent",
+    "PRReviewCycleConsolidationCompletedEvent",
+    "PRReviewCycleApprovedEvent",
+    "PRReviewCycleIssuesFoundEvent",
+    "PRReviewCycleMaxCyclesReachedEvent",
+    "PRReviewCycleEscalatedEvent",
+    "PRReviewCycleSubIssuesCreatedEvent",
+    "PRReviewCyclePhaseCompletedEvent",
     # Container execution events
     "ContainerExecutionCompletedEvent",
     # Execution events

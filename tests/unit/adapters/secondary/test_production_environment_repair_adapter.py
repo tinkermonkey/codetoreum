@@ -119,9 +119,7 @@ def _make_adapter(
 
 
 @pytest.mark.asyncio
-async def test_rebuild_environment_success(
-    mock_llm, repair_config, test_context, test_config, mock_event_emitter
-):
+async def test_rebuild_environment_success(mock_llm, repair_config, test_context, test_config, mock_event_emitter):
     """Test successful environment rebuild."""
     # Setup
     response = {
@@ -165,9 +163,7 @@ async def test_rebuild_environment_success(
 
 
 @pytest.mark.asyncio
-async def test_rebuild_environment_failure(
-    mock_llm, repair_config, test_context, test_config, mock_event_emitter
-):
+async def test_rebuild_environment_failure(mock_llm, repair_config, test_context, test_config, mock_event_emitter):
     """Test failed environment rebuild with error message."""
     # Setup
     response = {
@@ -198,9 +194,7 @@ async def test_rebuild_environment_failure(
 
 
 @pytest.mark.asyncio
-async def test_rebuild_environment_timeout(
-    mock_llm, test_context, test_config, mock_event_emitter
-):
+async def test_rebuild_environment_timeout(mock_llm, test_context, test_config, mock_event_emitter):
     """Test rebuild timeout enforcement using configured timeout."""
     # Setup - create config with very short timeout
     rebuild_timeout = 1
@@ -295,9 +289,7 @@ async def test_rebuild_environment_no_event_emitter(mock_llm, repair_config, tes
 
 
 @pytest.mark.asyncio
-async def test_verify_environment_success(
-    mock_llm, repair_config, test_context, test_config, mock_event_emitter
-):
+async def test_verify_environment_success(mock_llm, repair_config, test_context, test_config, mock_event_emitter):
     """Test successful environment verification."""
     # Setup
     response = {
@@ -340,9 +332,7 @@ async def test_verify_environment_success(
 
 
 @pytest.mark.asyncio
-async def test_verify_environment_failure(
-    mock_llm, repair_config, test_context, test_config, mock_event_emitter
-):
+async def test_verify_environment_failure(mock_llm, repair_config, test_context, test_config, mock_event_emitter):
     """Test failed environment verification with failed checks."""
     # Setup
     response = {
@@ -374,9 +364,7 @@ async def test_verify_environment_failure(
 
 
 @pytest.mark.asyncio
-async def test_verify_environment_timeout(
-    mock_llm, test_context, test_config, mock_event_emitter
-):
+async def test_verify_environment_timeout(mock_llm, test_context, test_config, mock_event_emitter):
     """Test verification timeout enforcement using configured timeout."""
     # Setup - create config with very short timeout
     verify_timeout = 1
@@ -443,9 +431,7 @@ async def test_verify_environment_json_parse_error(
 
 
 @pytest.mark.asyncio
-async def test_verify_environment_no_event_emitter(
-    mock_llm, repair_config, test_context, test_config
-):
+async def test_verify_environment_no_event_emitter(mock_llm, repair_config, test_context, test_config):
     """Test verify works without event emitter (null-object pattern)."""
     # Setup - no event emitter provided
     response = {
@@ -473,9 +459,7 @@ async def test_verify_environment_no_event_emitter(
 
 
 @pytest.mark.asyncio
-async def test_rebuild_and_verify_independent_timeouts(
-    mock_llm, test_context, test_config, mock_event_emitter
-):
+async def test_rebuild_and_verify_independent_timeouts(mock_llm, test_context, test_config, mock_event_emitter):
     """Test that rebuild and verify timeouts are independent."""
     # Setup - short rebuild timeout, longer verify timeout
     repair_config = EnvironmentRepairConfig(
@@ -521,9 +505,7 @@ async def test_rebuild_and_verify_independent_timeouts(
 
     # Verify rebuild used its own timeout
     events = mock_event_emitter.get_events()
-    rebuild_completed = next(
-        (e for e in events if isinstance(e, EnvironmentRebuildCompletedEvent)), None
-    )
+    rebuild_completed = next((e for e in events if isinstance(e, EnvironmentRebuildCompletedEvent)), None)
     assert rebuild_completed is not None
 
 
@@ -889,9 +871,7 @@ async def test_rebuild_with_circuit_breaker_open(
 
 
 @pytest.mark.asyncio
-async def test_verify_with_circuit_breaker_open(
-    mock_llm, repair_config, test_context, test_config, mock_event_emitter
-):
+async def test_verify_with_circuit_breaker_open(mock_llm, repair_config, test_context, test_config, mock_event_emitter):
     """Test verify when circuit breaker is open/tripped."""
     from codetoreum.infrastructure.resilience.circuit_breaker import CircuitBreakerOpenError
 
@@ -923,9 +903,7 @@ async def test_verify_with_circuit_breaker_open(
 # ============================================================================
 
 
-def test_get_test_type_description_unknown_type(
-    mock_event_emitter, caplog
-):
+def test_get_test_type_description_unknown_type(mock_event_emitter, caplog):
     """Test that unknown test type raises ValueError and logs error.
 
     This test verifies that when an unknown RepairTestType enum value is
@@ -964,9 +942,7 @@ def test_get_test_type_description_unknown_type(
 
 
 @pytest.mark.asyncio
-async def test_build_environment_rebuild_prompt_unknown_test_type(
-    mock_event_emitter, caplog
-):
+async def test_build_environment_rebuild_prompt_unknown_test_type(mock_event_emitter, caplog):
     """Test that rebuild prompt builder raises ValueError for unknown test type.
 
     Verifies that _build_environment_rebuild_prompt correctly propagates
@@ -999,9 +975,7 @@ async def test_build_environment_rebuild_prompt_unknown_test_type(
 
 
 @pytest.mark.asyncio
-async def test_build_environment_verify_prompt_unknown_test_type(
-    mock_event_emitter, caplog
-):
+async def test_build_environment_verify_prompt_unknown_test_type(mock_event_emitter, caplog):
     """Test that verify prompt builder raises ValueError for unknown test type.
 
     Verifies that _build_environment_verify_prompt correctly propagates

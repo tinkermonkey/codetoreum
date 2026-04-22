@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import re
+import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -14,6 +15,7 @@ from dateutil import parser as dateparser
 from codetoreum.domain.comment import Comment
 from codetoreum.domain.types import CommentId, ProjectId, UserId, WorkItemId
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
+from codetoreum.infrastructure.http.github_graphql_client import GitHubGraphQLClient, GitHubGraphQLConfig
 from codetoreum.ports.exceptions import (
     AuthenticationError,
     ExternalServiceError,
@@ -42,6 +44,9 @@ class GitHubConfig:
     api_version: str = "2022-11-28"
     timeout_seconds: int = 30
 
+    # GraphQL configuration
+    graphql_url: str = "https://api.github.com/graphql"
+
     # Caching
     cache_ttl_seconds: int = 300  # 5 minutes
     cache_max_entries: int = 1000  # Maximum cache entries before eviction
@@ -53,6 +58,7 @@ class GitHubTicketAdapter(ITicketSystem):
 
     This adapter implements the ITicketSystem interface using GitHub's REST API.
     It handles authentication, rate limiting, pagination, and error mapping.
+    Optionally uses GraphQL API to populate discussion_id field via discussion queries.
     """
 
     def __init__(self, config: GitHubConfig):
@@ -64,10 +70,17 @@ class GitHubTicketAdapter(ITicketSystem):
         """
         self.config = config
         self._http_client: httpx.AsyncClient | None = None
+        self._graphql_client: GitHubGraphQLClient | None = None
 
         # In-memory cache with eviction support
         self._cache: dict[str, tuple[datetime, Any]] = {}
         self._cache_access_times: dict[str, datetime] = {}  # Track LRU
+
+        # Discussion cache (issue_number -> discussion_id)
+        self._discussion_cache: dict[str, str | None] = {}
+        self._discussions_fetched: bool = False
+        self._discussions_fetch_error_id: str | None = None  # Sentry error tracking
+        self._discussions_retry_count: int = 0  # Retry limit for persistent failures (max 3)
 
         # Rate limit tracking
         self._rate_limit_remaining: int | None = None
@@ -90,11 +103,26 @@ class GitHubTicketAdapter(ITicketSystem):
 
         return self._http_client
 
+    def _get_graphql_client(self) -> GitHubGraphQLClient:
+        """Get or create GraphQL client."""
+        if self._graphql_client is None:
+            graphql_config = GitHubGraphQLConfig(
+                token=self.config.token,
+                api_url=self.config.graphql_url,
+                timeout_seconds=self.config.timeout_seconds,
+            )
+            self._graphql_client = GitHubGraphQLClient(graphql_config)
+
+        return self._graphql_client
+
     async def close(self) -> None:
-        """Close HTTP client."""
+        """Close HTTP client and GraphQL client."""
         if self._http_client is not None:
             await self._http_client.aclose()
             self._http_client = None
+        if self._graphql_client is not None:
+            await self._graphql_client.close()
+            self._graphql_client = None
 
     def get_owner_repo(self) -> tuple[str, str]:
         """Get GitHub owner (organization) and repository name.
@@ -109,6 +137,172 @@ class GitHubTicketAdapter(ITicketSystem):
             msg = "GitHub owner (organization) and repository must be configured"
             raise ValueError(msg)
         return (self.config.organization, self.config.repository)
+
+    async def _fetch_discussions_for_repository(self) -> dict[str, str | None]:
+        """Fetch all discussions in the repository and build issue->discussion mapping.
+
+        Queries GitHub GraphQL API for discussions in the repository using cursor-based
+        pagination. Searches for discussions that reference issue numbers and creates
+        a mapping of issue numbers to discussion IDs.
+
+        Returns:
+            Dictionary mapping issue_number -> discussion_id (or None if not found)
+
+        Note:
+            Results are cached in _discussion_cache for the lifetime of the adapter.
+            Only fetches once per adapter instance.
+            Uses cursor-based pagination to handle repositories with > 100 discussions.
+        """
+        if self._discussions_fetched:
+            return self._discussion_cache
+
+        # Stop retrying after 3 failures to prevent API call storms on persistent errors
+        if self._discussions_retry_count >= 3:
+            self._discussions_fetched = True
+            return {}
+
+        try:
+            graphql_client = self._get_graphql_client()
+
+            # Query for discussions in the repository using cursor-based pagination
+            # This follows the same pattern as github_discussion_adapter.py
+            query = """
+            query GetDiscussions($owner: String!, $repo: String!, $first: Int!, $after: String) {
+              repository(owner: $owner, name: $repo) {
+                discussions(first: $first, after: $after) {
+                  pageInfo {
+                    hasNextPage
+                    endCursor
+                  }
+                  nodes {
+                    id
+                    body
+                  }
+                }
+              }
+            }
+            """
+
+            cursor: str | None = None
+            issues_seen = 0
+
+            while True:
+                variables = {
+                    "owner": self.config.organization,
+                    "repo": self.config.repository,
+                    "first": 100,  # Fetch 100 per page (GitHub limit)
+                }
+                if cursor:
+                    variables["after"] = cursor
+
+                result = await graphql_client.execute(query, variables)
+
+                # Extract discussions from result
+                repository = result.get("repository", {})
+                discussions = repository.get("discussions", {})
+                page_info = discussions.get("pageInfo", {})
+                nodes = discussions.get("nodes", [])
+
+                # Build mapping of issue numbers to discussion IDs
+                # Searches for issue number references in discussion body
+                for discussion in nodes:
+                    body = discussion.get("body", "")
+                    discussion_id = discussion.get("id")
+
+                    # Find issue number references (#123) in discussion
+                    # Pattern matches #digits when preceded/followed by word boundaries
+                    # Avoids matching markdown headings (# 1) by requiring # to be followed immediately by digits
+                    # Note: Cannot reliably distinguish issue refs from PR refs (same #N syntax) or
+                    # from hex colors in all cases using simple regex. For production use, consider
+                    # GitHub's native linkedFrom/timelineItems GraphQL fields.
+                    issue_pattern = r"(?:^|\s|/|[(\[])?#(\d+)(?=[\s,\.\)\]\-;:!?]|$)"
+
+                    for match in re.finditer(issue_pattern, body, re.MULTILINE):
+                        issue_number = match.group(1)
+
+                        # Skip common CSS color codes (3-6 chars of hex only, e.g., #FFF, #FFFFFF, #000)
+                        # Only filter if it looks like a pure hex color code (letters A-F present)
+                        if len(issue_number) in (3, 6) and any(c in "ABCDEFabcdef" for c in issue_number):
+                            continue
+
+                        issues_seen += 1
+                        # Store first matching discussion for each issue
+                        if issue_number not in self._discussion_cache:
+                            self._discussion_cache[issue_number] = discussion_id
+
+                # Check if there are more pages
+                if not page_info.get("hasNextPage"):
+                    break
+
+                cursor = page_info.get("endCursor")
+
+            # Log if we hit the truncation point (exactly 100 * N discussions)
+            # to indicate pagination is working
+            if cursor is None and len(nodes) == 100:
+                logger.info(
+                    f"Fetched discussions for {self.config.organization}/{self.config.repository}, "
+                    f"found {issues_seen} issue references"
+                )
+
+            self._discussions_fetched = True
+            self._discussions_fetch_error_id = None  # Clear error ID on successful fetch
+            self._discussions_retry_count = 0  # Reset retry count on success
+            return self._discussion_cache
+
+        except ExternalServiceError as e:
+            # Log but don't fail - discussion fetching is optional
+            # Generate error_id for Sentry tracking and allow retry on transient failures
+            error_id = str(uuid.uuid4())
+            self._discussions_fetch_error_id = error_id
+            self._discussions_retry_count += 1
+            logger.warning(
+                f"Failed to fetch discussions for repository {self.config.organization}/{self.config.repository}: {e}",
+                exc_info=True,
+                extra={"error_id": error_id},
+            )
+            # Don't set _discussions_fetched = True to allow retry on transient failures
+            return {}
+        except Exception as e:
+            # Catch any other errors and log them
+            # Generate error_id for Sentry tracking and allow retry on transient failures
+            error_id = str(uuid.uuid4())
+            self._discussions_fetch_error_id = error_id
+            self._discussions_retry_count += 1
+            logger.warning(
+                f"Unexpected error fetching discussions: {e}",
+                exc_info=True,
+                extra={
+                    "organization": self.config.organization,
+                    "repository": self.config.repository,
+                    "error_id": error_id,
+                },
+            )
+            # Don't set _discussions_fetched = True to allow retry on transient failures
+            return {}
+
+    async def _get_discussion_id(self, issue_number: str) -> str | None:
+        """Get discussion ID associated with an issue.
+
+        Looks up the discussion ID for an issue from the cached discussions map.
+        The map is fetched on first call and cached for the lifetime of the adapter.
+
+        Args:
+            issue_number: GitHub issue number
+
+        Returns:
+            Discussion node ID (e.g., "D_kwDOQaznN84Ali-E") or None if not found
+        """
+        # Check if we've already cached discussions
+        if issue_number in self._discussion_cache:
+            return self._discussion_cache[issue_number]
+
+        # If we haven't fetched discussions yet, fetch them now
+        if not self._discussions_fetched:
+            discussions_map = await self._fetch_discussions_for_repository()
+            return discussions_map.get(issue_number)
+
+        # Already fetched and this issue isn't in the map
+        return None
 
     def _evict_cache_if_needed(self) -> None:
         """Evict oldest cache entries if cache is full."""
@@ -243,7 +437,7 @@ class GitHubTicketAdapter(ITicketSystem):
             msg = "GitHub"
             raise ExternalServiceError(msg, f"Request failed: {sanitized_error}") from e
 
-    def _map_github_issue_to_work_item(self, issue: dict[str, Any], project_id: str) -> WorkItem:
+    async def _map_github_issue_to_work_item(self, issue: dict[str, Any], project_id: str) -> WorkItem:
         """
         Map GitHub issue to WorkItem domain model.
 
@@ -292,6 +486,23 @@ class GitHubTicketAdapter(ITicketSystem):
         updated_at = dateparser.isoparse(issue["updated_at"])
         completed_at = dateparser.isoparse(issue["closed_at"]) if issue.get("closed_at") else None
 
+        # Extract PR and discussion identifiers from GitHub API response
+        # GitHub API may include pull_request information indicating this issue is linked to a PR
+        pr_id = None
+        if issue.get("pull_request"):
+            # Extract PR number from the pull_request URL
+            # pull_request contains a "url" field like "https://api.github.com/repos/owner/repo/pulls/123"
+            pr_url = issue["pull_request"].get("url", "")
+            if pr_url:
+                # Extract number from URL path
+                pr_number = pr_url.rstrip("/").split("/")[-1]
+                if pr_number.isdigit():
+                    pr_id = pr_number
+
+        # Query GraphQL API to populate discussion_id
+        # Searches for discussions in the repository that link to this issue
+        discussion_id = await self._get_discussion_id(str(issue["number"]))
+
         return WorkItem(
             id=WorkItemId(str(issue["number"])),
             project_id=project_id,
@@ -311,6 +522,8 @@ class GitHubTicketAdapter(ITicketSystem):
             created_at=created_at,
             updated_at=updated_at,
             completed_at=completed_at,
+            pr_id=pr_id,
+            discussion_id=discussion_id,
         )
 
     async def get_work_item(self, item_id: WorkItemId) -> WorkItem:
@@ -334,7 +547,7 @@ class GitHubTicketAdapter(ITicketSystem):
         issue = response.json()
         # Extract project_id from repository
         project_id = ProjectId(f"{self.config.organization}/{self.config.repository}")
-        work_item = self._map_github_issue_to_work_item(issue, project_id)
+        work_item = await self._map_github_issue_to_work_item(issue, project_id)
 
         self._set_cache(cache_key, work_item)
         return work_item
@@ -349,8 +562,32 @@ class GitHubTicketAdapter(ITicketSystem):
         priority: WorkItemPriority | None = None,
         metadata: dict[str, Any] | None = None,
         parent_issue_id: str | None = None,
+        pr_id: str | None = None,
+        discussion_id: str | None = None,
     ) -> WorkItem:
-        """Create a new work item."""
+        """Create a new work item.
+
+        Args:
+            title: Work item title
+            description: Work item description
+            project_id: Project identifier
+            labels: Optional list of labels
+            assignee: Optional assignee user ID
+            priority: Optional priority level
+            metadata: Optional metadata dictionary
+            parent_issue_id: Optional parent issue ID
+            pr_id: Optional PR identifier (not used for creation, ignored)
+            discussion_id: Optional discussion thread identifier (not used for creation, ignored)
+
+        Returns:
+            The created work item
+
+        Note:
+            The pr_id and discussion_id parameters are accepted for API consistency
+            but are not used when creating issues via GitHub API. They would be
+            populated when fetching existing work items that have associated PRs
+            or discussions.
+        """
         if not title:
             msg = "Title is required"
             raise ValidationError(msg)
@@ -384,7 +621,7 @@ class GitHubTicketAdapter(ITicketSystem):
             raise ExternalServiceError(msg, f"Failed to create issue: {response.text}")
 
         issue = response.json()
-        return self._map_github_issue_to_work_item(issue, project_id)
+        return await self._map_github_issue_to_work_item(issue, project_id)
 
     async def get_child_issues(self, parent_id: WorkItemId) -> list[WorkItem]:
         """Retrieve child issues for a parent work item.
@@ -432,7 +669,7 @@ class GitHubTicketAdapter(ITicketSystem):
 
         issue = response.json()
         project_id = ProjectId(f"{self.config.organization}/{self.config.repository}")
-        return self._map_github_issue_to_work_item(issue, project_id)
+        return await self._map_github_issue_to_work_item(issue, project_id)
 
     async def delete_work_item(self, item_id: WorkItemId) -> None:
         """
@@ -525,7 +762,7 @@ class GitHubTicketAdapter(ITicketSystem):
             if "pull_request" in issue:
                 continue
 
-            work_item = self._map_github_issue_to_work_item(issue, proj_id)
+            work_item = await self._map_github_issue_to_work_item(issue, proj_id)
 
             # Apply updated_after filter (not supported by GitHub API)
             if updated_after and work_item.updated_at < updated_after:
@@ -560,7 +797,11 @@ class GitHubTicketAdapter(ITicketSystem):
         issues = result.get("items", [])
 
         proj_id = ProjectId(f"{self.config.organization}/{self.config.repository}")
-        return [self._map_github_issue_to_work_item(issue, proj_id) for issue in issues]
+        work_items = []
+        for issue in issues:
+            work_item = await self._map_github_issue_to_work_item(issue, proj_id)
+            work_items.append(work_item)
+        return work_items
 
     async def get_work_item_stream(
         self,

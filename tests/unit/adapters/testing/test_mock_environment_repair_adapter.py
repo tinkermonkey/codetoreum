@@ -80,9 +80,7 @@ def test_config():
 
 
 @pytest.mark.asyncio
-async def test_rebuild_environment_default_success(
-    simulation_clock, test_context, test_config
-):
+async def test_rebuild_environment_default_success(simulation_clock, test_context, test_config):
     """Test rebuild succeeds by default on first attempt."""
     adapter = MockEnvironmentRepairAdapter(clock=simulation_clock)
 
@@ -99,13 +97,9 @@ async def test_rebuild_environment_default_success(
 
 
 @pytest.mark.asyncio
-async def test_rebuild_environment_default_with_events(
-    simulation_clock, mock_event_emitter, test_context, test_config
-):
+async def test_rebuild_environment_default_with_events(simulation_clock, mock_event_emitter, test_context, test_config):
     """Test rebuild emits events with correct structure."""
-    adapter = MockEnvironmentRepairAdapter(
-        clock=simulation_clock, event_emitter=mock_event_emitter
-    )
+    adapter = MockEnvironmentRepairAdapter(clock=simulation_clock, event_emitter=mock_event_emitter)
 
     result = await adapter.rebuild_environment(
         project="test-project",
@@ -143,9 +137,7 @@ async def test_rebuild_environment_failure_then_success(
     simulation_clock, mock_event_emitter, test_context, test_config
 ):
     """Test rebuild with failure followed by success in sequence."""
-    adapter = MockEnvironmentRepairAdapter(
-        clock=simulation_clock, event_emitter=mock_event_emitter
-    )
+    adapter = MockEnvironmentRepairAdapter(clock=simulation_clock, event_emitter=mock_event_emitter)
 
     # Configure sequence: fail, then succeed
     failure_result = RebuildResult(
@@ -182,9 +174,7 @@ async def test_rebuild_environment_failure_then_success(
 
 
 @pytest.mark.asyncio
-async def test_rebuild_environment_multiple_failures(
-    simulation_clock, test_context, test_config
-):
+async def test_rebuild_environment_multiple_failures(simulation_clock, test_context, test_config):
     """Test rebuild with multiple failures in sequence."""
     adapter = MockEnvironmentRepairAdapter(clock=simulation_clock)
 
@@ -211,28 +201,20 @@ async def test_rebuild_environment_multiple_failures(
     adapter.set_rebuild_results(results)
 
     # First attempt
-    r1 = await adapter.rebuild_environment(
-        project="test-project", config=test_config, context=test_context
-    )
+    r1 = await adapter.rebuild_environment(project="test-project", config=test_config, context=test_context)
     assert r1.success is False
 
     # Second attempt
-    r2 = await adapter.rebuild_environment(
-        project="test-project", config=test_config, context=test_context
-    )
+    r2 = await adapter.rebuild_environment(project="test-project", config=test_config, context=test_context)
     assert r2.success is False
 
     # Third attempt
-    r3 = await adapter.rebuild_environment(
-        project="test-project", config=test_config, context=test_context
-    )
+    r3 = await adapter.rebuild_environment(project="test-project", config=test_config, context=test_context)
     assert r3.success is True
 
 
 @pytest.mark.asyncio
-async def test_rebuild_environment_exhaustion_raises_error(
-    simulation_clock, test_context, test_config
-):
+async def test_rebuild_environment_exhaustion_raises_error(simulation_clock, test_context, test_config):
     """Test rebuild raises IndexError when sequence is exhausted.
 
     This prevents silent test failures where tests make more calls than
@@ -253,16 +235,12 @@ async def test_rebuild_environment_exhaustion_raises_error(
     )
 
     # First call returns configured result
-    result1 = await adapter.rebuild_environment(
-        project="test-project", config=test_config, context=test_context
-    )
+    result1 = await adapter.rebuild_environment(project="test-project", config=test_config, context=test_context)
     assert result1.success is False
 
     # Second call (sequence exhausted) raises error
     with pytest.raises(IndexError, match="rebuild_environment sequence exhausted"):
-        await adapter.rebuild_environment(
-            project="test-project", config=test_config, context=test_context
-        )
+        await adapter.rebuild_environment(project="test-project", config=test_config, context=test_context)
 
 
 # ============================================================================
@@ -271,9 +249,7 @@ async def test_rebuild_environment_exhaustion_raises_error(
 
 
 @pytest.mark.asyncio
-async def test_verify_environment_default_healthy(
-    simulation_clock, test_context, test_config
-):
+async def test_verify_environment_default_healthy(simulation_clock, test_context, test_config):
     """Test verify returns healthy by default on first attempt."""
     adapter = MockEnvironmentRepairAdapter(clock=simulation_clock)
 
@@ -290,13 +266,9 @@ async def test_verify_environment_default_healthy(
 
 
 @pytest.mark.asyncio
-async def test_verify_environment_default_with_events(
-    simulation_clock, mock_event_emitter, test_context, test_config
-):
+async def test_verify_environment_default_with_events(simulation_clock, mock_event_emitter, test_context, test_config):
     """Test verify emits events with correct structure."""
-    adapter = MockEnvironmentRepairAdapter(
-        clock=simulation_clock, event_emitter=mock_event_emitter
-    )
+    adapter = MockEnvironmentRepairAdapter(clock=simulation_clock, event_emitter=mock_event_emitter)
 
     result = await adapter.verify_environment(
         project="test-project",
@@ -335,9 +307,7 @@ async def test_verify_environment_unhealthy_then_healthy(
     simulation_clock, mock_event_emitter, test_context, test_config
 ):
     """Test verify with unhealthy followed by healthy in sequence."""
-    adapter = MockEnvironmentRepairAdapter(
-        clock=simulation_clock, event_emitter=mock_event_emitter
-    )
+    adapter = MockEnvironmentRepairAdapter(clock=simulation_clock, event_emitter=mock_event_emitter)
 
     # Configure sequence: unhealthy, then healthy
     unhealthy_result = VerificationResult(
@@ -374,9 +344,7 @@ async def test_verify_environment_unhealthy_then_healthy(
 
 
 @pytest.mark.asyncio
-async def test_verify_environment_multiple_unhealthy(
-    simulation_clock, test_context, test_config
-):
+async def test_verify_environment_multiple_unhealthy(simulation_clock, test_context, test_config):
     """Test verify with multiple unhealthy checks in sequence."""
     adapter = MockEnvironmentRepairAdapter(clock=simulation_clock)
 
@@ -403,28 +371,20 @@ async def test_verify_environment_multiple_unhealthy(
     adapter.set_verification_results(results)
 
     # First attempt
-    r1 = await adapter.verify_environment(
-        project="test-project", config=test_config, context=test_context
-    )
+    r1 = await adapter.verify_environment(project="test-project", config=test_config, context=test_context)
     assert r1.healthy is False
 
     # Second attempt
-    r2 = await adapter.verify_environment(
-        project="test-project", config=test_config, context=test_context
-    )
+    r2 = await adapter.verify_environment(project="test-project", config=test_config, context=test_context)
     assert r2.healthy is False
 
     # Third attempt
-    r3 = await adapter.verify_environment(
-        project="test-project", config=test_config, context=test_context
-    )
+    r3 = await adapter.verify_environment(project="test-project", config=test_config, context=test_context)
     assert r3.healthy is True
 
 
 @pytest.mark.asyncio
-async def test_verify_environment_exhaustion_raises_error(
-    simulation_clock, test_context, test_config
-):
+async def test_verify_environment_exhaustion_raises_error(simulation_clock, test_context, test_config):
     """Test verify raises IndexError when sequence is exhausted.
 
     This prevents silent test failures where tests make more calls than
@@ -445,16 +405,12 @@ async def test_verify_environment_exhaustion_raises_error(
     )
 
     # First call returns configured result
-    result1 = await adapter.verify_environment(
-        project="test-project", config=test_config, context=test_context
-    )
+    result1 = await adapter.verify_environment(project="test-project", config=test_config, context=test_context)
     assert result1.healthy is False
 
     # Second call (sequence exhausted) raises error
     with pytest.raises(IndexError, match="verify_environment sequence exhausted"):
-        await adapter.verify_environment(
-            project="test-project", config=test_config, context=test_context
-        )
+        await adapter.verify_environment(project="test-project", config=test_config, context=test_context)
 
 
 # ============================================================================
@@ -468,15 +424,11 @@ async def test_rebuild_advances_clock_by_duration(simulation_clock, test_context
     adapter = MockEnvironmentRepairAdapter(clock=simulation_clock)
 
     # Configure result with specific duration
-    adapter.set_rebuild_results(
-        [RebuildResult(success=True, duration_seconds=42.0, actions_taken=(), error=None)]
-    )
+    adapter.set_rebuild_results([RebuildResult(success=True, duration_seconds=42.0, actions_taken=(), error=None)])
 
     initial_time = simulation_clock.now()
 
-    await adapter.rebuild_environment(
-        project="test-project", config=test_config, context=test_context
-    )
+    await adapter.rebuild_environment(project="test-project", config=test_config, context=test_context)
 
     final_time = simulation_clock.now()
     elapsed = (final_time - initial_time).total_seconds()
@@ -503,9 +455,7 @@ async def test_verify_advances_clock_by_duration(simulation_clock, test_context,
 
     initial_time = simulation_clock.now()
 
-    await adapter.verify_environment(
-        project="test-project", config=test_config, context=test_context
-    )
+    await adapter.verify_environment(project="test-project", config=test_config, context=test_context)
 
     final_time = simulation_clock.now()
     elapsed = (final_time - initial_time).total_seconds()
@@ -514,9 +464,7 @@ async def test_verify_advances_clock_by_duration(simulation_clock, test_context,
 
 
 @pytest.mark.asyncio
-async def test_multiple_operations_advance_clock_cumulatively(
-    simulation_clock, test_context, test_config
-):
+async def test_multiple_operations_advance_clock_cumulatively(simulation_clock, test_context, test_config):
     """Test that multiple operations advance clock cumulatively."""
     adapter = MockEnvironmentRepairAdapter(clock=simulation_clock)
 
@@ -536,24 +484,16 @@ async def test_multiple_operations_advance_clock_cumulatively(
     initial_time = simulation_clock.now()
 
     # First rebuild (10s)
-    await adapter.rebuild_environment(
-        project="test-project", config=test_config, context=test_context
-    )
+    await adapter.rebuild_environment(project="test-project", config=test_config, context=test_context)
 
     # First verify (5s)
-    await adapter.verify_environment(
-        project="test-project", config=test_config, context=test_context
-    )
+    await adapter.verify_environment(project="test-project", config=test_config, context=test_context)
 
     # Second rebuild (20s)
-    await adapter.rebuild_environment(
-        project="test-project", config=test_config, context=test_context
-    )
+    await adapter.rebuild_environment(project="test-project", config=test_config, context=test_context)
 
     # Second verify (5s)
-    await adapter.verify_environment(
-        project="test-project", config=test_config, context=test_context
-    )
+    await adapter.verify_environment(project="test-project", config=test_config, context=test_context)
 
     final_time = simulation_clock.now()
     total_elapsed = (final_time - initial_time).total_seconds()
@@ -568,9 +508,7 @@ async def test_multiple_operations_advance_clock_cumulatively(
 
 
 @pytest.mark.asyncio
-async def test_rebuild_and_verify_configured_independently(
-    simulation_clock, test_context, test_config
-):
+async def test_rebuild_and_verify_configured_independently(simulation_clock, test_context, test_config):
     """Test that rebuild and verify sequences are independent."""
     adapter = MockEnvironmentRepairAdapter(clock=simulation_clock)
 
@@ -599,15 +537,11 @@ async def test_rebuild_and_verify_configured_independently(
     )
 
     # Rebuild should fail
-    rebuild_result = await adapter.rebuild_environment(
-        project="test-project", config=test_config, context=test_context
-    )
+    rebuild_result = await adapter.rebuild_environment(project="test-project", config=test_config, context=test_context)
     assert rebuild_result.success is False
 
     # Verify should succeed (independent configuration)
-    verify_result = await adapter.verify_environment(
-        project="test-project", config=test_config, context=test_context
-    )
+    verify_result = await adapter.verify_environment(project="test-project", config=test_config, context=test_context)
     assert verify_result.healthy is True
 
 
@@ -621,9 +555,7 @@ async def test_rebuild_without_event_emitter(simulation_clock, test_context, tes
     """Test rebuild works without event emitter."""
     adapter = MockEnvironmentRepairAdapter(clock=simulation_clock, event_emitter=None)
 
-    result = await adapter.rebuild_environment(
-        project="test-project", config=test_config, context=test_context
-    )
+    result = await adapter.rebuild_environment(project="test-project", config=test_config, context=test_context)
 
     assert result.success is True
 
@@ -633,8 +565,6 @@ async def test_verify_without_event_emitter(simulation_clock, test_context, test
     """Test verify works without event emitter."""
     adapter = MockEnvironmentRepairAdapter(clock=simulation_clock, event_emitter=None)
 
-    result = await adapter.verify_environment(
-        project="test-project", config=test_config, context=test_context
-    )
+    result = await adapter.verify_environment(project="test-project", config=test_config, context=test_context)
 
     assert result.healthy is True

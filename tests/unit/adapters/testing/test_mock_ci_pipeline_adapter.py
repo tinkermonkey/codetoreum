@@ -598,6 +598,7 @@ class TestMockCIPipelineAdapterExceptionPropagation:
         This test ensures that exceptions raised by the injected event_emitter's
         emit() method are not suppressed, maintaining visibility of event bus failures.
         """
+
         class FailingEmitter:
             def emit(self, event):
                 raise RuntimeError("emitter failure should propagate")

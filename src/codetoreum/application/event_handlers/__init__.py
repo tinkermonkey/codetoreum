@@ -9,6 +9,9 @@ from codetoreum.application.event_handlers.branch_resolution_event_handler impor
 from codetoreum.application.event_handlers.execution_event_handler import (
     ExecutionEventHandler,
 )
+from codetoreum.application.event_handlers.pr_review_cycle_event_handler import (
+    PRReviewCycleEventHandler,
+)
 from codetoreum.application.event_handlers.repair_cycle_event_handler import (
     RepairCycleEventHandler,
 )
@@ -23,6 +26,7 @@ __all__ = [
     "BoardColumnEventHandler",
     "BranchResolutionEventHandler",
     "ExecutionEventHandler",
+    "PRReviewCycleEventHandler",
     "RepairCycleEventHandler",
     "ReviewEventHandler",
     "WorkflowEventHandler",

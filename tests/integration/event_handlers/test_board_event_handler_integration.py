@@ -17,7 +17,8 @@ from codetoreum.domain.board_workflow_template import (
     ColumnTemplate,
     ColumnType,
 )
-from codetoreum.domain.events import WorkItemColumnChanged
+from codetoreum.domain.events import WorkItemColumnChangedEvent
+from codetoreum.domain.events.adapter_events import now_iso
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.output.board_service import MovedByType, WorkItemPosition
 
@@ -167,16 +168,16 @@ class TestEndToEndColumnChangeWorkflow:
             queue_length=0,
         )
 
-        dev_event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Backlog",
-                "to_column": "Development",
-                "moved_by": "human",
-            },
+        dev_event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=now_iso(),
+            source="test",
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            from_column="Backlog",
+            to_column="Development",
+            moved_by="human",
         )
 
         await event_bus.publish(dev_event)
@@ -193,16 +194,16 @@ class TestEndToEndColumnChangeWorkflow:
             position=0,
         )
 
-        review_event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Development",
-                "to_column": "Code Review",
-                "moved_by": "orchestrator",
-            },
+        review_event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=now_iso(),
+            source="test",
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            from_column="Development",
+            to_column="Code Review",
+            moved_by="orchestrator",
         )
 
         await event_bus.publish(review_event)
@@ -221,16 +222,16 @@ class TestEndToEndColumnChangeWorkflow:
             queue_length_after_release=0,
         )
 
-        done_event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Testing",
-                "to_column": "Done",
-                "moved_by": "orchestrator",
-            },
+        done_event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=now_iso(),
+            source="test",
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            from_column="Testing",
+            to_column="Done",
+            moved_by="orchestrator",
         )
 
         await event_bus.publish(done_event)
@@ -260,16 +261,16 @@ class TestEndToEndColumnChangeWorkflow:
             queue_length=0,
         )
 
-        event1 = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Backlog",
-                "to_column": "Development",
-                "moved_by": "human",
-            },
+        event1 = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=now_iso(),
+            source="test",
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            from_column="Backlog",
+            to_column="Development",
+            moved_by="human",
         )
 
         await event_bus.publish(event1)
@@ -289,16 +290,16 @@ class TestEndToEndColumnChangeWorkflow:
             position=1,
         )
 
-        event2 = WorkItemColumnChanged(
-            aggregate_id="item-2",
-            payload={
-                "work_item_id": "item-2",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Backlog",
-                "to_column": "Development",
-                "moved_by": "human",
-            },
+        event2 = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=now_iso(),
+            source="test",
+            work_item_id="item-2",
+            project_id="proj-1",
+            board_id="board-1",
+            from_column="Backlog",
+            to_column="Development",
+            moved_by="human",
         )
 
         await event_bus.publish(event2)
@@ -319,16 +320,16 @@ class TestEndToEndColumnChangeWorkflow:
             position=1,
         )
 
-        exit_event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Testing",
-                "to_column": "Done",
-                "moved_by": "orchestrator",
-            },
+        exit_event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=now_iso(),
+            source="test",
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            from_column="Testing",
+            to_column="Done",
+            moved_by="orchestrator",
         )
 
         await event_bus.publish(exit_event)
@@ -403,16 +404,16 @@ class TestErrorRecovery:
         event_bus.register_handler(handler)
 
         # First event causes exception
-        event1 = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Backlog",
-                "to_column": "Development",
-                "moved_by": "human",
-            },
+        event1 = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=now_iso(),
+            source="test",
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            from_column="Backlog",
+            to_column="Development",
+            moved_by="human",
         )
 
         # Should not raise
@@ -422,16 +423,16 @@ class TestErrorRecovery:
         mock_agent_executor.reset_mock()
         mock_agent_executor.execute.side_effect = None
 
-        event2 = WorkItemColumnChanged(
-            aggregate_id="item-2",
-            payload={
-                "work_item_id": "item-2",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Development",
-                "to_column": "Code Review",
-                "moved_by": "human",
-            },
+        event2 = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=now_iso(),
+            source="test",
+            work_item_id="item-2",
+            project_id="proj-1",
+            board_id="board-1",
+            from_column="Development",
+            to_column="Code Review",
+            moved_by="human",
         )
 
         # Reset position for second item
@@ -505,16 +506,16 @@ class TestMultipleBoardsAndProjects:
             queue_length=0,
         )
 
-        event1 = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Backlog",
-                "to_column": "Development",
-                "moved_by": "human",
-            },
+        event1 = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=now_iso(),
+            source="test",
+            work_item_id="item-1",
+            project_id="proj-1",
+            board_id="board-1",
+            from_column="Backlog",
+            to_column="Development",
+            moved_by="human",
         )
 
         await event_bus.publish(event1)
@@ -522,16 +523,16 @@ class TestMultipleBoardsAndProjects:
 
         # Event for board 2 (simple workflow, no agents)
         mock_agent_executor.reset_mock()
-        event2 = WorkItemColumnChanged(
-            aggregate_id="item-2",
-            payload={
-                "work_item_id": "item-2",
-                "board_id": "board-2",
-                "project_id": "proj-1",
-                "from_column": "Todo",
-                "to_column": "Done",
-                "moved_by": "human",
-            },
+        event2 = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=now_iso(),
+            source="test",
+            work_item_id="item-2",
+            project_id="proj-1",
+            board_id="board-2",
+            from_column="Todo",
+            to_column="Done",
+            moved_by="human",
         )
 
         await event_bus.publish(event2)

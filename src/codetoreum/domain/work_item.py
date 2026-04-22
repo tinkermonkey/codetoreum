@@ -87,7 +87,11 @@ class WorkItem:
     # Timestamps
     created_at: datetime
     updated_at: datetime
-    completed_at: datetime | None
+
+    # PR and discussion tracking
+    pr_id: str | None = None
+    discussion_id: str | None = None
+    completed_at: datetime | None = None
 
     # Event tracking
     _events: list[DomainEvent] = field(default_factory=list, init=False, repr=False)
@@ -134,6 +138,8 @@ class WorkItem:
         priority: WorkItemPriority = WorkItemPriority.MEDIUM,
         external_id: str | None = None,
         external_url: str | None = None,
+        pr_id: str | None = None,
+        discussion_id: str | None = None,
     ) -> "WorkItem":
         """
         Factory method to create a new work item.
@@ -146,6 +152,8 @@ class WorkItem:
             priority: Work item priority (defaults to MEDIUM)
             external_id: Optional external system ID
             external_url: Optional external system URL
+            pr_id: Optional GitHub PR identifier
+            discussion_id: Optional GitHub discussion identifier
 
         Returns:
             Newly created WorkItem instance
@@ -170,6 +178,8 @@ class WorkItem:
             entered_column_at=None,
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
+            pr_id=pr_id,
+            discussion_id=discussion_id,
             completed_at=None,
         )
 
@@ -184,6 +194,8 @@ class WorkItem:
                 "priority": priority.value,
                 "external_id": external_id,
                 "external_url": external_url,
+                "pr_id": pr_id,
+                "discussion_id": discussion_id,
             },
         )
         work_item._add_event(event)
@@ -661,6 +673,8 @@ class WorkItem:
             entered_column_at=None,
             created_at=first_event.occurred_at,
             updated_at=first_event.occurred_at,
+            pr_id=payload.get("pr_id"),
+            discussion_id=payload.get("discussion_id"),
             completed_at=None,
         )
 

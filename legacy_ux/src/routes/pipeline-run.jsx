@@ -671,20 +671,20 @@ function PipelineRunView() {
         reactFlowInstance.fitView({ padding: 0.1, duration: 300 })
       }, 50)
     }
-  }, [mergedEvents, selectedPipelineRun, socketEvents, cycles, workflowConfig, setNodes, setEdges, reactFlowInstance, handleToggleCycle])
+  }, [mergedEvents, selectedPipelineRun, socketEvents, cycles, workflowConfig, setNodes, setEdges, reactFlowInstance, handleToggleCycle, pipelineRunEvents])
 
   // Initial load
   useEffect(() => {
     fetchActivePipelineRuns(true) // Pass true for initial load
     fetchCompletedPipelineRuns(0, false)
-  }, [])
+  }, [fetchActivePipelineRuns, fetchCompletedPipelineRuns])
 
   // Fetch data when tab changes
   useEffect(() => {
     if (selectedTab === 'completed' && completedPipelineRuns.length === 0) {
       fetchCompletedPipelineRuns(0, false)
     }
-  }, [selectedTab])
+  }, [selectedTab, completedPipelineRuns, fetchCompletedPipelineRuns])
 
   // Load events when pipeline run selected
   useEffect(() => {
@@ -760,7 +760,7 @@ function PipelineRunView() {
       })
       return updated
     })
-  }, [mergedEvents, workflowConfig, selectedPipelineRun])
+  }, [mergedEvents, workflowConfig, selectedPipelineRun, pipelineRunEvents])
 
   // Rebuild flowchart when events or socket events change
   useEffect(() => {
@@ -779,7 +779,7 @@ function PipelineRunView() {
         fetchActivePipelineRuns(false) // Background refresh from WebSocket event
       }
     }
-  }, [socketEvents])
+  }, [socketEvents, selectedPipelineRun, fetchPipelineRunEvents, fetchActivePipelineRuns])
 
   const onNodeMouseEnter = useCallback((event, node) => {
     setHoveredNode(node)

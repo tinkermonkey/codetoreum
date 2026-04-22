@@ -286,7 +286,7 @@ function PipelineRunDebugView() {
   useEffect(() => {
     fetchActivePipelineRuns(true) // Pass true for initial load
     fetchCompletedPipelineRuns(0, false)
-  }, [])
+  }, [fetchActivePipelineRuns, fetchCompletedPipelineRuns])
 
   // Periodic refresh to keep data up-to-date
   useEffect(() => {
@@ -308,7 +308,7 @@ function PipelineRunDebugView() {
     if (selectedTab === 'completed' && completedPipelineRuns.length === 0) {
       fetchCompletedPipelineRuns(0, false)
     }
-  }, [selectedTab])
+  }, [selectedTab, completedPipelineRuns, fetchCompletedPipelineRuns])
 
   // Load events when pipeline run selected
   useEffect(() => {

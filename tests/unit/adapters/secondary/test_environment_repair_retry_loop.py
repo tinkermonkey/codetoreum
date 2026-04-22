@@ -170,9 +170,7 @@ async def test_environment_issue_single_rebuild_succeeds():
     # After rebuild/verify succeeds, tests pass
     llm.execute.side_effect = [
         ExecutionResult(content=_ENVIRONMENT_ISSUE_JSON),  # Initial test run
-        ExecutionResult(
-            content='{"passed": 1, "failed": 0, "failures": [], "warnings": []}'
-        ),  # Re-test after env fix
+        ExecutionResult(content='{"passed": 1, "failed": 0, "failures": [], "warnings": []}'),  # Re-test after env fix
     ]
 
     ctx = _RepairCycleContext()
@@ -354,9 +352,7 @@ async def test_environment_issue_without_service_uses_llm_fallback():
         ExecutionResult(content=_ENVIRONMENT_ISSUE_JSON),  # Initial test
         ExecutionResult(content='{"success": true}'),  # Rebuild (LLM fallback)
         ExecutionResult(content='{"ready": true}'),  # Verify (LLM fallback)
-        ExecutionResult(
-            content='{"passed": 1, "failed": 0, "failures": [], "warnings": []}'
-        ),  # Retest
+        ExecutionResult(content='{"passed": 1, "failed": 0, "failures": [], "warnings": []}'),  # Retest
     ]
 
     ctx = _RepairCycleContext()
@@ -610,11 +606,7 @@ async def test_environment_rebuild_exhausted_event_emitted():
     assert result.overall_success is False
 
     # Verify that EnvironmentRebuildExhaustedEvent was emitted
-    exhausted_events = [
-        e
-        for e in event_emitter.events
-        if isinstance(e, EnvironmentRebuildExhaustedEvent)
-    ]
+    exhausted_events = [e for e in event_emitter.events if isinstance(e, EnvironmentRebuildExhaustedEvent)]
     assert len(exhausted_events) > 0, "EnvironmentRebuildExhaustedEvent should be emitted when all rebuilds exhausted"
     assert exhausted_events[0].work_item_id == ctx.work_item_id
     assert exhausted_events[0].workflow_run_id == ctx.workflow_run_id
@@ -671,9 +663,7 @@ async def test_emit_event_safely_catches_emitter_failures_in_rebuild(caplog):
     # Verify error was logged with "Failed to emit" message
     error_logs = [record for record in caplog.records if record.levelname == "ERROR"]
     assert len(error_logs) > 0, "Error should be logged when event emission fails"
-    failed_emit_logs = [
-        record for record in error_logs if "Failed to emit" in record.message
-    ]
+    failed_emit_logs = [record for record in error_logs if "Failed to emit" in record.message]
     assert len(failed_emit_logs) > 0, "Error log should contain 'Failed to emit' message"
 
 
@@ -728,7 +718,5 @@ async def test_emit_event_safely_catches_emitter_failures_in_verify(caplog):
     # Verify error was logged with "Failed to emit" message
     error_logs = [record for record in caplog.records if record.levelname == "ERROR"]
     assert len(error_logs) > 0, "Error should be logged when event emission fails"
-    failed_emit_logs = [
-        record for record in error_logs if "Failed to emit" in record.message
-    ]
+    failed_emit_logs = [record for record in error_logs if "Failed to emit" in record.message]
     assert len(failed_emit_logs) > 0, "Error log should contain 'Failed to emit' message"

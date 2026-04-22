@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 if TYPE_CHECKING:
+    from codetoreum.domain.pr_review_cycle_types import PRReviewCycleConfig
     from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig
 
 
@@ -170,6 +171,144 @@ class RepairCycleAgentConfigModel(BaseModel):
         )
 
 
+class PRReviewCycleConfigModel(BaseModel):
+    """YAML representation of PR review cycle configuration.
+
+    Mirrors the PRReviewCycleConfig domain model with Pydantic validation.
+    All fields are optional and default to the domain model defaults.
+
+    Attributes:
+        max_outer_cycles: Maximum number of complete cycles before escalation (>= 1, default 3)
+        verifier_context_sources: Tuple of context sources for verification phase
+        code_review_timeout_seconds: Timeout for Phase 1 code review
+        verification_timeout_seconds: Timeout per verification context source
+        ci_check_enabled: Whether to perform Phase 3 CI check
+        ci_check_timeout_seconds: Timeout for CI check
+        consolidation_timeout_seconds: Timeout for Phase 4 consolidation
+        sub_issue_creation: Whether to create sub-issues when findings are found
+        sub_issue_labels: Labels to apply to created sub-issues
+        sub_issue_initial_column: Column to place created sub-issues in
+    """
+
+    max_outer_cycles: int = Field(
+        default=3,
+        description="Maximum number of complete cycles before escalation",
+        ge=1,
+    )
+    verifier_context_sources: list[str] = Field(
+        default_factory=lambda: ["parent_issue"],
+        description="List of context sources to use during verification phase",
+        min_length=1,
+    )
+    code_review_timeout_seconds: int = Field(
+        default=600,
+        description="Timeout for Phase 1 code review in seconds",
+        gt=0,
+    )
+    verification_timeout_seconds: int = Field(
+        default=300,
+        description="Timeout per verification context source in seconds",
+        gt=0,
+    )
+    ci_check_enabled: bool = Field(
+        default=True,
+        description="Whether to perform Phase 3 CI check validation",
+    )
+    ci_check_timeout_seconds: int = Field(
+        default=300,
+        description="Timeout for Phase 3 CI check in seconds (must be > 0 when enabled)",
+        ge=0,
+    )
+    consolidation_timeout_seconds: int = Field(
+        default=600,
+        description="Timeout for Phase 4 consolidation in seconds",
+        gt=0,
+    )
+    sub_issue_target_board: str | None = Field(
+        default=None,
+        description="Board ID where sub-issues will be created",
+    )
+    sub_issue_creation: bool = Field(
+        default=True,
+        description="Whether to create sub-issues when findings are found",
+    )
+    sub_issue_labels: list[str] = Field(
+        default_factory=list,
+        description="Labels to apply to created sub-issues",
+    )
+    sub_issue_initial_column: str | None = Field(
+        default=None,
+        description="Column to place created sub-issues in",
+    )
+    on_issues_found_column: str | None = Field(
+        default=None,
+        description="Column to move item to when issues are found",
+    )
+    on_approved_column: str | None = Field(
+        default=None,
+        description="Column to move item to when approved",
+    )
+    agents: dict[str, str] | None = Field(
+        default=None,
+        description="Mapping of phase names to agent IDs (e.g., {'code_review': 'pr_code_reviewer'})",
+    )
+
+    @field_validator("ci_check_timeout_seconds")
+    @classmethod
+    def validate_ci_check_timeout(cls, v: int, info) -> int:
+        """Validate ci_check_timeout_seconds when ci_check_enabled is True."""
+        # Get the ci_check_enabled value from the data
+        ci_check_enabled = info.data.get("ci_check_enabled", True)
+        if ci_check_enabled and v <= 0:
+            msg = f"ci_check_timeout_seconds must be > 0 when ci_check_enabled=True, got {v}"
+            raise ValueError(msg)
+        return v
+
+    def to_domain(self) -> "PRReviewCycleConfig":
+        """Convert this Pydantic model to a domain PRReviewCycleConfig instance.
+
+        Returns:
+            A PRReviewCycleConfig domain instance with the same field values.
+            verifier_context_sources is converted from list to tuple.
+            agents dict is decomposed into individual code_review_agent, verifier_agent,
+            and consolidation_agent fields.
+        """
+        from codetoreum.domain.pr_review_cycle_types import PRReviewCycleConfig
+
+        # Build kwargs with only the non-None values for optional fields
+        kwargs = {
+            "max_outer_cycles": self.max_outer_cycles,
+            "verifier_context_sources": tuple(self.verifier_context_sources),
+            "code_review_timeout_seconds": self.code_review_timeout_seconds,
+            "verification_timeout_seconds": self.verification_timeout_seconds,
+            "ci_check_enabled": self.ci_check_enabled,
+            "ci_check_timeout_seconds": self.ci_check_timeout_seconds,
+            "consolidation_timeout_seconds": self.consolidation_timeout_seconds,
+            "sub_issue_target_board": self.sub_issue_target_board,
+            "sub_issue_creation": self.sub_issue_creation,
+            "sub_issue_labels": tuple(self.sub_issue_labels),
+        }
+
+        # Only add optional column fields if not None, so domain defaults apply
+        if self.sub_issue_initial_column is not None:
+            kwargs["sub_issue_initial_column"] = self.sub_issue_initial_column
+        if self.on_issues_found_column is not None:
+            kwargs["on_issues_found_column"] = self.on_issues_found_column
+        if self.on_approved_column is not None:
+            kwargs["on_approved_column"] = self.on_approved_column
+
+        # Decompose agents dict into individual agent fields
+        if self.agents:
+            if "code_review" in self.agents:
+                kwargs["code_review_agent"] = self.agents["code_review"]
+            if "verification" in self.agents:
+                kwargs["verifier_agent"] = self.agents["verification"]
+            if "consolidation" in self.agents:
+                kwargs["consolidation_agent"] = self.agents["consolidation"]
+
+        return PRReviewCycleConfig(**kwargs)
+
+
 class ScenarioColumnConfig(BaseModel):
     """Explicit column configuration for a board workflow template.
 
@@ -213,6 +352,13 @@ class ScenarioColumnConfig(BaseModel):
             "Ordered list of test type names to run when this column triggers a repair cycle. "
             "Valid values: COMPILATION, UNIT, INTEGRATION, CI, E2E. "
             "When omitted, the handler uses the default sequence (UNIT, INTEGRATION, E2E)."
+        ),
+    )
+    pr_review_cycle_config: PRReviewCycleConfigModel | None = Field(
+        default=None,
+        description=(
+            "Configuration for PR review cycle on this column. When set, triggers PR review cycle "
+            "instead of agent execution. Mutually exclusive with repair_cycle_agents."
         ),
     )
     execution_type: str = Field(

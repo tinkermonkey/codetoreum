@@ -36,7 +36,7 @@ class WorkItemColumnChangedEvent(CodetoreumEvent):
         work_item_id (str): ID of the work item that moved (e.g., issue #123)
         project_id (str): ID of the project containing the board
         board_id (str): ID of the board where the move occurred
-        from_column (str): Name of the column the item left
+        from_column (str | None): Name of the column the item left (None for initial placement)
         to_column (str): Name of the column the item entered
         moved_by (Literal["human", "orchestrator", "unknown"]): Actor who initiated the move
 
@@ -58,7 +58,7 @@ class WorkItemColumnChangedEvent(CodetoreumEvent):
     work_item_id: str = ""
     project_id: str = ""
     board_id: str = ""
-    from_column: str = ""
+    from_column: str | None = None
     to_column: str = ""
     moved_by: Literal["human", "orchestrator", "unknown"] = "unknown"
 
@@ -74,8 +74,9 @@ class WorkItemColumnChangedEvent(CodetoreumEvent):
         if not self.board_id:
             msg = "board_id is required"
             raise ValueError(msg)
-        if not self.from_column:
-            msg = "from_column is required"
+        # from_column can be None for initial placement (add_item_to_column), but not empty string
+        if self.from_column is not None and not self.from_column:
+            msg = "from_column must be non-empty string or None"
             raise ValueError(msg)
         if not self.to_column:
             msg = "to_column is required"

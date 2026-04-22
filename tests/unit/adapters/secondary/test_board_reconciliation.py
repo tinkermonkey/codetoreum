@@ -64,8 +64,8 @@ class TestBoardReconciliationIdempotency:
         adapter = mock_board_adapter
 
         # Add items to current state
-        adapter.add_item_to_column("board-1", "Backlog", "item-1")
-        adapter.add_item_to_column("board-1", "In Progress", "item-2")
+        adapter.seed_item_to_column("board-1", "Backlog", "item-1")
+        adapter.seed_item_to_column("board-1", "In Progress", "item-2")
 
         events = []
         adapter.on("board.reconciled", lambda e: events.append(e))
@@ -89,9 +89,9 @@ class TestBoardReconciliationIdempotency:
         adapter = mock_board_adapter
 
         # Add items
-        adapter.add_item_to_column("board-1", "Backlog", "item-1")
-        adapter.add_item_to_column("board-1", "Backlog", "item-2")
-        adapter.add_item_to_column("board-1", "In Progress", "item-3")
+        adapter.seed_item_to_column("board-1", "Backlog", "item-1")
+        adapter.seed_item_to_column("board-1", "Backlog", "item-2")
+        adapter.seed_item_to_column("board-1", "In Progress", "item-3")
 
         # Get initial state
         board1 = await adapter.get_board("proj-1", "board-1")
@@ -135,7 +135,7 @@ class TestBoardReconciliationIdempotency:
         adapter = mock_board_adapter
 
         # Add item with metadata
-        adapter.add_item_to_column("board-1", "Backlog", "item-1")
+        adapter.seed_item_to_column("board-1", "Backlog", "item-1")
 
         # Verify item exists
         board1 = await adapter.get_board("proj-1", "board-1")

@@ -466,6 +466,32 @@ class GitHubBoardAdapter(IBoardService):
             timestamp=timestamp,
         )
 
+    async def add_item_to_column(
+        self, work_item_id: str, target_column: str, moved_by: MovedByType
+    ) -> ColumnMovementResult:
+        """Add newly created work item to initial column.
+
+        Places a newly created work item in its initial column. This differs from
+        move_item_to_column in that it's the item's first placement, not a transition.
+
+        Args:
+            work_item_id: Item to place (must be newly created)
+            target_column: Target column name (e.g., "Backlog")
+            moved_by: Type of entity initiating the placement (HUMAN or ORCHESTRATOR)
+
+        Returns:
+            ColumnMovementResult: Details of the placement operation
+
+        Raises:
+            ResourceNotFoundError: Work item or target column doesn't exist
+            ExternalServiceError: Service communication failure
+        """
+        # For GitHub, adding to a column is the same as moving to a column
+        # since the item already exists at this point. The semantic difference
+        # (new placement vs. movement) is handled at the adapter level but the
+        # actual GitHub operation is identical.
+        return await self.move_item_to_column(work_item_id, target_column, moved_by)
+
     async def get_all_boards(self) -> list[ProjectBoard]:
         """Get all boards across all projects.
 

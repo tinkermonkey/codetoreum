@@ -35,9 +35,11 @@ def _make_adapter(llm_response_content: str) -> tuple[LLMSystemicAnalysisAdapter
     llm = AsyncMock()
     result = ExecutionResult(content=llm_response_content)
     llm.execute.return_value = result
+
     # Factory takes agent_name and returns coroutine resolving to ILLMProvider
     async def factory(agent_name: str) -> object:
         return llm
+
     adapter = LLMSystemicAnalysisAdapter(llm_factory=factory)
     return adapter, llm
 
@@ -78,8 +80,10 @@ class TestConstructor:
     def test_init_with_valid_llm_factory(self):
         """Constructor accepts valid llm_factory callable."""
         llm = AsyncMock()
+
         async def factory(agent_name: str) -> object:
             return llm
+
         adapter = LLMSystemicAnalysisAdapter(llm_factory=factory)
         assert adapter._llm_factory is not None
 
@@ -299,8 +303,10 @@ class TestExceptionFallback:
         """LLM timeout exception is raised (not caught) for caller to handle."""
         llm = AsyncMock()
         llm.execute.side_effect = TimeoutError("LLM call timed out")
+
         async def factory(agent_name: str) -> object:
             return llm
+
         adapter = LLMSystemicAnalysisAdapter(llm_factory=factory)
         context = _make_context()
         failures = _make_failures(1)
@@ -313,8 +319,10 @@ class TestExceptionFallback:
         """LLM connection error is raised (not caught) for caller to handle."""
         llm = AsyncMock()
         llm.execute.side_effect = ConnectionError("Failed to connect to LLM")
+
         async def factory(agent_name: str) -> object:
             return llm
+
         adapter = LLMSystemicAnalysisAdapter(llm_factory=factory)
         context = _make_context()
         failures = _make_failures(1)
@@ -544,6 +552,7 @@ class TestErrorLogging:
     async def test_logs_parse_error_with_context(self, caplog):
         """Parse error is logged with workflow_run_id and work_item_id."""
         import logging
+
         caplog.set_level(logging.ERROR)
 
         adapter, _ = _make_adapter("invalid json")
@@ -565,6 +574,7 @@ class TestErrorLogging:
     async def test_logs_unknown_classification_as_warning(self, caplog):
         """Unknown classification value is logged as warning."""
         import logging
+
         caplog.set_level(logging.WARNING)
 
         response = """{

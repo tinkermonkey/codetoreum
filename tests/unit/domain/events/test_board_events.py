@@ -117,7 +117,7 @@ class TestWorkItemColumnChangedEvent:
             )
 
     def test_missing_from_column(self):
-        """Test that from_column is required."""
+        """Test that from_column cannot be empty string (but can be None for initial placement)."""
         with pytest.raises(ValueError, match="from_column"):
             WorkItemColumnChangedEvent(
                 type="workitem.column_changed",
@@ -126,9 +126,24 @@ class TestWorkItemColumnChangedEvent:
                 work_item_id="123",
                 project_id="proj-1",
                 board_id="board-1",
-                from_column="",  # Empty
+                from_column="",  # Empty string is invalid
                 to_column="In Progress",
             )
+
+    def test_from_column_can_be_none(self):
+        """Test that from_column can be None for initial placement."""
+        event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=now_iso(),
+            source="github",
+            work_item_id="123",
+            project_id="proj-1",
+            board_id="board-1",
+            from_column=None,  # None is valid for initial placement
+            to_column="Backlog",
+        )
+        assert event.from_column is None
+        assert event.to_column == "Backlog"
 
     def test_missing_to_column(self):
         """Test that to_column is required."""

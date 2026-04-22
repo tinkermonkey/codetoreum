@@ -1,0 +1,31 @@
+# Planning & Design Review Cycle Scenario — Orchestrator: Simulation Settings
+#
+# Port/Interface: SimulationConfig (speed, clock, behaviour)
+# Adapter: SimulationClock, SimulationApplicationBootstrap
+#
+# Models Switchyard benchmark runs 854460d9 and fe4fa87f (requirements_verification workflow):
+# PR code review and requirements verification with issue creation (6 findings) or approval.
+# Benchmark duration: ~2-5 minutes per cycle (depending on findings) | At 100x: ~2 seconds
+
+name: "Planning & Design Review Cycle"
+description: |
+  Automated PR code review and requirements verification workflow.
+  Models Switchyard benchmark runs 854460d9 (issues found) and fe4fa87f (approved).
+  Pipeline: Backlog → In Review (PR Review Cycle) → In Development or Done
+version: "2.0"
+
+speed_multiplier: 100.0
+auto_advance: false
+
+metadata:
+  scenario_type: "planning_design_review_cycle"
+  author: "codetoreum-team"
+  benchmark_run_ids:
+    - "854460d9"
+    - "fe4fa87f"
+  benchmark_project: "context-studio"
+  tags:
+    - "pr-review-cycle"
+    - "code-review"
+    - "requirements-verification"
+    - "sub-issue-creation"

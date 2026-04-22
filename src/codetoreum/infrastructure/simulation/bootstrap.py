@@ -5,9 +5,9 @@ Wires up the entire application stack in simulation mode through 6 phases:
 
 **Phase 0**: Create simulation engine (encapsulates clock and timing)
 **Phase 1**: Create infrastructure (event bus, logger, error registry) - EARLY for event subscriptions
-**Phase 2**: Create adapters (32 adapters all via AdapterResolver)
+**Phase 2**: Create adapters (33 adapters all via AdapterResolver)
            Includes: ticket system, LLM, container, repository, event store, metrics, storage, config,
-           notifier, encryption, board, repair cycle, project manager, lock service, workflow config,
+           notifier, encryption, board, repair cycle, PR review cycle, project manager, lock service, workflow config,
            agent executor, version control, message broker, discussion, review cycle, identity service,
            checkpoint store, queue service, event emitter, code review, container recovery, work item
            service, agent repository, active workflow run registry, work item branch tracker, audit store,
@@ -136,6 +136,12 @@ from codetoreum.application.conversational_loop_orchestrator import Conversation
 from codetoreum.application.event_handlers.board_event_handler import (
     BoardColumnEventHandler,
 )
+from codetoreum.application.event_handlers.pr_review_cycle_dispatch_handler import (
+    PRReviewCycleDispatchHandler,
+)
+from codetoreum.application.event_handlers.pr_review_cycle_event_handler import (
+    PRReviewCycleEventHandler,
+)
 from codetoreum.application.event_handlers.review_event_handler import (
     ReviewEventHandler,
 )
@@ -230,6 +236,7 @@ from codetoreum.ports.output.metrics import IMetrics
 from codetoreum.ports.output.notifier import INotifier
 from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
 from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
+from codetoreum.ports.output.pr_review_cycle_service import IPRReviewCycle
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
 from codetoreum.ports.output.repair_cycle_checkpoint_store import (
     IRepairCycleCheckpointStore,
@@ -345,6 +352,7 @@ class SimulationAdapters:
     message_broker: IMessageBroker
     discussion_adapter: IDiscussionAdapter
     review_cycle: IReviewCycle
+    pr_review_cycle: IPRReviewCycle
     code_review: ICodeReviewService
     identity_service: IIdentityService
     checkpoint_store: IRepairCycleCheckpointStore
@@ -531,6 +539,24 @@ class SimulationAdapters:
             msg = f"review_cycle is {type(self.review_cycle).__name__}, not MockReviewCycleAdapter"
             raise TypeError(msg)
         return cast("MockReviewCycleAdapter", self.review_cycle)
+
+    def pr_review_cycle_as_mock(self) -> "MockPRReviewCycleAdapter":
+        """Get PR review cycle as MockPRReviewCycleAdapter.
+
+        Raises TypeError if pr_review_cycle is not MockPRReviewCycleAdapter.
+        """
+        try:
+            from codetoreum.adapters.testing.mock_pr_review_cycle_adapter import (
+                MockPRReviewCycleAdapter,
+            )
+
+            if not isinstance(self.pr_review_cycle, MockPRReviewCycleAdapter):
+                msg = f"pr_review_cycle is {type(self.pr_review_cycle).__name__}, not MockPRReviewCycleAdapter"
+                raise TypeError(msg)
+            return cast("MockPRReviewCycleAdapter", self.pr_review_cycle)
+        except ImportError as e:
+            msg = f"Failed to import MockPRReviewCycleAdapter: {e}"
+            raise TypeError(msg) from e
 
     def identity_service_as_configurable(self) -> ConfigurableIdentityService:
         """Get identity service as ConfigurableIdentityService.
@@ -1225,7 +1251,7 @@ class SimulationApplicationBootstrap:
 
     async def _create_adapters(self) -> SimulationAdapters:
         """
-        Create all 33 adapters using AdapterResolver in dependency order.
+        Create all 34 adapters using AdapterResolver in dependency order.
 
         Phase 2 bootstrap creates adapters following a partial dependency ordering:
         1. Leaf adapters (no dependencies): event_store, config_store, metrics, encryption, identity_service
@@ -1237,10 +1263,10 @@ class SimulationApplicationBootstrap:
                    workflow_config, notifier
         7. Composite: project_manager
         8. Repository: (depends on event_emitter)
-        9. Engine-coupled: review_cycle, repair_cycle (use SimulationEngine for clock injection)
+        9. Engine-coupled: review_cycle, repair_cycle, pr_review_cycle (use SimulationEngine for clock injection)
         10. Additional services: code_review, container_recovery, systemic_analysis_service,
-            environment_repair_service, ci_pipeline_service (32 total via resolver)
-        11. Manual post-processing: branch_resolution_service (33rd adapter, created separately)
+            environment_repair_service, ci_pipeline_service (33 total via resolver)
+        11. Manual post-processing: branch_resolution_service (34th adapter, created separately)
 
         AdapterResolver validates credentials before construction and raises aggregated
         configuration errors if any adapter is misconfigured.
@@ -1324,13 +1350,79 @@ class SimulationApplicationBootstrap:
             resolved.repair_cycle.environment_repair_service = resolved.environment_repair_service
             resolved.repair_cycle.ci_pipeline_service = resolved.ci_pipeline
 
+        # Wire ticket system, board service, and event emitter to PR review cycle adapter
+        # This enables the mock PR review cycle adapter to create sub-issues, move items, and emit events
+        from codetoreum.adapters.testing.mock_pr_review_cycle_adapter import MockPRReviewCycleAdapter
+
+        if isinstance(resolved.pr_review_cycle, MockPRReviewCycleAdapter):
+            resolved.pr_review_cycle.ticket_system = resolved.ticket_system
+            resolved.pr_review_cycle.board_service = resolved.board
+            resolved.pr_review_cycle.event_emitter = resolved.event_emitter
+
+            # Wire event emitter to publish CodetoreumEvents to event bus
+            # This ensures that PR review cycle events emitted by the adapter reach the event bus handlers
+            def _publish_codetoreum_event_to_bus(event):  # type: ignore
+                import asyncio
+                # Create an async task to publish to event bus (fire and forget with error handling)
+                try:
+                    loop = asyncio.get_running_loop()
+                    task = loop.create_task(self.infrastructure.event_bus.publish(event))
+
+                    def task_done_callback(task_result: asyncio.Task[None]) -> None:
+                        """Log any unhandled exceptions from the PR review cycle bridge task."""
+                        try:
+                            task_result.result()
+                        except asyncio.CancelledError:
+                            # Task was cancelled - this is normal during shutdown
+                            pass
+                        except Exception as task_exception:
+                            # Unhandled exception in the bridge handler (e.g., event bus failure)
+                            # This logs the failure so it's not silently swallowed
+                            logger.error(
+                                f"Unhandled exception in PR review cycle event bridge for event type "
+                                f"{getattr(event, 'type', 'unknown')}: {task_exception}",
+                                exc_info=True,
+                                extra={
+                                    "error_type": type(task_exception).__name__,
+                                    "error_id": ErrorRegistry.ERR_INTERNAL_ERROR,
+                                },
+                            )
+
+                    task.add_done_callback(task_done_callback)
+                except RuntimeError as e:
+                    logger.error(
+                        f"Failed to schedule PR review cycle event bus publication task: {e}",
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                    )
+
+            # Subscribe to specific PR review cycle event types (not wildcard "all" events)
+            # This prevents capturing unrelated events from other adapters like board column changes
+            pr_review_cycle_event_types = [
+                "pr_review_cycle.started",
+                "pr_review_cycle.approved",
+                "pr_review_cycle.issues_found",
+                "pr_review_cycle.max_cycles_reached",
+                "pr_review_cycle.escalated",
+                "pr_review_cycle.code_review_started",
+                "pr_review_cycle.verification_started",
+                "pr_review_cycle.ci_check_completed",
+                "pr_review_cycle.consolidation_started",
+                "pr_review_cycle.phase_completed",
+                "pr_review_cycle.sub_issues_created",
+                "pr_review_cycle.consolidation_completed",
+            ]
+            for event_type in pr_review_cycle_event_types:
+                resolved.event_emitter.on(event_type, _publish_codetoreum_event_to_bus)
+            logger.info("Wired PR review cycle event emitter to event bus with 12 event types")
+
         # Create branch resolution adapter (mock adapter for simulation testing)
         resolved.branch_resolution_service = MockBranchResolutionAdapter(clock=self._engine.get_clock_for_testing())
 
         # Create audit store (not provided by resolver)
         audit_store = InMemoryAuditStore()
 
-        logger.info("Created 33 simulation adapters (32 via AdapterResolver + branch_resolution_service)")
+        logger.info("Created 34 simulation adapters (33 via AdapterResolver + branch_resolution_service)")
 
         # Update audit_store in resolved adapters
         resolved.audit_store = audit_store
@@ -2005,15 +2097,24 @@ class SimulationApplicationBootstrap:
         if hasattr(self, "conversational_loop_orchestrator") and self.conversational_loop_orchestrator:
             # NOTE: EventBus routes callbacks by event.event_type (Python class name), not dot notation.
             self.infrastructure.event_bus.subscribe(
-                "WorkItemColumnChanged",
+                "WorkItemColumnChangedEvent",
                 self.conversational_loop_orchestrator.handle_column_change_event,
             )
-            logger.info("Subscribed ConversationalLoopOrchestrator to WorkItemColumnChanged events")
+            logger.info("Subscribed ConversationalLoopOrchestrator to WorkItemColumnChangedEvent events")
 
         # Register repair cycle event handler with event bus
         # This allows the handler to listen for WorkItemColumnChanged events
         # and invoke the repair cycle when items enter the configured repair cycle stage
         self._register_repair_cycle_handler()
+
+        # Register PR review cycle event handler with event bus
+        # This allows the handler to manage PR review cycle lifecycle
+        self._register_pr_review_cycle_handler()
+
+        # Register PR review cycle outcome event handler with event bus
+        # This handler listens for PR review cycle completion events and moves work items
+        # to the appropriate next column based on cycle outcome
+        self._register_pr_review_cycle_outcome_event_handler()
 
         # Register review event handler with event bus (FR-7.2)
         # This handler listens for review cycle events and has CI pipeline service wired
@@ -2058,6 +2159,58 @@ class SimulationApplicationBootstrap:
 
         self.infrastructure.event_bus.register_handler(handler)
         logger.info("Registered RepairCycleEventHandler with event bus")
+
+    def _register_pr_review_cycle_handler(self) -> None:
+        """
+        Register PR review cycle dispatch handler with the event bus.
+
+        Part of Phase 5: Event handler registration for cross-cutting concerns.
+
+        Creates a PRReviewCycleDispatchHandler that listens for WorkItemColumnChangedEvent
+        and initiates PR review cycles when items enter columns with pr_review_cycle_config.
+
+        Logs a warning if components are not yet initialized, allowing
+        graceful degradation if called before full setup completion.
+        """
+        if not self.adapters or not self.infrastructure:
+            logger.warning("Cannot register PR review cycle handler: components not ready")
+            return
+
+        # Create PR review cycle dispatch handler
+        handler = PRReviewCycleDispatchHandler(
+            pr_review_cycle=self.adapters.pr_review_cycle,
+            workflow_config=self.adapters.workflow_config,
+            work_item_service=self.adapters.work_item_service,
+            active_workflow_run_registry=self.adapters.run_registry,
+        )
+
+        # Register handler with event bus
+        self.infrastructure.event_bus.register_handler(handler)
+        logger.info("Registered PRReviewCycleDispatchHandler with event bus")
+
+    def _register_pr_review_cycle_outcome_event_handler(self) -> None:
+        """
+        Register PR review cycle outcome event handler with the event bus.
+
+        Part of Phase 5: Event handler registration for cross-cutting concerns.
+
+        This handler listens for PR review cycle outcome events (PRReviewCycleApprovedEvent,
+        PRReviewCycleIssuesFoundEvent, PRReviewCycleMaxCyclesReachedEvent) and moves work
+        items to the appropriate next column based on cycle outcome.
+
+        Logs a warning if components are not yet initialized, allowing graceful degradation
+        if called before full setup completion.
+        """
+        if not self.adapters or not self.infrastructure:
+            logger.warning("Cannot register PR review cycle outcome handler: components not ready")
+            return
+
+        handler = PRReviewCycleEventHandler(
+            board_service=self.adapters.board,
+        )
+
+        self.infrastructure.event_bus.register_handler(handler)
+        logger.info("Registered PRReviewCycleEventHandler with event bus")
 
     def _register_review_event_handler(self) -> None:
         """

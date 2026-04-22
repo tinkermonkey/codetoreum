@@ -290,7 +290,7 @@ def create_simulation_ticketing_router(
                 staging_column = await _find_staging_column(request.project_id, request.board_id, board)
 
                 # Place item in staging column first
-                board_adapter.add_item_to_column(request.board_id, staging_column, work_item.id)
+                await board_adapter.add_item_to_column(work_item.id, staging_column, MovedByType.HUMAN)
 
                 # Move to target column to trigger WorkItemColumnChangedEvent
                 # (This is essential for pipeline trigger columns to invoke orchestration)

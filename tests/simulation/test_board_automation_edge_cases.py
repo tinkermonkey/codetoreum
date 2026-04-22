@@ -93,7 +93,7 @@ class TestBoardReconciliation:
         config_service = setup["config_service"]
 
         # Add work item to "Review" column
-        board_service.add_item_to_column(
+        board_service.seed_item_to_column(
             board_id="board-1",
             column_name="Review",
             work_item_id="work-item-100",
@@ -196,7 +196,7 @@ class TestBoardReconciliation:
         config_service = setup["config_service"]
 
         # Add work item to "Review" column (will be deleted)
-        board_service.add_item_to_column(
+        board_service.seed_item_to_column(
             board_id="board-1",
             column_name="Review",
             work_item_id="work-item-orphan",
@@ -290,7 +290,7 @@ class TestBoardReconciliation:
         config_service = setup["config_service"]
 
         # Add work item to "Testing" column (will remain)
-        board_service.add_item_to_column(
+        board_service.seed_item_to_column(
             board_id="board-1",
             column_name="Testing",
             work_item_id="work-item-kept",
@@ -650,7 +650,7 @@ class TestManualColumns:
             assert auto_col.type == ColumnType.AUTOMATED
 
         # Add item to Backlog (manual column) and verify it's there
-        board_service.add_item_to_column(
+        board_service.seed_item_to_column(
             board_id="board-1",
             column_name="Backlog",
             work_item_id="work-item-100",
@@ -756,7 +756,7 @@ class TestQueuePositionUpdates:
         # Setup: Add multiple items to Development column
         for i in range(4):
             # Add item to Backlog first
-            board_service.add_item_to_column(
+            board_service.seed_item_to_column(
                 board_id="board-1",
                 column_name="Backlog",
                 work_item_id=f"work-item-{100 + i}",
