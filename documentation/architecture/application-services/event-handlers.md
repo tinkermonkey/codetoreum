@@ -505,14 +505,19 @@ graph TB
         E3["ExecutionStartedEvent"]
         E4["ExecutionCompletedEvent"]
         E5["ExecutionFailedEvent"]
-        E6["ReviewCycleCreatedEvent"]
-        E7["ReviewCycleApprovedEvent"]
-        E8["ReviewCycleRejectedEvent"]
-        E9["ReviewCycleEscalatedEvent"]
-        E10["WorkItemCreatedEvent"]
-        E11["BranchResolvedEvent"]
-        E12["PRReviewCycleApprovedEvent"]
-        E13["PRReviewCycleIssuesFoundEvent"]
+        E6["ExecutionTimeoutEvent"]
+        E7["ReviewCycleCreatedEvent"]
+        E8["ReviewIterationStartedEvent"]
+        E9["ReviewFeedbackSubmittedEvent"]
+        E10["ReviewCycleApprovedEvent"]
+        E11["ReviewCycleRejectedEvent"]
+        E12["ReviewCycleEscalatedEvent"]
+        E13["WorkItemCreatedEvent"]
+        E14["BranchReusedEvent"]
+        E15["BranchResolutionCreatedEvent"]
+        E16["PRReviewCycleApprovedEvent"]
+        E17["PRReviewCycleIssuesFoundEvent"]
+        E18["PRReviewCycleMaxCyclesReachedEvent"]
     end
 
     subgraph "Event Handlers (Subscribe & React)"
@@ -554,25 +559,30 @@ graph TB
     E4 -->|subscribes| H4
     E5 -->|subscribes| H2
     E5 -->|subscribes| H4
+    E6 -->|subscribes| H2
 
     %% Review Events → Review Handler & Workflow Handler
-    E6 -->|subscribes| H3
     E7 -->|subscribes| H3
-    E7 -->|subscribes| H4
     E8 -->|subscribes| H3
-    E8 -->|subscribes| H4
     E9 -->|subscribes| H3
-    E9 -->|subscribes| H4
+    E10 -->|subscribes| H3
+    E10 -->|subscribes| H4
+    E11 -->|subscribes| H3
+    E11 -->|subscribes| H4
+    E12 -->|subscribes| H3
+    E12 -->|subscribes| H4
 
     %% Work Item Created → Workflow Handler
-    E10 -->|subscribes| H4
+    E13 -->|subscribes| H4
 
     %% Branch Events → Branch Handler
-    E11 -->|subscribes| H6
+    E14 -->|subscribes| H6
+    E15 -->|subscribes| H6
 
     %% PR Review Cycle Events → PR Handlers
-    E12 -->|subscribes| H7
-    E13 -->|subscribes| H7
+    E16 -->|subscribes| H7
+    E17 -->|subscribes| H7
+    E18 -->|subscribes| H7
 
     %% Handlers → Services
     H1 -->|calls| S1

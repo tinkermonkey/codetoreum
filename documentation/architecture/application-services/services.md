@@ -13,7 +13,7 @@ applies_to: "documentation/architecture/application-services/services.md"
 
 ## Overview
 
-The application services layer contains **23 services** that orchestrate domain logic and coordinate interactions with external systems through ports. Each service implements one or more high-level business capabilities by receiving commands from input ports, invoking domain logic, calling output ports, and emitting domain events.
+The application services layer contains **22 services** that orchestrate domain logic and coordinate interactions with external systems through ports. Each service implements one or more high-level business capabilities by receiving commands from input ports, invoking domain logic, calling output ports, and emitting domain events.
 
 Services are organized into six functional groups:
 
@@ -43,12 +43,12 @@ All services are:
 **Purpose**: Coordinates workflow execution by responding to board state changes, handling execution completion, processing review outcomes, and routing work items to appropriate next stages.
 
 **Port Dependencies**:
-- `IBoardService` — Read board state, move items to columns
-- `ITicketSystem` — Fetch and update work item details
-- `IEventStore` — Persist execution history
+- [`IBoardService`](../ports/output/board-management.md) — Read board state, move items to columns
+- [`ITicketSystem`](../ports/output/core-system.md) — Fetch and update work item details
+- [`IEventStore`](../ports/output/infrastructure-services.md) — Persist execution history
 - `IConversationalLoopService` — Manage feedback loops (input port)
 - `IWorkflowConfigService` — Retrieve workflow definitions
-- `IEventEmitter` — Publish domain events
+- [`IEventEmitter`](../ports/output/infrastructure-services.md) — Publish domain events
 
 **Domain Dependencies**:
 - `WorkItem` aggregate
@@ -127,10 +127,10 @@ sequenceDiagram
 **Purpose**: Manages feedback loops where agents engage in conversations with humans, maintaining session state and responding to comments.
 
 **Port Dependencies**:
-- `IDiscussionAdapter` — Read/write discussion comments
-- `IBoardService` — Move items between columns
-- `ILLMProvider` — Generate agent responses
-- `IEventEmitter` — Publish events
+- [`IDiscussionAdapter`](../ports/output/code-review.md) — Read/write discussion comments
+- [`IBoardService`](../ports/output/board-management.md) — Move items between columns
+- [`ILLMProvider`](../ports/output/core-system.md) — Generate agent responses
+- [`IEventEmitter`](../ports/output/infrastructure-services.md) — Publish events
 
 **Domain Dependencies**:
 - `ConversationalLoopSession` aggregate
@@ -221,7 +221,7 @@ async def recover(
 **Events Emitted**:
 - `PipelineStageStartedEvent` — Stage execution began
 - `PipelineStageCompletedEvent` — Stage finished successfully
-- `PipelineStageFailed Event` — Stage execution failed
+- `PipelineStageFailedEvent` — Stage execution failed
 - `PipelineCompletedEvent` — Entire pipeline finished
 
 #### 4. MultiProjectOrchestrator
@@ -274,12 +274,12 @@ async def list_enabled_projects(self) -> list[str]:
 **Purpose**: Orchestrates agent execution by creating execution records, starting runs, invoking LLM or container execution, capturing output, and handling failures.
 
 **Port Dependencies**:
-- `ILLMProvider` — Execute LLM-based agents
-- `IContainer` — Execute containerized agents
-- `IRepository` — Access code repositories
-- `IStorage` — Store execution artifacts
-- `IEventStore` — Persist execution records
-- `IEventEmitter` — Publish events
+- [`ILLMProvider`](../ports/output/core-system.md) — Execute LLM-based agents
+- [`IContainer`](../ports/output/core-system.md) — Execute containerized agents
+- [`IRepository`](../ports/output/core-system.md) — Access code repositories
+- [`IStorage`](../ports/output/infrastructure-services.md) — Store execution artifacts
+- [`IEventStore`](../ports/output/infrastructure-services.md) — Persist execution records
+- [`IEventEmitter`](../ports/output/infrastructure-services.md) — Publish events
 
 **Domain Dependencies**:
 - `AgentExecution` aggregate
@@ -423,9 +423,9 @@ async def dequeue_next(self) -> Task | None:
 **Purpose**: Creates the contextual information (issue details, code snippets, previous output) that agents need for execution.
 
 **Port Dependencies**:
-- `ITicketSystem` — Fetch work item details
-- `IRepository` — Retrieve code snippets
-- `IStorage` — Store context files
+- [`ITicketSystem`](../ports/output/core-system.md) — Fetch work item details
+- [`IRepository`](../ports/output/core-system.md) — Retrieve code snippets
+- [`IStorage`](../ports/output/infrastructure-services.md) — Store context files
 
 **Domain Dependencies**:
 - `ExecutionContext` aggregate
@@ -477,8 +477,8 @@ async def cleanup_workspace(
 **Purpose**: Dispatches executions to workspace implementations and manages container context preparation.
 
 **Port Dependencies**:
-- `IContainer` — Manage container workspaces
-- `IStorage` — Store workspace state
+- [`IContainer`](../ports/output/core-system.md) — Manage container workspaces
+- [`IStorage`](../ports/output/infrastructure-services.md) — Store workspace state
 
 **Service Dependencies**:
 - `ContextBuilder` — Prepare contexts
@@ -521,9 +521,9 @@ async def mount_files(
 **Purpose**: Manages complete review cycles including iteration management, feedback submission, and completion decisions.
 
 **Port Dependencies**:
-- `ICodeReviewService` — Create/manage code reviews
-- `IDiscussionAdapter` — Manage review discussions
-- `IEventEmitter` — Publish events
+- [`ICodeReviewService`](../ports/output/code-review.md) — Create/manage code reviews
+- [`IDiscussionAdapter`](../ports/output/code-review.md) — Manage review discussions
+- [`IEventEmitter`](../ports/output/infrastructure-services.md) — Publish events
 
 **Domain Dependencies**:
 - `ReviewCycle` aggregate
@@ -594,7 +594,7 @@ async def get_review_status(
 **Purpose**: Converts reviewer comments into structured feedback that maker agents can action.
 
 **Port Dependencies**:
-- `IStorage` — Store parsed feedback
+- [`IStorage`](../ports/output/infrastructure-services.md) — Store parsed feedback
 
 **Key Methods**:
 
@@ -628,9 +628,9 @@ async def format_feedback_for_maker(
 **Purpose**: Processes execution failures, tracks unrecoverable failures, and detects stuck locks.
 
 **Port Dependencies**:
-- `IFailedEventStore` — Persist failed events
-- `IPipelineLockService` — Check lock status
-- `IEventEmitter` — Publish events
+- [`IFailedEventStore`](../ports/output/infrastructure-services.md) — Persist failed events
+- [`IPipelineLockService`](../ports/output/board-management.md) — Check lock status
+- [`IEventEmitter`](../ports/output/infrastructure-services.md) — Publish events
 
 **Domain Dependencies**:
 - Domain events: `WorkItemDeadLetterQueuedEvent`, `LockStuckEvent`, `WorkflowFailedEvent`
@@ -663,7 +663,7 @@ async def get_failed_event_store_stats(self) -> FailureStats:
 
 ---
 
-### Configuration & State Services (5 services)
+### Configuration & State Services (4 services)
 
 #### 12. ConfigurationService
 
@@ -674,9 +674,9 @@ async def get_failed_event_store_stats(self) -> FailureStats:
 **Purpose**: Provides configuration management with change tracking and event emission.
 
 **Port Dependencies**:
-- `IConfigStore` — Persist configuration
+- [`IConfigStore`](../ports/output/lifecycle-services.md) — Persist configuration
 - `IValidator` — Validate configuration
-- `IEventEmitter` — Publish events
+- [`IEventEmitter`](../ports/output/infrastructure-services.md) — Publish events
 
 **Key Methods**:
 
@@ -745,9 +745,9 @@ async def mount_subagent(
 **Purpose**: Manages work item lifecycle with full audit trail through event sourcing.
 
 **Port Dependencies**:
-- `IEventStore` — Persist work item events
-- `ITicketSystem` — Sync with external system
-- `IEventEmitter` — Publish events
+- [`IEventStore`](../ports/output/infrastructure-services.md) — Persist work item events
+- [`ITicketSystem`](../ports/output/core-system.md) — Sync with external system
+- [`IEventEmitter`](../ports/output/infrastructure-services.md) — Publish events
 
 **Domain Dependencies**:
 - `WorkItem` aggregate
@@ -852,7 +852,7 @@ async def count_work_items(
 **Purpose**: Aggregates metrics from all components to provide system-wide visibility.
 
 **Port Dependencies**:
-- `IMetrics` — Query metrics backend
+- [`IMetrics`](../ports/output/infrastructure-services.md) — Query metrics backend
 - `IHealthMonitor` — Check component health
 
 **Key Methods**:
@@ -907,7 +907,7 @@ async def get_repair_cycle_metrics(self) -> dict:
 
 **Port Dependencies**:
 - `ILockStore` — Persist lock state
-- `IEventEmitter` — Publish lock events
+- [`IEventEmitter`](../ports/output/infrastructure-services.md) — Publish lock events
 
 **Domain Dependencies**:
 - `LockToken` value object
@@ -950,7 +950,7 @@ async def update_queue_positions(
 
 ---
 
-### Infrastructure & Recovery Services (4 services)
+### Infrastructure & Recovery Services (3 services)
 
 #### 16. ContainerRecoveryService
 
@@ -961,8 +961,8 @@ async def update_queue_positions(
 **Purpose**: Assesses container state and recovers or cleans up containers with bounded parallelism.
 
 **Port Dependencies**:
-- `IContainer` — Query and manage containers
-- `IEventEmitter` — Publish events
+- [`IContainer`](../ports/output/core-system.md) — Query and manage containers
+- [`IEventEmitter`](../ports/output/infrastructure-services.md) — Publish events
 
 **Key Methods**:
 
@@ -992,7 +992,7 @@ async def recover_or_cleanup_containers(
 **Port Dependencies**:
 - `IUserStore` — Persist user records
 - `ITokenStore` — Store tokens
-- `IEventEmitter` — Publish auth events
+- [`IEventEmitter`](../ports/output/infrastructure-services.md) — Publish auth events
 
 **Key Methods**:
 
@@ -1044,8 +1044,8 @@ async def revoke_api_key(self, key_id: str) -> None:
 **Purpose**: Detects board state changes via polling when webhooks are unavailable.
 
 **Port Dependencies**:
-- `IBoardService` — Query board state
-- `IEventEmitter` — Publish change events
+- [`IBoardService`](../ports/output/board-management.md) — Query board state
+- [`IEventEmitter`](../ports/output/infrastructure-services.md) — Publish change events
 
 **Key Methods**:
 
@@ -1068,7 +1068,7 @@ async def stop(self) -> None:
 
 ---
 
-### Observability & Query Services (3 services)
+### Observability & Query Services (4 services)
 
 #### 19. WorkflowRunQueryService
 
@@ -1079,7 +1079,7 @@ async def stop(self) -> None:
 **Purpose**: Provides read-model access to workflow execution state without event sourcing overhead.
 
 **Port Dependencies**:
-- `IEventStore` — Query event history
+- [`IEventStore`](../ports/output/infrastructure-services.md) — Query event history
 - `IWorkflowRepository` — Query workflow runs
 
 **Key Methods**:
@@ -1195,8 +1195,8 @@ def get_repair_cycle_sequence(self) -> str:
 **Purpose**: Integrates CI pipeline checks with repair cycle aggregation.
 
 **Port Dependencies**:
-- `ICIPipelineService` — Retrieve CI results
-- `IEventEmitter` — Publish events
+- [`ICIPipelineService`](../ports/output/domain-services.md) — Retrieve CI results
+- [`IEventEmitter`](../ports/output/infrastructure-services.md) — Publish events
 
 **Key Methods**:
 
@@ -1243,13 +1243,13 @@ async def convert_ci_run_result_to_repair_test_result(
 
 - **IBoardService** — 4 services (WorkflowOrchestrator, ConversationalLoopOrchestrator, WorkItemService, BoardPollingService)
 - **IEventStore** — 5 services (ExecutionService, WorkItemService, WorkflowRunQueryService, EventSequenceValidator, RepairCycleCIIntegration)
-- **IEventEmitter** — All 23 services (publish domain events)
+- **IEventEmitter** — All 22 services (publish domain events)
 - **ITicketSystem** — 5 services (WorkflowOrchestrator, ContextBuilder, WorkItemService, ReviewService, FeedbackProcessor)
 - **ILLMProvider** — 2 services (ExecutionService, ConversationalLoopOrchestrator)
-- **IContainer** — 4 services (ExecutionService, WorkspaceRouter, ContainerRecoveryService, RepairCycleCIIntegration)
-- **IRepository** — 3 services (ContextBuilder, ExecutionService, WorkItemService)
+- **IContainer** — 3 services (ExecutionService, WorkspaceRouter, ContainerRecoveryService)
+- **IRepository** — 2 services (ContextBuilder, ExecutionService)
 - **IStorage** — 5 services (ExecutionService, ContextBuilder, WorkspaceRouter, FeedbackProcessor, MetricsService)
-- **ICodeReviewService** — 2 services (ReviewService, PipelineLockService)
+- **ICodeReviewService** — 1 service (ReviewService)
 - **IDiscussionAdapter** — 2 services (ConversationalLoopOrchestrator, ReviewService)
 - **IConfigStore** — ConfigurationService
 - **IMetrics** — MetricsService

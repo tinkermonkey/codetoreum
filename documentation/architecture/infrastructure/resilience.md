@@ -428,10 +428,7 @@ Service receives: WorkItem (retries transparent)
    - `ResilientTicketSystemDecorator` — Wraps ITicketSystem
    - `ResilientLLMProviderDecorator` — Wraps ILLMProvider
    - `ResilientBoardServiceDecorator` — Wraps IBoardService
-   - `ResilientCodeReviewServiceDecorator` — Wraps ICodeReviewService
    - `ResilientDiscussionAdapterDecorator` — Wraps IDiscussionAdapter
-   - `ResilientContainerDecorator` — Wraps IContainer
-   - And 15+ more adapter-specific decorators
 
 2. **circuit_breaker.py** — Circuit breaker state machine
    - `CircuitBreaker` — Production implementation

@@ -364,7 +364,8 @@ Each Stream Entry:
 **Class**: `class EventBus:`
 
 **Related Files**:
-- `src/codetoreum/infrastructure/event_bus_wiring.py` — Handler registration coordination
+- `src/codetoreum/application/event_bus_wiring.py` — Event handler registration (primary entry point, registers 5 of 8 handlers)
+- `src/codetoreum/infrastructure/event_bus_wiring.py` — Additional handler registration coordination
 - `src/codetoreum/infrastructure/event_serialization.py` — Event serialization for Redis
 - `src/codetoreum/infrastructure/observability/trace_context_propagation.py` — W3C Trace Context integration
 - `src/codetoreum/domain/events/` — All domain event definitions
