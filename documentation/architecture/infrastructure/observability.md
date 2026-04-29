@@ -753,4 +753,3 @@ await dlq.start()
 - [Event Bus](./event-bus.md) — Events and tracing integration
 - [Resilience](./resilience.md) — Circuit breaker metrics
 - [Application Services](../application-services/services.md) — Services being observed
-- [Design Specification](../../01_design/infrastructure/) — Detailed observability architecture

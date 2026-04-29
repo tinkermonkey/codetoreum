@@ -470,7 +470,7 @@ Service receives: WorkItem (retries transparent)
 **Related Files**:
 - Tests: `tests/unit/infrastructure/resilience/` (1000+ lines)
 - Integration: `tests/integration/infrastructure/resilience/` (500+ lines)
-- Design: `documentation/01_design/infrastructure/resilience_infrastructure_design.md`
+- See [Infrastructure Documentation](./README.md) for detailed specification
 
 ---
 
@@ -580,4 +580,4 @@ stats = resilient_adapter._get_resilience_stats()
 - [Observability](./observability.md) — Metrics and tracing
 - [Application Services](../application-services/services.md) — Services using resilient adapters
 - [Output Ports](../ports/output/) — Adapter interfaces being wrapped
-- [Resilience Design](../../01_design/infrastructure/resilience_infrastructure_design.md) — Detailed design specification
+- [Infrastructure Documentation](./README.md) — Complete infrastructure architecture

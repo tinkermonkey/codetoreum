@@ -149,5 +149,5 @@ This template applies to all port documentation files:
 
 - Port documentation is typically written as part of Phase 4 (Architecture Tier - Port Contracts)
 - Each port group file documents 3-8 related port interfaces
-- Port documentation is enriched during Phase 4 with content from existing `comprehensive-ports-reference.md`
+- Port content is decomposed across the 7 port group files by functional domain
 - Adapters are discovered via code introspection in `src/codetoreum/adapters/`

@@ -358,7 +358,7 @@ async def test_workflow():
 2. `documentation/architecture/domain/models.md` - Domain model specifications (67 classes)
 3. `documentation/architecture/domain/events.md` - Domain event catalog (91 modern events)
 4. `documentation/architecture/infrastructure/resilience.md` - Resilience patterns
-5. `documentation/01_design/ports/output/comprehensive-ports-reference.md` - Complete port inventory (19 input, 40 output)
+5. `documentation/architecture/ports/output/` - Complete output port specifications (40 ports across 7 groups)
 
 **Application & Services:**
 - `documentation/architecture/application-services/services.md` - Application service designs (23 services)
@@ -375,7 +375,7 @@ async def test_workflow():
 **Infrastructure:**
 - `documentation/architecture/infrastructure/event-bus.md` - Event distribution architecture
 - `documentation/architecture/infrastructure/observability.md` - Observability patterns
-- `documentation/01_design/infrastructure/production-bootstrap-wiring.md` - Production wiring
+- `documentation/implementations/production-bootstrap.md` - Production bootstrap wiring
 
 ## Architecture Documentation Tools
 

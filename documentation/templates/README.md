@@ -143,7 +143,7 @@ Each template file:
 ## File Naming
 
 All documentation files use lowercase-hyphenated naming (except README.md):
-- ✅ `comprehensive-ports-reference.md`
+- ✅ `production-bootstrap.md`
 - ✅ `event-bus-design.md`
 - ❌ `ComprehensivePortsReference.md`
 - ❌ `PRODUCTION_BOOTSTRAP_WIRING.md`

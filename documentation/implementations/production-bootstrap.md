@@ -1,4 +1,4 @@
-# Production Bootstrap Wiring - Phase 5 Integration
+# Production Bootstrap - Phase 5 Integration
 
 ## Summary
 
@@ -150,7 +150,7 @@ execution_service = ExecutionService(
 - **Adapter**: `src/codetoreum/adapters/secondary/branch_resolution_adapter.py`
 - **Simulation Bootstrap Example**: `src/codetoreum/infrastructure/simulation/bootstrap.py:1306`
 - **Tests**: `tests/integration/application/test_workspace_router.py`
-- **Architecture Design**: `documentation/01_design/`
+- **Architecture Design**: `documentation/architecture/`
 
 ## Next Steps
 

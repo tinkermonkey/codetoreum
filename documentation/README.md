@@ -29,4 +29,4 @@ Template definitions and enforcement rules that specify required sections for ea
 
 ## Naming Conventions
 
-All documentation files use lowercase-hyphenated naming (e.g., `comprehensive-ports-reference.md`). README.md files are exceptions and use standard capitalization.
+All documentation files use lowercase-hyphenated naming (e.g., `production-bootstrap.md`). README.md files are exceptions and use standard capitalization.
