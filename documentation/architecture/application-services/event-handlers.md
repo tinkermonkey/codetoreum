@@ -26,7 +26,7 @@ All handlers implement the `EventHandler` interface and register with the event 
 
 ## Handler Catalog
 
-### 1. BoardEventHandler
+### 1. BoardColumnEventHandler
 
 **File**: `src/codetoreum/application/event_handlers/board_event_handler.py`
 
@@ -508,49 +508,46 @@ flowchart TB
     end
 
     subgraph "Event Handlers"
-        H1["BoardEventHandler"]
+        H1["BoardColumnEventHandler"]
         H2["RepairCycleEventHandler"]
         H3["PRReviewCycleDispatchHandler"]
     end
 
-    subgraph "Application Services"
-        S1["WorkflowOrchestrator"]
-        S2["AgentScheduler"]
-        S3["RepairCycleService"]
-        S4["ReviewService"]
+    subgraph "Services & Stores"
+        S1["IEventStore &<br/>IAgentExecutor<br/>(BoardColumnEventHandler)"]
+        S2["IRepairCycle<br/>(RepairCycleEventHandler)"]
+        S3["IPRReviewCycle<br/>(PRReviewCycleDispatchHandler)"]
     end
 
-    subgraph "Workflow Events (Output)"
-        E2["WorkflowCreatedEvent<br/>WorkflowStartedEvent<br/>WorkflowStageAdvancedEvent<br/>LockStuckEvent"]
-    end
-
-    subgraph "Execution Pipeline"
-        E3["ExecutionInitializedEvent"]
+    subgraph "Output Events"
+        E2["Workflow Events<br/>WorkflowCreatedEvent<br/>WorkflowStartedEvent<br/>WorkflowStageAdvancedEvent<br/>LockStuckEvent"]
+        E3["RepairCycleCompletedEvent"]
+        E4["PRReviewCycle Events<br/>PRReviewCycleStartedEvent<br/>PRReviewCycleApprovedEvent<br/>PRReviewCycleIssuesFoundEvent<br/>PRReviewCycleMaxCyclesReachedEvent"]
     end
 
     E1 -->|subscribes| H1
     E1 -->|subscribes| H2
     E1 -->|subscribes| H3
 
-    H1 -->|triggers<br/>pipeline| S1
-    H1 -->|schedules<br/>agent| S2
-    H2 -->|initiates| S3
-    H3 -->|initiates| S4
+    H1 -->|appends to| S1
+    H1 -->|triggers agent via| S1
+    H2 -->|initiates| S2
+    H3 -->|initiates| S3
 
     S1 -->|emits| E2
     S2 -->|emits| E3
-    S3 -->|emits| E2
-    S4 -->|emits| E2
-
-    E2 -.->|closes loop| E1
-    E3 -.->|closes loop| E1
+    S3 -->|emits| E4
 
     style E1 fill:#e1f5ff
     style H1 fill:#f3e5f5
     style H2 fill:#f3e5f5
     style H3 fill:#f3e5f5
     style S1 fill:#e8f5e9
+    style S2 fill:#e8f5e9
+    style S3 fill:#e8f5e9
     style E2 fill:#fff3e0
+    style E3 fill:#fff3e0
+    style E4 fill:#fff3e0
 ```
 
 ### Execution Context
@@ -678,7 +675,7 @@ flowchart TB
 
     subgraph "Dispatch Phase"
         H1["PRReviewCycleDispatchHandler"]
-        S1["ReviewService"]
+        S1["IPRReviewCycle"]
     end
 
     subgraph "PR Review Events"
@@ -690,7 +687,7 @@ flowchart TB
 
     subgraph "Outcome Phase"
         H2["PRReviewCycleEventHandler"]
-        S2["WorkflowOrchestrator"]
+        S2["IBoardService"]
     end
 
     subgraph "Next Workflow Step"
@@ -708,7 +705,7 @@ flowchart TB
     E4 -->|subscribes| H2
     E5 -->|subscribes| H2
 
-    H2 -->|routes| S2
+    H2 -->|routes to| S2
     S2 -->|emits| E6
 
     E6 -.->|closes loop| E1
@@ -719,6 +716,8 @@ flowchart TB
     style E5 fill:#ffe0b2
     style H1 fill:#f3e5f5
     style H2 fill:#f3e5f5
+    style S1 fill:#e8f5e9
+    style S2 fill:#e8f5e9
     style E6 fill:#fff3e0
 ```
 
@@ -737,28 +736,24 @@ flowchart TB
     end
 
     subgraph "Application Services"
-        S1["RepairCycleService"]
+        S1["IRepairCycle"]
         S2["ICIPipelineService"]
     end
 
-    subgraph "Repair Workflow"
+    subgraph "Output Events"
         E2["RepairCycleCompletedEvent"]
-        E3["WorkItemColumnChangedEvent<br/>(to next column)"]
     end
 
     E1 -->|subscribes| H1
     H1 -->|initiates| S1
     S1 -->|routes CI to| S2
     S1 -->|emits| E2
-    S1 -->|emits| E3
-
-    E3 -.->|may restart| E1
 
     style E1 fill:#e1f5ff
     style H1 fill:#f3e5f5
     style S1 fill:#e8f5e9
+    style S2 fill:#e8f5e9
     style E2 fill:#fff3e0
-    style E3 fill:#fff3e0
 ```
 
 ### Branch Resolution Context
