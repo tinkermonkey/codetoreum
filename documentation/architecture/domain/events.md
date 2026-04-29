@@ -11,7 +11,12 @@ applies_to: "documentation/architecture/domain/events.md"
 
 ## Overview
 
-Domain events are immutable records of significant state changes in the system. The system defines 167 event classes across 19 source files, organized into 13 bounded contexts. Events are frozen dataclasses (`@dataclass(frozen=True)`), making them immutable once created—a critical requirement for maintaining an audit trail and enabling event sourcing.
+Domain events are immutable records of significant state changes in the system. The system defines **245 event classes** across **20 source files**, organized into **18 bounded contexts**. This includes:
+- **167 modern event classes** (frozen dataclasses): Across 19 files in the `domain/events/` directory
+- **74 legacy event classes** (older DomainEvent base class): In `legacy_domain_events.py`
+- **4 project context event classes** (legacy style): In `project_context.py`
+
+Events are frozen dataclasses (`@dataclass(frozen=True)`), making them immutable once created—a critical requirement for maintaining an audit trail and enabling event sourcing.
 
 Every significant state change in a domain model emits one or more events:
 1. Domain model method is called
@@ -84,6 +89,50 @@ class WorkItemUpdatedEvent(CodetoreumEvent):
 - Work item must have valid ID and title (validated in __post_init__)
 - Project ID must be non-empty
 - Only significant changes emit events (not timestamp-only updates)
+
+**Event-Flow Diagram**:
+
+```mermaid
+graph TB
+    subgraph "Domain Layer"
+        WI["🟦 WorkItem<br/>aggregate"]
+    end
+    
+    subgraph "Events"
+        WI -->|create| WI_CREATED["WorkItemCreatedEvent"]
+        WI -->|update fields| WI_UPDATED["WorkItemUpdatedEvent"]
+    end
+    
+    subgraph "Event Bus"
+        BUS["📢 Event Bus<br/>(pub/sub)"]
+        WI_CREATED -->|emit| BUS
+        WI_UPDATED -->|emit| BUS
+    end
+    
+    subgraph "Event Handlers"
+        BH["📋 BoardHandler"]
+        NH["📧 NotificationHandler"]
+        AH["📊 AuditHandler"]
+        MH["📈 MetricsHandler"]
+    end
+    
+    subgraph "External Systems"
+        BOARD["GitHub Board"]
+        NOTIFY["Notifications"]
+        AUDIT["Audit Log"]
+    end
+    
+    BUS -->|WorkItemCreatedEvent| BH
+    BUS -->|WorkItemCreatedEvent| MH
+    BUS -->|WorkItemCreatedEvent| AH
+    BUS -->|WorkItemUpdatedEvent| BH
+    BUS -->|WorkItemUpdatedEvent| NH
+    BUS -->|WorkItemUpdatedEvent| AH
+    
+    BH -->|IBoardService| BOARD
+    NH -->|INotifier| NOTIFY
+    AH -->|IAudit| AUDIT
+```
 
 ---
 
@@ -259,6 +308,53 @@ class ExecutionTimedOutEvent(CodetoreumEvent):
     timeout_seconds: int = 0
 ```
 
+**Event-Flow Diagram**:
+
+```mermaid
+graph TB
+    subgraph "Domain Layer"
+        EXEC["🟦 AgentExecution<br/>aggregate"]
+    end
+    
+    subgraph "Execution Lifecycle Events"
+        EXEC -->|start| STARTED["ExecutionStartedEvent"]
+        EXEC -->|complete| COMPLETED["ExecutionCompletedEvent"]
+        EXEC -->|fail| FAILED["ExecutionFailedEvent"]
+        EXEC -->|timeout| TIMEOUT["ExecutionTimedOutEvent"]
+    end
+    
+    subgraph "Event Bus"
+        BUS["📢 Event Bus"]
+        STARTED -->|emit| BUS
+        COMPLETED -->|emit| BUS
+        FAILED -->|emit| BUS
+        TIMEOUT -->|emit| BUS
+    end
+    
+    subgraph "Event Handlers"
+        EH["⚙️ ExecutionHandler"]
+        NH["📧 NotificationHandler"]
+        RCH["🔧 RepairCycleHandler"]
+        MH["📈 MetricsHandler"]
+    end
+    
+    subgraph "External Systems"
+        CONTAINER["Container Runtime"]
+        NOTIFY["Notifications"]
+        REPAIR["Repair Cycle"]
+    end
+    
+    BUS -->|ExecutionStartedEvent| EH
+    BUS -->|ExecutionCompletedEvent| EH
+    BUS -->|ExecutionFailedEvent| RCH
+    BUS -->|ExecutionTimedOutEvent| NH
+    BUS -->|All events| MH
+    
+    EH -->|IContainer| CONTAINER
+    NH -->|INotifier| NOTIFY
+    RCH -->|Trigger| REPAIR
+```
+
 ---
 
 ### Review Context
@@ -308,6 +404,43 @@ class ReviewCommentAddedEvent(CodetoreumEvent):
     comment_id: str = ""
     author_id: str = ""
     body: str = ""
+```
+
+**Event-Flow Diagram**:
+
+```mermaid
+graph TB
+    subgraph "External System"
+        REVIEW["🔄 Code Review<br/>(GitHub PR)"]
+    end
+    
+    subgraph "Adapter Event Emission"
+        REVIEW -->|status changes| STATUS["ReviewStatusChangedEvent"]
+        REVIEW -->|comment added| COMMENT["ReviewCommentAddedEvent"]
+    end
+    
+    subgraph "Event Bus"
+        BUS["📢 Event Bus"]
+        STATUS -->|emit| BUS
+        COMMENT -->|emit| BUS
+    end
+    
+    subgraph "Event Handlers"
+        RH["🔍 ReviewHandler"]
+        NH["📧 NotificationHandler"]
+        MH["📈 MetricsHandler"]
+    end
+    
+    subgraph "Application Layer"
+        RC["ReviewCycle<br/>aggregate"]
+    end
+    
+    BUS -->|ReviewStatusChangedEvent| RH
+    BUS -->|ReviewCommentAddedEvent| NH
+    BUS -->|All events| MH
+    
+    RH -->|update| RC
+    NH -->|notify team| NOTIFY["Notifications"]
 ```
 
 ---
@@ -512,6 +645,50 @@ class PRReviewCycleApprovedEvent(CodetoreumEvent):
 # ... 9 more events (PhaseStarted, CICheckCompleted, IssuesFound, Escalated, etc.)
 ```
 
+**Event-Flow Diagram**:
+
+```mermaid
+graph TB
+    subgraph "Domain Layer"
+        PRC["🟦 PRReviewCycle<br/>aggregate"]
+    end
+    
+    subgraph "Multi-Phase Review Events"
+        PRC -->|start| STARTED["PRReviewCycleStartedEvent"]
+        PRC -->|phase change| PHASE["PhaseStartedEvent"]
+        PRC -->|complete review| COMPLETED["PRReviewCompletedEvent"]
+        PRC -->|auto-merge| MERGED["PRAutoMergedEvent"]
+    end
+    
+    subgraph "Event Bus"
+        BUS["📢 Event Bus"]
+        STARTED -->|emit| BUS
+        PHASE -->|emit| BUS
+        COMPLETED -->|emit| BUS
+        MERGED -->|emit| BUS
+    end
+    
+    subgraph "Event Handlers"
+        PRH["🔍 PRReviewHandler"]
+        CIH["🔧 CICheckHandler"]
+        MH["📈 MetricsHandler"]
+        WFH["🔄 WorkflowHandler"]
+    end
+    
+    subgraph "External Systems"
+        GITHUB["GitHub<br/>PR/Checks"]
+        CI["CI Pipeline"]
+    end
+    
+    BUS -->|All PR events| PRH
+    BUS -->|CI-related events| CIH
+    BUS -->|All events| MH
+    BUS -->|Completion events| WFH
+    
+    PRH -->|IBoardService| GITHUB
+    CIH -->|ICIPipeline| CI
+```
+
 ---
 
 ### Repair Cycle Context
@@ -673,6 +850,42 @@ class ContainerExecutionCompletedEvent(CodetoreumEvent):
     error: str = ""
 ```
 
+**Event-Flow Diagram**:
+
+```mermaid
+graph TB
+    subgraph "Container Runtime"
+        CONTAINER["🐳 Container<br/>execute code"]
+    end
+    
+    subgraph "Events"
+        CONTAINER -->|completion| COMPLETED["ContainerExecutionCompletedEvent"]
+    end
+    
+    subgraph "Event Bus"
+        BUS["📢 Event Bus"]
+        COMPLETED -->|emit| BUS
+    end
+    
+    subgraph "Event Handlers"
+        EH["⚙️ ExecutionHandler"]
+        WH["🗑️ WorkspaceHandler"]
+        MH["📈 MetricsHandler"]
+    end
+    
+    subgraph "Application Layer"
+        EXEC["ExecutionService"]
+        WS["WorkspaceRouter"]
+    end
+    
+    BUS -->|ContainerExecutionCompletedEvent| EH
+    BUS -->|ContainerExecutionCompletedEvent| WH
+    BUS -->|ContainerExecutionCompletedEvent| MH
+    
+    EH -->|update status| EXEC
+    WH -->|cleanup| WS
+```
+
 ---
 
 ### Container Recovery Context
@@ -705,6 +918,44 @@ class ContainerKilledEvent(CodetoreumEvent):
     reason: str = ""
 
 # ... 1 more event (ContainerRecoveryCompletedEvent)
+```
+
+**Event-Flow Diagram**:
+
+```mermaid
+graph TB
+    subgraph "Container Failure"
+        FAIL["❌ Container<br/>execution fails"]
+    end
+    
+    subgraph "Recovery Events"
+        FAIL -->|recovery attempt| RECOVERY["ContainerRecoveryAttemptedEvent"]
+        RECOVERY -->|retry| RETRY["ContainerRespawnedEvent"]
+        RETRY -->|success or kill| RESULT{"Recovered?"}
+        RESULT -->|yes| RECOVERED["ContainerRecoveredEvent"]
+        RESULT -->|no| KILLED["ContainerKilledEvent"]
+    end
+    
+    subgraph "Event Bus"
+        BUS["📢 Event Bus"]
+        RECOVERY -->|emit| BUS
+        RETRY -->|emit| BUS
+        RECOVERED -->|emit| BUS
+        KILLED -->|emit| BUS
+    end
+    
+    subgraph "Event Handlers"
+        RCH["🔧 RecoveryHandler"]
+        EH["⚙️ ExecutionHandler"]
+        MH["📈 MetricsHandler"]
+    end
+    
+    BUS -->|Recovery events| RCH
+    BUS -->|Completion events| EH
+    BUS -->|All events| MH
+    
+    RCH -->|IContainer| CONTAINER["Container Runtime"]
+    EH -->|mark failed| EXEC["ExecutionService"]
 ```
 
 ---
@@ -766,6 +1017,49 @@ class StaleLockDetectedEvent(CodetoreumEvent):
 # ... 4 more events (PipelineLockAcquired, PipelineLockReleased, LockStuck, WorkItemQueued)
 ```
 
+**Event-Flow Diagram**:
+
+```mermaid
+graph TB
+    subgraph "Pipeline Coordination"
+        ACQ["🔒 Lock<br/>acquired by agent"]
+        HELD["Held by work item"]
+        REL["🔓 Lock<br/>released"]
+        STALE["⚠️ Stale lock<br/>detected"]
+    end
+    
+    subgraph "Lock Lifecycle Events"
+        ACQ -->|emit| ACQUIRED["LockAcquiredEvent"]
+        REL -->|emit| RELEASED["LockReleasedEvent"]
+        STALE -->|emit| STALEEV["StaleLockDetectedEvent"]
+    end
+    
+    subgraph "Event Bus"
+        BUS["📢 Event Bus"]
+        ACQUIRED -->|emit| BUS
+        RELEASED -->|emit| BUS
+        STALEEV -->|emit| BUS
+    end
+    
+    subgraph "Event Handlers"
+        LH["🔐 LockHandler"]
+        WFH["🔄 WorkflowHandler"]
+        MH["📈 MetricsHandler"]
+    end
+    
+    subgraph "Services"
+        LOCK["IPipelineLockService"]
+        WF["WorkflowOrchestrator"]
+    end
+    
+    BUS -->|Lock events| LH
+    BUS -->|Release events| WFH
+    BUS -->|All events| MH
+    
+    LH -->|acquire/release| LOCK
+    WFH -->|proceed| WF
+```
+
 ---
 
 ### Repository Context
@@ -805,6 +1099,48 @@ class BranchCreatedEvent(CodetoreumEvent):
     branch_name: str = ""
 
 # ... 2 more events (BranchPushed, FilesStagedEvent)
+```
+
+**Event-Flow Diagram**:
+
+```mermaid
+graph TB
+    subgraph "Git Operations"
+        COMMIT["💾 Commit<br/>code changes"]
+        BRANCH["🌳 Branch<br/>created"]
+        PUSH["⬆️ Push<br/>to remote"]
+    end
+    
+    subgraph "Repository Events"
+        COMMIT -->|emit| COMMITEV["CommitCreatedEvent"]
+        BRANCH -->|emit| BRANCHEV["BranchCreatedEvent"]
+        PUSH -->|emit| PUSHEV["BranchPushedEvent"]
+    end
+    
+    subgraph "Event Bus"
+        BUS["📢 Event Bus"]
+        COMMITEV -->|emit| BUS
+        BRANCHEV -->|emit| BUS
+        PUSHEV -->|emit| BUS
+    end
+    
+    subgraph "Event Handlers"
+        RH["📦 RepositoryHandler"]
+        AH["📊 AuditHandler"]
+        MH["📈 MetricsHandler"]
+    end
+    
+    subgraph "External Systems"
+        GIT["Git Repository"]
+        AUDIT["Audit Log"]
+    end
+    
+    BUS -->|All repo events| RH
+    BUS -->|All repo events| AH
+    BUS -->|All events| MH
+    
+    RH -->|IRepositoryService| GIT
+    AH -->|IAudit| AUDIT
 ```
 
 ---
@@ -852,6 +1188,49 @@ class CIRunCompletedEvent(CodetoreumEvent):
     work_item_id: str = ""
     run_id: str = ""
     success: bool = False
+```
+
+**Event-Flow Diagram**:
+
+```mermaid
+graph TB
+    subgraph "CI Pipeline Execution"
+        CHECK["🔍 Check<br/>pipeline status"]
+        START["▶️ CI run<br/>starts"]
+        COMPLETE["✅ CI run<br/>completes"]
+    end
+    
+    subgraph "Pipeline Events"
+        CHECK -->|emit| CHECKEV["CIPipelineStatusCheckedEvent"]
+        START -->|emit| STARTEV["CIRunStartedEvent"]
+        COMPLETE -->|emit| COMPLETEEV["CIRunCompletedEvent"]
+    end
+    
+    subgraph "Event Bus"
+        BUS["📢 Event Bus"]
+        CHECKEV -->|emit| BUS
+        STARTEV -->|emit| BUS
+        COMPLETEEV -->|emit| BUS
+    end
+    
+    subgraph "Event Handlers"
+        CIH["🔧 CIHandler"]
+        WFH["🔄 WorkflowHandler"]
+        NH["📧 NotificationHandler"]
+        MH["📈 MetricsHandler"]
+    end
+    
+    subgraph "External Systems"
+        CI["CI/CD Platform<br/>(GitHub Actions, etc)"]
+    end
+    
+    BUS -->|Check events| CIH
+    BUS -->|Completion events| WFH
+    BUS -->|Failure events| NH
+    BUS -->|All events| MH
+    
+    CIH -->|ICIPipeline| CI
+    WFH -->|advance workflow| WORKFLOW["WorkflowOrchestrator"]
 ```
 
 ---
@@ -914,6 +1293,50 @@ class ConversationalLoopStartedEvent(CodetoreumEvent):
 # ... 5 more events (AgentResponsePosted, FeedbackListeningStarted, etc.)
 ```
 
+**Event-Flow Diagram**:
+
+```mermaid
+graph TB
+    subgraph "Discussion Events"
+        COMMENT["💬 Comment<br/>posted"]
+        MENTION["@mention<br/>agent"]
+        RESPONSE["💬 Agent<br/>responds"]
+        LOOP["🔄 Multi-turn<br/>conversation"]
+    end
+    
+    subgraph "Events"
+        COMMENT -->|emit| COMMENTEV["CommentPostedEvent"]
+        MENTION -->|emit| NEEDSEV["CommentNeedsResponseEvent"]
+        RESPONSE -->|emit| RESPONSEEV["AgentResponsePostedEvent"]
+        LOOP -->|emit| LOOPEV["ConversationalLoopStartedEvent"]
+    end
+    
+    subgraph "Event Bus"
+        BUS["📢 Event Bus"]
+        COMMENTEV -->|emit| BUS
+        NEEDSEV -->|emit| BUS
+        RESPONSEEV -->|emit| BUS
+        LOOPEV -->|emit| BUS
+    end
+    
+    subgraph "Event Handlers"
+        DH["💬 DiscussionHandler"]
+        AEH["⚙️ AgentExecutionHandler"]
+        NH["📧 NotificationHandler"]
+    end
+    
+    subgraph "External Systems"
+        GITHUB["GitHub Issues/<br/>Discussion"]
+    end
+    
+    BUS -->|Comment events| DH
+    BUS -->|Agent needed| AEH
+    BUS -->|All events| NH
+    
+    DH -->|IDiscussionAdapter| GITHUB
+    AEH -->|schedule execution| EXEC["ExecutionService"]
+```
+
 ---
 
 ### Project Context
@@ -944,6 +1367,48 @@ class ProjectEnabledEvent(CodetoreumEvent):
     project_id: str = ""
 
 # ... 3 more events (ProjectDisabled, ProjectCloneFailed, OrchestrationCycleCompleted)
+```
+
+**Event-Flow Diagram**:
+
+```mermaid
+graph TB
+    subgraph "Project Lifecycle"
+        CLONE["📥 Repository<br/>cloned"]
+        ENABLE["✅ Project<br/>enabled"]
+        CONFIG["⚙️ Configuration<br/>updated"]
+    end
+    
+    subgraph "Project Events"
+        CLONE -->|emit| CLONEEV["ProjectClonedEvent"]
+        ENABLE -->|emit| ENABLEEV["ProjectEnabledEvent"]
+        CONFIG -->|emit| CONFIGEV["ProjectConfigurationChangedEvent"]
+    end
+    
+    subgraph "Event Bus"
+        BUS["📢 Event Bus"]
+        CLONEEV -->|emit| BUS
+        ENABLEEV -->|emit| BUS
+        CONFIGEV -->|emit| BUS
+    end
+    
+    subgraph "Event Handlers"
+        PH["📦 ProjectHandler"]
+        WFH["🔄 WorkflowHandler"]
+        MH["📈 MetricsHandler"]
+    end
+    
+    subgraph "External Systems"
+        GITHUB["GitHub"]
+        CONFIG_STORE["Config Store"]
+    end
+    
+    BUS -->|Clone/Enable events| PH
+    BUS -->|Enable events| WFH
+    BUS -->|All events| MH
+    
+    PH -->|IRepositoryService| GITHUB
+    PH -->|IConfigStore| CONFIG_STORE
 ```
 
 ---
@@ -980,6 +1445,47 @@ class QueuePositionChangedEvent(CodetoreumEvent):
     new_position: int = 0
 
 # ... 2 more events (QueueItemRemoved, WorkItemDeadLetterQueued)
+```
+
+**Event-Flow Diagram**:
+
+```mermaid
+graph TB
+    subgraph "Queue Operations"
+        ADD["➕ Work item<br/>added to queue"]
+        REORDER["🔄 Queue position<br/>changes"]
+        EXECUTE["▶️ Work item<br/>executes"]
+    end
+    
+    subgraph "Queue Events"
+        ADD -->|emit| ADDEV["QueueItemAddedEvent"]
+        REORDER -->|emit| POSEV["QueuePositionChangedEvent"]
+        EXECUTE -->|emit| REMEV["QueueItemRemovedEvent"]
+    end
+    
+    subgraph "Event Bus"
+        BUS["📢 Event Bus"]
+        ADDEV -->|emit| BUS
+        POSEV -->|emit| BUS
+        REMEV -->|emit| BUS
+    end
+    
+    subgraph "Event Handlers"
+        QH["📋 QueueHandler"]
+        SCH["⚙️ SchedulerHandler"]
+        MH["📈 MetricsHandler"]
+    end
+    
+    subgraph "Services"
+        QUEUE["AgentScheduler"]
+    end
+    
+    BUS -->|Add events| QH
+    BUS -->|Position/Remove events| SCH
+    BUS -->|All events| MH
+    
+    QH -->|manage queue| QUEUE
+    SCH -->|execute next| EXEC["ExecutionService"]
 ```
 
 ---
@@ -1025,6 +1531,47 @@ class BranchResolvedEvent(CodetoreumEvent):
     branch_name: str = ""
 ```
 
+**Event-Flow Diagram**:
+
+```mermaid
+graph TB
+    subgraph "Branch Lifecycle"
+        CREATE["🌳 Create<br/>new branch"]
+        REUSE["♻️ Reuse<br/>existing branch"]
+        RESOLVE["✅ Branch<br/>resolved"]
+    end
+    
+    subgraph "Branch Events"
+        CREATE -->|emit| CREATEEV["BranchResolutionCreatedEvent"]
+        REUSE -->|emit| REUSEEV["BranchReusedEvent"]
+        RESOLVE -->|emit| RESOLVEEV["BranchResolvedEvent"]
+    end
+    
+    subgraph "Event Bus"
+        BUS["📢 Event Bus"]
+        CREATEEV -->|emit| BUS
+        REUSEEV -->|emit| BUS
+        RESOLVEEV -->|emit| BUS
+    end
+    
+    subgraph "Event Handlers"
+        BH["🌳 BranchHandler"]
+        WH["🔄 WorkflowHandler"]
+        MH["📈 MetricsHandler"]
+    end
+    
+    subgraph "External Systems"
+        GIT["Git Repository"]
+    end
+    
+    BUS -->|All branch events| BH
+    BUS -->|Resolved events| WH
+    BUS -->|All events| MH
+    
+    BH -->|IRepositoryService| GIT
+    WH -->|advance workflow| WF["WorkflowOrchestrator"]
+```
+
 ---
 
 ### Storage Context
@@ -1061,6 +1608,44 @@ class ArtifactDeletedEvent(CodetoreumEvent):
     work_item_id: str = ""
 ```
 
+**Event-Flow Diagram**:
+
+```mermaid
+graph TB
+    subgraph "Storage Operations"
+        UPLOAD["⬆️ Artifact<br/>uploaded"]
+        DELETE["🗑️ Artifact<br/>deleted"]
+    end
+    
+    subgraph "Storage Events"
+        UPLOAD -->|emit| UPLOADEV["ArtifactUploadedEvent"]
+        DELETE -->|emit| DELETEEV["ArtifactDeletedEvent"]
+    end
+    
+    subgraph "Event Bus"
+        BUS["📢 Event Bus"]
+        UPLOADEV -->|emit| BUS
+        DELETEEV -->|emit| BUS
+    end
+    
+    subgraph "Event Handlers"
+        SH["💾 StorageHandler"]
+        MH["📈 MetricsHandler"]
+        AH["📊 AuditHandler"]
+    end
+    
+    subgraph "External Systems"
+        STORAGE["Object Storage<br/>(S3, GCS, etc)"]
+    end
+    
+    BUS -->|Artifact events| SH
+    BUS -->|All events| MH
+    BUS -->|All events| AH
+    
+    SH -->|IStorage| STORAGE
+    AH -->|log| AUDIT["Audit Log"]
+```
+
 ---
 
 ### Adapter Context
@@ -1089,6 +1674,120 @@ class CodetoreumEvent:
     source: str = ""  # Source system (e.g., "github", "codetoreum")
     correlation_id: str | None = None  # Link related events
 ```
+
+**Event-Flow Diagram**:
+
+```mermaid
+graph TB
+    subgraph "Event Creation"
+        ALL["🟦 Domain Model<br/>state changes"]
+    end
+    
+    subgraph "Event Base Class"
+        ALL -->|extend| BASE["CodetoreumEvent<br/>base class"]
+    end
+    
+    subgraph "Event Properties"
+        BASE -->|add| TYPE["type<br/>(event identifier)"]
+        BASE -->|add| TIMESTAMP["timestamp<br/>(UTC)"]
+        BASE -->|add| ID["event_id<br/>(unique UUID)"]
+        BASE -->|add| SOURCE["source<br/>(system)"]
+        BASE -->|add| CORR["correlation_id<br/>(event linking)"]
+    end
+    
+    subgraph "Frozen/Immutable"
+        TYPE -->|immutable| FROZEN["@dataclass<br/>(frozen=True)"]
+        TIMESTAMP -->|immutable| FROZEN
+        ID -->|immutable| FROZEN
+        SOURCE -->|immutable| FROZEN
+        CORR -->|immutable| FROZEN
+    end
+    
+    subgraph "Event Bus"
+        FROZEN -->|serialize| BUS["📢 Event Bus<br/>(pub/sub, persistence)"]
+    end
+    
+    subgraph "Event Sourcing"
+        BUS -->|store| STORE["💾 Event Store<br/>(audit trail)"]
+        BUS -->|publish| HANDLERS["Event Handlers"]
+    end
+```
+
+---
+
+## Legacy Events (Deprecated)
+
+**Status**: These events are deprecated and should not be used for new features. They exist for backward compatibility with older code paths.
+
+### Legacy DomainEvent Base Class
+
+The system contains **74 legacy event classes** using the older `DomainEvent` base class pattern (located in `legacy_domain_events.py`). These events follow a different design pattern than the modern frozen dataclass events:
+
+```python
+# Legacy pattern (deprecated - do NOT use for new events)
+class DomainEvent:
+    """Base class for legacy events (deprecated pattern)."""
+    def __init__(self, aggregate_id: str, aggregate_type: str, payload: dict, **kwargs):
+        self.aggregate_id = aggregate_id
+        self.aggregate_type = aggregate_type
+        self.payload = payload
+        # ... additional initialization
+
+# Example: WorkItemCreated (legacy - from legacy_domain_events.py)
+class WorkItemCreated(DomainEvent):
+    """Emitted when a work item is created (DEPRECATED)."""
+    def __init__(self, aggregate_id: str, payload: dict, **kwargs):
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
+```
+
+**Legacy Event Classes** (74 total):
+- WorkItemCreated, AgentAssigned, ExecutionStarted, WorkflowAttached, etc.
+- ExecutionFailed, ExecutionTimedOut, ReviewStarted, ReviewApproved, etc.
+- And ~60 more legacy-style events
+
+### Transition to Modern Events
+
+New events **MUST** use the modern frozen dataclass pattern:
+
+```python
+# Modern pattern (use this for all new events)
+@dataclass(frozen=True)
+class WorkItemCreatedEvent(CodetoreumEvent):
+    """Emitted when a work item is created (MODERN pattern)."""
+    work_item_id: str = ""
+    project_id: str = ""
+    title: str = ""
+```
+
+**Differences**:
+| Aspect | Legacy | Modern |
+|--------|--------|---------|
+| Base Class | `DomainEvent` | `CodetoreumEvent` |
+| Immutability | Not enforced | `@dataclass(frozen=True)` |
+| Fields | Dict-based payload | Typed dataclass fields |
+| Serialization | Manual | Automatic via dataclass |
+| Validation | __post_init__ not used | Full __post_init__ support |
+
+### Project Context Legacy Events
+
+Additionally, **4 events** in `project_context.py` use the legacy pattern:
+- ProjectContextCreated
+- ProjectTestConfigUpdated
+- ProjectDockerConfigUpdated
+- ProjectWorkflowMappingAdded
+
+These should be migrated to modern pattern when ProjectContext is refactored.
+
+### Migration Path
+
+If you encounter legacy events in the codebase:
+1. Identify events inheriting from `DomainEvent` (not `CodetoreumEvent`)
+2. Convert to modern frozen dataclass pattern
+3. Update event handlers to use typed fields
+4. Add tests for the migrated events
+5. Remove old legacy event class
+
+For now, legacy events are supported for backward compatibility, but **all new code should use the modern frozen dataclass pattern**.
 
 ---
 

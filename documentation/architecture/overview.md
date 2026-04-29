@@ -12,7 +12,7 @@ applies_to: "documentation/architecture/overview.md"
 
 ## Overview
 
-Codetoreum is built on a **hexagonal architecture** (ports & adapters pattern) that cleanly separates business logic from external dependencies. The system is organized into five distinct layers, each with well-defined responsibilities and boundaries. This architecture enables the platform to remain vendor-agnostic, highly testable, and maintainable as requirements evolve.
+Codetoreum is built on a **hexagonal architecture** (ports & adapters pattern) that cleanly separates business logic from external dependencies. The system is organized into five distinct layers (Domain, Application, Input Ports, Output Ports, Adapters) plus an Infrastructure layer providing cross-cutting concerns. This architecture enables the platform to remain vendor-agnostic, highly testable, and maintainable as requirements evolve.
 
 The core insight of hexagonal architecture is inverting the traditional "layers" model: instead of application code depending on external systems, external systems depend on abstract ports defined by the application. This inversion of control allows the domain layer to remain pure—containing no framework coupling, no I/O operations, and no external dependencies.
 
@@ -364,9 +364,9 @@ graph TB
         style INFRA fill:#ffe0b2
     end
     
-    DL -->|uses| AL
-    AL -->|requests via| IP
-    IP -->|calls adapters| AD
+    AL -->|orchestrates| DL
+    IP -->|delegates to| AL
+    IP -->|implemented by| AD
     AL -->|depends on| OP
     OP -->|implemented by| AD
     INF -.->|supports all layers| AL

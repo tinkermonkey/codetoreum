@@ -5,6 +5,8 @@ required_sections:
   - "## Invariants"
   - "## Relationships"
   - "## Diagram"
+  - "## Events"
+  - "## Examples"
 applies_to: "documentation/architecture/domain/models.md"
 ---
 
@@ -12,14 +14,17 @@ applies_to: "documentation/architecture/domain/models.md"
 
 ## Overview
 
-The domain layer contains 90 pure business logic classes across 17 source files. These models form the core of Codetoreum, representing the system's fundamental concepts: work items, agents, workflows, executions, reviews, and supporting structures. All domain models are technology-agnostic—they contain no external dependencies, no I/O operations, and no framework coupling. They are organized into six primary bounded contexts:
+The domain layer contains **121 pure business logic classes** across **20 source files**. These models form the core of Codetoreum, representing the system's fundamental concepts: work items, agents, workflows, executions, reviews, repairs, exceptions, and project configuration. All domain models are technology-agnostic—they contain no external dependencies, no I/O operations, and no framework coupling. They are organized into nine primary bounded contexts:
 
 1. **Work Item Context** — Lifecycle and state management of work items
 2. **Agent Context** — AI agents and their capabilities
 3. **Execution Context** — Agent execution instances and their lifecycle
 4. **Workflow Context** — Workflow definitions and stage management
 5. **Review Context** — Code review cycles and feedback
-6. **Infrastructure Models** — Supporting structures for all other contexts
+6. **Repair Cycle Context** — Automated test-fix-validate cycles
+7. **Project Context** — Project-level configuration and test setup
+8. **Exception Context** — Domain-level error types and business rule violations
+9. **Infrastructure Models** — Supporting structures (values objects, enums) for all other contexts
 
 Domain models enforce business rules through **invariants**: conditions that must always be true. These invariants are expressed as methods on the models that validate state before allowing transitions.
 
@@ -611,6 +616,150 @@ class Comment:
 
 ---
 
+### Repair Cycle Context
+
+**File**: `repair_cycle_types.py` (17 classes)
+
+The Repair Cycle context provides types and value objects for automated test-fix-validate cycles. It classifies failures, configures repair strategies, and tracks repair cycle results.
+
+**Key Types**:
+- **FailureClassification**: Enum categorizing root cause (CODE_DEFECT, ENVIRONMENT_ISSUE, TRANSIENT_FAILURE, DEPENDENCY_ISSUE, CONFIGURATION_ISSUE)
+- **RepairTestType**: Enum for test execution order (COMPILATION, UNIT, INTEGRATION, CI, E2E)
+- **RepairTestFailure**: Immutable record of a test failure with file, test name, and message
+- **RepairTestWarning**: Immutable record of warnings found during testing
+- **RepairTestResult**: Result from executing a test type in one iteration
+- **CycleResult**: Result of a complete repair cycle iteration
+- **RepairCycleResult**: Final aggregated result of entire repair cycle
+- **RepairTestRunConfig**: Configuration for test runs (timeout, failure reporting, etc.)
+- **RepairCycleAgentConfig**: Configuration for repair agent behavior
+- **RepairCycleCheckpoint**: Checkpoint marking progress in repair cycle
+- **EnvironmentRepairConfig**: Configuration for environment repair strategy
+- **RepairCycleStageConfig**: Configuration for each test type stage
+- **SystemicAnalysisResult**: Result of systemic analysis for environment/dependency issues
+- **AnalysisContext**: Context for analysis operations
+- **RebuildResult**: Result of rebuild operation
+- **VerificationResult**: Result of verification operation
+- **SystemicFixResult**: Result of systemic fix operation
+
+**Invariants Enforced**:
+- Test types must execute in strict order
+- Failure/warning records must have all required fields
+- Immutability of results (frozen dataclasses)
+
+---
+
+### Project Context
+
+**File**: `project_context.py` (5 classes)
+
+The Project Context provides project-level configuration and state management.
+
+```python
+class ProjectContextCreated(DomainEvent):
+    """Emitted when project context is created."""
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
+
+class ProjectTestConfigUpdated(DomainEvent):
+    """Emitted when test configuration is updated."""
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
+
+class ProjectDockerConfigUpdated(DomainEvent):
+    """Emitted when Docker configuration is updated."""
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
+
+class ProjectWorkflowMappingAdded(DomainEvent):
+    """Emitted when workflow mapping is added."""
+    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
+        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
+
+@dataclass
+class ProjectContext:
+    """Project aggregate root.
+    
+    Manages project-level configuration including test commands, Docker setup,
+    and workflow mappings.
+    """
+    # Identity
+    id: str
+    
+    # Project metadata
+    name: str
+    repository_url: str
+    default_branch: str
+    
+    # Test configuration
+    test_command: str | None
+    test_framework: str | None
+    
+    # Docker configuration
+    has_dockerfile: bool
+    dockerfile_path: str | None
+    requires_dev_container: bool
+    
+    # Timestamps
+    created_at: datetime
+    updated_at: datetime
+```
+
+**Key Responsibilities**:
+- Store project-level configuration
+- Manage test setup and Docker configuration
+- Track workflow mappings to external systems
+- Emit events for configuration changes
+
+---
+
+### Exception Context
+
+**File**: `exceptions.py` (9 classes)
+
+Domain-level exception types representing business rule violations and error conditions.
+
+```python
+class DomainError(Exception):
+    """Base exception for domain layer errors."""
+    def __init__(self, message: str):
+        self.message = message
+        super().__init__(self.message)
+
+# Entity Not Found Exceptions
+class AgentNotFoundError(DomainError):
+    """Raised when an agent cannot be found."""
+
+class ExecutionNotFoundError(DomainError):
+    """Raised when an execution cannot be found."""
+
+class WorkItemNotFoundError(DomainError):
+    """Raised when a work item cannot be found."""
+
+class WorkspaceNotFoundError(DomainError):
+    """Raised when a workspace cannot be found."""
+
+# Business Logic Exceptions
+class TestOutputParseError(DomainError):
+    """Raised when test output structure is invalid."""
+
+class PipelineNotFoundError(DomainError):
+    """Raised when a pipeline cannot be found."""
+
+class ConfigNotFoundError(DomainError):
+    """Raised when configuration is missing."""
+
+class InvalidStateError(DomainError):
+    """Raised when model state violates invariants."""
+```
+
+**Key Responsibilities**:
+- Provide typed exceptions for domain layer errors
+- Enable precise error handling in application services
+- Support business rule validation
+- Distinguish entity not found from invalid state errors
+
+---
+
 ## Invariants
 
 Domain models enforce business rules through invariants:
@@ -949,6 +1098,231 @@ classDiagram
     PipelineStage "N" --> "1" Agent: uses
     Agent "1" --> "0..*" AgentExecution: executes
     ReviewCycle "1" --> "1..*" ReviewFeedback: collects
+```
+
+---
+
+## Events
+
+Every state change in domain models emits one or more domain events. These immutable events are the mechanism by which the domain layer communicates changes to the application layer and other subscribers.
+
+### Event Emission Pattern
+
+Domain models emit events through their methods:
+
+1. **WorkItem.transition_to_stage(new_stage)** → Emits `WorkItemStageUpdatedEvent`
+2. **Agent.update_capability(skill, proficiency)** → Emits `AgentCapabilityUpdatedEvent`
+3. **ReviewCycle.add_feedback(feedback)** → Emits `ReviewFeedbackAddedEvent`
+4. **ReviewCycle.approve()** → Emits `ReviewApprovedEvent`
+5. **Workflow.advance_to_next_stage()** → Emits `WorkflowStageAdvancedEvent`
+
+### Event Subscribers
+
+Events are published to the event bus and handled by multiple subscribers:
+
+- **BoardHandler**: Updates project board when work items transition
+- **MetricsHandler**: Records metrics on state changes
+- **NotificationHandler**: Sends notifications to interested parties
+- **AuditHandler**: Logs all state changes for audit trail
+- **WorkflowHandler**: Advances workflow on stage completions
+
+### Key Event Categories
+
+1. **State Change Events**: WorkItemUpdatedEvent, WorkflowStageAdvancedEvent, ReviewApprovedEvent
+2. **Lifecycle Events**: WorkItemCreatedEvent, ExecutionStartedEvent, ReviewCompletedEvent
+3. **Transition Events**: WorkItemColumnChangedEvent, ExecutionStatusChangedEvent
+4. **Validation Events**: ReviewFailedEvent, ExecutionFailedEvent
+
+For complete event catalog, see `documentation/architecture/domain/events.md`.
+
+---
+
+## Examples
+
+### Example 1: Creating a Work Item
+
+```python
+# Domain layer: Create work item
+work_item = WorkItem(
+    id="WI-123",
+    project_id="proj-1",
+    title="Implement authentication",
+    description="Add OAuth2 support",
+    status=WorkItemStatus.NEW,
+    priority=WorkItemPriority.HIGH,
+    labels=["feature", "auth"],
+    external_id="github-issue-456",
+    external_url="https://github.com/org/repo/issues/456",
+    assigned_agent_id=None,
+    assigned_at=None,
+    current_workflow_id=None,
+    current_stage=None,
+    current_column=None,
+    entered_column_at=None,
+    created_at=datetime.now(UTC),
+    updated_at=datetime.now(UTC)
+)
+
+# Application layer: Persist and emit event
+event = WorkItemCreatedEvent(
+    work_item_id=work_item.id,
+    project_id=work_item.project_id,
+    title=work_item.title,
+    initial_column="Backlog"
+)
+await event_bus.publish(event)
+
+# Subscribers react to event
+# - BoardHandler: adds item to GitHub board column
+# - MetricsHandler: initializes metrics tracking
+# - AuditHandler: logs creation
+```
+
+### Example 2: Assigning an Agent to a Work Item
+
+```python
+# Validate agent exists and has capabilities
+if agent.has_capability("implementation"):
+    # Domain layer: Update work item assignment
+    work_item.assigned_agent_id = agent.id
+    work_item.assigned_at = datetime.now(UTC)
+    work_item.status = WorkItemStatus.ASSIGNED
+    
+    # Emit event
+    event = WorkItemAssignedEvent(
+        work_item_id=work_item.id,
+        agent_id=agent.id,
+        agent_name=agent.name
+    )
+    await event_bus.publish(event)
+    
+    # Subscribers react:
+    # - ExecutionHandler: schedules agent execution
+    # - NotificationHandler: notifies agent of assignment
+    # - MetricsHandler: records assignment time
+
+else:
+    # Domain layer validation: agent lacks required capability
+    raise InvalidStateError(
+        f"Agent {agent.id} cannot handle {work_item.title}: "
+        f"missing capability 'implementation'"
+    )
+```
+
+### Example 3: Handling Execution Failure and Repair Cycle
+
+```python
+# Execution fails
+execution = agent_execution  # AgentExecution aggregate
+execution.status = ExecutionStatus.FAILED
+execution.error = "Tests failed: 3 failures, 2 warnings"
+
+# Emit event
+event = ExecutionFailedEvent(
+    execution_id=execution.id,
+    work_item_id=execution.work_item_id,
+    error=execution.error
+)
+await event_bus.publish(event)
+
+# Application layer: Repair cycle handler receives event
+repair_cycle = RepairCycle(
+    id=generate_id(),
+    work_item_id=execution.work_item_id,
+    failed_execution_id=execution.id,
+    status=RepairCycleStatus.IN_PROGRESS,
+    failures=[
+        RepairTestFailure(
+            file="tests/auth_test.py",
+            test="test_login_oauth",
+            message="Token validation failed"
+        )
+    ],
+    warnings=[
+        RepairTestWarning(
+            file="src/auth.py",
+            message="DeprecationWarning: use new auth library"
+        )
+    ],
+    config=RepairCycleConfig(
+        max_iterations=3,
+        timeout_minutes=30,
+        review_warnings=True
+    ),
+    created_at=datetime.now(UTC),
+    updated_at=datetime.now(UTC)
+)
+
+# Repair cycle agents attempt fixes via RepairTestType.UNIT → INTEGRATION → E2E
+```
+
+### Example 4: Invalid State Transition (Error Case)
+
+```python
+# Domain layer invariant enforcement
+workflow = Workflow(
+    id="wf-1",
+    stages=[
+        PipelineStage(name="Development", position=0),
+        PipelineStage(name="Review", position=1),
+        PipelineStage(name="Deploy", position=2),
+    ],
+    current_stage_index=1  # Currently at Review
+)
+
+# Attempt invalid transition (skipping to Deploy before completing Review)
+try:
+    workflow.current_stage_index = 2  # Would skip Review
+    if not workflow.can_transition_to(2):
+        raise InvalidStateError(
+            "Cannot skip workflow stages: must complete Review before Deploy"
+        )
+except InvalidStateError as e:
+    # Application layer catches and logs
+    logger.error(f"Workflow invariant violated: {e.message}")
+    # Event NOT emitted (no state change occurred)
+    # Work item remains in Review stage
+```
+
+### Example 5: Review Cycle with Invariant Enforcement
+
+```python
+# Create review cycle
+review = ReviewCycle(
+    id="rc-1",
+    work_item_id="WI-123",
+    status=ReviewStatus.IN_PROGRESS,
+    iterations=[ReviewIteration(number=1, started_at=datetime.now(UTC))],
+    required_approvals=2,
+    feedback=[],
+    deadline=datetime.now(UTC) + timedelta(days=1),
+    created_at=datetime.now(UTC),
+    updated_at=datetime.now(UTC)
+)
+
+# Add feedback from reviewers
+review.add_feedback(ReviewFeedback(
+    reviewer_id="reviewer-1",
+    decision=ReviewDecision.APPROVED,
+    comments="Looks good",
+    submitted_at=datetime.now(UTC)
+))
+
+review.add_feedback(ReviewFeedback(
+    reviewer_id="reviewer-2",
+    decision=ReviewDecision.REQUESTED_CHANGES,
+    comments="Need refactoring in auth module",
+    submitted_at=datetime.now(UTC)
+))
+
+# Check if can approve (must have required approvals with no rejections)
+if not review.can_approve():
+    raise InvalidStateError(
+        "Cannot approve: requires 2 approvals, got 1 approval + 1 requested_changes"
+    )
+
+# Once all feedback addressed:
+review.approve()  # Emits ReviewApprovedEvent
 ```
 
 ---
