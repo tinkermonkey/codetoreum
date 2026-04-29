@@ -14,7 +14,7 @@ applies_to: "documentation/architecture/domain/models.md"
 
 ## Overview
 
-The domain layer contains **121 pure business logic classes** across **20 source files**. These models form the core of Codetoreum, representing the system's fundamental concepts: work items, agents, workflows, executions, reviews, repairs, exceptions, and project configuration. All domain models are technology-agnostic—they contain no external dependencies, no I/O operations, and no framework coupling. They are organized into nine primary bounded contexts:
+The domain layer contains **90 pure business logic classes** across **19 source files**. These models form the core of Codetoreum, representing the system's fundamental concepts: work items, agents, workflows, executions, reviews, repairs, exceptions, and project configuration. All domain models are technology-agnostic—they contain no external dependencies, no I/O operations, and no framework coupling. They are organized into nine primary bounded contexts:
 
 1. **Work Item Context** — Lifecycle and state management of work items
 2. **Agent Context** — AI agents and their capabilities
@@ -119,14 +119,14 @@ Agents represent AI systems capable of performing work on work items.
 ```python
 class AgentType(Enum):
     """Types of agents in the system."""
-    MAKER = "maker"                          # Creates initial implementations
-    REVIEWER = "reviewer"                    # Reviews agent-generated code
+    MAKER = "maker"                          # Creates/produces output
+    REVIEWER = "reviewer"                    # Reviews output
     SPECIALIZED = "specialized"              # Task-specific agents
     REQUIREMENTS_ANALYST = "requirements_analyst"
     ARCHITECT = "architect"
-    REPAIR_CYCLE = "repair_cycle"
-    TEST_RUNNER = "test_runner"
-    TEST_FIXER = "test_fixer"
+    DEVELOPER = "developer"
+    TESTER = "tester"
+    DEVOPS = "devops"
 
 @dataclass
 class AgentCapability:
@@ -140,7 +140,6 @@ class Agent:
     """Agent aggregate root.
     
     Represents an AI agent with capabilities, configuration, and constraints.
-    Agents are created once and used repeatedly to execute work items.
     """
     # Identity
     id: str
@@ -150,26 +149,34 @@ class Agent:
     display_name: str
     agent_type: AgentType
     
-    # Capabilities
+    # Capabilities and role
     capabilities: dict[str, AgentCapability]  # skill -> capability
+    role_description: str
     
     # Configuration
-    model_id: str                # e.g., "claude-opus"
+    model: str                 # LLM model (e.g., "claude-sonnet-4-5")
     timeout_seconds: int
     max_retries: int
-    max_concurrent_executions: int
+    temperature: float = 0.7   # LLM temperature (0.0-2.0)
+    max_tokens: int = 4096     # Maximum tokens for responses
+    system_prompt: str = ""    # System prompt for the agent
     
-    # Execution context
-    requires_project_files: bool
-    mcp_servers: dict[str, dict[str, Any]]  # MCP server configs
+    # Constraints (environment requirements)
+    requires_docker: bool
+    requires_dev_container: bool
+    makes_code_changes: bool
+    filesystem_write_allowed: bool
     
-    # Constraints
-    constraints: dict[str, Any]
+    # MCP servers
+    mcp_servers: list[str]
     
     # Metadata
+    metadata: dict[str, Any]
+    commit_policy: CommitPolicy  # When to commit file changes
+    
+    # Timestamps
     created_at: datetime
     updated_at: datetime
-    last_used_at: datetime | None = None
 ```
 
 **Key Responsibilities**:
@@ -189,10 +196,10 @@ Execution entities represent instances of agents working on work items.
 ```python
 class ExecutionStatus(Enum):
     """Status enumeration for agent executions."""
-    PENDING = "pending"
-    INITIALIZED = "initialized"
+    PENDING = "pending"              # Waiting to be started
+    INITIALIZED = "initialized"      # Created but not yet running
     RUNNING = "running"
-    PAUSED = "paused"
+    PAUSED = "paused"                # Execution paused by user/system
     COMPLETED = "completed"
     FAILED = "failed"
     TIMEOUT = "timeout"
@@ -212,20 +219,35 @@ class AgentExecution:
     workflow_id: str
     stage_name: str
     
-    # Execution state
+    # Status
     status: ExecutionStatus
-    started_at: datetime | None
-    completed_at: datetime | None
+    
+    # Execution context
+    prompt: str
+    model: str
+    session_id: str | None
+    
+    # Container tracking
+    container_name: str | None
+    container_id: str | None
     
     # Results
     output: str | None
-    error: str | None
+    error_message: str | None
+    exit_code: int | None
+    
+    # Metrics
+    input_tokens: int
+    output_tokens: int
+    duration_seconds: float | None
+    
+    # Timestamps
+    initialized_at: datetime
+    started_at: datetime | None
+    completed_at: datetime | None
     
     # Metadata
-    created_at: datetime
-    updated_at: datetime
-    retry_count: int = 0
-    execution_duration_seconds: float | None = None
+    metadata: dict[str, Any]
 ```
 
 **Key Responsibilities**:
@@ -314,43 +336,58 @@ class Workflow:
 ```python
 class StageType(Enum):
     """Type of pipeline stage."""
-    AGENT_EXECUTION = "agent_execution"
-    MANUAL_APPROVAL = "manual_approval"
-    CONDITIONAL_BRANCH = "conditional_branch"
+    SEQUENTIAL = "sequential"
+    PARALLEL = "parallel"
+    REVIEW = "review"
 
 class StageStatus(Enum):
     """Status of a pipeline stage."""
     PENDING = "pending"
-    IN_PROGRESS = "in_progress"
+    READY = "ready"
+    RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
     SKIPPED = "skipped"
 
 @dataclass
 class PipelineStage:
-    """A stage in a workflow pipeline.
+    """Pipeline Stage entity.
     
-    Represents a single step in a workflow where either:
-    1. An agent executes and produces output
-    2. Manual approval is required
-    3. A conditional decision branches the workflow
+    Represents a stage in a workflow pipeline with dependencies and execution tracking.
     """
     # Identity
     id: str
     name: str
-    stage_type: StageType
+    workflow_id: str
     
     # Configuration
-    agent_id: str | None  # Required for AGENT_EXECUTION
-    timeout_seconds: int | None
-    on_failure: str | None  # Stage name to jump to on failure
+    stage_type: StageType
+    agent_config: dict[str, Any]
+    description: str
     
-    # Conditional branching
-    condition_input: str | None  # Reference to prev stage output
-    branches: dict[str, str] | None  # condition -> next stage
+    # Dependencies
+    dependencies: list[str]
+    is_parallel: bool
     
-    # Ordering
-    order: int
+    # Review configuration (if stage_type == REVIEW)
+    maker_agent_id: str | None
+    reviewer_agent_id: str | None
+    max_review_iterations: int
+    
+    # Status
+    status: StageStatus
+    
+    # Execution tracking
+    execution_id: str | None
+    started_at: datetime | None
+    completed_at: datetime | None
+    
+    # Results
+    output: str | None
+    error_message: str | None
+    
+    # Metadata
+    metadata: dict[str, Any]
 ```
 
 ```python
@@ -360,6 +397,7 @@ class ColumnType(Enum):
     AUTOMATED = "automated"
 
 @dataclass
+@dataclass(frozen=True)
 class ColumnTemplate:
     """Template for a board column with workflow semantics.
     
@@ -368,18 +406,18 @@ class ColumnTemplate:
     """
     name: str
     type: ColumnType
-    agent_id: str | None  # Agent to trigger when item enters
-    is_pipeline_trigger: bool  # Acquire lock when item enters?
-    is_exit_column: bool  # Release lock when item enters?
+    agent_id: str | None
+    is_pipeline_trigger: bool
+    is_exit_column: bool
     position: int
     auto_progress_on_completion: bool
-    sla_seconds: int | None
-    on_failure_column: str | None  # Move here on agent failure
-    sla_escalation_column: str | None  # Move here on SLA expiry
-    repair_cycle_agents: dict | None
-    repair_cycle_test_types: tuple | None
-    pr_review_cycle_config: dict | None
-    execution_type: str  # "task_queue" or "conversational"
+    sla_seconds: int | None = None
+    on_failure_column: str | None = None
+    sla_escalation_column: str | None = None
+    repair_cycle_agents: RepairCycleAgentConfig | None = None
+    repair_cycle_test_types: tuple[RepairTestType, ...] | None = None
+    pr_review_cycle_config: PRReviewCycleConfig | None = None
+    execution_type: str = "task_queue"  # "task_queue" or "conversational"
 
 @dataclass
 class BoardWorkflowTemplate:
@@ -465,24 +503,43 @@ class ReviewCycle:
 ```
 
 ```python
+class PRReviewOutcome(Enum):
+    """Outcome of a PR review cycle."""
+    ISSUES_FOUND = "issues_found"
+    APPROVED = "approved"
+    MAX_CYCLES_REACHED = "max_cycles"
+
 class PRReviewStatus(Enum):
     """Status of a PR review cycle."""
-    STARTED = "started"
-    CODE_REVIEW = "code_review"
-    VERIFICATION = "verification"
-    CI_CHECK = "ci_check"
-    CONSOLIDATION = "consolidation"
-    APPROVED = "approved"
-    ISSUES_FOUND = "issues_found"
+    PENDING = "pending"
+    PHASE_1_CODE_REVIEW = "phase_1_code_review"
+    PHASE_2_VERIFICATION = "phase_2_verification"
+    PHASE_3_CI_CHECK = "phase_3_ci_check"
+    PHASE_4_CONSOLIDATION = "phase_4_consolidation"
+    COMPLETED = "completed"
     ESCALATED = "escalated"
 
 @dataclass
 class PRReviewFinding:
-    """A finding from code review."""
-    category: str  # "security", "performance", "style", etc.
-    severity: str  # "critical", "major", "minor"
+    """Represents a single finding from the PR review."""
+    title: str
     description: str
-    suggested_fix: str | None
+    severity: str  # "critical", "high", "medium", "low"
+    phase: str
+    context_source: str | None = None
+
+@dataclass
+class PRReviewPhaseOutput:
+    """Output from a single phase in the PR review cycle."""
+    phase_name: str
+    phase_index: int
+    success: bool
+    findings: tuple[PRReviewFinding, ...]
+    summary: str
+    duration_seconds: float
+    context_source: str | None = None
+    comment_id: str | None = None
+    error: str | None = None
 
 @dataclass
 class PRReviewCycleConfig:

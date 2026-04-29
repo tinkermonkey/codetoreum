@@ -11,10 +11,7 @@ applies_to: "documentation/architecture/domain/events.md"
 
 ## Overview
 
-Domain events are immutable records of significant state changes in the system. The system defines **245 event classes** across **20 source files**, organized into **18 bounded contexts**. This includes:
-- **167 modern event classes** (frozen dataclasses): Across 19 files in the `domain/events/` directory
-- **74 legacy event classes** (older DomainEvent base class): In `legacy_domain_events.py`
-- **4 project context event classes** (legacy style): In `project_context.py`
+Domain events are immutable records of significant state changes in the system. The system defines **91 modern event classes** (frozen dataclasses) across **19 files** in the `domain/events/` directory, organized into multiple bounded contexts. The system also includes **74 legacy event classes** in `legacy_domain_events.py` for backward compatibility.
 
 Events are frozen dataclasses (`@dataclass(frozen=True)`), making them immutable once created—a critical requirement for maintaining an audit trail and enabling event sourcing.
 
