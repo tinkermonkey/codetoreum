@@ -1357,21 +1357,20 @@ This section documents additional domain models and value objects that support s
 
 **File**: `src/codetoreum/domain/workflow_template.py`
 
-Represents the definition template for a workflow stage. Allows configuration of stage-specific settings before instantiation.
+Represents the definition template for a pipeline stage in a workflow.
 
 **Attributes**:
-- `id` (str): Unique identifier for the stage template
 - `name` (str): Display name of the stage
-- `description` (str): Human-readable description of stage purpose
-- `entry_conditions` (Dict[str, Any]): Conditions that must be met to enter this stage
-- `exit_conditions` (Dict[str, Any]): Conditions that must be met to exit this stage
-- `agents_assigned` (List[str]): Agent IDs that can execute in this stage
-- `timeout_seconds` (Optional[int]): Maximum time allowed in this stage
-- `retry_policy` (Optional[str]): How failures in this stage should be retried
-- `created_at` (datetime): When template was created
-- `updated_at` (datetime): When template was last updated
+- `agent_id` (str): Primary agent ID that executes in this stage
+- `stage_type` (str): Type of stage execution ("sequential", "parallel", or "review")
+- `dependencies` (list[str]): List of stage names that must complete before this stage
+- `is_parallel` (bool): Whether this stage executes in parallel with other stages
+- `maker_agent_id` (str | None): Agent ID for maker role (if review stage)
+- `reviewer_agent_id` (str | None): Agent ID for reviewer role (if review stage)
+- `max_review_iterations` (int): Maximum review iterations before escalation
+- `metadata` (dict[str, Any]): Additional stage-specific configuration data
 
-**Purpose**: Allows workflow architects to define reusable stage templates without hardcoding stage logic.
+**Purpose**: Allows workflow architects to define reusable stage templates with clear roles and dependencies.
 
 #### BoardReconciliationConfig
 
@@ -1414,39 +1413,36 @@ Represents the current state of a PR review cycle at a point in time.
 
 **File**: `src/codetoreum/domain/pr_review_cycle_types.py`
 
-Final result/outcome of a completed PR review cycle.
+Immutable record of a completed PR review cycle with all results and findings.
 
 **Attributes**:
-- `cycle_id` (str): ID of the cycle that produced this result
-- `pr_id` (str): GitHub PR reviewed
-- `final_decision` (str): Final outcome ("approved", "changes_required", "escalated")
-- `total_cycles` (int): Number of review cycles executed
-- `findings_count` (int): Total findings across all phases
-- `critical_findings` (int): Count of critical severity findings
-- `high_findings` (int): Count of high severity findings
-- `review_duration_seconds` (float): Total time spent in review
-- `commits_created` (int): Number of commits during review cycles (from fixing)
-- `completion_timestamp` (datetime): When review cycle completed
+- `cycle_number` (int): Iteration count (1-based) for outer re-trigger tracking
+- `workflow_run_id` (str): ID of the workflow run that executed this cycle
+- `outcome` (PRReviewOutcome): Final outcome (ISSUES_FOUND, APPROVED, or MAX_CYCLES_REACHED)
+- `phase_outputs` (tuple[PRReviewPhaseOutput, ...]): Results from each executed phase
+- `all_findings` (tuple[PRReviewFinding, ...]): All findings from all phases
+- `sub_issues_created` (tuple[str, ...]): IDs of created sub-issues (empty if approved/max_cycles)
+- `ci_passed` (bool | None): CI check result (True/False if checked, None if skipped)
+- `total_findings` (int): Total number of findings across all phases
+- `critical_count`, `high_count`, `medium_count`, `low_count` (int): Counts by severity
+- `total_duration_seconds` (float): Total time for entire review cycle
+- `timestamp` (str): ISO 8601 timestamp when cycle started
+- `next_column` (str): Name of column to move work item to (determined by outcome)
 
-**Purpose**: Provides summary of review cycle results for metrics and decision-making.
+**Purpose**: Immutable record of complete PR review cycle for audit trail and decision-making.
 
 #### PRReviewOutcome
 
 **File**: `src/codetoreum/domain/pr_review_cycle_types.py`
 
-An individual outcome/finding from one phase of PR review.
+An enumeration representing the final outcome of a completed PR review cycle.
 
-**Attributes**:
-- `finding_id` (str): Unique ID for this finding
-- `phase_name` (str): Which phase generated this finding
-- `severity` (str): Severity level ("critical", "high", "medium", "low")
-- `category` (str): Finding category (e.g., "code_smell", "bug", "security", "style")
-- `message` (str): Description of the finding
-- `file_path` (Optional[str]): File where finding occurred
-- `line_number` (Optional[int]): Line number if applicable
-- `suggested_fix` (Optional[str]): Suggested resolution
+**Enum Values**:
+- `ISSUES_FOUND`: Review identified issues requiring fixes (creates sub-issues for each finding)
+- `APPROVED`: PR approved without any issues (ready to progress to next workflow column)
+- `MAX_CYCLES_REACHED`: Maximum review cycles exceeded (escalates to human reviewer)
 
-**Purpose**: Represents individual findings from code review phases.
+**Purpose**: Represents the terminal outcome of a PR review cycle, determining next workflow action.
 
 #### PRReviewPhaseOutput
 
@@ -1465,85 +1461,6 @@ Output produced by a single phase in the PR review cycle.
 - `execution_logs` (Optional[str]): Execution logs from phase
 
 **Purpose**: Encapsulates output from a single review phase for composition into full cycle result.
-
-### Review Cycle Event-Like Models
-
-These models represent key events/state changes in review cycles, providing a structured way to track review progression:
-
-#### ReviewCycleCreated
-
-**File**: `src/codetoreum/domain/review_cycle.py`
-
-Represents initial creation of a review cycle.
-
-**Attributes**:
-- `cycle_id` (str): New review cycle ID
-- `work_item_id` (str): Item under review
-- `created_by` (str): Who initiated the review
-- `reviewers` (List[str]): Reviewer IDs assigned
-- `deadline` (Optional[datetime]): When review should complete
-- `created_at` (datetime): Creation timestamp
-
-**Purpose**: Records creation event for tracking review initiation.
-
-#### ReviewIterationStarted
-
-**File**: `src/codetoreum/domain/review_cycle.py`
-
-Represents start of a new iteration in a review cycle (after changes requested).
-
-**Attributes**:
-- `cycle_id` (str): Review cycle ID
-- `iteration_number` (int): Which iteration (1, 2, 3, etc.)
-- `reason_for_iteration` (str): Why new iteration needed (e.g., "feedback from iteration 1")
-- `started_at` (datetime): When iteration began
-
-**Purpose**: Tracks review cycle iterations for feedback loops.
-
-#### ReviewFeedbackSubmitted
-
-**File**: `src/codetoreum/domain/review_cycle.py`
-
-Represents feedback submission from a reviewer.
-
-**Attributes**:
-- `cycle_id` (str): Review cycle ID
-- `reviewer_id` (str): Who submitted feedback
-- `decision` (str): Review decision ("APPROVED", "CHANGES_REQUESTED", "BLOCKED")
-- `feedback_text` (str): Reviewer's comments
-- `blocking_issues` (List[str]): Issues blocking approval (if any)
-- `submitted_at` (datetime): When feedback was submitted
-
-**Purpose**: Records individual reviewer feedback for aggregation.
-
-#### ReviewCycleApproved
-
-**File**: `src/codetoreum/domain/review_cycle.py`
-
-Terminal state representing a review cycle that has been approved.
-
-**Attributes**:
-- `cycle_id` (str): Approved review cycle ID
-- `approved_by` (str): Who approved (usually orchestrator after aggregating feedback)
-- `total_iterations` (int): Number of iterations completed
-- `approvals_count` (int): Number of reviewers who approved
-- `approved_at` (datetime): When approval occurred
-
-**Purpose**: Marks completion of successful review cycle.
-
-#### ReviewCycleEscalated
-
-**File**: `src/codetoreum/domain/review_cycle.py`
-
-Terminal state representing a review cycle escalated to human intervention.
-
-**Attributes**:
-- `cycle_id` (str): Escalated review cycle ID
-- `escalation_reason` (str): Why escalation was needed
-- `escalated_to` (str): Human or team to handle escalation
-- `escalated_at` (datetime): When escalation occurred
-
-**Purpose**: Records when review cycle cannot progress through normal channels.
 
 ### Session Management
 

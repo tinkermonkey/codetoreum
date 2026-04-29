@@ -247,54 +247,44 @@ The simulation adapters use several helper classes and data structures to organi
 Represents the execution of a single command within a simulated container.
 
 **Attributes**:
-- `id` (str): Unique identifier for this command execution
+- `timestamp` (datetime): When execution occurred
 - `command` (str): The command that was executed (e.g., "python -m pytest")
-- `working_directory` (str): Directory where command was executed
-- `started_at` (datetime): When execution started
-- `completed_at` (Optional[datetime]): When execution finished (None if running)
-- `return_code` (Optional[int]): Exit code of command (None if running)
+- `exit_code` (int): Exit code returned by command
 - `stdout` (str): Standard output captured
 - `stderr` (str): Standard error captured
-- `duration_seconds` (float): Execution duration
+- `duration_ms` (float): Execution duration in milliseconds
 
-**Purpose**: Tracks simulated container command executions for verification in tests.
+**Purpose**: Records a single command execution for verification in container simulation tests.
 
 #### ActiveExecutionInfo
 
 **Location**: `src/codetoreum/adapters/testing/execution_service_agent_executor.py`
 
-Tracks information about currently active agent executions.
+Metadata about an in-progress agent execution, exposed for timeout detection.
 
 **Attributes**:
-- `execution_id` (str): Unique execution ID
-- `agent_id` (str): ID of executing agent
+- `execution_id` (str): Unique ID for this execution
 - `work_item_id` (str): Work item being processed
-- `started_at` (datetime): When execution started
-- `status` (str): Current status ("running", "completed", "failed")
-- `output` (str): Accumulated output from execution
-- `error` (Optional[str]): Error message if execution failed
-- `duration_seconds` (float): Time elapsed
+- `started_at` (datetime): When execution started (UTC)
+- `timeout_seconds` (int): Timeout threshold from Agent configuration
+- `task` (asyncio.Task): The running asyncio Task for cancellation
 
-**Purpose**: Maintains state of currently executing agents for monitoring and recovery.
+**Purpose**: Provides execution metadata to timeout watchdog for detecting and canceling timed-out executions.
 
 #### MockProjectState
 
 **Location**: `src/codetoreum/adapters/testing/mock_project_manager_adapter.py`
 
-Represents the simulated state of a project being managed.
+Internal state tracking for a project in the mock adapter.
 
 **Attributes**:
-- `project_id` (str): Project identifier
-- `name` (str): Project name
-- `status` (str): Current project status ("active", "paused", "archived")
-- `work_items_count` (int): Total work items in project
-- `completed_items` (int): Number of completed work items
-- `in_progress_items` (int): Number of items currently being worked on
-- `failed_items` (int): Number of failed items
-- `configuration` (Dict[str, Any]): Project configuration settings
-- `last_updated_at` (datetime): When state was last modified
+- `config` (ProjectConfig): Project configuration
+- `cloned` (bool): Whether project has been successfully cloned
+- `clone_path` (str): Path where project is cloned
+- `last_clone_attempt` (datetime | None): Timestamp of last clone attempt
+- `clone_failures` (int): Count of consecutive clone failures
 
-**Purpose**: Simulates project state for testing multi-project orchestration.
+**Purpose**: Tracks project state including clone status and failure counts for mock project management.
 
 ### Event and Movement Tracking
 
@@ -318,16 +308,12 @@ Represents the movement of a work item on a board (card movement between columns
 
 **Location**: `src/codetoreum/adapters/testing/mock_review_cycle_adapter.py`
 
-Represents a single item in a review sequence (pre-configured review outcomes).
+A single item in a pre-configured review sequence.
 
 **Attributes**:
-- `sequence_number` (int): Position in sequence (0-based)
-- `review_id` (str): ID of the review
-- `decision` (str): Review decision ("APPROVED", "CHANGES_REQUESTED", "BLOCKED")
-- `feedback` (str): Review feedback/comments
-- `timestamp` (datetime): When this review occurred
-- `reviewer_id` (str): Who performed the review
-- `blocking_issues` (List[str]): Issues blocking approval (if applicable)
+- `decision` (ReviewDecision): Reviewer's decision (APPROVE, REQUEST_CHANGES, ESCALATE)
+- `findings` (list[ReviewFinding]): Optional list of findings from the review
+- `summary` (str | None): Optional summary of the review
 
 **Purpose**: Enables pre-scripted review sequences for deterministic testing of review cycles.
 
@@ -337,16 +323,11 @@ Represents a single item in a review sequence (pre-configured review outcomes).
 
 **Location**: `src/codetoreum/adapters/testing/mock_repair_cycle_adapter.py`
 
-Exception raised when a circuit breaker is tripped (too many consecutive failures).
+Exception raised when maximum agent calls are exceeded during repair cycle.
 
-**Attributes**:
-- `message` (str): Description of the circuit breaker trip
-- `operation` (str): Operation that was attempted
-- `failure_count` (int): Number of consecutive failures
-- `failure_threshold` (int): Threshold at which circuit breaks
-- `reset_timeout_seconds` (int): How long until circuit can reset
+**Attributes**: None (bare Exception subclass)
 
-**Purpose**: Signals circuit breaker activation for testing resilience handling.
+**Purpose**: Signals circuit breaker activation when repair cycle max calls exceeded.
 
 ### Logging and Debugging
 
@@ -354,20 +335,15 @@ Exception raised when a circuit breaker is tripped (too many consecutive failure
 
 **Location**: `src/codetoreum/adapters/primary/input_port_adapters/mock/mock_logger_adapter.py`
 
-Captures logging output for verification and debugging in tests.
-
-**Attributes**:
-- `logs` (List[Dict[str, Any]]): All captured log entries
-- `log_level` (str): Minimum log level being captured (DEBUG, INFO, WARNING, ERROR)
-- `enabled` (bool): Whether logging is currently enabled
+Simple logging interface adapter for FastAPI application layer.
 
 **Methods**:
-- `log(level, message, **context)`: Record a log entry
-- `get_logs_by_level(level)`: Retrieve logs of specific level
-- `contains_pattern(regex_pattern)`: Check if logs match pattern
-- `clear_logs()`: Clear captured logs
+- `info(message)`: Log info level message
+- `warning(message)`: Log warning level message
+- `error(message)`: Log error level message
+- `debug(message)`: Log debug level message
 
-**Purpose**: Provides programmatic access to application logs during testing, enabling assertions on logging behavior.
+**Purpose**: Provides simple logging interface, delegating to Python's standard logging module.
 
 ### Mock Agents
 
@@ -375,23 +351,22 @@ Captures logging output for verification and debugging in tests.
 
 **Location**: `src/codetoreum/adapters/testing/mock_agent_executor.py`
 
-Simulates agent execution without running actual LLM models.
+Mock implementation of IAgentExecutor for testing and port adapter coverage.
 
 **Attributes**:
-- `agent_id` (str): ID of simulated agent
-- `response_mode` (str): How to generate responses ("deterministic", "random", "scripted")
-- `scripted_responses` (Dict[str, str]): Pre-scripted response mappings
-- `last_execution` (Optional[ActiveExecutionInfo]): Info about most recent execution
-- `execution_count` (int): Number of times executed
-- `failure_rate` (float): Percentage of executions that should fail (0.0-1.0)
+- `_execution_delay` (float): Seconds to simulate agent work (default 3.0)
+- `_completion_callback` (Callable | None): Async callback invoked after execution
+- `_default_board_id` (str): Board ID passed to completion callback
+- `_executions` (list[dict]): Record of all executions for test assertions
+- `_pending_tasks` (set[asyncio.Task]): Set of pending execution tasks
+- `_execution_query` (MockExecutionQueryAdapter | None): Wired execution query adapter
 
 **Methods**:
-- `execute(work_item_id, context)`: Simulate agent execution
-- `set_scripted_response(prompt_pattern, response)`: Pre-script response
-- `get_execution_history()`: Get all past executions
-- `reset()`: Clear state for next test
+- `set_completion_handler(callback, default_board_id)`: Wire completion callback
+- `set_execution_query(adapter)`: Wire execution query adapter
+- `execute(agent, work_item)`: Simulate agent execution
 
-**Purpose**: Enables controlled, deterministic agent execution simulation without external LLM services.
+**Purpose**: Simulates agent work for testing without running actual LLM models.
 
 ---
 
