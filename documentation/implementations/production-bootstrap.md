@@ -1,8 +1,8 @@
-# Production Bootstrap - Phase 5 Integration
+# Production Bootstrap Wiring
 
 ## Summary
 
-Phase 5 of the intelligent branch resolution feature provides factory functions to wire `BranchResolutionAdapter` into the workspace preparation flow. These factories are ready for integration into a production bootstrap path once it exists.
+This document provides factory functions to wire `BranchResolutionAdapter` into the workspace preparation flow. These factories are ready for integration into a production bootstrap path once it exists.
 
 **Important Note**: A production bootstrap entry point for `WorkspaceRouter` does not yet exist in `fastapi_app.py`. Currently, only the simulation bootstrap (`infrastructure/simulation/bootstrap.py`) instantiates `WorkspaceRouter`. The factories in this document are designed to be called from production startup code once such an entry point is created.
 
@@ -154,15 +154,15 @@ execution_service = ExecutionService(
 
 ## Next Steps
 
-1. ✅ **Phase 5: Factories & Tests** - Production bootstrap factories are available with unit tests in `adapters/primary/factories/production.py` and `tests/unit/adapters/primary/factories/test_production.py`
+1. ✅ **Factories & Tests** - Production bootstrap factories are available with unit tests in `adapters/primary/factories/production.py` and `tests/unit/adapters/primary/factories/test_production.py`
 
-2. **Phase 6: Production Bootstrap** (Future Work) - Create production bootstrap entry point:
+2. **Production Entry Point** (Future Work) - Create production bootstrap entry point:
    - Determine where `WorkspaceRouter` should be instantiated in production (CLI startup, app initialization, etc.)
    - Call `create_branch_resolution_adapter()` and `create_workspace_router_with_branch_resolution()` factories during bootstrap
    - Inject `WorkspaceRouter` into `ExecutionServiceAgentExecutor` (per simulation pattern)
    - This completes the acceptance criterion: "Integration into workflow startup before agent execution begins"
 
-3. **Phase 7: Validation** - After production bootstrap is created:
+3. **Integration Validation** - After production bootstrap is created:
    - Verify branch resolution events are emitted correctly
    - Verify intelligent branch reuse works for agent executions
    - Verify fallback logic activates correctly when branch resolution is unavailable
