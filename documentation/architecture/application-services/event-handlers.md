@@ -495,197 +495,364 @@ async def handle_pr_review_column_change(
 
 ## Event Bus Wiring Diagram
 
-The following diagram shows how domain events flow through the event bus to subscribers (handlers), and how handlers trigger application services to emit new events, creating reactive workflows.
+The following diagrams show how domain events flow through the event bus to subscribers (handlers), and how handlers trigger application services to emit new events. Diagrams are partitioned by bounded context for clarity.
+
+### Board Automation Context
+
+Board events drive the primary automation flow, coordinating column changes with workflow execution and lock management.
 
 ```mermaid
-graph TB
-    subgraph "Domain Events (Published)"
+flowchart TB
+    subgraph "Board Events (Input)"
         E1["WorkItemColumnChangedEvent"]
-        E2["ExecutionInitializedEvent"]
-        E3["ExecutionStartedEvent"]
-        E4["ExecutionCompletedEvent"]
-        E5["ExecutionFailedEvent"]
-        E6["ExecutionTimeoutEvent"]
-        E7["ReviewCycleCreatedEvent"]
-        E8["ReviewIterationStartedEvent"]
-        E9["ReviewFeedbackSubmittedEvent"]
-        E10["ReviewCycleApprovedEvent"]
-        E11["ReviewCycleRejectedEvent"]
-        E12["ReviewCycleEscalatedEvent"]
-        E13["WorkItemCreatedEvent"]
-        E14["BranchReusedEvent"]
-        E15["BranchResolutionCreatedEvent"]
-        E16["PRReviewCycleApprovedEvent"]
-        E17["PRReviewCycleIssuesFoundEvent"]
-        E18["PRReviewCycleMaxCyclesReachedEvent"]
     end
 
-    subgraph "Event Handlers (Subscribe & React)"
+    subgraph "Event Handlers"
         H1["BoardEventHandler"]
-        H2["ExecutionEventHandler"]
-        H3["ReviewEventHandler"]
-        H4["WorkflowEventHandler"]
-        H5["RepairCycleEventHandler"]
-        H6["BranchResolutionEventHandler"]
-        H7["PRReviewCycleEventHandler"]
-        H8["PRReviewCycleDispatchHandler"]
+        H2["RepairCycleEventHandler"]
+        H3["PRReviewCycleDispatchHandler"]
     end
 
-    subgraph "Application Services (Invoked by Handlers)"
+    subgraph "Application Services"
         S1["WorkflowOrchestrator"]
-        S2["ExecutionService"]
-        S3["ReviewService"]
-        S4["AgentScheduler"]
-        S5["WorkItemService"]
+        S2["AgentScheduler"]
+        S3["RepairCycleService"]
+        S4["ReviewService"]
     end
 
-    subgraph "New Domain Events (Emitted by Services)"
-        E20["WorkflowStartedEvent"]
-        E21["WorkflowStageAdvancedEvent"]
-        E22["WorkflowCompletedEvent"]
-        E23["LockStuckEvent"]
-        E24["ReviewCycleStartedEvent"]
+    subgraph "Workflow Events (Output)"
+        E2["WorkflowCreatedEvent<br/>WorkflowStartedEvent<br/>WorkflowStageAdvancedEvent<br/>LockStuckEvent"]
     end
 
-    %% Column Change → Board Handler
+    subgraph "Execution Pipeline"
+        E3["ExecutionInitializedEvent"]
+    end
+
     E1 -->|subscribes| H1
-    E1 -->|subscribes| H5
-    E1 -->|subscribes| H8
+    E1 -->|subscribes| H2
+    E1 -->|subscribes| H3
 
-    %% Execution Events → Execution Handler & Workflow Handler
-    E2 -->|subscribes| H2
+    H1 -->|triggers<br/>pipeline| S1
+    H1 -->|schedules<br/>agent| S2
+    H2 -->|initiates| S3
+    H3 -->|initiates| S4
+
+    S1 -->|emits| E2
+    S2 -->|emits| E3
+    S3 -->|emits| E2
+    S4 -->|emits| E2
+
+    E2 -.->|closes loop| E1
+    E3 -.->|closes loop| E1
+
+    style E1 fill:#e1f5ff
+    style H1 fill:#f3e5f5
+    style H2 fill:#f3e5f5
+    style H3 fill:#f3e5f5
+    style S1 fill:#e8f5e9
+    style E2 fill:#fff3e0
+```
+
+### Execution Context
+
+Execution events track agent work lifecycle, enabling metrics collection and workflow progression.
+
+```mermaid
+flowchart TB
+    subgraph "Execution Events (Input)"
+        E1["ExecutionInitializedEvent"]
+        E2["ExecutionStartedEvent"]
+        E3["ExecutionCompletedEvent"]
+        E4["ExecutionFailedEvent"]
+        E5["ExecutionTimeoutEvent"]
+    end
+
+    subgraph "Event Handlers"
+        H1["ExecutionEventHandler<br/>(Observability)"]
+        H2["WorkflowEventHandler<br/>(Progression)"]
+    end
+
+    subgraph "Metrics & Observability"
+        M1["Execution Metrics<br/>- Total executions<br/>- Active executions<br/>- Success/failure rates<br/>- Duration tracking"]
+    end
+
+    subgraph "Application Services"
+        S1["WorkflowOrchestrator"]
+    end
+
+    subgraph "Workflow Events (Output)"
+        E6["WorkflowStageAdvancedEvent<br/>ReviewCycleCreatedEvent<br/>WorkItemColumnChangedEvent"]
+    end
+
+    E1 -->|subscribes| H1
+    E2 -->|subscribes| H1
+    E3 -->|subscribes| H1
     E3 -->|subscribes| H2
+    E4 -->|subscribes| H1
     E4 -->|subscribes| H2
-    E4 -->|subscribes| H4
+    E5 -->|subscribes| H1
+
+    H1 -->|tracks| M1
+    H2 -->|routes to| S1
+
+    S1 -->|emits| E6
+
+    E6 -.->|may trigger| E1
+
+    style E1 fill:#e1f5ff
+    style E3 fill:#ffe0b2
+    style E4 fill:#ffcdd2
+    style H1 fill:#f3e5f5
+    style H2 fill:#f3e5f5
+    style M1 fill:#c8e6c9
+    style E6 fill:#fff3e0
+```
+
+### Review Cycle Context
+
+Review events orchestrate code review workflows with approval, rejection, and escalation paths.
+
+```mermaid
+flowchart TB
+    subgraph "Review Events (Input)"
+        E1["ReviewCycleCreatedEvent"]
+        E2["ReviewIterationStartedEvent"]
+        E3["ReviewFeedbackSubmittedEvent"]
+        E4["ReviewCycleApprovedEvent"]
+        E5["ReviewCycleRejectedEvent"]
+        E6["ReviewCycleEscalatedEvent"]
+    end
+
+    subgraph "Event Handlers"
+        H1["ReviewEventHandler<br/>(Metrics)"]
+        H2["WorkflowEventHandler<br/>(Routing)"]
+    end
+
+    subgraph "Metrics & Quality"
+        M1["Review Metrics<br/>- Total reviews<br/>- Approval/rejection rates<br/>- Escalation rate<br/>- Iteration count"]
+    end
+
+    subgraph "Application Services"
+        S1["WorkflowOrchestrator"]
+    end
+
+    subgraph "Workflow Progression"
+        E7["WorkItemColumnChangedEvent"]
+    end
+
+    E1 -->|subscribes| H1
+    E2 -->|subscribes| H1
+    E3 -->|subscribes| H1
+    E4 -->|subscribes| H1
+    E4 -->|subscribes| H2
+    E5 -->|subscribes| H1
     E5 -->|subscribes| H2
-    E5 -->|subscribes| H4
+    E6 -->|subscribes| H1
     E6 -->|subscribes| H2
 
-    %% Review Events → Review Handler & Workflow Handler
-    E7 -->|subscribes| H3
-    E8 -->|subscribes| H3
-    E9 -->|subscribes| H3
-    E10 -->|subscribes| H3
-    E10 -->|subscribes| H4
-    E11 -->|subscribes| H3
-    E11 -->|subscribes| H4
-    E12 -->|subscribes| H3
-    E12 -->|subscribes| H4
+    H1 -->|tracks| M1
+    H2 -->|routes to| S1
 
-    %% Work Item Created → Workflow Handler
-    E13 -->|subscribes| H4
+    S1 -->|emits| E7
 
-    %% Branch Events → Branch Handler
-    E14 -->|subscribes| H6
-    E15 -->|subscribes| H6
+    E7 -.->|may trigger<br/>new cycle| E1
 
-    %% PR Review Cycle Events → PR Handlers
-    E16 -->|subscribes| H7
-    E17 -->|subscribes| H7
-    E18 -->|subscribes| H7
+    style E4 fill:#c8e6c9
+    style E5 fill:#ffcdd2
+    style E6 fill:#ffe0b2
+    style H1 fill:#f3e5f5
+    style H2 fill:#f3e5f5
+    style M1 fill:#c8e6c9
+    style E7 fill:#fff3e0
+```
 
-    %% Handlers → Services
-    H1 -->|calls| S1
-    H1 -->|calls| S4
-    H4 -->|calls| S1
-    H2 -->|tracks metrics| H2
-    H3 -->|tracks metrics| H3
-    H5 -->|dispatches| S3
-    H8 -->|initiates| S3
+### PR Review Cycle Context
 
-    %% Services → New Events
-    S1 -->|emits| E20
-    S1 -->|emits| E21
-    S1 -->|emits| E22
-    S1 -->|emits| E23
-    S3 -->|emits| E24
+PR review cycles manage pull request reviews with a dispatch/outcome separation pattern.
 
-    %% Event Loop
-    E20 -.->|closes loop| H4
-    E21 -.->|closes loop| H4
-    E22 -.->|closes loop| H4
+```mermaid
+flowchart TB
+    subgraph "Board Events (Trigger)"
+        E1["WorkItemColumnChangedEvent<br/>(to PR review column)"]
+    end
+
+    subgraph "Dispatch Phase"
+        H1["PRReviewCycleDispatchHandler"]
+        S1["ReviewService"]
+    end
+
+    subgraph "PR Review Events"
+        E2["PRReviewCycleStartedEvent"]
+        E3["PRReviewCycleApprovedEvent"]
+        E4["PRReviewCycleIssuesFoundEvent"]
+        E5["PRReviewCycleMaxCyclesReachedEvent"]
+    end
+
+    subgraph "Outcome Phase"
+        H2["PRReviewCycleEventHandler"]
+        S2["WorkflowOrchestrator"]
+    end
+
+    subgraph "Next Workflow Step"
+        E6["WorkItemColumnChangedEvent<br/>(to next column)"]
+    end
+
+    E1 -->|subscribes| H1
+    H1 -->|initiates| S1
+    S1 -->|emits| E2
+    S1 -->|emits| E3
+    S1 -->|emits| E4
+    S1 -->|emits| E5
+
+    E3 -->|subscribes| H2
+    E4 -->|subscribes| H2
+    E5 -->|subscribes| H2
+
+    H2 -->|routes| S2
+    S2 -->|emits| E6
+
+    E6 -.->|closes loop| E1
+
+    style E1 fill:#e1f5ff
+    style E3 fill:#c8e6c9
+    style E4 fill:#ffcdd2
+    style E5 fill:#ffe0b2
+    style H1 fill:#f3e5f5
+    style H2 fill:#f3e5f5
+    style E6 fill:#fff3e0
+```
+
+### Repair Cycle Context
+
+Repair cycles handle test-fix-validate workflows triggered by repair columns.
+
+```mermaid
+flowchart TB
+    subgraph "Board Events (Trigger)"
+        E1["WorkItemColumnChangedEvent<br/>(to repair column)"]
+    end
+
+    subgraph "Event Handlers"
+        H1["RepairCycleEventHandler"]
+    end
+
+    subgraph "Application Services"
+        S1["RepairCycleService"]
+        S2["ICIPipelineService"]
+    end
+
+    subgraph "Repair Workflow"
+        E2["RepairCycleCompletedEvent"]
+        E3["WorkItemColumnChangedEvent<br/>(to next column)"]
+    end
+
+    E1 -->|subscribes| H1
+    H1 -->|initiates| S1
+    S1 -->|routes CI to| S2
+    S1 -->|emits| E2
+    S1 -->|emits| E3
+
+    E3 -.->|may restart| E1
+
+    style E1 fill:#e1f5ff
+    style H1 fill:#f3e5f5
+    style S1 fill:#e8f5e9
+    style E2 fill:#fff3e0
+    style E3 fill:#fff3e0
+```
+
+### Branch Resolution Context
+
+Branch resolution events maintain audit trail of branching decisions.
+
+```mermaid
+flowchart TB
+    subgraph "Branch Events (Input)"
+        E1["BranchResolutionCreatedEvent"]
+        E2["BranchResolvedEvent"]
+        E3["BranchReusedEvent"]
+    end
+
+    subgraph "Event Handlers"
+        H1["BranchResolutionEventHandler"]
+    end
+
+    subgraph "Audit Trail"
+        A1["Audit Log<br/>- project_id<br/>- issue_id<br/>- branch_name<br/>- strategy<br/>- confidence_score<br/>- timestamp"]
+    end
+
+    E1 -->|subscribes| H1
+    E2 -->|subscribes| H1
+    E3 -->|subscribes| H1
+
+    H1 -->|logs| A1
 
     style E1 fill:#e1f5ff
     style E2 fill:#e1f5ff
-    style E20 fill:#fff3e0
+    style E3 fill:#e1f5ff
     style H1 fill:#f3e5f5
-    style H4 fill:#f3e5f5
+    style A1 fill:#c8e6c9
+```
+
+### Workflow Orchestration Context
+
+The WorkflowEventHandler acts as a cross-cutting orchestrator, routing outcomes from execution, review, and work item events to progression logic.
+
+```mermaid
+flowchart TB
+    subgraph "Triggering Events"
+        E1["WorkItemCreatedEvent"]
+        E2["ExecutionCompletedEvent"]
+        E3["ExecutionFailedEvent"]
+        E4["ReviewCycleApprovedEvent"]
+        E5["ReviewCycleRejectedEvent"]
+        E6["ReviewCycleEscalatedEvent"]
+    end
+
+    subgraph "Cross-Cutting Handler"
+        H1["WorkflowEventHandler<br/>(Orchestrator)"]
+    end
+
+    subgraph "Routing Logic"
+        R1["Start Workflow"]
+        R2["Advance Stage"]
+        R3["Queue Review"]
+        R4["Queue Revision"]
+        R5["Escalate to Human"]
+    end
+
+    subgraph "Application Services"
+        S1["WorkflowOrchestrator"]
+    end
+
+    subgraph "Workflow Progression"
+        E7["WorkflowStageAdvancedEvent<br/>ReviewCycleCreatedEvent<br/>WorkItemColumnChangedEvent"]
+    end
+
+    E1 -->|subscribes| H1
+    E2 -->|subscribes| H1
+    E3 -->|subscribes| H1
+    E4 -->|subscribes| H1
+    E5 -->|subscribes| H1
+    E6 -->|subscribes| H1
+
+    H1 -->|routes to| R1
+    H1 -->|routes to| R2
+    H1 -->|routes to| R3
+    H1 -->|routes to| R4
+    H1 -->|routes to| R5
+
+    R1 -->|invokes| S1
+    R2 -->|invokes| S1
+    R3 -->|invokes| S1
+    R4 -->|invokes| S1
+    R5 -->|invokes| S1
+
+    S1 -->|emits| E7
+
+    style H1 fill:#f3e5f5
     style S1 fill:#e8f5e9
-```
-
-### Event Flow Trace
-
-#### 1. Column Change → Board Automation
-
-```
-WorkItemColumnChangedEvent
-  ↓
-BoardEventHandler.handle()
-  ├→ _handle_pipeline_trigger() [if trigger column]
-  │   └→ WorkflowOrchestrator.handle_card_movement()
-  │       └→ Emit WorkflowStartedEvent
-  ├→ _handle_exit_column() [if exit column]
-  │   └→ Release pipeline lock
-  └→ _trigger_agent()
-      └→ AgentScheduler.schedule()
-          └→ ExecutionService.create_execution()
-              └→ Emit ExecutionInitializedEvent
-```
-
-#### 2. Execution → Workflow Progression
-
-```
-ExecutionCompletedEvent
-  ↓
-ExecutionEventHandler.handle()
-  ├→ Track metrics
-  └→ [Handler continues processing in parallel]
-
-ExecutionCompletedEvent
-  ↓
-WorkflowEventHandler.handle()
-  └→ _handle_execution_completed()
-      └→ WorkflowOrchestrator.handle_stage_completion()
-          ├→ ReviewService.create_review_cycle() [if review needed]
-          │   └→ Emit ReviewCycleCreatedEvent
-          └→ Move to next column [if auto-advance]
-              └→ Emit WorkItemColumnChangedEvent
-```
-
-#### 3. Review Cycle → Outcome Routing
-
-```
-ReviewCycleApprovedEvent
-  ↓
-ReviewEventHandler.handle()
-  ├→ Track approval metric
-  └→ [Handler continues]
-
-ReviewCycleApprovedEvent
-  ↓
-WorkflowEventHandler.handle()
-  └→ _handle_review_approved()
-      └→ WorkflowOrchestrator.handle_review_cycle_completion()
-          └→ Move to approved column
-              └→ Emit WorkItemColumnChangedEvent
-```
-
-#### 4. PR Review Cycle
-
-```
-WorkItemColumnChangedEvent (to PR review column)
-  ↓
-PRReviewCycleDispatchHandler.handle()
-  └→ Initiate PR review cycle
-      └→ Emit PRReviewCycleStartedEvent
-
-[After review cycle completes...]
-
-PRReviewCycleApprovedEvent
-  ↓
-PRReviewCycleEventHandler.handle()
-  └→ Move to approved column
-      └→ Emit WorkItemColumnChangedEvent
+    style E7 fill:#fff3e0
 ```
 
 ---
