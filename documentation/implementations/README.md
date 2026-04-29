@@ -20,18 +20,18 @@ Each implementation includes:
 ### [simulation/](./simulation/)
 **The Simulation System — Complete Mock Implementation**
 
-The simulation system is a full implementation of Codetoreum using mock adapters and in-memory services. It enables:
+The simulation system is a full, working implementation of Codetoreum using mock adapters and in-memory services. It is NOT a test harness — it exercises the complete architecture with real domain logic and business rules. It enables:
 
 - Fast, deterministic testing without external dependencies
 - Scenario-based testing with time manipulation
 - Complete audit trail through event sourcing
-- Reproducible behavior for debugging
+- Reproducible behavior for debugging and analysis
 
-**Files** (Phase 6):
-- **overview.md** — Simulation as an implementation, fast-forward time, deterministic responses
-- **adapters.md** — 35 testing adapters + 18 mock input port adapters, mapped to ports
-- **bootstrap-wiring.md** — 6-phase bootstrap sequence, adapter wiring diagram
-- **scenarios.md** — 10 scenario directories, 28 YAML files, scenario format and execution
+**Files** (Phase 6 — Complete):
+- **[overview.md](./simulation/overview.md)** — Simulation as complete port contract implementation, time control, determinism
+- **[adapters.md](./simulation/adapters.md)** — All 53 adapters (35 testing + 18 input mock) mapped to port interfaces with file paths
+- **[bootstrap-wiring.md](./simulation/bootstrap-wiring.md)** — 6-phase bootstrap sequence with Level 4 Mermaid wiring diagram
+- **[scenarios.md](./simulation/scenarios.md)** — All 10 scenario directories with 80 YAML files, format guide, and execution instructions
 
 ## How to Add a New Implementation
 

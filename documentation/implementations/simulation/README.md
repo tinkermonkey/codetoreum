@@ -21,34 +21,39 @@ The simulation implementation serves multiple purposes:
 - **Scenario-Based**: Predefined workflows test different system paths
 - **In-Memory**: No database or external storage required
 
-## Contents
+## Contents (Phase 6 — Complete)
 
-### overview.md (Phase 6)
-Overview of the simulation system:
-- How it fulfills the architecture contracts
-- Configuration and behavior
-- Time control and determinism
-- Quick start guide
+### [overview.md](./overview.md)
+Overview of the Simulation Implementation as a complete port contract implementation:
+- How it fulfills all architecture contracts with mock adapters
+- Configuration and behavior of 53 adapters
+- Time control (100x fast-forward) and determinism
+- Purpose, architecture, quick start guide
+- Limitations and integration pattern
 
-### adapters.md (Phase 6)
-Complete list of 53 adapters:
-- 35 testing adapters (mock implementations of output ports)
-- 18 mock input port adapters (for HTTP/API simulation)
-- Each adapter's source file and role
+### [adapters.md](./adapters.md)
+Complete reference for all 53 adapters:
+- **35 Testing Adapters**: Mock implementations of output ports (InMemoryTicketAdapter, MockLLMAdapter, FakeContainerAdapter, etc.)
+- **18 Input Port Adapters**: HTTP endpoint wrappers (MockOrchestrationCommand, MockWorkItem, etc.)
+- Full mapping table with port interface → adapter class → file path
+- Adapter organization and characteristics
+- Testing patterns and integration
 
-### bootstrap-wiring.md (Phase 6)
-How adapters are instantiated and wired:
-- 6-phase bootstrap sequence
-- Adapter instantiation with dependencies
-- Configuration injection
-- Wiring diagram
+### [bootstrap-wiring.md](./bootstrap-wiring.md)
+Complete bootstrap documentation with diagrams:
+- **6-Phase Bootstrap Sequence**: Engine → Infrastructure → Adapters → Services → Input Ports → FastAPI
+- **Level 4 Mermaid Flowchart**: Detailed wiring diagram with all phases
+- **Dependency Graphs**: Adapter and service dependency relationships
+- **Configuration Options**: Python and YAML configuration examples
+- **Degraded Mode Support**: Graceful degradation for optional phases
 
-### scenarios.md (Phase 6)
-Predefined scenario tests:
-- 10 scenario directories
-- 28 YAML scenario files
-- Scenario format and creation guide
-- How to run scenarios
+### [scenarios.md](./scenarios.md)
+Complete scenario reference and catalog:
+- **10 Scenario Directories**: smoke, sdlc_pipeline, review_cycle, failure_recovery, repair_cycle_test, stress_test, planning_design_pipeline, planning_design_review_cycle, pr_feedback_child_issue, dev_environment_repair
+- **80 YAML Files**: 8 files per scenario (external + orchestrator subdirectories)
+- **YAML Schema**: Complete documentation of projects.yaml, workflows.yaml, agents.yaml, etc.
+- **Loading & Execution**: Programmatic loading, CLI, and test integration examples
+- **Best Practices**: Speed multiplier selection, work item counts, agent configuration
 
 ## Architecture
 
