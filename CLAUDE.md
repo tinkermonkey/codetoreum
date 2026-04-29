@@ -46,19 +46,18 @@ codetoreum/
 │   └── templates/              # Documentation templates
 ├── scenarios/                  # Simulation scenario YAML definitions
 └── src/codetoreum/
-    ├── domain/                 # Core business logic (pure)
+    ├── domain/                 # Core business logic (pure, 67 domain model classes)
     │   ├── events/             # 167 domain event classes (immutable)
-    │   ├── models/             # 67 domain model classes
     │   └── services/           # Domain services
     ├── application/            # 23 application services + event handlers
     ├── ports/                  # Port interfaces
     │   ├── input/              # 19 inbound ports (commands, queries, services)
     │   └── output/             # 40 outbound port interfaces
-    ├── adapters/               # Adapter implementations
+    ├── adapters/               # Adapter implementations (53 total mock/in-memory adapters)
     │   ├── primary/            # FastAPI app, REST routers, webhook adapter
-    │   │   └── input_port_adapters/mock/  # Mock implementations of all input ports
+    │   │   └── input_port_adapters/mock/  # Mock implementations of all input ports (18 files)
     │   ├── secondary/          # GitHub, Docker, Claude, Redis, Elasticsearch
-    │   └── testing/            # 53 mock/in-memory adapters for simulation
+    │   └── testing/            # 35 mock/in-memory adapters for simulation
     ├── config/                 # Configuration management
     ├── cli/                    # CLI commands (simulation server, YAML import)
     └── infrastructure/         # Cross-cutting concerns
@@ -151,8 +150,8 @@ See `documentation/architecture/ports/` for complete port specifications.
 - ClaudeCodeAdapter (LLM provider)
 - DockerContainerAdapter
 
-**Testing/Simulation** (`adapters/testing/`):
-- 53 total mock and in-memory adapters for deterministic testing
+**Testing/Simulation** (`adapters/testing/` + `adapters/primary/input_port_adapters/mock/`):
+- 53 total mock and in-memory adapters for deterministic testing (35 in testing/, 18 in input port mocks)
 - Examples: MockLLMAdapter, MockBoardAdapter, MockCodeReviewAdapter, MockAgentExecutor
 - MockReviewCycleAdapter, MockRepairCycleAdapter, MockContainerRecoveryAdapter
 - InMemoryEventStore, InMemoryConfigStore, InMemoryMetricsAdapter
@@ -291,8 +290,8 @@ The system includes a comprehensive simulation framework for fast, deterministic
 - `advance_to(time)` - Jump to specific time
 - `now()` - Get current simulation time
 
-**Mock Adapters** (`src/codetoreum/adapters/testing/`)
-- 53 total adapters (mock + in-memory implementations)
+**Mock Adapters** (`src/codetoreum/adapters/testing/` and `src/codetoreum/adapters/primary/input_port_adapters/mock/`)
+- 53 total adapters (mock + in-memory implementations): 35 in testing/, 18 in input port mocks
 - MockLLMAdapter, MockBoardAdapter, MockReviewCycleAdapter, MockRepairCycleAdapter
 - InMemoryEventStore, InMemoryStorageAdapter, InMemoryMetricsAdapter
 - See `documentation/implementations/simulation/adapters.md` for complete reference
