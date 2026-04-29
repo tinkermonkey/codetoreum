@@ -47,7 +47,7 @@ Output ports are organized by functional domain and responsibility:
    - Bot/human identity verification
    - Notification delivery (webhooks, email, Slack, etc.)
 
-7. **lifecycle-services.md** — IRepairCycle, IRepairCycleCheckpointStore, IContainerRecoveryService, IEnvironmentRepairService, ICIPipelineService, ISystemicAnalysisService, IMultiProjectOrchestrator, IProjectManagerService, IActiveWorkflowRunRegistry
+7. **lifecycle-services.md** — IRepairCycle, IRepairCycleCheckpointStore, IAgentContainerRecoveryService, IEnvironmentRepairService, ICIPipelineService, ISystemicAnalysisService, IMultiProjectOrchestrator, IProjectManagerService, IActiveWorkflowRunRegistry
    - Repair cycle orchestration and state
    - Container failure recovery
    - Environment variable repair
