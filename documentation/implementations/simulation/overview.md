@@ -32,7 +32,7 @@ The Simulation Implementation is a complete, working system that demonstrates al
 - Product teams demonstrating features
 
 **Key characteristics:**
-- All 53 simulation/mock adapters implement the same port contracts as production
+- All 54 simulation/mock adapters implement the same port contracts as production
 - Domain layer, application services, and event flows are identical to production
 - Adapters provide deterministic responses (no randomness, configurable via YAML)
 - Time is controlled — simulations advance at 100x speed by default
@@ -109,7 +109,7 @@ The Simulation Implementation selects mock adapters for all 40+ output ports:
 | `IReviewCycle` | `MockReviewCycleAdapter` | `adapters/testing/mock_review_cycle_adapter.py` | Mock |
 | `IPRReviewCycle` | `MockPRReviewCycleAdapter` | `adapters/testing/mock_pr_review_cycle_adapter.py` | Mock |
 | `ICodeReviewService` | `InMemoryCodeReviewAdapter` | `adapters/testing/in_memory_code_review_adapter.py` | Mock |
-| `IIdentityService` | `ConfigurableIdentityService` | `adapters/testing/configurable_identity_service.py` | Mock |
+| `IIdentityService` | `ConfigurableIdentityService` | `adapters/secondary/configurable_identity_service.py` | Mock |
 | `IRepairCycleCheckpointStore` | `InMemoryCheckpointStore` | `adapters/testing/in_memory_checkpoint_store.py` | Mock |
 | `ICIPipelineService` | `MockCIPipelineAdapter` | `adapters/testing/mock_ci_pipeline_adapter.py` | Mock |
 | `IAgentRepository` | `InMemoryAgentRepository` | `adapters/testing/in_memory_agent_repository.py` | Mock |
@@ -130,6 +130,7 @@ All 18 input ports are implemented via mock adapters that wrap application servi
 | Port Interface | Adapter Class | File |
 |---|---|---|
 | `IOrchestrationCommandPort` | `MockOrchestrationCommandAdapter` | `adapters/primary/input_port_adapters/mock/mock_orchestration_command_adapter.py` |
+| `IAgentCommandPort` | `MockAgentCommandAdapter` | `adapters/primary/input_port_adapters/mock/mock_agent_command_adapter.py` |
 | `IAgentQueryPort` | `MockAgentQueryAdapter` | `adapters/primary/input_port_adapters/mock/mock_agent_query_adapter.py` |
 | `IWorkflowCommandPort` | `MockWorkflowCommandAdapter` | `adapters/primary/input_port_adapters/mock/mock_workflow_command_adapter.py` |
 | `IConfigurationCommandPort` | `MockConfigCommandAdapter` | `adapters/primary/input_port_adapters/mock/mock_config_command_adapter.py` |
@@ -144,7 +145,7 @@ All 18 input ports are implemented via mock adapters that wrap application servi
 | `IMetricsQueryPort` | `MockMetricsQueryAdapter` | `adapters/primary/input_port_adapters/mock/mock_metrics_query_adapter.py` |
 | `IWorkspaceQueryPort` | `MockWorkspaceQueryAdapter` | `adapters/primary/input_port_adapters/mock/mock_workspace_query_adapter.py` |
 | `IConfigurationServicePort` | `MockConfigServiceAdapter` | `adapters/primary/input_port_adapters/mock/mock_config_service_adapter.py` |
-| `IAuditQueryPort` | `MockAuditQueryAdapter` | `adapters/primary/input_port_adapters/mock/mock_audit_query_adapter.py` |
+| `IAuditQueryPort` | `AuditQueryAdapter` | `adapters/primary/audit_query_adapter.py` |
 | `IWorkflowRunQueryPort` | `MockWorkflowRunQueryAdapter` | `adapters/primary/input_port_adapters/mock/mock_workflow_run_query_adapter.py` |
 
 ## Bootstrap Process
@@ -155,9 +156,9 @@ The Simulation Implementation uses a 6-phase bootstrap sequence to wire all adap
 
 1. **Phase 0**: Create simulation engine (clock, timing control, configuration)
 2. **Phase 1**: Create infrastructure (event bus, logger, error registry) — created early to enable event subscriptions
-3. **Phase 2**: Create 33 output port adapters via `AdapterResolver` (all mock/in-memory implementations)
+3. **Phase 2**: Create 36 output port adapters via `AdapterResolver` (all mock/in-memory implementations)
 4. **Phase 3**: Create 11 application services with dependencies (workflow orchestrator, execution service, etc.)
-5. **Phase 4**: Create 16 input port implementations (mock adapters wrapping application services)
+5. **Phase 4**: Create 18 input port implementations (mock adapters wrapping application services)
 6. **Phase 5**: Create FastAPI app and mount routes, register event handlers, wire infrastructure
 
 **Result**: A complete, wired application ready for scenario testing.
@@ -313,8 +314,8 @@ flowchart TB
         ports["Port Interfaces<br/>(Contracts)"]
     end
     
-    subgraph "Simulation Adapters (35 Testing + 18 Input Mock = 53 Total)"
-        output_mocks["Output Port Adapters (35)<br/>InMemoryTicketAdapter<br/>MockLLMAdapter<br/>FakeContainerAdapter<br/>... 32 more"]
+    subgraph "Simulation Adapters (36 Testing + 18 Input Mock = 54 Total)"
+        output_mocks["Output Port Adapters (36)<br/>InMemoryTicketAdapter<br/>MockLLMAdapter<br/>FakeContainerAdapter<br/>... 33 more"]
         input_mocks["Input Port Adapters (18)<br/>MockOrchestrationCommand<br/>MockWorkflowCommand<br/>... 16 more"]
     end
     
@@ -356,7 +357,7 @@ See [bootstrap-wiring.md](./bootstrap-wiring.md) for the detailed 6-phase bootst
 
 - [Implementations Overview](../README.md) — All implementation tiers
 - [Bootstrap Wiring](./bootstrap-wiring.md) — 6-phase bootstrap sequence with flowchart
-- [Adapters Reference](./adapters.md) — Complete mapping of all 53 adapters
+- [Adapters Reference](./adapters.md) — Complete mapping of all 54 adapters
 - [Scenarios Reference](./scenarios.md) — All 10 scenario directories and 80 YAML files
 - [Architecture: Ports](../../architecture/ports/) — Port interface specifications
 - [Architecture: Domain](../../architecture/domain/) — Domain models and events

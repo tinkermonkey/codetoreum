@@ -768,8 +768,7 @@ scenarios/
 ├── planning_design_pipeline/
 ├── planning_design_review_cycle/
 ├── pr_feedback_child_issue/
-├── dev_environment_repair/
-└── README.md (this file)
+└── dev_environment_repair/
 ```
 
 ---

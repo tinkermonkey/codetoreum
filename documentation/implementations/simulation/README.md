@@ -21,19 +21,19 @@ The simulation implementation serves multiple purposes:
 - **Scenario-Based**: Predefined workflows test different system paths
 - **In-Memory**: No database or external storage required
 
-## Contents (Phase 6 — Complete)
+## Contents
 
 ### [overview.md](./overview.md)
 Overview of the Simulation Implementation as a complete port contract implementation:
 - How it fulfills all architecture contracts with mock adapters
-- Configuration and behavior of 53 adapters
+- Configuration and behavior of 54 adapters
 - Time control (100x fast-forward) and determinism
 - Purpose, architecture, quick start guide
 - Limitations and integration pattern
 
 ### [adapters.md](./adapters.md)
-Complete reference for all 53 adapters:
-- **35 Testing Adapters**: Mock implementations of output ports (InMemoryTicketAdapter, MockLLMAdapter, FakeContainerAdapter, etc.)
+Complete reference for all 54 adapters:
+- **36 Testing Adapters**: Mock implementations of output ports (InMemoryTicketAdapter, MockLLMAdapter, FakeContainerAdapter, etc.)
 - **18 Input Port Adapters**: HTTP endpoint wrappers (MockOrchestrationCommand, MockWorkItem, etc.)
 - Full mapping table with port interface → adapter class → file path
 - Adapter organization and characteristics
@@ -98,7 +98,7 @@ Everything is real except the adapters — which are mocks. This means:
 
 ## Using the Simulation
 
-See `overview.md` (Phase 6) for detailed setup and usage.
+See `overview.md` for detailed setup and usage.
 
 Quick example:
 ```python
@@ -113,13 +113,6 @@ async def scenario(sim):
 result = await runner.run(scenario)
 assert result.success
 ```
-
-## Phase Delivery
-
-- **Phase 6**: Complete simulation implementation documentation
-- **adapters.md** — All 53 adapters listed and mapped
-- **bootstrap-wiring.md** — 6-phase bootstrap with diagrams
-- **scenarios.md** — All scenarios documented
 
 ## See Also
 

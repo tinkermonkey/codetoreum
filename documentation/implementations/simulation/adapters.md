@@ -5,12 +5,12 @@ Complete mapping of all 53 simulation/mock adapters to their port interfaces.
 ## Overview
 
 The Simulation Implementation provides:
-- **35 Testing Adapters**: Mock/in-memory implementations of output ports
+- **36 Testing Adapters**: Mock/in-memory implementations of output ports
 - **18 Input Port Adapters**: Mock adapters wrapping application services for HTTP endpoints
 
 All adapters implement the same port contracts as production adapters, ensuring the simulation exercises identical business logic.
 
-## Output Port Adapters (35 Testing Adapters)
+## Output Port Adapters (36 Testing Adapters)
 
 Complete list of mock implementations for all output ports.
 
@@ -39,7 +39,7 @@ Complete list of mock implementations for all output ports.
 | 21 | `IReviewCycle` | `MockReviewCycleAdapter` | `adapters/testing/mock_review_cycle_adapter.py` | Simulates code review — PR review workflows |
 | 22 | `IPRReviewCycle` | `MockPRReviewCycleAdapter` | `adapters/testing/mock_pr_review_cycle_adapter.py` | Simulates PR review — approval, feedback, revisions |
 | 23 | `ICodeReviewService` | `InMemoryCodeReviewAdapter` | `adapters/testing/in_memory_code_review_adapter.py` | In-memory code review tracking |
-| 24 | `IIdentityService` | `ConfigurableIdentityService` | `adapters/testing/configurable_identity_service.py` | Simulates identity — bot/human user detection |
+| 24 | `IIdentityService` | `ConfigurableIdentityService` | `adapters/secondary/configurable_identity_service.py` | Simulates identity — bot/human user detection |
 | 25 | `IRepairCycleCheckpointStore` | `InMemoryCheckpointStore` | `adapters/testing/in_memory_checkpoint_store.py` | In-memory repair cycle checkpoints |
 | 26 | `ICIPipelineService` | `MockCIPipelineAdapter` | `adapters/testing/mock_ci_pipeline_adapter.py` | Simulates CI/CD — build, test execution |
 | 27 | `IAgentRepository` | `InMemoryAgentRepository` | `adapters/testing/in_memory_agent_repository.py` | In-memory agent catalog — capabilities, models |
@@ -62,7 +62,7 @@ Mock implementations of input ports that wrap application services for HTTP endp
 | 1 | `IOrchestrationCommandPort` | `MockOrchestrationCommandAdapter` | `adapters/primary/input_port_adapters/mock/mock_orchestration_command_adapter.py` | Workflow orchestration commands |
 | 2 | `IWorkflowCommandPort` | `MockWorkflowCommandAdapter` | `adapters/primary/input_port_adapters/mock/mock_workflow_command_adapter.py` | Workflow definition commands |
 | 3 | `IWorkflowDefinitionCommandPort` | `MockWorkflowDefinitionCommandAdapter` | `adapters/primary/input_port_adapters/mock/mock_workflow_definition_command_adapter.py` | Workflow stage definition commands |
-| 4 | `IWorkflowQueryPort` | `MockWorkflowQueryPort` | `adapters/primary/input_port_adapters/mock/mock_workflow_query_adapter.py` | Workflow queries |
+| 4 | `IWorkflowQueryPort` | `MockWorkflowQueryAdapter` | `adapters/primary/input_port_adapters/mock/mock_workflow_query_adapter.py` | Workflow queries |
 | 5 | `IWorkflowRunQueryPort` | `MockWorkflowRunQueryAdapter` | `adapters/primary/input_port_adapters/mock/mock_workflow_run_query_adapter.py` | Workflow run queries |
 | 6 | `IWorkItemCommandPort` | `MockWorkItemCommandAdapter` | `adapters/primary/input_port_adapters/mock/mock_work_item_command_adapter.py` | Work item commands — create, update, label |
 | 7 | `IWorkItemQueryPort` | `MockWorkItemQueryAdapter` | `adapters/primary/input_port_adapters/mock/mock_work_item_query_adapter.py` | Work item queries — search, list, get |
@@ -76,7 +76,7 @@ Mock implementations of input ports that wrap application services for HTTP endp
 | 15 | `ITaskQueryPort` | `MockTaskQueryAdapter` | `adapters/primary/input_port_adapters/mock/mock_task_query_adapter.py` | Task/job queries |
 | 16 | `IMetricsQueryPort` | `MockMetricsQueryAdapter` | `adapters/primary/input_port_adapters/mock/mock_metrics_query_adapter.py` | Metrics queries — timing, counts |
 | 17 | `IWorkspaceQueryPort` | `MockWorkspaceQueryAdapter` | `adapters/primary/input_port_adapters/mock/mock_workspace_query_adapter.py` | Workspace queries — containers, mounts |
-| 18 | `IAuditQueryPort` | `MockAuditQueryAdapter` | `adapters/primary/input_port_adapters/mock/mock_audit_query_adapter.py` | Audit log queries |
+| 18 | `IAuditQueryPort` | `AuditQueryAdapter` | `adapters/primary/audit_query_adapter.py` | Audit log queries |
 
 ## Adapter Organization
 
@@ -253,6 +253,6 @@ assert len(artifacts) == 5
 
 ---
 
-**Total Adapter Count**: 35 testing + 18 input port = **53 adapters**
+**Total Adapter Count**: 36 testing + 18 input port = **54 adapters**
 
 All adapters implement port contracts to provide a complete, testable implementation of the Codetoreum architecture.

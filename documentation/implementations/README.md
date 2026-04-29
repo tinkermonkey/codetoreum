@@ -7,7 +7,7 @@ The implementations tier documents concrete implementations that fulfill the arc
 An implementation is a complete, working configuration of adapters that together satisfy all output ports. For example:
 
 - **Simulation Implementation**: Uses mock adapters to simulate the entire system in-memory. Used for testing, development, and scenario testing. (Currently the only complete implementation.)
-- **Production Implementation**: Would use real adapters for GitHub, Docker, Claude Code, etc. (Planned for Phase 6.)
+- **Production Implementation**: Would use real adapters for GitHub, Docker, Claude Code, etc. (Planned for future development.)
 
 Each implementation includes:
 - A bootstrap function that instantiates and wires all adapters
@@ -27,11 +27,11 @@ The simulation system is a full, working implementation of Codetoreum using mock
 - Complete audit trail through event sourcing
 - Reproducible behavior for debugging and analysis
 
-**Files** (Phase 6 — Complete):
+**Documentation Files**:
 - **[overview.md](./simulation/overview.md)** — Simulation as complete port contract implementation, time control, determinism
-- **[adapters.md](./simulation/adapters.md)** — All 53 adapters (35 testing + 18 input mock) mapped to port interfaces with file paths
+- **[adapters.md](./simulation/adapters.md)** — All 54 adapters (36 testing + 18 input mock) mapped to port interfaces with file paths
 - **[bootstrap-wiring.md](./simulation/bootstrap-wiring.md)** — 6-phase bootstrap sequence with Level 4 Mermaid wiring diagram
-- **[scenarios.md](./simulation/scenarios.md)** — All 10 scenario directories with 80 YAML files, format guide, and execution instructions
+- **[scenarios.md](./simulation/scenarios.md)** — All 10 scenario directories with YAML files, format guide, and execution instructions
 
 ## How to Add a New Implementation
 
@@ -78,12 +78,12 @@ To create a new implementation (e.g., production, staging, cloud-hosted):
 
 Architecture remains stable while implementations can be added or evolved. A new implementation doesn't require architecture changes — only adapter selection and wiring.
 
-## Planned Implementations
+## Available and Planned Implementations
 
-- **Simulation** (Phase 6) — ✅ Complete mock implementation
-- **Production** (Future) — Real GitHub, Docker, Claude Code, etc.
-- **Staging** (Future) — Real systems with test GitHub org
-- **Cloud-Hosted** (Future) — Kubernetes, cloud storage, etc.
+- **Simulation** — ✅ Complete mock implementation with in-memory services
+- **Production** (Planned) — Real GitHub, Docker, Claude Code, and external services
+- **Staging** (Planned) — Real systems with test GitHub organization
+- **Cloud-Hosted** (Planned) — Kubernetes-based deployment with cloud storage
 
 ## Documentation Standards
 
@@ -95,8 +95,3 @@ Each implementation follows the pattern:
 - Links back to architecture tier documentation
 
 See `../templates/implementation-template.md` for required sections and structure.
-
-## Phase Delivery
-
-- **Phase 6**: Complete simulation implementation documentation
-- **Phase 7+**: Additional implementations as needed
