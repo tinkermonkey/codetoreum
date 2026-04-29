@@ -38,7 +38,7 @@ codetoreum/
 ├── documentation/              # Architecture and implementation documentation
 │   ├── architecture/           # Gen 2 design specifications
 │   │   ├── domain/             # Domain model specifications
-│   │   ├── ports/              # Port interface specifications (19 input, 40 output)
+│   │   ├── ports/              # Port interface specifications (19 input, 41 output)
 │   │   ├── application-services/ # Orchestration service designs
 │   │   └── infrastructure/     # Cross-cutting infrastructure
 │   ├── implementations/        # Implementation and testing documentation
@@ -47,17 +47,17 @@ codetoreum/
 ├── scenarios/                  # Simulation scenario YAML definitions
 └── src/codetoreum/
     ├── domain/                 # Core business logic (pure, 67 domain model classes)
-    │   ├── events/             # 167 domain event classes (immutable)
+    │   ├── events/             # 91 modern domain event classes (immutable)
     │   └── services/           # Domain services
     ├── application/            # 23 application services + event handlers
     ├── ports/                  # Port interfaces
     │   ├── input/              # 19 inbound ports (commands, queries, services)
     │   └── output/             # 40 outbound port interfaces
-    ├── adapters/               # Adapter implementations (53 total mock/in-memory adapters)
+    ├── adapters/               # Adapter implementations (59 total mock/in-memory adapters)
     │   ├── primary/            # FastAPI app, REST routers, webhook adapter
     │   │   └── input_port_adapters/mock/  # Mock implementations of all input ports (18 files)
     │   ├── secondary/          # GitHub, Docker, Claude, Redis, Elasticsearch
-    │   └── testing/            # 35 mock/in-memory adapters for simulation
+    │   └── testing/            # 41 mock/in-memory adapters for simulation
     ├── config/                 # Configuration management
     ├── cli/                    # CLI commands (simulation server, YAML import)
     └── infrastructure/         # Cross-cutting concerns
@@ -104,13 +104,13 @@ See `documentation/architecture/application-services/` for complete service docu
 
 ### Port Interfaces (Contracts)
 
-**59 total ports**: 19 input ports + 40 output ports
+**60 total ports**: 19 input ports + 41 output ports
 
 **Input Ports** (19 total): Command, query, and service interfaces for inbound operations
 - Agent management, work item management, workflow management
 - Execution management, configuration, system services
 
-**Output Ports** (40 total): Vendor-agnostic interfaces for external system interactions
+**Output Ports** (41 total): Vendor-agnostic interfaces for external system interactions
 - **Core System**: ITicketSystem, ILLMProvider, IContainer, IVersionControlService, IEventStore, IStorage
 - **Board Management**: IBoardService, board reconciliation services
 - **Code Review**: ICodeReviewService, PR/review lifecycle interfaces
@@ -151,7 +151,7 @@ See `documentation/architecture/ports/` for complete port specifications.
 - DockerContainerAdapter
 
 **Testing/Simulation** (`adapters/testing/` + `adapters/primary/input_port_adapters/mock/`):
-- 53 total mock and in-memory adapters for deterministic testing (35 in testing/, 18 in input port mocks)
+- 59 total mock and in-memory adapters for deterministic testing (41 in testing/, 18 in input port mocks)
 - Examples: MockLLMAdapter, MockBoardAdapter, MockCodeReviewAdapter, MockAgentExecutor
 - MockReviewCycleAdapter, MockRepairCycleAdapter, MockContainerRecoveryAdapter
 - InMemoryEventStore, InMemoryConfigStore, InMemoryMetricsAdapter
@@ -291,7 +291,7 @@ The system includes a comprehensive simulation framework for fast, deterministic
 - `now()` - Get current simulation time
 
 **Mock Adapters** (`src/codetoreum/adapters/testing/` and `src/codetoreum/adapters/primary/input_port_adapters/mock/`)
-- 53 total adapters (mock + in-memory implementations): 35 in testing/, 18 in input port mocks
+- 59 total adapters (mock + in-memory implementations): 41 in testing/, 18 in input port mocks
 - MockLLMAdapter, MockBoardAdapter, MockReviewCycleAdapter, MockRepairCycleAdapter
 - InMemoryEventStore, InMemoryStorageAdapter, InMemoryMetricsAdapter
 - See `documentation/implementations/simulation/adapters.md` for complete reference
@@ -356,9 +356,9 @@ async def test_workflow():
 **Essential Architecture Reading:**
 1. `documentation/architecture/overview.md` - Architecture overview
 2. `documentation/architecture/domain/models.md` - Domain model specifications (67 classes)
-3. `documentation/architecture/domain/events.md` - Domain event catalog (167 classes)
+3. `documentation/architecture/domain/events.md` - Domain event catalog (91 modern events)
 4. `documentation/architecture/infrastructure/resilience.md` - Resilience patterns
-5. `documentation/01_design/ports/output/comprehensive-ports-reference.md` - Complete port inventory (19 input, 40 output)
+5. `documentation/01_design/ports/output/comprehensive-ports-reference.md` - Complete port inventory (19 input, 41 output)
 
 **Application & Services:**
 - `documentation/architecture/application-services/services.md` - Application service designs (23 services)
@@ -369,7 +369,7 @@ async def test_workflow():
 **Testing & Simulation:**
 - `tests/simulation/README.md` - Simulation testing framework
 - `tests/simulation/SCENARIO_FORMAT.md` - Scenario creation guide
-- `documentation/implementations/simulation/adapters.md` - Mock adapter reference (53 adapters)
+- `documentation/implementations/simulation/adapters.md` - Mock adapter reference (59 adapters)
 - `documentation/implementations/simulation/scenarios.md` - Scenario specifications
 
 **Infrastructure:**

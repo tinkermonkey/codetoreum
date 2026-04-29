@@ -642,7 +642,162 @@ class PRReviewCycleApprovedEvent(CodetoreumEvent):
     pr_id: str = ""
     auto_merge: bool = False
 
-# ... 9 more events (PhaseStarted, CICheckCompleted, IssuesFound, Escalated, etc.)
+@dataclass(frozen=True)
+class PRReviewCyclePRCommentedEvent(CodetoreumEvent):
+    """Emitted when an agent posts a comment on a PR during review cycle.
+    
+    **Immutability**: This is an immutable event (frozen dataclass).
+    
+    Attributes:
+        type (str): Fixed to "pr_review_cycle.pr_commented"
+        pr_id (str): GitHub PR identifier
+        work_item_id (str): Associated work item ID
+        comment_id (str): ID of the posted comment
+        agent_id (str): ID of agent posting comment
+        finding_type (str): Type of finding (e.g., "code_smell", "bug", "suggestion")
+        workflow_run_id (str): ID of the workflow run
+        timestamp (str): ISO 8601 timestamp
+    """
+    pr_id: str = ""
+    work_item_id: str = ""
+    comment_id: str = ""
+    agent_id: str = ""
+    finding_type: str = ""
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class PRReviewCycleReviewCompletedEvent(CodetoreumEvent):
+    """Emitted when entire code review phase completes.
+    
+    **Immutability**: This is an immutable event (frozen dataclass).
+    
+    Attributes:
+        type (str): Fixed to "pr_review_cycle.review_completed"
+        pr_id (str): GitHub PR identifier
+        work_item_id (str): Associated work item ID
+        findings_count (int): Total number of findings from review
+        review_duration_seconds (float): Time taken for review
+        workflow_run_id (str): ID of the workflow run
+        timestamp (str): ISO 8601 timestamp
+    """
+    pr_id: str = ""
+    work_item_id: str = ""
+    findings_count: int = 0
+    review_duration_seconds: float = 0.0
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class PRReviewCycleReviewFailedEvent(CodetoreumEvent):
+    """Emitted when PR review phase fails (e.g., agent error, timeout).
+    
+    **Immutability**: This is an immutable event (frozen dataclass).
+    
+    Attributes:
+        type (str): Fixed to "pr_review_cycle.review_failed"
+        pr_id (str): GitHub PR identifier
+        work_item_id (str): Associated work item ID
+        error_message (str): Description of what failed
+        error_type (str): Type of error (e.g., "timeout", "agent_error")
+        cycle_number (int): Review cycle number when failure occurred
+        workflow_run_id (str): ID of the workflow run
+        timestamp (str): ISO 8601 timestamp
+    """
+    pr_id: str = ""
+    work_item_id: str = ""
+    error_message: str = ""
+    error_type: str = ""
+    cycle_number: int = 0
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class PRReviewCycleSinglePhaseCompletedEvent(CodetoreumEvent):
+    """Emitted when a single phase within the review cycle completes.
+    
+    **Immutability**: This is an immutable event (frozen dataclass).
+    
+    Attributes:
+        type (str): Fixed to "pr_review_cycle.single_phase_completed"
+        pr_id (str): GitHub PR identifier
+        phase_name (str): Name of completed phase
+        phase_index (int): Position in phase sequence (1-based)
+        findings_count (int): Number of findings in this phase
+        duration_seconds (float): Time spent in this phase
+        workflow_run_id (str): ID of the workflow run
+        timestamp (str): ISO 8601 timestamp
+    """
+    pr_id: str = ""
+    phase_name: str = ""
+    phase_index: int = 0
+    findings_count: int = 0
+    duration_seconds: float = 0.0
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class PRReviewCycleStagedEvent(CodetoreumEvent):
+    """Emitted when PR review cycle reaches a specific stage.
+    
+    **Immutability**: This is an immutable event (frozen dataclass).
+    
+    Attributes:
+        type (str): Fixed to "pr_review_cycle.staged"
+        pr_id (str): GitHub PR identifier
+        work_item_id (str): Associated work item ID
+        stage_name (str): Name of the stage reached
+        cycle_number (int): Review cycle number
+        workflow_run_id (str): ID of the workflow run
+        timestamp (str): ISO 8601 timestamp
+    """
+    pr_id: str = ""
+    work_item_id: str = ""
+    stage_name: str = ""
+    cycle_number: int = 0
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class PRReviewCycleStatusUpdateNeededEvent(CodetoreumEvent):
+    """Emitted when PR review cycle requires status update in workflow.
+    
+    **Immutability**: This is an immutable event (frozen dataclass).
+    
+    Attributes:
+        type (str): Fixed to "pr_review_cycle.status_update_needed"
+        pr_id (str): GitHub PR identifier
+        work_item_id (str): Associated work item ID
+        new_status (str): Status that needs to be set
+        reason (str): Reason for status update
+        workflow_run_id (str): ID of the workflow run
+        timestamp (str): ISO 8601 timestamp
+    """
+    pr_id: str = ""
+    work_item_id: str = ""
+    new_status: str = ""
+    reason: str = ""
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class PRReviewCycleTransitionBlockedEvent(CodetoreumEvent):
+    """Emitted when transition to next phase is blocked (preconditions not met).
+    
+    **Immutability**: This is an immutable event (frozen dataclass).
+    
+    Attributes:
+        type (str): Fixed to "pr_review_cycle.transition_blocked"
+        pr_id (str): GitHub PR identifier
+        work_item_id (str): Associated work item ID
+        current_phase (str): Current phase that cannot transition
+        next_phase (str): Phase trying to transition to
+        blocking_reason (str): Why transition is blocked
+        cycle_number (int): Review cycle number
+        workflow_run_id (str): ID of the workflow run
+        timestamp (str): ISO 8601 timestamp
+    """
+    pr_id: str = ""
+    work_item_id: str = ""
+    current_phase: str = ""
+    next_phase: str = ""
+    blocking_reason: str = ""
+    cycle_number: int = 0
+    workflow_run_id: str = ""
 ```
 
 **Event-Flow Diagram**:
@@ -772,7 +927,128 @@ class RepairCycleCompletedEvent(CodetoreumEvent):
     success: bool = False
     iterations: int = 0
 
-# ... 18 more events (FileFixStarted, WarningReviewCompleted, Resumed, CheckpointFailed, etc.)
+@dataclass(frozen=True)
+class RepairCycleFixCycleStartedEvent(CodetoreumEvent):
+    """Emitted when fix cycle starts within repair cycle."""
+    test_type: RepairTestType = RepairTestType.UNIT
+    iteration: int = 0
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class RepairCycleFileFixStartedEvent(CodetoreumEvent):
+    """Emitted when agent starts fixing a specific file."""
+    file_path: str = ""
+    issue_count: int = 0
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class RepairCycleFileFixCompletedEvent(CodetoreumEvent):
+    """Emitted when agent completes fixing a file."""
+    file_path: str = ""
+    fixes_applied: int = 0
+    duration_seconds: float = 0.0
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class RepairCycleWarningReviewStartedEvent(CodetoreumEvent):
+    """Emitted when warning review begins."""
+    test_type: RepairTestType = RepairTestType.UNIT
+    warning_count: int = 0
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class RepairCycleWarningReviewCompletedEvent(CodetoreumEvent):
+    """Emitted when warning review completes."""
+    test_type: RepairTestType = RepairTestType.UNIT
+    warnings_reviewed: int = 0
+    action_items: int = 0
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class RepairCycleTestCycleCompletedEvent(CodetoreumEvent):
+    """Emitted when test cycle for a single test type completes."""
+    test_type: RepairTestType = RepairTestType.UNIT
+    result_passed: bool = False
+    iterations_used: int = 0
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class RepairCycleFastFailEvent(CodetoreumEvent):
+    """Emitted when repair cycle fails fast due to unrecoverable error."""
+    error_message: str = ""
+    error_type: str = ""
+    test_type: RepairTestType = RepairTestType.UNIT
+    iteration: int = 0
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class RepairCycleResumedEvent(CodetoreumEvent):
+    """Emitted when repair cycle resumes after pause or interruption."""
+    reason_resumed: str = ""
+    from_iteration: int = 0
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class SystemicAnalysisStartedEvent(CodetoreumEvent):
+    """Emitted when systemic failure analysis begins."""
+    failure_category: str = ""
+    affected_test_types: int = 0
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class SystemicAnalysisCompletedEvent(CodetoreumEvent):
+    """Emitted when systemic failure analysis completes."""
+    root_causes_identified: int = 0
+    systemic_issue_found: bool = False
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class SystemicFixStartedEvent(CodetoreumEvent):
+    """Emitted when systemic fix process starts."""
+    systemic_issue: str = ""
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class SystemicFixCompletedEvent(CodetoreumEvent):
+    """Emitted when systemic fix completes."""
+    fix_applied: str = ""
+    affected_files: int = 0
+    workflow_run_id: str = ""
+
+# Environment and Verification Events
+@dataclass(frozen=True)
+class EnvironmentRebuildStartedEvent(CodetoreumEvent):
+    """Emitted when environment rebuild process starts."""
+    rebuild_reason: str = ""
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class EnvironmentRebuildCompletedEvent(CodetoreumEvent):
+    """Emitted when environment rebuild completes successfully."""
+    dependencies_installed: int = 0
+    duration_seconds: float = 0.0
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class EnvironmentVerificationStartedEvent(CodetoreumEvent):
+    """Emitted when environment verification begins."""
+    checks_planned: int = 0
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class EnvironmentVerificationCompletedEvent(CodetoreumEvent):
+    """Emitted when environment verification completes."""
+    checks_passed: int = 0
+    checks_failed: int = 0
+    duration_seconds: float = 0.0
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class EnvironmentRebuildExhaustedEvent(CodetoreumEvent):
+    """Emitted when environment rebuild is exhausted (max attempts reached)."""
+    max_attempts: int = 0
+    last_error: str = ""
+    workflow_run_id: str = ""
 ```
 
 **Event-Flow Diagram**:
@@ -1014,7 +1290,42 @@ class StaleLockDetectedEvent(CodetoreumEvent):
     held_by: str = ""
     held_duration_seconds: int = 0
 
-# ... 4 more events (PipelineLockAcquired, PipelineLockReleased, LockStuck, WorkItemQueued)
+@dataclass(frozen=True)
+class PipelineLockAcquiredEvent(CodetoreumEvent):
+    """Emitted when pipeline-level lock is acquired for serializing work items."""
+    project_id: str = ""
+    board_id: str = ""
+    work_item_id: str = ""
+    timestamp (str): ISO 8601 timestamp when lock acquired
+
+@dataclass(frozen=True)
+class PipelineLockReleasedEvent(CodetoreumEvent):
+    """Emitted when pipeline-level lock is released."""
+    project_id: str = ""
+    board_id: str = ""
+    work_item_id: str = ""
+    timestamp (str): ISO 8601 timestamp when lock released
+
+@dataclass(frozen=True)
+class LockStuckEvent(CodetoreumEvent):
+    """Emitted when a lock is detected as stuck (holder not responding)."""
+    project_id: str = ""
+    board_id: str = ""
+    work_item_id: str = ""
+    lock_duration_seconds: int = 0
+    held_by_agent: str = ""
+    recovery_initiated: bool = False
+    timestamp (str): ISO 8601 timestamp when stuck detected
+
+@dataclass(frozen=True)
+class WorkItemQueuedEvent(CodetoreumEvent):
+    """Emitted when work item is queued waiting for lock."""
+    project_id: str = ""
+    board_id: str = ""
+    work_item_id: str = ""
+    queue_position: int = 0
+    queue_depth: int = 0
+    timestamp (str): ISO 8601 timestamp when queued
 ```
 
 **Event-Flow Diagram**:
@@ -1290,7 +1601,71 @@ class ConversationalLoopStartedEvent(CodetoreumEvent):
     work_item_id: str = ""
     session_id: str = ""
 
-# ... 5 more events (AgentResponsePosted, FeedbackListeningStarted, etc.)
+@dataclass(frozen=True)
+class AgentResponsePostedEvent(CodetoreumEvent):
+    """Emitted when agent posts a response to a comment.
+    
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail integrity.
+    
+    Attributes:
+        type (str): Fixed to "discussion.agent_response_posted"
+        work_item_id (str): Work item ID where response was posted
+        comment_id (str): ID of the response comment
+        responding_agent_id (str): ID of the agent that posted response
+        parent_comment_id (str): ID of the comment being responded to
+        response_body (str): Text content of the agent's response
+        workflow_run_id (str): ID of the workflow run
+        timestamp (str): ISO 8601 timestamp when response was posted
+    """
+    work_item_id: str = ""
+    comment_id: str = ""
+    responding_agent_id: str = ""
+    parent_comment_id: str = ""
+    response_body: str = ""
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class FeedbackListeningStartedEvent(CodetoreumEvent):
+    """Emitted when feedback listening session starts on a work item.
+    
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail integrity.
+    
+    Attributes:
+        type (str): Fixed to "discussion.feedback_listening_started"
+        work_item_id (str): Work item ID listening for feedback
+        listening_agent_id (str): ID of agent listening for feedback
+        listening_duration_seconds (int): How long to listen for feedback
+        workflow_run_id (str): ID of the workflow run
+        timestamp (str): ISO 8601 timestamp when listening started
+    """
+    work_item_id: str = ""
+    listening_agent_id: str = ""
+    listening_duration_seconds: int = 0
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class FeedbackListeningStoppedEvent(CodetoreumEvent):
+    """Emitted when feedback listening session stops.
+    
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail integrity.
+    
+    Attributes:
+        type (str): Fixed to "discussion.feedback_listening_stopped"
+        work_item_id (str): Work item ID that was listening
+        listening_agent_id (str): ID of agent that was listening
+        feedback_received_count (int): Number of feedback comments received
+        reason (str): Reason listening stopped (timeout, max_feedback, manual)
+        workflow_run_id (str): ID of the workflow run
+        timestamp (str): ISO 8601 timestamp when listening stopped
+    """
+    work_item_id: str = ""
+    listening_agent_id: str = ""
+    feedback_received_count: int = 0
+    reason: str = ""
+    workflow_run_id: str = ""
 ```
 
 **Event-Flow Diagram**:
@@ -1366,7 +1741,29 @@ class ProjectEnabledEvent(CodetoreumEvent):
     """
     project_id: str = ""
 
-# ... 3 more events (ProjectDisabled, ProjectCloneFailed, OrchestrationCycleCompleted)
+@dataclass(frozen=True)
+class ProjectDisabledEvent(CodetoreumEvent):
+    """Emitted when a project becomes disabled in configuration."""
+    project_name: str = ""
+    reason: str | None = None
+    timestamp (str): ISO 8601 timestamp when disabled
+
+@dataclass(frozen=True)
+class ProjectCloneFailedEvent(CodetoreumEvent):
+    """Emitted when project clone or update fails (transient error)."""
+    project_name: str = ""
+    error_message: str = ""
+    will_retry: bool = True
+    timestamp (str): ISO 8601 timestamp when failure occurred
+
+@dataclass(frozen=True)
+class OrchestrationCycleCompletedEvent(CodetoreumEvent):
+    """Emitted at the end of each orchestration poll cycle."""
+    projects_processed: int = 0
+    boards_processed: int = 0
+    total_actions: int = 0
+    cycle_duration_ms: int = 0
+    timestamp (str): ISO 8601 timestamp when cycle completed
 ```
 
 **Event-Flow Diagram**:
@@ -1715,6 +2112,302 @@ graph TB
 
 ---
 
+## Advanced Review and Repair Events
+
+This section documents the detailed event specifications for advanced review phases, repair cycle operations, and reconciliation processes that provide fine-grained control over complex workflows.
+
+### Review Phase Events
+
+**Complete Lifecycle**: ReviewPhaseStartedEvent → ReviewPhaseCompletedEvent or ReviewPhaseTimedOutEvent
+
+Events for tracking detailed review phases within larger processes (like PR reviews, code review cycles, etc.).
+
+```python
+@dataclass(frozen=True)
+class ReviewPhaseStartedEvent(CodetoreumEvent):
+    """Emitted when a review phase within a larger process starts.
+    
+    Attributes:
+        work_item_id (str): ID of the work item under review
+        phase_name (str): Name of the review phase
+        reviewers_assigned (int): Number of reviewers assigned
+        deadline (Optional[str]): Optional deadline for review completion
+        workflow_run_id (str): ID of the workflow run
+    """
+    work_item_id: str = ""
+    phase_name: str = ""
+    reviewers_assigned: int = 0
+    deadline: str | None = None
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class ReviewPhaseCompletedEvent(CodetoreumEvent):
+    """Emitted when a review phase completes.
+    
+    Attributes:
+        work_item_id (str): ID of the work item that was reviewed
+        phase_name (str): Name of the completed phase
+        approved (bool): True if phase was approved
+        reviewers_participated (int): Number of reviewers who participated
+        duration_seconds (float): Time taken for review phase
+        workflow_run_id (str): ID of the workflow run
+    """
+    work_item_id: str = ""
+    phase_name: str = ""
+    approved: bool = False
+    reviewers_participated: int = 0
+    duration_seconds: float = 0.0
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class ReviewPhaseTimedOutEvent(CodetoreumEvent):
+    """Emitted when a review phase times out (deadline exceeded without completion).
+    
+    Attributes:
+        work_item_id (str): ID of the work item under review
+        phase_name (str): Name of the phase that timed out
+        timeout_seconds (int): Timeout duration in seconds
+        reviews_pending (int): Number of reviews still pending
+        escalation_required (bool): True if escalation is needed due to timeout
+        workflow_run_id (str): ID of the workflow run
+    """
+    work_item_id: str = ""
+    phase_name: str = ""
+    timeout_seconds: int = 0
+    reviews_pending: int = 0
+    escalation_required: bool = False
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class ReviewProgressStalledEvent(CodetoreumEvent):
+    """Emitted when review progress stalls (no activity within threshold).
+    
+    Attributes:
+        work_item_id (str): ID of the work item under review
+        stall_duration_seconds (int): How long review has been inactive
+        last_activity (str): ISO 8601 timestamp of last activity
+        expected_reviewers (int): Number of reviewers who haven't responded
+        workflow_run_id (str): ID of the workflow run
+    """
+    work_item_id: str = ""
+    stall_duration_seconds: int = 0
+    last_activity: str = ""
+    expected_reviewers: int = 0
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class ReviewQueuedEvent(CodetoreumEvent):
+    """Emitted when a review is queued for processing.
+    
+    Attributes:
+        work_item_id (str): ID of the work item queued for review
+        review_id (str): ID of the review being queued
+        queue_position (int): Position in the review queue (1-based)
+        total_in_queue (int): Total reviews in queue
+        workflow_run_id (str): ID of the workflow run
+    """
+    work_item_id: str = ""
+    review_id: str = ""
+    queue_position: int = 0
+    total_in_queue: int = 0
+    workflow_run_id: str = ""
+```
+
+### Test and Repair Phase Events
+
+**Complete Lifecycle**: TestPhaseCompletedEvent indicates completion; TestRepairCycleInitiatedEvent indicates new repair cycle
+
+Events for tracking testing phases and test-driven repair cycles.
+
+```python
+@dataclass(frozen=True)
+class TestPhaseCompletedEvent(CodetoreumEvent):
+    """Emitted when a phase of testing completes (UNIT, INTEGRATION, or E2E).
+    
+    Attributes:
+        workflow_run_id (str): ID of the workflow run
+        work_item_id (str): ID of the work item being tested
+        test_phase (str): Name of completed phase (UNIT, INTEGRATION, E2E)
+        tests_passed (int): Number of tests that passed
+        tests_failed (int): Number of tests that failed
+        duration_seconds (float): Time taken for this phase
+    """
+    workflow_run_id: str = ""
+    work_item_id: str = ""
+    test_phase: str = ""
+    tests_passed: int = 0
+    tests_failed: int = 0
+    duration_seconds: float = 0.0
+
+@dataclass(frozen=True)
+class TestRepairCycleInitiatedEvent(CodetoreumEvent):
+    """Emitted when a test-repair iteration cycle begins.
+    
+    Attributes:
+        workflow_run_id (str): ID of the workflow run
+        work_item_id (str): ID of the work item being repaired
+        failing_tests_count (int): Number of tests to fix
+        iteration (int): Iteration number for this repair cycle
+    """
+    workflow_run_id: str = ""
+    work_item_id: str = ""
+    failing_tests_count: int = 0
+    iteration: int = 0
+
+@dataclass(frozen=True)
+class TestFailureAnalyzedEvent(CodetoreumEvent):
+    """Emitted when test failure analysis is completed.
+    
+    Attributes:
+        workflow_run_id (str): ID of the workflow run
+        work_item_id (str): ID of the work item with test failures
+        test_count (int): Total tests analyzed
+        failures_count (int): Number of failures identified
+        analysis_type (str): Type of analysis performed
+        root_causes (int): Number of root causes identified
+    """
+    workflow_run_id: str = ""
+    work_item_id: str = ""
+    test_count: int = 0
+    failures_count: int = 0
+    analysis_type: str = ""
+    root_causes: int = 0
+
+@dataclass(frozen=True)
+class UpdatesRepairedEvent(CodetoreumEvent):
+    """Emitted when code updates have been applied to fix issues.
+    
+    Attributes:
+        workflow_run_id (str): ID of the workflow run
+        work_item_id (str): ID of the work item with repairs
+        files_updated (int): Number of files that were updated
+        changes_summary (str): Summary of changes made
+        commit_sha (str): Git commit SHA if changes were committed
+    """
+    workflow_run_id: str = ""
+    work_item_id: str = ""
+    files_updated: int = 0
+    changes_summary: str = ""
+    commit_sha: str = ""
+```
+
+### Reconciliation Events
+
+**Complete Lifecycle**: ReconciliationNeededEvent → ReconciliationStartedEvent → (ReconciliationSucceededEvent | ReconciliationFailedEvent)
+
+Events for tracking reconciliation of state, configurations, versions, and other system elements.
+
+```python
+@dataclass(frozen=True)
+class ReconciliationNeededEvent(CodetoreumEvent):
+    """Emitted when reconciliation is detected as needed.
+    
+    Attributes:
+        workflow_run_id (str): ID of the workflow run
+        work_item_id (str): ID of the work item needing reconciliation
+        reason (str): Why reconciliation is needed
+    """
+    workflow_run_id: str = ""
+    work_item_id: str = ""
+    reason: str = ""
+
+@dataclass(frozen=True)
+class ReconciliationStartedEvent(CodetoreumEvent):
+    """Emitted when reconciliation process starts.
+    
+    Attributes:
+        workflow_run_id (str): ID of the workflow run
+        work_item_id (str): ID of the work item being reconciled
+        reconciliation_type (str): Type of reconciliation (e.g., "board", "dependencies")
+    """
+    workflow_run_id: str = ""
+    work_item_id: str = ""
+    reconciliation_type: str = ""
+
+@dataclass(frozen=True)
+class ReconciliationSucceededEvent(CodetoreumEvent):
+    """Emitted when reconciliation completes successfully.
+    
+    Attributes:
+        workflow_run_id (str): ID of the workflow run
+        work_item_id (str): ID of the work item that was reconciled
+        reconciliation_type (str): Type of reconciliation that succeeded
+        changes_applied (int): Number of changes applied during reconciliation
+        duration_seconds (float): Time taken for reconciliation
+    """
+    workflow_run_id: str = ""
+    work_item_id: str = ""
+    reconciliation_type: str = ""
+    changes_applied: int = 0
+    duration_seconds: float = 0.0
+
+@dataclass(frozen=True)
+class ReconciliationFailedEvent(CodetoreumEvent):
+    """Emitted when reconciliation process fails.
+    
+    Attributes:
+        workflow_run_id (str): ID of the workflow run
+        work_item_id (str): ID of the work item where reconciliation failed
+        reconciliation_type (str): Type of reconciliation that failed
+        error_message (str): Description of the failure
+        error_type (str): Category of error
+    """
+    workflow_run_id: str = ""
+    work_item_id: str = ""
+    reconciliation_type: str = ""
+    error_message: str = ""
+    error_type: str = ""
+
+@dataclass(frozen=True)
+class VersionReconciliationStartedEvent(CodetoreumEvent):
+    """Emitted when version reconciliation process starts (syncing versions across systems).
+    
+    Attributes:
+        workflow_run_id (str): ID of the workflow run
+        work_item_id (str): ID of the work item being reconciled
+        component (str): Component being reconciled (e.g., "dependency", "package")
+    """
+    workflow_run_id: str = ""
+    work_item_id: str = ""
+    component: str = ""
+
+@dataclass(frozen=True)
+class VersionReconciliationCompletedEvent(CodetoreumEvent):
+    """Emitted when version reconciliation process completes.
+    
+    Attributes:
+        workflow_run_id (str): ID of the workflow run
+        work_item_id (str): ID of the work item that was reconciled
+        component (str): Component that was reconciled
+        versions_synced (int): Number of versions synchronized
+        success (bool): True if reconciliation was successful
+        duration_seconds (float): Time taken for reconciliation
+    """
+    workflow_run_id: str = ""
+    work_item_id: str = ""
+    component: str = ""
+    versions_synced: int = 0
+    success: bool = False
+    duration_seconds: float = 0.0
+
+@dataclass(frozen=True)
+class ReqsRepairCycleInitiatedEvent(CodetoreumEvent):
+    """Emitted when requirements/dependencies repair cycle begins.
+    
+    Attributes:
+        workflow_run_id (str): ID of the workflow run
+        work_item_id (str): ID of the work item with requirement issues
+        requirements_file (str): Path to requirements file (e.g., "requirements.txt")
+        outdated_packages_count (int): Number of outdated packages detected
+    """
+    workflow_run_id: str = ""
+    work_item_id: str = ""
+    requirements_file: str = ""
+    outdated_packages_count: int = 0
+```
+
+---
+
 ## Legacy Events (Deprecated)
 
 **Status**: These events are deprecated and should not be used for new features. They exist for backward compatibility with older code paths.
@@ -1804,7 +2497,7 @@ graph LR
     end
     
     subgraph "Event Bus"
-        BUS["Event Bus<br/>(Redis)")
+        BUS["Event Bus<br/>(Redis)"]
         WI_CREATED -->|emit| BUS
         WI_STAGE -->|emit| BUS
     end

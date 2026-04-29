@@ -234,6 +234,167 @@ artifacts = storage.list_artifacts()
 assert len(artifacts) == 5
 ```
 
+## Helper Classes and Data Structures
+
+The simulation adapters use several helper classes and data structures to organize state and coordinate testing scenarios. These classes are not adapters themselves but provide essential utilities for adapter implementations.
+
+### Execution and State Tracking
+
+#### CommandExecution
+
+**Location**: `src/codetoreum/adapters/testing/fake_container_adapter.py`
+
+Represents the execution of a single command within a simulated container.
+
+**Attributes**:
+- `id` (str): Unique identifier for this command execution
+- `command` (str): The command that was executed (e.g., "python -m pytest")
+- `working_directory` (str): Directory where command was executed
+- `started_at` (datetime): When execution started
+- `completed_at` (Optional[datetime]): When execution finished (None if running)
+- `return_code` (Optional[int]): Exit code of command (None if running)
+- `stdout` (str): Standard output captured
+- `stderr` (str): Standard error captured
+- `duration_seconds` (float): Execution duration
+
+**Purpose**: Tracks simulated container command executions for verification in tests.
+
+#### ActiveExecutionInfo
+
+**Location**: `src/codetoreum/adapters/testing/execution_service_agent_executor.py`
+
+Tracks information about currently active agent executions.
+
+**Attributes**:
+- `execution_id` (str): Unique execution ID
+- `agent_id` (str): ID of executing agent
+- `work_item_id` (str): Work item being processed
+- `started_at` (datetime): When execution started
+- `status` (str): Current status ("running", "completed", "failed")
+- `output` (str): Accumulated output from execution
+- `error` (Optional[str]): Error message if execution failed
+- `duration_seconds` (float): Time elapsed
+
+**Purpose**: Maintains state of currently executing agents for monitoring and recovery.
+
+#### MockProjectState
+
+**Location**: `src/codetoreum/adapters/testing/mock_project_manager_adapter.py`
+
+Represents the simulated state of a project being managed.
+
+**Attributes**:
+- `project_id` (str): Project identifier
+- `name` (str): Project name
+- `status` (str): Current project status ("active", "paused", "archived")
+- `work_items_count` (int): Total work items in project
+- `completed_items` (int): Number of completed work items
+- `in_progress_items` (int): Number of items currently being worked on
+- `failed_items` (int): Number of failed items
+- `configuration` (Dict[str, Any]): Project configuration settings
+- `last_updated_at` (datetime): When state was last modified
+
+**Purpose**: Simulates project state for testing multi-project orchestration.
+
+### Event and Movement Tracking
+
+#### MovementEvent
+
+**Location**: `src/codetoreum/adapters/testing/mock_board_adapter.py`
+
+Represents the movement of a work item on a board (card movement between columns).
+
+**Attributes**:
+- `work_item_id` (str): ID of work item that moved
+- `from_column` (str): Column the item moved from
+- `to_column` (str): Column the item moved to
+- `timestamp` (datetime): When movement occurred
+- `moved_by` (str): What triggered the movement ("agent", "user", "automation")
+- `reason` (Optional[str]): Why the movement occurred
+
+**Purpose**: Tracks board card movements for verifying workflow progress in tests.
+
+#### ReviewSequenceItem
+
+**Location**: `src/codetoreum/adapters/testing/mock_review_cycle_adapter.py`
+
+Represents a single item in a review sequence (pre-configured review outcomes).
+
+**Attributes**:
+- `sequence_number` (int): Position in sequence (0-based)
+- `review_id` (str): ID of the review
+- `decision` (str): Review decision ("APPROVED", "CHANGES_REQUESTED", "BLOCKED")
+- `feedback` (str): Review feedback/comments
+- `timestamp` (datetime): When this review occurred
+- `reviewer_id` (str): Who performed the review
+- `blocking_issues` (List[str]): Issues blocking approval (if applicable)
+
+**Purpose**: Enables pre-scripted review sequences for deterministic testing of review cycles.
+
+### Exception and Circuit Breaking
+
+#### CircuitBreakerTripped
+
+**Location**: `src/codetoreum/adapters/testing/mock_repair_cycle_adapter.py`
+
+Exception raised when a circuit breaker is tripped (too many consecutive failures).
+
+**Attributes**:
+- `message` (str): Description of the circuit breaker trip
+- `operation` (str): Operation that was attempted
+- `failure_count` (int): Number of consecutive failures
+- `failure_threshold` (int): Threshold at which circuit breaks
+- `reset_timeout_seconds` (int): How long until circuit can reset
+
+**Purpose**: Signals circuit breaker activation for testing resilience handling.
+
+### Logging and Debugging
+
+#### MockLoggerAdapter
+
+**Location**: `src/codetoreum/adapters/primary/input_port_adapters/mock/mock_logger_adapter.py`
+
+Captures logging output for verification and debugging in tests.
+
+**Attributes**:
+- `logs` (List[Dict[str, Any]]): All captured log entries
+- `log_level` (str): Minimum log level being captured (DEBUG, INFO, WARNING, ERROR)
+- `enabled` (bool): Whether logging is currently enabled
+
+**Methods**:
+- `log(level, message, **context)`: Record a log entry
+- `get_logs_by_level(level)`: Retrieve logs of specific level
+- `contains_pattern(regex_pattern)`: Check if logs match pattern
+- `clear_logs()`: Clear captured logs
+
+**Purpose**: Provides programmatic access to application logs during testing, enabling assertions on logging behavior.
+
+### Mock Agents
+
+#### MockAgentExecutor
+
+**Location**: `src/codetoreum/adapters/testing/mock_agent_executor.py`
+
+Simulates agent execution without running actual LLM models.
+
+**Attributes**:
+- `agent_id` (str): ID of simulated agent
+- `response_mode` (str): How to generate responses ("deterministic", "random", "scripted")
+- `scripted_responses` (Dict[str, str]): Pre-scripted response mappings
+- `last_execution` (Optional[ActiveExecutionInfo]): Info about most recent execution
+- `execution_count` (int): Number of times executed
+- `failure_rate` (float): Percentage of executions that should fail (0.0-1.0)
+
+**Methods**:
+- `execute(work_item_id, context)`: Simulate agent execution
+- `set_scripted_response(prompt_pattern, response)`: Pre-script response
+- `get_execution_history()`: Get all past executions
+- `reset()`: Clear state for next test
+
+**Purpose**: Enables controlled, deterministic agent execution simulation without external LLM services.
+
+---
+
 ## Cross-References
 
 - **Port Specifications**: See [Architecture: Ports](../../architecture/ports/)

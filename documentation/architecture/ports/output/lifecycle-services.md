@@ -18,6 +18,7 @@ The lifecycle services output ports define contracts for:
 - **IActiveWorkflowRunRegistry**: In-flight workflow tracking
 - **IProjectManagerService**: Project lifecycle management
 - **ISystemicAnalysisService**: System analysis and diagnostics
+- **IAgentContainerRecoveryService**: Container recovery and cleanup at startup
 
 These ports manage long-running processes and system lifecycle.
 
@@ -317,6 +318,52 @@ class ISystemicAnalysisService(ABC):
         pass
 ```
 
+### IAgentContainerRecoveryService
+
+```python
+class IAgentContainerRecoveryService(ABC):
+    """Container recovery and cleanup at startup.
+    
+    Detects and manages orphaned Docker containers from prior execution sessions,
+    ensuring resources are cleaned up and interrupted work can be resumed.
+    """
+    
+    @abstractmethod
+    async def recover_or_cleanup_containers(self) -> RecoveryResult:
+        """Execute full recovery/cleanup cycle on startup."""
+        pass
+    
+    @abstractmethod
+    async def get_running_agent_containers(self) -> list[ContainerMetadata]:
+        """List running containers with Codetoreum labels."""
+        pass
+    
+    @abstractmethod
+    async def assess_container(self, metadata: ContainerMetadata) -> RecoveryAssessment:
+        """Assess recovery action for a single container."""
+        pass
+    
+    @abstractmethod
+    async def execute_recovery_action(self, assessment: RecoveryAssessment) -> bool:
+        """Execute reconnect or kill action."""
+        pass
+    
+    @abstractmethod
+    async def get_running_repair_cycle_containers(self) -> list[ContainerMetadata]:
+        """List running repair cycle containers using label filtering."""
+        pass
+    
+    @abstractmethod
+    async def assess_repair_cycle_container(self, metadata: ContainerMetadata) -> RecoveryAssessment:
+        """Assess recovery action for a repair cycle container."""
+        pass
+    
+    @abstractmethod
+    async def process_orphaned_repair_results(self) -> int:
+        """Process completed repair cycle results in storage."""
+        pass
+```
+
 ## Methods Summary
 
 | Service | Key Methods | Purpose |
@@ -333,6 +380,7 @@ class ISystemicAnalysisService(ABC):
 | IActiveWorkflowRunRegistry | `register_run()`, `get_active_run()`, `list_active_runs()` | Workflow tracking |
 | IProjectManagerService | `create_project()`, `get_project()`, `update_project()`, `delete_project()` | Project lifecycle |
 | ISystemicAnalysisService | `analyze_system_health()`, `analyze_bottlenecks()`, `generate_diagnostics_report()` | System diagnostics |
+| IAgentContainerRecoveryService | `recover_or_cleanup_containers()`, `assess_container()`, `execute_recovery_action()` | Container recovery |
 
 ## Events Emitted
 
@@ -397,5 +445,16 @@ classDiagram
         +get_active_run(workflow_run_id) WorkflowRunInfo
         +list_active_runs(project_id) list
         +unregister_run(workflow_run_id) None
+    }
+    
+    class IAgentContainerRecoveryService {
+        <<interface>>
+        +recover_or_cleanup_containers() RecoveryResult
+        +get_running_agent_containers() list
+        +assess_container(metadata) RecoveryAssessment
+        +execute_recovery_action(assessment) bool
+        +get_running_repair_cycle_containers() list
+        +assess_repair_cycle_container(metadata) RecoveryAssessment
+        +process_orphaned_repair_results() int
     }
 ```

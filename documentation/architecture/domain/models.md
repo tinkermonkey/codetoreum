@@ -1003,6 +1003,26 @@ erDiagram
         int sla_seconds
         string on_failure_column
     }
+    
+    EXECUTION_STATUS {
+        string id PK
+        string status
+        string description
+    }
+    
+    WORKSPACE_CONTEXT {
+        string id PK
+        string path
+        string name
+        datetime created_at
+    }
+    
+    PROJECT_CONFIG {
+        string id PK
+        string project_id
+        dict config
+        datetime updated_at
+    }
 ```
 
 ### Class Diagram (Key Aggregates)
@@ -1324,6 +1344,257 @@ if not review.can_approve():
 # Once all feedback addressed:
 review.approve()  # Emits ReviewApprovedEvent
 ```
+
+---
+
+## Additional Domain Models
+
+This section documents additional domain models and value objects that support specialized functionality in the system.
+
+### Configuration Models
+
+#### StageTemplate
+
+**File**: `src/codetoreum/domain/workflow_template.py`
+
+Represents the definition template for a workflow stage. Allows configuration of stage-specific settings before instantiation.
+
+**Attributes**:
+- `id` (str): Unique identifier for the stage template
+- `name` (str): Display name of the stage
+- `description` (str): Human-readable description of stage purpose
+- `entry_conditions` (Dict[str, Any]): Conditions that must be met to enter this stage
+- `exit_conditions` (Dict[str, Any]): Conditions that must be met to exit this stage
+- `agents_assigned` (List[str]): Agent IDs that can execute in this stage
+- `timeout_seconds` (Optional[int]): Maximum time allowed in this stage
+- `retry_policy` (Optional[str]): How failures in this stage should be retried
+- `created_at` (datetime): When template was created
+- `updated_at` (datetime): When template was last updated
+
+**Purpose**: Allows workflow architects to define reusable stage templates without hardcoding stage logic.
+
+#### BoardReconciliationConfig
+
+**File**: `src/codetoreum/domain/board_workflow_template.py`
+
+Configuration for how boards should be reconciled with external systems (GitHub Projects, Jira boards, etc.).
+
+**Attributes**:
+- `reconciliation_type` (str): Type of reconciliation (e.g., "board_columns", "card_states")
+- `sync_interval_seconds` (int): How often to sync with external system
+- `conflict_resolution` (str): How to resolve conflicts ("external_wins", "local_wins", "merge")
+- `external_id_mapping` (Dict[str, str]): Mapping of local IDs to external system IDs
+- `ignore_patterns` (List[str]): Patterns for cards/columns to ignore during reconciliation
+- `enabled` (bool): Whether reconciliation is currently enabled
+
+**Purpose**: Controls how the system stays synchronized with external board systems.
+
+### PR Review Cycle Models
+
+#### PRReviewCycleState
+
+**File**: `src/codetoreum/domain/pr_review_cycle_types.py`
+
+Represents the current state of a PR review cycle at a point in time.
+
+**Attributes**:
+- `cycle_id` (str): Unique identifier for this review cycle
+- `pr_id` (str): GitHub PR identifier
+- `current_phase` (str): Current phase name (e.g., "code_review", "verification", "ci_check", "consolidation")
+- `phase_index` (int): Position in phase sequence
+- `cycle_number` (int): Which iteration of review (1, 2, 3, etc.)
+- `findings` (List[Finding]): Issues/findings from current and prior phases
+- `status` (str): Overall status ("in_progress", "approved", "changes_needed", "escalated")
+- `started_at` (datetime): When cycle began
+- `last_updated_at` (datetime): When state last changed
+
+**Purpose**: Tracks the full state of a PR review cycle for resumption and debugging.
+
+#### PRReviewCycleResult
+
+**File**: `src/codetoreum/domain/pr_review_cycle_types.py`
+
+Final result/outcome of a completed PR review cycle.
+
+**Attributes**:
+- `cycle_id` (str): ID of the cycle that produced this result
+- `pr_id` (str): GitHub PR reviewed
+- `final_decision` (str): Final outcome ("approved", "changes_required", "escalated")
+- `total_cycles` (int): Number of review cycles executed
+- `findings_count` (int): Total findings across all phases
+- `critical_findings` (int): Count of critical severity findings
+- `high_findings` (int): Count of high severity findings
+- `review_duration_seconds` (float): Total time spent in review
+- `commits_created` (int): Number of commits during review cycles (from fixing)
+- `completion_timestamp` (datetime): When review cycle completed
+
+**Purpose**: Provides summary of review cycle results for metrics and decision-making.
+
+#### PRReviewOutcome
+
+**File**: `src/codetoreum/domain/pr_review_cycle_types.py`
+
+An individual outcome/finding from one phase of PR review.
+
+**Attributes**:
+- `finding_id` (str): Unique ID for this finding
+- `phase_name` (str): Which phase generated this finding
+- `severity` (str): Severity level ("critical", "high", "medium", "low")
+- `category` (str): Finding category (e.g., "code_smell", "bug", "security", "style")
+- `message` (str): Description of the finding
+- `file_path` (Optional[str]): File where finding occurred
+- `line_number` (Optional[int]): Line number if applicable
+- `suggested_fix` (Optional[str]): Suggested resolution
+
+**Purpose**: Represents individual findings from code review phases.
+
+#### PRReviewPhaseOutput
+
+**File**: `src/codetoreum/domain/pr_review_cycle_types.py`
+
+Output produced by a single phase in the PR review cycle.
+
+**Attributes**:
+- `phase_name` (str): Name of the phase that produced this
+- `phase_index` (int): Position in sequence
+- `outcomes` (List[PRReviewOutcome]): Findings from this phase
+- `agent_id` (str): ID of agent that executed this phase
+- `duration_seconds` (float): Time spent in this phase
+- `status` (str): Phase result ("success", "timeout", "error")
+- `can_proceed_to_next` (bool): Whether next phase can proceed
+- `execution_logs` (Optional[str]): Execution logs from phase
+
+**Purpose**: Encapsulates output from a single review phase for composition into full cycle result.
+
+### Review Cycle Event-Like Models
+
+These models represent key events/state changes in review cycles, providing a structured way to track review progression:
+
+#### ReviewCycleCreated
+
+**File**: `src/codetoreum/domain/review_cycle.py`
+
+Represents initial creation of a review cycle.
+
+**Attributes**:
+- `cycle_id` (str): New review cycle ID
+- `work_item_id` (str): Item under review
+- `created_by` (str): Who initiated the review
+- `reviewers` (List[str]): Reviewer IDs assigned
+- `deadline` (Optional[datetime]): When review should complete
+- `created_at` (datetime): Creation timestamp
+
+**Purpose**: Records creation event for tracking review initiation.
+
+#### ReviewIterationStarted
+
+**File**: `src/codetoreum/domain/review_cycle.py`
+
+Represents start of a new iteration in a review cycle (after changes requested).
+
+**Attributes**:
+- `cycle_id` (str): Review cycle ID
+- `iteration_number` (int): Which iteration (1, 2, 3, etc.)
+- `reason_for_iteration` (str): Why new iteration needed (e.g., "feedback from iteration 1")
+- `started_at` (datetime): When iteration began
+
+**Purpose**: Tracks review cycle iterations for feedback loops.
+
+#### ReviewFeedbackSubmitted
+
+**File**: `src/codetoreum/domain/review_cycle.py`
+
+Represents feedback submission from a reviewer.
+
+**Attributes**:
+- `cycle_id` (str): Review cycle ID
+- `reviewer_id` (str): Who submitted feedback
+- `decision` (str): Review decision ("APPROVED", "CHANGES_REQUESTED", "BLOCKED")
+- `feedback_text` (str): Reviewer's comments
+- `blocking_issues` (List[str]): Issues blocking approval (if any)
+- `submitted_at` (datetime): When feedback was submitted
+
+**Purpose**: Records individual reviewer feedback for aggregation.
+
+#### ReviewCycleApproved
+
+**File**: `src/codetoreum/domain/review_cycle.py`
+
+Terminal state representing a review cycle that has been approved.
+
+**Attributes**:
+- `cycle_id` (str): Approved review cycle ID
+- `approved_by` (str): Who approved (usually orchestrator after aggregating feedback)
+- `total_iterations` (int): Number of iterations completed
+- `approvals_count` (int): Number of reviewers who approved
+- `approved_at` (datetime): When approval occurred
+
+**Purpose**: Marks completion of successful review cycle.
+
+#### ReviewCycleEscalated
+
+**File**: `src/codetoreum/domain/review_cycle.py`
+
+Terminal state representing a review cycle escalated to human intervention.
+
+**Attributes**:
+- `cycle_id` (str): Escalated review cycle ID
+- `escalation_reason` (str): Why escalation was needed
+- `escalated_to` (str): Human or team to handle escalation
+- `escalated_at` (datetime): When escalation occurred
+
+**Purpose**: Records when review cycle cannot progress through normal channels.
+
+### Session Management
+
+#### ConversationalSessionState
+
+**File**: `src/codetoreum/domain/conversational_session.py`
+
+Represents the full state of a multi-turn conversational session between agent and user.
+
+**Attributes**:
+- `session_id` (str): Unique identifier for this session
+- `work_item_id` (str): Work item this session is about
+- `agent_id` (str): Agent engaged in conversation
+- `messages` (List[Message]): All messages in conversation (user + agent)
+- `current_turn` (int): Which turn of conversation (0-based)
+- `context` (Dict[str, Any]): Contextual information for conversation
+- `state` (str): Session state ("active", "paused", "completed", "error")
+- `created_at` (datetime): When session started
+- `last_message_at` (datetime): When last message occurred
+- `timeout_seconds` (Optional[int]): How long before session times out
+- `metadata` (Dict[str, Any]): Additional session metadata
+
+**Purpose**: Maintains complete state for multi-turn agent conversations, enabling pause/resume and history replay.
+
+### User and Security Models
+
+#### APIKey
+
+**File**: `src/codetoreum/domain/user.py`
+
+Represents an API key for external authentication and integration.
+
+**Attributes**:
+- `id` (str): Unique identifier for this key
+- `user_id` (str): Owner of the key
+- `key_hash` (str): One-way hash of the actual key (actual key never stored)
+- `key_prefix` (str): First few characters for identification (e.g., "ctm_abc123...")
+- `name` (str): Human-readable name for this key
+- `scopes` (List[str]): Permissions/scopes this key has access to
+- `created_at` (datetime): When key was created
+- `last_used_at` (Optional[datetime]): When key was last used
+- `expires_at` (Optional[datetime]): When key expires (if applicable)
+- `is_active` (bool): Whether key is currently active
+
+**Purpose**: Enables external systems to authenticate with Codetoreum API securely.
+
+**Invariants**:
+- Actual key value never stored, only hash
+- Keys must have at least one scope
+- Expired keys are automatically deactivated
+- Lost keys cannot be recovered; must be rotated
 
 ---
 
