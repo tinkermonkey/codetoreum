@@ -300,37 +300,46 @@ Workflows define multi-stage pipelines that work items progress through.
 
 ```python
 class WorkflowStatus(Enum):
-    """Status of a workflow instance."""
-    CREATED = "created"
-    IN_PROGRESS = "in_progress"
+    """Status enumeration for workflows."""
+    PENDING = "pending"
+    RUNNING = "running"
+    PAUSED = "paused"
     COMPLETED = "completed"
     FAILED = "failed"
-    PAUSED = "paused"
+    CANCELLED = "cancelled"
 
 @dataclass
 class Workflow:
-    """Workflow instance aggregate root.
+    """Workflow aggregate root.
     
-    Represents a specific workflow applied to a work item.
-    Tracks progress through stages and stage status.
+    Orchestrates execution of work items through pipeline stages.
+    Maintains consistency boundary for workflow execution.
     """
     # Identity
     id: str
-    workflow_template_id: str
     work_item_id: str
+    template_id: str
     project_id: str
     
-    # State
+    # Status
     status: WorkflowStatus
-    current_stage_index: int
     
-    # Stage execution tracking
-    stage_executions: list[AgentExecution]  # One per stage
+    # Stage tracking
+    stages: list[PipelineStage]
+    current_stage_index: int
+    completed_stages: list[str]
+    
+    # Execution tracking
+    started_at: datetime | None
+    completed_at: datetime | None
+    paused_at: datetime | None
+    
+    # Metadata
+    metadata: dict[str, Any]
     
     # Timestamps
     created_at: datetime
-    started_at: datetime | None
-    completed_at: datetime | None
+    updated_at: datetime
 ```
 
 ```python
