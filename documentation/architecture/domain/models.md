@@ -153,13 +153,10 @@ class Agent:
     capabilities: dict[str, AgentCapability]  # skill -> capability
     role_description: str
     
-    # Configuration
+    # Configuration (required fields first)
     model: str                 # LLM model (e.g., "claude-sonnet-4-5")
     timeout_seconds: int
     max_retries: int
-    temperature: float = 0.7   # LLM temperature (0.0-2.0)
-    max_tokens: int = 4096     # Maximum tokens for responses
-    system_prompt: str = ""    # System prompt for the agent
     
     # Constraints (environment requirements)
     requires_docker: bool
@@ -172,11 +169,16 @@ class Agent:
     
     # Metadata
     metadata: dict[str, Any]
-    commit_policy: CommitPolicy  # When to commit file changes
     
-    # Timestamps
+    # Timestamps (NO DEFAULTS - Required fields)
     created_at: datetime
     updated_at: datetime
+    
+    # Configuration with defaults (must come after required fields)
+    temperature: float = 0.7   # LLM temperature (0.0-2.0)
+    max_tokens: int = 4096     # Maximum tokens for responses
+    system_prompt: str = ""    # System prompt for the agent
+    commit_policy: CommitPolicy = CommitPolicy.ON_SUCCESS  # When to commit file changes
 ```
 
 **Key Responsibilities**:
@@ -405,7 +407,6 @@ class ColumnType(Enum):
     MANUAL = "manual"
     AUTOMATED = "automated"
 
-@dataclass
 @dataclass(frozen=True)
 class ColumnTemplate:
     """Template for a board column with workflow semantics.
@@ -512,13 +513,13 @@ class ReviewCycle:
 ```
 
 ```python
-class PRReviewOutcome(Enum):
+class PRReviewOutcome(str, Enum):
     """Outcome of a PR review cycle."""
     ISSUES_FOUND = "issues_found"
     APPROVED = "approved"
     MAX_CYCLES_REACHED = "max_cycles"
 
-class PRReviewStatus(Enum):
+class PRReviewStatus(str, Enum):
     """Status of a PR review cycle."""
     PENDING = "pending"
     PHASE_1_CODE_REVIEW = "phase_1_code_review"
@@ -528,7 +529,7 @@ class PRReviewStatus(Enum):
     COMPLETED = "completed"
     ESCALATED = "escalated"
 
-@dataclass
+@dataclass(frozen=True)
 class PRReviewFinding:
     """Represents a single finding from the PR review."""
     title: str
@@ -537,7 +538,7 @@ class PRReviewFinding:
     phase: str
     context_source: str | None = None
 
-@dataclass
+@dataclass(frozen=True)
 class PRReviewPhaseOutput:
     """Output from a single phase in the PR review cycle."""
     phase_name: str
