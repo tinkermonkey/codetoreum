@@ -1,0 +1,94 @@
+# Ports Layer
+
+The ports layer defines contracts (interfaces) that separate the core domain and application logic from external systems. Ports follow the hexagonal architecture pattern: input ports represent system boundaries for inbound requests, output ports represent system boundaries for outbound dependencies.
+
+## Architecture
+
+Input and output ports are logical separations:
+
+- **Input Ports** (Inbound): Commands, queries, and services that external clients invoke
+- **Output Ports** (Outbound): Contracts for dependencies the system relies on
+
+Both sets use Python Abstract Base Classes (ABCs) with type-annotated methods. Adapters implement these ports to connect to real or mock external systems.
+
+## Port Organization
+
+With 59 total port interfaces (19 input + 40 output), individual files per port would create navigational overhead. Instead, ports are grouped by **functional domain** — related interfaces that address the same problem area.
+
+This strategy:
+- Keeps related interfaces together for context
+- Reduces directory fragmentation
+- Matches the organization of existing reference documentation
+- Creates 6 input files + 7 output files = 13 total port documentation files
+
+### Why This Approach?
+
+- **Cohesion**: Ports within a group typically change together (e.g., review-related interfaces)
+- **Traceability**: Cross-references between related ports are explicit in a single file
+- **Diagrams**: One diagram per group shows port relationships and their implementations
+- **Maintainability**: 13 files is a navigable documentation surface
+
+## Contents
+
+### [input/](./input/)
+**19 input port interfaces** across 6 documentation files:
+
+1. **agent-management.md** — Agent command/query operations
+2. **work-item-management.md** — Work item and task operations
+3. **workflow-management.md** — Workflow definition and execution
+4. **execution-management.md** — Agent execution and orchestration
+5. **configuration.md** — System configuration and metrics
+6. **system-services.md** — Authentication, audit, workspace operations
+
+Each input port documentation file includes:
+- Purpose and responsibility
+- Interface definition (ABC with type signatures)
+- Methods table
+- Events this port's operations may trigger
+- Error contracts
+- Available adapters (mock implementations)
+- Class diagram
+
+### [output/](./output/)
+**40 output port interfaces** across 7 documentation files:
+
+1. **core-system.md** — Fundamental operations (tickets, VCS, containers, LLM)
+2. **board-management.md** — Project board operations
+3. **code-review.md** — Pull request and review lifecycle
+4. **work-coordination.md** — Work item coordination and workflow
+5. **infrastructure-services.md** — Event distribution, storage, metrics, tracing
+6. **domain-services.md** — Bot identity, agent execution, configuration
+7. **lifecycle-services.md** — Repair cycles, container recovery, system analysis
+
+Each output port documentation file includes:
+- Purpose and responsibility
+- Interface definition (ABC with type signatures)
+- Methods table
+- Events operations may trigger
+- Error contracts
+- Production, secondary, and testing adapters
+- Class diagram
+
+## CQRS Pattern
+
+The port interfaces follow Command Query Responsibility Segregation (CQRS) at the port level:
+
+- **Command Ports** (mutation): IWorkItemCommandPort, IWorkflowCommandPort, etc.
+- **Query Ports** (read): IWorkItemQueryPort, IWorkflowQueryPort, etc.
+
+This separation is architectural — it doesn't imply separate physical stores or event logs. Rather, it clarifies intent at the interface boundary.
+
+## Phase Delivery
+
+- **Phase 4**: Complete port documentation for all 19 input and 40 output interfaces
+- **Phase 4+**: Content from existing `COMPREHENSIVE_PORTS_REFERENCE.md` decomposed and enriched into these grouped files
+
+## Adapter Mapping
+
+Each port documentation file includes an "Adapter Implementations" section listing all known adapters that implement that port. Adapters are categorized as:
+
+- **Production**: Real external system implementations (GitHub, Docker, etc.)
+- **Secondary**: Alternative production implementations
+- **Testing/Mock**: In-memory or mock implementations for simulation and unit testing
+
+This mapping ensures that every adapter is documented and traceable to its port(s).
