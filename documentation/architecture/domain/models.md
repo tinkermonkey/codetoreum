@@ -460,10 +460,10 @@ class ReviewStatus(Enum):
     ESCALATED = "escalated"
 
 class ReviewDecision(Enum):
-    """Final decision on a review."""
-    APPROVED = "approved"
-    REJECTED = "rejected"
-    ESCALATED = "escalated"
+    """Reviewer's decision."""
+    APPROVE = "approve"
+    REQUEST_CHANGES = "request_changes"
+    ESCALATE = "escalate"
 
 @dataclass
 class ReviewFeedback:
