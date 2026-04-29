@@ -11,7 +11,7 @@ required_sections:
 required_elements:
   - "mermaid"
   - "python code block"
-applies_to: "documentation/implementations/*.md"
+applies_to: "documentation/implementations/**/*.md"
 ---
 
 # Implementation Documentation Template

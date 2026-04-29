@@ -51,7 +51,7 @@ Required sections for application service documentation:
 - **Key Methods** — Table of method names, parameters, return types
 - **Events Emitted** — Domain events this service publishes
 - **Error Handling** — Error scenarios and recovery
-- **Workflow** — Mermaid diagram of typical workflow (if complex)
+- **Sequence Diagram** — Mermaid diagram of typical workflow (if complex)
 - **Source** — File path and class name
 
 Required elements:
