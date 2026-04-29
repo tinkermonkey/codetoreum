@@ -17,7 +17,7 @@ The Simulation Implementation is a complete, working system that demonstrates al
 
 For comprehensive usage, implementation details, and testing guidance, refer to the authoritative testing framework documentation:
 
-📖 **[`tests/simulation/README.md`](../../tests/simulation/README.md)** — Complete framework reference
+📖 **[`tests/simulation/README.md`](../../../tests/simulation/README.md)** — Complete framework reference
 
 This file covers:
 - Framework overview and key features
