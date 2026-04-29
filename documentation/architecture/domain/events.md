@@ -1,0 +1,1238 @@
+---
+required_sections:
+  - "## Overview"
+  - "## Event Catalog by Bounded Context"
+  - "## Event-Flow Diagrams"
+  - "## Event Sourcing and Replay"
+applies_to: "documentation/architecture/domain/events.md"
+---
+
+# Domain Events Catalog
+
+## Overview
+
+Domain events are immutable records of significant state changes in the system. The system defines 167 event classes across 19 source files, organized into 13 bounded contexts. Events are frozen dataclasses (`@dataclass(frozen=True)`), making them immutable once created—a critical requirement for maintaining an audit trail and enabling event sourcing.
+
+Every significant state change in a domain model emits one or more events:
+1. Domain model method is called
+2. State change is validated against invariants
+3. Domain event is created (immutable)
+4. Event is persisted to event store
+5. Event is published to event bus
+6. Subscribers (event handlers) react to the event
+
+Events enable:
+- **Complete Audit Trail**: Every change is recorded immutably
+- **Event Replay**: Reconstruct past state by replaying events
+- **Decoupled Layers**: Application logic communicates through events, not direct calls
+- **Multiple Subscribers**: One event can trigger multiple handler reactions
+- **Time Travel**: Query system state at any point in time
+
+---
+
+## Event Catalog by Bounded Context
+
+### Work Item Context
+
+**File**: `work_item_events.py` (2 events)
+
+The Work Item context manages the lifecycle of issues, tasks, and features flowing through the system.
+
+```python
+@dataclass(frozen=True)
+class WorkItemCreatedEvent(CodetoreumEvent):
+    """Emitted when a work item is created.
+    
+    Fired by: IWorkItemService.create() → application service
+    Subscribers:
+      - BoardHandler: Add item to board
+      - MetricsHandler: Initialize metrics
+      - AuditHandler: Log creation
+    
+    Attributes:
+        work_item_id: ID of newly created work item
+        project_id: Project containing the work item
+        title: Work item title
+        initial_column: Board column (if on board initially)
+    """
+    work_item_id: str = ""
+    project_id: str = ""
+    title: str = ""
+    initial_column: str | None = None
+
+@dataclass(frozen=True)
+class WorkItemUpdatedEvent(CodetoreumEvent):
+    """Emitted when a work item is updated (title, description, labels, etc.)
+    
+    Fired by: IWorkItemService.update() → application service
+    Subscribers:
+      - BoardHandler: Update board display
+      - NotificationHandler: Notify watchers
+      - AuditHandler: Log change
+    
+    Attributes:
+        work_item_id: Work item being updated
+        project_id: Project containing the work item
+        updated_fields: Dictionary of changed fields
+    """
+    work_item_id: str = ""
+    project_id: str = ""
+    updated_fields: dict[str, Any] = field(default_factory=dict)
+```
+
+**Invariants Enforced**:
+- Work item must have valid ID and title (validated in __post_init__)
+- Project ID must be non-empty
+- Only significant changes emit events (not timestamp-only updates)
+
+---
+
+### Board Context
+
+**File**: `board_events.py` (4 events)
+
+The Board context manages work item positioning on workflow boards (columns) and column SLA monitoring.
+
+```python
+@dataclass(frozen=True)
+class WorkItemColumnChangedEvent(CodetoreumEvent):
+    """Emitted when a work item moves between board columns.
+    
+    Fired by: IWorkflowService.transition_stage() → application → domain
+    Subscribers:
+      - BoardHandler: Update board position via IBoardService
+      - SLAMonitor: Start/stop SLA timers
+      - MetricsHandler: Record column entry time
+      - NotificationHandler: Notify team of progression
+    
+    Attributes:
+        work_item_id: Work item that moved
+        project_id: Project containing the board
+        from_column: Previous column name
+        to_column: New column name
+        timestamp: When move occurred
+    """
+    work_item_id: str = ""
+    project_id: str = ""
+    from_column: str = ""
+    to_column: str = ""
+
+@dataclass(frozen=True)
+class WorkItemPositionChangedEvent(CodetoreumEvent):
+    """Emitted when a work item's position changes within a column (ordering).
+    
+    Fired by: IBoardService.reorder_items() → external system adapter
+    Subscribers:
+      - BoardHandler: Update board display
+      - QueueHandler: Update queue position tracking
+    
+    Attributes:
+        work_item_id: Work item that moved
+        project_id: Project containing the board
+        column: Column where item is located
+        old_position: Previous position index
+        new_position: New position index
+    """
+    work_item_id: str = ""
+    project_id: str = ""
+    column: str = ""
+    old_position: int = 0
+    new_position: int = 0
+
+@dataclass(frozen=True)
+class BoardReconciledEvent(CodetoreumEvent):
+    """Emitted when a board's structure is synchronized with workflow template.
+    
+    Fired by: IBoardService.reconcile() → application service
+    Subscribers:
+      - MetricsHandler: Record reconciliation
+      - AuditHandler: Log board changes
+    
+    Attributes:
+        project_id: Project containing the board
+        board_id: Board being reconciled
+        columns_added: List of new column names
+        columns_removed: List of deleted column names
+        columns_reordered: List of columns with new positions
+    """
+    project_id: str = ""
+    board_id: str = ""
+    columns_added: list[str] = field(default_factory=list)
+    columns_removed: list[str] = field(default_factory=list)
+    columns_reordered: list[str] = field(default_factory=list)
+
+@dataclass(frozen=True)
+class ColumnSLAExceededEvent(CodetoreumEvent):
+    """Emitted when a work item exceeds SLA in a column.
+    
+    Fired by: SLAMonitor task (infrastructure)
+    Subscribers:
+      - NotificationHandler: Alert team
+      - EscalationHandler: Move to escalation column if configured
+      - MetricsHandler: Record SLA breach
+    
+    Attributes:
+        work_item_id: Work item exceeding SLA
+        project_id: Project containing the board
+        column: Column where SLA was exceeded
+        sla_seconds: SLA threshold that was exceeded
+        time_in_column_seconds: Actual time spent in column
+    """
+    work_item_id: str = ""
+    project_id: str = ""
+    column: str = ""
+    sla_seconds: int = 0
+    time_in_column_seconds: int = 0
+```
+
+**Event-Flow Diagram**:
+
+```mermaid
+graph TB
+    subgraph "Work Item Lifecycle"
+        WI["🟦 Work Item<br/>transitions to stage"]
+    end
+    
+    subgraph "Emission"
+        EMIT["📤 WorkItemColumnChangedEvent<br/>(work_item_id, from_col, to_col)"]
+    end
+    
+    subgraph "Event Bus"
+        STORE["💾 Event Store<br/>(Redis) Persist"]
+        PUB["📡 Event Bus<br/>Publish to subscribers"]
+    end
+    
+    subgraph "Event Handlers"
+        H1["🔷 BoardHandler<br/>IBoardService.move_item()"]
+        H2["🔷 SLAMonitor<br/>Start/stop timers"]
+        H3["🔷 MetricsHandler<br/>Record transition time"]
+        H4["🔷 NotificationHandler<br/>Notify team"]
+    end
+    
+    subgraph "External Effects"
+        BOARD["📋 Update board<br/>in GitHub/Jira"]
+        METRIC["📊 Store metric<br/>in Prometheus"]
+        NOTIF["🔔 Send notification<br/>to Slack"]
+    end
+    
+    WI -->|triggers| EMIT
+    EMIT -->|enters| STORE
+    STORE -->|publishes| PUB
+    PUB -->|to| H1
+    PUB -->|to| H2
+    PUB -->|to| H3
+    PUB -->|to| H4
+    H1 -->|calls| BOARD
+    H3 -->|calls| METRIC
+    H4 -->|calls| NOTIF
+```
+
+---
+
+### Execution Context
+
+**File**: `execution_events.py` (1 event)
+
+The Execution context tracks agent execution lifecycle events.
+
+```python
+@dataclass(frozen=True)
+class ExecutionTimedOutEvent(CodetoreumEvent):
+    """Emitted when an agent execution exceeds its timeout.
+    
+    Fired by: ExecutionService timeout monitor (infrastructure)
+    Subscribers:
+      - ExecutionHandler: Mark execution as TIMEOUT, release resources
+      - NotificationHandler: Notify team of timeout
+      - MetricsHandler: Record timeout metric
+      - RepairCycleHandler: Possibly trigger repair cycle
+    
+    Attributes:
+        execution_id: Execution that timed out
+        agent_id: Agent that timed out
+        work_item_id: Work item being executed
+        timeout_seconds: Timeout threshold
+    """
+    execution_id: str = ""
+    agent_id: str = ""
+    work_item_id: str = ""
+    timeout_seconds: int = 0
+```
+
+---
+
+### Review Context
+
+**File**: `review_events.py` (2 events)
+
+The Review context manages code review state and feedback.
+
+```python
+@dataclass(frozen=True)
+class ReviewStatusChangedEvent(CodetoreumEvent):
+    """Emitted when a code review's status changes.
+    
+    Fired by: ICodeReviewService.update_review() → adapter
+    Subscribers:
+      - ReviewHandler: Update review cycle state
+      - NotificationHandler: Notify reviewers
+      - MetricsHandler: Record review timing
+    
+    Attributes:
+        review_id: Review being updated
+        work_item_id: Work item under review
+        old_status: Previous review status
+        new_status: New review status
+    """
+    review_id: str = ""
+    work_item_id: str = ""
+    old_status: str = ""
+    new_status: str = ""
+
+@dataclass(frozen=True)
+class ReviewCommentAddedEvent(CodetoreumEvent):
+    """Emitted when a comment is added to a code review.
+    
+    Fired by: ICodeReviewService.add_comment() → adapter
+    Subscribers:
+      - ReviewHandler: Update review feedback
+      - NotificationHandler: Notify other reviewers
+    
+    Attributes:
+        review_id: Review being commented on
+        comment_id: New comment ID
+        author_id: Who left the comment
+        body: Comment text
+    """
+    review_id: str = ""
+    comment_id: str = ""
+    author_id: str = ""
+    body: str = ""
+```
+
+---
+
+### Review Cycle Context
+
+**File**: `review_cycle_events.py` (7 events)
+
+The Review Cycle context (domain layer) models maker-checker code review cycles with iteration and feedback.
+
+```python
+@dataclass(frozen=True)
+class ReviewCycleStartedEvent(CodetoreumEvent):
+    """Emitted when a new review cycle begins.
+    
+    Fired by: ReviewService.create_review_cycle() → domain
+    Subscribers:
+      - ReviewHandler: Initialize review state
+      - NotificationHandler: Notify reviewers to start
+      - MetricsHandler: Record review start time
+    
+    Attributes:
+        review_cycle_id: New review cycle ID
+        work_item_id: Item under review
+        project_id: Project containing the item
+        required_approvers: Number of approvals needed
+    """
+    review_cycle_id: str = ""
+    work_item_id: str = ""
+    project_id: str = ""
+    required_approvers: int = 1
+
+@dataclass(frozen=True)
+class ReviewCycleIterationCompletedEvent(CodetoreumEvent):
+    """Emitted when a review iteration completes (feedback collected).
+    
+    Fired by: ReviewCycle.complete_iteration() → domain
+    Subscribers:
+      - ReviewHandler: Check if approved/escalate if changes needed
+      - NotificationHandler: Notify author of feedback
+    
+    Attributes:
+        review_cycle_id: Review cycle
+        iteration_number: Which iteration completed (1, 2, etc.)
+        feedback_count: Number of reviewers who provided feedback
+    """
+    review_cycle_id: str = ""
+    iteration_number: int = 0
+    feedback_count: int = 0
+
+@dataclass(frozen=True)
+class ReviewCycleApprovedEvent(CodetoreumEvent):
+    """Emitted when a review cycle is approved (sufficient positive feedback).
+    
+    Fired by: ReviewCycle.approve() → domain
+    Subscribers:
+      - WorkflowHandler: Advance work item to next stage
+      - NotificationHandler: Notify team of approval
+      - MetricsHandler: Record review completion time
+    
+    Attributes:
+        review_cycle_id: Review cycle being approved
+        work_item_id: Item that was approved
+        project_id: Project
+        approvers: List of reviewer IDs who approved
+    """
+    review_cycle_id: str = ""
+    work_item_id: str = ""
+    project_id: str = ""
+    approvers: list[str] = field(default_factory=list)
+
+@dataclass(frozen=True)
+class ReviewCycleEscalatedToHumanEvent(CodetoreumEvent):
+    """Emitted when review cycle is escalated to human for decision.
+    
+    Fired by: ReviewCycle.escalate() → domain
+    Subscribers:
+      - EscalationHandler: Notify human reviewer
+      - MetricsHandler: Record escalation
+    
+    Attributes:
+        review_cycle_id: Review cycle being escalated
+        work_item_id: Item requiring escalation
+        reason: Why escalation occurred
+    """
+    review_cycle_id: str = ""
+    work_item_id: str = ""
+    reason: str = ""
+
+# ... 3 more events (HumanFeedbackReceivedEvent, MaxIterationsReachedEvent)
+```
+
+**Event-Flow Diagram**:
+
+```mermaid
+graph TB
+    subgraph "Review Cycle"
+        START["🟢 ReviewCycleStarted<br/>begin code review"]
+        ITER["🟡 ReviewCycleIteration<br/>collect feedback"]
+        DECISION{"Approved or<br/>Changes needed?"}
+    end
+    
+    subgraph "Event Bus"
+        STORE1["💾 Persist to store"]
+        PUB1["📡 Publish"]
+    end
+    
+    subgraph "Handlers - Approved Path"
+        H_APP["ReviewHandler<br/>Mark as approved"]
+        H_WF["WorkflowHandler<br/>Advance to next stage"]
+        H_NOTIF["NotificationHandler<br/>Notify team"]
+    end
+    
+    subgraph "Handlers - Revision Path"
+        H_ITER["ReviewHandler<br/>Start new iteration"]
+        H_NOTIF2["NotificationHandler<br/>Request changes"]
+    end
+    
+    START -->|emit| STORE1
+    STORE1 -->|publish| PUB1
+    ITER -->|emit| STORE1
+    DECISION -->|APPROVED| H_APP
+    DECISION -->|CHANGES| H_ITER
+    PUB1 -->|to| H_APP
+    PUB1 -->|to| H_WF
+    PUB1 -->|to| H_NOTIF
+    PUB1 -->|to| H_ITER
+    PUB1 -->|to| H_NOTIF2
+```
+
+---
+
+### PR Review Cycle Context
+
+**File**: `pr_review_cycle_events.py` (13 events)
+
+PR Review Cycle handles the multi-phase code review process for pull requests.
+
+```python
+@dataclass(frozen=True)
+class PRReviewCycleStartedEvent(CodetoreumEvent):
+    """Emitted when a PR review cycle begins.
+    
+    Fired by: PRReviewService.start_review_cycle() → application
+    Subscribers:
+      - PRReviewHandler: Initialize PR review state
+      - MetricsHandler: Record start time
+    
+    Attributes:
+        pr_review_cycle_id: New review cycle ID
+        work_item_id: Work item with PR
+        pr_id: Pull request ID
+        project_id: Project
+    """
+    pr_review_cycle_id: str = ""
+    work_item_id: str = ""
+    pr_id: str = ""
+    project_id: str = ""
+
+@dataclass(frozen=True)
+class PRReviewCycleCodeReviewStartedEvent(CodetoreumEvent):
+    """Emitted when code review phase starts (after auto-check phase).
+    
+    Attributes:
+        pr_review_cycle_id: Review cycle
+        pr_id: Pull request
+    """
+    pr_review_cycle_id: str = ""
+    pr_id: str = ""
+
+@dataclass(frozen=True)
+class PRReviewCycleVerificationStartedEvent(CodetoreumEvent):
+    """Emitted when verification phase starts (after code review).
+    
+    Attributes:
+        pr_review_cycle_id: Review cycle
+        pr_id: Pull request
+    """
+    pr_review_cycle_id: str = ""
+    pr_id: str = ""
+
+@dataclass(frozen=True)
+class PRReviewCycleApprovedEvent(CodetoreumEvent):
+    """Emitted when PR review cycle is approved and ready to merge.
+    
+    Fired by: PRReviewCycle.approve() → domain
+    Subscribers:
+      - MergeHandler: Merge PR if auto-merge enabled
+      - NotificationHandler: Notify team
+    
+    Attributes:
+        pr_review_cycle_id: Review cycle
+        work_item_id: Work item
+        pr_id: Pull request
+        auto_merge: Whether to automatically merge
+    """
+    pr_review_cycle_id: str = ""
+    work_item_id: str = ""
+    pr_id: str = ""
+    auto_merge: bool = False
+
+# ... 9 more events (PhaseStarted, CICheckCompleted, IssuesFound, Escalated, etc.)
+```
+
+---
+
+### Repair Cycle Context
+
+**File**: `repair_cycle_events.py` (23 events)
+
+Repair Cycle handles test-fix-verify cycles for failing tests.
+
+```python
+@dataclass(frozen=True)
+class RepairCycleStartedEvent(CodetoreumEvent):
+    """Emitted when a repair cycle begins (fixing failing tests).
+    
+    Fired by: RepairCycleService.start() → application
+    Subscribers:
+      - RepairHandler: Initialize repair state
+      - MetricsHandler: Record start time
+    
+    Attributes:
+        repair_cycle_id: New repair cycle ID
+        work_item_id: Work item with failing tests
+        test_failures: List of failing tests
+    """
+    repair_cycle_id: str = ""
+    work_item_id: str = ""
+    test_failures: list[str] = field(default_factory=list)
+
+@dataclass(frozen=True)
+class RepairCycleTestExecutionStartedEvent(CodetoreumEvent):
+    """Emitted when repair cycle begins test execution.
+    
+    Attributes:
+        repair_cycle_id: Repair cycle
+        test_count: Number of tests to run
+    """
+    repair_cycle_id: str = ""
+    test_count: int = 0
+
+@dataclass(frozen=True)
+class RepairCycleTestExecutionCompletedEvent(CodetoreumEvent):
+    """Emitted when test execution phase completes.
+    
+    Attributes:
+        repair_cycle_id: Repair cycle
+        passed: Number of tests that passed
+        failed: Number of tests that failed
+    """
+    repair_cycle_id: str = ""
+    passed: int = 0
+    failed: int = 0
+
+@dataclass(frozen=True)
+class RepairCycleFixCycleStartedEvent(CodetoreumEvent):
+    """Emitted when fix phase starts (agent fixes failing tests).
+    
+    Attributes:
+        repair_cycle_id: Repair cycle
+        failing_tests: List of tests to fix
+    """
+    repair_cycle_id: str = ""
+    failing_tests: list[str] = field(default_factory=list)
+
+@dataclass(frozen=True)
+class RepairCycleCompletedEvent(CodetoreumEvent):
+    """Emitted when repair cycle completes (all tests passing or max retries).
+    
+    Fired by: RepairCycle.complete() → domain
+    Subscribers:
+      - WorkflowHandler: Advance work item
+      - NotificationHandler: Notify team
+      - MetricsHandler: Record cycle metrics
+    
+    Attributes:
+        repair_cycle_id: Completed repair cycle
+        work_item_id: Work item
+        success: Whether all tests now pass
+        iterations: Number of fix attempts
+    """
+    repair_cycle_id: str = ""
+    work_item_id: str = ""
+    success: bool = False
+    iterations: int = 0
+
+# ... 18 more events (FileFixStarted, WarningReviewCompleted, Resumed, CheckpointFailed, etc.)
+```
+
+**Event-Flow Diagram**:
+
+```mermaid
+graph TB
+    subgraph "Test Execution"
+        TE["🟦 Test Execution<br/>run tests"]
+        TEC["🟦 Tests Complete<br/>some fail"]
+    end
+    
+    subgraph "Repair Cycle"
+        RCS["🟡 RepairCycleStarted<br/>begin fixing tests"]
+        TES["🟢 TestExecutionStarted"]
+        TEC2["🟠 TestExecutionCompleted<br/>record results"]
+        FIX["🟡 FixCycleStarted<br/>agent fixes code"]
+        DECISION{"All tests<br/>passing?"}
+        RCC["🟢 RepairCycleCompleted"]
+    end
+    
+    subgraph "Event Bus"
+        STORE2["💾 Event Store"]
+    end
+    
+    subgraph "Handlers"
+        REP_H["RepairHandler<br/>Update cycle state"]
+        METRIC_H["MetricsHandler<br/>Record cycle time"]
+        WF_H["WorkflowHandler<br/>Advance work item"]
+    end
+    
+    TE -->|fail| RCS
+    RCS -->|emit| STORE2
+    RCS -->|start| TES
+    TES -->|run| TEC2
+    TEC2 -->|emit| STORE2
+    TEC2 -->|parse| DECISION
+    DECISION -->|fails| FIX
+    DECISION -->|passes| RCC
+    FIX -->|retry| TES
+    RCC -->|emit| STORE2
+    STORE2 -->|publish| REP_H
+    STORE2 -->|publish| METRIC_H
+    STORE2 -->|publish| WF_H
+```
+
+---
+
+### Container Context
+
+**File**: `container_events.py` (1 event)
+
+The Container context tracks agent container execution.
+
+```python
+@dataclass(frozen=True)
+class ContainerExecutionCompletedEvent(CodetoreumEvent):
+    """Emitted when a container execution completes.
+    
+    Fired by: DockerContainerAdapter → adapter
+    Subscribers:
+      - ExecutionHandler: Mark execution as COMPLETED
+      - WorkspaceHandler: Clean up workspace
+    
+    Attributes:
+        execution_id: Execution that completed
+        container_id: Container that ran
+        exit_code: Process exit code (0 = success)
+        output: Container stdout
+        error: Container stderr
+    """
+    execution_id: str = ""
+    container_id: str = ""
+    exit_code: int = 0
+    output: str = ""
+    error: str = ""
+```
+
+---
+
+### Container Recovery Context
+
+**File**: `container_recovery_events.py` (3 events)
+
+Container Recovery handles container failure and recovery.
+
+```python
+@dataclass(frozen=True)
+class ContainerRecoveredEvent(CodetoreumEvent):
+    """Emitted when a failed container is successfully recovered.
+    
+    Attributes:
+        execution_id: Execution being recovered
+        recovery_method: How it was recovered ("restart", "rebuild", etc.)
+    """
+    execution_id: str = ""
+    recovery_method: str = ""
+
+@dataclass(frozen=True)
+class ContainerKilledEvent(CodetoreumEvent):
+    """Emitted when a container is forcibly killed (recovery failed).
+    
+    Attributes:
+        execution_id: Execution that failed
+        reason: Why container was killed
+    """
+    execution_id: str = ""
+    reason: str = ""
+
+# ... 1 more event (ContainerRecoveryCompletedEvent)
+```
+
+---
+
+### Lock Context
+
+**File**: `lock_events.py` (7 events)
+
+The Lock context manages pipeline locks for coordinating work item progression.
+
+```python
+@dataclass(frozen=True)
+class LockAcquiredEvent(CodetoreumEvent):
+    """Emitted when a pipeline lock is acquired.
+    
+    Fired by: IPipelineLockService.acquire() → adapter
+    Subscribers:
+      - LockHandler: Update lock state
+      - MetricsHandler: Track lock acquisition time
+    
+    Attributes:
+        lock_id: Lock that was acquired
+        work_item_id: Work item holding lock
+        acquired_by: Agent or user acquiring lock
+    """
+    lock_id: str = ""
+    work_item_id: str = ""
+    acquired_by: str = ""
+
+@dataclass(frozen=True)
+class LockReleasedEvent(CodetoreumEvent):
+    """Emitted when a pipeline lock is released.
+    
+    Fired by: IPipelineLockService.release() → adapter
+    Subscribers:
+      - LockHandler: Free next work item to acquire lock
+      - QueueHandler: Dequeue next work item
+    
+    Attributes:
+        lock_id: Lock that was released
+        released_by: Agent or user releasing lock
+    """
+    lock_id: str = ""
+    released_by: str = ""
+
+@dataclass(frozen=True)
+class StaleLockDetectedEvent(CodetoreumEvent):
+    """Emitted when a lock holder stops responding.
+    
+    Attributes:
+        lock_id: Stale lock ID
+        held_by: Who is holding the lock
+        held_duration_seconds: How long lock has been held
+    """
+    lock_id: str = ""
+    held_by: str = ""
+    held_duration_seconds: int = 0
+
+# ... 4 more events (PipelineLockAcquired, PipelineLockReleased, LockStuck, WorkItemQueued)
+```
+
+---
+
+### Repository Context
+
+**File**: `repository_events.py` (4 events)
+
+The Repository context tracks git operations.
+
+```python
+@dataclass(frozen=True)
+class CommitCreatedEvent(CodetoreumEvent):
+    """Emitted when a commit is created.
+    
+    Fired by: IRepositoryService.commit() → adapter
+    Subscribers:
+      - AuditHandler: Log commit
+      - MetricsHandler: Track commits
+    
+    Attributes:
+        work_item_id: Work item being modified
+        commit_id: Git commit SHA
+        message: Commit message
+    """
+    work_item_id: str = ""
+    commit_id: str = ""
+    message: str = ""
+
+@dataclass(frozen=True)
+class BranchCreatedEvent(CodetoreumEvent):
+    """Emitted when a branch is created.
+    
+    Attributes:
+        work_item_id: Work item with new branch
+        branch_name: Name of created branch
+    """
+    work_item_id: str = ""
+    branch_name: str = ""
+
+# ... 2 more events (BranchPushed, FilesStagedEvent)
+```
+
+---
+
+### CI Pipeline Context
+
+**File**: `ci_pipeline_events.py` (3 events)
+
+CI Pipeline tracks continuous integration pipeline execution.
+
+```python
+@dataclass(frozen=True)
+class CIPipelineStatusCheckedEvent(CodetoreumEvent):
+    """Emitted when CI pipeline status is checked.
+    
+    Attributes:
+        work_item_id: Work item with CI pipeline
+        pipeline_id: CI pipeline ID
+        status: Current status (pending, running, success, failure)
+    """
+    work_item_id: str = ""
+    pipeline_id: str = ""
+    status: str = ""
+
+@dataclass(frozen=True)
+class CIRunStartedEvent(CodetoreumEvent):
+    """Emitted when a CI run starts.
+    
+    Attributes:
+        work_item_id: Work item
+        run_id: CI run ID
+    """
+    work_item_id: str = ""
+    run_id: str = ""
+
+@dataclass(frozen=True)
+class CIRunCompletedEvent(CodetoreumEvent):
+    """Emitted when a CI run completes.
+    
+    Attributes:
+        work_item_id: Work item
+        run_id: CI run ID
+        success: Whether CI passed
+    """
+    work_item_id: str = ""
+    run_id: str = ""
+    success: bool = False
+```
+
+---
+
+### Discussion Context
+
+**File**: `discussion_events.py` (8 events)
+
+Discussion tracks comments and conversational feedback loops on work items.
+
+```python
+@dataclass(frozen=True)
+class CommentPostedEvent(CodetoreumEvent):
+    """Emitted when a comment is posted on a work item.
+    
+    Fired by: IDiscussionAdapter.post_comment() → adapter
+    Subscribers:
+      - DiscussionHandler: Update discussion thread
+      - NotificationHandler: Notify mentioned users
+    
+    Attributes:
+        work_item_id: Work item receiving comment
+        comment_id: New comment ID
+        author_id: Who posted comment
+        body: Comment text
+    """
+    work_item_id: str = ""
+    comment_id: str = ""
+    author_id: str = ""
+    body: str = ""
+
+@dataclass(frozen=True)
+class CommentNeedsResponseEvent(CodetoreumEvent):
+    """Emitted when a comment requires agent response.
+    
+    Fired by: DiscussionAdapter detects comment mentioning agent
+    Subscribers:
+      - DiscussionHandler: Queue response task
+    
+    Attributes:
+        work_item_id: Work item with comment
+        comment_id: Comment requiring response
+        mentioned_agent_id: Agent that needs to respond
+    """
+    work_item_id: str = ""
+    comment_id: str = ""
+    mentioned_agent_id: str = ""
+
+@dataclass(frozen=True)
+class ConversationalLoopStartedEvent(CodetoreumEvent):
+    """Emitted when a multi-turn conversational loop begins.
+    
+    Attributes:
+        work_item_id: Work item
+        session_id: Conversation session ID
+    """
+    work_item_id: str = ""
+    session_id: str = ""
+
+# ... 5 more events (AgentResponsePosted, FeedbackListeningStarted, etc.)
+```
+
+---
+
+### Project Context
+
+**File**: `project_events.py` (5 events)
+
+Project context tracks project-level operations.
+
+```python
+@dataclass(frozen=True)
+class ProjectClonedEvent(CodetoreumEvent):
+    """Emitted when a project repository is successfully cloned.
+    
+    Attributes:
+        project_id: Project being cloned
+        repository_url: Cloned repo URL
+    """
+    project_id: str = ""
+    repository_url: str = ""
+
+@dataclass(frozen=True)
+class ProjectEnabledEvent(CodetoreumEvent):
+    """Emitted when a project is enabled for orchestration.
+    
+    Attributes:
+        project_id: Project being enabled
+    """
+    project_id: str = ""
+
+# ... 3 more events (ProjectDisabled, ProjectCloneFailed, OrchestrationCycleCompleted)
+```
+
+---
+
+### Queue Context
+
+**File**: `queue_events.py` (4 events)
+
+Queue context tracks work item queue management.
+
+```python
+@dataclass(frozen=True)
+class QueueItemAddedEvent(CodetoreumEvent):
+    """Emitted when a work item is added to execution queue.
+    
+    Attributes:
+        work_item_id: Work item queued
+        queue_position: Position in queue
+    """
+    work_item_id: str = ""
+    queue_position: int = 0
+
+@dataclass(frozen=True)
+class QueuePositionChangedEvent(CodetoreumEvent):
+    """Emitted when a work item's queue position changes.
+    
+    Attributes:
+        work_item_id: Work item in queue
+        old_position: Previous position
+        new_position: New position
+    """
+    work_item_id: str = ""
+    old_position: int = 0
+    new_position: int = 0
+
+# ... 2 more events (QueueItemRemoved, WorkItemDeadLetterQueued)
+```
+
+---
+
+### Branch Context
+
+**File**: `branch_events.py` (3 events)
+
+Branch context tracks branch resolution and reuse.
+
+```python
+@dataclass(frozen=True)
+class BranchResolutionCreatedEvent(CodetoreumEvent):
+    """Emitted when a branch resolution is created.
+    
+    Attributes:
+        work_item_id: Work item
+        branch_name: Branch name
+    """
+    work_item_id: str = ""
+    branch_name: str = ""
+
+@dataclass(frozen=True)
+class BranchReusedEvent(CodetoreumEvent):
+    """Emitted when an existing branch is reused for a work item.
+    
+    Attributes:
+        work_item_id: Work item
+        branch_name: Reused branch name
+    """
+    work_item_id: str = ""
+    branch_name: str = ""
+
+@dataclass(frozen=True)
+class BranchResolvedEvent(CodetoreumEvent):
+    """Emitted when a branch is resolved and ready for use.
+    
+    Attributes:
+        work_item_id: Work item
+        branch_name: Branch name
+    """
+    work_item_id: str = ""
+    branch_name: str = ""
+```
+
+---
+
+### Storage Context
+
+**File**: `storage_events.py` (2 events)
+
+Storage context tracks artifact uploads and deletions.
+
+```python
+@dataclass(frozen=True)
+class ArtifactUploadedEvent(CodetoreumEvent):
+    """Emitted when an artifact is uploaded to storage.
+    
+    Attributes:
+        artifact_id: Artifact ID
+        work_item_id: Associated work item
+        filename: Uploaded filename
+        size_bytes: File size
+    """
+    artifact_id: str = ""
+    work_item_id: str = ""
+    filename: str = ""
+    size_bytes: int = 0
+
+@dataclass(frozen=True)
+class ArtifactDeletedEvent(CodetoreumEvent):
+    """Emitted when an artifact is deleted.
+    
+    Attributes:
+        artifact_id: Artifact being deleted
+        work_item_id: Associated work item
+    """
+    artifact_id: str = ""
+    work_item_id: str = ""
+```
+
+---
+
+### Adapter Context
+
+**File**: `adapter_events.py` (1 event base class)
+
+The Adapter context provides the base event class.
+
+```python
+@dataclass(frozen=True)
+class CodetoreumEvent:
+    """Base class for all domain events.
+    
+    Immutable event base providing:
+    - Automatic timestamp (UTC)
+    - Unique event ID
+    - Source system identifier
+    - Serialization support
+    
+    All domain events inherit from this class and are frozen
+    to maintain immutability for event sourcing.
+    """
+    type: str = ""  # Event type identifier (e.g., "workitem.created")
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    event_id: str = field(default_factory=lambda: str(uuid4()))
+    source: str = ""  # Source system (e.g., "github", "codetoreum")
+    correlation_id: str | None = None  # Link related events
+```
+
+---
+
+## Event-Flow Diagrams
+
+### Work Item → Board → Execution Flow
+
+```mermaid
+graph LR
+    subgraph "Domain Layer"
+        WI["WorkItem<br/>aggregate"]
+        WI -->|create| WI_CREATED["WorkItemCreatedEvent"]
+        WI -->|transition_stage| WI_STAGE["WorkItemStageUpdatedEvent"]
+    end
+    
+    subgraph "Event Bus"
+        BUS["Event Bus<br/>(Redis)")
+        WI_CREATED -->|emit| BUS
+        WI_STAGE -->|emit| BUS
+    end
+    
+    subgraph "Event Handlers"
+        BH["📋 BoardHandler"]
+        WH["🔄 WorkflowHandler"]
+        EH["⚙️ ExecutionHandler"]
+        MH["📊 MetricsHandler"]
+    end
+    
+    subgraph "External Systems"
+        BOARD["GitHub Board"]
+        EXEC["Agent Executor"]
+        METRICS["Prometheus"]
+    end
+    
+    BUS -->|WorkItemCreatedEvent| BH
+    BUS -->|WorkItemStageUpdatedEvent| WH
+    BUS -->|WorkItemStageUpdatedEvent| EH
+    BUS -->|WorkItemStageUpdatedEvent| MH
+    
+    BH -->|IBoardService| BOARD
+    EH -->|IContainer| EXEC
+    MH -->|IMetrics| METRICS
+```
+
+### Error → Repair Cycle → Resolution Flow
+
+```mermaid
+graph TB
+    subgraph "Execution Failure"
+        TEST["Tests run"]
+        FAIL["Tests fail"]
+        FAIL -->|ExecutionFailedEvent| REPAIR["RepairCycleStartedEvent"]
+    end
+    
+    subgraph "Repair Cycle"
+        RC["RepairCycle<br/>aggregate"]
+        RC -->|test execution| TEST_START["RepairCycleTestExecutionStartedEvent"]
+        TEST_START -->|emit| TEST_COMPLETE["RepairCycleTestExecutionCompletedEvent"]
+        TEST_COMPLETE -->|parse results| DECISION{"All pass?"}
+        DECISION -->|no| FIX_START["RepairCycleFixCycleStartedEvent"]
+        FIX_START -->|agent fixes| FIX_COMPLETE["RepairCycleFileFixCompletedEvent"]
+        FIX_COMPLETE -->|retry tests| TEST_START
+        DECISION -->|yes| RC_COMPLETE["RepairCycleCompletedEvent"]
+    end
+    
+    subgraph "Event Bus & Handlers"
+        RC_COMPLETE -->|emit & publish| HANDLER["WorkflowHandler"]
+        HANDLER -->|advance work item| NEXT_STAGE["Next workflow stage"]
+    end
+```
+
+---
+
+## Event Sourcing and Replay
+
+Every event is persisted to the **Event Store** (Redis, optionally PostgreSQL). This enables:
+
+### 1. Complete Audit Trail
+- Every state change is recorded as an immutable fact
+- Timestamps and correlation IDs enable tracing
+- No information is lost
+
+### 2. Event Replay
+- Load a work item's initial state
+- Replay all events up to a point in time
+- Reconstruct exact state without explicit state storage
+- Enables temporal queries: "what was the state at time X?"
+
+### 3. Debugging
+- Event stream provides complete history of actions
+- Identify exactly when and why state changed
+- Replay events in test environment to reproduce issues
+
+### 4. Time-Travel Queries
+- Query: "How many work items were in progress at 2pm yesterday?"
+- Replay all events up to 2pm yesterday
+- Count in-progress items at that point in time
+
+**Example: Event Replay**
+
+```
+1. Load work item WI-123 (empty aggregate)
+2. Replay events in order:
+   - WorkItemCreatedEvent(id=WI-123, status=NEW)
+     → WorkItem state: {status: NEW}
+   - AgentAssignedEvent(agent_id=A1)
+     → WorkItem state: {status: NEW, assigned_agent: A1}
+   - WorkItemStartedEvent()
+     → WorkItem state: {status: IN_PROGRESS, assigned_agent: A1}
+   - WorkItemStageUpdatedEvent(new_stage=REVIEW)
+     → WorkItem state: {status: UNDER_REVIEW, current_stage: REVIEW}
+3. Reconstructed state is now current without loading from DB
+```
+
+---
+
+## Event Immutability and Integrity
+
+All domain events are **frozen dataclasses** (`@dataclass(frozen=True)`):
+
+```python
+@dataclass(frozen=True)
+class WorkItemCreatedEvent(CodetoreumEvent):
+    work_item_id: str = ""
+    
+# ✅ Create event
+event = WorkItemCreatedEvent(work_item_id="WI-123")
+
+# ❌ Attempting to modify raises FrozenInstanceError
+event.work_item_id = "WI-456"  # Raises: FrozenInstanceError
+
+# This immutability is essential because:
+# - Events are facts that happened in the past
+# - Facts cannot be changed retroactively
+# - Event sourcing relies on immutable history
+# - Audit trails must be tamper-proof
+```
+
+---
+
+## Summary
+
+The 167 domain events across 13 bounded contexts form a complete audit trail of system behavior. Each event represents an immutable fact about state changes. Event handlers subscribe to events and trigger reactions—calling output ports, updating read models, or emitting new events.
+
+Events enable decoupled communication between layers, complete observability through event sourcing, and the ability to replay history for debugging or temporal queries.
+
+See `documentation/architecture/domain/models.md` for the domain models that emit these events.
