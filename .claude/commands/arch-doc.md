@@ -111,13 +111,13 @@ User: /arch-doc generate IPipelineLockService
 
 Agent:
   1. Introspects src/codetoreum/ports/output/pipeline_lock_service.py
-  2. Loads documentation/templates/port-documentation-template.md
+  2. Loads documentation/templates/port-template.md
   3. Generates documentation with:
      - Purpose section (from interface docstring)
      - Method Signatures (from @abstractmethod)
      - Adapter Implementations (skeleton)
      - Usage Examples (from docstrings)
-  4. Writes to documentation/01_design/ports/output/pipeline-lock-service.md
+  4. Writes to documentation/architecture/ports/output/pipeline-lock-service.md
   5. Commits: "Generate documentation for IPipelineLockService port"
 ```
 
@@ -166,7 +166,7 @@ Agent:
   2. Traces event types and handler chains
   3. Generates Mermaid flowchart showing:
      DomainEvent → EventBus → Handlers → SideEffects
-  4. Adds to documentation/01_design/infrastructure/event-sourcing.md
+  4. Adds to documentation/architecture/infrastructure/event-sourcing.md
   5. Commits: "Add event flow diagram to event sourcing documentation"
 ```
 
@@ -180,7 +180,7 @@ Agent:
      - Ports: IBoardService, ICodeReviewService, IPipelineLockService, ...
      - Adapters: GitHubBoardAdapter, MockBoardAdapter, ...
      - Events: WorkItemColumnChangedEvent, ReviewStatusChangedEvent, ...
-  2. Cross-references with documentation/01_design/
+  2. Cross-references with documentation/architecture/
   3. Generates structured report:
      
      DOCUMENTATION COVERAGE REPORT
@@ -224,7 +224,7 @@ The architecture documentation agent activates automatically when:
   - `src/codetoreum/adapters/`
   - `src/codetoreum/domain/`
   - `src/codetoreum/application/`
-  - `documentation/01_design/`
+  - `documentation/architecture/`
 
 ## Tips
 
@@ -238,5 +238,5 @@ The architecture documentation agent activates automatically when:
 
 - Agent definition: `.claude/agents/arch-doc.md`
 - Skill validation: `.claude/skills/arch-doc-validator/SKILL.md`
-- Design docs: `documentation/01_design/`
+- Design docs: `documentation/architecture/`
 - Templates: `documentation/templates/`

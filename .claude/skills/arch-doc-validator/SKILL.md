@@ -10,7 +10,7 @@ This skill activates automatically when files are modified in:
 - `src/codetoreum/adapters/**/*.py` — Adapter implementations
 - `src/codetoreum/domain/events/*.py` — Domain events
 - `src/codetoreum/application/**/*.py` — Application services
-- `documentation/01_design/**/*.md` — Architecture documentation files
+- `documentation/architecture/**/*.md` — Architecture documentation files
 
 The skill also activates when users mention:
 - "validation", "coverage", "undocumented", "documentation gap"
@@ -25,11 +25,11 @@ The skill also activates when users mention:
 
 **Process:**
 1. Find all port interfaces in `src/codetoreum/ports/`
-2. Match to documentation in `documentation/01_design/ports/`
+2. Match to documentation in `documentation/architecture/ports/`
 3. For each undocumented port:
    - Extract class name, methods, docstring
    - Report missing documentation
-   - Suggest location: `documentation/01_design/ports/output/<port-name>.md`
+   - Suggest location: `documentation/architecture/ports/output/<port-name>.md`
 
 **Report Format:**
 ```
@@ -37,7 +37,7 @@ The skill also activates when users mention:
    Missing: IPipelineLockService
    Missing: IEventEmitter
    Location: src/codetoreum/ports/output/
-   Suggested docs: documentation/01_design/ports/output/
+   Suggested docs: documentation/architecture/ports/output/
 ```
 
 ### Check 2: Adapter Implementation Coverage
@@ -48,7 +48,7 @@ The skill also activates when users mention:
 1. Find all adapter classes in `src/codetoreum/adapters/`
 2. Match to references in:
    - Port documentation files
-   - Implementation tier documentation (`documentation/01_design/ports/implementation/`)
+   - Implementation tier documentation (`documentation/architecture/ports/`)
    - Adapter reference files
 3. For each undocumented adapter:
    - Extract class name, port it implements, file location
@@ -71,7 +71,7 @@ The skill also activates when users mention:
 
 **Process:**
 1. Find all domain event classes in `src/codetoreum/domain/events/`
-2. Match to entries in `documentation/01_design/events/domain-events-catalog.md`
+2. Match to entries in `documentation/architecture/domain/events.md`
 3. For each undocumented event:
    - Extract class name, fields, triggers
    - Report missing catalog entry
@@ -82,7 +82,7 @@ The skill also activates when users mention:
 ❌ Event Coverage (1 missing)
    Missing: PipelineLockAcquiredEvent
    Location: src/codetoreum/domain/events/
-   Suggested: Add entry to documentation/01_design/events/domain-events-catalog.md
+   Suggested: Add entry to documentation/architecture/domain/events.md
    
    Suggested format:
    ### PipelineLockAcquiredEvent
@@ -106,13 +106,13 @@ The skill also activates when users mention:
 **Report Format:**
 ```
 ⚠️  Template Compliance (8 missing sections)
-   documentation/01_design/ports/output/board-service.md
+   documentation/architecture/ports/output/board-service.md
      Missing: Examples section
-     Required by: port-documentation-template.md
+     Required by: port-template.md
    
-   documentation/01_design/adapters/github-board-adapter.md
+   documentation/architecture/adapters/github-board-adapter.md
      Missing: Configuration section
-     Required by: adapter-implementation-template.md
+     Required by: adapter-template.md
 ```
 
 ### Check 5: Required Mermaid Diagrams
@@ -128,11 +128,11 @@ The skill also activates when users mention:
 **Report Format:**
 ```
 🔍 Diagram Coverage (3 missing)
-   documentation/01_design/infrastructure/event-sourcing.md
+   documentation/architecture/infrastructure/event-sourcing.md
      Missing: Event flow diagram
      Required by: infrastructure-template.md
    
-   documentation/01_design/ports/implementation/
+   documentation/architecture/ports/
      Missing: Port interaction diagram
      Missing: Adapter hierarchy diagram
 ```
@@ -304,7 +304,7 @@ Should I:
 ### Activation 3: Documentation File Modified
 
 ```
-Trigger: Modified documentation/01_design/ports/output/board-service.md
+Trigger: Modified documentation/architecture/ports/output/board-service.md
 
 Skill activates automatically:
   ✅ Check 1: Port Coverage → No changes
@@ -315,8 +315,8 @@ Skill activates automatically:
 
 COMPLIANCE REPORT
 =================
-File: documentation/01_design/ports/output/board-service.md
-Template: port-documentation-template.md
+File: documentation/architecture/ports/output/board-service.md
+Template: port-template.md
 
 Required sections:
   ✅ Purpose
@@ -391,7 +391,7 @@ The skill automatically activates when `src/codetoreum/application/` changes:
 - Check 4: Validates service documentation compliance
 
 ### When Modifying Documentation
-The skill automatically activates when `documentation/01_design/` changes:
+The skill automatically activates when `documentation/architecture/` changes:
 - Check 4: Validates template section compliance
 - Check 5: Validates diagram presence
 
@@ -406,7 +406,7 @@ The skill automatically activates when `documentation/01_design/` changes:
 
 The skill operates with these settings:
 
-- **Activation scope**: `src/codetoreum/`, `documentation/01_design/`
+- **Activation scope**: `src/codetoreum/`, `documentation/architecture/`
 - **Report style**: Structured with categories and counts
 - **Autonomy default**: HIGH (read-only validation)
 - **Output format**: Markdown with emoji indicators

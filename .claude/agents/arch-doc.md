@@ -90,9 +90,9 @@ When the user invokes you, detect their intent and route to the appropriate work
    - Services: `src/codetoreum/application/**/*.py`
 
 2. Match to templates:
-   - Port docs: `documentation/templates/port-documentation-template.md`
-   - Adapter docs: `documentation/templates/adapter-implementation-template.md`
-   - Event docs: `documentation/templates/event-documentation-template.md`
+   - Port docs: `documentation/templates/port-template.md`
+   - Adapter docs: `documentation/templates/adapter-template.md`
+   - Event docs: `documentation/templates/domain-template.md`
 
 3. Generate stubs with HIGH autonomy:
    - Extract docstrings and type hints
@@ -186,10 +186,10 @@ Pattern: Functions decorated with `@event_bus.on()` or subscribed
 
 ## Template Reference
 
-- Port Interface: `documentation/templates/port-documentation-template.md`
-- Adapter Implementation: `documentation/templates/adapter-implementation-template.md`
-- Event Documentation: `documentation/templates/event-documentation-template.md`
-- Service Documentation: `documentation/templates/service-documentation-template.md`
+- Port Interface: `documentation/templates/port-template.md`
+- Adapter Implementation: `documentation/templates/adapter-template.md`
+- Event Documentation: `documentation/templates/domain-template.md`
+- Service Documentation: `documentation/templates/service-template.md`
 
 ## Self-Contained Execution Requirements
 
