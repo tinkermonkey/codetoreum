@@ -143,6 +143,7 @@ class IPipelineLockService(ABC):
 | Adapter Class | Type | File Path | Notes |
 |---|---|---|---|
 | `GitHubBoardAdapter` | Production | `src/codetoreum/adapters/secondary/github_board_adapter.py` | GitHub Projects v2 implementation |
+| `MockBoardAdapter` | Testing | `src/codetoreum/adapters/testing/mock_board_adapter.py` | Mock board adapter for testing IBoardService |
 | `InMemoryPipelineLockService` | Testing | `src/codetoreum/adapters/secondary/in_memory_pipeline_lock_service.py` | In-memory lock service for testing |
 | `InMemoryQueueLockService` | Testing | `src/codetoreum/adapters/secondary/in_memory_queue_lock_service.py` | In-memory queue lock for testing |
 

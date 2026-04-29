@@ -357,7 +357,7 @@ class IRepository(ABC):
 | `get_model_info()` | — | `ModelInfo` | Get model capabilities |
 | `stream_response()` | `prompt: str` | `AsyncIterator[str]` | Stream response tokens |
 
-### IRepository Methods (16 methods)
+### IRepository Methods (17 methods)
 
 | Method | Parameters | Return Type | Description |
 |---|---|---|---|

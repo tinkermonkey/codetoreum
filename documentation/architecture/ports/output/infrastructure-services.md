@@ -319,6 +319,7 @@ These ports do not directly emit events; they propagate events through infrastru
 | `ElasticsearchEventStore` | Production | `src/codetoreum/adapters/secondary/elasticsearch_event_store.py` | Elasticsearch-based event store |
 | `PrometheusMetricsAdapter` | Production | `src/codetoreum/adapters/secondary/prometheus_metrics_adapter.py` | Prometheus metrics collection |
 | `RedisPubSubAdapter` | Production | `src/codetoreum/adapters/secondary/redis_pubsub_adapter.py` | Redis pub/sub message broker |
+| `InMemoryEventStore` | Testing | `src/codetoreum/adapters/testing/in_memory_event_store.py` | In-memory event store for testing |
 | `MockEventEmitter` | Testing | `src/codetoreum/adapters/secondary/mock_event_emitter.py` | Mock event emitter for testing |
 | `FailedEventStoreAdapter` | Testing | `src/codetoreum/adapters/secondary/failed_event_store_adapter.py` | Dead letter queue adapter |
 
@@ -334,10 +335,19 @@ classDiagram
     
     class IEventStore {
         <<interface>>
-        +append(aggregate_id, event) None
-        +load_events(aggregate_id) list
-        +replay(aggregate_id, to_version) AggregateState
-        +get_event(aggregate_id, version) DomainEvent
+        +append(stream_id, events, expected_version) None
+        +get_events(stream_id, from_version, to_version) list
+        +get_events_since(since, stream_id) list
+        +replay_events(stream_id, from_version, to_version) AsyncIterator
+        +get_stream_version(stream_id) int
+        +stream_exists(stream_id) bool
+        +save_snapshot(stream_id, version, snapshot) None
+        +get_latest_snapshot(stream_id) dict
+        +delete_stream(stream_id) None
+        +get_all_stream_ids(aggregate_type) list
+        +get_events_by_type(event_type, since, limit) list
+        +get_events_by_correlation_id(correlation_id) list
+        +get_statistics() dict
     }
     
     class IStorage {

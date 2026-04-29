@@ -327,7 +327,7 @@ class INotifier(ABC):
 | IAgentExecutor | `execute()`, `validate_execution_context()`, `get_execution_logs()` | Agent execution |
 | IAgentRepository | `save_agent()`, `get_agent()`, `list_agents()`, `delete_agent()` | Agent persistence |
 | IIdentityService | `is_bot()`, `get_user_info()`, `is_authorized()` | Identity & auth |
-| INotifier (13 methods) | `send()`, `send_rich()`, `send_batch()`, `send_template()`, `get_delivery_status()`, `register_template()`, `health_check()` | Multi-channel notifications |
+| INotifier (14 methods) | `send()`, `send_rich()`, `send_batch()`, `send_template()`, `get_delivery_status()`, `register_template()`, `health_check()` | Multi-channel notifications |
 
 ## Events Emitted
 
