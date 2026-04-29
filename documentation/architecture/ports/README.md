@@ -89,15 +89,6 @@ This separation is architectural — it doesn't imply separate physical stores o
 7. **Async-First**: All port methods are async to support distributed systems
 8. **Type-Safe**: Full type hints for clarity and IDE support
 
-## CQRS at the Port Level
-
-Many ports implement CQRS (Command Query Responsibility Segregation) patterns:
-
-- **Command Ports** (IWorkItemCommandPort, IWorkflowCommandPort, etc.): Mutation operations that emit events
-- **Query Ports** (IWorkItemQueryPort, IWorkflowQueryPort, etc.): Read-only operations for data retrieval
-
-This separation clarifies intent at the system boundary and enables independent scaling of read/write paths.
-
 ## Event Emission from Ports
 
 Ports that extend `IEventEmitter` publish domain events following this pattern:
@@ -129,12 +120,6 @@ Complex services compose multiple ports at the adapter level:
 
 Composition happens in adapters, not in port definitions, keeping ports pure and focused.
 
-## Phase Delivery
-
-- **Phase 4**: Complete port documentation for all 59 interfaces (19 input, 40 output)
-- **Implementation**: Content from existing `COMPREHENSIVE_PORTS_REFERENCE.md` decomposed and enriched into 13 grouped files
-- **Quality**: All documentation follows `port-template.md` requirements
-
 ## Adapter Mapping
 
 Each port documentation file includes an "Adapter Implementations" section listing all known adapters that implement that port. Adapters are categorized as:
@@ -153,13 +138,16 @@ This mapping ensures that every adapter is documented and traceable to its port(
 - Mock implementations for simulation (`MockAgentCommandAdapter`, `MockWorkflowCommandAdapter`, etc.)
 
 **Secondary Adapters** (Output Port Implementations):
-- **GitHub**: `GitHubTicketAdapter`, `GitHubBoardAdapter`, `GitHubCodeReviewAdapter`
-- **Docker**: `DockerContainerAdapter`
-- **Redis**: `RedisEventStore`, `RedisLockService`, `RedisQueueService`
-- **PostgreSQL**: `PostgreSQLEventStore`, `PostgreSQLConfigStore`
-- **AWS**: `S3StorageAdapter`, `KMSEncryptionService`
+- **GitHub**: `GitHubTicketAdapter`, `GitHubBoardAdapter`, `GitHubCodeReviewAdapter`, `GitHubDiscussionAdapter`, `GitHubCIPipelineAdapter`
+- **Docker**: `DockerContainerAdapter`, `DockerContainerRecoveryAdapter`
+- **Git**: `GitRepositoryAdapter`
+- **Elasticsearch**: `ElasticsearchEventStore`
+- **Redis**: `RedisPubSubAdapter` (for messaging)
 - **Prometheus**: `PrometheusMetricsAdapter`
-- **Jaeger**: `JaegerTracer`
+- **Claude**: `ClaudeCodeAdapter` (LLM provider)
+- **Branch Resolution**: `BranchResolutionAdapter`
+- **Environment Repair**: `ProductionEnvironmentRepairAdapter`
+- **Repair Cycles**: `ProductionRepairCycleAdapter`
 
 **Testing Adapters** (Simulation and Unit Testing):
 - `InMemoryEventStore`

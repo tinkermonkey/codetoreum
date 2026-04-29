@@ -23,54 +23,81 @@ class ITicketSystem(ABC):
     Interface for ticket/issue management systems.
     
     Vendor-agnostic abstraction over GitHub Issues, Jira, Linear, etc.
+    Supports work item CRUD, comments, relationships, webhooks, and streaming.
     """
     
+    # Work Item Operations
     @abstractmethod
     async def get_work_item(self, item_id: WorkItemId) -> WorkItem:
         """Retrieve a work item by ID."""
-        pass
-    
+        
     @abstractmethod
-    async def create_work_item(
-        self,
-        title: str,
-        description: str,
-        project_id: ProjectId,
-        labels: list[str] | None = None,
-        assignee: UserId | None = None,
-        priority: WorkItemPriority | None = None,
-        metadata: dict[str, Any] | None = None,
-        parent_issue_id: str | None = None,
-        pr_id: str | None = None,
-        discussion_id: str | None = None,
-    ) -> WorkItem:
+    async def create_work_item(self, title: str, description: str, project_id: ProjectId,
+                              labels: list[str] | None = None, assignee: UserId | None = None,
+                              priority: WorkItemPriority | None = None, metadata: dict[str, Any] | None = None,
+                              parent_issue_id: str | None = None, pr_id: str | None = None,
+                              discussion_id: str | None = None) -> WorkItem:
         """Create a new work item."""
-        pass
-    
+        
     @abstractmethod
     async def get_child_issues(self, parent_id: WorkItemId) -> list[WorkItem]:
         """Retrieve all child work items for a given parent."""
-        pass
-    
+        
     @abstractmethod
     async def update_work_item(self, item_id: WorkItemId, updates: dict[str, Any]) -> WorkItem:
         """Update an existing work item."""
-        pass
-    
+        
     @abstractmethod
-    async def list_work_items(self, project_id: ProjectId, **filters) -> list[WorkItem]:
-        """List work items in a project with optional filtering."""
-        pass
-    
+    async def delete_work_item(self, item_id: WorkItemId) -> None:
+        """Delete a work item."""
+        
     @abstractmethod
-    async def add_comment(self, item_id: WorkItemId, comment: str) -> Comment:
+    async def update_status(self, item_id: WorkItemId, status: WorkItemStatus, reason: str | None = None) -> WorkItem:
+        """Update work item status."""
+    
+    # Query Operations
+    @abstractmethod
+    async def list_work_items(self, project_id: ProjectId | None = None, status: WorkItemStatus | None = None,
+                             assignee: UserId | None = None, labels: list[str] | None = None,
+                             created_after: datetime | None = None, updated_after: datetime | None = None,
+                             limit: int = 100, offset: int = 0) -> list[WorkItem]:
+        """List work items with filters."""
+        
+    @abstractmethod
+    async def search_work_items(self, query: str, project_id: ProjectId | None = None, limit: int = 100) -> list[WorkItem]:
+        """Full-text search for work items."""
+        
+    @abstractmethod
+    async def get_work_item_stream(self, project_id: ProjectId | None = None, since: datetime | None = None) -> AsyncIterator[WorkItem]:
+        """Stream work item updates in real-time."""
+    
+    # Comment Operations
+    @abstractmethod
+    async def add_comment(self, item_id: WorkItemId, body: str, author: UserId | None = None,
+                         metadata: dict[str, Any] | None = None) -> Comment:
         """Add a comment to a work item."""
-        pass
-    
+        
     @abstractmethod
-    async def get_comments(self, item_id: WorkItemId) -> list[Comment]:
-        """Get all comments on a work item."""
-        pass
+    async def get_comments(self, item_id: WorkItemId, since: datetime | None = None, limit: int = 100) -> list[Comment]:
+        """Get comments for a work item."""
+    
+    # Relationship Operations
+    @abstractmethod
+    async def link_work_items(self, source_id: WorkItemId, target_id: WorkItemId, relationship: str) -> None:
+        """Create relationship between work items."""
+        
+    @abstractmethod
+    async def get_related_items(self, item_id: WorkItemId, relationship: str | None = None) -> list[WorkItem]:
+        """Get related work items."""
+    
+    # Webhook Operations
+    @abstractmethod
+    async def register_webhook(self, url: str, events: list[str], project_id: ProjectId | None = None) -> str:
+        """Register a webhook for events."""
+        
+    @abstractmethod
+    async def unregister_webhook(self, webhook_id: str) -> None:
+        """Unregister a webhook."""
 ```
 
 ### IVersionControlService
@@ -196,19 +223,106 @@ class ILLMProvider(ABC):
         pass
 ```
 
+### IRepository
+
+```python
+class IRepository(ABC):
+    """
+    Generic repository operations for version-controlled source code.
+    
+    Abstracts git operations (clone, branch, commit, push, merge, etc.)
+    """
+    
+    @abstractmethod
+    async def clone(self, repo_url: str, repo_path: Path, branch: str | None = None) -> None:
+        """Clone a repository."""
+        
+    @abstractmethod
+    async def checkout(self, repo_path: Path, branch: str) -> None:
+        """Checkout a branch."""
+        
+    @abstractmethod
+    async def create_branch(self, repo_path: Path, branch_name: str, from_branch: str | None = None) -> None:
+        """Create a new branch."""
+        
+    @abstractmethod
+    async def stage_files(self, repo_path: Path, files: list[str]) -> None:
+        """Stage files for commit."""
+        
+    @abstractmethod
+    async def commit(self, repo_path: Path, message: str, author: CommitAuthor | None = None) -> CommitHash:
+        """Create a commit."""
+        
+    @abstractmethod
+    async def push(self, repo_path: Path, branch: str | None = None, force: bool = False) -> None:
+        """Push commits to remote."""
+        
+    @abstractmethod
+    async def pull(self, repo_path: Path, branch: str | None = None) -> None:
+        """Pull changes from remote."""
+        
+    @abstractmethod
+    async def fetch(self, repo_path: Path) -> None:
+        """Fetch from remote without merging."""
+        
+    @abstractmethod
+    async def diff(self, repo_path: Path, base_branch: str, head_branch: str) -> str:
+        """Get diff between branches."""
+        
+    @abstractmethod
+    async def status(self, repo_path: Path) -> RepositoryStatus:
+        """Get repository status."""
+        
+    @abstractmethod
+    async def list_branches(self, repo_path: Path, remote: bool = False) -> list[BranchName]:
+        """List branches."""
+        
+    @abstractmethod
+    async def merge(self, repo_path: Path, source_branch: str, target_branch: str) -> MergeResult:
+        """Merge branch."""
+        
+    @abstractmethod
+    async def get_file_content(self, repo_path: Path, file_path: str, ref: str | None = None) -> bytes:
+        """Get file content at ref."""
+        
+    @abstractmethod
+    async def get_commit_info(self, repo_path: Path, commit_hash: CommitHash) -> CommitInfo:
+        """Get commit information."""
+        
+    @abstractmethod
+    async def get_commit_history(self, repo_path: Path, max_count: int = 50) -> list[CommitInfo]:
+        """Get commit history."""
+        
+    @abstractmethod
+    async def add_remote(self, repo_path: Path, name: str, url: str) -> None:
+        """Add remote repository."""
+        
+    @abstractmethod
+    async def remove_remote(self, repo_path: Path, name: str) -> None:
+        """Remove remote repository."""
+```
+
 ## Methods
 
-### ITicketSystem Methods
+### ITicketSystem Methods (15 methods)
 
 | Method | Parameters | Return Type | Description |
 |---|---|---|---|
 | `get_work_item()` | `item_id: WorkItemId` | `WorkItem` | Retrieve work item by ID |
-| `create_work_item()` | `title, description, project_id, labels, assignee, priority, metadata, parent_issue_id, pr_id, discussion_id` | `WorkItem` | Create new work item |
+| `create_work_item()` | `title, description, project_id, labels, assignee, priority, metadata, parent_issue_id, pr_id, discussion_id` | `WorkItem` | Create new work item with optional parent/PR/discussion links |
 | `get_child_issues()` | `parent_id: WorkItemId` | `list[WorkItem]` | Get child issues for parent |
-| `update_work_item()` | `item_id, updates` | `WorkItem` | Update work item properties |
-| `list_work_items()` | `project_id, **filters` | `list[WorkItem]` | List work items with filters |
-| `add_comment()` | `item_id, comment` | `Comment` | Add comment to work item |
-| `get_comments()` | `item_id` | `list[Comment]` | Get work item comments |
+| `update_work_item()` | `item_id, updates: dict` | `WorkItem` | Update work item properties |
+| `delete_work_item()` | `item_id: WorkItemId` | `None` | Delete a work item |
+| `update_status()` | `item_id, status, reason` | `WorkItem` | Update work item status with optional reason |
+| `list_work_items()` | `project_id, status, assignee, labels, created_after, updated_after, limit, offset` | `list[WorkItem]` | List work items with comprehensive filtering |
+| `search_work_items()` | `query, project_id, limit` | `list[WorkItem]` | Full-text search for work items |
+| `get_work_item_stream()` | `project_id, since` | `AsyncIterator[WorkItem]` | Stream work item updates in real-time |
+| `add_comment()` | `item_id, body, author, metadata` | `Comment` | Add comment to work item |
+| `get_comments()` | `item_id, since, limit` | `list[Comment]` | Get comments with pagination and time filter |
+| `link_work_items()` | `source_id, target_id, relationship` | `None` | Create relationship between work items |
+| `get_related_items()` | `item_id, relationship` | `list[WorkItem]` | Get related work items optionally filtered by relationship |
+| `register_webhook()` | `url, events, project_id` | `str` | Register webhook, returns webhook ID |
+| `unregister_webhook()` | `webhook_id` | `None` | Unregister webhook by ID |
 
 ### IVersionControlService Methods
 
@@ -243,6 +357,28 @@ class ILLMProvider(ABC):
 | `get_model_info()` | — | `ModelInfo` | Get model capabilities |
 | `stream_response()` | `prompt: str` | `AsyncIterator[str]` | Stream response tokens |
 
+### IRepository Methods (16 methods)
+
+| Method | Parameters | Return Type | Description |
+|---|---|---|---|
+| `clone()` | `repo_url, repo_path, branch` | `None` | Clone a repository |
+| `checkout()` | `repo_path, branch` | `None` | Checkout a branch |
+| `create_branch()` | `repo_path, branch_name, from_branch` | `None` | Create a new branch |
+| `stage_files()` | `repo_path, files: list[str]` | `None` | Stage files for commit |
+| `commit()` | `repo_path, message, author` | `CommitHash` | Create a commit |
+| `push()` | `repo_path, branch, force` | `None` | Push commits to remote |
+| `pull()` | `repo_path, branch` | `None` | Pull changes from remote |
+| `fetch()` | `repo_path` | `None` | Fetch from remote without merging |
+| `diff()` | `repo_path, base_branch, head_branch` | `str` | Get diff between branches |
+| `status()` | `repo_path` | `RepositoryStatus` | Get repository status |
+| `list_branches()` | `repo_path, remote` | `list[BranchName]` | List branches |
+| `merge()` | `repo_path, source_branch, target_branch` | `MergeResult` | Merge branch |
+| `get_file_content()` | `repo_path, file_path, ref` | `bytes` | Get file content at ref |
+| `get_commit_info()` | `repo_path, commit_hash` | `CommitInfo` | Get commit information |
+| `get_commit_history()` | `repo_path, max_count` | `list[CommitInfo]` | Get commit history |
+| `add_remote()` | `repo_path, name, url` | `None` | Add remote repository |
+| `remove_remote()` | `repo_path, name` | `None` | Remove remote repository |
+
 ## Events Emitted
 
 These ports do not emit domain events directly. Events are emitted by adapters when state changes occur in external systems.
@@ -261,13 +397,11 @@ These ports do not emit domain events directly. Events are emitted by adapters w
 
 | Adapter Class | Type | File Path | Notes |
 |---|---|---|---|
-| `GitHubTicketAdapter` | Production | `adapters/secondary/github/` | GitHub Issues implementation |
-| `GitVersionControlAdapter` | Production | `adapters/secondary/git/` | Git version control |
-| `DockerContainerAdapter` | Production | `adapters/secondary/docker/` | Docker container runtime |
-| `ClaudeCodeAdapter` | Production | `adapters/secondary/llm/` | Claude API provider |
-| `MockTicketAdapter` | Testing | `adapters/testing/` | In-memory ticket system |
-| `MockContainerAdapter` | Testing | `adapters/testing/` | In-memory container runtime |
-| `MockLLMAdapter` | Testing | `adapters/testing/` | In-memory LLM provider |
+| `GitHubTicketAdapter` | Production | `src/codetoreum/adapters/secondary/github_ticket_adapter.py` | GitHub Issues implementation |
+| `GitRepositoryAdapter` | Production | `src/codetoreum/adapters/secondary/git_repository_adapter.py` | Git version control operations |
+| `DockerContainerAdapter` | Production | `src/codetoreum/adapters/secondary/docker_container_adapter.py` | Docker container runtime |
+| `ClaudeCodeAdapter` | Production | `src/codetoreum/adapters/secondary/claude_code_adapter.py` | Claude API provider |
+| `DockerContainerRecoveryAdapter` | Production | `src/codetoreum/adapters/secondary/docker_container_recovery_adapter.py` | Docker recovery operations |
 
 ## Diagram
 

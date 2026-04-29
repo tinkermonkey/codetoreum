@@ -40,27 +40,67 @@ class IEventEmitter(ABC):
 
 ```python
 class IEventStore(ABC):
-    """Event sourcing storage."""
+    """Interface for event sourcing and persistence.
+    
+    Manages event streams with support for optimistic concurrency,
+    snapshots, and comprehensive querying capabilities.
+    """
     
     @abstractmethod
-    async def append(self, aggregate_id: str, event: DomainEvent) -> None:
-        """Store new event."""
-        pass
-    
+    async def append(self, stream_id: str, events: list[DomainEvent], expected_version: int | None = None) -> None:
+        """Append events to a stream with optimistic concurrency control."""
+        
     @abstractmethod
-    async def load_events(self, aggregate_id: str) -> list[DomainEvent]:
-        """Retrieve events by aggregate."""
-        pass
-    
+    async def get_events(self, stream_id: str, from_version: int = 0, to_version: int | None = None) -> list[DomainEvent]:
+        """Get events from a stream by version range."""
+        
     @abstractmethod
-    async def replay(self, aggregate_id: str, to_version: int | None = None) -> AggregateState:
-        """Replay events for state reconstruction."""
-        pass
-    
+    async def get_events_since(self, since: datetime, stream_id: str | None = None) -> list[DomainEvent]:
+        """Get events since a timestamp."""
+        
     @abstractmethod
-    async def get_event(self, aggregate_id: str, version: int) -> DomainEvent:
-        """Get specific event."""
-        pass
+    async def stream_events(self, stream_id: str | None = None, from_version: int = 0) -> AsyncIterator[DomainEvent]:
+        """Stream events in real-time."""
+        
+    @abstractmethod
+    async def get_stream_version(self, stream_id: str) -> int:
+        """Get current version of a stream."""
+        
+    @abstractmethod
+    async def stream_exists(self, stream_id: str) -> bool:
+        """Check if a stream exists."""
+        
+    @abstractmethod
+    async def save_snapshot(self, stream_id: str, version: int, snapshot: dict[str, Any]) -> None:
+        """Save a snapshot for faster replay."""
+        
+    @abstractmethod
+    async def get_latest_snapshot(self, stream_id: str) -> dict[str, Any] | None:
+        """Get most recent snapshot."""
+        
+    @abstractmethod
+    async def delete_stream(self, stream_id: str) -> None:
+        """Delete an event stream."""
+        
+    @abstractmethod
+    async def get_all_stream_ids(self, aggregate_type: str | None = None) -> list[str]:
+        """Get all stream IDs, optionally filtered by aggregate type."""
+        
+    @abstractmethod
+    async def get_events_by_type(self, event_type: str, since: datetime | None = None, limit: int = 1000) -> list[DomainEvent]:
+        """Get events by event type."""
+        
+    @abstractmethod
+    async def get_events_by_correlation_id(self, correlation_id: str) -> list[DomainEvent]:
+        """Get all events with a specific correlation ID."""
+        
+    @abstractmethod
+    async def replay_events(self, stream_id: str, from_version: int = 0, to_version: int | None = None) -> AsyncIterator[DomainEvent]:
+        """Replay events from a stream for debugging/recovery."""
+        
+    @abstractmethod
+    async def get_statistics(self) -> dict[str, Any]:
+        """Get event store statistics."""
 ```
 
 ### IStorage
@@ -227,12 +267,31 @@ class ITracer(ABC):
 
 ## Methods
 
+### IEventStore Methods (14 methods)
+
+| Method | Parameters | Return Type | Description |
+|---|---|---|---|
+| `append()` | `stream_id, events, expected_version` | `None` | Append events to stream with optimistic concurrency |
+| `get_events()` | `stream_id, from_version, to_version` | `list[DomainEvent]` | Get events by version range |
+| `get_events_since()` | `since, stream_id` | `list[DomainEvent]` | Get events since timestamp |
+| `stream_events()` | `stream_id, from_version` | `AsyncIterator[DomainEvent]` | Stream events in real-time |
+| `get_stream_version()` | `stream_id` | `int` | Get current version of stream |
+| `stream_exists()` | `stream_id` | `bool` | Check if stream exists |
+| `save_snapshot()` | `stream_id, version, snapshot` | `None` | Save snapshot for faster replay |
+| `get_latest_snapshot()` | `stream_id` | `dict[str, Any] \| None` | Get most recent snapshot |
+| `delete_stream()` | `stream_id` | `None` | Delete an event stream |
+| `get_all_stream_ids()` | `aggregate_type` | `list[str]` | Get all stream IDs optionally filtered by type |
+| `get_events_by_type()` | `event_type, since, limit` | `list[DomainEvent]` | Get events by event type |
+| `get_events_by_correlation_id()` | `correlation_id` | `list[DomainEvent]` | Get events with specific correlation ID |
+| `replay_events()` | `stream_id, from_version, to_version` | `AsyncIterator[DomainEvent]` | Replay events for debugging/recovery |
+| `get_statistics()` | none | `dict[str, Any]` | Get event store statistics |
+
 ### Method Summary Table
 
 | Interface | Key Methods | Purpose |
 |---|---|---|
 | IEventEmitter | `emit()`, `emit_batch()` | Publish domain events |
-| IEventStore | `append()`, `load_events()`, `replay()` | Event sourcing storage |
+| IEventStore | `append()`, `get_events()`, `replay_events()` | Event sourcing storage (14 methods total) |
 | IStorage | `put()`, `get()`, `delete()`, `list()`, `get_url()` | Artifact storage |
 | IMetrics | `record_counter()`, `record_gauge()`, `record_histogram()`, `record_timing()` | Performance metrics |
 | IMonitoring | `start_monitoring()`, `stop_monitoring()`, `is_monitoring()` | Service lifecycle |
@@ -257,16 +316,11 @@ These ports do not directly emit events; they propagate events through infrastru
 
 | Adapter Class | Type | File Path | Notes |
 |---|---|---|---|
-| `RedisEventStore` | Production | `adapters/secondary/redis/` | Redis-based event store |
-| `PostgreSQLEventStore` | Production | `adapters/secondary/postgres/` | PostgreSQL event store |
-| `S3StorageAdapter` | Production | `adapters/secondary/aws/` | AWS S3 storage |
-| `LocalStorageAdapter` | Production | `adapters/secondary/storage/` | Local filesystem storage |
-| `PrometheusMetricsAdapter` | Production | `adapters/secondary/prometheus/` | Prometheus metrics |
-| `RabbitMQBroker` | Production | `adapters/secondary/rabbitmq/` | RabbitMQ message broker |
-| `JaegerTracer` | Production | `adapters/secondary/jaeger/` | Jaeger distributed tracing |
-| `InMemoryEventStore` | Testing | `adapters/testing/` | In-memory event store |
-| `InMemoryStorage` | Testing | `adapters/testing/` | In-memory storage |
-| `InMemoryMetricsAdapter` | Testing | `adapters/testing/` | In-memory metrics |
+| `ElasticsearchEventStore` | Production | `src/codetoreum/adapters/secondary/elasticsearch_event_store.py` | Elasticsearch-based event store |
+| `PrometheusMetricsAdapter` | Production | `src/codetoreum/adapters/secondary/prometheus_metrics_adapter.py` | Prometheus metrics collection |
+| `RedisPubSubAdapter` | Production | `src/codetoreum/adapters/secondary/redis_pubsub_adapter.py` | Redis pub/sub message broker |
+| `MockEventEmitter` | Testing | `src/codetoreum/adapters/secondary/mock_event_emitter.py` | Mock event emitter for testing |
+| `FailedEventStoreAdapter` | Testing | `src/codetoreum/adapters/secondary/failed_event_store_adapter.py` | Dead letter queue adapter |
 
 ## Diagram
 

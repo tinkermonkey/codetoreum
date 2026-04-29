@@ -14,8 +14,9 @@ The domain services output ports define contracts for:
 - **IAgentExecutor**: Agent code execution interface
 - **IAgentRepository**: Agent registry persistence
 - **IIdentityService**: Bot/human user identification
+- **INotifier**: Notification delivery across multiple channels
 
-These ports encapsulate business logic for complex workflows.
+These ports encapsulate business logic for complex workflows and cross-cutting concerns.
 
 ## Interface Definition
 
@@ -240,6 +241,80 @@ class IIdentityService(ABC):
         pass
 ```
 
+### INotifier
+
+```python
+class INotifier(ABC):
+    """Interface for sending notifications across multiple channels."""
+    
+    @abstractmethod
+    async def send(self, channel: NotificationChannel, recipient: str, subject: str, 
+                  message: str, priority: NotificationPriority = NotificationPriority.NORMAL,
+                  metadata: dict[str, Any] | None = None) -> NotificationResult:
+        """Send a notification."""
+        
+    @abstractmethod
+    async def send_rich(self, channel: NotificationChannel, recipient: str, content: RichContent,
+                       priority: NotificationPriority = NotificationPriority.NORMAL) -> NotificationResult:
+        """Send rich content notification (attachments, embeds, etc.)."""
+        
+    @abstractmethod
+    async def send_batch(self, notifications: list[Notification]) -> list[NotificationResult]:
+        """Send multiple notifications."""
+        
+    @abstractmethod
+    async def send_template(self, channel: NotificationChannel, recipient: str, template_id: str,
+                           variables: dict[str, Any], 
+                           priority: NotificationPriority = NotificationPriority.NORMAL) -> NotificationResult:
+        """Send notification using a template."""
+        
+    @abstractmethod
+    async def get_delivery_status(self, notification_id: str) -> DeliveryStatus:
+        """Get notification delivery status."""
+        
+    @abstractmethod
+    async def get_notification_history(self, recipient: str | None = None, 
+                                      channel: NotificationChannel | None = None,
+                                      since: datetime | None = None, 
+                                      limit: int = 100) -> list[dict[str, Any]]:
+        """Get notification history."""
+        
+    @abstractmethod
+    async def cancel_notification(self, notification_id: str) -> bool:
+        """Cancel a pending notification."""
+        
+    @abstractmethod
+    async def register_template(self, template_id: str, channel: NotificationChannel, 
+                               template: str, subject_template: str | None = None,
+                               metadata: dict[str, Any] | None = None) -> None:
+        """Register a notification template."""
+        
+    @abstractmethod
+    async def unregister_template(self, template_id: str) -> None:
+        """Unregister a notification template."""
+        
+    @abstractmethod
+    async def list_templates(self, channel: NotificationChannel | None = None) -> list[dict[str, Any]]:
+        """List registered templates."""
+        
+    @abstractmethod
+    async def test_channel(self, channel: NotificationChannel, recipient: str) -> bool:
+        """Test if a channel is properly configured."""
+        
+    @abstractmethod
+    async def get_statistics(self, since: datetime | None = None, 
+                            channel: NotificationChannel | None = None) -> dict[str, Any]:
+        """Get notification statistics."""
+        
+    @abstractmethod
+    async def configure_channel(self, channel: NotificationChannel, configuration: dict[str, Any]) -> None:
+        """Configure a notification channel."""
+        
+    @abstractmethod
+    async def health_check(self) -> dict[NotificationChannel, bool]:
+        """Check health of all configured channels."""
+```
+
 ## Methods
 
 | Service | Key Methods | Purpose |
@@ -252,6 +327,7 @@ class IIdentityService(ABC):
 | IAgentExecutor | `execute()`, `validate_execution_context()`, `get_execution_logs()` | Agent execution |
 | IAgentRepository | `save_agent()`, `get_agent()`, `list_agents()`, `delete_agent()` | Agent persistence |
 | IIdentityService | `is_bot()`, `get_user_info()`, `is_authorized()` | Identity & auth |
+| INotifier (13 methods) | `send()`, `send_rich()`, `send_batch()`, `send_template()`, `get_delivery_status()`, `register_template()`, `health_check()` | Multi-channel notifications |
 
 ## Events Emitted
 
