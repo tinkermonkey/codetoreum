@@ -1,6 +1,6 @@
 # Bootstrap Wiring: Simulation System Startup Sequence
 
-Complete documentation of how the Simulation Implementation wires all 53 adapters and 11 application services through a 6-phase bootstrap sequence.
+Complete documentation of how the Simulation Implementation wires all 54 adapters and 11 application services through a 6-phase bootstrap sequence.
 
 ## Bootstrap Overview
 
@@ -8,7 +8,7 @@ The Simulation Implementation bootstrap is implemented in:
 ```
 src/codetoreum/infrastructure/simulation/bootstrap.py
   - SimulationApplicationBootstrap (main orchestrator)
-  - SimulationAdapters (container for all 35+ output adapters)
+  - SimulationAdapters (container for all 36 output adapters)
   - SimulationServices (container for 11 application services)
   - SimulationPorts (container for 18 input port implementations)
 ```
@@ -66,7 +66,7 @@ degraded_mode = BootstrapDegradedModeState()
 
 ---
 
-### Phase 2: Create Output Port Adapters (35 Testing Adapters)
+### Phase 2: Create Output Port Adapters (36 Testing Adapters)
 
 **Purpose**: Instantiate all mock and in-memory adapters for output ports
 
@@ -77,9 +77,9 @@ degraded_mode = BootstrapDegradedModeState()
 - `AdapterResolver` understands adapter dependencies and instantiation order
 - Each adapter is created and registered in `SimulationAdapters` container
 - Adapters can subscribe to domain events during initialization
-- Returns all 35+ adapters wired together
+- Returns all 36 adapters wired together
 
-**Adapters Created** (35 total):
+**Adapters Created** (36 total):
 - **Ticket System**: `InMemoryTicketAdapter`
 - **LLM Provider**: `MockLLMAdapter`
 - **Container**: `FakeContainerAdapter`
@@ -87,7 +87,7 @@ degraded_mode = BootstrapDegradedModeState()
 - **Event Store**: `InMemoryEventStore`
 - **Board Service**: `MockBoardAdapter`
 - **Repair Cycle**: `MockRepairCycleAdapter`
-- **... 28 more adapters**
+- **... 29 more adapters**
 
 **Code**:
 ```python
@@ -97,7 +97,7 @@ resolver = AdapterResolver(
     config=config,
 )
 adapters = await resolver.create_all_adapters()
-# Returns SimulationAdapters container with 35+ typed adapters
+# Returns SimulationAdapters container with 36 typed adapters
 ```
 
 **Key Outputs**:
@@ -279,7 +279,7 @@ flowchart TD
     
     Phase0 --> Phase1["Phase 1: Infrastructure<br/>━━━━━━━━━━━━<br/>• Create EventBus<br/>• Create ErrorRegistry<br/>• Create Logger<br/>• Create CausalLinkRegistry<br/>⚠️ EARLY: Event subscriptions needed!"]
     
-    Phase1 --> Phase2["Phase 2: Output Port Adapters (35)<br/>━━━━━━━━━━━━━━━━━━━<br/>Depends on: Phase 1 (EventBus)"]
+    Phase1 --> Phase2["Phase 2: Output Port Adapters (36)<br/>━━━━━━━━━━━━━━━━━━━<br/>Depends on: Phase 1 (EventBus)"]
     
     Phase2 --> Phase2a["Create Ticket System<br/>InMemoryTicketAdapter"]
     Phase2a --> Phase2b["Create LLM Provider<br/>MockLLMAdapter"]
@@ -287,7 +287,7 @@ flowchart TD
     Phase2c --> Phase2d["Create Repository<br/>InMemoryRepositoryAdapter"]
     Phase2d --> Phase2e["Create Event Store<br/>InMemoryEventStore"]
     Phase2e --> Phase2f["Create Board Service<br/>MockBoardAdapter"]
-    Phase2f --> Phase2g["Create 29 More Adapters<br/>Repair Cycle, Review Cycle,<br/>Storage, Config, Metrics, etc."]
+    Phase2f --> Phase2g["Create 30 More Adapters<br/>Repair Cycle, Review Cycle,<br/>Storage, Config, Metrics, etc."]
     
     Phase2g --> Phase3["Phase 3: Application Services (11)<br/>━━━━━━━━━━━━━━<br/>Depends on: Phase 2 (Adapters)"]
     
@@ -347,7 +347,7 @@ class SimulationApplicationBootstrap:
             infrastructure = self._create_infrastructure(engine)
             
             # Phase 2: Create adapters
-            logger.info("Phase 2: Creating 35 adapters...")
+            logger.info("Phase 2: Creating 36 adapters...")
             adapters = await self._create_adapters()
             
             # Phase 2b: Register causal links
@@ -386,7 +386,7 @@ class SimulationApplicationBootstrap:
 ```python
 @dataclass
 class SimulationAdapters:
-    """All 35+ output port adapters."""
+    """All 36 output port adapters."""
     ticket_system: ITicketSystem
     llm_provider: ILLMProvider
     container: IContainer
@@ -611,7 +611,7 @@ adapters = bootstrap.adapters
 assert isinstance(adapters.ticket_system, ITicketSystem)
 assert isinstance(adapters.llm_provider, ILLMProvider)
 assert isinstance(adapters.container, IContainer)
-# ... verify all 35+ adapters
+# ... verify all 36 adapters
 
 # Verify services are created
 services = bootstrap.services
@@ -632,7 +632,7 @@ assert ports.work_item_query is not None
 # Bootstrap logs each phase
 logger.info("Phase 0: Creating simulation engine...")
 logger.info("Phase 1: Creating infrastructure...")
-logger.info("Phase 2: Creating 35 adapters...")
+logger.info("Phase 2: Creating 36 adapters...")
 logger.info("Phase 3: Creating 11 services...")
 logger.info("Phase 4: Creating 18 input ports...")
 logger.info("Phase 5: Creating FastAPI app...")
@@ -661,11 +661,11 @@ The 6-phase bootstrap creates a complete, wired Simulation Implementation:
 |-------|------|----------|----------|
 | 0 | Simulation engine | 1 | < 1ms |
 | 1 | Infrastructure | 4 components | < 1ms |
-| 2 | Output adapters | 35+ | ~10-50ms |
+| 2 | Output adapters | 36 | ~10-50ms |
 | 3 | Services | 11 | ~20-100ms |
 | 4 | Input ports | 18 | ~10-20ms |
 | 5 | FastAPI app | 1 | ~50-200ms |
-| **Total** | **Complete system** | **~70 components** | **~100-400ms** |
+| **Total** | **Complete system** | **~71 components** | **~100-400ms** |
 
 Total bootstrap time: **100-400ms** depending on adapter complexity and event subscription overhead.
 

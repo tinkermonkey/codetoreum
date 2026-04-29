@@ -1,6 +1,6 @@
 # Simulation Adapters Reference
 
-Complete mapping of all 53 simulation/mock adapters to their port interfaces.
+Complete mapping of all 54 simulation/mock adapters to their port interfaces.
 
 ## Overview
 
