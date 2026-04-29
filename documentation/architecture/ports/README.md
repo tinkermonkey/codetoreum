@@ -78,17 +78,93 @@ The port interfaces follow Command Query Responsibility Segregation (CQRS) at th
 
 This separation is architectural — it doesn't imply separate physical stores or event logs. Rather, it clarifies intent at the interface boundary.
 
+## Port Design Principles
+
+1. **Vendor Agnostic**: Ports hide external system details behind clean interfaces
+2. **Single Responsibility**: Each port has a focused concern area
+3. **Event-Driven**: Domain services emit events for state changes
+4. **Pure Contracts**: No implementation logic in port definitions
+5. **Immutable Parameters**: Complex parameters use `Mapping` for immutability
+6. **Clear Error Boundaries**: Custom exceptions define port contract violations
+7. **Async-First**: All port methods are async to support distributed systems
+8. **Type-Safe**: Full type hints for clarity and IDE support
+
+## CQRS at the Port Level
+
+Many ports implement CQRS (Command Query Responsibility Segregation) patterns:
+
+- **Command Ports** (IWorkItemCommandPort, IWorkflowCommandPort, etc.): Mutation operations that emit events
+- **Query Ports** (IWorkItemQueryPort, IWorkflowQueryPort, etc.): Read-only operations for data retrieval
+
+This separation clarifies intent at the system boundary and enables independent scaling of read/write paths.
+
+## Event Emission from Ports
+
+Ports that extend `IEventEmitter` publish domain events following this pattern:
+
+```python
+class MyService(IEventEmitter, ABC):
+    """Service with event emission."""
+    
+    async def my_operation(self) -> Result:
+        """Perform operation and emit event."""
+        # ... business logic ...
+        
+        # Emit event for state change
+        event = MyStateChangedEvent(...)
+        await self.emit("my.state.changed", event)
+        
+        return result
+```
+
+Events are immutable dataclasses with complete audit information.
+
+## Port Composition
+
+Complex services compose multiple ports at the adapter level:
+
+- **IBranchResolutionService**: Composes `ITicketSystem` + `IVersionControlService`
+- **ICodeReviewService**: Wraps VCS pull request operations
+- **IBoardService**: Manages board and work item state
+
+Composition happens in adapters, not in port definitions, keeping ports pure and focused.
+
 ## Phase Delivery
 
-- **Phase 4**: Complete port documentation for all 19 input and 40 output interfaces
-- **Phase 4+**: Content from existing `COMPREHENSIVE_PORTS_REFERENCE.md` decomposed and enriched into these grouped files
+- **Phase 4**: Complete port documentation for all 59 interfaces (19 input, 40 output)
+- **Implementation**: Content from existing `COMPREHENSIVE_PORTS_REFERENCE.md` decomposed and enriched into 13 grouped files
+- **Quality**: All documentation follows `port-template.md` requirements
 
 ## Adapter Mapping
 
 Each port documentation file includes an "Adapter Implementations" section listing all known adapters that implement that port. Adapters are categorized as:
 
-- **Production**: Real external system implementations (GitHub, Docker, etc.)
-- **Secondary**: Alternative production implementations
+- **Production**: Real external system implementations (GitHub, Docker, Redis, etc.)
+- **Secondary**: Alternative production implementations for different platforms
 - **Testing/Mock**: In-memory or mock implementations for simulation and unit testing
 
 This mapping ensures that every adapter is documented and traceable to its port(s).
+
+### Key Adapter Categories
+
+**Primary Adapters** (Input Port Implementations):
+- FastAPI route handlers that receive HTTP requests
+- Webhook handlers for external system callbacks
+- Mock implementations for simulation (`MockAgentCommandAdapter`, `MockWorkflowCommandAdapter`, etc.)
+
+**Secondary Adapters** (Output Port Implementations):
+- **GitHub**: `GitHubTicketAdapter`, `GitHubBoardAdapter`, `GitHubCodeReviewAdapter`
+- **Docker**: `DockerContainerAdapter`
+- **Redis**: `RedisEventStore`, `RedisLockService`, `RedisQueueService`
+- **PostgreSQL**: `PostgreSQLEventStore`, `PostgreSQLConfigStore`
+- **AWS**: `S3StorageAdapter`, `KMSEncryptionService`
+- **Prometheus**: `PrometheusMetricsAdapter`
+- **Jaeger**: `JaegerTracer`
+
+**Testing Adapters** (Simulation and Unit Testing):
+- `InMemoryEventStore`
+- `InMemoryStorage`
+- `MockBoardAdapter`
+- `MockContainerAdapter`
+- `MockLLMAdapter`
+- ~25+ total mock/in-memory adapters for comprehensive simulation testing
