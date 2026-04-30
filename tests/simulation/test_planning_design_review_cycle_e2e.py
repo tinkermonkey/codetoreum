@@ -175,65 +175,48 @@ async def test_issues_found_path(pr_review_env):
     # ========================================================================
 
     # AC-1: Item should move to "In Development" (issues found path)
-    in_development_reached = await wait_for_column(
-        board, work_item_id, "In Development", timeout=10.0
-    )
+    in_development_reached = await wait_for_column(board, work_item_id, "In Development", timeout=10.0)
     assert in_development_reached, "Item did not reach 'In Development' after PR review cycle"
 
     # AC-2: PRReviewCycleStartedEvent should be fired
-    cycle_events = [
-        e for e in event_store.events
-        if "pr_review_cycle" in str(type(e).__name__).lower()
-    ]
+    cycle_events = [e for e in event_store.events if "pr_review_cycle" in str(type(e).__name__).lower()]
     assert len(cycle_events) > 0, "No PR review cycle events found in event store"
 
     # AC-3: PRReviewCycleStartedEvent with correct attributes
-    started_events = [
-        e for e in cycle_events
-        if isinstance(e, PRReviewCycleStartedEvent)
-    ]
+    started_events = [e for e in cycle_events if isinstance(e, PRReviewCycleStartedEvent)]
     assert len(started_events) > 0, "PRReviewCycleStartedEvent not fired"
 
     # AC-4: Phase events in order (Phase 1 → 2.1 → 3 → 4)
     # Verify phase events are emitted in expected order
     phase_events = [e for e in cycle_events if "started" in str(type(e).__name__).lower()]
-    assert len(phase_events) >= 4, (
-        f"Expected at least 4 phase started events (Phase 1, 2.1, 3, 4), got {len(phase_events)}"
-    )
+    assert (
+        len(phase_events) >= 4
+    ), f"Expected at least 4 phase started events (Phase 1, 2.1, 3, 4), got {len(phase_events)}"
 
     # AC-5: PRReviewCycleSubIssuesCreatedEvent with count=6
-    sub_issue_events = [
-        e for e in cycle_events
-        if isinstance(e, PRReviewCycleSubIssuesCreatedEvent)
-    ]
+    sub_issue_events = [e for e in cycle_events if isinstance(e, PRReviewCycleSubIssuesCreatedEvent)]
     assert len(sub_issue_events) > 0, "PRReviewCycleSubIssuesCreatedEvent not fired"
-    assert sub_issue_events[0].count == 6, (
-        f"Expected 6 sub-issues created, got {sub_issue_events[0].count}"
-    )
+    assert sub_issue_events[0].count == 6, f"Expected 6 sub-issues created, got {sub_issue_events[0].count}"
 
     # AC-6: 6 child work items created with parent_issue_id and pr-review label
     child_items = [
-        item for item in seeder._ticket_adapter._work_items.values()
-        if item.parent_issue_id == int(parent_external_id)
+        item for item in seeder._ticket_adapter._work_items.values() if item.parent_issue_id == int(parent_external_id)
     ]
-    assert len(child_items) == 6, (
-        f"Expected 6 child work items with parent_issue_id={parent_external_id}, got {len(child_items)}"
-    )
+    assert (
+        len(child_items) == 6
+    ), f"Expected 6 child work items with parent_issue_id={parent_external_id}, got {len(child_items)}"
 
     for child_item in child_items:
-        assert "pr-review" in child_item.labels, (
-            f"Child item {child_item.title} missing 'pr-review' label. Labels: {child_item.labels}"
-        )
+        assert (
+            "pr-review" in child_item.labels
+        ), f"Child item {child_item.title} missing 'pr-review' label. Labels: {child_item.labels}"
 
     # AC-7: PRReviewCycleIssuesFoundEvent emitted with critical_count >= 1
-    issues_found_events = [
-        e for e in cycle_events
-        if isinstance(e, PRReviewCycleIssuesFoundEvent)
-    ]
+    issues_found_events = [e for e in cycle_events if isinstance(e, PRReviewCycleIssuesFoundEvent)]
     assert len(issues_found_events) > 0, "PRReviewCycleIssuesFoundEvent not fired"
-    assert issues_found_events[0].critical >= 1, (
-        f"Expected critical_count >= 1 in PRReviewCycleIssuesFoundEvent, got {issues_found_events[0].critical}"
-    )
+    assert (
+        issues_found_events[0].critical >= 1
+    ), f"Expected critical_count >= 1 in PRReviewCycleIssuesFoundEvent, got {issues_found_events[0].critical}"
 
 
 @pytest.mark.asyncio
@@ -286,21 +269,12 @@ async def test_approved_path(pr_review_env):
     assert done_reached, "Item did not reach 'Done' after PR review cycle approval"
 
     # AC-2: PRReviewCycleApprovedEvent should be present
-    cycle_events = [
-        e for e in event_store.events
-        if "pr_review_cycle" in str(type(e).__name__).lower()
-    ]
-    approved_events = [
-        e for e in cycle_events
-        if isinstance(e, PRReviewCycleApprovedEvent)
-    ]
+    cycle_events = [e for e in event_store.events if "pr_review_cycle" in str(type(e).__name__).lower()]
+    approved_events = [e for e in cycle_events if isinstance(e, PRReviewCycleApprovedEvent)]
     assert len(approved_events) > 0, "PRReviewCycleApprovedEvent not fired"
 
     # AC-3: PRReviewCycleSubIssuesCreatedEvent should be absent (no issues found)
-    sub_issue_events = [
-        e for e in cycle_events
-        if isinstance(e, PRReviewCycleSubIssuesCreatedEvent)
-    ]
-    assert len(sub_issue_events) == 0, (
-        f"Expected no PRReviewCycleSubIssuesCreatedEvent for approved path, got {len(sub_issue_events)}"
-    )
+    sub_issue_events = [e for e in cycle_events if isinstance(e, PRReviewCycleSubIssuesCreatedEvent)]
+    assert (
+        len(sub_issue_events) == 0
+    ), f"Expected no PRReviewCycleSubIssuesCreatedEvent for approved path, got {len(sub_issue_events)}"

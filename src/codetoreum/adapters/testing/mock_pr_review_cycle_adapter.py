@@ -207,7 +207,9 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
 
     # ==================== Configuration Methods ====================
 
-    def set_outcome(self, work_item_id: str, outcome: PRReviewOutcome, findings: list[PRReviewFinding] | None = None) -> None:
+    def set_outcome(
+        self, work_item_id: str, outcome: PRReviewOutcome, findings: list[PRReviewFinding] | None = None
+    ) -> None:
         """Configure the cycle outcome for a specific work item.
 
         Args:
@@ -346,7 +348,9 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
         started_at_str = started_at_dt.isoformat()
 
         # Calculate phases_planned dynamically based on config
-        phases_planned = 1 + len(request.config.verifier_context_sources) + (1 if request.config.ci_check_enabled else 0) + 1
+        phases_planned = (
+            1 + len(request.config.verifier_context_sources) + (1 if request.config.ci_check_enabled else 0) + 1
+        )
 
         # Emit PRReviewCycleStartedEvent
         started_event = PRReviewCycleStartedEvent(
@@ -380,7 +384,9 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 workflow_run_id=request.workflow_run_id,
             )
             self._event_emitter.emit(max_cycles_event)
-            self._log_event({"type": "pr_review_cycle.max_cycles_reached", "cycle_id": cycle_id, "work_item_id": work_item_id})
+            self._log_event(
+                {"type": "pr_review_cycle.max_cycles_reached", "cycle_id": cycle_id, "work_item_id": work_item_id}
+            )
 
             escalated_event = PRReviewCycleEscalatedEvent(
                 type="pr_review_cycle.escalated",
@@ -454,8 +460,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                     self._project_cycles[project_id] = []
                 # Remove existing entry for this work_item_id to prevent duplicates
                 self._project_cycles[project_id] = [
-                    cycle for cycle in self._project_cycles[project_id]
-                    if cycle.work_item_id != work_item_id
+                    cycle for cycle in self._project_cycles[project_id] if cycle.work_item_id != work_item_id
                 ]
                 self._project_cycles[project_id].append(state_data)
             return result
@@ -573,7 +578,14 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 workflow_run_id=request.workflow_run_id,
             )
             self._event_emitter.emit(phase3_completed)
-            self._log_event({"type": "pr_review_cycle.phase_completed", "cycle_id": cycle_id, "phase_index": 3, "work_item_id": work_item_id})
+            self._log_event(
+                {
+                    "type": "pr_review_cycle.phase_completed",
+                    "cycle_id": cycle_id,
+                    "phase_index": 3,
+                    "work_item_id": work_item_id,
+                }
+            )
         else:
             # Track when CI check is disabled
             with self._lock:
@@ -595,7 +607,14 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 workflow_run_id=request.workflow_run_id,
             )
             self._event_emitter.emit(phase3_completed)
-            self._log_event({"type": "pr_review_cycle.phase_completed", "cycle_id": cycle_id, "phase_index": 3, "work_item_id": work_item_id})
+            self._log_event(
+                {
+                    "type": "pr_review_cycle.phase_completed",
+                    "cycle_id": cycle_id,
+                    "phase_index": 3,
+                    "work_item_id": work_item_id,
+                }
+            )
 
         # If CI failed, skip Phase 4 consolidation entirely (tests expect no consolidation when CI fails)
         if request.config.ci_check_enabled and not ci_passed:
@@ -704,8 +723,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 if project_id not in self._project_cycles:
                     self._project_cycles[project_id] = []
                 self._project_cycles[project_id] = [
-                    cycle for cycle in self._project_cycles[project_id]
-                    if cycle.work_item_id != work_item_id
+                    cycle for cycle in self._project_cycles[project_id] if cycle.work_item_id != work_item_id
                 ]
                 self._project_cycles[project_id].append(state_data)
 
@@ -902,7 +920,9 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                     phase_index=next_phase_index,
                     success=ci_passed,
                     findings=(),
-                    summary="CI check passed" if ci_passed else f"CI check failed with {config.ci_failures_count} failures",
+                    summary=(
+                        "CI check passed" if ci_passed else f"CI check failed with {config.ci_failures_count} failures"
+                    ),
                     duration_seconds=0.5,
                     error=None if ci_passed else f"CI pipeline failed with {config.ci_failures_count} failures",
                 )
@@ -971,8 +991,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 self._project_cycles[project_id] = []
             # Remove existing entry for this work_item_id to prevent duplicates
             self._project_cycles[project_id] = [
-                cycle for cycle in self._project_cycles[project_id]
-                if cycle.work_item_id != work_item_id
+                cycle for cycle in self._project_cycles[project_id] if cycle.work_item_id != work_item_id
             ]
             self._project_cycles[project_id].append(state_data)
 
@@ -1005,8 +1024,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 self._project_cycles[project_id] = []
             # Remove existing entry for this work_item_id to prevent duplicates
             self._project_cycles[project_id] = [
-                cycle for cycle in self._project_cycles[project_id]
-                if cycle.work_item_id != data.work_item_id
+                cycle for cycle in self._project_cycles[project_id] if cycle.work_item_id != data.work_item_id
             ]
             self._project_cycles[project_id].append(data)
 
@@ -1022,8 +1040,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             # Also remove from _project_cycles to maintain consistency
             if project_id in self._project_cycles:
                 self._project_cycles[project_id] = [
-                    cycle for cycle in self._project_cycles[project_id]
-                    if cycle.work_item_id != work_item_id
+                    cycle for cycle in self._project_cycles[project_id] if cycle.work_item_id != work_item_id
                 ]
 
     async def load_active_cycles(self, project_id: str) -> list[PRReviewCycleStateData]:

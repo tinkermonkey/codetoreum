@@ -85,7 +85,9 @@ class PRReviewCycleEventHandler(EventHandler):
         Raises:
             Exception: If handling fails
         """
-        if isinstance(event, (PRReviewCycleApprovedEvent, PRReviewCycleIssuesFoundEvent, PRReviewCycleMaxCyclesReachedEvent)):
+        if isinstance(
+            event, (PRReviewCycleApprovedEvent, PRReviewCycleIssuesFoundEvent, PRReviewCycleMaxCyclesReachedEvent)
+        ):
             await self.handle_cycle_outcome(event)
         else:
             logger.warning(f"PRReviewCycleEventHandler received unexpected event type: {type(event).__name__}")

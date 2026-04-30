@@ -383,9 +383,7 @@ class TestPRReviewCycleDispatchHandlerErrorHandling:
         mock_cycle.get_cycle_state = AsyncMock(return_value=None)
 
         # Work item retrieval fails
-        mock_work_item.get_work_item = AsyncMock(
-            side_effect=ResourceNotFoundError("item-1", "Work item not found")
-        )
+        mock_work_item.get_work_item = AsyncMock(side_effect=ResourceNotFoundError("item-1", "Work item not found"))
 
         active_run = ActiveRunInfo(
             work_item_id="item-1",

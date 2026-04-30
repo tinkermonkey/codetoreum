@@ -1363,6 +1363,7 @@ class SimulationApplicationBootstrap:
             # This ensures that PR review cycle events emitted by the adapter reach the event bus handlers
             def _publish_codetoreum_event_to_bus(event):  # type: ignore
                 import asyncio
+
                 # Create an async task to publish to event bus (fire and forget with error handling)
                 try:
                     loop = asyncio.get_running_loop()

@@ -351,5 +351,6 @@ class TestYAMLParsingAndSeeding:
 
         # Verify immutability (frozen dataclass) - attempting to modify should raise FrozenInstanceError
         from dataclasses import FrozenInstanceError
+
         with pytest.raises(FrozenInstanceError):
             domain_config.max_outer_cycles = 5
