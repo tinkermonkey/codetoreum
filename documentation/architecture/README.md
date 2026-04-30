@@ -32,6 +32,21 @@ Infrastructure and cross-cutting concerns. Event bus, resilience patterns, obser
 - **resilience.md** (Phase 5): Circuit breakers, rate limiting, retries, and decorators
 - **observability.md** (Phase 5): Structured logging, metrics, tracing, audit trail
 
+### [adapters/](./adapters/)
+Adapter implementations connecting the system to external services and backing stores.
+
+#### [adapters/production/](./adapters/production/)
+Production adapters implementing port contracts with real external systems:
+
+- **github-board-adapter.md** (Phase 6): GitHub Projects v2 board management
+- **github-ticket-adapter.md** (Phase 6): GitHub Issues for work item management
+- **github-code-review-adapter.md** (Phase 6): GitHub PRs for code review workflows
+- **docker-container-adapter.md** (Phase 6): Docker for containerized agent execution
+- **claude-code-adapter.md** (Phase 6): Claude Code API for LLM operations
+- **git-repository-adapter.md** (Phase 6): Git CLI for version control operations
+- **github-discussion-adapter.md** (Phase 6): GitHub Discussions for extended conversations
+- **infrastructure-adapters.md** (Phase 6): Event stores, config, metrics, messaging, CI/CD, repair cycles
+
 ## Hexagonal Architecture Diagram
 
 The system follows a hexagonal (ports & adapters) architecture with five layers:
