@@ -1309,6 +1309,18 @@ classDiagram
         +request_changes()
         +escalate(reason)
         +is_complete()
+        +needs_maker_revision()
+        +get_latest_feedback()
+    }
+    
+    class ReviewIteration {
+        -iteration_number: int
+        -maker_output: string
+        -maker_execution_id: string
+        -reviewer_feedback: ReviewFeedback | None
+        -reviewer_execution_id: string | None
+        -started_at: datetime
+        -completed_at: datetime | None
     }
     
     class ReviewFeedback {
@@ -1327,7 +1339,8 @@ classDiagram
     Agent "1" --> "0..*" AgentExecution: performs
     Agent "N" --> "M" ReviewCycle: reviews
     AgentExecution "N" --> "1" Workflow: belongs to
-    ReviewCycle "1" --> "1..*" ReviewFeedback: collects
+    ReviewCycle "1" --> "0..*" ReviewIteration: has
+    ReviewIteration "1" --> "0..1" ReviewFeedback: has
 ```
 
 ---
