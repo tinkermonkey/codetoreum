@@ -11,7 +11,7 @@ applies_to: "documentation/architecture/domain/events.md"
 
 ## Overview
 
-Domain events are immutable records of significant state changes in the system. The system defines **90 modern event classes** (frozen dataclasses) across **18 files** in the `domain/events/` directory, organized into **18 bounded contexts**. The system also includes **73 legacy event classes** in `legacy_domain_events.py` for backward compatibility.
+Domain events are immutable records of significant state changes in the system. The system defines **90 modern event classes** (frozen dataclasses) across **17 files** in the `domain/events/` directory, organized into **18 bounded contexts**. The system also includes **73 legacy event classes** in `legacy_domain_events.py` for backward compatibility.
 
 Events are frozen dataclasses (`@dataclass(frozen=True)`), making them immutable once created—a critical requirement for maintaining an audit trail and enabling event sourcing.
 
@@ -521,13 +521,71 @@ class ReviewCycleEscalatedToHumanEvent(CodetoreumEvent):
     Attributes:
         review_cycle_id: Review cycle being escalated
         work_item_id: Item requiring escalation
-        reason: Why escalation occurred
+        iteration: Iteration when escalation occurred
+        blocking_count: Number of blocking findings
+        escalation_reason: Reason for escalation (BLOCKED or MAX_ITERATIONS)
     """
     review_cycle_id: str = ""
     work_item_id: str = ""
-    reason: str = ""
+    iteration: int = 0
+    blocking_count: int = 0
+    escalation_reason: str = ""
 
-# ... 3 more events (HumanFeedbackReceivedEvent, MaxIterationsReachedEvent)
+@dataclass(frozen=True)
+class ReviewCycleMakerRevisionEvent(CodetoreumEvent):
+    """Emitted when maker completes a revision.
+    
+    Fired by: ReviewCycle.apply_revision() → domain
+    Subscribers:
+      - ReviewHandler: Prepare for new review iteration
+      - MetricsHandler: Record revision completion
+    
+    Attributes:
+        review_cycle_id: Review cycle ID
+        work_item_id: Item being revised
+        iteration: Iteration number of this revision
+    """
+    review_cycle_id: str = ""
+    work_item_id: str = ""
+    iteration: int = 0
+
+@dataclass(frozen=True)
+class ReviewCycleHumanFeedbackReceivedEvent(CodetoreumEvent):
+    """Emitted when human feedback is received on escalated cycle.
+    
+    Fired by: ReviewService.receive_human_feedback() → application
+    Subscribers:
+      - ReviewHandler: Process feedback and resume cycle
+      - NotificationHandler: Notify team of feedback
+      - MetricsHandler: Record feedback received
+    
+    Attributes:
+        review_cycle_id: Review cycle ID
+        work_item_id: Item receiving feedback
+        feedback: The human feedback provided
+    """
+    review_cycle_id: str = ""
+    work_item_id: str = ""
+    feedback: str = ""
+
+@dataclass(frozen=True)
+class ReviewCycleMaxIterationsReachedEvent(CodetoreumEvent):
+    """Emitted when max iterations reached without approval.
+    
+    Fired by: ReviewCycle.check_max_iterations() → domain
+    Subscribers:
+      - ReviewHandler: Escalate to human decision
+      - NotificationHandler: Notify team of escalation
+      - MetricsHandler: Record max iterations reached
+    
+    Attributes:
+        review_cycle_id: Review cycle ID
+        work_item_id: Item requiring decision
+        max_iterations: Maximum iterations configured
+    """
+    review_cycle_id: str = ""
+    work_item_id: str = ""
+    max_iterations: int = 0
 ```
 
 **Event-Flow Diagram**:
@@ -618,6 +676,230 @@ class PRReviewCycleVerificationStartedEvent(CodetoreumEvent):
     """
     pr_review_cycle_id: str = ""
     pr_id: str = ""
+
+@dataclass(frozen=True)
+class PRReviewCyclePhaseStartedEvent(CodetoreumEvent):
+    """Emitted when any PR review cycle phase starts.
+    
+    Unified event for phase initiation across all phases (code review, verification, CI check, consolidation).
+    
+    Attributes:
+        pr_id: GitHub PR identifier
+        phase_name: Name of the phase starting (code_review, verification, ci_check, consolidation)
+        phase_index: Position in phase sequence (1-based)
+        agent_id: ID of the agent executing this phase
+        context_source: Context source for this phase (e.g., pr_diff, parent_issue, ba_output, or empty string)
+        workflow_run_id: ID of the workflow run
+    """
+    pr_id: str = ""
+    phase_name: str = ""
+    phase_index: int = 0
+    agent_id: str = ""
+    context_source: str = ""
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class PRReviewCycleCICheckCompletedEvent(CodetoreumEvent):
+    """Emitted when Phase 3 CI check completes.
+    
+    Fired by: PRReviewService.complete_ci_check() → application
+    Subscribers:
+      - PRReviewHandler: Update review state
+      - MetricsHandler: Record CI check results
+    
+    Attributes:
+        pr_id: GitHub PR identifier
+        passed: Whether CI check passed
+        failures_count: Number of failing CI checks
+        pending_count: Number of pending CI checks
+        duration_seconds: Time taken for CI check
+        workflow_run_id: ID of the workflow run
+    """
+    pr_id: str = ""
+    passed: bool = False
+    failures_count: int = 0
+    pending_count: int = 0
+    duration_seconds: float = 0.0
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class PRReviewCycleConsolidationStartedEvent(CodetoreumEvent):
+    """Emitted when Phase 4 consolidation starts.
+    
+    Fired by: PRReviewService.start_consolidation() → application
+    Subscribers:
+      - PRReviewHandler: Initialize consolidation state
+      - MetricsHandler: Record consolidation start time
+    
+    Attributes:
+        pr_id: GitHub PR identifier
+        finding_count: Number of findings to consolidate
+        workflow_run_id: ID of the workflow run
+    """
+    pr_id: str = ""
+    finding_count: int = 0
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class PRReviewCycleIssuesFoundEvent(CodetoreumEvent):
+    """Emitted when issues are found in review (cycle has problems to fix).
+    
+    Fired by: PRReviewService.record_issues() → application
+    Subscribers:
+      - NotificationHandler: Notify team of issues
+      - MetricsHandler: Record issue statistics
+      - WorkflowHandler: Plan next cycle
+    
+    Attributes:
+        pr_id: GitHub PR identifier
+        work_item_id: Work item ID being reviewed
+        cycle_number: Iteration number (1-based)
+        total: Total number of findings
+        critical: Number of critical severity findings
+        high: Number of high severity findings
+        medium: Number of medium severity findings
+        low: Number of low severity findings
+        sub_issue_count: Number of created sub-issues
+        cycle_duration_seconds: Total time for this cycle
+        next_column: Column to move item to
+        workflow_run_id: ID of the workflow run
+    """
+    pr_id: str = ""
+    work_item_id: str = ""
+    cycle_number: int = 0
+    total: int = 0
+    critical: int = 0
+    high: int = 0
+    medium: int = 0
+    low: int = 0
+    sub_issue_count: int = 0
+    cycle_duration_seconds: float = 0.0
+    next_column: str = ""
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class PRReviewCycleMaxCyclesReachedEvent(CodetoreumEvent):
+    """Emitted when maximum review cycles reached without resolution.
+    
+    Fired by: PRReviewService.check_max_cycles() → application
+    Subscribers:
+      - EscalationHandler: Escalate to human
+      - NotificationHandler: Notify team
+      - MetricsHandler: Record escalation
+    
+    Attributes:
+        pr_id: GitHub PR identifier
+        work_item_id: Work item ID being reviewed
+        cycle_number: Iteration number that exceeded limit
+        max_cycles: Maximum cycles configured
+        next_column: Column to move item to (escalation column)
+        workflow_run_id: ID of the workflow run
+    """
+    pr_id: str = ""
+    work_item_id: str = ""
+    cycle_number: int = 0
+    max_cycles: int = 0
+    next_column: str = ""
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class PRReviewCycleEscalatedEvent(CodetoreumEvent):
+    """Emitted when cycle is escalated to human reviewer.
+    
+    Fired by: PRReviewService.escalate() → application
+    Subscribers:
+      - EscalationHandler: Route to human reviewer
+      - NotificationHandler: Notify human reviewer
+      - MetricsHandler: Record escalation
+    
+    Attributes:
+        pr_id: GitHub PR identifier
+        reason: Reason for escalation (e.g., max_cycles_reached)
+        cycle_number: Iteration number when escalation occurred
+        workflow_run_id: ID of the workflow run
+    """
+    pr_id: str = ""
+    reason: str = ""
+    cycle_number: int = 0
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class PRReviewCycleSubIssuesCreatedEvent(CodetoreumEvent):
+    """Emitted when sub-issues are created during PR review cycle.
+    
+    Fired by: PRReviewService.create_sub_issues() → application
+    Subscribers:
+      - BoardHandler: Add sub-issues to board
+      - NotificationHandler: Notify team of sub-issues
+      - MetricsHandler: Record sub-issue creation
+    
+    Attributes:
+        pr_id: GitHub PR identifier
+        cycle_number: Iteration number (1-based)
+        count: Number of sub-issues created
+        work_item_ids: IDs of created work items (sub-issues)
+        target_board: Board ID where sub-issues were created
+        workflow_run_id: ID of the workflow run
+    """
+    pr_id: str = ""
+    cycle_number: int = 0
+    count: int = 0
+    work_item_ids: list[str] = field(default_factory=list)
+    target_board: str = ""
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class PRReviewCyclePhaseCompletedEvent(CodetoreumEvent):
+    """Emitted when a PR review cycle phase completes.
+    
+    Fired by: PRReviewService.complete_phase() → application
+    Subscribers:
+      - PRReviewHandler: Advance to next phase
+      - MetricsHandler: Record phase duration
+    
+    Attributes:
+        pr_id: GitHub PR identifier
+        phase_name: Name of the completed phase
+        phase_index: Position in phase sequence (1-based)
+        findings_count: Number of findings in this phase
+        comment_id: ID of comment associated with phase (if any)
+        workflow_run_id: ID of the workflow run
+    """
+    pr_id: str = ""
+    phase_name: str = ""
+    phase_index: int = 0
+    findings_count: int = 0
+    comment_id: str = ""
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class PRReviewCycleConsolidationCompletedEvent(CodetoreumEvent):
+    """Emitted when PR review cycle consolidation phase completes.
+    
+    Fired by: PRReviewService.complete_consolidation() → application
+    Subscribers:
+      - WorkflowHandler: Advance work item or escalate
+      - NotificationHandler: Notify team of outcome
+      - MetricsHandler: Record cycle completion
+    
+    Attributes:
+        pr_id: GitHub PR identifier
+        total_findings: Total number of findings across all phases
+        critical: Number of critical severity findings
+        high: Number of high severity findings
+        medium: Number of medium severity findings
+        low: Number of low severity findings
+        consolidation_duration_seconds: Time taken for consolidation
+        workflow_run_id: ID of the workflow run
+    """
+    pr_id: str = ""
+    total_findings: int = 0
+    critical: int = 0
+    high: int = 0
+    medium: int = 0
+    low: int = 0
+    consolidation_duration_seconds: float = 0.0
+    workflow_run_id: str = ""
 
 @dataclass(frozen=True)
 class PRReviewCycleApprovedEvent(CodetoreumEvent):
@@ -833,6 +1115,56 @@ class RepairCycleResumedEvent(CodetoreumEvent):
     """Emitted when repair cycle resumes after pause or interruption."""
     reason_resumed: str = ""
     from_iteration: int = 0
+    workflow_run_id: str = ""
+
+@dataclass(frozen=True)
+class RepairCycleCheckpointFailedEvent(CodetoreumEvent):
+    """Emitted when checkpoint save fails (recovery may not be possible).
+    
+    Fired by: CheckpointService.save() → infrastructure
+    Subscribers:
+      - RecoveryHandler: Mark cycle unrecoverable
+      - MetricsHandler: Record checkpoint failure
+      - AlertHandler: Notify operators
+    
+    Attributes:
+        workflow_run_id: ID of the workflow run
+        test_type: Type of test being executed (UNIT, INTEGRATION, E2E)
+        iteration: Current iteration number (1-based)
+        error_type: Type of error (e.g., ConnectionError)
+        error_message: Error message details
+        checkpoint_store_type: Type of checkpoint store (e.g., RedisCheckpointStore)
+    """
+    workflow_run_id: str = ""
+    test_type: str = ""
+    iteration: int = 0
+    error_type: str = ""
+    error_message: str = ""
+    checkpoint_store_type: str = ""
+
+@dataclass(frozen=True)
+class RepairCycleMetricsBackendFailedEvent(CodetoreumEvent):
+    """Emitted when metrics backend fails (critical observability degradation).
+    
+    Fired by: MetricsAdapter (resilience decorator) → infrastructure
+    Subscribers:
+      - MetricsHandler: Log metrics backend failure
+      - AlertHandler: Page on-call for observability
+      - CircuitBreakerHandler: Open circuit breaker
+    
+    Attributes:
+        operation: Operation that failed (e.g., repair_cycle_started)
+        error_type: Type of error (e.g., ConnectionError)
+        error_message: Error message details
+        consecutive_failures: Number of consecutive failures so far
+        circuit_breaker_open: True if circuit breaker is now open
+        workflow_run_id: ID of the workflow run (may be empty if unknown)
+    """
+    operation: str = ""
+    error_type: str = ""
+    error_message: str = ""
+    consecutive_failures: int = 0
+    circuit_breaker_open: bool = False
     workflow_run_id: str = ""
 
 @dataclass(frozen=True)
