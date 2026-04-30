@@ -72,7 +72,7 @@ Mock implementations of input ports that wrap application services for HTTP endp
 | 11 | `IAgentQueryPort` | `MockAgentQueryAdapter` | `adapters/primary/input_port_adapters/mock/mock_agent_query_adapter.py` | Agent queries — capabilities, status |
 | 12 | `IConfigurationCommandPort` | `MockConfigCommandAdapter` | `adapters/primary/input_port_adapters/mock/mock_config_command_adapter.py` | Configuration commands — create, update |
 | 13 | `IConfigurationQueryPort` | `MockConfigQueryAdapter` | `adapters/primary/input_port_adapters/mock/mock_config_query_adapter.py` | Configuration queries — read, list |
-| 14 | `IConfigurationServicePort` | `MockConfigServiceAdapter` | `adapters/primary/input_port_adapters/mock/mock_config_service_adapter.py` | Configuration service interface |
+| 14 | `ConfigurationService` | `MockConfigServiceAdapter` | `adapters/primary/input_port_adapters/mock/mock_config_service_adapter.py` | Configuration service wrapper |
 | 15 | `ITaskQueryPort` | `MockTaskQueryAdapter` | `adapters/primary/input_port_adapters/mock/mock_task_query_adapter.py` | Task/job queries |
 | 16 | `IMetricsQueryPort` | `MockMetricsQueryAdapter` | `adapters/primary/input_port_adapters/mock/mock_metrics_query_adapter.py` | Metrics queries — timing, counts |
 | 17 | `IWorkspaceQueryPort` | `MockWorkspaceQueryAdapter` | `adapters/primary/input_port_adapters/mock/mock_workspace_query_adapter.py` | Workspace queries — containers, mounts |
@@ -83,8 +83,8 @@ Mock implementations of input ports that wrap application services for HTTP endp
 ### Testing Adapters Location
 ```
 src/codetoreum/adapters/testing/
-├── in_memory_*.py          (11 files) - In-memory backing stores
-├── mock_*.py               (18 files) - Mock external systems
+├── in_memory_*.py          (16 files) - In-memory backing stores
+├── mock_*.py               (15 files) - Mock external systems
 ├── fake_*.py               (1 file)  - Fake implementations
 ├── simple_*.py             (1 file)  - Simple implementations
 ├── execution_service_agent_executor.py
@@ -96,19 +96,19 @@ src/codetoreum/adapters/testing/
 ```
 src/codetoreum/adapters/primary/input_port_adapters/mock/
 ├── mock_*_command_adapter.py    (7 files) - Command handlers
-├── mock_*_query_adapter.py      (11 files) - Query handlers
+├── mock_*_query_adapter.py      (9 files) - Query handlers
 └── __init__.py
 ```
 
 ## Key Adapter Characteristics
 
-### In-Memory Adapters (11)
+### In-Memory Adapters (16)
 - **Purpose**: Backing stores without external services
 - **Thread-Safe**: Protected by locks for concurrent test execution
 - **Persisted During Session**: Data survives for event replay
 - **Examples**: `InMemoryEventStore`, `InMemoryTicketAdapter`, `InMemoryConfigStore`
 
-### Mock Adapters (18)
+### Mock Adapters (15)
 - **Purpose**: Simulate external systems with configurable responses
 - **Deterministic**: Same input produces same output
 - **Configurable**: Responses set via YAML or programmatically
