@@ -11,7 +11,7 @@ applies_to: "documentation/architecture/domain/events.md"
 
 ## Overview
 
-Domain events are immutable records of significant state changes in the system. The system defines **91 modern event classes** (frozen dataclasses) across **19 files** in the `domain/events/` directory, organized into multiple bounded contexts. The system also includes **74 legacy event classes** in `legacy_domain_events.py` for backward compatibility.
+Domain events are immutable records of significant state changes in the system. The system defines **90 modern event classes** (frozen dataclasses) across **18 files** in the `domain/events/` directory, organized into **18 bounded contexts**. The system also includes **73 legacy event classes** in `legacy_domain_events.py` for backward compatibility.
 
 Events are frozen dataclasses (`@dataclass(frozen=True)`), making them immutable once created—a critical requirement for maintaining an audit trail and enabling event sourcing.
 
@@ -737,17 +737,6 @@ class RepairCycleTestExecutionCompletedEvent(CodetoreumEvent):
     failed: int = 0
 
 @dataclass(frozen=True)
-class RepairCycleFixCycleStartedEvent(CodetoreumEvent):
-    """Emitted when fix phase starts (agent fixes failing tests).
-    
-    Attributes:
-        repair_cycle_id: Repair cycle
-        failing_tests: List of tests to fix
-    """
-    repair_cycle_id: str = ""
-    failing_tests: list[str] = field(default_factory=list)
-
-@dataclass(frozen=True)
 class RepairCycleCompletedEvent(CodetoreumEvent):
     """Emitted when repair cycle completes (all tests passing or max retries).
     
@@ -770,9 +759,26 @@ class RepairCycleCompletedEvent(CodetoreumEvent):
 
 @dataclass(frozen=True)
 class RepairCycleFixCycleStartedEvent(CodetoreumEvent):
-    """Emitted when fix cycle starts within repair cycle."""
+    """Emitted when fix cycle starts after test failures (FR-3.2).
+    
+    Fired by: RepairCycle.start_fix_cycle() → domain
+    Subscribers:
+      - RepairCycleHandler: Initialize fix cycle state
+      - MetricsHandler: Record cycle start time
+    
+    Attributes:
+        test_type: Type of test that failed (UNIT, INTEGRATION, etc.)
+        test_type_index: Position in test type sequence (starts at 1)
+        test_cycle_iteration: Current iteration number (starts at 1)
+        file_count: Number of files with failures to fix
+        total_failures: Total number of failures across all files
+        workflow_run_id: ID of the workflow run
+    """
     test_type: RepairTestType = RepairTestType.UNIT
-    iteration: int = 0
+    test_type_index: int = 0
+    test_cycle_iteration: int = 0
+    file_count: int = 0
+    total_failures: int = 0
     workflow_run_id: str = ""
 
 @dataclass(frozen=True)
@@ -1034,7 +1040,31 @@ class ContainerKilledEvent(CodetoreumEvent):
     execution_id: str = ""
     reason: str = ""
 
-# ... 1 more event (ContainerRecoveryCompletedEvent)
+@dataclass(frozen=True)
+class ContainerRecoveryCompletedEvent(CodetoreumEvent):
+    """Emitted when the full container recovery cycle completes.
+    
+    Fired by: ContainerRecoveryService.complete_recovery() → application
+    Subscribers:
+      - MetricsHandler: Record recovery statistics
+      - NotificationHandler: Notify team of recovery completion
+    
+    Attributes:
+        containers_recovered: Number of containers successfully recovered
+        containers_killed: Number of containers killed during cleanup
+        errors_encountered: Number of errors during recovery process
+        repair_cycles_processed: Number of repair cycles completed
+        started_at: ISO 8601 timestamp when recovery started
+        completed_at: ISO 8601 timestamp when recovery completed
+        duration_seconds: Total recovery duration in seconds
+    """
+    containers_recovered: int = 0
+    containers_killed: int = 0
+    errors_encountered: int = 0
+    repair_cycles_processed: int = 0
+    started_at: str = ""
+    completed_at: str = ""
+    duration_seconds: float = 0.0
 ```
 
 **Event-Flow Diagram**:
@@ -1250,7 +1280,41 @@ class BranchCreatedEvent(CodetoreumEvent):
     work_item_id: str = ""
     branch_name: str = ""
 
-# ... 2 more events (BranchPushed, FilesStagedEvent)
+@dataclass(frozen=True)
+class BranchPushedEvent(CodetoreumEvent):
+    """Emitted when a branch is pushed to remote.
+    
+    Fired by: IRepositoryService.push_branch() → adapter
+    Subscribers:
+      - AuditHandler: Log push operation
+      - MetricsHandler: Track push events
+    
+    Attributes:
+        repository_id: ID of the repository
+        branch_name: Name of the pushed branch
+        project_id: ID of the project containing the repository
+    """
+    repository_id: str = ""
+    branch_name: str = ""
+    project_id: str | None = None
+
+@dataclass(frozen=True)
+class FilesStagedEvent(CodetoreumEvent):
+    """Emitted when files are staged in the repository.
+    
+    Fired by: IRepositoryService.stage_files() → adapter
+    Subscribers:
+      - AuditHandler: Log staging operation
+      - MetricsHandler: Track staged file counts
+    
+    Attributes:
+        repository_id: ID of the repository
+        file_paths: Immutable tuple of staged file paths
+        project_id: ID of the project containing the repository
+    """
+    repository_id: str = ""
+    file_paths: tuple[str, ...] = ()
+    project_id: str | None = None
 ```
 
 **Event-Flow Diagram**:
@@ -1389,7 +1453,7 @@ graph TB
 
 ### Discussion Context
 
-**File**: `discussion_events.py` (8 events)
+**File**: `discussion_events.py` (6 events)
 
 Discussion tracks comments and conversational feedback loops on work items.
 
@@ -1674,15 +1738,63 @@ class QueuePositionChangedEvent(CodetoreumEvent):
     """Emitted when a work item's queue position changes.
     
     Attributes:
-        work_item_id: Work item in queue
-        old_position: Previous position
-        new_position: New position
+        queue_name: Name of the queue (typically "project_id:board_id")
+        item_id: ID of the work item in queue
+        old_position: Previous position in queue
+        new_position: New position in queue
+        project_id: ID of the project containing the queue
     """
-    work_item_id: str = ""
+    queue_name: str = ""
+    item_id: str = ""
     old_position: int = 0
     new_position: int = 0
+    project_id: str | None = None
 
-# ... 2 more events (QueueItemRemoved, WorkItemDeadLetterQueued)
+@dataclass(frozen=True)
+class QueueItemRemovedEvent(CodetoreumEvent):
+    """Emitted when a work item is removed from the queue.
+    
+    Fired by: AgentScheduler.remove_from_queue() → application
+    Subscribers:
+      - QueueHandler: Update queue state
+      - MetricsHandler: Track removal
+    
+    Attributes:
+        queue_name: Name of the queue (typically "project_id:board_id")
+        item_id: ID of the work item removed from queue
+        project_id: ID of the project containing the queue
+    """
+    queue_name: str = ""
+    item_id: str = ""
+    project_id: str | None = None
+
+@dataclass(frozen=True)
+class WorkItemDeadLetterQueuedEvent(CodetoreumEvent):
+    """Emitted when a work item is queued to the dead letter queue.
+    
+    Fired by: QueueService.move_to_dlq() → application
+    Subscribers:
+      - DLQHandler: Log DLQ entry
+      - NotificationHandler: Alert team
+      - MetricsHandler: Track DLQ events
+    
+    The dead letter queue (DLQ) is where work items are placed when they cannot
+    be automatically progressed through the workflow due to failures.
+    
+    Attributes:
+        work_item_id: ID of the work item queued to DLQ
+        board_id: ID of the board containing the work item
+        from_column: Current column/state of the work item
+        to_column: Intended next column/state (UNKNOWN if not determinable)
+        reason: Reason for DLQ queueing (e.g., callback failure, timeout)
+        failure_details: Additional error details
+    """
+    work_item_id: str = ""
+    board_id: str = ""
+    from_column: str = ""
+    to_column: str = ""
+    reason: str = ""
+    failure_details: str = ""
 ```
 
 **Event-Flow Diagram**:
@@ -1961,7 +2073,7 @@ graph TB
 
 ### Legacy DomainEvent Base Class
 
-The system contains **74 legacy event classes** using the older `DomainEvent` base class pattern (located in `legacy_domain_events.py`). These events follow a different design pattern than the modern frozen dataclass events:
+The system contains **73 legacy event classes** using the older `DomainEvent` base class pattern (located in `legacy_domain_events.py`). These events follow a different design pattern than the modern frozen dataclass events:
 
 ```python
 # Legacy pattern (deprecated - do NOT use for new events)
@@ -2170,7 +2282,7 @@ event.work_item_id = "WI-456"  # Raises: FrozenInstanceError
 
 ## Summary
 
-The 167 domain events across 13 bounded contexts form a complete audit trail of system behavior. Each event represents an immutable fact about state changes. Event handlers subscribe to events and trigger reactions—calling output ports, updating read models, or emitting new events.
+The 163 domain events across 18 bounded contexts form a complete audit trail of system behavior. Each event represents an immutable fact about state changes. Event handlers subscribe to events and trigger reactions—calling output ports, updating read models, or emitting new events.
 
 Events enable decoupled communication between layers, complete observability through event sourcing, and the ability to replay history for debugging or temporal queries.
 
