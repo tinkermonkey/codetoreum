@@ -273,7 +273,7 @@ def git_adapter(mock_subprocess):
 **Related Files**:
 - Port interface: `src/codetoreum/ports/output/repository.py` (IRepository)
 - Domain types: `src/codetoreum/domain/types.py` (BranchName, CommitHash)
-- Bootstrap wiring: `src/codetoreum/infrastructure/bootstrap.py`
+- Bootstrap wiring: `src/codetoreum/infrastructure/simulation/bootstrap.py` (Simulation), `documentation/implementations/production-bootstrap.md` (Production)
 - Tests: `tests/unit/adapters/secondary/test_git_repository_adapter.py`
 
 ## Diagram

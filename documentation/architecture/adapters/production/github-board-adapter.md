@@ -257,7 +257,7 @@ def board_adapter(mock_graphql_client):
 - Ticket adapter: `src/codetoreum/adapters/secondary/github_ticket_adapter.py` (dependency)
 - GraphQL client: `src/codetoreum/infrastructure/http/github_graphql_client.py`
 - Domain events: `src/codetoreum/domain/events/board_events.py` (WorkItemColumnChangedEvent, BoardReconciledEvent)
-- Bootstrap wiring: `src/codetoreum/infrastructure/bootstrap.py`
+- Bootstrap wiring: `src/codetoreum/infrastructure/simulation/bootstrap.py` (Simulation), `documentation/implementations/production-bootstrap.md` (Production)
 - Tests: `tests/unit/adapters/secondary/github/test_board_adapter.py`
 
 ## Diagram

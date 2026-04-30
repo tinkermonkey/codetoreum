@@ -368,7 +368,7 @@ def llm_adapter(mock_http_client):
 - Configuration: `src/codetoreum/config/claude_config.py`
 - Credential providers: `src/codetoreum/adapters/secondary/claude_code_adapter.py` (ICredentialProvider)
 - Domain types: `src/codetoreum/domain/types.py`
-- Bootstrap wiring: `src/codetoreum/infrastructure/bootstrap.py`
+- Bootstrap wiring: `src/codetoreum/infrastructure/simulation/bootstrap.py` (Simulation), `documentation/implementations/production-bootstrap.md` (Production)
 - Tests: `tests/unit/adapters/secondary/test_claude_code_adapter.py`
 
 ## Diagram
@@ -455,7 +455,7 @@ classDiagram
 ## Cross-References
 
 - **Port Interface**: [ILLMProvider](../ports/output/core-system.md#illmprovider) - Complete interface specification
-- **Related Adapters**: [Systemic Analysis Adapter](./llm-systemic-analysis-adapter.md) - LLM-based analysis
+- **Related Adapters**: [Systemic Analysis Adapter](./infrastructure-adapters.md#llmsystemicanalysisadapter-isystemicanalysisservice) - LLM-based analysis
 - **Infrastructure**: [Resilience Patterns](../infrastructure/resilience.md) - Rate limiting, retry, circuit breaker
 - **Simulation**: [MockLLMAdapter](../../implementations/simulation/adapters.md#output-port-adapters) - Test alternative
 - **Domain Models**: [ExecutionResult](../domain/models.md) - Execution result structure

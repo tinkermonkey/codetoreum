@@ -330,19 +330,7 @@ circuit_breaker_threshold: int = 5  # Fail after 5 attempts
 
 #### GitHubDiscussionAdapter (IDiscussionAdapter)
 
-**Purpose**: Manage GitHub Discussions and inline comments on issues/PRs.
-
-**Implementation**:
-- Create and retrieve discussions
-- Add comments to discussions
-- Manage discussion categories and statuses
-- Track discussion threading
-
-**Use Cases**:
-- Detailed problem discussions (separate from issues)
-- Architecture decision records
-- RFCs and proposals
-- Knowledge base articles
+See [GitHub Discussion Adapter](./github-discussion-adapter.md) for complete specification.
 
 ---
 

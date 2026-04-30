@@ -261,7 +261,7 @@ def ticket_adapter(mock_http_client):
 - GraphQL client: `src/codetoreum/infrastructure/http/github_graphql_client.py`
 - Domain models: `src/codetoreum/domain/work_item.py` (WorkItem)
 - Domain types: `src/codetoreum/domain/types.py` (WorkItemId, CommentId)
-- Bootstrap wiring: `src/codetoreum/infrastructure/bootstrap.py`
+- Bootstrap wiring: `src/codetoreum/infrastructure/simulation/bootstrap.py` (Simulation), `documentation/implementations/production-bootstrap.md` (Production)
 - Tests: `tests/unit/adapters/secondary/github/test_ticket_adapter.py`
 
 ## Diagram

@@ -154,8 +154,8 @@ Pause and retry after backoff
 **Class**: `class GitHubDiscussionAdapter(IDiscussionAdapter):`
 
 **Related Files**:
-- Port interface: `src/codetoreum/ports/output/discussion.py` (IDiscussionAdapter)
-- Bootstrap wiring: `src/codetoreum/infrastructure/bootstrap.py`
+- Port interface: `src/codetoreum/ports/output/discussion_adapter.py` (IDiscussionAdapter)
+- Bootstrap wiring: `src/codetoreum/infrastructure/simulation/bootstrap.py` (Simulation), `documentation/implementations/production-bootstrap.md` (Production)
 - Tests: `tests/unit/adapters/secondary/github/test_discussion_adapter.py`
 
 ## Diagram

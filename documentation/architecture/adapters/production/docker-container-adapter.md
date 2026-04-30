@@ -338,7 +338,7 @@ def container_adapter(mock_docker_client):
 - Configuration: `src/codetoreum/config/docker_config.py`
 - Domain types: `src/codetoreum/domain/types.py` (ContainerId)
 - Recovery adapter: `src/codetoreum/adapters/secondary/docker_container_recovery_adapter.py` (failure recovery)
-- Bootstrap wiring: `src/codetoreum/infrastructure/bootstrap.py`
+- Bootstrap wiring: `src/codetoreum/infrastructure/simulation/bootstrap.py` (Simulation), `documentation/implementations/production-bootstrap.md` (Production)
 - Tests: `tests/unit/adapters/secondary/test_docker_container_adapter.py`
 
 ## Diagram
@@ -421,7 +421,7 @@ classDiagram
 ## Cross-References
 
 - **Port Interface**: [IContainer](../ports/output/core-system.md#icontainer) - Complete interface specification
-- **Related Adapters**: [Docker Container Recovery](./docker-container-recovery-adapter.md) - Failure recovery
+- **Related Adapters**: [Docker Container Recovery](./infrastructure-adapters.md#dockercontainerrecoveryadapter-iagentcontainerrecoveryservice) - Failure recovery
 - **Infrastructure**: [Resilience Patterns](../infrastructure/resilience.md) - Timeout, retry, circuit breaker
 - **Simulation**: [FakeContainerAdapter](../../implementations/simulation/adapters.md#output-port-adapters) - Test alternative
 - **Security**: [Agent Execution Security Model](../../../CLAUDE.md#agent-security-model)
