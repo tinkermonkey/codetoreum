@@ -105,44 +105,57 @@ class ITicketSystem(ABC):
 ```python
 class IVersionControlService(ABC):
     """
-    Abstract version control operations (Git, Mercurial, etc.).
+    Version control operations (synchronous, no events).
     
-    Handles clone, checkout, commit, push operations on repositories.
+    Provides vendor-agnostic abstraction for version control systems
+    (Git, Mercurial, etc.). These are synchronous command operations
+    without event emission, used for repository setup and state management.
     """
     
     @abstractmethod
-    async def clone_repository(self, repo_url: str, target_path: str) -> Repository:
-        """Clone a repository."""
+    async def clone_repository(self, url: str, target_path: str, branch: str | None = None) -> None:
+        """Clone a repository to local path."""
         pass
     
     @abstractmethod
-    async def create_branch(self, repo_path: str, branch_name: str, from_branch: str = "main") -> Branch:
-        """Create feature branch."""
+    async def checkout(self, repo_path: str, branch: str) -> None:
+        """Checkout specific branch."""
         pass
     
     @abstractmethod
-    async def checkout_branch(self, repo_path: str, branch_name: str) -> None:
-        """Checkout a branch."""
+    async def commit(self, repo_path: str, message: str, author_name: str | None = None,
+                    author_email: str | None = None, files: list[str] | None = None) -> str:
+        """Create commit with staged changes. Returns commit SHA."""
         pass
     
     @abstractmethod
-    async def commit(self, repo_path: str, message: str, files: list[str] | None = None) -> Commit:
-        """Create commit with message."""
+    async def push(self, repo_path: str, branch: str) -> None:
+        """Push branch to remote."""
         pass
     
     @abstractmethod
-    async def push(self, repo_path: str, branch_name: str, force: bool = False) -> PushResult:
-        """Push commits to remote."""
+    async def create_branch(self, repo_path: str, branch_name: str, from_branch: str | None = None) -> None:
+        """Create a new branch."""
         pass
     
     @abstractmethod
-    async def get_branches(self, repo_path: str) -> list[Branch]:
-        """List existing branches."""
+    async def list_branches(self, repo_path: str, remote: bool = False) -> list[str]:
+        """List all branches."""
         pass
     
     @abstractmethod
-    async def get_commit(self, repo_path: str, commit_hash: str) -> Commit:
-        """Get commit details."""
+    async def status(self, repo_path: str) -> VCSStatus:
+        """Return repository status."""
+        pass
+    
+    @abstractmethod
+    async def pull(self, repo_path: str, branch: str, remote: str = "origin") -> None:
+        """Pull latest changes from remote for the given branch."""
+        pass
+    
+    @abstractmethod
+    async def get_repository(self, identifier: str) -> Repository:
+        """Retrieve repository metadata."""
         pass
 ```
 
@@ -153,37 +166,107 @@ class IContainer(ABC):
     """
     Container runtime abstraction (Docker, Kubernetes, etc.).
     
-    Manages agent execution environments and containerized workloads.
+    Manages container lifecycle, execution, and file operations for agent execution environments.
     """
     
     @abstractmethod
-    async def run_command(self, command: str, container_id: str, timeout: int | None = None) -> CommandResult:
-        """Execute command in container."""
+    async def run(self, image: str, command: list[str] | tuple[str, ...],
+                 volumes: dict[str, str] | Mapping[str, str],
+                 environment: dict[str, str] | Mapping[str, str],
+                 timeout: int = 300,
+                 stream_callback: Callable | None = None) -> ContainerResult:
+        """Run a command in a container."""
         pass
     
     @abstractmethod
-    async def mount_directory(self, container_id: str, host_path: str, container_path: str, read_only: bool = False) -> None:
-        """Mount host directory into container."""
+    async def create(self, image: str, name: str | None = None,
+                    command: list[str] | tuple[str, ...] | None = None,
+                    volumes: dict[str, str] | Mapping[str, str] | None = None,
+                    environment: dict[str, str] | Mapping[str, str] | None = None,
+                    working_dir: str | None = None, user: str | None = None,
+                    network: str | None = None, labels: dict[str, str] | None = None) -> str:
+        """Create a container without starting it. Returns container ID."""
         pass
     
     @abstractmethod
-    async def cleanup(self, container_id: str) -> None:
-        """Clean up container resources."""
+    async def start(self, container_id: str) -> None:
+        """Start a container."""
         pass
     
     @abstractmethod
-    async def get_logs(self, container_id: str, tail: int | None = None) -> str:
-        """Retrieve container output."""
+    async def stop(self, container_id: str, timeout: int = 10) -> None:
+        """Stop a container."""
         pass
     
     @abstractmethod
-    async def get_status(self, container_id: str) -> ContainerStatus:
+    async def remove(self, container_id: str, force: bool = False) -> None:
+        """Remove a container."""
+        pass
+    
+    @abstractmethod
+    async def kill(self, container_id: str, signal: str = "SIGKILL") -> None:
+        """Kill a container."""
+        pass
+    
+    @abstractmethod
+    async def logs(self, container_id: str, stream: bool = False,
+                  follow: bool = False, tail: int | None = None,
+                  since: datetime | None = None) -> Any:
+        """Get container logs."""
+        pass
+    
+    @abstractmethod
+    async def status(self, container_id: str) -> ContainerStatus:
         """Get container status."""
         pass
     
     @abstractmethod
-    async def create_container(self, image: str, name: str, env_vars: dict[str, str] | None = None) -> Container:
-        """Create and start a new container."""
+    async def exec(self, container_id: str, command: list[str] | tuple[str, ...],
+                  user: str | None = None, working_dir: str | None = None,
+                  environment: dict[str, str] | Mapping[str, str] | None = None) -> ContainerResult:
+        """Execute a command in a running container."""
+        pass
+    
+    @abstractmethod
+    async def list_containers(self, all: bool = False,
+                             filters: dict[str, Any] | None = None) -> list[ContainerStatus]:
+        """List containers."""
+        pass
+    
+    @abstractmethod
+    async def pull_image(self, image: str, tag: str = "latest",
+                        stream_callback: Callable | None = None) -> None:
+        """Pull a container image."""
+        pass
+    
+    @abstractmethod
+    async def image_exists(self, image: str, tag: str = "latest") -> bool:
+        """Check if an image exists locally."""
+        pass
+    
+    @abstractmethod
+    async def inspect(self, container_id: str) -> dict[str, Any]:
+        """Get detailed container information."""
+        pass
+    
+    @abstractmethod
+    async def wait(self, container_id: str, timeout: int | None = None) -> int:
+        """Wait for a container to stop. Returns exit code."""
+        pass
+    
+    @abstractmethod
+    async def copy_to_container(self, container_id: str, source: str, destination: str) -> None:
+        """Copy files to a container."""
+        pass
+    
+    @abstractmethod
+    async def copy_from_container(self, container_id: str, source: str, destination: str) -> None:
+        """Copy files from a container."""
+        pass
+    
+    @abstractmethod
+    async def get_file_content(self, container_id: str, file_path: str) -> bytes:
+        """Get file content from a container's output directory."""
         pass
 ```
 
@@ -192,34 +275,62 @@ class IContainer(ABC):
 ```python
 class ILLMProvider(ABC):
     """
-    Language model provider abstraction (Claude, GPT-4, etc.).
+    Interface for Large Language Model providers.
     
-    Orchestrates agent interactions with LLM APIs.
+    This port abstracts LLM operations, supporting various providers
+    like Claude, GPT-4, and local models. For Codetoreum, providers
+    run in containerized environments with context mounted as files.
     """
     
     @abstractmethod
-    async def execute_agent(self, context: AgentContext) -> AgentExecutionResult:
-        """Run agent with context."""
+    async def execute(self, prompt: str, context: ExecutionContext | None = None,
+                     stream_callback: StreamCallback | None = None) -> ExecutionResult:
+        """Execute a prompt with the LLM."""
         pass
     
     @abstractmethod
-    async def converse(self, session_id: str, messages: list[Message]) -> ConversationResult:
-        """Multi-turn conversation."""
+    async def execute_with_tools(self, prompt: str, tools: list[ToolDefinition],
+                                context: ExecutionContext | None = None,
+                                stream_callback: StreamCallback | None = None) -> ExecutionResult:
+        """Execute prompt with tool/function calling capabilities."""
         pass
     
     @abstractmethod
-    async def validate_context_window(self, tokens: int) -> bool:
-        """Check token budget."""
+    async def stream_completion(self, prompt: str,
+                               context: ExecutionContext | None = None) -> AsyncIterator[StreamChunk]:
+        """Stream completion tokens as they're generated."""
+        pass
+    
+    @abstractmethod
+    async def create_conversation(self, system_prompt: str | None = None,
+                                 parameters: ExecutionContext | None = None) -> str:
+        """Create a new conversation session. Returns conversation ID."""
+        pass
+    
+    @abstractmethod
+    async def continue_conversation(self, conversation_id: str, message: str,
+                                   stream_callback: StreamCallback | None = None) -> ExecutionResult:
+        """Continue an existing conversation."""
         pass
     
     @abstractmethod
     async def get_model_info(self) -> ModelInfo:
-        """Get model capabilities and limits."""
+        """Get information about the current model."""
         pass
     
     @abstractmethod
-    async def stream_response(self, prompt: str) -> AsyncIterator[str]:
-        """Stream response tokens."""
+    async def list_available_models(self) -> list[ModelInfo]:
+        """List all available models from this provider."""
+        pass
+    
+    @abstractmethod
+    async def count_tokens(self, text: str, model: str | None = None) -> int:
+        """Count tokens in text."""
+        pass
+    
+    @abstractmethod
+    async def get_usage_stats(self, since: datetime | None = None) -> UsageStats:
+        """Get usage statistics (token usage and costs)."""
         pass
 ```
 
@@ -328,34 +439,51 @@ class IRepository(ABC):
 
 | Method | Parameters | Return Type | Description |
 |---|---|---|---|
-| `clone_repository()` | `repo_url, target_path` | `Repository` | Clone a repository |
-| `create_branch()` | `repo_path, branch_name, from_branch` | `Branch` | Create feature branch |
-| `checkout_branch()` | `repo_path, branch_name` | `None` | Switch to branch |
-| `commit()` | `repo_path, message, files` | `Commit` | Create commit |
-| `push()` | `repo_path, branch_name, force` | `PushResult` | Push commits to remote |
-| `get_branches()` | `repo_path` | `list[Branch]` | List branches |
-| `get_commit()` | `repo_path, commit_hash` | `Commit` | Get commit details |
+| `clone_repository()` | `url, target_path, branch` | `None` | Clone repository to local path |
+| `checkout()` | `repo_path, branch` | `None` | Checkout specific branch |
+| `commit()` | `repo_path, message, author_name, author_email, files` | `str` | Create commit, returns SHA |
+| `push()` | `repo_path, branch` | `None` | Push branch to remote |
+| `create_branch()` | `repo_path, branch_name, from_branch` | `None` | Create new branch |
+| `list_branches()` | `repo_path, remote` | `list[str]` | List all branches |
+| `status()` | `repo_path` | `VCSStatus` | Get repository status |
+| `pull()` | `repo_path, branch, remote` | `None` | Pull latest changes from remote |
+| `get_repository()` | `identifier` | `Repository` | Retrieve repository metadata |
 
 ### IContainer Methods
 
 | Method | Parameters | Return Type | Description |
 |---|---|---|---|
-| `run_command()` | `command, container_id, timeout` | `CommandResult` | Execute command in container |
-| `mount_directory()` | `container_id, host_path, container_path, read_only` | `None` | Mount host directory |
-| `cleanup()` | `container_id` | `None` | Clean up resources |
-| `get_logs()` | `container_id, tail` | `str` | Get container logs |
-| `get_status()` | `container_id` | `ContainerStatus` | Get container status |
-| `create_container()` | `image, name, env_vars` | `Container` | Create and start container |
+| `run()` | `image, command, volumes, environment, timeout, stream_callback` | `ContainerResult` | Run command in container |
+| `create()` | `image, name, command, volumes, environment, working_dir, user, network, labels` | `str` | Create container without starting |
+| `start()` | `container_id` | `None` | Start container |
+| `stop()` | `container_id, timeout` | `None` | Stop container |
+| `remove()` | `container_id, force` | `None` | Remove container |
+| `kill()` | `container_id, signal` | `None` | Kill container |
+| `logs()` | `container_id, stream, follow, tail, since` | `Any` | Get container logs |
+| `status()` | `container_id` | `ContainerStatus` | Get container status |
+| `exec()` | `container_id, command, user, working_dir, environment` | `ContainerResult` | Execute in running container |
+| `list_containers()` | `all, filters` | `list[ContainerStatus]` | List containers |
+| `pull_image()` | `image, tag, stream_callback` | `None` | Pull container image |
+| `image_exists()` | `image, tag` | `bool` | Check if image exists locally |
+| `inspect()` | `container_id` | `dict[str, Any]` | Get detailed container info |
+| `wait()` | `container_id, timeout` | `int` | Wait for container to stop |
+| `copy_to_container()` | `container_id, source, destination` | `None` | Copy files to container |
+| `copy_from_container()` | `container_id, source, destination` | `None` | Copy files from container |
+| `get_file_content()` | `container_id, file_path` | `bytes` | Get file content from container |
 
 ### ILLMProvider Methods
 
 | Method | Parameters | Return Type | Description |
 |---|---|---|---|
-| `execute_agent()` | `context: AgentContext` | `AgentExecutionResult` | Run agent with context |
-| `converse()` | `session_id, messages` | `ConversationResult` | Multi-turn conversation |
-| `validate_context_window()` | `tokens: int` | `bool` | Validate token budget |
-| `get_model_info()` | — | `ModelInfo` | Get model capabilities |
-| `stream_response()` | `prompt: str` | `AsyncIterator[str]` | Stream response tokens |
+| `execute()` | `prompt, context, stream_callback` | `ExecutionResult` | Execute prompt with LLM |
+| `execute_with_tools()` | `prompt, tools, context, stream_callback` | `ExecutionResult` | Execute with tool calling |
+| `stream_completion()` | `prompt, context` | `AsyncIterator[StreamChunk]` | Stream completion tokens |
+| `create_conversation()` | `system_prompt, parameters` | `str` | Create conversation session |
+| `continue_conversation()` | `conversation_id, message, stream_callback` | `ExecutionResult` | Continue conversation |
+| `get_model_info()` | — | `ModelInfo` | Get model information |
+| `list_available_models()` | — | `list[ModelInfo]` | List available models |
+| `count_tokens()` | `text, model` | `int` | Count tokens in text |
+| `get_usage_stats()` | `since` | `UsageStats` | Get usage statistics |
 
 ### IRepository Methods (17 methods)
 
@@ -420,32 +548,49 @@ classDiagram
     
     class IVersionControlService {
         <<interface>>
-        +clone_repository(repo_url, target_path) Repository
-        +create_branch(repo_path, branch_name, from_branch) Branch
-        +checkout_branch(repo_path, branch_name) None
-        +commit(repo_path, message, files) Commit
-        +push(repo_path, branch_name, force) PushResult
-        +get_branches(repo_path) list
-        +get_commit(repo_path, commit_hash) Commit
+        +clone_repository(url, target_path, branch) None
+        +checkout(repo_path, branch) None
+        +commit(repo_path, message, author_name, author_email, files) str
+        +push(repo_path, branch) None
+        +create_branch(repo_path, branch_name, from_branch) None
+        +list_branches(repo_path, remote) list[str]
+        +status(repo_path) VCSStatus
+        +pull(repo_path, branch, remote) None
+        +get_repository(identifier) Repository
     }
     
     class IContainer {
         <<interface>>
-        +run_command(command, container_id, timeout) CommandResult
-        +mount_directory(container_id, host_path, container_path, read_only) None
-        +cleanup(container_id) None
-        +get_logs(container_id, tail) str
-        +get_status(container_id) ContainerStatus
-        +create_container(image, name, env_vars) Container
+        +run(image, command, volumes, environment, timeout, stream_callback) ContainerResult
+        +create(image, name, command, volumes, environment, working_dir, user, network, labels) str
+        +start(container_id) None
+        +stop(container_id, timeout) None
+        +remove(container_id, force) None
+        +kill(container_id, signal) None
+        +logs(container_id, stream, follow, tail, since) Any
+        +status(container_id) ContainerStatus
+        +exec(container_id, command, user, working_dir, environment) ContainerResult
+        +list_containers(all, filters) list[ContainerStatus]
+        +pull_image(image, tag, stream_callback) None
+        +image_exists(image, tag) bool
+        +inspect(container_id) dict
+        +wait(container_id, timeout) int
+        +copy_to_container(container_id, source, destination) None
+        +copy_from_container(container_id, source, destination) None
+        +get_file_content(container_id, file_path) bytes
     }
     
     class ILLMProvider {
         <<interface>>
-        +execute_agent(context) AgentExecutionResult
-        +converse(session_id, messages) ConversationResult
-        +validate_context_window(tokens) bool
+        +execute(prompt, context, stream_callback) ExecutionResult
+        +execute_with_tools(prompt, tools, context, stream_callback) ExecutionResult
+        +stream_completion(prompt, context) AsyncIterator[StreamChunk]
+        +create_conversation(system_prompt, parameters) str
+        +continue_conversation(conversation_id, message, stream_callback) ExecutionResult
         +get_model_info() ModelInfo
-        +stream_response(prompt) AsyncIterator
+        +list_available_models() list[ModelInfo]
+        +count_tokens(text, model) int
+        +get_usage_stats(since) UsageStats
     }
     
     class GitHubTicketAdapter {
