@@ -261,35 +261,35 @@ class AgentExecution:
 ```python
 class WorkspaceType(Enum):
     """Type of workspace for agent execution."""
-    TASK_EXECUTION = "task_execution"
-    REVIEW_SESSION = "review_session"
-    DEBUG = "debug"
+    ISSUE = "issue"              # Feature branches + PRs
+    HYBRID = "hybrid"            # Feature branches + PRs + discussion posting
 
-@dataclass
+@dataclass(frozen=True)
 class WorkspaceContext:
     """Context for agent execution workspace.
     
-    Contains all information needed to set up a container
-    for agent execution, including files, environment,
-    and context about the work being performed.
+    Immutable value object that encapsulates workspace configuration
+    and routing logic. Determines how agent execution results are handled
+    (branch creation, PR creation, discussion comments, etc.).
     """
-    # Identity
-    id: str
+    # Workspace type
+    workspace_type: WorkspaceType
+    
+    # Identifiers
     project_id: str
     work_item_id: str
-    agent_id: str
     
-    # Workspace setup
-    type: WorkspaceType
-    container_id: str | None
-    mount_paths: dict[str, str]  # host_path -> container_path
+    # Issue workspace (feature branches + PRs)
+    branch_name: str | None
+    create_pr: bool
     
-    # Environment
-    environment_vars: dict[str, str]
+    # Discussion workspace (for hybrid mode)
+    discussion_id: str | None
     
-    # Lifecycle
-    created_at: datetime
-    destroyed_at: datetime | None
+    # Configuration
+    allow_code_changes: bool
+    create_commits: bool
+    post_comments: bool
 ```
 
 ---
@@ -475,20 +475,30 @@ class ReviewDecision(Enum):
     REQUEST_CHANGES = "request_changes"
     ESCALATE = "escalate"
 
-@dataclass
+@dataclass(frozen=True)
 class ReviewFeedback:
-    """Feedback from a single reviewer."""
-    reviewer_id: str
+    """Value object for review feedback.
+    
+    Immutable representation of reviewer's feedback on an iteration.
+    """
     decision: ReviewDecision
-    comments: str
-    submitted_at: datetime
+    comment: str
+    issues: tuple[str, ...]
+    suggestions: tuple[str, ...]
+    timestamp: datetime
 
-@dataclass
+@dataclass(frozen=True)
 class ReviewIteration:
-    """A single iteration of a review cycle."""
-    id: str
+    """Single iteration of maker-reviewer cycle.
+    
+    Represents one round of work submission and review.
+    Immutable value object for aggregate consistency.
+    """
     iteration_number: int
-    feedback: list[ReviewFeedback]
+    maker_output: str
+    maker_execution_id: str
+    reviewer_feedback: ReviewFeedback | None
+    reviewer_execution_id: str | None
     started_at: datetime
     completed_at: datetime | None
 
@@ -496,20 +506,33 @@ class ReviewIteration:
 class ReviewCycle:
     """Review Cycle aggregate root.
     
-    Models a code review process where feedback is collected
-    from reviewers, and a decision is made (approve/reject/escalate).
+    Manages iterative maker-checker review process where a maker agent
+    produces output and a reviewer agent evaluates it. The cycle continues
+    until approval, escalation, or max iterations reached.
     """
     # Identity
     id: str
-    work_item_id: str
     
-    # Review state
-    status: ReviewStatus
-    iterations: list[ReviewIteration]
+    # Workflow context
+    workflow_id: str
+    stage_name: str
     
-    # Deadline and SLAs
-    deadline: datetime | None
-    approved_at: datetime | None
+    # Agents
+    maker_agent_id: str
+    reviewer_agent_id: str
+    
+    # Configuration
+    max_iterations: int
+    
+    # Status (accessed via properties)
+    _status: ReviewStatus
+    _current_iteration: int
+    _created_at: datetime
+    _updated_at: datetime
+    _iterations: list[ReviewIteration]
+    _final_decision: ReviewDecision | None
+    _escalation_reason: str | None
+    _completed_at: datetime | None
 ```
 
 ```python
@@ -603,63 +626,155 @@ class ExecutionId(TypeSafeId):
 
 @dataclass(frozen=True)
 class ExecutionResult:
-    """Immutable result of an execution."""
-    status: ExecutionStatus
+    """Immutable result of an execution.
+    
+    Represents agent execution outcome with complete metrics and file tracking.
+    All collections are immutable (tuples instead of lists). Metadata dict is
+    wrapped in MappingProxyType to prevent in-place mutations.
+    """
+    # Status
+    success: bool
+    exit_code: int
+    
+    # Output
     output: str
-    error: str | None
+    error_message: str | None
+    
+    # Metrics
+    input_tokens: int
+    output_tokens: int
     duration_seconds: float
+    
+    # Timestamp
+    timestamp: datetime
+    
+    # Files modified (immutable tuples)
+    modified_files: tuple[str, ...] = ()
+    added_files: tuple[str, ...] = ()
+    deleted_files: tuple[str, ...] = ()
+    
+    # Session continuity
+    session_id: str | None = None
+    
+    # Metadata (wrapped in MappingProxyType for deep immutability)
+    metadata: dict[str, Any] = field(default_factory=dict)
+    
+    # Factory methods
+    @classmethod
+    def success_result(cls, output: str, input_tokens: int, output_tokens: int, 
+                      duration_seconds: float, modified_files: list[str] | None = None,
+                      added_files: list[str] | None = None, deleted_files: list[str] | None = None,
+                      session_id: str | None = None, metadata: dict[str, Any] | None = None) -> "ExecutionResult"
+    
+    @classmethod
+    def failure_result(cls, error_message: str, exit_code: int, output: str = "",
+                      duration_seconds: float = 0.0, input_tokens: int = 0,
+                      output_tokens: int = 0, metadata: dict[str, Any] | None = None) -> "ExecutionResult"
+    
+    def get_total_tokens(self) -> int
+    def has_file_changes(self) -> bool
+    def get_all_affected_files(self) -> list[str]
+    def to_dict(self) -> dict[str, Any]
 
 @dataclass(frozen=True)
 class ProjectConfig:
-    """Immutable project configuration."""
-    project_id: str
-    docker_config: dict
-    environment_vars: dict[str, str]
-    test_config: dict
+    """Immutable project configuration from projects.yaml.
+    
+    Represents the complete configuration for a single project including
+    repository details and enabled status. Frozen to ensure immutability
+    in the domain layer.
+    """
+    repo_url: str              # Repository URL (SSH or HTTPS format)
+    branch: str                # Branch name to checkout and track (e.g., "main")
+    enabled: bool              # Whether project is actively processed by orchestrator
+    org: str                   # Organization/namespace identifier for project
 
 @dataclass(frozen=True)
 class ContainerConfig:
-    """Immutable container configuration."""
-    image: str
-    environment: dict[str, str]
-    volumes: dict[str, str]  # host -> container
-    entrypoint: list[str] | None
-    working_dir: str
+    """Configuration for container creation.
+    
+    Immutable value object with tuples for commands/entrypoints and
+    MappingProxyType for environment/volumes dicts to prevent mutations.
+    """
+    image: str                                                    # Image name:tag
+    name: str | None = None                                       # Container name
+    command: tuple[str, ...] | None = None                        # Command to run
+    entrypoint: tuple[str, ...] | None = None                     # Entrypoint as tuple
+    working_dir: str = "/workspace"                               # Working directory
+    user: str = "1000:1000"                                       # UID:GID
+    environment: Mapping[str, str] | None = None                  # Environment vars (immutable)
+    volumes: Mapping[str, Mapping[str, str]] | None = None        # {host: {bind: path, mode}} (immutable)
+    network: str | None = None                                    # Network name
+    auto_remove: bool = False                                     # --rm flag
+    detached: bool = False                                        # -d flag
+    stdin_open: bool = False                                      # -i flag
+    tty: bool = False                                             # -t flag
 ```
 
 ```python
-class UserRole(Enum):
-    """Role of a user in the system."""
-    ADMIN = "admin"
-    DEVELOPER = "developer"
-    REVIEWER = "reviewer"
-    BOT = "bot"
+class UserRole(str, Enum):
+    """User roles for RBAC."""
+    ADMIN = "admin"                          # Full system access
+    DEVELOPER = "developer"                  # Can trigger workflows, view executions
+    VIEWER = "viewer"                        # Read-only access
+    SERVICE_ACCOUNT = "service_account"      # API access only
 
-class Permission(Enum):
-    """Permissions in the system."""
-    CREATE_WORK_ITEM = "create_work_item"
-    UPDATE_WORK_ITEM = "update_work_item"
-    DELETE_WORK_ITEM = "delete_work_item"
-    REVIEW = "review"
-    APPROVE = "approve"
-    ADMIN = "admin"
+class Permission(str, Enum):
+    """Granular permissions for authorization."""
+    # Workflow permissions
+    WORKFLOW_CREATE = "workflow:create"
+    WORKFLOW_VIEW = "workflow:view"
+    WORKFLOW_CANCEL = "workflow:cancel"
+    WORKFLOW_RETRY = "workflow:retry"
+    
+    # Execution permissions
+    EXECUTION_VIEW = "execution:view"
+    EXECUTION_CANCEL = "execution:cancel"
+    
+    # Configuration permissions
+    CONFIG_VIEW = "config:view"
+    CONFIG_UPDATE = "config:update"
+    
+    # Project permissions
+    PROJECT_CREATE = "project:create"
+    PROJECT_VIEW = "project:view"
+    PROJECT_UPDATE = "project:update"
+    PROJECT_DELETE = "project:delete"
+    
+    # User permissions
+    USER_CREATE = "user:create"
+    USER_VIEW = "user:view"
+    USER_UPDATE = "user:update"
+    USER_DELETE = "user:delete"
 
 @dataclass
 class User:
-    """User in the system."""
-    id: str
-    username: str
-    email: str
-    role: UserRole
-    permissions: set[Permission]
-    created_at: datetime
+    """User entity for authentication and authorization."""
+    id: UUID                                                    # Unique user identifier
+    username: str                                               # Unique username
+    email: str                                                  # User email address
+    hashed_password: str                                        # Bcrypt hashed password
+    roles: set[UserRole]                                        # User roles for RBAC
+    is_active: bool = True                                      # Whether user account is active
+    is_verified: bool = False                                   # Whether email is verified
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))  # Creation timestamp
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))  # Last update timestamp
+    last_login_at: datetime | None = None                       # Last login timestamp
+    metadata: dict = field(default_factory=dict)                # Additional user metadata
 
 @dataclass
 class AuthContext:
-    """Authentication context for a request."""
-    user: User
-    is_authenticated: bool
-    token_issued_at: datetime
+    """Authentication context for a request.
+    
+    Contains information about the authenticated user or API key.
+    """
+    user_id: UUID                            # Authenticated user ID
+    username: str                            # Authenticated username
+    roles: set[UserRole]                     # User roles
+    permissions: set[Permission]             # Effective permissions
+    auth_method: str = "jwt"                 # jwt, api_key, or session
+    api_key_id: UUID | None = None           # API key ID if authenticated via API key
+    metadata: dict = field(default_factory=dict)  # Additional context metadata
 ```
 
 ```python
@@ -834,24 +949,24 @@ Domain models enforce business rules through invariants:
 ### Work Item Invariants
 
 1. **WorkItem-1**: Work item must have a valid status from WorkItemStatus enum
-   - Enforced by: `WorkItemStatus` enum
+   - Enforced by: `WorkItemStatus` enum and `_validate_invariants()` check
    - Prevents: Invalid state values
 
-2. **WorkItem-2**: Work item can only transition to valid next stages
-   - Enforced by: `can_transition_to(new_status)` method
+2. **WorkItem-2**: Work item can only transition through valid state sequences
+   - Enforced by: `assign_agent()` (NEW/ASSIGNED → ASSIGNED), `start()` (ASSIGNED → IN_PROGRESS), `mark_under_review()` (IN_PROGRESS → UNDER_REVIEW), `complete()` (IN_PROGRESS/UNDER_REVIEW → COMPLETED)
    - Prevents: Invalid stage transitions (e.g., COMPLETED → IN_PROGRESS)
 
 3. **WorkItem-3**: If assigned to agent, must have assigned_agent_id and assigned_at timestamp
-   - Enforced by: `assign_agent()` method that sets both fields
+   - Enforced by: `assign_agent()` method sets both fields atomically
    - Prevents: Partial assignment state
 
-4. **WorkItem-4**: Work item cannot be COMPLETED without going through UNDER_REVIEW
-   - Enforced by: Workflow transition validation
-   - Prevents: Bypassing review stage
+4. **WorkItem-4**: Work item can only be completed from IN_PROGRESS or UNDER_REVIEW status
+   - Enforced by: `complete()` method validates precondition
+   - Prevents: Completing without proper review (if required by workflow)
 
-5. **WorkItem-5**: Current column must match workflow stage
-   - Enforced by: `on_stage_changed()` handler syncs column with stage
-   - Prevents: Desynchronization between workflow and board
+5. **WorkItem-5**: Work item must belong to a project
+   - Enforced by: `_validate_invariants()` checks project_id is non-empty
+   - Prevents: Orphaned work items without project context
 
 ### Agent Invariants
 
@@ -901,17 +1016,25 @@ Domain models enforce business rules through invariants:
 
 ### Review Invariants
 
-1. **Review-1**: Review cannot be approved without required minimum feedback
-   - Enforced by: `can_approve()` checks feedback count
-   - Prevents: Approving without sufficient review
+1. **Review-1**: Review cycle cannot approve when already in terminal state
+   - Enforced by: `approve()` validates cycle is in IN_PROGRESS state
+   - Prevents: Approving already-completed cycles
 
 2. **Review-2**: A reviewer can only submit feedback once per iteration
-   - Enforced by: `add_feedback()` replaces previous feedback from same reviewer
-   - Prevents: Duplicate feedback from single reviewer
+   - Enforced by: `submit_review()` checks current iteration doesn't already have feedback
+   - Prevents: Duplicate feedback on same iteration
 
-3. **Review-3**: Review deadline cannot be in the past
-   - Enforced by: `set_deadline()` validates deadline > now
-   - Prevents: Expired deadlines
+3. **Review-3**: Maker and reviewer must be different agents
+   - Enforced by: `_validate_invariants()` in `create()` factory method
+   - Prevents: Same agent reviewing their own work
+
+4. **Review-4**: Max iterations must be positive and current cannot exceed max
+   - Enforced by: `_validate_invariants()` validates max_iterations > 0
+   - Prevents: Invalid iteration limits or exceeding bounds
+
+5. **Review-5**: Cannot start iteration if already at max iterations
+   - Enforced by: `start_iteration()` checks current_iteration < max_iterations
+   - Prevents: Exceeding maximum iteration count
 
 ---
 
@@ -923,21 +1046,21 @@ Domain models relate to each other as follows:
 |---|---|---|---|---|
 | WorkItem | triggers | AgentExecution | 1:N | A work item may trigger multiple agent executions across workflow stages |
 | WorkItem | flows through | Workflow | 1:N | A work item may have multiple workflows (initial + repair cycles) |
-| WorkItem | has | ReviewCycle | 1:N | Multiple review cycles per work item (one per change set) |
 | WorkItem | belongs to | Project | N:1 | Many work items in single project |
 | WorkItem | tracks | Comment | 1:N | Comments are attached to work items |
 | Workflow | contains | PipelineStage | 1:N | Workflow is ordered sequence of stages |
-| PipelineStage | executes | Agent | N:1 | Each stage uses one agent (or manual/conditional) |
+| Workflow | has | ReviewCycle | 1:N | Review cycles for workflow stages |
+| PipelineStage | executes | Agent | N:1 | Each stage uses one or more agents |
+| PipelineStage | uses | ReviewCycle | 1:1 | Review stage may have a review cycle (if type=REVIEW) |
 | Agent | performs | AgentExecution | 1:N | Agent has many execution instances |
+| Agent | reviews | ReviewCycle | 1:N | Reviewer agent participates in review cycles |
 | AgentExecution | belongs to | Workflow | N:1 | Execution is part of workflow |
 | AgentExecution | updates | WorkItem | N:1 | Execution produces changes to work item |
-| ReviewCycle | collects | ReviewFeedback | 1:N | Review aggregates feedback from reviewers |
-| ReviewCycle | has | ReviewIteration | 1:N | Multiple iterations if changes requested |
-| ReviewIteration | contains | ReviewFeedback | 1:N | Each iteration collects feedback |
-| User | submits | ReviewFeedback | 1:N | User provides multiple feedback items |
+| ReviewCycle | contains | ReviewIteration | 1:N | Multiple iterations in maker-reviewer cycle |
+| ReviewIteration | has | ReviewFeedback | 0:1 | Each iteration has at most one reviewer feedback |
 | BoardWorkflowTemplate | defines | ColumnTemplate | 1:N | Board template contains ordered columns |
-| ColumnTemplate | triggers | Agent | N:1 | Multiple columns may trigger same agent |
-| WorkspaceContext | mounts | ProjectFiles | 1:N | Workspace includes read/write mounted files |
+| ColumnTemplate | triggers | Agent | N:1 | Column may trigger agent execution |
+| WorkspaceContext | used by | AgentExecution | 1:N | Determines execution result handling |
 | ProjectContext | configures | Agent | 1:N | Project can configure multiple agents |
 
 ---
@@ -950,20 +1073,19 @@ Domain models relate to each other as follows:
 erDiagram
     WORK_ITEM ||--o{ WORKFLOW : "flows_through"
     WORK_ITEM ||--o{ AGENT_EXECUTION : "triggers"
-    WORK_ITEM ||--o{ REVIEW_CYCLE : "has"
     WORK_ITEM ||--o{ COMMENT : "receives"
     WORKFLOW ||--o{ PIPELINE_STAGE : "contains"
+    WORKFLOW ||--o{ REVIEW_CYCLE : "has"
     WORKFLOW ||--o{ AGENT_EXECUTION : "sequences"
     PIPELINE_STAGE }o--|| AGENT : "executes"
     AGENT ||--o{ AGENT_EXECUTION : "performs"
+    AGENT ||--o{ REVIEW_CYCLE : "reviews"
     AGENT_EXECUTION }o--|| EXECUTION_STATUS : "has"
     REVIEW_CYCLE ||--o{ REVIEW_ITERATION : "has"
-    REVIEW_ITERATION ||--o{ REVIEW_FEEDBACK : "collects"
-    REVIEW_FEEDBACK }o--|| USER : "from"
+    REVIEW_ITERATION }o--|| REVIEW_FEEDBACK : "has"
     BOARD_WORKFLOW_TEMPLATE ||--o{ COLUMN_TEMPLATE : "defines"
     COLUMN_TEMPLATE }o--|| AGENT : "triggers"
-    WORKSPACE_CONTEXT ||--o{ PROJECT_CONFIG : "uses"
-    WORKSPACE_CONTEXT ||--o{ AGENT : "supports"
+    WORKSPACE_CONTEXT ||--o{ AGENT_EXECUTION : "configures"
     
     WORK_ITEM {
         string id PK
@@ -1019,32 +1141,38 @@ erDiagram
     
     REVIEW_CYCLE {
         string id PK
-        string work_item_id FK
+        string workflow_id FK
+        string stage_name
+        string maker_agent_id FK
+        string reviewer_agent_id FK
+        int max_iterations
         string status
-        datetime deadline
-        datetime approved_at
     }
     
     REVIEW_ITERATION {
-        string id PK
         int iteration_number
+        string maker_output
+        string maker_execution_id
+        string reviewer_execution_id
         datetime started_at
         datetime completed_at
     }
     
     REVIEW_FEEDBACK {
-        string id PK
-        string reviewer_id FK
         string decision
-        string comments
-        datetime submitted_at
+        string comment
+        tuple issues
+        tuple suggestions
+        datetime timestamp
     }
     
     USER {
-        string id PK
-        string username
-        string email
-        string role
+        uuid id PK
+        string username UK
+        string email UK
+        set roles
+        bool is_active
+        bool is_verified
         datetime created_at
     }
     
@@ -1078,17 +1206,19 @@ erDiagram
     }
     
     WORKSPACE_CONTEXT {
-        string id PK
-        string path
-        string name
-        datetime created_at
+        string workspace_type
+        string project_id
+        string work_item_id
+        string branch_name
+        bool create_pr
+        string discussion_id
     }
     
     PROJECT_CONFIG {
-        string id PK
-        string project_id
-        dict config
-        datetime updated_at
+        string repo_url
+        string branch
+        bool enabled
+        string org
     }
 ```
 
@@ -1104,11 +1234,17 @@ classDiagram
         -assigned_agent_id: string
         -current_workflow_id: string
         -current_stage: string
-        +assign_agent(agent_id)
-        +transition_to_stage(new_stage)
-        +start_review()
+        +create(title, description, project_id)
+        +assign_agent(agent_id, reason)
+        +start()
+        +mark_under_review()
         +complete()
-        +fail(error)
+        +fail(reason, error_details)
+        +block(reason, blocking_issue_id)
+        +unblock()
+        +update_stage(stage)
+        +can_start()
+        +is_terminal()
     }
     
     class Workflow {
@@ -1126,11 +1262,12 @@ classDiagram
     class PipelineStage {
         -id: string
         -name: string
-        -agent_id: string
-        -order: int
-        -timeout_seconds: int
-        +execute(input)
-        +can_transition_to_next()
+        -workflow_id: string
+        -stage_type: StageType
+        -status: StageStatus
+        -maker_agent_id: string
+        -reviewer_agent_id: string
+        -max_review_iterations: int
     }
     
     class Agent {
@@ -1160,30 +1297,36 @@ classDiagram
     
     class ReviewCycle {
         -id: string
-        -work_item_id: string
-        -status: ReviewStatus
-        -iterations: list[ReviewIteration]
-        -deadline: datetime
-        +add_iteration()
-        +add_feedback(feedback)
-        +can_approve()
+        -workflow_id: string
+        -stage_name: string
+        -maker_agent_id: string
+        -reviewer_agent_id: string
+        -max_iterations: int
+        -_status: ReviewStatus
+        +start_iteration(maker_output, maker_execution_id)
+        +submit_review(decision, comment, reviewer_execution_id)
         +approve()
-        +reject()
+        +request_changes()
+        +escalate(reason)
+        +is_complete()
     }
     
     class ReviewFeedback {
-        -reviewer_id: string
         -decision: ReviewDecision
-        -comments: string
-        -submitted_at: datetime
+        -comment: string
+        -issues: tuple[string]
+        -suggestions: tuple[string]
+        -timestamp: datetime
     }
     
     WorkItem "1" --> "0..*" Workflow: flows through
     WorkItem "1" --> "0..*" AgentExecution: triggers
-    WorkItem "1" --> "0..*" ReviewCycle: has
     Workflow "1" --> "1..*" PipelineStage: contains
-    PipelineStage "N" --> "1" Agent: uses
-    Agent "1" --> "0..*" AgentExecution: executes
+    Workflow "1" --> "0..*" ReviewCycle: has
+    PipelineStage "N" --> "1" Agent: executes
+    Agent "1" --> "0..*" AgentExecution: performs
+    Agent "N" --> "M" ReviewCycle: reviews
+    AgentExecution "N" --> "1" Workflow: belongs to
     ReviewCycle "1" --> "1..*" ReviewFeedback: collects
 ```
 
@@ -1197,11 +1340,14 @@ Every state change in domain models emits one or more domain events. These immut
 
 Domain models emit events through their methods:
 
-1. **WorkItem.transition_to_stage(new_stage)** → Emits `WorkItemStageUpdatedEvent`
-2. **Agent.update_capability(skill, proficiency)** → Emits `AgentCapabilityUpdatedEvent`
-3. **ReviewCycle.add_feedback(feedback)** → Emits `ReviewFeedbackAddedEvent`
-4. **ReviewCycle.approve()** → Emits `ReviewApprovedEvent`
-5. **Workflow.advance_to_next_stage()** → Emits `WorkflowStageAdvancedEvent`
+1. **WorkItem.update_stage(stage)** → Emits `WorkItemStageUpdatedEvent`
+2. **WorkItem.assign_agent(agent_id, reason)** → Emits `AgentAssigned`
+3. **WorkItem.complete()** → Emits `WorkItemCompleted`
+4. **ReviewCycle.create(...)** → Emits `ReviewCycleCreated`
+5. **ReviewCycle.start_iteration(...)** → Emits `ReviewIterationStarted`
+6. **ReviewCycle.submit_review(...)** → Emits `ReviewFeedbackSubmitted`
+7. **ReviewCycle.approve()** → Emits `ReviewCycleApproved`
+8. **ReviewCycle.escalate(reason)** → Emits `ReviewCycleEscalated`
 
 ### Event Subscribers
 
@@ -1371,45 +1517,55 @@ except InvalidStateError as e:
     # Work item remains in Review stage
 ```
 
-### Example 5: Review Cycle with Invariant Enforcement
+### Example 5: Review Cycle with Maker-Reviewer Iteration
 
 ```python
-# Create review cycle
-review = ReviewCycle(
-    id="rc-1",
-    work_item_id="WI-123",
-    status=ReviewStatus.IN_PROGRESS,
-    iterations=[ReviewIteration(number=1, started_at=datetime.now(UTC))],
-    required_approvals=2,
-    feedback=[],
-    deadline=datetime.now(UTC) + timedelta(days=1),
-    created_at=datetime.now(UTC),
-    updated_at=datetime.now(UTC)
+# Create review cycle using factory method
+review = ReviewCycle.create(
+    workflow_id="wf-1",
+    stage_name="code-review",
+    maker_agent_id="agent-maker-1",
+    reviewer_agent_id="agent-reviewer-1",
+    max_iterations=3
 )
 
-# Add feedback from reviewers
-review.add_feedback(ReviewFeedback(
-    reviewer_id="reviewer-1",
-    decision=ReviewDecision.APPROVED,
-    comments="Looks good",
-    submitted_at=datetime.now(UTC)
-))
+# Maker produces initial output
+review.start_iteration(
+    maker_output="Implemented authentication module",
+    maker_execution_id="exec-maker-1"
+)
 
-review.add_feedback(ReviewFeedback(
-    reviewer_id="reviewer-2",
-    decision=ReviewDecision.REQUESTED_CHANGES,
-    comments="Need refactoring in auth module",
-    submitted_at=datetime.now(UTC)
-))
+# Reviewer provides feedback
+review.submit_review(
+    decision=ReviewDecision.REQUEST_CHANGES,
+    comment="Need to add input validation",
+    reviewer_execution_id="exec-reviewer-1",
+    issues=["Missing input validation for email field"],
+    suggestions=["Add email validation before processing"]
+)
 
-# Check if can approve (must have required approvals with no rejections)
-if not review.can_approve():
-    raise InvalidStateError(
-        "Cannot approve: requires 2 approvals, got 1 approval + 1 requested_changes"
-    )
+# Cycle is now in CHANGES_REQUESTED state
+assert review.status == ReviewStatus.CHANGES_REQUESTED
+assert review.needs_maker_revision()
 
-# Once all feedback addressed:
-review.approve()  # Emits ReviewApprovedEvent
+# Maker addresses feedback and revises
+review.start_iteration(
+    maker_output="Implemented authentication module with validation",
+    maker_execution_id="exec-maker-2"
+)
+
+# Reviewer approves on second iteration
+review.submit_review(
+    decision=ReviewDecision.APPROVE,
+    comment="Looks good now",
+    reviewer_execution_id="exec-reviewer-2",
+    issues=[],
+    suggestions=[]
+)
+
+# Cycle is now APPROVED
+assert review.is_complete()
+assert review.final_decision == ReviewDecision.APPROVE
 ```
 
 ---
