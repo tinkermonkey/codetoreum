@@ -370,5 +370,5 @@ classDiagram
 - **Port Interface**: [IRepository](../ports/output/core-system.md#irepository) - Complete specification
 - **Related Adapters**: [GitHub Board Adapter](./github-board-adapter.md) - Repository links
 - **Infrastructure**: [Resilience Patterns](../infrastructure/resilience.md) - Retry, timeout
-- **Simulation**: [InMemoryRepositoryAdapter](../../implementations/simulation/adapters.md)
+- **Simulation**: [InMemoryRepositoryAdapter](../../../implementations/simulation/adapters.md)
 - **Security**: [Credential Management](../../../CLAUDE.md#agent-security-model)

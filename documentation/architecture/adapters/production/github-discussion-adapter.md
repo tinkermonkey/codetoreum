@@ -204,4 +204,4 @@ classDiagram
 - **Related Adapters**: 
   - [GitHubTicketAdapter](./github-ticket-adapter.md) - Issue management
   - [GitHub Code Review Adapter](./github-code-review-adapter.md) - PR comments
-- **Simulation**: [MockDiscussionAdapter](../../implementations/simulation/adapters.md)
+- **Simulation**: [MockDiscussionAdapter](../../../implementations/simulation/adapters.md)

@@ -462,5 +462,5 @@ classDiagram
 - **Port Interface**: [ILLMProvider](../ports/output/core-system.md#illmprovider) - Complete interface specification
 - **Related Adapters**: [Systemic Analysis Adapter](./infrastructure-adapters.md#llmsystemicanalysisadapter-isystemicanalysisservice) - LLM-based analysis
 - **Infrastructure**: [Resilience Patterns](../infrastructure/resilience.md) - Rate limiting, retry, circuit breaker
-- **Simulation**: [MockLLMAdapter](../../implementations/simulation/adapters.md#output-port-adapters) - Test alternative
+- **Simulation**: [MockLLMAdapter](../../../implementations/simulation/adapters.md#output-port-adapters) - Test alternative
 - **Domain Models**: [ExecutionResult](../domain/models.md) - Execution result structure

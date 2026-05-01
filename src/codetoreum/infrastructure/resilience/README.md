@@ -261,7 +261,7 @@ The resilience layer has comprehensive test coverage:
 ## Design Documentation
 
 For detailed design specifications, see:
-- `/workspace/documentation/01_design/infrastructure/resilience_infrastructure_design.md`
+- `documentation/architecture/infrastructure/resilience.md` - Resilience patterns and architecture
 
 ## Key Features
 

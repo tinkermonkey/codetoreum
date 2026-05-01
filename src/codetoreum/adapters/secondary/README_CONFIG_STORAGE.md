@@ -370,10 +370,9 @@ await initialize_config_store(config_store)
 
 ## References
 
-- **Implementation Plan**: `/workspace/documentation/01_design/03_implementation_plan.md` (Phase 7)
-- **Summary**: `/workspace/PHASE_7_PART_1_SUMMARY.md`
-- **Port Interface**: `/workspace/src/codetoreum/ports/output/config_store.py`
-- **Tests**: `/workspace/tests/integration/` (adapters/secondary and infrastructure)
+- **Architecture**: `documentation/architecture/` - Architecture documentation
+- **Port Interface**: `src/codetoreum/ports/output/config_store.py` - IConfigStore interface
+- **Tests**: `tests/integration/` (adapters/secondary and infrastructure)
 
 ## Next Steps
 

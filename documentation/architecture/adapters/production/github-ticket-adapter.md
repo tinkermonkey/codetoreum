@@ -343,4 +343,4 @@ classDiagram
   - [GitHub Discussion Adapter](./github-discussion-adapter.md) - Comments and discussions
 - **Domain Models**: [WorkItem](../domain/models.md#workitem) - Work item specification
 - **Infrastructure**: [Resilience Patterns](../infrastructure/resilience.md) - Retry, circuit breaker, rate limiting
-- **Simulation**: [InMemoryTicketAdapter](../../implementations/simulation/adapters.md#output-port-adapters) - Test alternative
+- **Simulation**: [InMemoryTicketAdapter](../../../implementations/simulation/adapters.md#output-port-adapters) - Test alternative

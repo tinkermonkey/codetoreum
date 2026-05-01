@@ -405,7 +405,7 @@ logger.info(
 ## Cross-References
 
 - **Port Interfaces**: [Output Ports](../ports/output/) - Complete specifications
-- **Bootstrap**: [Production Bootstrap](../../implementations/production-bootstrap.md) - Wiring configuration
+- **Bootstrap**: [Production Bootstrap](../../../implementations/production-bootstrap.md) - Wiring configuration
 - **Resilience**: [Resilience Patterns](../infrastructure/resilience.md) - Detailed pattern specs
 - **Observability**: [Observability](../infrastructure/observability.md) - Logging and monitoring
-- **Simulation**: [Simulation Adapters](../../implementations/simulation/adapters.md) - Testing alternatives
+- **Simulation**: [Simulation Adapters](../../../implementations/simulation/adapters.md) - Testing alternatives

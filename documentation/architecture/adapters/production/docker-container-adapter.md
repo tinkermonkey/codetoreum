@@ -423,5 +423,5 @@ classDiagram
 - **Port Interface**: [IContainer](../ports/output/core-system.md#icontainer) - Complete interface specification
 - **Related Adapters**: [Docker Container Recovery](./infrastructure-adapters.md#dockercontainerrecoveryadapter-iagentcontainerrecoveryservice) - Failure recovery
 - **Infrastructure**: [Resilience Patterns](../infrastructure/resilience.md) - Timeout, retry, circuit breaker
-- **Simulation**: [FakeContainerAdapter](../../implementations/simulation/adapters.md#output-port-adapters) - Test alternative
+- **Simulation**: [FakeContainerAdapter](../../../implementations/simulation/adapters.md#output-port-adapters) - Test alternative
 - **Security**: [Agent Execution Security Model](../../../CLAUDE.md#agent-security-model)
