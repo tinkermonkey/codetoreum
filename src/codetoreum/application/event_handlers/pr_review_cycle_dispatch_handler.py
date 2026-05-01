@@ -88,9 +88,9 @@ class PRReviewCycleDispatchHandler(EventHandler):
         """Get list of event types this handler processes.
 
         Returns:
-            List of event type names
+            List of event type names (includes both modern and legacy event types)
         """
-        return ["WorkItemColumnChangedEvent"]
+        return ["WorkItemColumnChangedEvent", "WorkItemColumnChanged"]
 
     async def handle(self, event: DomainEvent) -> None:
         """
@@ -112,7 +112,8 @@ class PRReviewCycleDispatchHandler(EventHandler):
         except Exception as e:
             # Extract work_item_id from both modern and legacy event types
             work_item_id = (
-                event.work_item_id if isinstance(event, WorkItemColumnChangedEvent)
+                event.work_item_id
+                if isinstance(event, WorkItemColumnChangedEvent)
                 else event.payload.get("work_item_id", "unknown")
             )
             logger.error(

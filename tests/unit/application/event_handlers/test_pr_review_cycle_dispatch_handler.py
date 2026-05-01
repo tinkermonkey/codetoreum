@@ -114,7 +114,7 @@ class TestPRReviewCycleDispatchHandlerInitialization:
         )
 
         event_types = handler.get_event_types()
-        assert event_types == ["WorkItemColumnChangedEvent"]
+        assert event_types == ["WorkItemColumnChangedEvent", "WorkItemColumnChanged"]
 
 
 @pytest.mark.asyncio
