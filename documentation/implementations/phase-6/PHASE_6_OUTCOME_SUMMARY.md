@@ -31,7 +31,7 @@ Phase 6 aggregates findings from all Phase 1 Completeness Verification phases (P
 - ✅ **Output Ports**: 40/40 interfaces mapped (100%)
 - ✅ **Total Coverage**: 59/59 ports (100%)
 - ✅ **Bootstrap Status**: All 4 bootstrap phases complete without errors
-- ⚠️ **Bug Identified**: WorkflowOrchestrator interface conformance (filed as #780)
+- ✅ **Bug Fixed**: WorkflowOrchestrator interface conformance (resolved via #775)
 
 **Status**: ✅ PASS
 
@@ -142,12 +142,12 @@ Phase 6 aggregates findings from all Phase 1 Completeness Verification phases (P
 
 ---
 
-## Gap Issues to File
+## Gap Issues Filed
 
-Since Milestone 4 (Coverage) has failed, the following gap issues must be filed:
+Since Milestone 4 (Coverage) has failed, two gap issues have been filed on GitHub:
 
-### Gap Issue 1: Domain Layer Coverage Below 100%
-**Title**: Phase 1 Gap: Domain Layer Coverage Below 100%  
+### Gap Issue #783: Domain Layer Coverage Below 100%
+**GitHub Issue**: https://github.com/tinkermonkey/codetoreum/issues/783  
 **Description**:
 - Current: 86.24% (851 lines missing)
 - Target: 100%
@@ -163,8 +163,8 @@ Since Milestone 4 (Coverage) has failed, the following gap issues must be filed:
   - queue_events.py: 20 missing lines
   - And 18 more files between 82-98% coverage
 
-### Gap Issue 2: Application Layer Coverage Below 90%
-**Title**: Phase 1 Gap: Application Layer Coverage Below 90%  
+### Gap Issue #784: Application Layer Coverage Below 90%
+**GitHub Issue**: https://github.com/tinkermonkey/codetoreum/issues/784  
 **Description**:
 - Current: 78.67% (1,078 lines missing)
 - Target: 90%
@@ -185,9 +185,9 @@ Since Milestone 4 (Coverage) has failed, the following gap issues must be filed:
 ❌ Milestone 4 FAIL: Coverage gaps require resolution
 
 **Action**:
-1. ✅ Do NOT close issue #771 yet
-2. ✅ File gap issues #779-A and #779-B (as defined above)
-3. ✅ Reference gap issues from #771
+1. ✅ Filed gap issue #783 (Domain Layer Coverage)
+2. ✅ Filed gap issue #784 (Application Layer Coverage)
+3. ✅ Posted milestone findings comment on #771
 4. ✅ Leave #771 open until gap issues close
 5. ❌ Do NOT update roadmap.md until all milestones pass
 
