@@ -68,7 +68,7 @@ class _WorkflowRunMetadata:
     stage_index: int
 
 
-@event_handler("WorkItemColumnChangedEvent")
+@event_handler("WorkItemColumnChangedEvent", "WorkItemColumnChanged")
 class BoardColumnEventHandler(EventHandler):
     """Handles workitem.column_changed events for board automation.
 
@@ -153,12 +153,13 @@ class BoardColumnEventHandler(EventHandler):
         Handle column change event and trigger appropriate workflow actions.
 
         Args:
-            event: Domain event to handle
+            event: Domain event to handle (supports both modern WorkItemColumnChangedEvent and legacy WorkItemColumnChanged)
 
         Raises:
             Exception: If handling fails
         """
-        if not isinstance(event, WorkItemColumnChangedEvent):
+        # Accept both modern WorkItemColumnChangedEvent and legacy WorkItemColumnChanged events
+        if not isinstance(event, (WorkItemColumnChangedEvent, WorkItemColumnChanged)):
             logger.warning(f"BoardColumnEventHandler received unexpected event type: {event.event_type}")
             return
 
