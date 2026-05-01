@@ -31,6 +31,7 @@ from codetoreum.domain.events import (
     WorkflowFailed,
     WorkflowStageAdvanced,
     WorkflowStarted,
+    WorkItemColumnChanged,
 )
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.infrastructure.event_bus import EventBus, EventHandler, event_handler
@@ -143,9 +144,9 @@ class BoardColumnEventHandler(EventHandler):
         """Get list of event types this handler processes.
 
         Returns:
-            List of event type names
+            List of event type names (includes both modern and legacy event types)
         """
-        return ["WorkItemColumnChangedEvent"]
+        return ["WorkItemColumnChangedEvent", "WorkItemColumnChanged"]
 
     async def handle(self, event: DomainEvent) -> None:
         """
@@ -164,8 +165,13 @@ class BoardColumnEventHandler(EventHandler):
         try:
             await self.handle_column_change(event)
         except Exception as e:
+            # Extract work_item_id from both modern and legacy event types
+            work_item_id = (
+                event.work_item_id if isinstance(event, WorkItemColumnChangedEvent)
+                else event.payload.get("work_item_id", "unknown")
+            )
             logger.error(
-                f"Error handling column change for {event.work_item_id}: {e}",
+                f"Error handling column change for {work_item_id}: {e}",
                 exc_info=True,
                 extra={"error_id": "ERR_BOARD_EVENT_HANDLE_COLUMN_CHANGE_FAILURE"},
             )
@@ -187,11 +193,21 @@ class BoardColumnEventHandler(EventHandler):
         Args:
             event: WorkItemColumnChangedEvent with column movement details
         """
-        work_item_id: str = event.work_item_id or ""
-        board_id: str = event.board_id or ""
-        project_id: str = event.project_id or ""
-        from_column: str = event.from_column or ""
-        to_column: str = event.to_column or ""
+        # Handle both modern WorkItemColumnChangedEvent and legacy WorkItemColumnChanged events
+        if isinstance(event, WorkItemColumnChangedEvent):
+            # Modern event with direct attributes
+            work_item_id: str = event.work_item_id or ""
+            board_id: str = event.board_id or ""
+            project_id: str = event.project_id or ""
+            from_column: str = event.from_column or ""
+            to_column: str = event.to_column or ""
+        else:
+            # Legacy event with payload
+            work_item_id: str = event.payload.get("work_item_id", "")
+            board_id: str = event.payload.get("board_id", "")
+            project_id: str = event.payload.get("project_id", "")
+            from_column: str = event.payload.get("from_column", "")
+            to_column: str = event.payload.get("to_column", "")
 
         logger.info(f"Processing column change for {work_item_id}: {from_column} -> {to_column}")
 
