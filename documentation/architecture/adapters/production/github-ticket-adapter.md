@@ -68,9 +68,13 @@ Tracks GitHub API rate limits (5,000 requests/hour for personal tokens):
 
 | Domain Type | GitHub Representation |
 |---|---|
-| WorkItemStatus.BACKLOG | Issue with label `backlog` |
-| WorkItemStatus.IN_PROGRESS | Assigned issue with label `in-progress` |
-| WorkItemStatus.COMPLETE | Closed issue |
+| WorkItemStatus.NEW | Open issue with label `status-new` |
+| WorkItemStatus.ASSIGNED | Open issue with label `status-assigned` and assignee set |
+| WorkItemStatus.IN_PROGRESS | Open issue with label `status-in-progress` |
+| WorkItemStatus.UNDER_REVIEW | Open issue with label `status-under-review` |
+| WorkItemStatus.COMPLETED | Closed issue with label `status-completed` |
+| WorkItemStatus.FAILED | Closed issue with label `status-failed` |
+| WorkItemStatus.BLOCKED | Open issue with label `status-blocked` |
 | WorkItemPriority.CRITICAL | Label `priority-critical` |
 | WorkItemPriority.HIGH | Label `priority-high` |
 | WorkItemPriority.MEDIUM | Label `priority-medium` |

@@ -7,25 +7,25 @@ applies_to: "documentation/architecture/adapters/production/**/*adapter*.md"
 
 ## Purpose
 
-**ClaudeCodeAdapter** implements the `ILLMProvider` interface by connecting to the Claude Code API, providing LLM operations including single-turn prompting, multi-turn conversations, tool execution, and streaming responses.
+**ClaudeCodeAdapter** implements the `ILLMProvider` interface by executing the Claude Code CLI, providing LLM operations including single-turn prompting, multi-turn conversations, tool execution (via MCP), and streaming responses.
 
-This adapter is used in production to execute agent logic via Claude Code. When the orchestrator needs an AI agent to analyze a work item, the adapter sends the item's context to Claude Code, receives a response, and returns the result to the orchestrator. The adapter handles multi-turn conversations, tool definitions, streaming output, and error recovery.
+This adapter is used in production to execute agent logic via Claude Code. When the orchestrator needs an AI agent to analyze a work item, the adapter builds a CLI command, executes it as a subprocess, parses the JSON stream output, and returns the result to the orchestrator. The adapter handles multi-turn conversations via session IDs, MCP-based tool definitions, streaming output, and error recovery.
 
 The adapter translates between:
-- Codetoreum domain models ↔ Claude Code API format
-- ExecutionContext (work item, code, history) ↔ Claude Code messages and tools
-- ExecutionResult ↔ Claude Code completion response
+- Codetoreum domain models ↔ CLI command-line arguments
+- ExecutionContext (work item, code, history) ↔ Claude CLI args and environment
+- JSON stream output ↔ ExecutionResult with parsed token counts and responses
 
 ## Implementation Strategy
 
-### Claude Code API Integration
+### Claude Code CLI Integration
 
-ClaudeCodeAdapter uses the **Claude Code API** (HTTP-based):
-- Streaming support for real-time output
-- Multi-turn conversation management
-- Tool definitions and execution
-- Token usage tracking
-- Model selection and configuration
+ClaudeCodeAdapter uses the **Claude Code CLI** (subprocess-based):
+- Executes the `claude` command-line interface
+- Streaming support via JSON event stream output (`stream-json` format)
+- Session management for multi-turn conversations via `--session-id`
+- MCP (Model Context Protocol) integration for tool availability
+- Containerized execution with configurable working directory
 
 ### Key Design Decisions
 
@@ -52,24 +52,30 @@ Credentials are provided via pluggable credential providers:
 ```python
 @dataclass
 class ClaudeCodeConfig:
-    # Model configuration
-    model: str = "claude-3-5-sonnet-20241022"  # Default model
-    max_tokens: int = 4096                      # Response length limit
-    temperature: float = 0.7                    # Randomness (0-1)
+    # Authentication (secure references)
+    api_key_credential_name: str = "ANTHROPIC_API_KEY"
+    oauth_token_credential_name: str = "CLAUDE_CODE_OAUTH_TOKEN"
+    credential_provider: ICredentialProvider | None = None
     
-    # API configuration
-    api_url: str = "https://api.anthropic.com"
-    timeout_seconds: int = 30
+    # CLI configuration
+    claude_cli_path: str = "claude"              # Path to Claude CLI executable
+    default_model: str = "claude-sonnet-4-5-20250929"
+    permission_mode: str = "bypassPermissions"   # or "askForPermissions"
     
-    # Streaming
-    streaming_enabled: bool = True
+    # Output configuration
+    output_format: str = "stream-json"           # or "text"
+    verbose: bool = False
     
-    # Rate limiting
-    requests_per_minute: int = 60
-    tokens_per_minute: int = 40000
+    # Execution limits
+    default_timeout_seconds: int = 300           # 5 minutes
+    max_context_tokens: int = 200000
+    
+    # Features
+    enable_mcp: bool = True
+    enable_tools: bool = True
 ```
 
-Configuration controls model selection, rate limits, and streaming behavior.
+Configuration controls CLI path, authentication, model selection, and feature flags.
 
 **3. Multi-turn Conversation Tracking**
 ```python
@@ -150,53 +156,47 @@ Streaming allows:
 ```python
 @dataclass
 class ClaudeCodeConfig:
-    # API credentials
-    api_key: str                        # Claude Code API key (required)
+    # Authentication (secure references)
+    api_key_credential_name: str = "ANTHROPIC_API_KEY"  # Required
+    oauth_token_credential_name: str = "CLAUDE_CODE_OAUTH_TOKEN"  # Alternative
+    credential_provider: ICredentialProvider | None = None
     
-    # Model configuration
-    model: str = "claude-3-5-sonnet-20241022"
-    max_tokens: int = 4096
-    temperature: float = 0.7
+    # CLI configuration
+    claude_cli_path: str = "claude"              # Path to CLI executable (required)
+    default_model: str = "claude-sonnet-4-5-20250929"
+    permission_mode: str = "bypassPermissions"
     
-    # API configuration
-    api_url: str = "https://api.anthropic.com"
-    timeout_seconds: int = 30
-    
-    # Streaming
-    streaming_enabled: bool = True
-    
-    # Rate limiting
-    requests_per_minute: int = 60
-    tokens_per_minute: int = 40000
+    # Features
+    enable_mcp: bool = True
+    enable_tools: bool = True
 ```
 
 ### Environment Variables
-- `CLAUDE_API_KEY`: Claude Code API key (required)
-- `CLAUDE_MODEL`: Model name (default: claude-3-5-sonnet-20241022)
-- `CLAUDE_MAX_TOKENS`: Max response tokens (default: 4096)
-- `CLAUDE_TEMPERATURE`: Temperature 0-1 (default: 0.7)
-- `CLAUDE_TIMEOUT_SECONDS`: API timeout (default: 30)
-- `CLAUDE_STREAMING_ENABLED`: Enable streaming (default: true)
+- `ANTHROPIC_API_KEY`: Anthropic API key (required if using API key auth)
+- `CLAUDE_CODE_OAUTH_TOKEN`: Claude Code OAuth token (required if using OAuth)
+- `CLAUDE`: Path to Claude CLI executable (default: "claude" in PATH)
 
 ### Credential Handling
 
-API key is retrieved via credential provider:
+Credentials are retrieved via pluggable credential provider:
 ```python
 credential_provider = EnvironmentCredentialProvider()  # Dev
 # OR
 credential_provider = SecureStoreCredentialProvider()  # Production
 
-api_key = await credential_provider.get_credential("CLAUDE_API_KEY")
+api_key = await credential_provider.get_credential("ANTHROPIC_API_KEY")
+oauth_token = await credential_provider.get_credential("CLAUDE_CODE_OAUTH_TOKEN")
 ```
 
-In production, use secure store integration (e.g., AWS Secrets Manager, HashiCorp Vault).
+The adapter requires either API key or OAuth token. In production, use secure store integration (e.g., AWS Secrets Manager, HashiCorp Vault).
 
 ### Model Selection
 
-Different models for different use cases:
-- **claude-3-5-sonnet-20241022**: Balanced cost/performance (default)
-- **claude-3-opus-20250219**: Most capable, slower, more expensive
-- **claude-3-haiku-20250307**: Fastest, cheaper, less capable
+Available Claude models via CLI:
+- **claude-sonnet-4-5-20250929**: Latest Sonnet model (default)
+- **claude-sonnet-3-5-20241022**: Previous Sonnet version
+- **claude-opus-4-20250514**: Most capable, slower, more expensive
+- Other models as available in Claude Code CLI
 
 Model can be overridden per execution via ExecutionContext.
 
@@ -204,104 +204,83 @@ Model can be overridden per execution via ExecutionContext.
 
 ### Authentication & Authorization Errors
 ```
-Claude Code API 401 Unauthorized (invalid or expired API key)
+Claude CLI execution with invalid or missing credentials
     ↓
-raise AuthenticationError("Invalid Claude Code API key")
+Exit code non-zero, stderr: "authentication" error
+    ↓
+raise AuthenticationError("Invalid API key or OAuth token")
 ```
-**Recovery**: Refresh API key in secure store. Restart adapter with new key.
+**Recovery**: Verify credentials via credential provider. Update environment variables or secure store.
 
+### CLI Not Found
 ```
-Claude Code API 403 Forbidden (rate limit, quota exceeded)
+Claude CLI executable not found at configured path
     ↓
-raise AuthorizationError("Rate limit exceeded or quota insufficient")
-```
-**Recovery**: Wait for rate limit window. Upgrade Claude Code API plan.
-
-### Model Not Available
-```
-Claude Code API 404 Not Found (model doesn't exist)
+FileNotFoundError during subprocess execution
     ↓
-raise UnsupportedFeatureError(f"Model {model} not available")
+raise LLMProviderError("Claude CLI not found at: {path}")
 ```
-**Recovery**: Use supported model. Check available models via API.
+**Recovery**: Install Claude CLI. Update `claude_cli_path` configuration.
 
 ### Validation Errors
 ```
-Invalid input (prompt too long, invalid tool definition)
+Invalid input (prompt too long, empty prompt)
     ↓
-raise ValidationError("Prompt exceeds max length {limit}")
+raise ValidationError("Prompt cannot be empty")
     OR
-raise PromptTooLongError(f"Total tokens {tokens} exceeds max {max_tokens}")
+raise PromptTooLongError("Prompt exceeds maximum length of 1MB")
 ```
-**Recovery**: Shorten prompt. Reduce context. Use summarization.
+**Recovery**: Validate prompt before execution. Reduce context size.
 
-### Transient Errors
+### Execution Timeout
 ```
-Claude Code API 500/503 error
+Claude CLI process exceeds timeout (default 5 minutes)
     ↓
-Automatic retry (exponential backoff: 1s, 2s, 4s)
+Process killed via SIGKILL
     ↓
-After 3 retries: raise ExternalServiceError("Claude Code API unavailable")
+raise ExternalServiceError("Execution timeout")
 ```
-**Recovery**: Retry with longer backoff. Alert on-call team.
+**Recovery**: Increase timeout in configuration. Reduce prompt complexity.
+
+### Process Termination Errors
+```
+CLI process fails to terminate gracefully after SIGKILL
+    ↓
+Log warning (likely D-state/kernel I/O)
+    ↓
+Adapter continues (process cleanup may lag)
+```
+**Recovery**: Monitor system resources. Investigate kernel state.
+
+### Stream Processing Errors
+```
+Invalid JSON in stream output or non-JSON lines
+    ↓
+Skip line and continue (logged at debug level)
+    ↓
+Progress output or stderr leakage expected from CLI
+```
+**Recovery**: None needed. Adapter handles mixed JSON/text output gracefully.
 
 ### Rate Limiting
 ```
-Claude Code API 429 Too Many Requests
+Claude Code backend returns rate limit error in stderr
     ↓
-Extract retry-after header from response
+Exit code non-zero, stderr: "rate limit"
     ↓
-Pause requests for retry-after duration
-    ↓
-Automatic retry after backoff
-    ↓
-raise RateLimitError if rate limit exceeded during execution
+raise RateLimitError()
 ```
 **Recovery**: Implement request queue with rate limiting. Retry after cooldown.
 
-### Streaming Errors
+### Conversation Management
 ```
-Connection lost during streaming response
+Conversation ID tracked locally, CLI manages session via --session-id
     ↓
-Capture data streamed so far
+Session ID persisted in execution metadata
     ↓
-Attempt reconnect and resume (if stream_callback supports it)
-    ↓
-If reconnect fails: raise StreamingError("Stream interrupted")
+Subsequent calls with same conversation_id use --session-id
 ```
-**Recovery**: Retry execution. Fall back to non-streaming mode.
-
-### Tool Execution Errors
-```
-Tool called by Claude Code doesn't exist or fails
-    ↓
-Log error with tool name and arguments
-    ↓
-Send error message back to Claude Code in conversation
-    ↓
-Claude Code can retry or use alternative approach
-```
-**Recovery**: Claude Code decides. Adapter returns error message.
-
-### Conversation Management Errors
-```
-Conversation exceeds max_turns limit
-    ↓
-raise ExternalServiceError("Conversation max turns exceeded")
-```
-**Recovery**: Start new conversation. Summarize previous conversation for context.
-
-### Token Usage Errors
-```
-Total tokens exceed account limits
-    ↓
-Track token usage from API responses
-    ↓
-Proactively prevent requests exceeding limits
-    ↓
-raise PromptTooLongError if prompt would exceed limit
-```
-**Recovery**: Optimize prompts. Summarize context. Increase token limit.
+**Recovery**: Create new conversation (new UUID) if session lost.
 
 ## Testing
 
@@ -425,8 +404,9 @@ classDiagram
         conversation_continued: bool
     }
     
-    class ClaudeCodeAPI {
-        +POST /v1/messages
+    class ClaudeCodeCLI {
+        +execute(args: list[str]) int
+        +stream_output(session_id: str) AsyncIterator[str]
     }
     
     ILLMProvider <|-- ClaudeCodeAdapter: implements
@@ -435,22 +415,22 @@ classDiagram
     ClaudeCodeAdapter --> SecureStoreCredentialProvider: can use
     ClaudeCodeAdapter --> ExecutionContext: receives
     ClaudeCodeAdapter --> ExecutionResult: returns
-    ClaudeCodeAdapter --> ClaudeCodeAPI: HTTP calls
+    ClaudeCodeAdapter --> ClaudeCodeCLI: subprocess calls
 ```
 
 ## Production vs. Mock Comparison
 
 | Aspect | Production (ClaudeCodeAdapter) | Mock (MockLLMAdapter) |
 |---|---|---|
-| **External System** | Real Claude Code API | In-memory responses |
-| **Latency** | 500ms-30s | <1ms |
+| **External System** | Claude Code CLI subprocess | In-memory responses |
+| **Latency** | 1-30 seconds (depends on prompt/model) | <1ms |
 | **Determinism** | No (depends on model output) | Yes (deterministic) |
-| **Capabilities** | Full Claude Code capabilities | Configurable mock responses |
-| **Dependencies** | Claude Code API key, network | None |
-| **Token Usage** | Real (tracked from API) | Simulated/configurable |
-| **Error Handling** | Real API errors + resilience patterns | Configurable mock errors |
+| **Capabilities** | Full Claude Code CLI capabilities (MCP, tools, streaming) | Configurable mock responses |
+| **Dependencies** | Claude Code CLI installed, API credentials, network | None |
+| **Token Usage** | Real (parsed from JSON output stream) | Simulated/configurable |
+| **Error Handling** | Real CLI/API errors + exit codes + resilience patterns | Configurable mock errors |
 | **Use Case** | Production, staging | Testing, development, CI/CD |
-| **Cost** | Per-token pricing | Free (simulated) |
+| **Cost** | Per-token pricing (via Anthropic) | Free (simulated) |
 
 ## Cross-References
 
