@@ -1,18 +1,18 @@
 # Simulation Adapters Reference
 
-Complete mapping of all 54 simulation/mock adapters to their port interfaces.
+Complete mapping of all 53 simulation/mock adapters to their port interfaces.
 
 ## Overview
 
 The Simulation Implementation provides:
-- **36 Testing Adapters**: Mock/in-memory implementations of output ports
+- **35 Testing Adapters**: Mock/in-memory implementations of output ports
 - **18 Input Port Adapters**: Mock adapters wrapping application services for HTTP endpoints
 
 All adapters implement the same port contracts as production adapters, ensuring the simulation exercises identical business logic.
 
-## Output Port Adapters (36 Testing Adapters)
+## Output Port Adapters (35 Testing Adapters)
 
-Complete list of mock implementations for all output ports.
+Complete list of mock implementations for all output ports in `adapters/testing/`.
 
 | # | Port Interface | Adapter Class | File | Purpose |
 |---|---|---|---|---|
@@ -29,29 +29,37 @@ Complete list of mock implementations for all output ports.
 | 11 | `IBoardService` | `MockBoardAdapter` | `adapters/testing/mock_board_adapter.py` | Simulates GitHub Projects — columns, cards, automation |
 | 12 | `IRepairCycle` | `MockRepairCycleAdapter` | `adapters/testing/mock_repair_cycle_adapter.py` | Simulates repair/fix cycles — test-fix-validate loops |
 | 13 | `IProjectManagerService` | `MockProjectManagerAdapter` | `adapters/testing/mock_project_manager_adapter.py` | Simulates project management — status, planning |
-| 14 | `IPipelineLockService` | `InMemoryLockService` | `adapters/secondary/in_memory_queue_lock_service.py` | In-memory distributed locking — deadlock prevention |
-| 15 | `IWorkflowConfigService` | `InMemoryWorkflowConfigService` | `adapters/testing/in_memory_workflow_config_service.py` | In-memory workflow configuration — stages, agents |
-| 16 | `IPipelineQueueService` | `InMemoryQueueService` | `adapters/testing/in_memory_queue_service.py` | In-memory task queue — execution ordering |
-| 17 | `IEventEmitter` | `CapturingMockEventEmitter` | `adapters/testing/capturing_mock_event_emitter.py` | Captures events for testing assertions |
-| 18 | `IVersionControlService` | `InMemoryVersionControlService` | `adapters/testing/in_memory_version_control_service.py` | Simulates version control — branches, commits |
-| 19 | `IMessageBroker` | `InMemoryMessageBroker` | `adapters/testing/in_memory_message_broker.py` | In-memory pub/sub — event distribution |
-| 20 | `IDiscussionAdapter` | `MockDiscussionAdapter` | `adapters/testing/mock_discussion_adapter.py` | Simulates discussions — comments, threading |
-| 21 | `IReviewCycle` | `MockReviewCycleAdapter` | `adapters/testing/mock_review_cycle_adapter.py` | Simulates code review — PR review workflows |
-| 22 | `IPRReviewCycle` | `MockPRReviewCycleAdapter` | `adapters/testing/mock_pr_review_cycle_adapter.py` | Simulates PR review — approval, feedback, revisions |
-| 23 | `ICodeReviewService` | `InMemoryCodeReviewAdapter` | `adapters/testing/in_memory_code_review_adapter.py` | In-memory code review tracking |
-| 24 | `IIdentityService` | `ConfigurableIdentityService` | `adapters/secondary/configurable_identity_service.py` | Simulates identity — bot/human user detection |
-| 25 | `IRepairCycleCheckpointStore` | `InMemoryCheckpointStore` | `adapters/testing/in_memory_checkpoint_store.py` | In-memory repair cycle checkpoints |
-| 26 | `ICIPipelineService` | `MockCIPipelineAdapter` | `adapters/testing/mock_ci_pipeline_adapter.py` | Simulates CI/CD — build, test execution |
-| 27 | `IAgentRepository` | `InMemoryAgentRepository` | `adapters/testing/in_memory_agent_repository.py` | In-memory agent catalog — capabilities, models |
-| 28 | `IActiveWorkflowRunRegistry` | `InMemoryActiveWorkflowRunRegistry` | `adapters/testing/in_memory_active_workflow_run_registry.py` | In-memory tracking of active workflow runs |
-| 29 | `IWorkItemBranchTracker` | `InMemoryWorkItemBranchTracker` | `adapters/testing/in_memory_work_item_branch_tracker.py` | In-memory branch tracking — work item to branch mapping |
-| 30 | `IWorkItemService` | `MockWorkItemService` | `adapters/testing/mock_work_item_service.py` | Mock work item service — CRUD operations |
-| 31 | `IAgentContainerRecoveryService` | `MockContainerRecoveryAdapter` | `adapters/testing/mock_container_recovery_adapter.py` | Simulates container recovery — failure handling |
-| 32 | `ISystemicAnalysisService` | `MockSystemicAnalysisAdapter` | `adapters/testing/mock_systemic_analysis_adapter.py` | Simulates systemic failure analysis |
-| 33 | `IEnvironmentRepairService` | `MockEnvironmentRepairAdapter` | `adapters/testing/mock_environment_repair_adapter.py` | Simulates environment repair — dependency fixes |
-| 34 | `IBranchResolutionService` | `MockBranchResolutionAdapter` | `adapters/testing/mock_branch_resolution_adapter.py` | Simulates intelligent branch resolution |
-| 35 | `IAgentExecutor` | `ExecutionServiceAgentExecutor` | `adapters/testing/execution_service_agent_executor.py` | Real agent executor wrapper — integrates with execution service |
-| 36 | `ITracer` | `InMemoryTracer` | `adapters/testing/in_memory_tracer.py` | In-memory distributed tracing — trace propagation |
+| 14 | `IWorkflowConfigService` | `InMemoryWorkflowConfigService` | `adapters/testing/in_memory_workflow_config_service.py` | In-memory workflow configuration — stages, agents |
+| 15 | `IPipelineQueueService` | `InMemoryQueueService` | `adapters/testing/in_memory_queue_service.py` | In-memory task queue — execution ordering |
+| 16 | `IEventEmitter` | `CapturingMockEventEmitter` | `adapters/testing/capturing_mock_event_emitter.py` | Captures events for testing assertions |
+| 17 | `IVersionControlService` | `InMemoryVersionControlService` | `adapters/testing/in_memory_version_control_service.py` | Simulates version control — branches, commits |
+| 18 | `IMessageBroker` | `InMemoryMessageBroker` | `adapters/testing/in_memory_message_broker.py` | In-memory pub/sub — event distribution |
+| 19 | `IDiscussionAdapter` | `MockDiscussionAdapter` | `adapters/testing/mock_discussion_adapter.py` | Simulates discussions — comments, threading |
+| 20 | `IReviewCycle` | `MockReviewCycleAdapter` | `adapters/testing/mock_review_cycle_adapter.py` | Simulates code review — PR review workflows |
+| 21 | `IPRReviewCycle` | `MockPRReviewCycleAdapter` | `adapters/testing/mock_pr_review_cycle_adapter.py` | Simulates PR review — approval, feedback, revisions |
+| 22 | `ICodeReviewService` | `InMemoryCodeReviewAdapter` | `adapters/testing/in_memory_code_review_adapter.py` | In-memory code review tracking |
+| 23 | `IRepairCycleCheckpointStore` | `InMemoryCheckpointStore` | `adapters/testing/in_memory_checkpoint_store.py` | In-memory repair cycle checkpoints |
+| 24 | `ICIPipelineService` | `MockCIPipelineAdapter` | `adapters/testing/mock_ci_pipeline_adapter.py` | Simulates CI/CD — build, test execution |
+| 25 | `IAgentRepository` | `InMemoryAgentRepository` | `adapters/testing/in_memory_agent_repository.py` | In-memory agent catalog — capabilities, models |
+| 26 | `IActiveWorkflowRunRegistry` | `InMemoryActiveWorkflowRunRegistry` | `adapters/testing/in_memory_active_workflow_run_registry.py` | In-memory tracking of active workflow runs |
+| 27 | `IWorkItemBranchTracker` | `InMemoryWorkItemBranchTracker` | `adapters/testing/in_memory_work_item_branch_tracker.py` | In-memory branch tracking — work item to branch mapping |
+| 28 | `IWorkItemService` | `MockWorkItemService` | `adapters/testing/mock_work_item_service.py` | Mock work item service — CRUD operations |
+| 29 | `IAgentContainerRecoveryService` | `MockContainerRecoveryAdapter` | `adapters/testing/mock_container_recovery_adapter.py` | Simulates container recovery — failure handling |
+| 30 | `ISystemicAnalysisService` | `MockSystemicAnalysisAdapter` | `adapters/testing/mock_systemic_analysis_adapter.py` | Simulates systemic failure analysis |
+| 31 | `IEnvironmentRepairService` | `MockEnvironmentRepairAdapter` | `adapters/testing/mock_environment_repair_adapter.py` | Simulates environment repair — dependency fixes |
+| 32 | `IBranchResolutionService` | `MockBranchResolutionAdapter` | `adapters/testing/mock_branch_resolution_adapter.py` | Simulates intelligent branch resolution |
+| 33 | `IAgentExecutor` | `ExecutionServiceAgentExecutor` | `adapters/testing/execution_service_agent_executor.py` | Real agent executor wrapper — integrates with execution service |
+| 34 | `ITracer` | `InMemoryTracer` | `adapters/testing/in_memory_tracer.py` | In-memory distributed tracing — trace propagation |
+| 35 | `IAgentExecutor` | `MockAgentExecutor` | `adapters/testing/mock_agent_executor.py` | Mock agent executor — simulates agent execution without LLM |
+
+## Secondary Adapters (2 Adapters in `adapters/secondary/`)
+
+These adapters are located in `adapters/secondary/` but are used in simulation testing:
+
+| # | Port Interface | Adapter Class | File | Purpose |
+|---|---|---|---|---|
+| 1 | `IPipelineLockService` | `InMemoryLockService` | `adapters/secondary/in_memory_queue_lock_service.py` | In-memory distributed locking — deadlock prevention |
+| 2 | `IIdentityService` | `ConfigurableIdentityService` | `adapters/secondary/configurable_identity_service.py` | Simulates identity — bot/human user detection |
 
 ## Input Port Adapters (18 Mock Adapters)
 
@@ -88,6 +96,7 @@ src/codetoreum/adapters/testing/
 ├── fake_*.py               (1 file)  - Fake implementations
 ├── simple_*.py             (1 file)  - Simple implementations
 ├── execution_service_agent_executor.py
+├── mock_agent_executor.py
 ├── capturing_mock_event_emitter.py
 └── __init__.py
 ```
@@ -389,6 +398,6 @@ Mock implementation of IAgentExecutor for testing and port adapter coverage.
 
 ---
 
-**Total Adapter Count**: 36 testing + 18 input port = **54 adapters**
+**Total Adapter Count**: 35 testing + 2 secondary + 18 input port = **53 adapters**
 
 All adapters implement port contracts to provide a complete, testable implementation of the Codetoreum architecture.

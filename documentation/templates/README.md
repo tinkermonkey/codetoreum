@@ -100,13 +100,13 @@ Required elements:
 Documentation templates are enforced through:
 
 1. **Manual Review**: During PR review, verify new documentation follows the applicable template
-2. **Automated Validation** (Future - Phase 2): An `arch-doc` agent with a validation skill checks:
+2. **Automated Validation**: The `arch-doc` agent (`.claude/agents/arch-doc.md`) with validation skill (`arch-doc-validator`, `.claude/skills/arch-doc-validator/SKILL.md`) checks:
    - All required sections are present
    - Required elements (diagrams, code blocks) exist
    - Headings match template requirements
    - Cross-references are valid
 
-3. **Coverage Validation** (Future - Phase 2): Agent verifies:
+3. **Coverage Validation**: Agent verifies:
    - Every port interface has documentation
    - Every adapter is listed in at least one documentation file
    - Every domain event is cataloged
@@ -148,10 +148,10 @@ All documentation files use lowercase-hyphenated naming (except README.md):
 - ❌ `ComprehensivePortsReference.md`
 - ❌ `PRODUCTION_BOOTSTRAP_WIRING.md`
 
-## Phase Delivery
+## Delivery Status
 
-- **Phase 1**: All 5 template files created with required sections
-- **Phase 2**: Agent and skill definitions for enforcement
+- **Phase 1** ✅: All 5 template files created with required sections
+- **Phase 2** ✅: Agent (`.claude/agents/arch-doc.md`) and skill (`arch-doc-validator`) definitions implemented for enforcement
 - **Phase 3+**: Template enforcement as content is generated
 - **Phase 8**: Validation pass confirming all documentation conforms to templates
 
