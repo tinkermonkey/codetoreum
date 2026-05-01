@@ -82,18 +82,21 @@ Configuration controls CLI path, authentication, model selection, and feature fl
 @dataclass
 class ExecutionContext:
     """Context for LLM execution."""
-    conversation_id: str                # Unique conversation identifier
-    messages: list[Message]             # Conversation history
-    tools: list[ToolDefinition]        # Available tools for this execution
-    max_turns: int = 10                # Limit conversation length
-    work_item_id: str | None = None    # Associated work item
-    project_id: str | None = None      # Associated project
+    model: str | None = None                      # Model selection
+    conversation_id: str | None = None            # Unique conversation identifier
+    message_history: tuple[dict, ...] = ()        # Conversation history (immutable)
+    system_prompt: str | None = None              # System instructions
+    timeout_seconds: int = 300                    # Execution timeout
+    working_directory: Path | None = None         # Container working directory
+    environment_variables: dict = {}              # Environment variables
+    mcp_servers: tuple[dict, ...] = ()            # MCP server configurations
 ```
 
 Conversations are tracked via `conversation_id`:
-- Multiple turns supported (agent can ask follow-up questions)
-- Message history preserved for context
-- Tool definitions specify what agent can do
+- Multiple turns supported via `message_history` (preserved message context)
+- Session management handled by Claude CLI with `--session-id` flag
+- Model selection per execution via `model` parameter
+- Container-specific context via `working_directory` and `environment_variables`
 
 **4. Tool Execution**
 ```python
@@ -118,15 +121,16 @@ When Claude Code calls a tool:
 
 **5. Streaming Support**
 ```python
-async def execute_streaming(
+async def stream_completion(
     self,
-    context: ExecutionContext,
-    stream_callback: StreamCallback
-) -> ExecutionResult:
-    """Execute with streaming output."""
-    async for chunk in self._stream_response():
-        await stream_callback(chunk)  # Real-time updates
-    return result
+    prompt: str,
+    context: ExecutionContext | None = None,
+) -> AsyncIterator[StreamChunk]:
+    """Stream completion tokens as they're generated."""
+    # Builds CLI command with --output-format stream-json
+    # Parses JSON event stream and yields StreamChunk objects
+    async for chunk in self._parse_stream():
+        yield chunk
 ```
 
 Streaming allows:
@@ -174,7 +178,8 @@ class ClaudeCodeConfig:
 ### Environment Variables
 - `ANTHROPIC_API_KEY`: Anthropic API key (required if using API key auth)
 - `CLAUDE_CODE_OAUTH_TOKEN`: Claude Code OAuth token (required if using OAuth)
-- `CLAUDE`: Path to Claude CLI executable (default: "claude" in PATH)
+
+Note: The CLI path is configured via `ClaudeCodeConfig.claude_cli_path`, not an environment variable.
 
 ### Credential Handling
 
@@ -285,25 +290,25 @@ Subsequent calls with same conversation_id use --session-id
 ## Testing
 
 ### Unit Tests
-- **HTTP client mocking**: Fixture returns canned Claude Code API responses
+- **CLI subprocess mocking**: Fixture mocks `subprocess.run()` to return canned Claude CLI responses
 - **Configuration validation**: Valid/invalid configs, required parameters
-- **Credential provider mocking**: Test with mocked credential sources
-- **Error mapping**: Claude Code API errors → port-standard exceptions
-- **Tool definition handling**: Valid/invalid tool schemas
-- **Token usage tracking**: Verify token counts extracted from responses
-- **Conversation state**: Message history, turn tracking
-- **Streaming support**: Verify stream callback invoked correctly
+- **Credential provider mocking**: Test with mocked EnvironmentCredentialProvider and SecureStoreCredentialProvider
+- **Error mapping**: CLI subprocess errors (exit codes, stderr) → port-standard exceptions
+- **Command building**: Verify correct `claude` CLI arguments constructed
+- **Token usage tracking**: Verify token counts extracted from JSON stream output
+- **Conversation state**: Message history, session ID tracking
+- **Streaming support**: Verify JSON stream parsing and StreamChunk generation
 
 **Location**: `tests/unit/adapters/secondary/test_claude_code_adapter.py`
 
 ### Integration Tests
-- **Real Claude Code API** (with test key): Execute actual prompts, verify responses
-- **Authentication**: Valid key, invalid key, expired key
+- **Real Claude Code CLI** (with test key): Execute actual prompts via CLI, verify responses
+- **Authentication**: Valid key, invalid key, expired token
 - **Different models**: Test with different available models
-- **Streaming**: Verify streaming output received correctly
-- **Tool execution**: Define and execute tools via Claude Code
-- **Rate limiting**: Verify backoff behavior
-- **Long conversations**: Multi-turn dialogue
+- **Streaming**: Verify streaming output received and parsed correctly
+- **Tool execution**: Define and execute tools via MCP configuration
+- **Rate limiting**: Verify handling of rate limit exit codes
+- **Long conversations**: Multi-turn dialogue via session IDs
 
 **Location**: `tests/integration/adapters/secondary/test_claude_code_adapter_integration.py`
 
@@ -323,17 +328,24 @@ Subsequent calls with same conversation_id use --session-id
 
 ### Mocking Strategy
 ```python
-# Test fixture
+# Test fixture - subprocess mocking
 @pytest.fixture
-def llm_adapter(mock_http_client):
-    config = ClaudeCodeConfig(
-        api_key="test-key",
-        model="claude-3-5-sonnet-20241022",
-        max_tokens=1024
+def llm_adapter(mocker):
+    # Mock subprocess.run() to return canned Claude CLI output
+    mock_run = mocker.patch("subprocess.run")
+    mock_run.return_value = subprocess.CompletedProcess(
+        args=["claude", ...],
+        returncode=0,
+        stdout='{"type": "text", "text": "Response"}',
+        stderr=""
     )
-    adapter = ClaudeCodeAdapter(config)
-    adapter._http_client = mock_http_client  # Inject mock
-    return adapter
+    
+    config = ClaudeCodeConfig(
+        claude_cli_path="claude",
+        default_model="claude-sonnet-4-5-20250929",
+        credential_provider=EnvironmentCredentialProvider()
+    )
+    return ClaudeCodeAdapter(config)
 ```
 
 ## Source
@@ -356,57 +368,70 @@ def llm_adapter(mock_http_client):
 classDiagram
     class ILLMProvider {
         <<interface>>
-        +execute(context: ExecutionContext) ExecutionResult
-        +execute_streaming(context: ExecutionContext, callback: StreamCallback) ExecutionResult
-        +get_model_info(model: str) ModelInfo
-        +estimate_tokens(text: str) int
+        +execute(prompt: str, context: ExecutionContext, callback: StreamCallback) ExecutionResult
+        +execute_with_tools(prompt: str, tools: list[ToolDefinition], context: ExecutionContext) ExecutionResult
+        +stream_completion(prompt: str, context: ExecutionContext) AsyncIterator[StreamChunk]
+        +create_conversation(system_prompt: str) str
+        +continue_conversation(conversation_id: str, message: str) ExecutionResult
+        +get_model_info() ModelInfo
+        +count_tokens(text: str) int
     }
     
     class ClaudeCodeAdapter {
         -config: ClaudeCodeConfig
-        -http_client: httpx.AsyncClient
         -credential_provider: ICredentialProvider
-        -rate_limiter: RateLimiter
-        +execute(context: ExecutionContext) ExecutionResult
-        +execute_streaming(context: ExecutionContext, callback: StreamCallback) ExecutionResult
-        +get_model_info(model: str) ModelInfo
-        +estimate_tokens(text: str) int
-        -_prepare_messages(context: ExecutionContext) list[Message]
-        -_prepare_tools(context: ExecutionContext) list[ToolDefinition]
-        -_handle_tool_call(tool_name: str, tool_args: dict) str
+        -_conversations: dict[str, dict]
+        -_usage_stats: dict
+        +execute(prompt: str, context: ExecutionContext, callback: StreamCallback) ExecutionResult
+        +execute_with_tools(prompt: str, tools: list[ToolDefinition], context: ExecutionContext) ExecutionResult
+        +stream_completion(prompt: str, context: ExecutionContext) AsyncIterator[StreamChunk]
+        +create_conversation(system_prompt: str) str
+        +continue_conversation(conversation_id: str, message: str) ExecutionResult
+        +get_model_info() ModelInfo
+        +count_tokens(text: str) int
+        -_build_command(prompt: str, context: ExecutionContext) list[str]
+        -_parse_stream_output(process: subprocess.Popen) AsyncIterator[StreamChunk]
+        -_handle_subprocess_error(exit_code: int, stderr: str) Exception
     }
     
     class ICredentialProvider {
         <<interface>>
-        +get_credential(key: str) str
+        +get_credential(key: str) str | None
     }
     
     class EnvironmentCredentialProvider {
-        +get_credential(key: str) str
+        +get_credential(key: str) str | None
     }
     
     class SecureStoreCredentialProvider {
-        +get_credential(key: str) str
+        +get_credential(key: str) str | None
     }
     
     class ExecutionContext {
-        conversation_id: str
-        messages: list[Message]
-        tools: list[ToolDefinition]
-        max_turns: int
-        work_item_id: str
+        model: str | None
+        conversation_id: str | None
+        message_history: tuple[dict, ...]
+        system_prompt: str | None
+        timeout_seconds: int
+        working_directory: Path | None
+        environment_variables: dict
+        mcp_servers: tuple[dict, ...]
     }
     
     class ExecutionResult {
-        response_text: str
-        tool_calls: list[ToolCall]
-        usage_stats: UsageStats
-        conversation_continued: bool
+        content: str
+        role: str
+        tool_calls: tuple[ToolCall, ...]
+        completion_tokens: int
+        prompt_tokens: int
+        total_tokens: int
+        finish_reason: str
+        conversation_id: str | None
     }
     
     class ClaudeCodeCLI {
-        +execute(args: list[str]) int
-        +stream_output(session_id: str) AsyncIterator[str]
+        +execute(args: list[str]) CompletedProcess
+        +stream(args: list[str], prompt: str) AsyncIterator[str]
     }
     
     ILLMProvider <|-- ClaudeCodeAdapter: implements
