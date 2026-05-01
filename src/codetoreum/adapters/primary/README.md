@@ -301,7 +301,7 @@ Primary adapters depend on:
 ## Design Documents
 
 Refer to the following design documents for detailed specifications:
-- `documentation/architecture/adapters/primary/` - Primary adapter architecture documentation
+- `documentation/architecture/adapters/` - Adapter architecture documentation
 - `documentation/architecture/overview.md` - High-level architecture overview
 - `CLAUDE.md` - Project implementation guidelines
 
