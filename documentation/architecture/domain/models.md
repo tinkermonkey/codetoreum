@@ -574,13 +574,49 @@ class PRReviewPhaseOutput:
     comment_id: str | None = None
     error: str | None = None
 
-@dataclass
+@dataclass(frozen=True)
 class PRReviewCycleConfig:
-    """Configuration for a PR review cycle."""
-    max_iterations: int
-    require_ci_pass: bool
-    code_review_timeout: int
-    allow_auto_merge: bool
+    """Configuration for a PR review cycle.
+    
+    Controls phase execution, timeouts, context sources for verification,
+    and column routing for different outcomes.
+    
+    Attributes:
+        max_outer_cycles: Maximum complete cycles before escalation (default 3)
+        verifier_context_sources: Context sources for verification phase (default ("parent_issue",))
+        code_review_timeout_seconds: Timeout for Phase 1 code review (default 600)
+        verification_timeout_seconds: Timeout per verification source (default 300)
+        ci_check_enabled: Enable Phase 3 CI check (default True)
+        ci_check_timeout_seconds: Timeout for CI check (default 300)
+        consolidation_timeout_seconds: Timeout for Phase 4 (default 600)
+        sub_issue_target_board: Board for created sub-issues (optional)
+        sub_issue_creation: Create sub-issues when issues found (default True)
+        sub_issue_labels: Labels for created sub-issues
+        sub_issue_initial_column: Initial column for sub-issues (default "Backlog")
+        on_issues_found_column: Column for issues found outcome (default "In Development")
+        on_approved_column: Column for approved outcome (default "Done")
+        on_failure_column: Column for CI failure outcome (optional)
+        code_review_agent: Phase 1 agent ID (default "default-code-reviewer")
+        verifier_agent: Phase 2 agent ID (default "default-verifier")
+        consolidation_agent: Phase 4 agent ID (default "default-consolidation")
+    """
+    max_outer_cycles: int = 3
+    verifier_context_sources: tuple[str, ...] = ("parent_issue",)
+    code_review_timeout_seconds: int = 600
+    verification_timeout_seconds: int = 300
+    ci_check_enabled: bool = True
+    ci_check_timeout_seconds: int = 300
+    consolidation_timeout_seconds: int = 600
+    sub_issue_target_board: str | None = None
+    sub_issue_creation: bool = True
+    sub_issue_labels: tuple[str, ...] = ()
+    sub_issue_initial_column: str = "Backlog"
+    on_issues_found_column: str = "In Development"
+    on_approved_column: str = "Done"
+    on_failure_column: str | None = None
+    code_review_agent: str = "default-code-reviewer"
+    verifier_agent: str = "default-verifier"
+    consolidation_agent: str = "default-consolidation"
 ```
 
 **Key Responsibilities**:
@@ -1687,14 +1723,15 @@ An enumeration representing the final outcome of a completed PR review cycle.
 Output produced by a single phase in the PR review cycle.
 
 **Attributes**:
-- `phase_name` (str): Name of the phase that produced this
-- `phase_index` (int): Position in sequence
-- `outcomes` (List[PRReviewOutcome]): Findings from this phase
-- `agent_id` (str): ID of agent that executed this phase
-- `duration_seconds` (float): Time spent in this phase
-- `status` (str): Phase result ("success", "timeout", "error")
-- `can_proceed_to_next` (bool): Whether next phase can proceed
-- `execution_logs` (Optional[str]): Execution logs from phase
+- `phase_name` (str): Name of the phase (e.g., "code_review", "verification")
+- `phase_index` (int): Position in phase sequence (1-based)
+- `success` (bool): Whether the phase completed successfully
+- `findings` (tuple[PRReviewFinding, ...]): Immutable tuple of findings discovered
+- `summary` (str): Human-readable summary of phase results
+- `duration_seconds` (float): Time taken to execute this phase
+- `context_source` (Optional[str]): Context source for this phase (e.g., "parent_issue")
+- `comment_id` (Optional[str]): ID of comment associated with this phase
+- `error` (Optional[str]): Error message if phase failed, None if successful
 
 **Purpose**: Encapsulates output from a single review phase for composition into full cycle result.
 

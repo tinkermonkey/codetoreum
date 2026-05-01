@@ -56,11 +56,13 @@ class WorkItemCreatedEvent(CodetoreumEvent):
         project_id: Project containing the work item
         title: Work item title
         initial_column: Board column (if on board initially)
+        parent_issue_id: ID of parent issue if this is a sub-issue, None otherwise
     """
     work_item_id: str = ""
     project_id: str = ""
     title: str = ""
     initial_column: str | None = None
+    parent_issue_id: str | None = None
 
 @dataclass(frozen=True)
 class WorkItemUpdatedEvent(CodetoreumEvent):
