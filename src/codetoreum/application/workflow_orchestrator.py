@@ -1614,6 +1614,20 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
                 # Process each work item
                 for item in board_items:
                     try:
+                        # Validate work_item_id is numeric before any operations
+                        try:
+                            issue_number = int(item.work_item_id)
+                        except ValueError:
+                            logger.warning(
+                                f"Invalid work_item_id format (not numeric): {item.work_item_id}",
+                                extra={
+                                    "error_id": "ERR_ORCHESTRATOR_INVALID_WORK_ITEM_ID",
+                                    "work_item_id": item.work_item_id,
+                                    "project": project_name,
+                                },
+                            )
+                            continue
+
                         # Find the column configuration for this item's current column
                         column_config = self._find_column_config(workflow_config, item.column_name)
                         if not column_config:
@@ -1678,7 +1692,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
                         await self.decision_events.emit_routing_decision(
                             RoutingDecision(
                                 project=project_name,
-                                issue_number=int(item.work_item_id),
+                                issue_number=issue_number,
                                 board=board.name,
                                 column=item.column_name,
                                 selected_agent=column_config.agent,

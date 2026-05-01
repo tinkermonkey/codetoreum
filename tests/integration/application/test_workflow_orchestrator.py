@@ -918,3 +918,53 @@ async def test_orchestrate_project_individual_item_failure_continues(
     task = mock_task_queue.get_last_task()
     assert task.agent == "developer"
     assert task.context["work_item_id"] == 124
+
+
+@pytest.mark.asyncio
+async def test_orchestrate_project_non_numeric_work_item_id_skipped(
+    mock_task_queue,
+    mock_config,
+    mock_workflow_state,
+    mock_decision_events,
+    mock_event_store,
+    mock_ticket_system,
+    mock_projects_api,
+):
+    """Test orchestrate_project skips non-numeric work_item_ids without enqueueing."""
+    board_service = MockBoardService()
+    board = MockBoard("Development", "board-1", "test-project")
+    board_service.boards = [board]
+
+    # Create a custom board item class that allows string work_item_id
+    class StringBoardItem:
+        def __init__(self, work_item_id, column_name):
+            self.work_item_id = work_item_id
+            self.column_name = column_name
+
+    # Mix numeric and non-numeric work item IDs
+    board_service.board_items["board-1"] = [
+        StringBoardItem("ABC-123", "Requirements"),  # Non-numeric
+        StringBoardItem(456, "Implementation"),  # Numeric
+    ]
+
+    orchestrator = WorkflowOrchestrator(
+        task_queue=mock_task_queue,
+        config=mock_config,
+        workflow_state=mock_workflow_state,
+        decision_events=mock_decision_events,
+        event_store=mock_event_store,
+        ticket_system=mock_ticket_system,
+        projects_api=mock_projects_api,
+        board_service=board_service,
+    )
+
+    # Should process only the numeric work item (456), skipping "ABC-123"
+    actions_taken = await orchestrator.orchestrate_project("test-project", "/workspace", mock_config)
+
+    # Should have only 1 task (for developer/Implementation with ID 456)
+    assert mock_task_queue.size() == 1
+    assert actions_taken == 1
+
+    task = mock_task_queue.get_last_task()
+    assert task.agent == "developer"
+    assert task.context["work_item_id"] == 456
