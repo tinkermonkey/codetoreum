@@ -9,7 +9,6 @@ import asyncio
 import logging
 import time
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
 
 from codetoreum.domain.events.project_events import (
     OrchestrationCycleCompletedEvent,
@@ -27,9 +26,7 @@ from codetoreum.ports.output.multi_project_orchestrator import (
     ProjectStatus,
 )
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
-
-if TYPE_CHECKING:
-    from codetoreum.ports.output.workflow_orchestrator import IWorkflowOrchestrator
+from codetoreum.ports.output.workflow_orchestrator import IWorkflowOrchestrator
 
 logger = logging.getLogger(__name__)
 

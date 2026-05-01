@@ -262,6 +262,7 @@ Database-backed configuration with web UI:
 - Adapters MUST remain pure (no resilience logic embedded)
 - No silent error handling (all errors logged with exc_info=True)
 - Simulation-only routes mount in `SimulationApplicationBootstrap`, NEVER in production `create_app()`
+- **Application services implementing output ports MUST explicitly inherit the port ABC** - Do not rely on duck typing or `TYPE_CHECKING`-only imports. Examples: `MultiProjectOrchestrator` and `WorkflowOrchestrator` both inherit from their respective port interfaces (`IMultiProjectOrchestrator`, `IWorkflowOrchestrator`)
 
 ## Simulation Testing Infrastructure
 
