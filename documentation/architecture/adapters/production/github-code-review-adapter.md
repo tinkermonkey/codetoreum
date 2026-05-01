@@ -250,5 +250,5 @@ classDiagram
 - **Related Adapters**: 
   - [GitHubTicketAdapter](./github-ticket-adapter.md) - Issue management
   - [GitHub Discussion Adapter](./github-discussion-adapter.md) - Comment management
-- **Domain Events**: [Review Events](../domain/events.md#review-events)
+- **Domain Events**: [Review Events](../domain/events.md#review-context)
 - **Simulation**: [MockCodeReviewAdapter](../../../implementations/simulation/adapters.md)

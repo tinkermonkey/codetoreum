@@ -38,7 +38,7 @@ codetoreum/
 ├── documentation/              # Architecture and implementation documentation
 │   ├── architecture/           # Gen 2 design specifications
 │   │   ├── domain/             # Domain model specifications
-│   │   ├── ports/              # Port interface specifications (19 input, 40 output)
+│   │   ├── ports/              # Port interface specifications (20 input, 40 output)
 │   │   ├── application-services/ # Orchestration service designs
 │   │   └── infrastructure/     # Cross-cutting infrastructure
 │   ├── implementations/        # Implementation and testing documentation
@@ -47,11 +47,11 @@ codetoreum/
 ├── scenarios/                  # Simulation scenario YAML definitions
 └── src/codetoreum/
     ├── domain/                 # Core business logic (pure, 90 domain model classes)
-    │   ├── events/             # 91 modern domain event classes (immutable)
+    │   ├── events/             # 165 total domain event classes (91 modern + 74 legacy, immutable)
     │   └── services/           # Domain services
-    ├── application/            # 22 application services + event handlers
+    ├── application/            # 23 application services + event handlers
     ├── ports/                  # Port interfaces
-    │   ├── input/              # 19 inbound ports (commands, queries, services)
+    │   ├── input/              # 20 inbound ports (commands, queries, services)
     │   └── output/             # 40 outbound port interfaces
     ├── adapters/               # Adapter implementations (53 total mock/in-memory adapters)
     │   ├── primary/            # FastAPI app, REST routers, webhook adapter
@@ -89,7 +89,7 @@ codetoreum/
 - All events frozen (immutable) with serialization support
 
 ### Application Services (Orchestration)
-22 total application services for workflow orchestration, including:
+23 total application services for workflow orchestration, including:
 - **WorkflowOrchestrator**: Coordinates workflow execution
 - **AgentScheduler**: Queues and schedules agent executions
 - **ExecutionService**: Manages agent execution lifecycle
@@ -104,9 +104,9 @@ See `documentation/architecture/application-services/` for complete service docu
 
 ### Port Interfaces (Contracts)
 
-**59 total ports**: 19 input ports + 40 output ports
+**60 total ports**: 20 input ports + 40 output ports
 
-**Input Ports** (19 total): Command, query, and service interfaces for inbound operations
+**Input Ports** (20 total): Command, query, and service interfaces for inbound operations
 - Agent management, work item management, workflow management
 - Execution management, configuration, system services
 
@@ -362,7 +362,7 @@ async def test_workflow():
 5. `documentation/architecture/ports/output/` - Complete output port specifications (40 ports across 7 groups)
 
 **Application & Services:**
-- `documentation/architecture/application-services/services.md` - Application service designs (22 services)
+- `documentation/architecture/application-services/services.md` - Application service designs (23 services)
 - `documentation/architecture/application-services/event-handlers.md` - Event handler specifications
 - `documentation/architecture/ports/input/` - Input port interface specifications
 - `documentation/architecture/ports/output/` - Output port interface specifications

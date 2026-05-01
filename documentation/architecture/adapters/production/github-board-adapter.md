@@ -331,6 +331,6 @@ classDiagram
 - **Related Adapters**: 
   - [GitHubTicketAdapter](./github-ticket-adapter.md) - Work item CRUD
   - [GitHub Code Review Adapter](./github-code-review-adapter.md) - PR management
-- **Domain Events**: [Board Events](../domain/events.md#board-events) - WorkItemColumnChangedEvent, BoardReconciledEvent
+- **Domain Events**: [Board Events](../domain/events.md#board-context) - WorkItemColumnChangedEvent, BoardReconciledEvent
 - **Infrastructure**: [Resilience Patterns](../infrastructure/resilience.md) - ResilientBoardServiceDecorator
 - **Simulation**: [MockBoardAdapter](../../../implementations/simulation/adapters.md#mock-adapters) - Test alternative
