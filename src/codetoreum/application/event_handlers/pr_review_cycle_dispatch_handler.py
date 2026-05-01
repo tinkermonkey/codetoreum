@@ -10,7 +10,7 @@ separately by PRReviewCycleEventHandler, which listens for outcome events.
 
 import logging
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events import DomainEvent, WorkItemColumnChanged
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.domain.types import WorkItemId
 from codetoreum.infrastructure.event_bus import EventHandler, event_handler
@@ -27,7 +27,7 @@ from codetoreum.ports.output.workflow_config_service import IWorkflowConfigServi
 logger = logging.getLogger(__name__)
 
 
-@event_handler("WorkItemColumnChangedEvent")
+@event_handler("WorkItemColumnChangedEvent", "WorkItemColumnChanged")
 class PRReviewCycleDispatchHandler(EventHandler):
     """
     Handles WorkItemColumnChangedEvent for PR review cycle dispatch.
@@ -97,26 +97,32 @@ class PRReviewCycleDispatchHandler(EventHandler):
         Handle column change event and dispatch PR review cycle if applicable.
 
         Args:
-            event: Domain event to handle
+            event: Domain event to handle (supports both modern WorkItemColumnChangedEvent and legacy WorkItemColumnChanged)
 
         Raises:
             Exception: If handling fails
         """
-        if not isinstance(event, WorkItemColumnChangedEvent):
+        # Accept both modern WorkItemColumnChangedEvent and legacy WorkItemColumnChanged events
+        if not isinstance(event, (WorkItemColumnChangedEvent, WorkItemColumnChanged)):
             logger.warning(f"PRReviewCycleDispatchHandler received unexpected event type: {event.event_type}")
             return
 
         try:
             await self.handle_pr_review_column_change(event)
         except Exception as e:
+            # Extract work_item_id from both modern and legacy event types
+            work_item_id = (
+                event.work_item_id if isinstance(event, WorkItemColumnChangedEvent)
+                else event.payload.get("work_item_id", "unknown")
+            )
             logger.error(
-                f"Error handling PR review cycle dispatch for {event.work_item_id}: {e}",
+                f"Error handling PR review cycle dispatch for {work_item_id}: {e}",
                 exc_info=True,
                 extra={"error_id": "ERR_PR_REVIEW_CYCLE_DISPATCH_FAILURE"},
             )
             raise
 
-    async def handle_pr_review_column_change(self, event: WorkItemColumnChangedEvent) -> None:
+    async def handle_pr_review_column_change(self, event: DomainEvent) -> None:
         """
         Process column movement and dispatch PR review cycle if applicable.
 
@@ -127,12 +133,21 @@ class PRReviewCycleDispatchHandler(EventHandler):
         4. Initiate the cycle
 
         Args:
-            event: WorkItemColumnChangedEvent with column movement details
+            event: WorkItemColumnChangedEvent or legacy WorkItemColumnChanged with column movement details
         """
-        work_item_id: str = event.work_item_id or ""
-        board_id: str = event.board_id or ""
-        project_id: str = event.project_id or ""
-        to_column: str = event.to_column or ""
+        # Handle both modern WorkItemColumnChangedEvent and legacy WorkItemColumnChanged events
+        if isinstance(event, WorkItemColumnChangedEvent):
+            # Modern event with direct attributes
+            work_item_id: str = event.work_item_id or ""
+            board_id: str = event.board_id or ""
+            project_id: str = event.project_id or ""
+            to_column: str = event.to_column or ""
+        else:
+            # Legacy event with payload
+            work_item_id: str = event.payload.get("work_item_id", "")
+            board_id: str = event.payload.get("board_id", "")
+            project_id: str = event.payload.get("project_id", "")
+            to_column: str = event.payload.get("to_column", "")
 
         logger.info(f"Checking PR review cycle for {work_item_id} in column '{to_column}'")
 
