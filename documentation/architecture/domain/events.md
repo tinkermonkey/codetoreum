@@ -11,7 +11,7 @@ applies_to: "documentation/architecture/domain/events.md"
 
 ## Overview
 
-Domain events are immutable records of significant state changes in the system. The system defines **90 modern event classes** (frozen dataclasses) across **17 files** in the `domain/events/` directory, organized into **18 bounded contexts**. The system also includes **73 legacy event classes** in `legacy_domain_events.py` for backward compatibility.
+Domain events are immutable records of significant state changes in the system. The system defines **91 modern event classes** (frozen dataclasses) across **18 files** in the `domain/events/` directory, organized into **18 bounded contexts**. The system also includes **74 legacy event classes** in `legacy_domain_events.py` for backward compatibility.
 
 Events are frozen dataclasses (`@dataclass(frozen=True)`), making them immutable once created—a critical requirement for maintaining an audit trail and enabling event sourcing.
 
@@ -77,11 +77,11 @@ class WorkItemUpdatedEvent(CodetoreumEvent):
     Attributes:
         work_item_id: Work item being updated
         project_id: Project containing the work item
-        updated_fields: Dictionary of changed fields
+        changes: Immutable mapping of field names to new values
     """
     work_item_id: str = ""
     project_id: str = ""
-    updated_fields: dict[str, Any] = field(default_factory=dict)
+    changes: Mapping[str, Any] = field(default_factory=dict)
 ```
 
 **Invariants Enforced**:
@@ -465,12 +465,16 @@ class ReviewCycleStartedEvent(CodetoreumEvent):
         review_cycle_id: New review cycle ID
         work_item_id: Item under review
         project_id: Project containing the item
-        required_approvers: Number of approvals needed
+        maker_agent: Name of the maker (development) agent
+        reviewer_agent: Name of the reviewer (code review) agent
+        max_iterations: Maximum iterations before escalation
     """
     review_cycle_id: str = ""
     work_item_id: str = ""
     project_id: str = ""
-    required_approvers: int = 1
+    maker_agent: str = ""
+    reviewer_agent: str = ""
+    max_iterations: int = 0
 
 @dataclass(frozen=True)
 class ReviewCycleIterationCompletedEvent(CodetoreumEvent):
@@ -2407,7 +2411,7 @@ graph TB
 
 ### Legacy DomainEvent Base Class
 
-The system contains **73 legacy event classes** using the older `DomainEvent` base class pattern (located in `legacy_domain_events.py`). These events follow a different design pattern than the modern frozen dataclass events:
+The system contains **74 legacy event classes** using the older `DomainEvent` base class pattern (located in `legacy_domain_events.py`). These events follow a different design pattern than the modern frozen dataclass events:
 
 ```python
 # Legacy pattern (deprecated - do NOT use for new events)
@@ -2429,7 +2433,7 @@ class WorkItemCreated(DomainEvent):
 **Legacy Event Classes** (74 total):
 - WorkItemCreated, AgentAssigned, ExecutionStarted, WorkflowAttached, etc.
 - ExecutionFailed, ExecutionTimedOut, ReviewStarted, ReviewApproved, etc.
-- And ~60 more legacy-style events
+- And ~59 more legacy-style events
 
 ### Transition to Modern Events
 
@@ -2616,7 +2620,7 @@ event.work_item_id = "WI-456"  # Raises: FrozenInstanceError
 
 ## Summary
 
-The 163 domain events across 18 bounded contexts form a complete audit trail of system behavior. Each event represents an immutable fact about state changes. Event handlers subscribe to events and trigger reactions—calling output ports, updating read models, or emitting new events.
+The 165 domain events (91 modern + 74 legacy) across 18 bounded contexts form a complete audit trail of system behavior. Each event represents an immutable fact about state changes. Event handlers subscribe to events and trigger reactions—calling output ports, updating read models, or emitting new events.
 
 Events enable decoupled communication between layers, complete observability through event sourcing, and the ability to replay history for debugging or temporal queries.
 
