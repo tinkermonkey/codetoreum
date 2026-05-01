@@ -190,9 +190,9 @@ Per project convention, the following are accepted as valid simulation adapters:
 ## Port Enumeration Accuracy
 
 ### Input Ports
-- **Port Files**: 21 total (20 + exceptions.py)
-- **Port Interfaces**: 20 (excluding exceptions.py which contains exception classes only)
-- **All 20 mapped to mock adapters**: ✅ 100%
+- **Port Files**: 20 total (19 interface files + exceptions.py)
+- **Port Interfaces**: 19 (excluding exceptions.py which contains exception classes only)
+- **All 19 mapped to mock adapters**: ✅ 100%
 
 ### Output Ports
 - **Port Files**: 40 total
