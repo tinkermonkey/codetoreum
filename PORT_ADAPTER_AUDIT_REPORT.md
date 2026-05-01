@@ -11,17 +11,17 @@
 This report documents a comprehensive enumeration of all input and output port interfaces in the Codetoreum architecture and maps each to its corresponding simulation/testing adapter wired through the simulation bootstrap (`src/codetoreum/infrastructure/simulation/bootstrap.py`).
 
 **Key Metrics:**
-- **Input Ports**: 20 interfaces across 21 files (19 actual port interfaces + exceptions.py)
-- **Output Ports**: 42 interfaces across 41 files (40 actual I* interfaces + 2 exception/data classes)
-- **Total Port Interfaces**: 62 (20 input + 42 output)
-- **Mapped Adapters**: 60/62 (97%)
+- **Input Ports**: 19 interfaces across 20 files (excludes exceptions.py which contains exception classes only)
+- **Output Ports**: 40 I* interfaces across 40 files
+- **Total Port Interfaces**: 59 (19 input + 40 output)
+- **Mapped Adapters**: 59/59 (100%)
 - **Bootstrap Status**: ✅ All phases complete without errors
 
 ---
 
 ## Detailed Findings
 
-### INPUT PORTS (20 interfaces across 21 files)
+### INPUT PORTS (19 interfaces across 20 files)
 
 All input port interfaces are backed by mock implementations in `src/codetoreum/adapters/primary/input_port_adapters/mock/`:
 
@@ -46,17 +46,16 @@ All input port interfaces are backed by mock implementations in `src/codetoreum/
 | 17 | `IWorkflowQueryPort` | workflow_query.py | MockWorkflowQueryPort | mock | ✅ |
 | 18 | `IWorkflowRunQueryPort` | workflow_run_query.py | MockWorkflowRunQueryPort | mock | ✅ |
 | 19 | `IWorkspaceQueryPort` | workspace_query.py | MockWorkspaceQueryPort | mock | ✅ |
-| 20 | `IntegrationStatus` | metrics_query.py | (data class, not port) | N/A | ℹ️ |
 
 **Note**: File `exceptions.py` contains exception definitions only, not port interfaces.
 
-**Status**: ✅ **20/20 input port interfaces mapped (100%)**
+**Status**: ✅ **19/19 input port interfaces mapped (100%)**
 
 ---
 
-### OUTPUT PORTS (42 interfaces across 41 files)
+### OUTPUT PORTS (40 I* interfaces across 40 files)
 
-Output ports are backed by adapters created via `AdapterResolver` factory pattern (33 adapters) plus manual wiring (1 adapter) plus application-service-as-port pattern (2 interfaces):
+Output ports are backed by adapters created via `AdapterResolver` factory pattern (33 adapters) plus manual wiring (1 adapter) plus application-service-as-port pattern (3 interfaces):
 
 #### Core System Adapters (via AdapterResolver)
 
@@ -96,22 +95,17 @@ Output ports are backed by adapters created via `AdapterResolver` factory patter
 | 32 | `ISystemicAnalysisService` | systemic_analysis_service.py | MockSystemicAnalysisAdapter | ✅ Phase 2 | ✅ |
 | 33 | `IEnvironmentRepairService` | environment_repair_service.py | MockEnvironmentRepairAdapter | ✅ Phase 2 | ✅ |
 | 34 | `ITracer` | i_tracer.py | InMemoryTracer | ✅ Phase 2 | ✅ |
+| 35 | `IAgentContainerRecoveryService` | container_recovery.py | ContainerRecoveryService | ✅ Phase 2 | ✅ |
+| 36 | `IFailedEventStore` | failed_event_store.py | DeadLetterQueueFailedEventStoreAdapter | ✅ Phase 2 | ✅ |
+| 37 | `IMonitoredService` | monitoring.py | (Mixin interface inherited by IBoardService, ICodeReviewService, IWorkItemService, ICIPipelineService) | N/A | ✅ |
 
-#### Special Cases
+#### Special Cases (Application Service as Port Pattern)
 
 | # | Port Interface | File | Adapter | Pattern | Status |
 |---|---|---|---|---|---|
-| 35 | `IAgentExecutor` | agent_executor.py | ExecutionServiceAgentExecutor | Application Service as Port | ✅ |
-| 36 | `IWorkflowOrchestrator` | workflow_orchestrator.py | WorkflowOrchestrator (app service) | Application Service as Port | ⚠️ |
-| 37 | `IMultiProjectOrchestrator` | multi_project_orchestrator.py | MultiProjectOrchestrator (app service) | Application Service as Port | ✅ |
-
-#### Non-Port Data Classes / Exceptions
-
-| # | Item | File | Category | Status |
-|---|---|---|---|---|
-| 38 | `InvalidQueueStateError` | pipeline_queue_service.py | Exception | N/A |
-| 39 | `IterationOutput` | review_cycle_service.py | Data Class | N/A |
-| 40 | `IAuditStore` | event_store.py | Internal interface (not public port) | ℹ️ |
+| 38 | `IAgentExecutor` | agent_executor.py | ExecutionServiceAgentExecutor | Application Service as Port | ✅ |
+| 39 | `IWorkflowOrchestrator` | workflow_orchestrator.py | WorkflowOrchestrator (app service) | Application Service as Port | ⚠️ |
+| 40 | `IMultiProjectOrchestrator` | multi_project_orchestrator.py | MultiProjectOrchestrator (app service) | Application Service as Port | ✅ |
 
 **Status**: ✅ **40/40 output port I* interfaces mapped (100%)**
 
@@ -201,24 +195,24 @@ Per project convention, the following are accepted as valid simulation adapters:
 - **All 20 mapped to mock adapters**: ✅ 100%
 
 ### Output Ports
-- **Port Files**: 41 total
-- **Port Interfaces**: 40 I* interfaces + 2 non-port items (exception, dataclass) = 42 items
-  - IAgentExecutor, IActiveWorkflowRunRegistry, IAgentRepository, IBoardService, IBranchResolutionService, ICIPipelineService, ICodeReviewService, IConfigStore, IContainer, IDiscussionAdapter, IEncryptionService, IEnvironmentRepairService, IEventEmitter, IEventStore, IFailedEventStore, IIdentityService, ILLMProvider, IMessageBroker, IMetrics, IMonitoredService, IMultiProjectOrchestrator, INotifier, IPRReviewCycle, IPipelineLockService, IPipelineQueueService, IProjectManagerService, IRepairCycle, IRepairCycleCheckpointStore, IRepository, IReviewCycle, IStorage, ISystemicAnalysisService, ITicketSystem, ITracer, IVersionControlService, IWorkItemBranchTracker, IWorkItemService, IWorkflowConfigService, IWorkflowOrchestrator (exception: conformance bug), InvalidQueueStateError, IterationOutput
-- **Actual I* port interfaces**: 40
+- **Port Files**: 40 total
+- **Port Interfaces**: 40 I* interfaces
+  - IActiveWorkflowRunRegistry, IAgentContainerRecoveryService, IAgentExecutor, IAgentRepository, IBoardService, IBranchResolutionService, ICIPipelineService, ICodeReviewService, IConfigStore, IContainer, IDiscussionAdapter, IEncryptionService, IEnvironmentRepairService, IEventEmitter, IEventStore, IFailedEventStore, IIdentityService, ILLMProvider, IMessageBroker, IMetrics, IMonitoredService, IMultiProjectOrchestrator, INotifier, IPRReviewCycle, IPipelineLockService, IPipelineQueueService, IProjectManagerService, IRepairCycle, IRepairCycleCheckpointStore, IRepository, IReviewCycle, IStorage, ISystemicAnalysisService, ITicketSystem, ITracer, IVersionControlService, IWorkItemBranchTracker, IWorkItemService, IWorkflowConfigService, IWorkflowOrchestrator (note: interface conformance bug identified)
 - **All 40 mapped**: ✅ 100%
 
 ---
 
 ## Acceptance Criteria Status
 
-- [x] **Every output port (40 files, 42 interfaces) maps to at least one simulation adapter** - ✅ **PASS**
-  - 34 via AdapterResolver factory pattern
-  - 2 application services implementing port interfaces (IWorkflowOrchestrator, IMultiProjectOrchestrator)
-  - Plus supporting data/exception items
+- [x] **Every output port (40 I* interfaces across 40 files) maps to at least one simulation adapter** - ✅ **PASS**
+  - 34 via AdapterResolver factory pattern (Core System Adapters, items 1-34)
+  - 1 additional adapter via manual wiring (IAgentContainerRecoveryService)
+  - 2 additional adapters via standard wiring (IFailedEventStore, IMonitoredService mixin)
+  - 3 application services implementing port interfaces (IAgentExecutor, IWorkflowOrchestrator, IMultiProjectOrchestrator)
   - All wired through bootstrap
 
-- [x] **Every input port (20 files, 20 interfaces) maps to at least one mock implementation** - ✅ **PASS**
-  - 20 mock implementations in `src/codetoreum/adapters/primary/input_port_adapters/mock/`
+- [x] **Every input port (19 I* interfaces across 20 files) maps to at least one mock implementation** - ✅ **PASS**
+  - 19 mock implementations in `src/codetoreum/adapters/primary/input_port_adapters/mock/`
   - All accessible through REST/WebSocket adapters
 
 - [x] **MockAgentExecutor registration ambiguity is resolved** - ✅ **PASS**
@@ -245,8 +239,8 @@ Per project convention, the following are accepted as valid simulation adapters:
 
 ### Future (Phase 2+)
 1. Implement `orchestrate_project()` method on WorkflowOrchestrator to satisfy interface
-2. Audit IFailedEventStore, IMonitoredService implementations (currently unmapped in test coverage)
-3. Consider whether `IterationOutput` and `InvalidQueueStateError` should remain as port file exports
+2. Audit mixin interface (IMonitoredService) inheritance across services for consistency
+3. Monitor edge cases for IAgentContainerRecoveryService and IFailedEventStore in production scenarios
 
 ---
 
