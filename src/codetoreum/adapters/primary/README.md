@@ -301,10 +301,9 @@ Primary adapters depend on:
 ## Design Documents
 
 Refer to the following design documents for detailed specifications:
-- `documentation/01_design/primary_adapters/github_webhook_adapter_design.md`
-- `documentation/01_design/primary_adapters/primary_adapters_inventory.md`
-- `documentation/01_design/02_high_level_arch.md`
-- `documentation/01_design/03_implementation_plan.md`
+- `documentation/architecture/adapters/` - Adapter architecture documentation
+- `documentation/architecture/overview.md` - High-level architecture overview
+- `CLAUDE.md` - Project implementation guidelines
 
 ---
 

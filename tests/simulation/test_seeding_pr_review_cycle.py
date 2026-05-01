@@ -21,9 +21,7 @@ from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
 class TestSeedingPRReviewCycle:
     """Test PR review cycle seeding integration."""
 
-    async def test_register_workflow_template_with_pr_review_cycle_config(
-        self, simulation_bootstrap
-    ) -> None:
+    async def test_register_workflow_template_with_pr_review_cycle_config(self, simulation_bootstrap) -> None:
         """Seeding maps pr_review_cycle_config to ColumnTemplate correctly."""
         seeder = SimulationDataSeeder(simulation_bootstrap)
 
@@ -91,9 +89,7 @@ class TestSeedingPRReviewCycle:
         assert done_col is not None
         assert done_col.pr_review_cycle_config is None
 
-    async def test_seeding_without_pr_review_cycle_config_no_regression(
-        self, simulation_bootstrap
-    ) -> None:
+    async def test_seeding_without_pr_review_cycle_config_no_regression(self, simulation_bootstrap) -> None:
         """Seeding columns without pr_review_cycle_config works as before (no regression)."""
         seeder = SimulationDataSeeder(simulation_bootstrap)
 
@@ -150,9 +146,7 @@ class TestSeedingPRReviewCycle:
         assert in_progress_col.agent_id == "coder"
         assert in_progress_col.is_pipeline_trigger is True
 
-    async def test_seeding_with_complex_pr_review_config(
-        self, simulation_bootstrap
-    ) -> None:
+    async def test_seeding_with_complex_pr_review_config(self, simulation_bootstrap) -> None:
         """Seeding with all PR review cycle configuration fields works correctly."""
         seeder = SimulationDataSeeder(simulation_bootstrap)
 

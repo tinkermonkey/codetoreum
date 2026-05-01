@@ -234,7 +234,7 @@ scenario YAML files and `scenario.md` now. Use the Write tool directly for each 
 ### 5B — Update Codetoreum System (if applicable)
 For each Codetoreum system gap the user approved, use a sub-agent to implement the change:
 - Provide it with: the gap description, the relevant design docs from
-  `documentation/01_design/`, the relevant port interface, and the existing adapter/service
+  `documentation/architecture/`, the relevant port interface, and the existing adapter/service
   code it must integrate with.
 - The sub-agent must: implement the feature in the domain/application/port layer first,
   then add the production adapter implementation, then update the mock adapter to
@@ -369,6 +369,6 @@ trade-offs. Wait for a response before continuing.
 | Scenario seeder | `src/codetoreum/infrastructure/simulation/seeding.py` |
 | Bootstrap wiring | `src/codetoreum/infrastructure/simulation/bootstrap.py` |
 | Port interfaces | `src/codetoreum/ports/output/` + `ports/input/` |
-| Design docs | `documentation/01_design/` |
+| Design docs | `documentation/architecture/` |
 | Test helpers | `tests/simulation/helpers.py`, `tests/conftest.py` |
-| Mock adapter reference | `documentation/01_design/infrastructure/MOCK_ADAPTERS_REFERENCE.md` |
+| Mock adapter reference | `documentation/implementations/simulation/adapters.md` |

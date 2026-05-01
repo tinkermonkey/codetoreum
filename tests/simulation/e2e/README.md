@@ -205,8 +205,8 @@ All 24 E2E tests should complete in **<30 seconds** when using the fast simulati
 
 ## Design Documents
 
-- [Phase 3 Implementation Plan](../../../documentation/01_design/03_implementation_plan.md#phase-3-e2e-test-harness-7-days)
-- [Simulation Architecture](../../../documentation/01_design/infrastructure/simulation_mode_architecture.md)
+- [Simulation Architecture](../../../documentation/implementations/simulation/scenarios.md) - Scenario specifications
+- [Simulation Framework](../README.md) - E2E testing framework overview
 
 ## Support
 

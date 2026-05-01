@@ -64,9 +64,7 @@ class TestPRReviewCycleEventHandlerApprovedPath:
         await handler.handle(event)
 
         # Verify move_item_to_column was called with correct arguments
-        mock_service.move_item_to_column.assert_called_once_with(
-            "item-1", "Done", MovedByType.ORCHESTRATOR
-        )
+        mock_service.move_item_to_column.assert_called_once_with("item-1", "Done", MovedByType.ORCHESTRATOR)
 
     async def test_approved_event_correct_move_by_type(self):
         """Test handler uses MovedByType.ORCHESTRATOR when moving item."""
@@ -120,9 +118,7 @@ class TestPRReviewCycleEventHandlerIssuesFoundPath:
         await handler.handle(event)
 
         # Verify move_item_to_column was called with correct arguments
-        mock_service.move_item_to_column.assert_called_once_with(
-            "item-2", "In Development", MovedByType.ORCHESTRATOR
-        )
+        mock_service.move_item_to_column.assert_called_once_with("item-2", "In Development", MovedByType.ORCHESTRATOR)
 
     async def test_issues_found_event_multiple_findings(self):
         """Test issues found event with multiple findings moves item correctly."""
@@ -176,9 +172,7 @@ class TestPRReviewCycleEventHandlerMaxCyclesPath:
         await handler.handle(event)
 
         # Verify move_item_to_column was called with escalation column
-        mock_service.move_item_to_column.assert_called_once_with(
-            "item-3", "Review", MovedByType.ORCHESTRATOR
-        )
+        mock_service.move_item_to_column.assert_called_once_with("item-3", "Review", MovedByType.ORCHESTRATOR)
 
     async def test_max_cycles_event_escalates_to_human_review(self):
         """Test max cycles event escalates item to human review column."""
@@ -200,9 +194,7 @@ class TestPRReviewCycleEventHandlerMaxCyclesPath:
         await handler.handle(event)
 
         # Should move to Human Review column
-        mock_service.move_item_to_column.assert_called_once_with(
-            "item-5", "Human Review", MovedByType.ORCHESTRATOR
-        )
+        mock_service.move_item_to_column.assert_called_once_with("item-5", "Human Review", MovedByType.ORCHESTRATOR)
 
 
 @pytest.mark.asyncio
@@ -212,9 +204,7 @@ class TestPRReviewCycleEventHandlerErrorHandling:
     async def test_resource_not_found_error_handling(self):
         """Test handler raises error when work item not found."""
         mock_service = AsyncMock(spec=IBoardService)
-        mock_service.move_item_to_column.side_effect = ResourceNotFoundError(
-            "WorkItem", "item-1"
-        )
+        mock_service.move_item_to_column.side_effect = ResourceNotFoundError("WorkItem", "item-1")
         handler = PRReviewCycleEventHandler(mock_service)
 
         event = PRReviewCycleApprovedEvent(
@@ -238,9 +228,7 @@ class TestPRReviewCycleEventHandlerErrorHandling:
     async def test_external_service_error_handling(self):
         """Test handler raises error when board service fails."""
         mock_service = AsyncMock(spec=IBoardService)
-        mock_service.move_item_to_column.side_effect = ExternalServiceError(
-            "BoardService", "Board service unavailable"
-        )
+        mock_service.move_item_to_column.side_effect = ExternalServiceError("BoardService", "Board service unavailable")
         handler = PRReviewCycleEventHandler(mock_service)
 
         event = PRReviewCycleIssuesFoundEvent(

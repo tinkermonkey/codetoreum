@@ -499,7 +499,6 @@ class BoardColumnEventHandler(EventHandler):
                         extra={"work_item_id": release_result.next_work_item_id},
                     )
 
-
     # ========================================================================
     # Workflow Run Lifecycle Tracking
     # ========================================================================

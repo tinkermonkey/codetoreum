@@ -4,7 +4,7 @@
 
 Codetoreum is an AI agent orchestration platform that automates software development workflows using specialized AI agents. The system integrates with GitHub for work item management and uses Claude Code for agent execution in containerized environments.
 
-**IMPORTANT**: Design documentation for the Gen 2 architecture is located in the `documentation/01_design/` directory. If a specific design document was not specified for a task, refer to that directory for the relevant design details.
+**IMPORTANT**: Architecture documentation for the Gen 2 design is located in the `documentation/architecture/` directory. For implementation details and simulation testing, refer to `documentation/implementations/`. If a specific design document was not specified for a task, use the `/arch-doc` command to generate or search for documentation.
 
 ## Architecture
 
@@ -35,27 +35,29 @@ Codetoreum is an AI agent orchestration platform that automates software develop
 
 ```
 codetoreum/
-├── documentation/01_design/    # Gen 2 design specifications
-│   ├── domains/                # Domain model designs
-│   ├── application_services/   # Orchestration service designs
-│   ├── input_ports/            # Inbound port interfaces
-│   ├── output_ports/           # Outbound port interfaces
-│   ├── events/                 # Domain event catalog
-│   └── infrastructure/         # Cross-cutting infrastructure
+├── documentation/              # Architecture and implementation documentation
+│   ├── architecture/           # Gen 2 design specifications
+│   │   ├── domain/             # Domain model specifications
+│   │   ├── ports/              # Port interface specifications (19 input, 40 output)
+│   │   ├── application-services/ # Orchestration service designs
+│   │   └── infrastructure/     # Cross-cutting infrastructure
+│   ├── implementations/        # Implementation and testing documentation
+│   │   └── simulation/         # Simulation framework and scenarios
+│   └── templates/              # Documentation templates
 ├── scenarios/                  # Simulation scenario YAML definitions
-└── src/
-    ├── domain/                 # Core business logic (pure)
-    │   ├── events/             # Domain events (immutable)
+└── src/codetoreum/
+    ├── domain/                 # Core business logic (pure, 90 domain model classes)
+    │   ├── events/             # 91 modern domain event classes (immutable)
     │   └── services/           # Domain services
-    ├── application/            # Application services + event handlers
+    ├── application/            # 22 application services + event handlers
     ├── ports/                  # Port interfaces
-    │   ├── input/              # Inbound ports (commands, queries, services)
-    │   └── output/             # Outbound ports (29+ interfaces)
-    ├── adapters/               # Adapter implementations
+    │   ├── input/              # 19 inbound ports (commands, queries, services)
+    │   └── output/             # 40 outbound port interfaces
+    ├── adapters/               # Adapter implementations (53 total mock/in-memory adapters)
     │   ├── primary/            # FastAPI app, REST routers, webhook adapter
-    │   │   └── input_port_adapters/mock/  # Mock implementations of all input ports
+    │   │   └── input_port_adapters/mock/  # Mock implementations of all input ports (18 files)
     │   ├── secondary/          # GitHub, Docker, Claude, Redis, Elasticsearch
-    │   └── testing/            # ~25 mock/in-memory adapters for simulation
+    │   └── testing/            # 35 mock/in-memory adapters for simulation
     ├── config/                 # Configuration management
     ├── cli/                    # CLI commands (simulation server, YAML import)
     └── infrastructure/         # Cross-cutting concerns
@@ -87,6 +89,7 @@ codetoreum/
 - All events frozen (immutable) with serialization support
 
 ### Application Services (Orchestration)
+22 total application services for workflow orchestration, including:
 - **WorkflowOrchestrator**: Coordinates workflow execution
 - **AgentScheduler**: Queues and schedules agent executions
 - **ExecutionService**: Manages agent execution lifecycle
@@ -97,26 +100,26 @@ codetoreum/
 - **MultiProjectOrchestrator**: Coordinates across multiple projects
 - **Event Handlers** (`application/event_handlers/`): Board, workflow, review, execution, repair cycle
 
+See `documentation/architecture/application-services/` for complete service documentation.
+
 ### Port Interfaces (Contracts)
 
-**Core System Ports:**
-- **ITicketSystem**: Abstract ticket system (GitHub, Jira, etc.)
-- **ILLMProvider**: Abstract LLM provider (Claude Code, GPT-4, etc.)
-- **IContainer**: Container runtime abstraction
-- **IRepository**: Git repository operations
-- **IEventStore**: Event sourcing storage
-- **IStorage**: Artifact storage
+**59 total ports**: 19 input ports + 40 output ports
 
-**New Vendor-Agnostic Ports (PR #121):**
-- **IBoardService**: Project board management (columns, work items)
-- **ICodeReviewService**: Code review lifecycle (PRs, approvals)
-- **IDiscussionAdapter**: Discussion/comment thread management
-- **IWorkItemService**: Work item CRUD operations
-- **IVersionControlService**: VCS operations (branches, commits)
-- **IPipelineLockService**: Distributed locking for workflow coordination
-- **IIdentityService**: Bot/human user identification
-- **IEventEmitter**: Event publication interface
-- **IMonitoredService**: Lifecycle management (start/stop monitoring)
+**Input Ports** (19 total): Command, query, and service interfaces for inbound operations
+- Agent management, work item management, workflow management
+- Execution management, configuration, system services
+
+**Output Ports** (40 total): Vendor-agnostic interfaces for external system interactions
+- **Core System**: ITicketSystem, ILLMProvider, IContainer, IVersionControlService, IEventStore, IStorage
+- **Board Management**: IBoardService, board reconciliation services
+- **Code Review**: ICodeReviewService, PR/review lifecycle interfaces
+- **Work Item Management**: IWorkItemService, work item CRUD and tracking
+- **Infrastructure**: IEventEmitter, event bus, monitoring interfaces
+- **Identity & Lock Services**: IIdentityService, IPipelineLockService
+- **Domain Services**: Specialized business logic services
+
+See `documentation/architecture/ports/` for complete port specifications.
 
 ### Infrastructure Layer (Cross-cutting Concerns)
 
@@ -147,8 +150,9 @@ codetoreum/
 - ClaudeCodeAdapter (LLM provider)
 - DockerContainerAdapter
 
-**Testing/Simulation** (`adapters/testing/`):
-- MockLLMAdapter, MockBoardAdapter, MockCodeReviewAdapter, MockAgentExecutor
+**Testing/Simulation** (`adapters/testing/` + `adapters/primary/input_port_adapters/mock/`):
+- 53 total mock and in-memory adapters for deterministic testing (35 in testing/, 18 in input port mocks)
+- Examples: MockLLMAdapter, MockBoardAdapter, MockCodeReviewAdapter, MockAgentExecutor
 - MockReviewCycleAdapter, MockRepairCycleAdapter, MockContainerRecoveryAdapter
 - InMemoryEventStore, InMemoryConfigStore, InMemoryMetricsAdapter
 - FakeContainerAdapter, MockEventEmitter, CapturingMockEventEmitter
@@ -228,12 +232,12 @@ Database-backed configuration with web UI:
 ## Working with Claude on This Project
 
 ### When Adding New Features
-1. Review relevant design docs in `documentation/01_design/`
+1. Review relevant design docs in `documentation/architecture/`
 2. Check if domain models, ports, or adapters need updates
 3. Follow hexagonal architecture patterns (no external deps in domain)
 4. Write tests first (domain layer) or alongside (application layer)
 5. Emit domain events for all state changes
-6. Update design documentation to match implementation
+6. Update design documentation using `/arch-doc` command to validate and generate
 
 ### When Debugging
 1. Check event store for audit trail (event replay capability)
@@ -286,11 +290,11 @@ The system includes a comprehensive simulation framework for fast, deterministic
 - `advance_to(time)` - Jump to specific time
 - `now()` - Get current simulation time
 
-**Mock Adapters** (`src/codetoreum/adapters/testing/`)
-- ~25 total adapters (mock + in-memory implementations)
+**Mock Adapters** (`src/codetoreum/adapters/testing/` and `src/codetoreum/adapters/primary/input_port_adapters/mock/`)
+- 53 total adapters (mock + in-memory implementations): 35 in testing/, 18 in input port mocks
 - MockLLMAdapter, MockBoardAdapter, MockReviewCycleAdapter, MockRepairCycleAdapter
 - InMemoryEventStore, InMemoryStorageAdapter, InMemoryMetricsAdapter
-- See `MOCK_ADAPTERS_REFERENCE.md` for complete reference
+- See `documentation/implementations/simulation/adapters.md` for complete reference
 
 ### Simulation Scenarios
 
@@ -304,9 +308,9 @@ The system includes a comprehensive simulation framework for fast, deterministic
 - **Scenario 13**: Multi-project orchestration
 - **Board Automation A/B/C**: Board-driven workflow variants
 
-YAML scenario definitions live in `scenarios/` (default, demo, review_cycle, failure_recovery, stress_test).
+YAML scenario definitions live in `scenarios/` (dev_environment_repair, failure_recovery, planning_design_pipeline, planning_design_review_cycle, pr_feedback_child_issue, repair_cycle_test, review_cycle, sdlc_pipeline, smoke, stress_test).
 
-See `documentation/simulation_scenarios/SCENARIOS_COMPLETE.md` for detailed specifications.
+See `documentation/implementations/simulation/scenarios.md` for detailed specifications.
 
 ### Testing Pattern
 
@@ -344,29 +348,64 @@ async def test_workflow():
 
 - `tests/simulation/README.md` - Framework overview and best practices
 - `tests/simulation/SCENARIO_FORMAT.md` - Scenario creation guide
-- `documentation/simulation_scenarios/SCENARIOS_COMPLETE.md` - All scenario specifications
-- `documentation/01_design/infrastructure/MOCK_ADAPTERS_REFERENCE.md` - Mock adapter guide
+- `documentation/implementations/simulation/scenarios.md` - All scenario specifications
+- `documentation/implementations/simulation/adapters.md` - Mock adapter guide
 
 ## Key Documentation
 
-**Essential Reading:**
-1. `documentation/01_design/02_high_level_arch.md` - Architecture overview
-2. `documentation/01_design/03_implementation_plan.md` - Implementation plan
-3. `documentation/01_design/infrastructure/resilience_infrastructure_design.md` - Resilience patterns
-4. `documentation/01_design/ports/output/NEW_INTERFACES_QUICK_REFERENCE.md` - Port interface guide
-5. `documentation/01_design/ports/output/COMPREHENSIVE_PORTS_REFERENCE.md` - Complete port inventory (29+ ports)
+**Essential Architecture Reading:**
+1. `documentation/architecture/overview.md` - Architecture overview
+2. `documentation/architecture/domain/models.md` - Domain model specifications (90 classes)
+3. `documentation/architecture/domain/events.md` - Domain event catalog (91 modern events)
+4. `documentation/architecture/infrastructure/resilience.md` - Resilience patterns
+5. `documentation/architecture/ports/output/` - Complete output port specifications (40 ports across 7 groups)
+
+**Application & Services:**
+- `documentation/architecture/application-services/services.md` - Application service designs (22 services)
+- `documentation/architecture/application-services/event-handlers.md` - Event handler specifications
+- `documentation/architecture/ports/input/` - Input port interface specifications
+- `documentation/architecture/ports/output/` - Output port interface specifications
 
 **Testing & Simulation:**
 - `tests/simulation/README.md` - Simulation testing framework
-- `documentation/simulation_scenarios/SCENARIOS_COMPLETE.md` - Scenario specifications
-- `documentation/01_design/infrastructure/MOCK_ADAPTERS_REFERENCE.md` - Mock adapter reference
+- `tests/simulation/SCENARIO_FORMAT.md` - Scenario creation guide
+- `documentation/implementations/simulation/adapters.md` - Mock adapter reference (53 adapters)
+- `documentation/implementations/simulation/scenarios.md` - Scenario specifications
 
-**Design Specifications:**
-- `documentation/01_design/domains/` - Domain model specifications
-- `documentation/01_design/application_services/` - Application service designs
-- `documentation/01_design/ports/` - Port interface specifications
-- `documentation/01_design/events/` - Domain event catalog
-- `documentation/01_design/infrastructure/` - Cross-cutting infrastructure
+**Infrastructure:**
+- `documentation/architecture/infrastructure/event-bus.md` - Event distribution architecture
+- `documentation/architecture/infrastructure/observability.md` - Observability patterns
+- `documentation/implementations/production-bootstrap.md` - Production bootstrap wiring
+
+## Architecture Documentation Tools
+
+This project includes specialized tools for managing and validating architecture documentation:
+
+### `/arch-doc` Command
+
+Use the `/arch-doc` slash command to:
+- Generate documentation for new ports, adapters, services, or domain models
+- Validate existing documentation against templates
+- Search and audit documentation coverage
+- Update documentation when code changes
+
+The command is powered by the **Architecture Documentation Agent** (`.claude/agents/arch-doc.md`), which intelligently routes your request to the appropriate documentation workflow.
+
+### Architecture Documentation Validator Skill
+
+The `arch-doc-validator` skill (`.claude/skills/arch-doc-validator/SKILL.md`) automatically validates:
+- Port interface coverage and documentation completeness
+- Adapter documentation conformance to templates
+- Domain event catalog accuracy
+- Application service documentation
+- Template compliance across all architecture documentation
+
+The skill activates automatically when you modify code in:
+- `src/codetoreum/ports/**/*.py`
+- `src/codetoreum/adapters/**/*.py`
+- `src/codetoreum/domain/events/*.py`
+- `src/codetoreum/application/**/*.py`
+- `documentation/architecture/**/*.md`
 
 ---
 

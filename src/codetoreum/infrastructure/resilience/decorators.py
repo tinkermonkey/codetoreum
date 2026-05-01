@@ -633,7 +633,9 @@ class ResilientBoardServiceDecorator(IBoardService):
             rate_limit_cost=1,
         )
 
-    async def add_item_to_column(self, work_item_id: str, target_column: str, moved_by: MovedByType) -> ColumnMovementResult:
+    async def add_item_to_column(
+        self, work_item_id: str, target_column: str, moved_by: MovedByType
+    ) -> ColumnMovementResult:
         """Add item to initial column with resilience (1 GraphQL mutation)."""
         return await self._execute_resilient(
             operation=lambda: self._wrapped.add_item_to_column(work_item_id, target_column, moved_by),

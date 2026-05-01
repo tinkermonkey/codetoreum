@@ -66,8 +66,9 @@ codetoreum/
 │   └── simulation/         # Full workflow simulation tests
 ├── docs/                   # Additional documentation
 └── documentation/          # Design documentation
-    ├── 00_legacy/          # Gen 1 system documentation
-    └── 01_design/          # Gen 2 design specifications
+    ├── architecture/       # Gen 2 architecture specifications
+    ├── implementations/    # Implementation guides and production bootstrap
+    └── templates/          # Documentation templates
 ```
 
 ## Quick Start
@@ -223,10 +224,13 @@ Containerized agents have:
 
 ## Documentation
 
-- **Architecture Overview**: `documentation/01_design/02_high_level_arch.md`
-- **Implementation Plan**: `documentation/01_design/03_implementation_plan.md`
-- **Design Changes**: `documentation/01_design/01_design_changes.md`
-- **Legacy System**: `documentation/00_legacy/README.md`
+See `documentation/` for complete architecture and implementation documentation:
+
+- **Architecture Documentation**: `documentation/architecture/overview.md` - Complete system design
+- **Domain Models**: `documentation/architecture/domain/models.md` - Domain model specifications
+- **Port Specifications**: `documentation/architecture/ports/` - Input and output port interfaces
+- **Production Bootstrap**: `documentation/implementations/production-bootstrap.md` - Production bootstrap wiring guide
+- **Simulation Framework**: `documentation/implementations/simulation/` - Simulation and testing documentation
 
 ## Technology Stack
 
