@@ -46,7 +46,7 @@ codetoreum/
 │   └── templates/              # Documentation templates
 ├── scenarios/                  # Simulation scenario YAML definitions
 └── src/codetoreum/
-    ├── domain/                 # Core business logic (pure, 90 domain model classes)
+    ├── domain/                 # Core business logic (pure, ~95 domain model classes)
     │   ├── events/             # 165 total domain event classes (91 modern + 74 legacy, immutable)
     │   └── services/           # Domain services
     ├── application/            # 23 application services + event handlers
@@ -356,7 +356,7 @@ async def test_workflow():
 
 **Essential Architecture Reading:**
 1. `documentation/architecture/overview.md` - Architecture overview
-2. `documentation/architecture/domain/models.md` - Domain model specifications (90 classes)
+2. `documentation/architecture/domain/models.md` - Domain model specifications (~95 classes)
 3. `documentation/architecture/domain/events.md` - Domain event catalog (91 modern events)
 4. `documentation/architecture/infrastructure/resilience.md` - Resilience patterns
 5. `documentation/architecture/ports/output/` - Complete output port specifications (40 ports across 7 groups)
