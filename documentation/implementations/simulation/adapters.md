@@ -398,6 +398,6 @@ Mock implementation of IAgentExecutor for testing and port adapter coverage.
 
 ---
 
-**Total Adapter Count**: 35 testing + 2 secondary + 18 input port = **53 adapters**
+**Total Adapter Count**: 35 testing + 18 input port = **53 adapters**
 
 All adapters implement port contracts to provide a complete, testable implementation of the Codetoreum architecture.

@@ -291,7 +291,7 @@ The system includes a comprehensive simulation framework for fast, deterministic
 - `now()` - Get current simulation time
 
 **Mock Adapters** (`src/codetoreum/adapters/testing/` and `src/codetoreum/adapters/primary/input_port_adapters/mock/`)
-- 53 total adapters (mock + in-memory implementations): 35 in testing/, 2 in secondary/, 18 in input port mocks
+- 53 total adapters (mock + in-memory implementations): 35 in testing/, 18 in input port mocks
 - MockLLMAdapter, MockBoardAdapter, MockReviewCycleAdapter, MockRepairCycleAdapter
 - InMemoryEventStore, InMemoryStorageAdapter, InMemoryMetricsAdapter
 - See `documentation/implementations/simulation/adapters.md` for complete reference
