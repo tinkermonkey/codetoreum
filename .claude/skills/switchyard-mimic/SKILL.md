@@ -371,4 +371,4 @@ trade-offs. Wait for a response before continuing.
 | Port interfaces | `src/codetoreum/ports/output/` + `ports/input/` |
 | Design docs | `documentation/architecture/` |
 | Test helpers | `tests/simulation/helpers.py`, `tests/conftest.py` |
-| Mock adapter reference | `documentation/architecture/infrastructure/MOCK_ADAPTERS_REFERENCE.md` |
+| Mock adapter reference | `documentation/implementations/simulation/adapters.md` |
