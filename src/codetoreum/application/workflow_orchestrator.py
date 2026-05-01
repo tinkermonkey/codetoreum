@@ -1636,6 +1636,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
                         except Exception as e:
                             logger.warning(
                                 f"Failed to load agent config for {column_config.agent}: {e}",
+                                exc_info=True,
                                 extra={"error_id": "ERR_ORCHESTRATOR_AGENT_CONFIG_LOAD"},
                             )
                             continue
@@ -1648,6 +1649,8 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
                                 f"Agent {column_config.agent} cannot run: {validation_result.reason}",
                                 extra={"error_id": "ERR_ORCHESTRATOR_AGENT_VALIDATION"},
                             )
+                            if validation_result.needs_dev_setup:
+                                await self._queue_dev_setup(project_name)
                             continue
 
                         # Build task context and enqueue
@@ -1670,6 +1673,21 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
 
                         task_id = await self.task_queue.enqueue(task)
                         logger.info(f"Enqueued task {task_id} for {item.work_item_id} via orchestrate_project")
+
+                        # Emit routing decision
+                        await self.decision_events.emit_routing_decision(
+                            RoutingDecision(
+                                project=project_name,
+                                issue_number=item.work_item_id,
+                                board=board.name,
+                                column=item.column_name,
+                                selected_agent=column_config.agent,
+                                reason=f"Agent {column_config.agent} configured for column {item.column_name}",
+                                alternatives=[],
+                                workspace_type=workflow_config.workspace_type,
+                                timestamp=datetime.now(UTC),
+                            )
+                        )
 
                         # Update workflow state
                         workflow_state.mark_in_progress(column_config.name, column_config.agent)
