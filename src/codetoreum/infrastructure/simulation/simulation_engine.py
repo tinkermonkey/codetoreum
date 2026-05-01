@@ -258,7 +258,7 @@ class SimulationEngine:
 
     def create_repair_cycle_adapter(
         self,
-        llm_factory: "Callable[[str], ILLMProvider]",
+        llm_factory: "Callable[[str], ILLMProvider] | None" = None,
         checkpoint_store: "IRepairCycleCheckpointStore | None" = None,
         container_adapter: "IContainer | None" = None,
     ) -> "MockRepairCycleAdapter":
@@ -266,9 +266,10 @@ class SimulationEngine:
         Create mock repair cycle adapter with injected clock.
 
         Args:
-            llm_factory: Factory callable that takes agent name and returns an ILLMProvider.
-                        Required to enforce behavioral parity with production adapter's
-                        agent selection and LLM instantiation for contract validation.
+            llm_factory: Optional factory callable that takes agent name and returns an ILLMProvider.
+                        If not provided, a default MockLLMAdapter factory is created.
+                        Used for behavioral parity with production adapter's agent selection
+                        and LLM instantiation for contract validation.
             checkpoint_store: Optional checkpoint store for recovery testing.
                             Stores recovery snapshots for repair cycle resumption.
             container_adapter: Optional container adapter for causal linking (FR-2/US-2.4).
@@ -283,6 +284,13 @@ class SimulationEngine:
         from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
             MockRepairCycleAdapter,
         )
+        from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
+
+        # If no llm_factory provided, create a default one that returns MockLLMAdapter instances
+        if llm_factory is None:
+            def default_llm_factory(agent_name: str) -> "ILLMProvider":
+                return MockLLMAdapter()
+            llm_factory = default_llm_factory
 
         adapter = MockRepairCycleAdapter(
             llm_factory=llm_factory,
