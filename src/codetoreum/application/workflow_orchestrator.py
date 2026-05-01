@@ -1678,7 +1678,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
                         await self.decision_events.emit_routing_decision(
                             RoutingDecision(
                                 project=project_name,
-                                issue_number=item.work_item_id,
+                                issue_number=int(item.work_item_id),
                                 board=board.name,
                                 column=item.column_name,
                                 selected_agent=column_config.agent,
