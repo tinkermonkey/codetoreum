@@ -281,10 +281,10 @@ class SimulationEngine:
         Returns:
             MockRepairCycleAdapter instance with clock already configured
         """
+        from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
         from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
             MockRepairCycleAdapter,
         )
-        from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
 
         # If no llm_factory provided, create a default one that returns MockLLMAdapter instances
         if llm_factory is None:

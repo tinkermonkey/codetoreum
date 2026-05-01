@@ -144,10 +144,10 @@ class PRReviewCycleDispatchHandler(EventHandler):
             to_column: str = event.to_column or ""
         else:
             # Legacy event with payload
-            work_item_id: str = event.payload.get("work_item_id", "")
-            board_id: str = event.payload.get("board_id", "")
-            project_id: str = event.payload.get("project_id", "")
-            to_column: str = event.payload.get("to_column", "")
+            work_item_id = event.payload.get("work_item_id", "")
+            board_id = event.payload.get("board_id", "")
+            project_id = event.payload.get("project_id", "")
+            to_column = event.payload.get("to_column", "")
 
         logger.info(f"Checking PR review cycle for {work_item_id} in column '{to_column}'")
 

@@ -178,7 +178,7 @@ class BoardColumnEventHandler(EventHandler):
             )
             raise
 
-    async def handle_column_change(self, event: WorkItemColumnChangedEvent) -> None:
+    async def handle_column_change(self, event: WorkItemColumnChangedEvent | WorkItemColumnChanged) -> None:
         """
         Process column movement and trigger appropriate actions.
 
@@ -204,11 +204,11 @@ class BoardColumnEventHandler(EventHandler):
             to_column: str = event.to_column or ""
         else:
             # Legacy event with payload
-            work_item_id: str = event.payload.get("work_item_id", "")
-            board_id: str = event.payload.get("board_id", "")
-            project_id: str = event.payload.get("project_id", "")
-            from_column: str = event.payload.get("from_column", "")
-            to_column: str = event.payload.get("to_column", "")
+            work_item_id = event.payload.get("work_item_id", "")
+            board_id = event.payload.get("board_id", "")
+            project_id = event.payload.get("project_id", "")
+            from_column = event.payload.get("from_column", "")
+            to_column = event.payload.get("to_column", "")
 
         logger.info(f"Processing column change for {work_item_id}: {from_column} -> {to_column}")
 
