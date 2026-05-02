@@ -396,6 +396,7 @@ class AdapterResolver:
         return self._factory.create_repair_cycle(
             adapter_name=self._config.repair_cycle,
             llm_factory=self._create_agent_llm_factory(),
+            event_emitter=self._resolved["event_emitter"],
             agent_repository=self._resolved["agent_repository"],
             systemic_analysis_service=systemic_analysis_service,
             environment_repair_service=environment_repair_service,
