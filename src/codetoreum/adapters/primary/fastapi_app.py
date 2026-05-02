@@ -538,7 +538,8 @@ def create_app(
     # Include Board Workflow Templates router (if workflow_config_service is provided)
     if workflow_config_service is not None:
         board_workflow_router = create_board_workflow_router(
-            workflow_config_service=workflow_config_service
+            workflow_config_service=workflow_config_service,
+            auth_deps=auth_deps,
         )
         app.include_router(board_workflow_router)
 

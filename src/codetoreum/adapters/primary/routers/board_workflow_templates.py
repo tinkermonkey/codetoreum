@@ -14,9 +14,10 @@ Endpoints:
 import logging
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
+from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
 from codetoreum.domain.board_workflow_template import (
     BoardWorkflowTemplate,
     ColumnTemplate,
@@ -91,11 +92,13 @@ class BoardWorkflowTemplateListResponse(BaseModel):
 
 def create_board_workflow_router(
     workflow_config_service: IWorkflowConfigService,
+    auth_deps: SimpleAuthDependencies | None = None,
 ) -> APIRouter:
     """Create the board workflow template REST API router.
 
     Args:
         workflow_config_service: IWorkflowConfigService implementation
+        auth_deps: Optional authentication dependencies
 
     Returns:
         Configured APIRouter for board workflow management
@@ -111,7 +114,9 @@ def create_board_workflow_router(
         summary="List board workflow templates for a project",
         response_description="List of board workflow templates",
     )
-    async def list_templates(project_id: str) -> BoardWorkflowTemplateListResponse:
+    async def list_templates(
+        project_id: str, _: str = Depends(auth_deps) if auth_deps else None
+    ) -> BoardWorkflowTemplateListResponse:
         """List all workflow templates for a project.
 
         Args:
@@ -172,7 +177,9 @@ def create_board_workflow_router(
         summary="Get a board workflow template",
         response_description="Board workflow template",
     )
-    async def get_template(project_id: str, board_id: str) -> BoardWorkflowTemplateResponse:
+    async def get_template(
+        project_id: str, board_id: str, _: str = Depends(auth_deps) if auth_deps else None
+    ) -> BoardWorkflowTemplateResponse:
         """Get a specific board workflow template.
 
         Args:
@@ -244,7 +251,9 @@ def create_board_workflow_router(
         response_description="Created board workflow template",
     )
     async def create_template(
-        project_id: str, request: BoardWorkflowTemplateRequest
+        project_id: str,
+        request: BoardWorkflowTemplateRequest,
+        _: str = Depends(auth_deps) if auth_deps else None,
     ) -> BoardWorkflowTemplateResponse:
         """Create a new board workflow template.
 
@@ -335,7 +344,10 @@ def create_board_workflow_router(
         response_description="Updated board workflow template",
     )
     async def update_template(
-        project_id: str, board_id: str, request: BoardWorkflowTemplateRequest
+        project_id: str,
+        board_id: str,
+        request: BoardWorkflowTemplateRequest,
+        _: str = Depends(auth_deps) if auth_deps else None,
     ) -> BoardWorkflowTemplateResponse:
         """Update an existing board workflow template.
 
@@ -442,7 +454,9 @@ def create_board_workflow_router(
         status_code=status.HTTP_204_NO_CONTENT,
         summary="Delete a board workflow template",
     )
-    async def delete_template(project_id: str, board_id: str) -> None:
+    async def delete_template(
+        project_id: str, board_id: str, _: str = Depends(auth_deps) if auth_deps else None
+    ) -> None:
         """Delete a board workflow template.
 
         Args:
