@@ -193,6 +193,9 @@ class BoardColumnEventHandler(EventHandler):
 
         Args:
             event: WorkItemColumnChangedEvent with column movement details
+
+        Raises:
+            ValueError: If required payload keys are missing in legacy events
         """
         # Handle both modern WorkItemColumnChangedEvent and legacy WorkItemColumnChanged events
         if isinstance(event, WorkItemColumnChangedEvent):
@@ -203,12 +206,27 @@ class BoardColumnEventHandler(EventHandler):
             from_column: str = event.from_column or ""
             to_column: str = event.to_column or ""
         else:
-            # Legacy event with payload
-            work_item_id = event.payload.get("work_item_id", "")
-            board_id = event.payload.get("board_id", "")
-            project_id = event.payload.get("project_id", "")
-            from_column = event.payload.get("from_column", "")
-            to_column = event.payload.get("to_column", "")
+            # Legacy event with payload — validate required keys
+            try:
+                work_item_id = event.payload["work_item_id"]
+                board_id = event.payload["board_id"]
+                project_id = event.payload["project_id"]
+                from_column = event.payload.get("from_column", "")
+                to_column = event.payload["to_column"]
+            except KeyError as e:
+                missing_key = str(e).strip("'")
+                logger.error(
+                    f"Legacy WorkItemColumnChanged event missing required key: {missing_key}",
+                    exc_info=True,
+                    extra={
+                        "error_id": "ERR_BOARD_EVENT_LEGACY_PAYLOAD_MISSING_KEY",
+                        "missing_key": missing_key,
+                        "event_type": event.event_type,
+                    },
+                )
+                raise ValueError(
+                    f"Legacy WorkItemColumnChanged event missing required key: {missing_key}"
+                ) from e
 
         logger.info(f"Processing column change for {work_item_id}: {from_column} -> {to_column}")
 

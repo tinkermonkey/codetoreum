@@ -135,6 +135,9 @@ class PRReviewCycleDispatchHandler(EventHandler):
 
         Args:
             event: WorkItemColumnChangedEvent or legacy WorkItemColumnChanged with column movement details
+
+        Raises:
+            ValueError: If required payload keys are missing in legacy events
         """
         # Handle both modern WorkItemColumnChangedEvent and legacy WorkItemColumnChanged events
         if isinstance(event, WorkItemColumnChangedEvent):
@@ -144,11 +147,26 @@ class PRReviewCycleDispatchHandler(EventHandler):
             project_id: str = event.project_id or ""
             to_column: str = event.to_column or ""
         else:
-            # Legacy event with payload
-            work_item_id = event.payload.get("work_item_id", "")
-            board_id = event.payload.get("board_id", "")
-            project_id = event.payload.get("project_id", "")
-            to_column = event.payload.get("to_column", "")
+            # Legacy event with payload — validate required keys
+            try:
+                work_item_id = event.payload["work_item_id"]
+                board_id = event.payload["board_id"]
+                project_id = event.payload["project_id"]
+                to_column = event.payload["to_column"]
+            except KeyError as e:
+                missing_key = str(e).strip("'")
+                logger.error(
+                    f"Legacy WorkItemColumnChanged event missing required key: {missing_key}",
+                    exc_info=True,
+                    extra={
+                        "error_id": "ERR_PR_REVIEW_CYCLE_LEGACY_PAYLOAD_MISSING_KEY",
+                        "missing_key": missing_key,
+                        "event_type": event.event_type,
+                    },
+                )
+                raise ValueError(
+                    f"Legacy WorkItemColumnChanged event missing required key: {missing_key}"
+                ) from e
 
         logger.info(f"Checking PR review cycle for {work_item_id} in column '{to_column}'")
 
