@@ -31,6 +31,7 @@ from codetoreum.domain.events import (
     WorkflowFailed,
     WorkflowStageAdvanced,
     WorkflowStarted,
+    WorkItemColumnChanged,
 )
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.infrastructure.event_bus import EventBus, EventHandler, event_handler
@@ -67,7 +68,7 @@ class _WorkflowRunMetadata:
     stage_index: int
 
 
-@event_handler("WorkItemColumnChangedEvent")
+@event_handler("WorkItemColumnChangedEvent", "WorkItemColumnChanged")
 class BoardColumnEventHandler(EventHandler):
     """Handles workitem.column_changed events for board automation.
 
@@ -143,35 +144,42 @@ class BoardColumnEventHandler(EventHandler):
         """Get list of event types this handler processes.
 
         Returns:
-            List of event type names
+            List of event type names (includes both modern and legacy event types)
         """
-        return ["WorkItemColumnChangedEvent"]
+        return ["WorkItemColumnChangedEvent", "WorkItemColumnChanged"]
 
     async def handle(self, event: DomainEvent) -> None:
         """
         Handle column change event and trigger appropriate workflow actions.
 
         Args:
-            event: Domain event to handle
+            event: Domain event to handle (supports both modern WorkItemColumnChangedEvent and legacy WorkItemColumnChanged)
 
         Raises:
             Exception: If handling fails
         """
-        if not isinstance(event, WorkItemColumnChangedEvent):
+        # Accept both modern WorkItemColumnChangedEvent and legacy WorkItemColumnChanged events
+        if not isinstance(event, (WorkItemColumnChangedEvent, WorkItemColumnChanged)):
             logger.warning(f"BoardColumnEventHandler received unexpected event type: {event.event_type}")
             return
 
         try:
             await self.handle_column_change(event)
         except Exception as e:
+            # Extract work_item_id from both modern and legacy event types
+            work_item_id = (
+                event.work_item_id
+                if isinstance(event, WorkItemColumnChangedEvent)
+                else event.payload.get("work_item_id", "unknown")
+            )
             logger.error(
-                f"Error handling column change for {event.work_item_id}: {e}",
+                f"Error handling column change for {work_item_id}: {e}",
                 exc_info=True,
                 extra={"error_id": "ERR_BOARD_EVENT_HANDLE_COLUMN_CHANGE_FAILURE"},
             )
             raise
 
-    async def handle_column_change(self, event: WorkItemColumnChangedEvent) -> None:
+    async def handle_column_change(self, event: WorkItemColumnChangedEvent | WorkItemColumnChanged) -> None:
         """
         Process column movement and trigger appropriate actions.
 
@@ -186,12 +194,39 @@ class BoardColumnEventHandler(EventHandler):
 
         Args:
             event: WorkItemColumnChangedEvent with column movement details
+
+        Raises:
+            ValueError: If required payload keys are missing in legacy events
         """
-        work_item_id: str = event.work_item_id or ""
-        board_id: str = event.board_id or ""
-        project_id: str = event.project_id or ""
-        from_column: str = event.from_column or ""
-        to_column: str = event.to_column or ""
+        # Handle both modern WorkItemColumnChangedEvent and legacy WorkItemColumnChanged events
+        if isinstance(event, WorkItemColumnChangedEvent):
+            # Modern event with direct attributes
+            # Required fields are guaranteed non-empty by WorkItemColumnChangedEvent.__post_init__
+            work_item_id: str = event.work_item_id
+            board_id: str = event.board_id
+            project_id: str = event.project_id
+            from_column: str = event.from_column or ""
+            to_column: str = event.to_column
+        else:
+            # Legacy event with payload — validate required keys
+            try:
+                work_item_id = event.payload["work_item_id"]
+                board_id = event.payload["board_id"]
+                project_id = event.payload["project_id"]
+                from_column = event.payload.get("from_column", "")
+                to_column = event.payload["to_column"]
+            except KeyError as e:
+                missing_key = str(e).strip("'")
+                logger.error(
+                    f"Legacy WorkItemColumnChanged event missing required key: {missing_key}",
+                    exc_info=True,
+                    extra={
+                        "error_id": "ERR_BOARD_EVENT_LEGACY_PAYLOAD_MISSING_KEY",
+                        "missing_key": missing_key,
+                        "event_type": event.event_type,
+                    },
+                )
+                raise ValueError(f"Legacy WorkItemColumnChanged event missing required key: {missing_key}") from e
 
         logger.info(f"Processing column change for {work_item_id}: {from_column} -> {to_column}")
 

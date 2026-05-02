@@ -19,6 +19,9 @@ from codetoreum.adapters.testing.in_memory_checkpoint_store import InMemoryCheck
 from codetoreum.adapters.testing.in_memory_code_review_adapter import InMemoryCodeReviewAdapter
 from codetoreum.adapters.testing.in_memory_config_store import InMemoryConfigStore
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
+from codetoreum.adapters.testing.in_memory_failed_event_store import (
+    InMemoryFailedEventStore,
+)
 from codetoreum.adapters.testing.in_memory_message_broker import InMemoryMessageBroker
 from codetoreum.adapters.testing.in_memory_metrics_adapter import InMemoryMetricsAdapter
 from codetoreum.adapters.testing.in_memory_queue_service import InMemoryQueueService
@@ -86,6 +89,7 @@ __all__ = [
     "InMemoryCodeReviewAdapter",
     "InMemoryConfigStore",
     "InMemoryEventStore",
+    "InMemoryFailedEventStore",
     "InMemoryMessageBroker",
     "InMemoryMetricsAdapter",
     "InMemoryQueueService",

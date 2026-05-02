@@ -46,16 +46,16 @@ codetoreum/
 │   └── templates/              # Documentation templates
 ├── scenarios/                  # Simulation scenario YAML definitions
 └── src/codetoreum/
-    ├── domain/                 # Core business logic (pure, 90 domain model classes)
-    │   ├── events/             # 91 modern domain event classes (immutable)
+    ├── domain/                 # Core business logic (pure, ~95 domain model classes)
+    │   ├── events/             # 165 total domain event classes (91 modern + 74 legacy, immutable)
     │   └── services/           # Domain services
-    ├── application/            # 22 application services + event handlers
+    ├── application/            # 23 application services + event handlers
     ├── ports/                  # Port interfaces
     │   ├── input/              # 19 inbound ports (commands, queries, services)
     │   └── output/             # 40 outbound port interfaces
-    ├── adapters/               # Adapter implementations (53 total mock/in-memory adapters)
+    ├── adapters/               # Adapter implementations (54 total mock/in-memory adapters)
     │   ├── primary/            # FastAPI app, REST routers, webhook adapter
-    │   │   └── input_port_adapters/mock/  # Mock implementations of all input ports (18 files)
+    │   │   └── input_port_adapters/mock/  # Mock implementations of all input ports (19 files)
     │   ├── secondary/          # GitHub, Docker, Claude, Redis, Elasticsearch
     │   └── testing/            # 35 mock/in-memory adapters for simulation
     ├── config/                 # Configuration management
@@ -89,7 +89,7 @@ codetoreum/
 - All events frozen (immutable) with serialization support
 
 ### Application Services (Orchestration)
-22 total application services for workflow orchestration, including:
+23 total application services for workflow orchestration, including:
 - **WorkflowOrchestrator**: Coordinates workflow execution
 - **AgentScheduler**: Queues and schedules agent executions
 - **ExecutionService**: Manages agent execution lifecycle
@@ -151,7 +151,7 @@ See `documentation/architecture/ports/` for complete port specifications.
 - DockerContainerAdapter
 
 **Testing/Simulation** (`adapters/testing/` + `adapters/primary/input_port_adapters/mock/`):
-- 53 total mock and in-memory adapters for deterministic testing (35 in testing/, 18 in input port mocks)
+- 54 total mock and in-memory adapters for deterministic testing (35 in testing/, 19 in input port mocks)
 - Examples: MockLLMAdapter, MockBoardAdapter, MockCodeReviewAdapter, MockAgentExecutor
 - MockReviewCycleAdapter, MockRepairCycleAdapter, MockContainerRecoveryAdapter
 - InMemoryEventStore, InMemoryConfigStore, InMemoryMetricsAdapter
@@ -262,6 +262,7 @@ Database-backed configuration with web UI:
 - Adapters MUST remain pure (no resilience logic embedded)
 - No silent error handling (all errors logged with exc_info=True)
 - Simulation-only routes mount in `SimulationApplicationBootstrap`, NEVER in production `create_app()`
+- **Application services implementing output ports MUST explicitly inherit the port ABC** - Do not rely on duck typing or `TYPE_CHECKING`-only imports. Examples: `MultiProjectOrchestrator` and `WorkflowOrchestrator` both inherit from their respective port interfaces (`IMultiProjectOrchestrator`, `IWorkflowOrchestrator`)
 
 ## Simulation Testing Infrastructure
 
@@ -291,7 +292,7 @@ The system includes a comprehensive simulation framework for fast, deterministic
 - `now()` - Get current simulation time
 
 **Mock Adapters** (`src/codetoreum/adapters/testing/` and `src/codetoreum/adapters/primary/input_port_adapters/mock/`)
-- 53 total adapters (mock + in-memory implementations): 35 in testing/, 18 in input port mocks
+- 54 total adapters (mock + in-memory implementations): 35 in testing/, 19 in input port mocks
 - MockLLMAdapter, MockBoardAdapter, MockReviewCycleAdapter, MockRepairCycleAdapter
 - InMemoryEventStore, InMemoryStorageAdapter, InMemoryMetricsAdapter
 - See `documentation/implementations/simulation/adapters.md` for complete reference
@@ -355,13 +356,13 @@ async def test_workflow():
 
 **Essential Architecture Reading:**
 1. `documentation/architecture/overview.md` - Architecture overview
-2. `documentation/architecture/domain/models.md` - Domain model specifications (90 classes)
+2. `documentation/architecture/domain/models.md` - Domain model specifications (~95 classes)
 3. `documentation/architecture/domain/events.md` - Domain event catalog (91 modern events)
 4. `documentation/architecture/infrastructure/resilience.md` - Resilience patterns
 5. `documentation/architecture/ports/output/` - Complete output port specifications (40 ports across 7 groups)
 
 **Application & Services:**
-- `documentation/architecture/application-services/services.md` - Application service designs (22 services)
+- `documentation/architecture/application-services/services.md` - Application service designs (23 services)
 - `documentation/architecture/application-services/event-handlers.md` - Event handler specifications
 - `documentation/architecture/ports/input/` - Input port interface specifications
 - `documentation/architecture/ports/output/` - Output port interface specifications

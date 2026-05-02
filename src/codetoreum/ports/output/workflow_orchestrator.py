@@ -27,12 +27,11 @@ class IWorkflowOrchestrator(ABC):
     async def orchestrate_project(self, project_name: str, workspace_path: str, config: ProjectConfig) -> int:
         """Execute orchestration for a single project.
 
-        Coordinates all workflow activities for the project:
-        1. Polls project board for card movements
-        2. Routes moved cards to appropriate agents
-        3. Queues agent execution tasks
-        4. Handles review cycles
-        5. Processes human feedback
+        Coordinates workflow activities for the project:
+        1. Checks if project is enabled via config.enabled flag
+        2. Scans automated columns for work items requiring agent execution
+        3. Queues agent tasks for items in automated columns
+        4. Emits routing decisions and updates workflow state
 
         Args:
             project_name: Name of the project
@@ -40,7 +39,7 @@ class IWorkflowOrchestrator(ABC):
             config: Project configuration (repo, branch, enabled status)
 
         Returns:
-            int: Number of actions taken (cards moved, tasks queued, etc.)
+            int: Number of actions taken (tasks queued, etc.)
 
         Raises:
             ExternalServiceError: External service communication failure

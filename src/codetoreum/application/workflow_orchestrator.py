@@ -2,6 +2,7 @@
 
 import logging
 import time
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
@@ -12,17 +13,24 @@ from codetoreum.domain.events import (
     DomainEvent,
 )
 from codetoreum.domain.events.repair_cycle_events import RepairCycleCompletedEvent
+from codetoreum.domain.value_objects import ProjectConfig
 from codetoreum.domain.work_item import WorkItemPriority
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.event_types import EventTypes
 from codetoreum.infrastructure.observability.instrumentation import (
     instrument_async_function,
 )
-from codetoreum.ports.exceptions import TimeoutError as PortTimeoutError
+from codetoreum.ports.exceptions import (
+    ExternalServiceError,
+)
+from codetoreum.ports.exceptions import (
+    TimeoutError as PortTimeoutError,
+)
 from codetoreum.ports.input.conversational_loop_service import IConversationalLoopService
 from codetoreum.ports.output import IBoardService, IEventStore, ITicketSystem
 from codetoreum.ports.output.board_service import MovedByType
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
+from codetoreum.ports.output.workflow_orchestrator import IWorkflowOrchestrator
 
 logger = logging.getLogger(__name__)
 
@@ -225,67 +233,67 @@ class WorkflowState:
 
 
 # Port interfaces for dependencies
-class ITaskQueue:
+class ITaskQueue(ABC):
     """Interface to task queue for enqueueing work."""
 
+    @abstractmethod
     async def enqueue(self, task: Task) -> str:
         """Enqueue a task and return task_id."""
-        raise NotImplementedError
 
 
-class IProjectConfiguration:
+class IProjectConfiguration(ABC):
     """Interface to configuration system."""
 
+    @abstractmethod
     async def get_workflow_config(self, project: str, board: str) -> WorkflowConfig:
         """Get workflow configuration for a project board."""
-        raise NotImplementedError
 
+    @abstractmethod
     async def get_agent_config(self, agent_name: str) -> AgentConfig:
         """Get agent configuration."""
-        raise NotImplementedError
 
 
-class IWorkflowStateManager:
+class IWorkflowStateManager(ABC):
     """Interface to workflow state management."""
 
+    @abstractmethod
     async def get_workflow_state(self, issue_id: str) -> WorkflowState:
         """Get current workflow state for an issue."""
-        raise NotImplementedError
 
+    @abstractmethod
     async def update_workflow_state(self, issue_id: str, state: WorkflowState) -> None:
         """Update workflow state."""
-        raise NotImplementedError
 
+    @abstractmethod
     async def get_item_position(self, work_item_id: str) -> dict[str, Any] | None:
         """Get current position information for a work item."""
-        raise NotImplementedError
 
 
-class IDecisionEvents:
+class IDecisionEvents(ABC):
     """Interface to decision event emission."""
 
+    @abstractmethod
     async def emit_routing_decision(self, decision: RoutingDecision) -> None:
         """Emit agent routing decision."""
-        raise NotImplementedError
 
+    @abstractmethod
     async def emit_progression_decision(self, decision: ProgressionDecision) -> None:
         """Emit workflow progression decision."""
-        raise NotImplementedError
 
 
-class IProjectsAPI:
+class IProjectsAPI(ABC):
     """Interface to GitHub Projects API for card movement."""
 
+    @abstractmethod
     async def move_card_to_column(self, project: str, issue_number: int, column_name: str) -> None:
         """Move card to specified column."""
-        raise NotImplementedError
 
+    @abstractmethod
     async def add_label(self, project: str, issue_number: int, label: str) -> None:
         """Add label to issue."""
-        raise NotImplementedError
 
 
-class WorkflowOrchestrator:
+class WorkflowOrchestrator(IWorkflowOrchestrator):
     """
     Workflow Orchestrator application service.
 
@@ -293,10 +301,11 @@ class WorkflowOrchestrator:
     Handles agent routing, stage progression, and decision making.
 
     Also acts as an event handler subscribing to adapter events:
-    - workitem.column_changed: Triggers agents for automated columns
+    - WorkItemColumnChanged: Triggers agents for automated columns
     - comment.needs_response: Triggers conversational agents
     - lock.released: Acquires lock for next queued item
     - review.status_changed: Progresses work through maker-checker cycles
+    - RepairCycleCompletedEvent: Progresses work after repair cycle completion
     """
 
     def __init__(
@@ -917,8 +926,7 @@ class WorkflowOrchestrator:
         1. Get column configuration
         2. If automated column: Trigger agent (lock acquisition is handled by BoardEventHandler)
         3. If exit column: Log for reference (lock release is handled by BoardEventHandler)
-        4. If conversational column: Start discussion monitoring
-        5. If leaving conversational column: Stop discussion monitoring
+        4. If conversational column: Start discussion monitoring via ConversationalLoopOrchestrator
 
         Note: Lock acquisition and release are orchestrated by BoardEventHandler, not here.
         The WorkflowOrchestrator focuses on task queue management and agent triggering
@@ -926,9 +934,10 @@ class WorkflowOrchestrator:
         via _handle_lock_released() to check for queued items and continue processing.
 
         Args:
-            event: workitem.column_changed event
+            event: WorkItemColumnChanged DomainEvent
         """
-        # Validate event structure upfront - let KeyError/AttributeError propagate if malformed
+        # Validate event structure upfront - extract required fields with safe defaults
+        # (KeyError will not be raised due to .get() usage; validation occurs below)
         work_item_id: str = event.payload.get("work_item_id") or ""
         project_id: str = event.payload.get("project_id") or ""
         board_id: str = event.payload.get("board_id") or ""
@@ -956,8 +965,17 @@ class WorkflowOrchestrator:
                     board_template = await self._workflow_config.get_board_workflow_template(board_id)
                     if board_template:
                         target_column_config = board_template.get_column_config(to_column)
-                except Exception:
-                    pass  # fall through to legacy path
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to get board workflow template from Gen2 config for board={board_id}, "
+                        f"falling back to legacy path: {e}",
+                        exc_info=True,
+                        extra={
+                            "error_id": "ERR_ORCHESTRATOR_WORKFLOW_CONFIG_LOOKUP",
+                            "board_id": board_id,
+                            "error_type": type(e).__name__,
+                        },
+                    )
 
             if target_column_config is None:
                 # Legacy path: old-style WorkflowConfig
@@ -1125,7 +1143,8 @@ class WorkflowOrchestrator:
         Args:
             event: comment.needs_response event
         """
-        # Validate event structure upfront - let KeyError propagate if malformed
+        # Validate event structure upfront - extract required fields with safe defaults
+        # (KeyError will not be raised due to .get() usage; validation occurs below)
         work_item_id: str = event.payload.get("work_item_id") or ""
         project_id: str = event.payload.get("project_id") or ""
         agent_name: str = event.payload.get("agent_assignment") or ""
@@ -1201,7 +1220,8 @@ class WorkflowOrchestrator:
         Args:
             event: lock.released event with project_id, board_id, next_in_queue
         """
-        # Validate event structure upfront - let KeyError propagate if malformed
+        # Validate event structure upfront - extract required fields with safe defaults
+        # (KeyError will not be raised due to .get() usage; validation occurs below)
         project_id: str = event.payload.get("project_id") or ""
         board_id: str = event.payload.get("board_id") or ""
         next_in_queue: str = event.payload.get("next_in_queue") or ""
@@ -1431,8 +1451,7 @@ class WorkflowOrchestrator:
         - overall_success=False: Move to failure column if configured, else log warning
 
         Args:
-            event: repair_cycle.completed DomainEvent whose payload is deserialized
-                   into a RepairCycleCompletedEvent
+            event: RepairCycleCompletedEvent DomainEvent (arrives directly, no deserialization)
         """
         # The event arrives as a RepairCycleCompletedEvent (CodetoreumEvent duck-typed via EventBus).
         # Access fields directly — no payload deserialization needed.
@@ -1548,3 +1567,204 @@ class WorkflowOrchestrator:
                     "error_type": type(e).__name__,
                 },
             )
+
+    @instrument_async_function(
+        name="workflow.orchestrate_project",
+        attributes={"service": "workflow_orchestrator", "operation": "orchestrate_project"},
+    )
+    async def orchestrate_project(self, project_name: str, workspace_path: str, config: ProjectConfig) -> int:
+        """Execute orchestration for a single project.
+
+        Coordinates all workflow activities for the project:
+        1. Polls project board for work items needing processing
+        2. Routes items to appropriate agents
+        3. Queues agent execution tasks
+
+        Args:
+            project_name: Name of the project
+            workspace_path: Local workspace path for the project
+            config: Project configuration (repo, branch, enabled status)
+
+        Returns:
+            int: Number of actions taken (tasks queued, etc.)
+
+        Raises:
+            ExternalServiceError: External service communication failure
+        """
+        actions_taken = 0
+        error_count = 0
+
+        # Check if project is enabled before proceeding
+        if not config.enabled:
+            logger.info(
+                f"Project {project_name} is disabled in configuration, skipping orchestration",
+                extra={"project_name": project_name},
+            )
+            return actions_taken
+
+        if not self.board_service:
+            logger.warning(
+                f"Board service not available, skipping orchestration for {project_name}",
+                extra={"error_id": "ERR_ORCHESTRATOR_NO_BOARD_SERVICE", "project_name": project_name},
+            )
+            return actions_taken
+
+        try:
+            # Get all boards for the project
+            all_boards = await self.board_service.get_all_boards()
+            logger.debug(f"Retrieved {len(all_boards)} boards for orchestration of {project_name}")
+
+            # Process each board for the project
+            for board in all_boards:
+                if board.project_id != project_name:
+                    continue
+
+                logger.debug(f"Processing board {board.name} for project {project_name}")
+
+                # Get all work items on this board
+                board_items = await self.board_service.get_board_items(project_id=project_name, board_id=board.id)
+                logger.debug(f"Found {len(board_items)} items on board {board.name}")
+
+                # Get workflow configuration
+                try:
+                    workflow_config = await self.config.get_workflow_config(project_name, board.name)
+                except (ValueError, ExternalServiceError, PortTimeoutError) as e:
+                    logger.error(
+                        f"Failed to load workflow config for board {board.name}, skipping all items on board: {e}",
+                        exc_info=True,
+                        extra={"error_id": "ERR_ORCHESTRATOR_CONFIG_LOAD", "board": board.name},
+                    )
+                    continue
+
+                # Process each work item
+                for item in board_items:
+                    try:
+                        # Validate work_item_id is numeric before any operations
+                        try:
+                            issue_number = int(item.work_item_id)
+                        except ValueError:
+                            logger.warning(
+                                f"Invalid work_item_id format (not numeric): {item.work_item_id}",
+                                exc_info=True,
+                                extra={
+                                    "error_id": "ERR_ORCHESTRATOR_INVALID_WORK_ITEM_ID",
+                                    "work_item_id": item.work_item_id,
+                                    "project": project_name,
+                                },
+                            )
+                            continue
+
+                        # Find the column configuration for this item's current column
+                        column_config = self._find_column_config(workflow_config, item.column_name)
+                        if not column_config:
+                            logger.debug(f"No column config for {item.column_name}, skipping {item.work_item_id}")
+                            continue
+
+                        # Check if work is already in progress for this agent
+                        workflow_state = await self.workflow_state.get_workflow_state(
+                            f"{project_name}:{item.work_item_id}"
+                        )
+                        if workflow_state.is_in_progress(column_config.name, column_config.agent):
+                            logger.debug(
+                                f"Work already in progress for {item.work_item_id}, agent {column_config.agent}"
+                            )
+                            continue
+
+                        # Validate agent can run
+                        try:
+                            agent_config = await self.config.get_agent_config(column_config.agent)
+                        except Exception as e:
+                            logger.warning(
+                                f"Failed to load agent config for {column_config.agent}: {e}",
+                                exc_info=True,
+                                extra={"error_id": "ERR_ORCHESTRATOR_AGENT_CONFIG_LOAD"},
+                            )
+                            continue
+
+                        validation_result = await self._validate_agent_can_run(
+                            project_name, column_config.agent, agent_config
+                        )
+                        if not validation_result.can_run:
+                            logger.debug(
+                                f"Agent {column_config.agent} cannot run: {validation_result.reason}",
+                                extra={"error_id": "ERR_ORCHESTRATOR_AGENT_VALIDATION"},
+                            )
+                            if validation_result.needs_dev_setup:
+                                await self._queue_dev_setup(project_name)
+                            continue
+
+                        # Build task context and enqueue
+                        task_context = {
+                            "project": project_name,
+                            "work_item_id": item.work_item_id,
+                            "workspace_path": workspace_path,
+                            "column": item.column_name,
+                            "board": board.name,
+                        }
+
+                        task = Task(
+                            id=f"orchestrate_{project_name}_{item.work_item_id}_{int(time.time())}",
+                            agent=column_config.agent,
+                            project=project_name,
+                            priority=WorkItemPriority.MEDIUM,
+                            context=task_context,
+                            created_at=datetime.now(UTC),
+                        )
+
+                        task_id = await self.task_queue.enqueue(task)
+                        logger.info(f"Enqueued task {task_id} for {item.work_item_id} via orchestrate_project")
+
+                        # Emit routing decision
+                        await self.decision_events.emit_routing_decision(
+                            RoutingDecision(
+                                project=project_name,
+                                issue_number=issue_number,
+                                board=board.name,
+                                column=item.column_name,
+                                selected_agent=column_config.agent,
+                                reason=f"Agent {column_config.agent} configured for column {item.column_name}",
+                                alternatives=[],
+                                workspace_type=workflow_config.workspace_type,
+                                timestamp=datetime.now(UTC),
+                            )
+                        )
+
+                        # Update workflow state
+                        workflow_state.mark_in_progress(column_config.name, column_config.agent)
+                        await self.workflow_state.update_workflow_state(
+                            f"{project_name}:{item.work_item_id}", workflow_state
+                        )
+
+                        actions_taken += 1
+
+                    except Exception as e:
+                        logger.error(
+                            f"Error processing work item {item.work_item_id} during orchestrate_project: {e}",
+                            exc_info=True,
+                            extra={
+                                "error_id": "ERR_ORCHESTRATOR_ITEM_PROCESSING",
+                                "work_item_id": item.work_item_id,
+                                "project": project_name,
+                                "error_type": type(e).__name__,
+                            },
+                        )
+                        error_count += 1
+                        continue
+
+            logger.info(
+                f"Orchestrated project {project_name}: {actions_taken} actions taken, {error_count} errors encountered",
+                extra={"actions": actions_taken, "errors": error_count},
+            )
+            return actions_taken
+
+        except Exception as e:
+            logger.error(
+                f"Error orchestrating project {project_name}: {e}",
+                exc_info=True,
+                extra={
+                    "error_id": "ERR_ORCHESTRATOR_PROJECT_ORCHESTRATION_FAILURE",
+                    "project_name": project_name,
+                    "error_type": type(e).__name__,
+                },
+            )
+            raise

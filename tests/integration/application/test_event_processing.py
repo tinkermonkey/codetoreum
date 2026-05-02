@@ -175,6 +175,9 @@ def workflow_orchestrator(event_store, ticket_system):
         async def update_workflow_state(self, issue_id, state):
             self.states[issue_id] = state
 
+        async def get_item_position(self, work_item_id):
+            return None
+
     class MockDecisionEvents(IDecisionEvents):
         def __init__(self):
             self.decisions = []

@@ -9,6 +9,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
 from codetoreum.domain.events.board_events import (
     BoardReconciledEvent,
@@ -108,9 +109,22 @@ class MockBoardAdapter(IBoardService):
         self._lock = asyncio.Lock()  # Async-safe lock for concurrent operations
         self._event_listeners: dict[str, list] = {}  # Event type -> list of handlers
         self._event_emitter = event_emitter
+        self._event_bus: Any | None = None  # Central event bus for publishing to handlers
         self._clock = clock
         self.current_project: str | None = None
         self.current_board: str | None = None
+
+    # ===== Event Bus and Emitter Management =====
+
+    @property
+    def event_bus(self) -> Any | None:
+        """Get the event bus for publishing domain events."""
+        return self._event_bus
+
+    @event_bus.setter
+    def event_bus(self, bus: Any | None) -> None:
+        """Set the event bus for publishing domain events."""
+        self._event_bus = bus
 
     # ===== Event Emitter Implementation =====
 
@@ -125,16 +139,18 @@ class MockBoardAdapter(IBoardService):
         if event_type in self._event_listeners:
             self._event_listeners[event_type] = [h for h in self._event_listeners[event_type] if h != handler]
 
-    def emit(self, event) -> None:
-        """Emit event to all registered listeners and event emitter.
+    def _emit_to_listeners_and_emitter(self, event) -> None:
+        """Emit event to local listeners and event emitter.
 
-        Emits to both:
-        1. Local event listeners (for backwards compatibility)
-        2. Event emitter (for domain event publishing to event bus)
+        This helper method contains the common logic for both emit() and emit_async(),
+        reducing code duplication.
+
+        Args:
+            event: Domain event to emit
         """
         event_type = getattr(event, "type", event.__class__.__name__)
 
-        # Emit to local listeners
+        # Emit to local listeners (synchronous)
         if event_type in self._event_listeners:
             for handler in self._event_listeners[event_type]:
                 try:
@@ -142,12 +158,72 @@ class MockBoardAdapter(IBoardService):
                 except Exception as e:
                     logger.error(f"Error in event handler: {e}", exc_info=True)
 
-        # Emit to event emitter if provided (for event bus subscription)
+        # Emit to local event emitter if provided (synchronous)
         if self._event_emitter:
             try:
                 self._event_emitter.emit(event)
             except Exception as e:
                 logger.error(f"Error emitting to event emitter: {e}", exc_info=True)
+
+    async def _publish_to_event_bus_async(self, event) -> None:
+        """Publish event to central event bus asynchronously.
+
+        Args:
+            event: Domain event to publish
+
+        Raises:
+            Exception: If event bus publish fails
+        """
+        if self._event_bus:
+            await self._event_bus.publish(event)
+
+    async def emit_async(self, event) -> None:
+        """Emit event asynchronously with full event bus integration.
+
+        This is the async version of emit() that properly awaits event bus publishing.
+        Use this from async methods to ensure events are fully processed before returning.
+
+        Args:
+            event: Domain event to emit
+        """
+        # Emit to local listeners and emitter
+        self._emit_to_listeners_and_emitter(event)
+
+        # Publish to central event bus if provided (awaitable)
+        if self._event_bus:
+            try:
+                await self._publish_to_event_bus_async(event)
+            except Exception as e:
+                logger.warning(f"Failed to publish event to event_bus: {e}")
+
+    def emit(self, event) -> None:
+        """Emit event to all registered listeners and event emitter.
+
+        Emits to:
+        1. Local event listeners (for backwards compatibility)
+        2. Event emitter (for capturing in tests)
+        3. Central event bus (for domain event distribution to handlers)
+        """
+        # Emit to local listeners and emitter
+        self._emit_to_listeners_and_emitter(event)
+
+        # Publish to central event bus if provided (for handler subscription)
+        if self._event_bus:
+            try:
+                # Check if we're in an async context
+                try:
+                    asyncio.get_running_loop()
+                    # Create a task but add a callback to log errors
+                    task = asyncio.create_task(self._publish_to_event_bus_async(event))
+                    def log_error(t):
+                        if t.exception():
+                            logger.error(f"Event bus publish failed: {t.exception()}")
+                    task.add_done_callback(log_error)
+                except RuntimeError:
+                    # No running loop - can't publish to async event bus
+                    logger.debug("No async event loop running, skipping event bus publish")
+            except Exception as e:
+                logger.warning(f"Failed to schedule event bus publish: {e}")
 
     # ===== Query Operations =====
 
@@ -323,7 +399,7 @@ class MockBoardAdapter(IBoardService):
                                     board_id_stored, col_name, old_pos = self._item_positions[item_id]
                                     self._item_positions[item_id] = (board_id_stored, col_name, i)
                                     # Emit position change event for sibling items
-                                    self.emit(
+                                    await self.emit_async(
                                         WorkItemPositionChangedEvent(
                                             type="workitem.position_changed",
                                             work_item_id=item_id,
@@ -362,7 +438,7 @@ class MockBoardAdapter(IBoardService):
                 self._movement_log.append(movement)
 
                 # Emit event
-                self.emit(
+                await self.emit_async(
                     WorkItemColumnChangedEvent(
                         type="workitem.column_changed",
                         work_item_id=work_item_id,
@@ -466,20 +542,21 @@ class MockBoardAdapter(IBoardService):
             # Note: We do NOT log initial placement as a movement (movement log is for column transitions)
             # Only actual moves between columns are logged in movement_log
 
-            # Emit event (for event handlers/listeners to process)
-            self.emit(
-                WorkItemColumnChangedEvent(
-                    type="workitem.column_changed",
-                    work_item_id=work_item_id,
-                    project_id=project_id,
-                    board_id=board_id,
-                    from_column=None,
-                    to_column=target_column,
-                    moved_by=moved_by.value,  # Use enum value
-                    timestamp=self._get_iso_timestamp(),
-                    source="mock",
-                )
+        # Emit event asynchronously (for event handlers/listeners to process)
+        # Use the async version to ensure event bus publishing completes before returning
+        await self.emit_async(
+            WorkItemColumnChangedEvent(
+                type="workitem.column_changed",
+                work_item_id=work_item_id,
+                project_id=project_id,
+                board_id=board_id,
+                from_column=None,
+                to_column=target_column,
+                moved_by=moved_by.value,  # Use enum value
+                timestamp=self._get_iso_timestamp(),
+                source="mock",
             )
+        )
 
         return ColumnMovementResult(
             work_item_id=work_item_id,
@@ -544,7 +621,7 @@ class MockBoardAdapter(IBoardService):
                 orphaned_items=orphaned_items,
             )
 
-            self.emit(
+            await self.emit_async(
                 BoardReconciledEvent(
                     type="board.reconciled",
                     project_id=self.current_project,

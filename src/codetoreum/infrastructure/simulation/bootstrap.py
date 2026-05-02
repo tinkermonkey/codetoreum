@@ -5,18 +5,18 @@ Wires up the entire application stack in simulation mode through 6 phases:
 
 **Phase 0**: Create simulation engine (encapsulates clock and timing)
 **Phase 1**: Create infrastructure (event bus, logger, error registry) - EARLY for event subscriptions
-**Phase 2**: Create adapters (33 adapters all via AdapterResolver)
+**Phase 2**: Create adapters (34 adapters all via AdapterResolver)
            Includes: ticket system, LLM, container, repository, event store, metrics, storage, config,
            notifier, encryption, board, repair cycle, PR review cycle, project manager, lock service, workflow config,
            agent executor, version control, message broker, discussion, review cycle, identity service,
            checkpoint store, queue service, event emitter, code review, container recovery, work item
            service, agent repository, active workflow run registry, work item branch tracker, audit store,
-           systemic analysis service, environment repair service, and CI pipeline service
+           systemic analysis service, environment repair service, branch resolution service, and CI pipeline service
 **Phase 3**: Create services (11 application services with their dependencies: workflow orchestrator,
            execution service, agent scheduler, pipeline manager, review service, feedback processor,
            workspace router, configuration service, work item service, multi-project orchestrator,
            container recovery service)
-**Phase 4**: Create ports (16 input port implementations)
+**Phase 4**: Create ports (17 input port implementations)
 **Phase 5**: Create FastAPI app (wire all ports to API endpoints, register event handlers)
 
 Note: Infrastructure (event bus) is created before adapters to enable causal linking via
@@ -43,6 +43,7 @@ from codetoreum.adapters.primary.fastapi_app import create_app
 from codetoreum.adapters.primary.input_port_adapters.mock import (
     MockAgentCommandAdapter,
     MockAgentQueryAdapter,
+    MockAuditQueryAdapter,
     MockConfigCommandAdapter,
     MockConfigQueryAdapter,
     MockConfigServiceAdapter,
@@ -74,9 +75,6 @@ from codetoreum.adapters.primary.routers.simulation_stream import (
 )
 from codetoreum.adapters.primary.routers.simulation_ticketing import (
     create_simulation_ticketing_router,
-)
-from codetoreum.adapters.secondary.failed_event_store_adapter import (
-    DeadLetterQueueFailedEventStoreAdapter,
 )
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
@@ -817,7 +815,7 @@ class SimulationApplicationBootstrap:
     Bootstrap the entire application stack in simulation mode.
 
     This class wires up:
-    1. All 24 testing and simulation adapters
+    1. All 34 testing and simulation adapters
     2. Infrastructure (event bus, clock, logger)
     3. All application services
     4. All input/output ports
@@ -896,9 +894,9 @@ class SimulationApplicationBootstrap:
         This method executes bootstrap phases in order:
         - Phase 0: Create simulation engine (encapsulates clock and timing)
         - Phase 1: Create infrastructure (event bus, logger, error registry) - EARLY for subscriptions
-        - Phase 2: Create adapters (24 mock adapters for all output ports)
+        - Phase 2: Create adapters (34 mock adapters for all output ports)
         - Phase 3: Create services (11 application services with dependencies)
-        - Phase 4: Create ports (16 input port implementations)
+        - Phase 4: Create ports (17 input port implementations)
         - Phase 5: Create FastAPI app (wire all ports to API endpoints, register handlers)
         - Phase 6: Conditionally start auto-advance clock (if configured)
         - Phase 6b: Register stale lock watchdog (deadlock prevention)
@@ -937,8 +935,8 @@ class SimulationApplicationBootstrap:
             logger.info("Phase 1: Creating infrastructure...")
             self.infrastructure = self._create_infrastructure()
 
-            # Phase 2: Create adapters (33 total: 32 via resolver + branch_resolution_service) with event bus subscriptions
-            logger.info("Phase 2: Creating 33 adapters...")
+            # Phase 2: Create adapters (34 total: 33 via resolver + branch_resolution_service) with event bus subscriptions
+            logger.info("Phase 2: Creating 34 adapters...")
             self.adapters = await self._create_adapters()
 
             # Register causal links between adapters and domain events
@@ -961,14 +959,10 @@ class SimulationApplicationBootstrap:
             logger.info("Phase 5b: Validating causal link consistency...")
             self._validate_causal_links()
 
-            # Start dead letter queue retry processor
-            # This enables automatic retry of failed event publishing (issue #371)
+            # Start failed event store retry processor (in-memory implementation in simulation)
+            # InMemoryFailedEventStore is a no-op for retry processing in simulation mode
             if self.infrastructure and self.infrastructure.failed_event_store:
-                logger.info("Starting failed event store retry processor...")
-                # Cast to adapter to access infrastructure-specific lifecycle methods
-                dlq_adapter = self.infrastructure.failed_event_store
-                if isinstance(dlq_adapter, DeadLetterQueueFailedEventStoreAdapter):
-                    await dlq_adapter.start_retry_processor(self._create_dlq_retry_handler())
+                logger.debug("Failed event store is ready (no-op for in-memory implementation)")
 
             # Phase 6: Start auto-advance if configured
             # This must come after all event handlers are registered so tick-driven events have handlers
@@ -1201,11 +1195,7 @@ class SimulationApplicationBootstrap:
                 self._column_progression_watchdog.stop()
                 logger.debug("Column progression watchdog stopped")
 
-            # Stop dead letter queue retry processor
-            if self.infrastructure and self.infrastructure.failed_event_store:
-                dlq_adapter = self.infrastructure.failed_event_store
-                if isinstance(dlq_adapter, DeadLetterQueueFailedEventStoreAdapter):
-                    await dlq_adapter.stop_retry_processor()
+            # No cleanup needed for in-memory failed event store
 
             # Stop simulation engine
             if self._engine:
@@ -1251,7 +1241,7 @@ class SimulationApplicationBootstrap:
 
     async def _create_adapters(self) -> SimulationAdapters:
         """
-        Create all 34 adapters using AdapterResolver in dependency order.
+        Create all 34 adapters: 33 via AdapterResolver + 1 manual post-processing.
 
         Phase 2 bootstrap creates adapters following a partial dependency ordering:
         1. Leaf adapters (no dependencies): event_store, config_store, metrics, encryption, identity_service
@@ -1276,7 +1266,7 @@ class SimulationApplicationBootstrap:
         simulation-specific methods.
 
         Returns:
-            SimulationAdapters with all 33 adapters typed as port interfaces
+            SimulationAdapters with all 34 adapters typed as port interfaces
         """
         if not self._engine:
             message = "SimulationEngine must be created before adapters"
@@ -1350,14 +1340,16 @@ class SimulationApplicationBootstrap:
             resolved.repair_cycle.environment_repair_service = resolved.environment_repair_service
             resolved.repair_cycle.ci_pipeline_service = resolved.ci_pipeline
 
-        # Wire ticket system, board service, and event emitter to PR review cycle adapter
-        # This enables the mock PR review cycle adapter to create sub-issues, move items, and emit events
+        # Wire ticket system, board service, event emitter, event bus, and event store to PR review cycle adapter
+        # This enables the mock PR review cycle adapter to create sub-issues, move items, emit events, publish to the event bus, and persist to the event store
         from codetoreum.adapters.testing.mock_pr_review_cycle_adapter import MockPRReviewCycleAdapter
 
         if isinstance(resolved.pr_review_cycle, MockPRReviewCycleAdapter):
             resolved.pr_review_cycle.ticket_system = resolved.ticket_system
             resolved.pr_review_cycle.board_service = resolved.board
             resolved.pr_review_cycle.event_emitter = resolved.event_emitter
+            resolved.pr_review_cycle.event_bus = self.infrastructure.event_bus
+            resolved.pr_review_cycle.event_store = resolved.event_store
 
             # Wire event emitter to publish CodetoreumEvents to event bus
             # This ensures that PR review cycle events emitted by the adapter reach the event bus handlers
@@ -1416,6 +1408,15 @@ class SimulationApplicationBootstrap:
             for event_type in pr_review_cycle_event_types:
                 resolved.event_emitter.on(event_type, _publish_codetoreum_event_to_bus)
             logger.info("Wired PR review cycle event emitter to event bus with 12 event types")
+
+        # Wire event bus to board adapter for column change event publishing
+        # This enables the mock board adapter to publish WorkItemColumnChangedEvent to the event bus
+        # so that PRReviewCycleDispatchHandler receives the event and initiates PR review cycles
+        from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
+
+        if isinstance(resolved.board, MockBoardAdapter):
+            resolved.board.event_bus = self.infrastructure.event_bus
+            logger.info("Wired MockBoardAdapter to event bus for column change event publishing")
 
         # Create branch resolution adapter (mock adapter for simulation testing)
         resolved.branch_resolution_service = MockBranchResolutionAdapter(clock=self._engine.get_clock_for_testing())
@@ -1570,56 +1571,6 @@ class SimulationApplicationBootstrap:
             )
             raise
 
-    def _create_dlq_retry_handler(self) -> Any:
-        """
-        Create a retry handler function for the dead letter queue.
-
-        The handler is called by the DLQ retry processor to retry failed events.
-        It simply re-publishes the event to the event bus.
-
-        Returns:
-            Async function that retries an event
-        """
-        event_bus = self.infrastructure.event_bus if self.infrastructure else None
-
-        async def retry_event(event_type: str, event_data: dict[str, Any]) -> None:
-            """Retry publishing a failed event."""
-            if not event_bus:
-                message = "Event bus not available for retry"
-                raise RuntimeError(message)
-
-            # Reconstruct the domain event from the stored data
-            # Map event type to actual event class for proper reconstruction
-            retry_event_obj = None
-
-            if event_type == "WorkItemColumnChanged":
-                retry_event_obj = WorkItemColumnChanged(
-                    aggregate_id=event_data.get("work_item_id", ""),
-                    payload=event_data,
-                )
-            elif event_type == "BoardReconciled":
-                retry_event_obj = BoardReconciled(
-                    aggregate_id=event_data.get("board_id", ""),
-                    payload=event_data,
-                )
-            else:
-                # For unknown event types, raise exception to prevent silent deletion
-                # This ensures the DLQ doesn't remove events of unmapped types on first retry.
-                # The retry processor will treat this as a processing failure and retry with backoff.
-                message = f"Unknown event type '{event_type}' in dead letter queue - handler mapping not updated"
-                logger.error(
-                    message,
-                    extra={
-                        "event_type": event_type,
-                        "error_id": ErrorRegistry.ERR_INTERNAL_ERROR,
-                    },
-                )
-                raise ValueError(message)
-
-            await event_bus.publish(retry_event_obj)
-
-        return retry_event
-
     # =========================================================================
     # Phase 1: Create Infrastructure (Early for Event Bus Subscriptions)
     # =========================================================================
@@ -1634,8 +1585,8 @@ class SimulationApplicationBootstrap:
         The CausalLinkRegistry enables runtime enforcement and discoverability of
         causal dependencies between adapters and domain events.
 
-        The DeadLetterQueue captures failed event publishing attempts, enabling
-        event bridge reliability (see issue #371).
+        The InMemoryFailedEventStore captures failed event publishing attempts,
+        enabling deterministic simulation testing of event failure scenarios.
 
         Returns:
             SimulationInfrastructure with configured components
@@ -1643,8 +1594,6 @@ class SimulationApplicationBootstrap:
         if not self._engine:
             message = "SimulationEngine must be created before infrastructure"
             raise RuntimeError(message)
-
-        from codetoreum.infrastructure.dead_letter_queue import DeadLetterQueue
 
         # Create event bus
         event_bus = EventBus()
@@ -1658,11 +1607,14 @@ class SimulationApplicationBootstrap:
         # Create causal link registry for managing adapter dependencies
         causal_link_registry = CausalLinkRegistry()
 
-        # Create dead letter queue for capturing failed event publishing
-        # Wrap it with the port adapter to decouple infrastructure from application
-        # This is critical for event bridge reliability (issue #371)
-        dead_letter_queue = DeadLetterQueue()
-        failed_event_store = DeadLetterQueueFailedEventStoreAdapter(dead_letter_queue)
+        # Create in-memory failed event store for simulation mode
+        # No production infrastructure contact (FR-1.5: simulation-only requirement)
+        # Provides fully deterministic behavior for testing event failure scenarios
+        from codetoreum.adapters.testing.in_memory_failed_event_store import (
+            InMemoryFailedEventStore,
+        )
+
+        failed_event_store = InMemoryFailedEventStore()
 
         logger.info("Created infrastructure components (including CausalLinkRegistry and IFailedEventStore)")
 
@@ -1947,10 +1899,8 @@ class SimulationApplicationBootstrap:
         config_command = MockConfigCommandAdapter()
         task_query = MockTaskQueryAdapter()
 
-        # Create audit query adapter using the audit store
-        from codetoreum.adapters.primary.audit_query_adapter import AuditQueryAdapter
-
-        audit_query = AuditQueryAdapter(audit_store=self.adapters.audit_store)
+        # Create audit query adapter using mock adapter with audit store
+        audit_query = MockAuditQueryAdapter(audit_store=self.adapters.audit_store)
 
         logger.info("Created all port implementations")
 
@@ -1984,7 +1934,7 @@ class SimulationApplicationBootstrap:
 
         This is the final step in Phase 5, which:
         1. Creates FastAPI app instance using create_app() factory
-        2. Wires all 16 input ports (7 command + 9 query) to API endpoints
+        2. Wires all 17 input ports (7 command + 10 query) to API endpoints
         3. Wires infrastructure components (event store, event bus)
         4. Wires application services (configuration service, logger, recovery service)
         5. Configures CORS for localhost development

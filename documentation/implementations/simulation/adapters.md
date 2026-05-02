@@ -84,7 +84,7 @@ Mock implementations of input ports that wrap application services for HTTP endp
 | 15 | `ITaskQueryPort` | `MockTaskQueryAdapter` | `adapters/primary/input_port_adapters/mock/mock_task_query_adapter.py` | Task/job queries |
 | 16 | `IMetricsQueryPort` | `MockMetricsQueryAdapter` | `adapters/primary/input_port_adapters/mock/mock_metrics_query_adapter.py` | Metrics queries — timing, counts |
 | 17 | `IWorkspaceQueryPort` | `MockWorkspaceQueryAdapter` | `adapters/primary/input_port_adapters/mock/mock_workspace_query_adapter.py` | Workspace queries — containers, mounts |
-| 18 | `IAuditQueryPort` | `AuditQueryAdapter` | `adapters/primary/audit_query_adapter.py` | Audit log queries |
+| 18 | `IAuditQueryPort` | `MockAuditQueryAdapter` | `adapters/primary/input_port_adapters/mock/mock_audit_query_adapter.py` | Audit log queries |
 
 ## Adapter Organization
 

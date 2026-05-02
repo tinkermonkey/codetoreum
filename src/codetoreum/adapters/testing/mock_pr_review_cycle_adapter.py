@@ -108,6 +108,8 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
         board_service: IBoardService | None = None,
         clock: SimulationClock | None = None,
         event_emitter: IEventEmitter | None = None,
+        event_bus: "Any | None" = None,
+        event_store: "Any | None" = None,
     ) -> None:
         """Initialize the PR review cycle adapter.
 
@@ -123,6 +125,10 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                   Can be injected via public property after construction.
             event_emitter: Optional event emitter for domain event publication.
                           Can be injected via public property after construction.
+            event_bus: Optional EventBus for publishing domain events.
+                      Can be injected via public property after construction.
+            event_store: Optional EventStore for persisting domain events.
+                        Can be injected via public property after construction.
 
         Note:
             Dependencies can be set after construction using the public properties:
@@ -130,12 +136,16 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             adapter.board_service = board_service
             adapter.clock = clock
             adapter.event_emitter = event_emitter
+            adapter.event_bus = event_bus
+            adapter.event_store = event_store
         """
         super().__init__()
         self._ticket_system = ticket_system
         self._board_service = board_service
         self._clock = clock
         self._event_emitter = event_emitter
+        self._event_bus = event_bus
+        self._event_store = event_store
 
         # State storage (keyed by work_item_id for multi-item support)
         self._cycles: dict[str, PRReviewCycleStateData] = {}
@@ -204,6 +214,34 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             event_emitter: IEventEmitter instance for domain event publication
         """
         self._event_emitter = event_emitter
+
+    @property
+    def event_bus(self) -> "Any | None":
+        """Get the event bus."""
+        return self._event_bus
+
+    @event_bus.setter
+    def event_bus(self, event_bus: "Any | None") -> None:
+        """Set the event bus.
+
+        Args:
+            event_bus: EventBus instance for publishing domain events
+        """
+        self._event_bus = event_bus
+
+    @property
+    def event_store(self) -> "Any | None":
+        """Get the event store."""
+        return self._event_store
+
+    @event_store.setter
+    def event_store(self, event_store: "Any | None") -> None:
+        """Set the event store.
+
+        Args:
+            event_store: EventStore instance for persisting domain events
+        """
+        self._event_store = event_store
 
     # ==================== Configuration Methods ====================
 
@@ -291,6 +329,43 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 max_cycles_reached=True,
             )
 
+    # ==================== Helper Methods ====================
+
+    async def _emit_and_publish_event(self, event: Any) -> None:
+        """Emit event to local event_emitter, publish to event_bus, and persist to event_store.
+
+        Args:
+            event: Domain event to emit and publish
+        """
+        event_type = type(event).__name__
+        logger.debug(f"_emit_and_publish_event: {event_type}, event_emitter={self._event_emitter is not None}, event_bus={self._event_bus is not None}, event_store={self._event_store is not None}")
+
+        # Emit to local event_emitter for test capture
+        if self._event_emitter:
+            try:
+                self._event_emitter.emit(event)
+                logger.debug(f"Emitted {event_type} to local event_emitter")
+            except Exception as e:
+                logger.warning(f"Failed to emit {event_type} to local event_emitter: {e}")
+
+        # Publish to central event_bus for event handlers
+        if self._event_bus:
+            try:
+                await self._event_bus.publish(event)
+                logger.debug(f"Published {event_type} to event_bus")
+            except Exception as e:
+                logger.warning(f"Failed to publish {event_type} to event_bus: {e}")
+
+        # Persist to event_store for audit trail and testing
+        if self._event_store:
+            try:
+                # Use work_item_id as aggregate_id for proper event sourcing
+                aggregate_id = getattr(event, "work_item_id", "unknown")
+                await self._event_store.append(aggregate_id, [event])
+                logger.debug(f"Appended {event_type} to event_store for {aggregate_id}")
+            except Exception as e:
+                logger.warning(f"Failed to append {event_type} to event_store: {e}")
+
     # ==================== IPRReviewCycle Implementation ====================
 
     async def start_pr_review_cycle(self, request: PRReviewCycleRequest) -> PRReviewCycleResult:
@@ -315,6 +390,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             ValueError: If request validation fails
             ExternalServiceError: If service calls fail
         """
+        logger.info(f"start_pr_review_cycle invoked for {request.work_item_id}")
         # Validate request
         if not request.work_item_id:
             raise ValueError("work_item_id is required")
@@ -365,7 +441,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             phases_planned=phases_planned,
             workflow_run_id=request.workflow_run_id,
         )
-        self._event_emitter.emit(started_event)
+        await self._emit_and_publish_event(started_event)
         self._log_event({"type": "pr_review_cycle.started", "cycle_id": cycle_id, "work_item_id": work_item_id})
 
         # Check max cycles before emitting phase events
@@ -383,7 +459,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 next_column="Human Review",
                 workflow_run_id=request.workflow_run_id,
             )
-            self._event_emitter.emit(max_cycles_event)
+            await self._emit_and_publish_event(max_cycles_event)
             self._log_event(
                 {"type": "pr_review_cycle.max_cycles_reached", "cycle_id": cycle_id, "work_item_id": work_item_id}
             )
@@ -397,7 +473,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 cycle_number=cycle_number,
                 workflow_run_id=request.workflow_run_id,
             )
-            self._event_emitter.emit(escalated_event)
+            await self._emit_and_publish_event(escalated_event)
             self._log_event({"type": "pr_review_cycle.escalated", "cycle_id": cycle_id})
 
             # Create placeholder phase output to satisfy non-empty phase_outputs requirement
@@ -475,7 +551,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             workflow_run_id=request.workflow_run_id,
             timeout_seconds=request.config.code_review_timeout_seconds,
         )
-        self._event_emitter.emit(code_review_event)
+        await self._emit_and_publish_event(code_review_event)
         self._log_event({"type": "pr_review_cycle.code_review_started", "cycle_id": cycle_id})
 
         # Advance clock for Phase 1 (~10 minutes)
@@ -493,7 +569,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             comment_id="",
             workflow_run_id=request.workflow_run_id,
         )
-        self._event_emitter.emit(phase1_completed)
+        await self._emit_and_publish_event(phase1_completed)
         self._log_event({"type": "pr_review_cycle.phase_completed", "cycle_id": cycle_id, "phase_index": 1})
 
         # ===== PHASE 2.x: Verification =====
@@ -508,7 +584,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 total_sources=len(request.config.verifier_context_sources),
                 workflow_run_id=request.workflow_run_id,
             )
-            self._event_emitter.emit(verification_event)
+            await self._emit_and_publish_event(verification_event)
             self._log_event(
                 {
                     "type": "pr_review_cycle.verification_started",
@@ -532,7 +608,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             comment_id="",
             workflow_run_id=request.workflow_run_id,
         )
-        self._event_emitter.emit(phase2_completed)
+        await self._emit_and_publish_event(phase2_completed)
         self._log_event({"type": "pr_review_cycle.phase_completed", "cycle_id": cycle_id, "phase_index": 2})
 
         # ===== PHASE 3: CI Check (only if enabled) =====
@@ -550,7 +626,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 duration_seconds=0.5,
                 workflow_run_id=request.workflow_run_id,
             )
-            self._event_emitter.emit(ci_event)
+            await self._emit_and_publish_event(ci_event)
             self._log_event(
                 {
                     "type": "pr_review_cycle.ci_check_completed",
@@ -577,7 +653,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 comment_id="",
                 workflow_run_id=request.workflow_run_id,
             )
-            self._event_emitter.emit(phase3_completed)
+            await self._emit_and_publish_event(phase3_completed)
             self._log_event(
                 {
                     "type": "pr_review_cycle.phase_completed",
@@ -606,7 +682,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 comment_id="",
                 workflow_run_id=request.workflow_run_id,
             )
-            self._event_emitter.emit(phase3_completed)
+            await self._emit_and_publish_event(phase3_completed)
             self._log_event(
                 {
                     "type": "pr_review_cycle.phase_completed",
@@ -738,7 +814,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             finding_count=len(config.findings),
             workflow_run_id=request.workflow_run_id,
         )
-        self._event_emitter.emit(consolidation_event)
+        await self._emit_and_publish_event(consolidation_event)
         self._log_event(
             {
                 "type": "pr_review_cycle.consolidation_started",
@@ -767,7 +843,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 next_column=next_column,
                 workflow_run_id=request.workflow_run_id,
             )
-            self._event_emitter.emit(outcome_event)
+            await self._emit_and_publish_event(outcome_event)
             self._log_event({"type": "pr_review_cycle.approved", "cycle_id": cycle_id, "work_item_id": work_item_id})
 
         else:  # ISSUES_FOUND
@@ -813,7 +889,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                     target_board=request.board_id,
                     workflow_run_id=request.workflow_run_id,
                 )
-                self._event_emitter.emit(sub_issues_event)
+                await self._emit_and_publish_event(sub_issues_event)
                 self._log_event(
                     {
                         "type": "pr_review_cycle.sub_issues_created",
@@ -845,7 +921,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 next_column=request.config.on_issues_found_column or "In Development",
                 workflow_run_id=request.workflow_run_id,
             )
-            self._event_emitter.emit(outcome_event)
+            await self._emit_and_publish_event(outcome_event)
             self._log_event(
                 {
                     "type": "pr_review_cycle.issues_found",
@@ -878,7 +954,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             consolidation_duration_seconds=consolidation_duration,
             workflow_run_id=request.workflow_run_id,
         )
-        self._event_emitter.emit(consolidation_completed)
+        await self._emit_and_publish_event(consolidation_completed)
         self._log_event(
             {
                 "type": "pr_review_cycle.consolidation_completed",
