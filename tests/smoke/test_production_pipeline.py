@@ -8,6 +8,7 @@ Verifies end-to-end workflow with the Codetoreum pipeline configuration:
 """
 
 import pytest
+
 from codetoreum.adapters.secondary.elasticsearch_workflow_config_service import (
     ElasticsearchWorkflowConfigService,
 )
@@ -15,7 +16,7 @@ from codetoreum.adapters.testing.in_memory_workflow_config_service import (
     InMemoryWorkflowConfigService,
 )
 from codetoreum.config.codetoreum_pipeline import create_codetoreum_pipeline_template
-from codetoreum.domain.board_workflow_template import ColumnTemplate, ColumnType, BoardWorkflowTemplate
+from codetoreum.domain.board_workflow_template import BoardWorkflowTemplate, ColumnTemplate, ColumnType
 from codetoreum.ports.exceptions import ValidationError
 
 
