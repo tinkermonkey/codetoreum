@@ -301,10 +301,11 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
     Handles agent routing, stage progression, and decision making.
 
     Also acts as an event handler subscribing to adapter events:
-    - workitem.column_changed: Triggers agents for automated columns
+    - WorkItemColumnChanged: Triggers agents for automated columns
     - comment.needs_response: Triggers conversational agents
     - lock.released: Acquires lock for next queued item
     - review.status_changed: Progresses work through maker-checker cycles
+    - RepairCycleCompletedEvent: Progresses work after repair cycle completion
     """
 
     def __init__(
@@ -925,8 +926,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         1. Get column configuration
         2. If automated column: Trigger agent (lock acquisition is handled by BoardEventHandler)
         3. If exit column: Log for reference (lock release is handled by BoardEventHandler)
-        4. If conversational column: Start discussion monitoring
-        5. If leaving conversational column: Stop discussion monitoring
+        4. If conversational column: Start discussion monitoring via ConversationalLoopOrchestrator
 
         Note: Lock acquisition and release are orchestrated by BoardEventHandler, not here.
         The WorkflowOrchestrator focuses on task queue management and agent triggering
@@ -1451,8 +1451,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         - overall_success=False: Move to failure column if configured, else log warning
 
         Args:
-            event: repair_cycle.completed DomainEvent whose payload is deserialized
-                   into a RepairCycleCompletedEvent
+            event: RepairCycleCompletedEvent DomainEvent (arrives directly, no deserialization)
         """
         # The event arrives as a RepairCycleCompletedEvent (CodetoreumEvent duck-typed via EventBus).
         # Access fields directly — no payload deserialization needed.

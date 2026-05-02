@@ -29,9 +29,9 @@ class IWorkflowOrchestrator(ABC):
 
         Coordinates workflow activities for the project:
         1. Checks if project is enabled via config.enabled flag
-        2. Polls project board for card movements
-        3. Routes moved cards to appropriate agents
-        4. Queues agent execution tasks
+        2. Scans automated columns for work items requiring agent execution
+        3. Queues agent tasks for items in automated columns
+        4. Manages conversational and standard task queue execution
 
         Args:
             project_name: Name of the project
@@ -39,7 +39,7 @@ class IWorkflowOrchestrator(ABC):
             config: Project configuration (repo, branch, enabled status)
 
         Returns:
-            int: Number of actions taken (cards moved, tasks queued, etc.)
+            int: Number of actions taken (tasks queued, etc.)
 
         Raises:
             ExternalServiceError: External service communication failure
