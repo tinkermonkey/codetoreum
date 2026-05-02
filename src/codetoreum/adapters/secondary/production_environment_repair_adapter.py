@@ -40,7 +40,7 @@ from codetoreum.domain.repair_cycle_types import (
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.output.environment_repair_service import IEnvironmentRepairService
-from codetoreum.ports.output.event_emitter import IEventEmitter, NullEventEmitter
+from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.repair_cycle_service import RepairCycleContext
 
 logger = logging.getLogger(__name__)

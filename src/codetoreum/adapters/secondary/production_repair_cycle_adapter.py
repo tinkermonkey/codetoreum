@@ -16,7 +16,7 @@ Key responsibilities:
 
 Architecture:
 - Factory injection of ILLMProvider for flexible provider selection
-- Optional event emission (null-object pattern)
+- Required event emission via injected IEventEmitter
 - Retry logic for JSON parsing (3 attempts)
 - Comprehensive error logging with no silent failures
 - Circuit breaker preventing exceeding max_total_agent_calls
@@ -73,7 +73,7 @@ from codetoreum.domain.repair_cycle_types import (
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.resilience.exceptions import CircuitBreakerOpenError
 from codetoreum.ports.output.environment_repair_service import IEnvironmentRepairService
-from codetoreum.ports.output.event_emitter import IEventEmitter, NullEventEmitter
+from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.repair_cycle_checkpoint_store import (
     IRepairCycleCheckpointStore,
 )

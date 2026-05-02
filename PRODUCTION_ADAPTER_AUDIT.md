@@ -151,8 +151,8 @@ The AdapterFactory maintains 34 registries (see factory.py lines 303-336):
 ### Analysis
 
 **Production Safety**: 
-- ✅ No production adapter slot resolves to a class name containing "Mock", "InMemory", "Fake", or "Null" when using real production configuration
-- ⚠️  Shared adapters (in-memory/mock) are intentional for specific feature areas (queues, locks, config, placeholders)
+- ✅ No adapter on the critical execution path (ticket system, LLM, container, board, code review, repair cycle, event store, event emitter) resolves to a Mock/InMemory/Fake/Null class
+- ⚠️  11 shared adapter slots use in-memory or mock implementations as documented in the table above—all intentional and justified for non-critical feature areas (queues, locks, config, review cycles, placeholders)
 - ⚠️  Agent executor registry exists but is not used in standard resolver (no production impact)
 
 **Shared Adapters Justification**:
