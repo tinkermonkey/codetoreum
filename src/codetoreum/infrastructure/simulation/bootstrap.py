@@ -1340,14 +1340,16 @@ class SimulationApplicationBootstrap:
             resolved.repair_cycle.environment_repair_service = resolved.environment_repair_service
             resolved.repair_cycle.ci_pipeline_service = resolved.ci_pipeline
 
-        # Wire ticket system, board service, and event emitter to PR review cycle adapter
-        # This enables the mock PR review cycle adapter to create sub-issues, move items, and emit events
+        # Wire ticket system, board service, event emitter, event bus, and event store to PR review cycle adapter
+        # This enables the mock PR review cycle adapter to create sub-issues, move items, emit events, publish to the event bus, and persist to the event store
         from codetoreum.adapters.testing.mock_pr_review_cycle_adapter import MockPRReviewCycleAdapter
 
         if isinstance(resolved.pr_review_cycle, MockPRReviewCycleAdapter):
             resolved.pr_review_cycle.ticket_system = resolved.ticket_system
             resolved.pr_review_cycle.board_service = resolved.board
             resolved.pr_review_cycle.event_emitter = resolved.event_emitter
+            resolved.pr_review_cycle.event_bus = self.infrastructure.event_bus
+            resolved.pr_review_cycle.event_store = resolved.event_store
 
             # Wire event emitter to publish CodetoreumEvents to event bus
             # This ensures that PR review cycle events emitted by the adapter reach the event bus handlers
@@ -1406,6 +1408,15 @@ class SimulationApplicationBootstrap:
             for event_type in pr_review_cycle_event_types:
                 resolved.event_emitter.on(event_type, _publish_codetoreum_event_to_bus)
             logger.info("Wired PR review cycle event emitter to event bus with 12 event types")
+
+        # Wire event bus to board adapter for column change event publishing
+        # This enables the mock board adapter to publish WorkItemColumnChangedEvent to the event bus
+        # so that PRReviewCycleDispatchHandler receives the event and initiates PR review cycles
+        from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
+
+        if isinstance(resolved.board, MockBoardAdapter):
+            resolved.board.event_bus = self.infrastructure.event_bus
+            logger.info("Wired MockBoardAdapter to event bus for column change event publishing")
 
         # Create branch resolution adapter (mock adapter for simulation testing)
         resolved.branch_resolution_service = MockBranchResolutionAdapter(clock=self._engine.get_clock_for_testing())
