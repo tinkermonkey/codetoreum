@@ -5,6 +5,7 @@ In-memory implementation of IAuditQueryPort for development and testing.
 Integrates with InMemoryAuditStore for audit event storage and retrieval.
 """
 
+import logging
 from types import MappingProxyType
 
 from codetoreum.infrastructure.audit.interfaces import (
@@ -18,6 +19,8 @@ from codetoreum.ports.input.audit_query import (
     AuditEventQueryResult,
     IAuditQueryPort,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class MockAuditQueryAdapter(IAuditQueryPort):
@@ -90,9 +93,20 @@ class MockAuditQueryAdapter(IAuditQueryPort):
         # Convert to result format
         events = []
         for event_dict in event_dicts:
+            # Timestamp is required - must be present in event data to maintain audit integrity
+            timestamp = event_dict.get("timestamp")
+            if timestamp is None:
+                logger.error(
+                    "Audit event missing required timestamp field",
+                    extra={"event_id": event_dict.get("id")},
+                )
+                raise RuntimeError(
+                    f"Audit data integrity error: event {event_dict.get('id')} missing required timestamp"
+                )
+
             event_info = AuditEventInfo(
                 id=event_dict.get("id", ""),
-                timestamp=event_dict.get("timestamp"),
+                timestamp=timestamp,
                 event_type=event_dict.get("event_type", ""),
                 resource_type=event_dict.get("resource_type", ""),
                 resource_id=event_dict.get("resource_id", ""),
