@@ -31,7 +31,7 @@ class IWorkflowOrchestrator(ABC):
         1. Checks if project is enabled via config.enabled flag
         2. Scans automated columns for work items requiring agent execution
         3. Queues agent tasks for items in automated columns
-        4. Manages conversational and standard task queue execution
+        4. Emits routing decisions and updates workflow state
 
         Args:
             project_name: Name of the project

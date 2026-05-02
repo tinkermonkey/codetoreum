@@ -934,7 +934,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         via _handle_lock_released() to check for queued items and continue processing.
 
         Args:
-            event: workitem.column_changed event
+            event: WorkItemColumnChanged DomainEvent
         """
         # Validate event structure upfront - extract required fields with safe defaults
         # (KeyError will not be raised due to .get() usage; validation occurs below)
