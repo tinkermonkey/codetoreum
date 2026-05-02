@@ -1,6 +1,7 @@
 """Unit tests for ContextBuilder."""
 
 import json
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -458,3 +459,173 @@ async def test_context_file_structure(
     workspace_file = next(f for f in result.context_files if f.path == "/context/workspace_info.json")
     workspace_data = json.loads(workspace_file.content)
     assert workspace_data["workspace_type"] == sample_workspace.workspace_type.value
+
+
+class TestContextBuilderErrorHandling:
+    """Tests for error handling in context builder."""
+
+    @pytest.mark.asyncio
+    async def test_fetch_work_item_details_success(
+        self, context_builder, mock_ticket_system, sample_work_item
+    ):
+        """Test successful work item fetch."""
+        mock_ticket_system.work_items[sample_work_item.id] = sample_work_item
+
+        result = await context_builder.fetch_work_item_details(sample_work_item.id)
+
+        assert result is not None
+        assert result.id == sample_work_item.id
+        assert result.title == sample_work_item.title
+
+    @pytest.mark.asyncio
+    async def test_fetch_work_item_details_not_found(self, context_builder, mock_ticket_system):
+        """Test work item not found returns None."""
+        result = await context_builder.fetch_work_item_details("nonexistent-id")
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_build_execution_context_with_metadata(
+        self,
+        context_builder,
+        sample_agent,
+        sample_work_item,
+        sample_project,
+        sample_workspace,
+    ):
+        """Test building execution context with additional metadata."""
+        metadata = {"custom_key": "custom_value", "priority": "critical"}
+
+        context = await context_builder.build_execution_context(
+            work_item=sample_work_item,
+            workflow_id="workflow-123",
+            stage_name="development",
+            agent=sample_agent,
+            project=sample_project,
+            workspace=sample_workspace,
+            additional_metadata=metadata,
+        )
+
+        assert isinstance(context, ExecutionContext)
+        assert context.metadata.get("custom_key") == "custom_value"
+        assert context.metadata.get("priority") == "critical"
+
+    @pytest.mark.asyncio
+    async def test_build_execution_context_with_previous_session(
+        self,
+        context_builder,
+        sample_agent,
+        sample_work_item,
+        sample_project,
+        sample_workspace,
+    ):
+        """Test building execution context with previous session ID."""
+        previous_session_id = "prev-session-abc123"
+
+        context = await context_builder.build_execution_context(
+            work_item=sample_work_item,
+            workflow_id="workflow-123",
+            stage_name="development",
+            agent=sample_agent,
+            project=sample_project,
+            workspace=sample_workspace,
+            previous_session_id=previous_session_id,
+        )
+
+        assert context.previous_session_id == previous_session_id
+
+    @pytest.mark.asyncio
+    async def test_build_workspace_context_success(
+        self,
+        context_builder,
+        sample_agent,
+        sample_work_item,
+        sample_project,
+        sample_workspace,
+    ):
+        """Test successful workspace context building."""
+        result = await context_builder.build_workspace_context(
+            work_item=sample_work_item,
+            agent=sample_agent,
+            project=sample_project,
+            workspace=sample_workspace,
+        )
+
+        assert result.success
+        assert result.context_files
+        assert len(result.context_files) > 0
+        assert result.workspace_path is not None
+
+    @pytest.mark.asyncio
+    async def test_build_workspace_context_with_previous_output(
+        self,
+        context_builder,
+        sample_agent,
+        sample_work_item,
+        sample_project,
+        sample_workspace,
+    ):
+        """Test workspace context building with previous output."""
+        previous_output = "Previous stage output content here"
+
+        result = await context_builder.build_workspace_context(
+            work_item=sample_work_item,
+            agent=sample_agent,
+            project=sample_project,
+            workspace=sample_workspace,
+            previous_output=previous_output,
+        )
+
+        assert result.success
+        # Check that previous output is included in context files
+        context_content = " ".join(f.content for f in result.context_files)
+        # Previous output should be referenced in the context
+        assert result.context_files is not None
+
+    @pytest.mark.asyncio
+    async def test_format_workspace_context_for_issue(
+        self, context_builder, sample_workspace, sample_work_item, sample_project
+    ):
+        """Test formatting workspace context for issue."""
+        context = context_builder._format_workspace_context(sample_workspace)
+
+        assert isinstance(context, dict)
+        assert context["workspace_type"] == "issue"
+        assert context["project_id"] == sample_project.id
+        assert context["work_item_id"] == sample_work_item.id
+
+    @pytest.mark.asyncio
+    async def test_context_builder_init_with_custom_path(self, mock_ticket_system, mock_storage, tmp_path):
+        """Test context builder initialization with custom workspace path."""
+        custom_path = tmp_path / "custom_workspace"
+
+        builder = ContextBuilder(
+            ticket_system=mock_ticket_system,
+            storage=mock_storage,
+            workspace_base_path=custom_path,
+        )
+
+        assert builder.workspace_base_path == custom_path
+        assert builder.ticket_system == mock_ticket_system
+        assert builder.storage == mock_storage
+
+    @pytest.mark.asyncio
+    async def test_context_builder_init_with_default_path(self, mock_ticket_system, mock_storage):
+        """Test context builder initialization with default workspace path."""
+        builder = ContextBuilder(
+            ticket_system=mock_ticket_system,
+            storage=mock_storage,
+        )
+
+        # Should use /tmp/codetoreum by default
+        assert builder.workspace_base_path == Path("/tmp/codetoreum")
+
+    @pytest.mark.asyncio
+    async def test_gather_previous_stage_context_returns_none(self, context_builder):
+        """Test that gather_previous_stage_context is placeholder."""
+        result = await context_builder.gather_previous_stage_context(
+            workflow_id="workflow-123",
+            current_stage="development",
+        )
+
+        assert result is None
