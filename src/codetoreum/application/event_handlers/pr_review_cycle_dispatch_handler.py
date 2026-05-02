@@ -123,7 +123,7 @@ class PRReviewCycleDispatchHandler(EventHandler):
             )
             raise
 
-    async def handle_pr_review_column_change(self, event: DomainEvent) -> None:
+    async def handle_pr_review_column_change(self, event: WorkItemColumnChangedEvent | WorkItemColumnChanged) -> None:
         """
         Process column movement and dispatch PR review cycle if applicable.
 
@@ -137,15 +137,56 @@ class PRReviewCycleDispatchHandler(EventHandler):
             event: WorkItemColumnChangedEvent or legacy WorkItemColumnChanged with column movement details
 
         Raises:
-            ValueError: If required payload keys are missing in legacy events
+            ValueError: If required fields are missing or None in modern events, or if required payload keys are missing in legacy events
         """
         # Handle both modern WorkItemColumnChangedEvent and legacy WorkItemColumnChanged events
         if isinstance(event, WorkItemColumnChangedEvent):
-            # Modern event with direct attributes
-            work_item_id: str = event.work_item_id or ""
-            board_id: str = event.board_id or ""
-            project_id: str = event.project_id or ""
-            to_column: str = event.to_column or ""
+            # Modern event with direct attributes — validate required fields are not None
+            work_item_id: str = event.work_item_id
+            board_id: str = event.board_id
+            project_id: str = event.project_id
+            to_column: str = event.to_column
+
+            if not work_item_id:
+                logger.error(
+                    "WorkItemColumnChangedEvent missing required field: work_item_id",
+                    exc_info=False,
+                    extra={
+                        "error_id": "ERR_PR_REVIEW_CYCLE_MODERN_MISSING_WORK_ITEM_ID",
+                        "event_type": event.event_type,
+                    },
+                )
+                raise ValueError("WorkItemColumnChangedEvent missing required field: work_item_id")
+            if not board_id:
+                logger.error(
+                    "WorkItemColumnChangedEvent missing required field: board_id",
+                    exc_info=False,
+                    extra={
+                        "error_id": "ERR_PR_REVIEW_CYCLE_MODERN_MISSING_BOARD_ID",
+                        "event_type": event.event_type,
+                    },
+                )
+                raise ValueError("WorkItemColumnChangedEvent missing required field: board_id")
+            if not project_id:
+                logger.error(
+                    "WorkItemColumnChangedEvent missing required field: project_id",
+                    exc_info=False,
+                    extra={
+                        "error_id": "ERR_PR_REVIEW_CYCLE_MODERN_MISSING_PROJECT_ID",
+                        "event_type": event.event_type,
+                    },
+                )
+                raise ValueError("WorkItemColumnChangedEvent missing required field: project_id")
+            if not to_column:
+                logger.error(
+                    "WorkItemColumnChangedEvent missing required field: to_column",
+                    exc_info=False,
+                    extra={
+                        "error_id": "ERR_PR_REVIEW_CYCLE_MODERN_MISSING_TO_COLUMN",
+                        "event_type": event.event_type,
+                    },
+                )
+                raise ValueError("WorkItemColumnChangedEvent missing required field: to_column")
         else:
             # Legacy event with payload — validate required keys
             try:
