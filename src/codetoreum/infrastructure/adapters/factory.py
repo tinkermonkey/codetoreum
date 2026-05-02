@@ -51,7 +51,6 @@ from codetoreum.adapters.testing import (
     InMemoryVersionControlService,
     InMemoryWorkflowConfigService,
     InMemoryWorkItemBranchTracker,
-    MockAgentExecutor,
     MockBoardAdapter,
     MockCIPipelineAdapter,
     MockContainerRecoveryAdapter,
