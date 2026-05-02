@@ -4,8 +4,9 @@ Tests cover all methods, edge cases, and failure scenarios to ensure
 the adapter correctly implements IFailedEventStore for simulation mode.
 """
 
-import pytest
 from datetime import UTC, datetime, timedelta
+
+import pytest
 
 from codetoreum.adapters.testing.in_memory_failed_event_store import (
     InMemoryFailedEventStore,
