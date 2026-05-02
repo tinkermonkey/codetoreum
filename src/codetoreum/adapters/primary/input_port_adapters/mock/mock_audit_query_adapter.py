@@ -93,28 +93,42 @@ class MockAuditQueryAdapter(IAuditQueryPort):
         # Convert to result format
         events = []
         for event_dict in event_dicts:
-            # Timestamp is required - must be present in event data to maintain audit integrity
-            timestamp = event_dict.get("timestamp")
-            if timestamp is None:
+            # Validate required fields for audit integrity
+            required_fields = {
+                "id": event_dict.get("id"),
+                "timestamp": event_dict.get("timestamp"),
+                "event_type": event_dict.get("event_type"),
+                "resource_type": event_dict.get("resource_type"),
+                "resource_id": event_dict.get("resource_id"),
+                "action": event_dict.get("action"),
+                "user_id": event_dict.get("user_id"),
+            }
+
+            # Check for missing or empty required fields
+            missing_fields = [name for name, value in required_fields.items() if not value]
+            if missing_fields:
                 logger.error(
-                    "Audit event missing required timestamp field",
-                    extra={"event_id": event_dict.get("id")},
+                    "Audit event missing required fields",
+                    extra={
+                        "event_id": event_dict.get("id"),
+                        "missing_fields": missing_fields,
+                    },
                 )
                 raise RuntimeError(
-                    f"Audit data integrity error: event {event_dict.get('id')} missing required timestamp"
+                    f"Audit data integrity error: event {event_dict.get('id')} missing required fields: {missing_fields}"
                 )
 
             event_info = AuditEventInfo(
-                id=event_dict.get("id", ""),
-                timestamp=timestamp,
-                event_type=event_dict.get("event_type", ""),
-                resource_type=event_dict.get("resource_type", ""),
-                resource_id=event_dict.get("resource_id", ""),
-                action=event_dict.get("action", ""),
-                user_id=event_dict.get("user_id", ""),
+                id=required_fields["id"],
+                timestamp=required_fields["timestamp"],
+                event_type=required_fields["event_type"],
+                resource_type=required_fields["resource_type"],
+                resource_id=required_fields["resource_id"],
+                action=required_fields["action"],
+                user_id=required_fields["user_id"],
                 correlation_id=event_dict.get("correlation_id"),
                 metadata=MappingProxyType(event_dict.get("metadata", {})),
-                success=event_dict.get("success", True),
+                success=event_dict.get("success", False),
                 error_message=event_dict.get("error_message"),
             )
             events.append(event_info)
