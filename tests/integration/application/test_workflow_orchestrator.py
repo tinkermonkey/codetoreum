@@ -1122,7 +1122,6 @@ async def test_orchestrate_project_filters_boards_from_other_projects(
 @pytest.mark.asyncio
 async def test_orchestrate_project_all_items_fail_continues(
     mock_task_queue,
-    mock_config,
     mock_workflow_state,
     mock_decision_events,
     mock_event_store,
@@ -1130,7 +1129,11 @@ async def test_orchestrate_project_all_items_fail_continues(
     mock_projects_api,
     project_config,
 ):
-    """Test orchestrate_project continues when every work item processing fails."""
+    """Test orchestrate_project continues when every work item processing fails.
+
+    Tests the outer exception handler (lines 1740-1752) by making task_queue.enqueue
+    raise for all items, exercising the ERR_ORCHESTRATOR_ITEM_PROCESSING error path.
+    """
     board_service = MockBoardService()
     board = MockBoard("Development", "board-1", "test-project")
     board_service.boards = [board]
@@ -1140,16 +1143,16 @@ async def test_orchestrate_project_all_items_fail_continues(
         MockBoardItem(125, "Testing"),
     ]
 
-    # Create a config that raises exception for all agent lookups
-    class FailingConfig(MockProjectConfiguration):
-        async def get_agent_config(self, agent_name: str) -> AgentConfig:
-            raise ValueError(f"Config load failure for {agent_name}")
+    # Create a task queue that raises on every enqueue call
+    class FailingTaskQueue(MockTaskQueue):
+        async def enqueue(self, task: Task) -> str:
+            raise RuntimeError(f"Failed to enqueue task {task.id}")
 
-    failing_config = FailingConfig()
+    failing_task_queue = FailingTaskQueue()
 
     orchestrator = WorkflowOrchestrator(
-        task_queue=mock_task_queue,
-        config=failing_config,
+        task_queue=failing_task_queue,
+        config=MockProjectConfiguration(),
         workflow_state=mock_workflow_state,
         decision_events=mock_decision_events,
         event_store=mock_event_store,
@@ -1158,11 +1161,11 @@ async def test_orchestrate_project_all_items_fail_continues(
         board_service=board_service,
     )
 
-    # Should not raise exception, just return 0 actions
+    # Should not raise exception, just return 0 actions when all enqueue operations fail
     actions_taken = await orchestrator.orchestrate_project("test-project", "/workspace", project_config)
 
-    # All items failed, so no actions taken and no tasks queued
+    # All items failed to enqueue, so no actions taken
     assert actions_taken == 0
-    assert mock_task_queue.size() == 0
-    # Should have emitted no routing decisions since all items failed
+    assert failing_task_queue.size() == 0
+    # Should have emitted no routing decisions since all items failed before emit
     assert len(mock_decision_events.routing_decisions) == 0
