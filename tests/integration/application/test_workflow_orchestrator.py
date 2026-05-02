@@ -213,6 +213,7 @@ def mock_decision_events():
     events = MockDecisionEvents()
     yield events
     events.routing_decisions.clear()
+    events.progression_decisions.clear()
 
 
 @pytest.fixture
@@ -224,7 +225,6 @@ def project_config():
         enabled=True,
         org="test-org"
     )
-    events.progression_decisions.clear()
 
 
 @pytest.fixture
@@ -991,3 +991,48 @@ async def test_orchestrate_project_non_numeric_work_item_id_skipped(
     task = mock_task_queue.get_last_task()
     assert task.agent == "developer"
     assert task.context["work_item_id"] == 456
+
+
+@pytest.mark.asyncio
+async def test_orchestrate_project_disabled_project_skipped(
+    mock_task_queue,
+    mock_config,
+    mock_workflow_state,
+    mock_decision_events,
+    mock_event_store,
+    mock_ticket_system,
+    mock_projects_api,
+):
+    """Test orchestrate_project returns 0 when project is disabled."""
+    # Create a disabled project config
+    disabled_config = ProjectConfig(
+        repo_url="https://github.com/test/repo.git",
+        branch="main",
+        enabled=False,
+        org="test-org"
+    )
+
+    board_service = MockBoardService()
+    board = MockBoard("Development", "board-1", "test-project")
+    board_service.boards = [board]
+    board_service.board_items["board-1"] = [
+        MockBoardItem(123, "Requirements"),
+    ]
+
+    orchestrator = WorkflowOrchestrator(
+        task_queue=mock_task_queue,
+        config=mock_config,
+        workflow_state=mock_workflow_state,
+        decision_events=mock_decision_events,
+        event_store=mock_event_store,
+        ticket_system=mock_ticket_system,
+        projects_api=mock_projects_api,
+        board_service=board_service,
+    )
+
+    # Should skip orchestration for disabled project
+    actions_taken = await orchestrator.orchestrate_project("test-project", "/workspace", disabled_config)
+
+    # Should not enqueue any tasks
+    assert mock_task_queue.size() == 0
+    assert actions_taken == 0

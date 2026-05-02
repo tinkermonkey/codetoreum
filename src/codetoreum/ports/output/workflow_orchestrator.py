@@ -27,12 +27,11 @@ class IWorkflowOrchestrator(ABC):
     async def orchestrate_project(self, project_name: str, workspace_path: str, config: ProjectConfig) -> int:
         """Execute orchestration for a single project.
 
-        Coordinates all workflow activities for the project:
-        1. Polls project board for card movements
-        2. Routes moved cards to appropriate agents
-        3. Queues agent execution tasks
-        4. Handles review cycles
-        5. Processes human feedback
+        Coordinates workflow activities for the project:
+        1. Checks if project is enabled via config.enabled flag
+        2. Polls project board for card movements
+        3. Routes moved cards to appropriate agents
+        4. Queues agent execution tasks
 
         Args:
             project_name: Name of the project

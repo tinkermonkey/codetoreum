@@ -961,7 +961,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
                     if board_template:
                         target_column_config = board_template.get_column_config(to_column)
                 except Exception as e:
-                    logger.debug(
+                    logger.warning(
                         f"Failed to get board workflow template from Gen2 config for board={board_id}, "
                         f"falling back to legacy path: {e}",
                         exc_info=True,
