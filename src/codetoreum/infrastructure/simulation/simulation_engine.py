@@ -288,8 +288,10 @@ class SimulationEngine:
 
         # If no llm_factory provided, create a default async one that returns MockLLMAdapter instances
         if llm_factory is None:
+
             async def default_llm_factory(agent_name: str) -> "ILLMProvider":
                 return MockLLMAdapter()
+
             llm_factory = default_llm_factory
 
         adapter = MockRepairCycleAdapter(

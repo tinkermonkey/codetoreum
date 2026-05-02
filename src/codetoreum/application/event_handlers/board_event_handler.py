@@ -168,7 +168,8 @@ class BoardColumnEventHandler(EventHandler):
         except Exception as e:
             # Extract work_item_id from both modern and legacy event types
             work_item_id = (
-                event.work_item_id if isinstance(event, WorkItemColumnChangedEvent)
+                event.work_item_id
+                if isinstance(event, WorkItemColumnChangedEvent)
                 else event.payload.get("work_item_id", "unknown")
             )
             logger.error(
@@ -224,9 +225,7 @@ class BoardColumnEventHandler(EventHandler):
                         "event_type": event.event_type,
                     },
                 )
-                raise ValueError(
-                    f"Legacy WorkItemColumnChanged event missing required key: {missing_key}"
-                ) from e
+                raise ValueError(f"Legacy WorkItemColumnChanged event missing required key: {missing_key}") from e
 
         logger.info(f"Processing column change for {work_item_id}: {from_column} -> {to_column}")
 
