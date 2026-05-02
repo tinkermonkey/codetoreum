@@ -67,7 +67,7 @@ class ProductionTaskQueue:
     async def enqueue(self, task: Any) -> str:
         """Enqueue task using queue service adapter."""
         # Store task in queue service and return task ID
-        task_data = {
+        {
             "id": task.id,
             "agent": task.agent,
             "project": task.project,
@@ -115,7 +115,7 @@ class ProductionRateLimiter:
 
     async def get_retry_after(self, agent: str) -> int | None:
         """Get retry after seconds if rate limited."""
-        if agent in self._call_times and self._call_times[agent]:
+        if self._call_times.get(agent):
             import time
 
             oldest_call = min(self._call_times[agent])
