@@ -9,8 +9,9 @@ Tests verify:
 - Error handling for missing required timestamp and other fields
 """
 
+from datetime import UTC, datetime
+
 import pytest
-from datetime import datetime, UTC
 
 from codetoreum.adapters.primary.input_port_adapters.mock.mock_audit_query_adapter import (
     MockAuditQueryAdapter,
