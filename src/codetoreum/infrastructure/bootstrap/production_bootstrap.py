@@ -29,6 +29,9 @@ from fastapi import FastAPI
 
 from codetoreum.adapters.primary.fastapi_app import create_app
 from codetoreum.adapters.primary.input_port_adapters.mock.mock_task_query_adapter import MockTaskQueryAdapter
+from codetoreum.adapters.secondary.elasticsearch_workflow_config_service import (
+    ElasticsearchWorkflowConfigService,
+)
 from codetoreum.application.agent_scheduler import AgentScheduler, IProjectConfiguration
 from codetoreum.application.configuration_service import ConfigurationService
 from codetoreum.application.container_recovery_service import ContainerRecoveryService
@@ -42,6 +45,7 @@ from codetoreum.application.work_item_service import WorkItemService
 from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator
 from codetoreum.application.workflow_run_query_service import WorkflowRunQueryService
 from codetoreum.application.workspace_router import WorkspaceRouter
+from codetoreum.config.codetoreum_pipeline import create_codetoreum_pipeline_template
 from codetoreum.infrastructure.adapters.factory import AdapterFactory, AdapterFactoryConfig
 from codetoreum.infrastructure.adapters.resolver import AdapterDependencies, AdapterResolver
 from codetoreum.infrastructure.bootstrap.production_config import create_production_adapter_config
@@ -351,7 +355,7 @@ class ProductionApplicationBootstrap:
 
         # Phase 8: Create FastAPI app
         logger.info("Phase 8: Creating FastAPI application...")
-        self._create_fastapi_app()
+        await self._create_fastapi_app()
 
         logger.info("Production bootstrap completed successfully")
         return self.app
@@ -763,17 +767,46 @@ class ProductionApplicationBootstrap:
 
         logger.info("Input ports created successfully")
 
-    def _create_fastapi_app(self) -> None:
+    async def _create_fastapi_app(self) -> None:
         """
         Create FastAPI application with all ports wired.
 
         Calls create_app() with 16 required ports and optional audit_query_port,
         then wires the 2 input ports that are not handled by create_app().
+        Also initializes the workflow configuration service and seeds the
+        Codetoreum pipeline configuration.
         """
         if not self.ports or not self.adapters or not self.services:
             msg = "Ports, adapters, and services must be created first"
             logger.error(msg, extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR})
             raise RuntimeError(msg)
+
+        # Create and initialize workflow config service
+        workflow_config_service = None
+        try:
+            workflow_config_service = ElasticsearchWorkflowConfigService(
+                es_client=self.adapters.event_store.client
+                if hasattr(self.adapters.event_store, "client")
+                else None,
+                create_index_templates=True,
+                shard_count=1,
+                replica_count=1,
+            )
+            await workflow_config_service.initialize()
+            logger.info("Elasticsearch workflow configuration service initialized")
+
+            # Seed the Codetoreum pipeline configuration
+            codetoreum_template = create_codetoreum_pipeline_template()
+            await workflow_config_service.save_board_workflow_template(codetoreum_template)
+            logger.info("Codetoreum pipeline configuration seeded successfully")
+
+        except Exception as e:
+            logger.warning(
+                f"Failed to initialize workflow config service or seed pipeline: {e}",
+                exc_info=True,
+            )
+            # Continue without workflow config service - it's optional for backward compatibility
+            workflow_config_service = None
 
         # Create FastAPI app with 16 required ports
         self.app = create_app(
@@ -797,6 +830,7 @@ class ProductionApplicationBootstrap:
             event_bus=self.event_bus,
             config_service=self.services["configuration_service"],
             logger=logger,
+            workflow_config_service=workflow_config_service,
             audit_query_port=self.ports["audit_query"],
             auth_secret_key=self.auth_secret_key,
             disable_auth=False,  # Enable authentication in production
