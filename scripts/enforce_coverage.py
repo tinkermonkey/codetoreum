@@ -211,14 +211,18 @@ def enforce_coverage(
     for threshold in COVERAGE_THRESHOLDS:
         metrics = get_layer_coverage(coverage_data, threshold.path_pattern)
 
+        # Pre-compute baseline metrics once if available
+        baseline_metrics = None
+        if baseline_data is not None:
+            baseline_metrics = get_layer_coverage(baseline_data, threshold.path_pattern)
+
         # Determine pass/fail based on mode
         if strict_mode:
             # Strict mode: enforce absolute thresholds
             passed = metrics.percent_covered >= threshold.minimum_percent
         else:
             # Default mode: only fail on regression
-            if baseline_data is not None:
-                baseline_metrics = get_layer_coverage(baseline_data, threshold.path_pattern)
+            if baseline_metrics is not None:
                 passed = check_regression(metrics, baseline_metrics)
             else:
                 # No baseline yet, so can't regress
@@ -232,8 +236,7 @@ def enforce_coverage(
         status_text += f"[required: {threshold.minimum_percent:.2f}%]"
 
         # Add baseline comparison if available and not in strict mode
-        if not strict_mode and baseline_data is not None:
-            baseline_metrics = get_layer_coverage(baseline_data, threshold.path_pattern)
+        if not strict_mode and baseline_metrics is not None:
             diff = metrics.percent_covered - baseline_metrics.percent_covered
             sign = "+" if diff >= 0 else ""
             status_text += f" (baseline: {baseline_metrics.percent_covered:.2f}%, {sign}{diff:.2f}%)"
@@ -243,11 +246,15 @@ def enforce_coverage(
     # Check overall threshold
     overall_metrics = get_overall_coverage(coverage_data)
 
+    # Pre-compute baseline metrics once if available
+    baseline_overall = None
+    if baseline_data is not None:
+        baseline_overall = get_overall_coverage(baseline_data)
+
     if strict_mode:
         overall_passed = overall_metrics.percent_covered >= OVERALL_MINIMUM_PERCENT
     else:
-        if baseline_data is not None:
-            baseline_overall = get_overall_coverage(baseline_data)
+        if baseline_overall is not None:
             overall_passed = check_regression(overall_metrics, baseline_overall)
         else:
             overall_passed = True
@@ -259,8 +266,7 @@ def enforce_coverage(
     status_text += f"({overall_metrics.lines_covered}/{overall_metrics.lines_total} lines) "
     status_text += f"[required: {OVERALL_MINIMUM_PERCENT:.2f}%]"
 
-    if not strict_mode and baseline_data is not None:
-        baseline_overall = get_overall_coverage(baseline_data)
+    if not strict_mode and baseline_overall is not None:
         diff = overall_metrics.percent_covered - baseline_overall.percent_covered
         sign = "+" if diff >= 0 else ""
         status_text += f" (baseline: {baseline_overall.percent_covered:.2f}%, {sign}{diff:.2f}%)"
@@ -272,6 +278,12 @@ def enforce_coverage(
     print("\n" + "=" * 80)
     print(f"Coverage Enforcement Results ({mode_label})")
     print("=" * 80)
+
+    # Warn if no baseline found in regression mode
+    if not strict_mode and baseline_data is None:
+        print("⚠ No baseline found — regression detection skipped.")
+        print("  Run with --save-baseline to establish one.\n")
+
     for result in results:
         print(result)
     print("=" * 80)

@@ -1,7 +1,7 @@
 """Tests for enforce_coverage.py script."""
 
 import json
-import subprocess
+import os
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -321,7 +321,6 @@ class TestRunCoverageTests:
                 mock_exists.return_value = True
 
                 # Change to temp dir for this test
-                import os
                 original_cwd = os.getcwd()
                 try:
                     os.chdir(tmpdir)
@@ -347,7 +346,6 @@ class TestRunCoverageTests:
             with patch("scripts.enforce_coverage.Path.exists") as mock_exists:
                 mock_exists.return_value = True
 
-                import os
                 original_cwd = os.getcwd()
                 try:
                     os.chdir(tmpdir)
@@ -394,8 +392,6 @@ class TestRunCoverageTests:
 
     def test_run_coverage_tests_uses_poetry_fallback(self) -> None:
         """Test run_coverage_tests falls back to poetry when venv doesn't exist."""
-        import os
-
         with tempfile.TemporaryDirectory() as tmpdir:
             coverage_json = Path(tmpdir) / "coverage.json"
             coverage_json.write_text('{"totals": {"num_statements": 100, "covered_lines": 90}}')
@@ -449,7 +445,6 @@ class TestRunCoverageTests:
             with patch("scripts.enforce_coverage.Path.exists") as mock_exists:
                 mock_exists.return_value = True
 
-                import os
                 original_cwd = os.getcwd()
                 try:
                     os.chdir(tmpdir)
