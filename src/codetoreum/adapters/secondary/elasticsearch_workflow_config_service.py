@@ -35,7 +35,6 @@ the project's hexagonal architecture principles.
 """
 
 import dataclasses
-import json
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -47,8 +46,6 @@ from codetoreum.domain.board_workflow_template import (
     ColumnTemplate,
     ColumnType,
 )
-from codetoreum.domain.pr_review_cycle_types import PRReviewCycleConfig
-from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig, RepairTestType
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.exceptions import ValidationError
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
