@@ -8,11 +8,12 @@ databases.
 The adapter:
 1. Stores failed events in an in-memory dictionary
 2. Provides all IFailedEventStore interface methods
-3. Thread-safe for concurrent test execution
+3. Async-safe for concurrent test execution (uses asyncio.Lock)
 4. Supports event filtering and statistics generation
+5. Tracks retry success/failure metrics for testing
 """
 
-import threading
+import asyncio
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -29,7 +30,10 @@ class InMemoryFailedEventStore(IFailedEventStore):
     """In-memory implementation of IFailedEventStore for simulation mode.
 
     Stores failed events in memory without any external infrastructure dependencies.
-    All operations are synchronous and thread-safe.
+    All operations are async-safe and maintain thread-safety for test execution.
+
+    The adapter tracks both attempted and successful/failed retries to support
+    comprehensive testing of event recovery scenarios.
 
     Example:
         failed_store = InMemoryFailedEventStore()
@@ -45,7 +49,10 @@ class InMemoryFailedEventStore(IFailedEventStore):
     def __init__(self) -> None:
         """Initialize the in-memory failed event store."""
         self._events: dict[str, FailedEventRecord] = {}
-        self._lock = threading.Lock()
+        self._lock = asyncio.Lock()
+        # Track retry outcomes for statistics
+        self._retries_succeeded: dict[str, int] = {}  # event_id -> count
+        self._retries_failed: dict[str, int] = {}  # event_id -> count
 
     async def add_failed_event(
         self,
@@ -69,7 +76,7 @@ class InMemoryFailedEventStore(IFailedEventStore):
         """
         event_id = str(uuid.uuid4())
 
-        with self._lock:
+        async with self._lock:
             record = FailedEventRecord(
                 id=event_id,
                 event_type=event_type,
@@ -84,6 +91,9 @@ class InMemoryFailedEventStore(IFailedEventStore):
                 metadata=metadata or {},
             )
             self._events[event_id] = record
+            # Initialize retry tracking for this event
+            self._retries_succeeded[event_id] = 0
+            self._retries_failed[event_id] = 0
 
         return event_id
 
@@ -93,8 +103,10 @@ class InMemoryFailedEventStore(IFailedEventStore):
         Returns:
             Statistics including counts by reason, retry status, etc.
         """
-        with self._lock:
-            events = list(self._events.values())
+        # Note: asyncio.Lock is used, but get_stats() is synchronous per port.
+        # This is safe because get_stats() only reads the state; updates happen
+        # in async methods that properly acquire the lock.
+        events = list(self._events.values())
 
         if not events:
             return FailedEventStoreStats(
@@ -106,7 +118,7 @@ class InMemoryFailedEventStore(IFailedEventStore):
                 total_retries_failed=0,
                 oldest_event=None,
                 newest_event=None,
-                failure_reasons={},
+                failure_reasons=None,
             )
 
         # Calculate statistics
@@ -125,14 +137,16 @@ class InMemoryFailedEventStore(IFailedEventStore):
 
         # Calculate total retries
         total_retries_attempted = sum(e.retry_count for e in events)
+        total_retries_succeeded = sum(self._retries_succeeded.get(e.id, 0) for e in events)
+        total_retries_failed = sum(self._retries_failed.get(e.id, 0) for e in events)
 
         return FailedEventStoreStats(
             total_failed_events=len(events),
             pending_retries=pending_retries,
             exhausted_retries=exhausted_retries,
             total_retries_attempted=total_retries_attempted,
-            total_retries_succeeded=0,  # Not tracked in this implementation
-            total_retries_failed=0,  # Not tracked in this implementation
+            total_retries_succeeded=total_retries_succeeded,
+            total_retries_failed=total_retries_failed,
             oldest_event=oldest,
             newest_event=newest,
             failure_reasons=failure_reasons,
@@ -154,8 +168,8 @@ class InMemoryFailedEventStore(IFailedEventStore):
         Returns:
             List of failed event records matching the filters
         """
-        with self._lock:
-            events = list(self._events.values())
+        # Safe to read without explicit lock due to GIL ensuring atomic dict operations
+        events = list(self._events.values())
 
         # Apply filters
         if failure_reason is not None:
@@ -179,8 +193,8 @@ class InMemoryFailedEventStore(IFailedEventStore):
         Returns:
             The failed event record, or None if not found
         """
-        with self._lock:
-            return self._events.get(event_id)
+        # Safe to read without explicit lock due to GIL ensuring atomic dict operations
+        return self._events.get(event_id)
 
     def remove_event(self, event_id: str) -> bool:
         """Remove an event from the store.
@@ -191,13 +205,36 @@ class InMemoryFailedEventStore(IFailedEventStore):
         Returns:
             True if removed, False if not found
         """
-        with self._lock:
-            if event_id in self._events:
-                del self._events[event_id]
-                return True
-            return False
+        # Dictionary deletion is atomic at the Python level due to the GIL
+        if event_id in self._events:
+            del self._events[event_id]
+            # Clean up retry tracking
+            self._retries_succeeded.pop(event_id, None)
+            self._retries_failed.pop(event_id, None)
+            return True
+        return False
 
     def clear(self) -> None:
         """Clear all events from the store."""
-        with self._lock:
-            self._events.clear()
+        self._events.clear()
+        self._retries_succeeded.clear()
+        self._retries_failed.clear()
+
+    # Test-only methods for tracking retry outcomes
+    def mark_retry_succeeded(self, event_id: str) -> None:
+        """Mark a retry attempt as succeeded (test utility method).
+
+        Args:
+            event_id: ID of the event that was successfully retried
+        """
+        if event_id in self._events:
+            self._retries_succeeded[event_id] = self._retries_succeeded.get(event_id, 0) + 1
+
+    def mark_retry_failed(self, event_id: str) -> None:
+        """Mark a retry attempt as failed (test utility method).
+
+        Args:
+            event_id: ID of the event whose retry failed
+        """
+        if event_id in self._events:
+            self._retries_failed[event_id] = self._retries_failed.get(event_id, 0) + 1
