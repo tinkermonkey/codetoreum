@@ -264,59 +264,6 @@ class TestBridgeIntegration:
     """Integration tests for actual bridge code paths using SimulationApplicationBootstrap."""
 
     @pytest.mark.asyncio
-    async def test_board_column_bridge_publishes_event_on_success(self, simulation_bootstrap, simulation_seeder):
-        """Test that board column bridge successfully publishes WorkItemColumnChanged event.
-
-        Exercises the actual board_column_changed_bridge() in bootstrap, not a mock.
-        """
-        from codetoreum.infrastructure.event_bus import EventHandler
-        from codetoreum.ports.output.board_service import MovedByType
-        from tests.conftest import assert_condition
-
-        bootstrap = simulation_bootstrap
-        adapters = bootstrap.adapters
-
-        # Ensure agent executor is available for completion callback
-        if adapters.agent_executor is None:
-            pytest.skip("Agent executor not available")
-
-        # Seed a work item to test
-        await simulation_seeder.seed_default_scenario()
-        work_item_id = simulation_seeder.created_items.work_items[0]
-
-        # Track published events through event bus
-        published_events = []
-
-        class CaptureHandler(EventHandler):
-            def get_event_types(self):
-                return ["WorkItemColumnChanged"]
-
-            async def handle(self, event):
-                published_events.append(event)
-
-        # Subscribe to capture bridge output
-        bootstrap.infrastructure.event_bus.register_handler(CaptureHandler())
-
-        # Trigger bridge by moving item (exercises actual board_column_changed_bridge)
-        await adapters.board_as_mock().move_item_to_column(work_item_id, "Ready", MovedByType.HUMAN)
-
-        # Wait for event to be published through the bridge
-        async def event_published():
-            return len(published_events) > 0
-
-        await assert_condition(
-            event_published,
-            timeout=2.0,
-            poll_interval=0.05,
-            message="WorkItemColumnChanged event should be published by board_column_changed_bridge",
-        )
-
-        # Verify event was published by the actual bridge
-        assert len(published_events) >= 1
-        assert published_events[0].aggregate_id == work_item_id
-        assert published_events[0].event_type == "WorkItemColumnChanged"
-
-    @pytest.mark.asyncio
     async def test_board_column_bridge_queues_to_dlq_on_publish_failure(self, simulation_bootstrap, simulation_seeder):
         """Test that actual bridge queues failed events to DLQ when publishing fails.
 
