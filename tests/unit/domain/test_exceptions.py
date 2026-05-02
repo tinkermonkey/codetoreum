@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.codetoreum.domain.exceptions import (
+from codetoreum.domain.exceptions import (
     AgentNotFoundError,
     ConfigNotFoundError,
     DomainError,
