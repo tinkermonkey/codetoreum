@@ -159,16 +159,10 @@ def create_app_instance() -> Any:
     # Create bootstrap instance
     bootstrap = ProductionApplicationBootstrap()
 
-    # Run async setup in a way that works with uvicorn's sync factory
-    # This creates a new event loop for setup if needed
+    # Run async setup via asyncio.run() for proper event loop management
+    # This handles loop creation correctly for both standalone and async contexts
     try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-    try:
-        app = loop.run_until_complete(bootstrap.setup())
+        app = asyncio.run(bootstrap.setup())
         logger.info("Production bootstrap completed successfully")
         return app
     except Exception as e:

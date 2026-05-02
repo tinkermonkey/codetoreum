@@ -1,7 +1,7 @@
 """Production adapter selection configuration.
 
 Defines the production AdapterSelectionConfig that explicitly selects
-production implementations for all 34 adapter slots with no mock or
+production implementations for all 33 adapter slots with no mock or
 in-memory fallbacks.
 
 Used by ProductionApplicationBootstrap to wire the production environment.
@@ -14,7 +14,7 @@ def create_production_adapter_config() -> AdapterSelectionConfig:
     """
     Create production adapter selection configuration.
 
-    Explicitly selects production implementations for all 34 adapter slots.
+    Explicitly selects production implementations for all 33 adapter slots.
     No mock or in-memory fallbacks - all adapters are production-ready.
 
     Returns:
