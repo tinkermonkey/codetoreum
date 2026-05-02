@@ -49,8 +49,13 @@ test-simulation: ## Run simulation tests only
 
 test-cov: ## Run tests with coverage report
 	@echo "$(BLUE)Running tests with coverage...$(NC)"
-	poetry run pytest -n 1 --cov=src --cov-report=html --cov-report=term-missing
+	poetry run pytest -n 1 --cov=src --cov-report=html --cov-report=term-missing --cov-report=json
 	@echo "$(GREEN)Coverage report generated in htmlcov/index.html$(NC)"
+
+test-cov-enforce: ## Run tests with per-layer coverage enforcement
+	@echo "$(BLUE)Running tests with per-layer coverage enforcement...$(NC)"
+	python3 scripts/enforce_coverage.py
+	@echo "$(GREEN)Coverage enforcement passed!$(NC)"
 
 lint: ## Run all linters
 	@echo "$(BLUE)Running linters...$(NC)"

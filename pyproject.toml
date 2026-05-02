@@ -491,6 +491,16 @@ filterwarnings = [
 ]
 
 # ===== Coverage Configuration =====
+# Per-layer coverage enforcement is implemented via scripts/enforce_coverage.py
+# which enforces:
+#   - Domain layer (src/codetoreum/domain): 100%
+#   - Application layer (src/codetoreum/application): 90%
+#   - Overall: 80%
+#
+# The fail_under threshold below is a secondary safety net and should not be
+# relied upon as the primary enforcement mechanism. Use 'make test-cov-enforce'
+# or 'python3 scripts/enforce_coverage.py' to run tests with per-layer enforcement.
+
 [tool.coverage.run]
 source = ["src/codetoreum"]
 omit = [

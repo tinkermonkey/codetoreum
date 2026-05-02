@@ -55,9 +55,9 @@ jobs:
         run: |
           poetry run mypy src
 
-      - name: Run tests with coverage
+      - name: Run tests with per-layer coverage enforcement
         run: |
-          poetry run pytest tests --tb=short -m "not integration and not simulation" --cov=src/codetoreum --cov-report=xml
+          python3 scripts/enforce_coverage.py
         env:
           REDIS_URL: redis://localhost:6379
           # Token scoped by workflow-level permissions (contents:read, actions:read)
