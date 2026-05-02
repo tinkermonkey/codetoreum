@@ -14,7 +14,6 @@ The mock adapter:
 7. Uses threading.RLock() for thread-safe state management
 """
 
-import asyncio
 import logging
 import threading
 from dataclasses import dataclass, field
