@@ -916,7 +916,7 @@ class GitHubBoardAdapter(IBoardService):
                 )
 
             # Extract status field ID for mutation operations
-            status_field_id = status_field.get("id", "")
+            status_field_id = status_field.get("id") or None
 
             return ProjectBoard(
                 id=board_id,
@@ -942,9 +942,6 @@ class GitHubBoardAdapter(IBoardService):
 
         Returns:
             Status field ID (non-empty string), or None if not found
-
-        Raises:
-            None - Returns None if field ID is not available (should not happen in normal flow)
         """
         return board.status_field_id
 
@@ -967,9 +964,6 @@ class GitHubBoardAdapter(IBoardService):
 
         Returns:
             Option ID (non-empty string) if column found, None otherwise
-
-        Raises:
-            None - Returns None if column not found
         """
         # Search columns for matching name and return its ID (which is the option ID)
         for column in board.columns:
@@ -998,23 +992,8 @@ class GitHubBoardAdapter(IBoardService):
         - Backup/recovery scenarios where board must be recreated from scratch
 
         **Implementation note**:
-        Requires GitHub Projects v2 GraphQL mutation `createProjectV2Field` or similar
-        to add a new option to the Status field. Mutation signature:
-        ```graphql
-        mutation CreateStatusOption(
-          $projectId: ID!
-          $fieldId: ID!
-          $optionName: String!
-        ) {
-          createProjectV2FieldOption(input: {
-            projectId: $projectId
-            fieldId: $fieldId
-            optionName: $optionName
-          }) {
-            projectV2Field { ... }
-          }
-        }
-        ```
+        Requires GitHub Projects v2 GraphQL mutation `createProjectV2FieldOption` to add
+        a new option to the Status field.
 
         Args:
             board_id: Board to add column to

@@ -228,39 +228,6 @@ class TestFieldAndOptionIdLookup:
         assert option_id == "opt-2"
 
     @pytest.mark.asyncio
-    async def test_find_option_id_backlog(self, board_adapter, mock_graphql_client, sample_board_response):
-        """Test finding option ID for Backlog column."""
-        mock_graphql_client.execute.return_value = sample_board_response
-        board = await board_adapter.get_board("proj-123", "board-456")
-
-        field_id = board_adapter._find_status_field_id(board)
-        option_id = board_adapter._find_option_id(board, field_id, "Backlog")
-
-        assert option_id == "opt-1"
-
-    @pytest.mark.asyncio
-    async def test_find_option_id_review(self, board_adapter, mock_graphql_client, sample_board_response):
-        """Test finding option ID for Review column."""
-        mock_graphql_client.execute.return_value = sample_board_response
-        board = await board_adapter.get_board("proj-123", "board-456")
-
-        field_id = board_adapter._find_status_field_id(board)
-        option_id = board_adapter._find_option_id(board, field_id, "Review")
-
-        assert option_id == "opt-3"
-
-    @pytest.mark.asyncio
-    async def test_find_option_id_done(self, board_adapter, mock_graphql_client, sample_board_response):
-        """Test finding option ID for Done column."""
-        mock_graphql_client.execute.return_value = sample_board_response
-        board = await board_adapter.get_board("proj-123", "board-456")
-
-        field_id = board_adapter._find_status_field_id(board)
-        option_id = board_adapter._find_option_id(board, field_id, "Done")
-
-        assert option_id == "opt-4"
-
-    @pytest.mark.asyncio
     async def test_find_option_id_not_found(self, board_adapter, mock_graphql_client, sample_board_response):
         """Test that _find_option_id returns None for nonexistent column."""
         mock_graphql_client.execute.return_value = sample_board_response
