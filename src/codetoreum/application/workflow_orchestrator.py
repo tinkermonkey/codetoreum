@@ -2,6 +2,7 @@
 
 import logging
 import time
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
@@ -227,64 +228,64 @@ class WorkflowState:
 
 
 # Port interfaces for dependencies
-class ITaskQueue:
+class ITaskQueue(ABC):
     """Interface to task queue for enqueueing work."""
 
+    @abstractmethod
     async def enqueue(self, task: Task) -> str:
         """Enqueue a task and return task_id."""
-        raise NotImplementedError
 
 
-class IProjectConfiguration:
+class IProjectConfiguration(ABC):
     """Interface to configuration system."""
 
+    @abstractmethod
     async def get_workflow_config(self, project: str, board: str) -> WorkflowConfig:
         """Get workflow configuration for a project board."""
-        raise NotImplementedError
 
+    @abstractmethod
     async def get_agent_config(self, agent_name: str) -> AgentConfig:
         """Get agent configuration."""
-        raise NotImplementedError
 
 
-class IWorkflowStateManager:
+class IWorkflowStateManager(ABC):
     """Interface to workflow state management."""
 
+    @abstractmethod
     async def get_workflow_state(self, issue_id: str) -> WorkflowState:
         """Get current workflow state for an issue."""
-        raise NotImplementedError
 
+    @abstractmethod
     async def update_workflow_state(self, issue_id: str, state: WorkflowState) -> None:
         """Update workflow state."""
-        raise NotImplementedError
 
+    @abstractmethod
     async def get_item_position(self, work_item_id: str) -> dict[str, Any] | None:
         """Get current position information for a work item."""
-        raise NotImplementedError
 
 
-class IDecisionEvents:
+class IDecisionEvents(ABC):
     """Interface to decision event emission."""
 
+    @abstractmethod
     async def emit_routing_decision(self, decision: RoutingDecision) -> None:
         """Emit agent routing decision."""
-        raise NotImplementedError
 
+    @abstractmethod
     async def emit_progression_decision(self, decision: ProgressionDecision) -> None:
         """Emit workflow progression decision."""
-        raise NotImplementedError
 
 
-class IProjectsAPI:
+class IProjectsAPI(ABC):
     """Interface to GitHub Projects API for card movement."""
 
+    @abstractmethod
     async def move_card_to_column(self, project: str, issue_number: int, column_name: str) -> None:
         """Move card to specified column."""
-        raise NotImplementedError
 
+    @abstractmethod
     async def add_label(self, project: str, issue_number: int, label: str) -> None:
         """Add label to issue."""
-        raise NotImplementedError
 
 
 class WorkflowOrchestrator(IWorkflowOrchestrator):
@@ -930,7 +931,8 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         Args:
             event: workitem.column_changed event
         """
-        # Validate event structure upfront - let KeyError/AttributeError propagate if malformed
+        # Validate event structure upfront - extract required fields with safe defaults
+        # (KeyError will not be raised due to .get() usage; validation occurs below)
         work_item_id: str = event.payload.get("work_item_id") or ""
         project_id: str = event.payload.get("project_id") or ""
         board_id: str = event.payload.get("board_id") or ""
@@ -958,8 +960,17 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
                     board_template = await self._workflow_config.get_board_workflow_template(board_id)
                     if board_template:
                         target_column_config = board_template.get_column_config(to_column)
-                except Exception:
-                    pass  # fall through to legacy path
+                except Exception as e:
+                    logger.debug(
+                        f"Failed to get board workflow template from Gen2 config for board={board_id}, "
+                        f"falling back to legacy path: {e}",
+                        exc_info=True,
+                        extra={
+                            "error_id": "ERR_ORCHESTRATOR_WORKFLOW_CONFIG_LOOKUP",
+                            "board_id": board_id,
+                            "error_type": type(e).__name__,
+                        },
+                    )
 
             if target_column_config is None:
                 # Legacy path: old-style WorkflowConfig
@@ -1127,7 +1138,8 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         Args:
             event: comment.needs_response event
         """
-        # Validate event structure upfront - let KeyError propagate if malformed
+        # Validate event structure upfront - extract required fields with safe defaults
+        # (KeyError will not be raised due to .get() usage; validation occurs below)
         work_item_id: str = event.payload.get("work_item_id") or ""
         project_id: str = event.payload.get("project_id") or ""
         agent_name: str = event.payload.get("agent_assignment") or ""
@@ -1203,7 +1215,8 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         Args:
             event: lock.released event with project_id, board_id, next_in_queue
         """
-        # Validate event structure upfront - let KeyError propagate if malformed
+        # Validate event structure upfront - extract required fields with safe defaults
+        # (KeyError will not be raised due to .get() usage; validation occurs below)
         project_id: str = event.payload.get("project_id") or ""
         board_id: str = event.payload.get("board_id") or ""
         next_in_queue: str = event.payload.get("next_in_queue") or ""
@@ -1562,7 +1575,6 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         1. Polls project board for work items needing processing
         2. Routes items to appropriate agents
         3. Queues agent execution tasks
-        4. Handles review cycles and feedback
 
         Args:
             project_name: Name of the project
@@ -1570,12 +1582,20 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
             config: Project configuration (repo, branch, enabled status)
 
         Returns:
-            int: Number of actions taken (cards moved, tasks queued, etc.)
+            int: Number of actions taken (tasks queued, etc.)
 
         Raises:
             ExternalServiceError: External service communication failure
         """
         actions_taken = 0
+
+        # Check if project is enabled before proceeding
+        if not config.enabled:
+            logger.info(
+                f"Project {project_name} is disabled in configuration, skipping orchestration",
+                extra={"project_name": project_name},
+            )
+            return actions_taken
 
         if not self.board_service:
             logger.warning(
@@ -1712,13 +1732,14 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
                         actions_taken += 1
 
                     except Exception as e:
-                        logger.warning(
+                        logger.error(
                             f"Error processing work item {item.work_item_id} during orchestrate_project: {e}",
                             exc_info=True,
                             extra={
                                 "error_id": "ERR_ORCHESTRATOR_ITEM_PROCESSING",
                                 "work_item_id": item.work_item_id,
                                 "project": project_name,
+                                "error_type": type(e).__name__,
                             },
                         )
                         continue

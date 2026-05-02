@@ -26,6 +26,7 @@ from codetoreum.application.workflow_orchestrator import (
     WorkflowOrchestrator,
     WorkflowState,
 )
+from codetoreum.domain.value_objects import ProjectConfig
 from codetoreum.domain.work_item import WorkItemPriority
 
 # Mock implementations for testing
@@ -141,6 +142,7 @@ class MockWorkflowStateManager(IWorkflowStateManager):
 
     def __init__(self):
         self.states: dict[str, WorkflowState] = {}
+        self.item_positions: dict[str, dict] = {}
 
     async def get_workflow_state(self, issue_id: str) -> WorkflowState:
         if issue_id not in self.states:
@@ -149,6 +151,10 @@ class MockWorkflowStateManager(IWorkflowStateManager):
 
     async def update_workflow_state(self, issue_id: str, state: WorkflowState) -> None:
         self.states[issue_id] = state
+
+    async def get_item_position(self, work_item_id: str) -> dict | None:
+        """Get current position information for a work item."""
+        return self.item_positions.get(work_item_id)
 
 
 class MockDecisionEvents(IDecisionEvents):
@@ -207,6 +213,17 @@ def mock_decision_events():
     events = MockDecisionEvents()
     yield events
     events.routing_decisions.clear()
+
+
+@pytest.fixture
+def project_config():
+    """Create a valid ProjectConfig for testing orchestrate_project."""
+    return ProjectConfig(
+        repo_url="https://github.com/test/repo.git",
+        branch="main",
+        enabled=True,
+        org="test-org"
+    )
     events.progression_decisions.clear()
 
 
@@ -723,6 +740,7 @@ async def test_orchestrate_project_happy_path(
     mock_event_store,
     mock_ticket_system,
     mock_projects_api,
+    project_config,
 ):
     """Test orchestrate_project successfully enqueues tasks for board items."""
     # Setup board service
@@ -745,7 +763,7 @@ async def test_orchestrate_project_happy_path(
         board_service=board_service,
     )
 
-    actions_taken = await orchestrator.orchestrate_project("test-project", "/workspace", mock_config)
+    actions_taken = await orchestrator.orchestrate_project("test-project", "/workspace", project_config)
 
     # Verify tasks were enqueued
     assert mock_task_queue.size() == 2
@@ -767,6 +785,7 @@ async def test_orchestrate_project_no_boards(
     mock_event_store,
     mock_ticket_system,
     mock_projects_api,
+    project_config,
 ):
     """Test orchestrate_project returns 0 when no boards found."""
     board_service = MockBoardService()
@@ -783,7 +802,7 @@ async def test_orchestrate_project_no_boards(
         board_service=board_service,
     )
 
-    actions_taken = await orchestrator.orchestrate_project("test-project", "/workspace", mock_config)
+    actions_taken = await orchestrator.orchestrate_project("test-project", "/workspace", project_config)
 
     assert actions_taken == 0
     assert mock_task_queue.size() == 0
@@ -798,6 +817,7 @@ async def test_orchestrate_project_no_matching_boards_for_project(
     mock_event_store,
     mock_ticket_system,
     mock_projects_api,
+    project_config,
 ):
     """Test orchestrate_project continues when workflow config not found for board."""
     board_service = MockBoardService()
@@ -819,7 +839,7 @@ async def test_orchestrate_project_no_matching_boards_for_project(
         board_service=board_service,
     )
 
-    actions_taken = await orchestrator.orchestrate_project("test-project", "/workspace", mock_config)
+    actions_taken = await orchestrator.orchestrate_project("test-project", "/workspace", project_config)
 
     # No tasks should be enqueued due to missing workflow config
     assert actions_taken == 0
@@ -835,6 +855,7 @@ async def test_orchestrate_project_workflow_config_load_failure_continues(
     mock_event_store,
     mock_ticket_system,
     mock_projects_api,
+    project_config,
 ):
     """Test orchestrate_project continues processing when workflow config load fails."""
     board_service = MockBoardService()
@@ -863,7 +884,7 @@ async def test_orchestrate_project_workflow_config_load_failure_continues(
     )
 
     # Should not raise exception, just return 0 actions
-    actions_taken = await orchestrator.orchestrate_project("test-project", "/workspace", failing_config)
+    actions_taken = await orchestrator.orchestrate_project("test-project", "/workspace", project_config)
 
     assert actions_taken == 0
     assert mock_task_queue.size() == 0
@@ -878,6 +899,7 @@ async def test_orchestrate_project_individual_item_failure_continues(
     mock_event_store,
     mock_ticket_system,
     mock_projects_api,
+    project_config,
 ):
     """Test orchestrate_project continues after individual item processing failure."""
     board_service = MockBoardService()
@@ -909,7 +931,7 @@ async def test_orchestrate_project_individual_item_failure_continues(
     )
 
     # Should successfully process item 124 (developer) despite item 123 (business_analyst) failing
-    actions_taken = await orchestrator.orchestrate_project("test-project", "/workspace", partial_config)
+    actions_taken = await orchestrator.orchestrate_project("test-project", "/workspace", project_config)
 
     # Should have 1 task (only for developer/Implementation)
     assert mock_task_queue.size() == 1
@@ -929,6 +951,7 @@ async def test_orchestrate_project_non_numeric_work_item_id_skipped(
     mock_event_store,
     mock_ticket_system,
     mock_projects_api,
+    project_config,
 ):
     """Test orchestrate_project skips non-numeric work_item_ids without enqueueing."""
     board_service = MockBoardService()
@@ -959,7 +982,7 @@ async def test_orchestrate_project_non_numeric_work_item_id_skipped(
     )
 
     # Should process only the numeric work item (456), skipping "ABC-123"
-    actions_taken = await orchestrator.orchestrate_project("test-project", "/workspace", mock_config)
+    actions_taken = await orchestrator.orchestrate_project("test-project", "/workspace", project_config)
 
     # Should have only 1 task (for developer/Implementation with ID 456)
     assert mock_task_queue.size() == 1
