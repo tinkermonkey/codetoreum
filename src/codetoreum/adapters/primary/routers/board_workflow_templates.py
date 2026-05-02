@@ -103,10 +103,15 @@ def create_board_workflow_router(
     Returns:
         Configured APIRouter for board workflow management
     """
-    router = APIRouter(
-        prefix="/api/v2/projects",
-        tags=["board-workflows"],
-    )
+    # Create router with authentication dependency if provided
+    router_kwargs = {
+        "prefix": "/api/v2/projects",
+        "tags": ["board-workflows"],
+    }
+    if auth_deps:
+        router_kwargs["dependencies"] = [Depends(auth_deps.require_auth)]
+
+    router = APIRouter(**router_kwargs)
 
     @router.get(
         "/{project_id}/board-workflows",
@@ -115,7 +120,7 @@ def create_board_workflow_router(
         response_description="List of board workflow templates",
     )
     async def list_templates(
-        project_id: str, _: str = Depends(auth_deps) if auth_deps else None
+        project_id: str,
     ) -> BoardWorkflowTemplateListResponse:
         """List all workflow templates for a project.
 
@@ -178,7 +183,7 @@ def create_board_workflow_router(
         response_description="Board workflow template",
     )
     async def get_template(
-        project_id: str, board_id: str, _: str = Depends(auth_deps) if auth_deps else None
+        project_id: str, board_id: str
     ) -> BoardWorkflowTemplateResponse:
         """Get a specific board workflow template.
 
@@ -253,7 +258,6 @@ def create_board_workflow_router(
     async def create_template(
         project_id: str,
         request: BoardWorkflowTemplateRequest,
-        _: str = Depends(auth_deps) if auth_deps else None,
     ) -> BoardWorkflowTemplateResponse:
         """Create a new board workflow template.
 
@@ -347,7 +351,6 @@ def create_board_workflow_router(
         project_id: str,
         board_id: str,
         request: BoardWorkflowTemplateRequest,
-        _: str = Depends(auth_deps) if auth_deps else None,
     ) -> BoardWorkflowTemplateResponse:
         """Update an existing board workflow template.
 
@@ -455,7 +458,7 @@ def create_board_workflow_router(
         summary="Delete a board workflow template",
     )
     async def delete_template(
-        project_id: str, board_id: str, _: str = Depends(auth_deps) if auth_deps else None
+        project_id: str, board_id: str
     ) -> None:
         """Delete a board workflow template.
 
