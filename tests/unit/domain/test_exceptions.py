@@ -9,9 +9,11 @@ from codetoreum.domain.exceptions import (
     ExecutionNotFoundError,
     InvalidStateError,
     PipelineNotFoundError,
-    TestOutputParseError as ParseError,
     WorkItemNotFoundError,
     WorkspaceNotFoundError,
+)
+from codetoreum.domain.exceptions import (
+    TestOutputParseError as ParseError,
 )
 
 
