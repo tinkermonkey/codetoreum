@@ -88,7 +88,7 @@ class InMemoryFailedEventStore(IFailedEventStore):
                 max_retries=3,
                 next_retry_at=None,
                 last_retry_at=None,
-                metadata=metadata or {},
+                metadata=metadata,
             )
             self._events[event_id] = record
             # Initialize retry tracking for this event

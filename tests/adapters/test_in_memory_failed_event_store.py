@@ -49,7 +49,7 @@ class TestInMemoryFailedEventStoreBasics:
         assert record.max_retries == 3
         assert record.next_retry_at is None
         assert record.last_retry_at is None
-        assert record.metadata == {}
+        assert record.metadata is None
 
     @pytest.mark.asyncio
     async def test_add_failed_event_with_metadata(self, store):
@@ -68,8 +68,8 @@ class TestInMemoryFailedEventStoreBasics:
         assert record.metadata == metadata
 
     @pytest.mark.asyncio
-    async def test_add_failed_event_without_metadata_defaults_to_empty_dict(self, store):
-        """Test that metadata defaults to empty dict when not provided."""
+    async def test_add_failed_event_without_metadata_defaults_to_none(self, store):
+        """Test that metadata defaults to None when not provided."""
         event_id = await store.add_failed_event(
             event_type="Event",
             event_data={},
@@ -79,7 +79,7 @@ class TestInMemoryFailedEventStoreBasics:
 
         record = store.get_event(event_id)
         assert record is not None
-        assert record.metadata == {}
+        assert record.metadata is None
 
     @pytest.mark.asyncio
     async def test_get_event_returns_none_for_nonexistent_id(self, store):
@@ -277,67 +277,68 @@ class TestInMemoryFailedEventStoreFiltering:
     """Test event listing and filtering functionality."""
 
     @pytest.fixture
-    def store_with_events(self):
+    async def store_with_events(self):
         """Create a store with various events for testing."""
         store = InMemoryFailedEventStore()
 
-        async def setup():
-            await store.add_failed_event(
-                event_type="Event1",
-                event_data={},
-                failure_reason=FailureReason.TRANSIENT_ERROR,
-                error_message="Transient",
-            )
-            await store.add_failed_event(
-                event_type="Event2",
-                event_data={},
-                failure_reason=FailureReason.VALIDATION_ERROR,
-                error_message="Validation",
-            )
-            await store.add_failed_event(
-                event_type="Event3",
-                event_data={},
-                failure_reason=FailureReason.TIMEOUT,
-                error_message="Timeout",
-            )
-            await store.add_failed_event(
-                event_type="Event4",
-                event_data={},
-                failure_reason=FailureReason.TRANSIENT_ERROR,
-                error_message="Transient2",
-            )
+        await store.add_failed_event(
+            event_type="Event1",
+            event_data={},
+            failure_reason=FailureReason.TRANSIENT_ERROR,
+            error_message="Transient",
+        )
+        await store.add_failed_event(
+            event_type="Event2",
+            event_data={},
+            failure_reason=FailureReason.VALIDATION_ERROR,
+            error_message="Validation",
+        )
+        await store.add_failed_event(
+            event_type="Event3",
+            event_data={},
+            failure_reason=FailureReason.TIMEOUT,
+            error_message="Timeout",
+        )
+        await store.add_failed_event(
+            event_type="Event4",
+            event_data={},
+            failure_reason=FailureReason.TRANSIENT_ERROR,
+            error_message="Transient2",
+        )
 
-        # Run setup in event loop
-        import asyncio
-        asyncio.run(setup())
         return store
 
-    def test_list_events_returns_all_by_default(self, store_with_events):
+    @pytest.mark.asyncio
+    async def test_list_events_returns_all_by_default(self, store_with_events):
         """Test that list_events returns all events when no filters applied."""
         events = store_with_events.list_events()
         assert len(events) == 4
 
-    def test_list_events_filter_by_failure_reason(self, store_with_events):
+    @pytest.mark.asyncio
+    async def test_list_events_filter_by_failure_reason(self, store_with_events):
         """Test filtering events by failure reason."""
         events = store_with_events.list_events(failure_reason=FailureReason.TRANSIENT_ERROR)
         assert len(events) == 2
         assert all(e.failure_reason == FailureReason.TRANSIENT_ERROR for e in events)
 
-    def test_list_events_filter_by_can_retry_true(self, store_with_events):
+    @pytest.mark.asyncio
+    async def test_list_events_filter_by_can_retry_true(self, store_with_events):
         """Test filtering events that can retry."""
         events = store_with_events.list_events(can_retry=True)
         # Transient and Timeout can retry, Validation cannot
         assert len(events) == 3
         assert all(e.can_retry() for e in events)
 
-    def test_list_events_filter_by_can_retry_false(self, store_with_events):
+    @pytest.mark.asyncio
+    async def test_list_events_filter_by_can_retry_false(self, store_with_events):
         """Test filtering events that cannot retry."""
         events = store_with_events.list_events(can_retry=False)
         # Only Validation error cannot retry
         assert len(events) == 1
         assert all(not e.can_retry() for e in events)
 
-    def test_list_events_filter_combined(self, store_with_events):
+    @pytest.mark.asyncio
+    async def test_list_events_filter_combined(self, store_with_events):
         """Test combining multiple filters."""
         events = store_with_events.list_events(
             failure_reason=FailureReason.TRANSIENT_ERROR,
@@ -347,12 +348,14 @@ class TestInMemoryFailedEventStoreFiltering:
         assert all(e.failure_reason == FailureReason.TRANSIENT_ERROR for e in events)
         assert all(e.can_retry() for e in events)
 
-    def test_list_events_with_limit(self, store_with_events):
+    @pytest.mark.asyncio
+    async def test_list_events_with_limit(self, store_with_events):
         """Test limiting the number of returned events."""
         events = store_with_events.list_events(limit=2)
         assert len(events) == 2
 
-    def test_list_events_filter_and_limit(self, store_with_events):
+    @pytest.mark.asyncio
+    async def test_list_events_filter_and_limit(self, store_with_events):
         """Test combining filters with limit."""
         events = store_with_events.list_events(
             failure_reason=FailureReason.TRANSIENT_ERROR,
@@ -361,7 +364,8 @@ class TestInMemoryFailedEventStoreFiltering:
         assert len(events) == 1
         assert events[0].failure_reason == FailureReason.TRANSIENT_ERROR
 
-    def test_list_events_no_matches(self, store_with_events):
+    @pytest.mark.asyncio
+    async def test_list_events_no_matches(self, store_with_events):
         """Test list_events returns empty list when no events match."""
         events = store_with_events.list_events(
             failure_reason=FailureReason.CIRCUIT_BREAKER_OPEN,
