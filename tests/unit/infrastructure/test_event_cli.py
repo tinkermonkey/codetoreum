@@ -1,8 +1,9 @@
 """Unit tests for EventCLI infrastructure utility."""
 
-import pytest
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from codetoreum.infrastructure.event_cli import EventCLI
 from codetoreum.ports.output.event_store import IEventStore

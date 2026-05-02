@@ -1,15 +1,17 @@
 """Unit tests for repair cycle logging infrastructure."""
 
 import logging
+from datetime import UTC, datetime
+from unittest.mock import MagicMock, call, patch
+
 import pytest
-from datetime import datetime, UTC
-from unittest.mock import MagicMock, patch, call
+
 from codetoreum.infrastructure.repair_cycle_logging import (
     RepairCycleErrorLogger,
     RepairCycleLogContext,
-    RepairCycleLogLevel,
     RepairCycleLogger,
     RepairCycleLoggingContext,
+    RepairCycleLogLevel,
     RepairCyclePerformanceLogger,
 )
 

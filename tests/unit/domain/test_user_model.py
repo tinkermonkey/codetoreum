@@ -1,13 +1,14 @@
 """Unit tests for User domain model."""
 
-import pytest
 from datetime import UTC
 from unittest.mock import patch
 from uuid import UUID
 
+import pytest
+
 from codetoreum.domain.user import (
-    Permission,
     ROLE_PERMISSIONS,
+    Permission,
     User,
     UserRole,
 )
@@ -339,14 +340,14 @@ class TestUserTimestamps:
 
     def test_updated_at_changes_on_role_change(self) -> None:
         """Test that updated_at changes when role is modified."""
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timedelta, timezone
 
         user = User(username="john", email="john@example.com", hashed_password="hash")
         initial_updated_at = user.updated_at
 
         # Mock datetime.now to return a future time when add_role is called
         future_time = initial_updated_at + timedelta(seconds=1)
-        with patch('codetoreum.domain.user.datetime') as mock_datetime:
+        with patch("codetoreum.domain.user.datetime") as mock_datetime:
             # Set the current time and ensure now() returns the mocked time
             mock_datetime.now.return_value = future_time
             # Keep UTC accessible
