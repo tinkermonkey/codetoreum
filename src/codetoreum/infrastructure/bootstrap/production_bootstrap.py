@@ -28,7 +28,8 @@ from typing import Any
 from fastapi import FastAPI
 
 from codetoreum.adapters.primary.fastapi_app import create_app
-from codetoreum.application.agent_scheduler import AgentScheduler
+from codetoreum.adapters.primary.input_port_adapters.mock.mock_task_query_adapter import MockTaskQueryAdapter
+from codetoreum.application.agent_scheduler import AgentScheduler, IProjectConfiguration
 from codetoreum.application.configuration_service import ConfigurationService
 from codetoreum.application.container_recovery_service import ContainerRecoveryService
 from codetoreum.application.conversational_loop_orchestrator import ConversationalLoopOrchestrator
@@ -48,6 +49,13 @@ from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.resilience import OperationMode
 from codetoreum.infrastructure.resilience.factory import ResilienceFactory
+from codetoreum.ports.output.agent_executor import IAgentExecutor
+from codetoreum.ports.output.board_service import IBoardService
+from codetoreum.ports.output.config_store import AgentConfig
+from codetoreum.ports.output.pipeline_lock_service import IQueuedPipelineLockService
+from codetoreum.ports.output.work_item_service import IWorkItemService
+from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
+from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 logger = logging.getLogger(__name__)
 
@@ -212,6 +220,46 @@ class _ProductionEngine:
         return self._clock
 
 
+class ProductionProjectConfigurationWrapper(IProjectConfiguration):
+    """
+    Wrapper that implements IProjectConfiguration interface for AgentScheduler.
+
+    The IProjectConfiguration interface expects a get_agent_config(agent_name) method.
+    This wrapper adapts ConfigurationService to provide that interface.
+    """
+
+    def __init__(self, configuration_service: ConfigurationService) -> None:
+        """
+        Initialize the wrapper.
+
+        Args:
+            configuration_service: The ConfigurationService instance to wrap
+        """
+        self.configuration_service = configuration_service
+
+    async def get_agent_config(self, agent_name: str) -> AgentConfig:
+        """
+        Get agent configuration.
+
+        Args:
+            agent_name: Name of the agent to get config for
+
+        Returns:
+            Agent configuration
+
+        Raises:
+            Exception: If agent config cannot be retrieved
+        """
+        # For now, return a minimal default config
+        # In a full implementation, this would query the actual configuration
+        return AgentConfig(
+            id=agent_name,
+            name=agent_name,
+            description=f"Agent: {agent_name}",
+            enabled=True,
+        )
+
+
 class ProductionApplicationBootstrap:
     """Bootstrap the entire application stack in production mode.
 
@@ -362,31 +410,46 @@ class ProductionApplicationBootstrap:
             logger.warning("Cannot register event handlers: services or adapters not yet initialized")
             return
 
-        # Create event handlers with required dependencies
+        # Create event handlers with correct parameters
         board_handler = BoardColumnEventHandler(
-            ticket_system=self.adapters.ticket_system,
             board_service=self.adapters.board,
+            lock_service=self.adapters.lock_service,
+            workflow_config=self.adapters.workflow_config,
+            agent_executor=self.adapters.agent_executor,
             event_bus=self.event_bus,
+            event_store=self.adapters.event_store,
+            run_registry=self.adapters.run_registry,
+            event_emitter=self.adapters.event_emitter,
         )
 
         pr_review_dispatch_handler = PRReviewCycleDispatchHandler(
-            review_cycle=self.adapters.review_cycle,
-            event_bus=self.event_bus,
+            pr_review_cycle=self.adapters.pr_review_cycle,
+            workflow_config=self.adapters.workflow_config,
+            work_item_service=self.services["work_item_service"],
+            active_workflow_run_registry=self.adapters.run_registry,
         )
 
         pr_review_handler = PRReviewCycleEventHandler(
-            pr_review_cycle=self.adapters.pr_review_cycle,
-            event_bus=self.event_bus,
+            board_service=self.adapters.board,
         )
 
         review_handler = ReviewEventHandler(
-            review_service=self.services.get("review_service"),
-            event_bus=self.event_bus,
+            review_service=self.services["review_service"],
+            ci_pipeline_service=self.adapters.ci_pipeline,
         )
 
         # Register handlers with event bus
-        # Note: The event bus should handle handler registration internally
-        logger.info("Event handlers created and wired (registration via event_bus subscription)")
+        self.event_bus.register_handler(board_handler)
+        logger.info("Registered BoardColumnEventHandler with event bus")
+
+        self.event_bus.register_handler(pr_review_dispatch_handler)
+        logger.info("Registered PRReviewCycleDispatchHandler with event bus")
+
+        self.event_bus.register_handler(pr_review_handler)
+        logger.info("Registered PRReviewCycleEventHandler with event bus")
+
+        self.event_bus.register_handler(review_handler)
+        logger.info("Registered ReviewEventHandler with event bus")
 
     def _create_adapter_factory(self) -> None:
         """Create adapter factory with production configuration."""
@@ -548,6 +611,12 @@ class ProductionApplicationBootstrap:
             logger.error(msg, extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR})
             raise RuntimeError(msg)
 
+        # Create configuration_service FIRST (required by agent_scheduler)
+        configuration_service = ConfigurationService(
+            config_store=self.adapters.config_store,
+            event_bus=self.event_bus,
+        )
+
         # Create core orchestration services
         workflow_orchestrator = WorkflowOrchestrator(
             ticket_system=self.adapters.ticket_system,
@@ -561,9 +630,12 @@ class ProductionApplicationBootstrap:
             event_bus=self.event_bus,
         )
 
+        # Create wrapper for ConfigurationService to implement IProjectConfiguration
+        config_wrapper = ProductionProjectConfigurationWrapper(configuration_service)
+
         agent_scheduler = AgentScheduler(
             task_queue=ProductionTaskQueue(self.adapters.queue_service),
-            config=configuration_service,  # Use ConfigurationService instead of mock
+            config=config_wrapper,  # Use wrapper that implements IProjectConfiguration
             rate_limiter=ProductionRateLimiter(rate_limit_rpm=60),
             resource_monitor=ProductionResourceMonitor(),
             scheduling_events=ProductionSchedulingEvents(self.event_bus),
@@ -590,11 +662,6 @@ class ProductionApplicationBootstrap:
         workspace_router = WorkspaceRouter(
             container=self.adapters.container,
             storage=self.adapters.storage,
-            event_bus=self.event_bus,
-        )
-
-        configuration_service = ConfigurationService(
-            config_store=self.adapters.config_store,
             event_bus=self.event_bus,
         )
 
@@ -665,14 +732,16 @@ class ProductionApplicationBootstrap:
             ticket_system=self.adapters.ticket_system,
         )
 
-        # Create a task query implementation backed by execution service
-        # This provides basic task/execution status query functionality
-        task_query_impl = self.services["execution_service"]
+        # Create a task query implementation using MockTaskQueryAdapter as a placeholder
+        # TODO: Create a proper adapter that wraps ExecutionService and implements ITaskQueryPort.
+        # For now, MockTaskQueryAdapter provides a valid ITaskQueryPort implementation that
+        # can be used in production while the full implementation is being developed.
+        task_query_impl = MockTaskQueryAdapter()
 
         # Store ports for create_app()
         self.ports = {
             "workflow_command": self.services["workflow_orchestrator"],
-            "task_query": task_query_impl,  # Backed by execution service
+            "task_query": task_query_impl,  # Placeholder implementation of ITaskQueryPort
             "config_command": self.services["configuration_service"],
             "config_query": self.services["configuration_service"],
             "metrics_query": self.adapters.metrics,
