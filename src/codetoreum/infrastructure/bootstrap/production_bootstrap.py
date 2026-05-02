@@ -49,13 +49,7 @@ from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.resilience import OperationMode
 from codetoreum.infrastructure.resilience.factory import ResilienceFactory
-from codetoreum.ports.output.agent_executor import IAgentExecutor
-from codetoreum.ports.output.board_service import IBoardService
 from codetoreum.ports.output.config_store import AgentConfig
-from codetoreum.ports.output.pipeline_lock_service import IQueuedPipelineLockService
-from codetoreum.ports.output.work_item_service import IWorkItemService
-from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
-from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 logger = logging.getLogger(__name__)
 
@@ -252,11 +246,17 @@ class ProductionProjectConfigurationWrapper(IProjectConfiguration):
         """
         # For now, return a minimal default config
         # In a full implementation, this would query the actual configuration
+        # TODO: Query actual agent config from configuration_service
         return AgentConfig(
-            id=agent_name,
-            name=agent_name,
-            description=f"Agent: {agent_name}",
-            enabled=True,
+            project_id="default",
+            agent_name=agent_name,
+            model="claude-opus-4-6",
+            timeout=300,
+            requires_docker=True,
+            makes_code_changes=True,
+            mcp_servers=(),
+            capabilities=(),
+            constraints={},
         )
 
 
