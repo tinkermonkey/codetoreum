@@ -43,6 +43,7 @@ from codetoreum.adapters.primary.fastapi_app import create_app
 from codetoreum.adapters.primary.input_port_adapters.mock import (
     MockAgentCommandAdapter,
     MockAgentQueryAdapter,
+    MockAuditQueryAdapter,
     MockConfigCommandAdapter,
     MockConfigQueryAdapter,
     MockConfigServiceAdapter,
@@ -1937,10 +1938,8 @@ class SimulationApplicationBootstrap:
         config_command = MockConfigCommandAdapter()
         task_query = MockTaskQueryAdapter()
 
-        # Create audit query adapter using the audit store
-        from codetoreum.adapters.primary.audit_query_adapter import AuditQueryAdapter
-
-        audit_query = AuditQueryAdapter(audit_store=self.adapters.audit_store)
+        # Create audit query adapter using mock adapter with audit store
+        audit_query = MockAuditQueryAdapter(audit_store=self.adapters.audit_store)
 
         logger.info("Created all port implementations")
 

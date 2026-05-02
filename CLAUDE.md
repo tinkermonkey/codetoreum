@@ -104,9 +104,9 @@ See `documentation/architecture/application-services/` for complete service docu
 
 ### Port Interfaces (Contracts)
 
-**60 total ports**: 20 input ports + 40 output ports
+**59 total ports**: 19 input ports + 40 output ports
 
-**Input Ports** (20 total): Command, query, and service interfaces for inbound operations
+**Input Ports** (19 total): Command, query, and service interfaces for inbound operations
 - Agent management, work item management, workflow management
 - Execution management, configuration, system services
 

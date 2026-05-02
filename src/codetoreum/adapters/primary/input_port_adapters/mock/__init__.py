@@ -8,6 +8,7 @@ without requiring external dependencies like databases or event stores.
 
 from .mock_agent_command_adapter import MockAgentCommandAdapter
 from .mock_agent_query_adapter import MockAgentQueryAdapter
+from .mock_audit_query_adapter import MockAuditQueryAdapter
 from .mock_config_command_adapter import MockConfigCommandAdapter
 from .mock_config_query_adapter import MockConfigQueryAdapter
 from .mock_config_service_adapter import MockConfigServiceAdapter
@@ -30,6 +31,7 @@ from .mock_workspace_query_adapter import MockWorkspaceQueryAdapter
 __all__ = [
     "MockAgentCommandAdapter",
     "MockAgentQueryAdapter",
+    "MockAuditQueryAdapter",
     "MockConfigCommandAdapter",
     "MockConfigQueryAdapter",
     "MockConfigServiceAdapter",
