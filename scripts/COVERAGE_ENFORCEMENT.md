@@ -156,29 +156,7 @@ make test-cov
 open htmlcov/index.html
 ```
 
-## Integration Points
-
-### Local Development
-
-- `make test-cov-enforce` in development to catch coverage issues early
-- `make test-cov` to generate detailed HTML reports for analysis
-
-### Pre-commit
-
-You can add the enforcement script to pre-commit hooks:
-
-```yaml
-- repo: local
-  hooks:
-    - id: coverage-enforcement
-      name: Per-layer coverage enforcement
-      entry: python3 scripts/enforce_coverage.py
-      language: system
-      pass_filenames: false
-      stages: [commit]
-```
-
-### CI/CD
+## CI/CD Integration
 
 The enforcement is integrated into the GitHub Actions CI workflow:
 
@@ -186,60 +164,6 @@ The enforcement is integrated into the GitHub Actions CI workflow:
 - name: Run tests with per-layer coverage enforcement
   run: python3 scripts/enforce_coverage.py
 ```
-
-## Troubleshooting
-
-### Script Fails to Find pytest
-
-**Issue**: `Error: [Errno 13] Permission denied: 'pytest'`
-
-**Solution**: Ensure the virtual environment is set up:
-```bash
-poetry install
-# or
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements-dev.txt
-```
-
-### coverage.json Not Found
-
-**Issue**: `Error: coverage.json not found`
-
-**Solution**: This usually means tests failed to run. Check:
-1. All dependencies are installed
-2. Tests directory structure is correct
-3. pytest-cov is installed in the virtual environment
-
-### Thresholds Too Strict
-
-If you need to adjust thresholds, modify `COVERAGE_THRESHOLDS` in `enforce_coverage.py`:
-
-```python
-COVERAGE_THRESHOLDS = [
-    CoverageThreshold(name="Domain", path_pattern="src/codetoreum/domain", minimum_percent=95.0),
-    CoverageThreshold(name="Application", path_pattern="src/codetoreum/application", minimum_percent=85.0),
-]
-OVERALL_MINIMUM_PERCENT = 75.0
-```
-
-## Best Practices
-
-1. **Run Locally First**: Always run `make test-cov-enforce` locally before pushing
-2. **Review Coverage Reports**: Use HTML reports to understand what's not covered
-3. **Domain-First Testing**: Prioritize domain layer test coverage (100% requirement)
-4. **Integration Tests**: Application layer tests should focus on integration scenarios
-5. **Regular Monitoring**: Track coverage trends over time
-
-## Future Enhancements
-
-Potential improvements to the enforcement infrastructure:
-
-1. **Coverage Trend Tracking**: Store metrics over time and prevent regressions
-2. **Per-File Enforcement**: Optional per-file thresholds for critical modules
-3. **Conditional Thresholds**: Different thresholds for different module types
-4. **Coverage Badges**: Generate coverage badges for documentation
-5. **Advanced Reporting**: Detailed reports with uncovered line suggestions
 
 ## Related Files
 

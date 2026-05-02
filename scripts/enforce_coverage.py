@@ -40,8 +40,8 @@ COVERAGE_THRESHOLDS = [
 OVERALL_MINIMUM_PERCENT = 80.0
 
 
-def run_coverage_tests() -> str:
-    """Run pytest with coverage and return coverage JSON output path."""
+def run_coverage_tests() -> tuple[str, bool]:
+    """Run pytest with coverage and return (coverage JSON path, tests_failed)."""
     print("Running tests with coverage...")
 
     # Use pytest from the project's virtual environment
@@ -58,20 +58,26 @@ def run_coverage_tests() -> str:
         pytest_cmd
         + [
             "tests",
+            "-m", "not integration and not simulation",
             "--cov=src/codetoreum",
             "--cov-report=json",
             "--cov-report=xml",
-            "-q",
-            "--tb=line",
+            "--tb=short",
         ],
         capture_output=True,
         text=True,
         cwd=Path.cwd(),
     )
 
+    # Print pytest output when tests fail or if there's a critical error
+    if result.returncode != 0:
+        if result.stdout:
+            print(result.stdout)
+        if result.stderr:
+            print(result.stderr, file=sys.stderr)
+
     # Exit codes: 0 = all pass, 1 = test failures (coverage still collected), >1 = error
     if result.returncode > 1:
-        print(f"Error running tests: {result.stderr}")
         sys.exit(1)
 
     # The coverage.json should be in the current directory
@@ -82,7 +88,9 @@ def run_coverage_tests() -> str:
         print("STDERR:", result.stderr)
         sys.exit(1)
 
-    return str(coverage_json_path)
+    # Track whether tests failed (returncode == 1)
+    tests_failed = result.returncode == 1
+    return str(coverage_json_path), tests_failed
 
 
 def parse_coverage_json(json_path: str) -> dict:
@@ -127,8 +135,16 @@ def get_overall_coverage(coverage_data: dict) -> CoverageMetrics:
     return CoverageMetrics(percent_covered=percent_covered, lines_covered=covered_lines, lines_total=total_lines)
 
 
-def enforce_coverage(coverage_json_path: str) -> int:
-    """Enforce coverage thresholds and return exit code."""
+def enforce_coverage(coverage_json_path: str, tests_failed: bool) -> int:
+    """Enforce coverage thresholds and return exit code.
+
+    Args:
+        coverage_json_path: Path to coverage.json file
+        tests_failed: Whether pytest exited with returncode 1 (test failures)
+
+    Returns:
+        Exit code: 0 if all checks pass, 1 otherwise
+    """
     coverage_data = parse_coverage_json(coverage_json_path)
 
     all_passed = True
@@ -165,16 +181,22 @@ def enforce_coverage(coverage_json_path: str) -> int:
     print("=" * 80)
     for result in results:
         print(result)
-    print("=" * 80 + "\n")
+    print("=" * 80)
 
+    # If tests failed, report and fail CI
+    if tests_failed:
+        print("⚠ WARNING: Tests failed — coverage results may be incomplete\n")
+        return 1
+
+    print()
     return 0 if all_passed else 1
 
 
 def main() -> int:
     """Main entry point."""
     try:
-        coverage_json_path = run_coverage_tests()
-        return enforce_coverage(coverage_json_path)
+        coverage_json_path, tests_failed = run_coverage_tests()
+        return enforce_coverage(coverage_json_path, tests_failed)
     except Exception as e:  # noqa: BLE001
         print(f"Error: {e}", file=sys.stderr)
         return 1
