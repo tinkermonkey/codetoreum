@@ -1036,3 +1036,133 @@ async def test_orchestrate_project_disabled_project_skipped(
     # Should not enqueue any tasks
     assert mock_task_queue.size() == 0
     assert actions_taken == 0
+
+
+@pytest.mark.asyncio
+async def test_orchestrate_project_board_service_none(
+    mock_task_queue,
+    mock_config,
+    mock_workflow_state,
+    mock_decision_events,
+    mock_event_store,
+    mock_ticket_system,
+    mock_projects_api,
+    project_config,
+):
+    """Test orchestrate_project returns early when board_service is None."""
+    orchestrator = WorkflowOrchestrator(
+        task_queue=mock_task_queue,
+        config=mock_config,
+        workflow_state=mock_workflow_state,
+        decision_events=mock_decision_events,
+        event_store=mock_event_store,
+        ticket_system=mock_ticket_system,
+        projects_api=mock_projects_api,
+        board_service=None,  # Explicitly None
+    )
+
+    actions_taken = await orchestrator.orchestrate_project("test-project", "/workspace", project_config)
+
+    # Should return 0 and not attempt any operations
+    assert actions_taken == 0
+    assert mock_task_queue.size() == 0
+
+
+@pytest.mark.asyncio
+async def test_orchestrate_project_filters_boards_from_other_projects(
+    mock_task_queue,
+    mock_config,
+    mock_workflow_state,
+    mock_decision_events,
+    mock_event_store,
+    mock_ticket_system,
+    mock_projects_api,
+    project_config,
+):
+    """Test orchestrate_project correctly filters out boards from other projects."""
+    board_service = MockBoardService()
+
+    # Create boards from different projects
+    board_this_project = MockBoard("Development", "board-1", "test-project")
+    board_other_project = MockBoard("Development", "board-2", "other-project")
+
+    board_service.boards = [board_this_project, board_other_project]
+
+    # Add items to both boards
+    board_service.board_items["board-1"] = [
+        MockBoardItem(123, "Requirements"),
+    ]
+    board_service.board_items["board-2"] = [
+        MockBoardItem(456, "Requirements"),
+    ]
+
+    orchestrator = WorkflowOrchestrator(
+        task_queue=mock_task_queue,
+        config=mock_config,
+        workflow_state=mock_workflow_state,
+        decision_events=mock_decision_events,
+        event_store=mock_event_store,
+        ticket_system=mock_ticket_system,
+        projects_api=mock_projects_api,
+        board_service=board_service,
+    )
+
+    actions_taken = await orchestrator.orchestrate_project("test-project", "/workspace", project_config)
+
+    # Should only process board-1 (test-project), skipping board-2 (other-project)
+    assert actions_taken == 1
+    assert mock_task_queue.size() == 1
+
+    # Verify the task is for the correct board and work item
+    task = mock_task_queue.get_last_task()
+    assert task.context["work_item_id"] == 123
+    assert task.context["board"] == "Development"
+
+
+@pytest.mark.asyncio
+async def test_orchestrate_project_all_items_fail_continues(
+    mock_task_queue,
+    mock_config,
+    mock_workflow_state,
+    mock_decision_events,
+    mock_event_store,
+    mock_ticket_system,
+    mock_projects_api,
+    project_config,
+):
+    """Test orchestrate_project continues when every work item processing fails."""
+    board_service = MockBoardService()
+    board = MockBoard("Development", "board-1", "test-project")
+    board_service.boards = [board]
+    board_service.board_items["board-1"] = [
+        MockBoardItem(123, "Requirements"),
+        MockBoardItem(124, "Implementation"),
+        MockBoardItem(125, "Testing"),
+    ]
+
+    # Create a config that raises exception for all agent lookups
+    class FailingConfig(MockProjectConfiguration):
+        async def get_agent_config(self, agent_name: str) -> AgentConfig:
+            raise ValueError(f"Config load failure for {agent_name}")
+
+    failing_config = FailingConfig()
+
+    orchestrator = WorkflowOrchestrator(
+        task_queue=mock_task_queue,
+        config=failing_config,
+        workflow_state=mock_workflow_state,
+        decision_events=mock_decision_events,
+        event_store=mock_event_store,
+        ticket_system=mock_ticket_system,
+        projects_api=mock_projects_api,
+        board_service=board_service,
+    )
+
+    # Should not raise exception, just return 0 actions
+    actions_taken = await orchestrator.orchestrate_project("test-project", "/workspace", project_config)
+
+    # All items failed, so no actions taken and no tasks queued
+    assert actions_taken == 0
+    assert mock_task_queue.size() == 0
+    # Should have emitted no routing decisions since all items failed
+    assert len(mock_decision_events.routing_decisions) == 0
