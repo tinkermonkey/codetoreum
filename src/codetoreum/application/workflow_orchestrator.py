@@ -22,6 +22,8 @@ from codetoreum.infrastructure.observability.instrumentation import (
 )
 from codetoreum.ports.exceptions import (
     ExternalServiceError,
+)
+from codetoreum.ports.exceptions import (
     TimeoutError as PortTimeoutError,
 )
 from codetoreum.ports.input.conversational_loop_service import IConversationalLoopService
@@ -1641,7 +1643,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
                         # Validate work_item_id is numeric before any operations
                         try:
                             issue_number = int(item.work_item_id)
-                        except ValueError as e:
+                        except ValueError:
                             logger.warning(
                                 f"Invalid work_item_id format (not numeric): {item.work_item_id}",
                                 exc_info=True,
