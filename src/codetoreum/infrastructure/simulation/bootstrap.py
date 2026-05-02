@@ -75,9 +75,6 @@ from codetoreum.adapters.primary.routers.simulation_stream import (
 from codetoreum.adapters.primary.routers.simulation_ticketing import (
     create_simulation_ticketing_router,
 )
-from codetoreum.adapters.secondary.failed_event_store_adapter import (
-    DeadLetterQueueFailedEventStoreAdapter,
-)
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
 )
@@ -961,14 +958,10 @@ class SimulationApplicationBootstrap:
             logger.info("Phase 5b: Validating causal link consistency...")
             self._validate_causal_links()
 
-            # Start dead letter queue retry processor
-            # This enables automatic retry of failed event publishing (issue #371)
+            # Start failed event store retry processor (in-memory implementation in simulation)
+            # InMemoryFailedEventStore is a no-op for retry processing in simulation mode
             if self.infrastructure and self.infrastructure.failed_event_store:
-                logger.info("Starting failed event store retry processor...")
-                # Cast to adapter to access infrastructure-specific lifecycle methods
-                dlq_adapter = self.infrastructure.failed_event_store
-                if isinstance(dlq_adapter, DeadLetterQueueFailedEventStoreAdapter):
-                    await dlq_adapter.start_retry_processor(self._create_dlq_retry_handler())
+                logger.debug("Failed event store is ready (no-op for in-memory implementation)")
 
             # Phase 6: Start auto-advance if configured
             # This must come after all event handlers are registered so tick-driven events have handlers
@@ -1201,11 +1194,7 @@ class SimulationApplicationBootstrap:
                 self._column_progression_watchdog.stop()
                 logger.debug("Column progression watchdog stopped")
 
-            # Stop dead letter queue retry processor
-            if self.infrastructure and self.infrastructure.failed_event_store:
-                dlq_adapter = self.infrastructure.failed_event_store
-                if isinstance(dlq_adapter, DeadLetterQueueFailedEventStoreAdapter):
-                    await dlq_adapter.stop_retry_processor()
+            # No cleanup needed for in-memory failed event store
 
             # Stop simulation engine
             if self._engine:
@@ -1634,8 +1623,8 @@ class SimulationApplicationBootstrap:
         The CausalLinkRegistry enables runtime enforcement and discoverability of
         causal dependencies between adapters and domain events.
 
-        The DeadLetterQueue captures failed event publishing attempts, enabling
-        event bridge reliability (see issue #371).
+        The InMemoryFailedEventStore captures failed event publishing attempts,
+        enabling deterministic simulation testing of event failure scenarios.
 
         Returns:
             SimulationInfrastructure with configured components
@@ -1643,8 +1632,6 @@ class SimulationApplicationBootstrap:
         if not self._engine:
             message = "SimulationEngine must be created before infrastructure"
             raise RuntimeError(message)
-
-        from codetoreum.infrastructure.dead_letter_queue import DeadLetterQueue
 
         # Create event bus
         event_bus = EventBus()

@@ -281,8 +281,6 @@ class SimulationEngine:
         Returns:
             MockRepairCycleAdapter instance with clock already configured
         """
-        from typing import Any, Coroutine
-
         from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
         from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
             MockRepairCycleAdapter,
