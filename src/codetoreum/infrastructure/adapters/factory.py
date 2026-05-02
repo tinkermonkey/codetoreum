@@ -857,7 +857,7 @@ class AdapterFactory:
                 simulation_only=True,
                 description="Simulation-only adapter, no credentials required",
             ),
-            set_as_default=True,
+            set_as_default=False,
         )
 
         # Agent Repository Adapters

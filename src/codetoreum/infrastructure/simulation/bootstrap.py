@@ -5,18 +5,18 @@ Wires up the entire application stack in simulation mode through 6 phases:
 
 **Phase 0**: Create simulation engine (encapsulates clock and timing)
 **Phase 1**: Create infrastructure (event bus, logger, error registry) - EARLY for event subscriptions
-**Phase 2**: Create adapters (33 adapters all via AdapterResolver)
+**Phase 2**: Create adapters (34 adapters all via AdapterResolver)
            Includes: ticket system, LLM, container, repository, event store, metrics, storage, config,
            notifier, encryption, board, repair cycle, PR review cycle, project manager, lock service, workflow config,
            agent executor, version control, message broker, discussion, review cycle, identity service,
            checkpoint store, queue service, event emitter, code review, container recovery, work item
            service, agent repository, active workflow run registry, work item branch tracker, audit store,
-           systemic analysis service, environment repair service, and CI pipeline service
+           systemic analysis service, environment repair service, branch resolution service, and CI pipeline service
 **Phase 3**: Create services (11 application services with their dependencies: workflow orchestrator,
            execution service, agent scheduler, pipeline manager, review service, feedback processor,
            workspace router, configuration service, work item service, multi-project orchestrator,
            container recovery service)
-**Phase 4**: Create ports (16 input port implementations)
+**Phase 4**: Create ports (17 input port implementations)
 **Phase 5**: Create FastAPI app (wire all ports to API endpoints, register event handlers)
 
 Note: Infrastructure (event bus) is created before adapters to enable causal linking via
@@ -815,7 +815,7 @@ class SimulationApplicationBootstrap:
     Bootstrap the entire application stack in simulation mode.
 
     This class wires up:
-    1. All 24 testing and simulation adapters
+    1. All 34 testing and simulation adapters
     2. Infrastructure (event bus, clock, logger)
     3. All application services
     4. All input/output ports
@@ -894,9 +894,9 @@ class SimulationApplicationBootstrap:
         This method executes bootstrap phases in order:
         - Phase 0: Create simulation engine (encapsulates clock and timing)
         - Phase 1: Create infrastructure (event bus, logger, error registry) - EARLY for subscriptions
-        - Phase 2: Create adapters (24 mock adapters for all output ports)
+        - Phase 2: Create adapters (34 mock adapters for all output ports)
         - Phase 3: Create services (11 application services with dependencies)
-        - Phase 4: Create ports (16 input port implementations)
+        - Phase 4: Create ports (17 input port implementations)
         - Phase 5: Create FastAPI app (wire all ports to API endpoints, register handlers)
         - Phase 6: Conditionally start auto-advance clock (if configured)
         - Phase 6b: Register stale lock watchdog (deadlock prevention)
@@ -935,8 +935,8 @@ class SimulationApplicationBootstrap:
             logger.info("Phase 1: Creating infrastructure...")
             self.infrastructure = self._create_infrastructure()
 
-            # Phase 2: Create adapters (33 total: 32 via resolver + branch_resolution_service) with event bus subscriptions
-            logger.info("Phase 2: Creating 33 adapters...")
+            # Phase 2: Create adapters (34 total: 33 via resolver + branch_resolution_service) with event bus subscriptions
+            logger.info("Phase 2: Creating 34 adapters...")
             self.adapters = await self._create_adapters()
 
             # Register causal links between adapters and domain events
@@ -1255,8 +1255,7 @@ class SimulationApplicationBootstrap:
         8. Repository: (depends on event_emitter)
         9. Engine-coupled: review_cycle, repair_cycle, pr_review_cycle (use SimulationEngine for clock injection)
         10. Additional services: code_review, container_recovery, systemic_analysis_service,
-            environment_repair_service, ci_pipeline_service (33 total via resolver)
-        11. Manual post-processing: branch_resolution_service (34th adapter, created separately)
+            environment_repair_service, ci_pipeline_service, branch_resolution_service (34 total via resolver)
 
         AdapterResolver validates credentials before construction and raises aggregated
         configuration errors if any adapter is misconfigured.
@@ -1266,7 +1265,7 @@ class SimulationApplicationBootstrap:
         simulation-specific methods.
 
         Returns:
-            SimulationAdapters with all 33 adapters typed as port interfaces
+            SimulationAdapters with all 34 adapters typed as port interfaces
         """
         if not self._engine:
             message = "SimulationEngine must be created before adapters"
@@ -1570,56 +1569,6 @@ class SimulationApplicationBootstrap:
                 extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
             )
             raise
-
-    def _create_dlq_retry_handler(self) -> Any:
-        """
-        Create a retry handler function for the dead letter queue.
-
-        The handler is called by the DLQ retry processor to retry failed events.
-        It simply re-publishes the event to the event bus.
-
-        Returns:
-            Async function that retries an event
-        """
-        event_bus = self.infrastructure.event_bus if self.infrastructure else None
-
-        async def retry_event(event_type: str, event_data: dict[str, Any]) -> None:
-            """Retry publishing a failed event."""
-            if not event_bus:
-                message = "Event bus not available for retry"
-                raise RuntimeError(message)
-
-            # Reconstruct the domain event from the stored data
-            # Map event type to actual event class for proper reconstruction
-            retry_event_obj = None
-
-            if event_type == "WorkItemColumnChanged":
-                retry_event_obj = WorkItemColumnChanged(
-                    aggregate_id=event_data.get("work_item_id", ""),
-                    payload=event_data,
-                )
-            elif event_type == "BoardReconciled":
-                retry_event_obj = BoardReconciled(
-                    aggregate_id=event_data.get("board_id", ""),
-                    payload=event_data,
-                )
-            else:
-                # For unknown event types, raise exception to prevent silent deletion
-                # This ensures the DLQ doesn't remove events of unmapped types on first retry.
-                # The retry processor will treat this as a processing failure and retry with backoff.
-                message = f"Unknown event type '{event_type}' in dead letter queue - handler mapping not updated"
-                logger.error(
-                    message,
-                    extra={
-                        "event_type": event_type,
-                        "error_id": ErrorRegistry.ERR_INTERNAL_ERROR,
-                    },
-                )
-                raise ValueError(message)
-
-            await event_bus.publish(retry_event_obj)
-
-        return retry_event
 
     # =========================================================================
     # Phase 1: Create Infrastructure (Early for Event Bus Subscriptions)
@@ -1984,7 +1933,7 @@ class SimulationApplicationBootstrap:
 
         This is the final step in Phase 5, which:
         1. Creates FastAPI app instance using create_app() factory
-        2. Wires all 16 input ports (7 command + 9 query) to API endpoints
+        2. Wires all 17 input ports (7 command + 10 query) to API endpoints
         3. Wires infrastructure components (event store, event bus)
         4. Wires application services (configuration service, logger, recovery service)
         5. Configures CORS for localhost development
