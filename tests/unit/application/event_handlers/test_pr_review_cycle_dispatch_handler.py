@@ -576,9 +576,9 @@ class TestLegacyWorkItemColumnChangedEventHandling:
 
     async def test_raises_on_legacy_event_missing_work_item_id(self, caplog):
         """Should raise ValueError when legacy event missing work_item_id."""
-        from codetoreum.domain.events import WorkItemColumnChanged
-
         import logging
+
+        from codetoreum.domain.events import WorkItemColumnChanged
 
         caplog.set_level(logging.ERROR)
         mock_cycle = AsyncMock(spec=IPRReviewCycle)
@@ -611,9 +611,9 @@ class TestLegacyWorkItemColumnChangedEventHandling:
 
     async def test_raises_on_legacy_event_missing_board_id(self, caplog):
         """Should raise ValueError when legacy event missing board_id."""
-        from codetoreum.domain.events import WorkItemColumnChanged
-
         import logging
+
+        from codetoreum.domain.events import WorkItemColumnChanged
 
         caplog.set_level(logging.ERROR)
         mock_cycle = AsyncMock(spec=IPRReviewCycle)
@@ -644,9 +644,9 @@ class TestLegacyWorkItemColumnChangedEventHandling:
 
     async def test_raises_on_legacy_event_missing_project_id(self, caplog):
         """Should raise ValueError when legacy event missing project_id."""
-        from codetoreum.domain.events import WorkItemColumnChanged
-
         import logging
+
+        from codetoreum.domain.events import WorkItemColumnChanged
 
         caplog.set_level(logging.ERROR)
         mock_cycle = AsyncMock(spec=IPRReviewCycle)
@@ -677,9 +677,9 @@ class TestLegacyWorkItemColumnChangedEventHandling:
 
     async def test_raises_on_legacy_event_missing_to_column(self, caplog):
         """Should raise ValueError when legacy event missing to_column."""
-        from codetoreum.domain.events import WorkItemColumnChanged
-
         import logging
+
+        from codetoreum.domain.events import WorkItemColumnChanged
 
         caplog.set_level(logging.ERROR)
         mock_cycle = AsyncMock(spec=IPRReviewCycle)
