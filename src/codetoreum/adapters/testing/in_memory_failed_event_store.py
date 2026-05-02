@@ -8,12 +8,11 @@ databases.
 The adapter:
 1. Stores failed events in an in-memory dictionary
 2. Provides all IFailedEventStore interface methods
-3. Async-safe for concurrent test execution (uses asyncio.Lock)
+3. Thread-safe for single event loop execution (no external locks needed)
 4. Supports event filtering and statistics generation
 5. Tracks retry success/failure metrics for testing
 """
 
-import asyncio
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -30,7 +29,8 @@ class InMemoryFailedEventStore(IFailedEventStore):
     """In-memory implementation of IFailedEventStore for simulation mode.
 
     Stores failed events in memory without any external infrastructure dependencies.
-    All operations are async-safe and maintain thread-safety for test execution.
+    All operations are safe within a single event loop due to Python's single-threaded
+    async execution model - no explicit locking needed.
 
     The adapter tracks both attempted and successful/failed retries to support
     comprehensive testing of event recovery scenarios.
@@ -49,7 +49,6 @@ class InMemoryFailedEventStore(IFailedEventStore):
     def __init__(self) -> None:
         """Initialize the in-memory failed event store."""
         self._events: dict[str, FailedEventRecord] = {}
-        self._lock = asyncio.Lock()
         # Track retry outcomes for statistics
         self._retries_succeeded: dict[str, int] = {}  # event_id -> count
         self._retries_failed: dict[str, int] = {}  # event_id -> count
@@ -75,25 +74,23 @@ class InMemoryFailedEventStore(IFailedEventStore):
             ID of the stored failed event
         """
         event_id = str(uuid.uuid4())
-
-        async with self._lock:
-            record = FailedEventRecord(
-                id=event_id,
-                event_type=event_type,
-                event_data=event_data,
-                failure_reason=failure_reason,
-                error_message=error_message,
-                failed_at=datetime.now(UTC),
-                retry_count=0,
-                max_retries=3,
-                next_retry_at=None,
-                last_retry_at=None,
-                metadata=metadata,
-            )
-            self._events[event_id] = record
-            # Initialize retry tracking for this event
-            self._retries_succeeded[event_id] = 0
-            self._retries_failed[event_id] = 0
+        record = FailedEventRecord(
+            id=event_id,
+            event_type=event_type,
+            event_data=event_data,
+            failure_reason=failure_reason,
+            error_message=error_message,
+            failed_at=datetime.now(UTC),
+            retry_count=0,
+            max_retries=3,
+            next_retry_at=None,
+            last_retry_at=None,
+            metadata=metadata,
+        )
+        self._events[event_id] = record
+        # Initialize retry tracking for this event
+        self._retries_succeeded[event_id] = 0
+        self._retries_failed[event_id] = 0
 
         return event_id
 
@@ -103,9 +100,8 @@ class InMemoryFailedEventStore(IFailedEventStore):
         Returns:
             Statistics including counts by reason, retry status, etc.
         """
-        # Note: asyncio.Lock is used, but get_stats() is synchronous per port.
-        # This is safe because get_stats() only reads the state; updates happen
-        # in async methods that properly acquire the lock.
+        # Safe to read without explicit lock since operations are single-threaded
+        # within the event loop.
         events = list(self._events.values())
 
         if not events:
@@ -168,7 +164,7 @@ class InMemoryFailedEventStore(IFailedEventStore):
         Returns:
             List of failed event records matching the filters
         """
-        # Safe to read without explicit lock due to GIL ensuring atomic dict operations
+        # Safe to read without explicit lock since the event loop is single-threaded
         events = list(self._events.values())
 
         # Apply filters
@@ -193,7 +189,7 @@ class InMemoryFailedEventStore(IFailedEventStore):
         Returns:
             The failed event record, or None if not found
         """
-        # Safe to read without explicit lock due to GIL ensuring atomic dict operations
+        # Safe to read without explicit lock since the event loop is single-threaded
         return self._events.get(event_id)
 
     def remove_event(self, event_id: str) -> bool:
@@ -205,7 +201,7 @@ class InMemoryFailedEventStore(IFailedEventStore):
         Returns:
             True if removed, False if not found
         """
-        # Dictionary deletion is atomic at the Python level due to the GIL
+        # Safe to modify in single-threaded event loop context
         if event_id in self._events:
             del self._events[event_id]
             # Clean up retry tracking
