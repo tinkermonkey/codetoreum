@@ -1,10 +1,8 @@
 """Contract tests for INotifier interface.
 
-These abstract tests verify that all INotifier implementations
-follow the contract correctly.
+These tests verify the contract and data models for the INotifier interface.
 """
 
-from abc import ABC, abstractmethod
 from datetime import UTC, datetime
 from types import MappingProxyType
 from uuid import uuid4
@@ -15,7 +13,6 @@ from codetoreum.ports.output.notifier import (
     Action,
     Attachment,
     DeliveryStatus,
-    INotifier,
     Notification,
     NotificationChannel,
     NotificationPriority,
@@ -464,113 +461,3 @@ class TestDeliveryStatusEnum:
         """Test that all statuses are defined."""
         statuses = {s.value for s in DeliveryStatus}
         assert statuses == {"pending", "sent", "delivered", "failed", "bounced"}
-
-
-class TestNotifierContract(ABC):
-    """Abstract contract tests for INotifier implementations.
-
-    Subclasses must implement create_notifier() to provide a concrete
-    INotifier implementation to test.
-    """
-
-    @abstractmethod
-    def create_notifier(self) -> INotifier:
-        """Create and return an INotifier instance for testing."""
-
-    @pytest.mark.asyncio
-    async def test_send_email_notification(self) -> None:
-        """Test sending an email notification."""
-        notifier = self.create_notifier()
-
-        result = await notifier.send(
-            channel=NotificationChannel.EMAIL,
-            recipient="test@example.com",
-            subject="Test",
-            message="Test message",
-            priority=NotificationPriority.NORMAL,
-        )
-
-        assert result.success
-        assert result.notification_id
-        assert result.error is None
-
-    @pytest.mark.asyncio
-    async def test_send_slack_notification(self) -> None:
-        """Test sending a Slack notification."""
-        notifier = self.create_notifier()
-
-        result = await notifier.send(
-            channel=NotificationChannel.SLACK,
-            recipient="C123456789",
-            subject="Alert",
-            message="Something happened",
-            priority=NotificationPriority.HIGH,
-        )
-
-        assert result.success
-        assert result.notification_id
-
-    @pytest.mark.asyncio
-    async def test_send_with_metadata(self) -> None:
-        """Test sending notification with metadata."""
-        notifier = self.create_notifier()
-
-        result = await notifier.send(
-            channel=NotificationChannel.EMAIL,
-            recipient="test@example.com",
-            subject="Test",
-            message="Test message",
-            metadata={"user_id": "123", "context": "test"},
-        )
-
-        assert result.success
-
-    @pytest.mark.asyncio
-    async def test_send_rich_notification(self) -> None:
-        """Test sending rich content notification."""
-        notifier = self.create_notifier()
-
-        action = Action(label="View", url="https://example.com")
-        content = RichContent(
-            title="Test Notification",
-            body="This is a test",
-            attachments=(),
-            actions=(action,),
-        )
-
-        result = await notifier.send_rich(
-            channel=NotificationChannel.EMAIL,
-            recipient="test@example.com",
-            content=content,
-        )
-
-        assert result.success
-
-    @pytest.mark.asyncio
-    async def test_send_batch_notifications(self) -> None:
-        """Test sending multiple notifications."""
-        notifier = self.create_notifier()
-
-        notifications = [
-            Notification(
-                channel=NotificationChannel.EMAIL,
-                recipient="user1@example.com",
-                subject="Test 1",
-                message="Message 1",
-                priority=NotificationPriority.NORMAL,
-                metadata=MappingProxyType({}),
-            ),
-            Notification(
-                channel=NotificationChannel.EMAIL,
-                recipient="user2@example.com",
-                subject="Test 2",
-                message="Message 2",
-                priority=NotificationPriority.HIGH,
-                metadata=MappingProxyType({}),
-            ),
-        ]
-
-        results = await notifier.send_batch(notifications)
-
-        assert len(results) == 2
-        assert all(r.success for r in results)

@@ -1,7 +1,6 @@
 """Unit tests for execution domain events."""
 
 import pytest
-from datetime import datetime, UTC
 
 from codetoreum.domain.events import ExecutionTimedOutEvent, now_iso
 
