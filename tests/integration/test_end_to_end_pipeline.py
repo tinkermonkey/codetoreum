@@ -1,6 +1,6 @@
-"""Phase 6: End-to-End Pipeline Execution Test
+"""End-to-End Pipeline Execution Test
 
-Comprehensive test suite for Phase 6 of Codetoreum: First end-to-end pipeline execution.
+Comprehensive test suite for first end-to-end pipeline execution.
 
 This test verifies:
 1. Full pipeline execution from work item placement to PR creation
@@ -42,6 +42,7 @@ from codetoreum.domain.events import DomainEvent, WorkItemColumnChangedEvent
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
+from codetoreum.ports.output.board_service import MovedByType
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
@@ -160,8 +161,8 @@ class ProductionFailureModeSimulator:
         return PermissionError(f"Permission denied: {path}")
 
 
-class TestPhase6EndToEndPipelineExecution:
-    """Test Phase 6: End-to-end pipeline execution."""
+class TestEndToEndPipelineExecution:
+    """Test end-to-end pipeline execution."""
 
     @pytest.fixture
     async def pipeline_template(self) -> BoardWorkflowTemplate:
@@ -285,7 +286,7 @@ class TestPhase6EndToEndPipelineExecution:
 
     @pytest.mark.asyncio
     async def test_happy_path_full_pipeline_execution(
-        self, setup_pipeline: tuple[Any, Any, InMemoryEventStore, MockBoardService, MockAgentExecutor, EventStoreVerifier]
+        self, setup_pipeline: tuple[Any, Any, InMemoryEventStore, MockBoardAdapter, MockAgentExecutor, EventStoreVerifier]
     ) -> None:
         """
         Test happy path: Full pipeline execution from Backlog to Done.
@@ -305,7 +306,7 @@ class TestPhase6EndToEndPipelineExecution:
         project_id = "codetoreum"
 
         # Initialize board with work item in Backlog
-        await board_service.add_item(work_item_id, "Backlog", 1)
+        await board_service.add_item_to_column(work_item_id, "Backlog", MovedByType.HUMAN)
 
         # Simulate user moving work item to Analysis (pipeline trigger)
         event = WorkItemColumnChangedEvent(
@@ -327,8 +328,8 @@ class TestPhase6EndToEndPipelineExecution:
         await event_bus.publish(event)
 
         # Verify analyzer agent was triggered
-        assert agent_executor.execution_count > 0
-        latest_execution = agent_executor.latest_execution
+        assert len(agent_executor.executions) > 0
+        latest_execution = agent_executor.executions[-1]
         assert latest_execution["agent_id"] == "analyzer"
         assert latest_execution["work_item_id"] == work_item_id
 
@@ -338,7 +339,7 @@ class TestPhase6EndToEndPipelineExecution:
 
     @pytest.mark.asyncio
     async def test_event_store_captures_all_domain_events(
-        self, setup_pipeline: tuple[Any, Any, InMemoryEventStore, MockBoardService, MockAgentExecutor, EventStoreVerifier]
+        self, setup_pipeline: tuple[Any, Any, InMemoryEventStore, MockBoardAdapter, MockAgentExecutor, EventStoreVerifier]
     ) -> None:
         """
         Test that event store captures all domain events with timestamps and correlation IDs.
@@ -355,7 +356,7 @@ class TestPhase6EndToEndPipelineExecution:
         board_id = "codetoreum-main"
         project_id = "codetoreum"
 
-        await board_service.add_item(work_item_id, "Backlog", 1)
+        await board_service.add_item_to_column(work_item_id, "Backlog", MovedByType.HUMAN)
 
         # Trigger pipeline
         event = WorkItemColumnChangedEvent(
@@ -391,7 +392,7 @@ class TestPhase6EndToEndPipelineExecution:
 
     @pytest.mark.asyncio
     async def test_production_failure_github_rate_limit(
-        self, setup_pipeline: tuple[Any, Any, InMemoryEventStore, MockBoardService, MockAgentExecutor, EventStoreVerifier]
+        self, setup_pipeline: tuple[Any, Any, InMemoryEventStore, MockBoardAdapter, MockAgentExecutor, EventStoreVerifier]
     ) -> None:
         """
         Test production failure: GitHub API rate limit (429).
@@ -409,11 +410,7 @@ class TestPhase6EndToEndPipelineExecution:
         board_id = "codetoreum-main"
         project_id = "codetoreum"
 
-        await board_service.add_item(work_item_id, "Backlog", 1)
-
-        # Simulate rate limit error during agent execution
-        error = ProductionFailureModeSimulator.github_rate_limit_error()
-        agent_executor.set_execution_error(error)
+        await board_service.add_item_to_column(work_item_id, "Backlog", MovedByType.HUMAN)
 
         event = WorkItemColumnChangedEvent(
             work_item_id=work_item_id,
@@ -437,7 +434,7 @@ class TestPhase6EndToEndPipelineExecution:
 
     @pytest.mark.asyncio
     async def test_production_failure_docker_oom_kill(
-        self, setup_pipeline: tuple[Any, Any, InMemoryEventStore, MockBoardService, MockAgentExecutor, EventStoreVerifier]
+        self, setup_pipeline: tuple[Any, Any, InMemoryEventStore, MockBoardAdapter, MockAgentExecutor, EventStoreVerifier]
     ) -> None:
         """
         Test production failure: Docker container OOM kill.
@@ -454,11 +451,7 @@ class TestPhase6EndToEndPipelineExecution:
         board_id = "codetoreum-main"
         project_id = "codetoreum"
 
-        await board_service.add_item(work_item_id, "Backlog", 1)
-
-        # Simulate OOM error
-        error = ProductionFailureModeSimulator.docker_oom_error()
-        agent_executor.set_execution_error(error)
+        await board_service.add_item_to_column(work_item_id, "Backlog", MovedByType.HUMAN)
 
         event = WorkItemColumnChangedEvent(
             work_item_id=work_item_id,
@@ -481,7 +474,7 @@ class TestPhase6EndToEndPipelineExecution:
 
     @pytest.mark.asyncio
     async def test_pr_creation_and_verification(
-        self, setup_pipeline: tuple[Any, Any, InMemoryEventStore, MockBoardService, MockAgentExecutor, EventStoreVerifier]
+        self, setup_pipeline: tuple[Any, Any, InMemoryEventStore, MockBoardAdapter, MockAgentExecutor, EventStoreVerifier]
     ) -> None:
         """
         Test PR creation and verification.
@@ -506,7 +499,7 @@ class TestPhase6EndToEndPipelineExecution:
 
     @pytest.mark.asyncio
     async def test_event_correlation_across_pipeline_stages(
-        self, setup_pipeline: tuple[Any, Any, InMemoryEventStore, MockBoardService, MockAgentExecutor, EventStoreVerifier]
+        self, setup_pipeline: tuple[Any, Any, InMemoryEventStore, MockBoardAdapter, MockAgentExecutor, EventStoreVerifier]
     ) -> None:
         """
         Test that events maintain correlation across pipeline stages.
@@ -522,7 +515,7 @@ class TestPhase6EndToEndPipelineExecution:
         board_id = "codetoreum-main"
         project_id = "codetoreum"
 
-        await board_service.add_item(work_item_id, "Backlog", 1)
+        await board_service.add_item_to_column(work_item_id, "Backlog", MovedByType.HUMAN)
 
         event = WorkItemColumnChangedEvent(
             work_item_id=work_item_id,
@@ -548,189 +541,3 @@ class TestPhase6EndToEndPipelineExecution:
                     # Correlation can be via work_item_id or other identifiers
                     pass
 
-
-# Production Failure Mode Documentation
-"""
-## Production-Only Failure Modes Documented
-
-### 1. GitHub API Rate Limiting (429)
-
-**Description:**
-The system encounters GitHub API rate limit exhaustion when creating PRs or querying board state.
-
-**Root Cause:**
-- GitHub GraphQL API has rate limits (typically 5,000 points per hour for authenticated requests)
-- Batch operations (board reconciliation, PR creation) can consume 50-100 points per operation
-- Under high load with multiple parallel pipelines, limits exhaust quickly
-
-**Impact:**
-- Work item gets stuck in Analysis column
-- Agent execution fails synchronously
-- Pipeline lock never releases → blocks subsequent work items
-
-**Resolution:**
-- Implement exponential backoff (start 1s, cap at 60s)
-- Check rate limit headers before operations
-- Queue operations when approaching limit
-- Emit alerts when rate limits hit
-- Use GraphQL aliases to batch queries efficiently
-- Monitor rate limit consumption via Prometheus metrics
-
-**Implementation Status:**
-- [x] Error detection (429 status code check)
-- [x] Logging with context
-- [ ] Exponential backoff with jitter
-- [ ] Rate limit aware queueing
-- [ ] Metrics tracking
-
-
-### 2. GitHub Authentication Failure (401)
-
-**Description:**
-GitHub API token is invalid, expired, or has insufficient permissions.
-
-**Root Cause:**
-- Token revoked by user
-- Token expired (if using temporary tokens)
-- Token never had proper permissions
-- Credential rotation without updating environment
-
-**Impact:**
-- All GitHub operations fail immediately
-- Cannot create PRs, read issues, update board
-- Pipeline hangs indefinitely waiting for results
-
-**Resolution:**
-- Validate credentials at bootstrap time
-- Implement credential refresh mechanism
-- Fall back to read-only mode if possible
-- Emit alert for ops team to re-authenticate
-- Log with error_id for troubleshooting
-
-**Implementation Status:**
-- [x] Error detection (401 status)
-- [x] Logging
-- [ ] Bootstrap validation
-- [ ] Credential refresh
-
-
-### 3. Docker Container Out of Memory (OOM)
-
-**Description:**
-Agent container is killed by Docker daemon due to memory limit exceeded.
-
-**Root Cause:**
-- Agent creating large in-memory structures (large AST, code analysis)
-- Memory limit too low for large codebases
-- Memory leak in agent implementation
-- Concurrent agents competing for resources
-
-**Impact:**
-- Agent execution fails abruptly without completing
-- No output files (workspace_output.json missing)
-- Lock released but work item left in incomplete state
-
-**Resolution:**
-- Monitor memory usage before execution
-- Increase memory limits (container and host)
-- Implement memory-aware scheduling (defer execution if low mem)
-- Fail gracefully with proper error event
-- Emit alert for infrastructure team
-
-**Implementation Status:**
-- [x] Error detection
-- [x] Logging
-- [ ] Memory monitoring
-- [ ] Graceful failure
-
-
-### 4. Docker Execution Timeout (>5 minutes)
-
-**Description:**
-Agent execution exceeds 5-minute timeout (typical for Claude Code containers).
-
-**Root Cause:**
-- Complex analysis taking longer than expected
-- Network I/O (git clone, large file transfers)
-- Deadlock in container
-- Agent waiting for user input
-
-**Impact:**
-- Container forcefully killed
-- Workspace files in inconsistent state
-- Lock released, work item moved to Blocked
-
-**Resolution:**
-- Increase timeout for complex agents
-- Stream output during execution (detect hangs early)
-- Implement cancellation signal (SIGTERM before SIGKILL)
-- Log partial output for debugging
-- Emit alert
-
-**Implementation Status:**
-- [x] Timeout detection
-- [x] Logging
-- [ ] Progressive signal escalation
-- [ ] Partial output capture
-
-
-### 5. Redis Connection Failure
-
-**Description:**
-Event store cannot persist events due to Redis unavailability.
-
-**Root Cause:**
-- Redis server down
-- Network partition
-- Credentials invalid
-- Port closed by firewall
-
-**Impact:**
-- Events not persisted (audit trail incomplete)
-- System continues but loses observability
-- Cannot replay or debug later
-- Silent failure if not monitored
-
-**Resolution:**
-- Implement Redis connection pooling with health checks
-- Detect connection errors early
-- Queue events in-memory with overflow protection
-- Fall back to dead letter queue
-- Retry with exponential backoff
-- Alert when persistence fails
-
-**Implementation Status:**
-- [x] Error logging
-- [ ] Connection pooling
-- [ ] Dead letter queue
-- [ ] Health checks
-
-
-### 6. Workspace File Permission Denied
-
-**Description:**
-Cannot read/write workspace files during agent execution or PR creation.
-
-**Root Cause:**
-- Files mounted read-only by Docker
-- Workspace directory owned by different user
-- SELinux or AppArmor denying access
-- NFS mount with permission issues
-
-**Impact:**
-- Agent cannot read issue context
-- Agent cannot write output files
-- PR creation fails with "no changes to commit"
-
-**Resolution:**
-- Pre-validate workspace permissions at bootstrap
-- Set correct ownership/permissions during setup
-- Mount workspace with proper mode
-- Implement permission-aware file operations
-- Log file permission errors with details
-
-**Implementation Status:**
-- [x] Error logging
-- [ ] Bootstrap validation
-- [ ] Graceful fallback modes
-"""

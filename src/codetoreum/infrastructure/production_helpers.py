@@ -1,4 +1,4 @@
-"""Phase 6: End-to-End Pipeline Execution Helpers
+"""Production Pipeline Execution Helpers
 
 Utilities for:
 1. Verifying event store contains expected domain events
@@ -12,7 +12,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 from codetoreum.domain.events import DomainEvent
-from codetoreum.ports.exceptions import ExternalServiceError
 from codetoreum.ports.output.event_store import IEventStore
 
 logger = logging.getLogger(__name__)
@@ -35,9 +34,12 @@ class EventStoreAuditTrail:
             all_events = await self.event_store.get_events(work_item_id)
             if all_events:
                 events.extend(all_events)
-        except Exception:
+        except KeyError:
             # Aggregate not found, continue
-            pass
+            logger.debug(f"No events found for work item {work_item_id}")
+        except Exception as e:
+            logger.error(f"Error retrieving events for work item {work_item_id}", exc_info=True)
+            raise
         return events
 
     async def assert_event_sequence(self, aggregate_id: str, expected_types: list[str]) -> None:
@@ -169,28 +171,33 @@ class ProductionErrorHandler:
     def is_docker_timeout_error(error: Exception) -> bool:
         """Check if error is Docker timeout."""
         error_str = str(error).lower()
-        return (
-            "timeout" in error_str
-            or "exceeded" in error_str
-            or "timed out" in error_str
-            or "deadline" in error_str
-        )
+        # Check for Docker-specific timeout indicators
+        if "docker" in error_str:
+            return (
+                "timeout" in error_str
+                or "exceeded" in error_str
+                or "timed out" in error_str
+                or "deadline" in error_str
+            )
+        return False
 
     @staticmethod
     def is_redis_error(error: Exception) -> bool:
         """Check if error is Redis connectivity."""
         error_str = str(error).lower()
+        # Check for Redis-specific connection errors
         return (
             "redis" in error_str
-            or "connection refused" in error_str
-            or "econnrefused" in error_str
-            or "timeout" in error_str and "redis" in str(error)
+            or ("connection refused" in error_str and "redis" in error_str)
+            or ("econnrefused" in error_str and "6379" in error_str)  # Redis default port
         )
 
     @staticmethod
     def is_file_permission_error(error: Exception) -> bool:
         """Check if error is file permission denied."""
-        return isinstance(error, PermissionError) or "permission denied" in str(error).lower()
+        return isinstance(error, PermissionError) or (
+            "permission denied" in str(error).lower() and "/" in str(error)  # Path indicator
+        )
 
     @staticmethod
     def classify_error(error: Exception) -> str:
@@ -199,6 +206,9 @@ class ProductionErrorHandler:
             return "GITHUB_RATE_LIMIT"
         elif ProductionErrorHandler.is_auth_error(error):
             return "GITHUB_AUTH_FAILURE"
+        elif ProductionErrorHandler.is_file_permission_error(error):
+            # Check file permission BEFORE general permission (more specific)
+            return "FILE_PERMISSION_DENIED"
         elif ProductionErrorHandler.is_permission_error(error):
             return "GITHUB_PERMISSION_DENIED"
         elif ProductionErrorHandler.is_docker_oom_error(error):
@@ -207,8 +217,6 @@ class ProductionErrorHandler:
             return "DOCKER_TIMEOUT"
         elif ProductionErrorHandler.is_redis_error(error):
             return "REDIS_CONNECTION_FAILURE"
-        elif ProductionErrorHandler.is_file_permission_error(error):
-            return "FILE_PERMISSION_DENIED"
         else:
             return "UNKNOWN"
 

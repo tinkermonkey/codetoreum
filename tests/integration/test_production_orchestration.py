@@ -1,4 +1,4 @@
-"""Phase 6: Production Orchestration Integration Test
+"""Production Orchestration Integration Test
 
 Tests end-to-end production pipeline with real-like error scenarios.
 
@@ -25,48 +25,114 @@ from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
 from codetoreum.application.agent_execution_recovery_service import AgentExecutionRecoveryService
 from codetoreum.application.event_handlers.board_event_handler import BoardColumnEventHandler
 from codetoreum.config.codetoreum_pipeline import create_codetoreum_pipeline_template
+from codetoreum.domain.board_workflow_template import BoardWorkflowTemplate
 from codetoreum.domain.events import WorkItemColumnChangedEvent
 from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.infrastructure.phase_6_helpers import (
+from codetoreum.infrastructure.production_helpers import (
     EventStoreAuditTrail,
     ProductionErrorHandler,
     PRVerifier,
 )
+from codetoreum.ports.output.board_service import MovedByType
 from codetoreum.ports.output.event_emitter import IEventEmitter
+from codetoreum.ports.output.failed_event_store import FailedEventStoreStats, IFailedEventStore
+from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 logger = logging.getLogger(__name__)
 
 
-class MockWorkflowConfigService:
-    """Mock workflow config service."""
+class MockWorkflowConfigService(IWorkflowConfigService):
+    """Mock workflow config service for testing."""
 
-    def __init__(self, template: Any):
-        """Initialize."""
+    def __init__(self, template: BoardWorkflowTemplate):
+        """Initialize with template."""
         self.template = template
 
-    async def save_board_workflow_template(self, template: Any) -> None:
-        """Save."""
+    async def save_board_workflow_template(self, template: BoardWorkflowTemplate) -> None:
+        """Save template."""
         self.template = template
 
-    async def get_board_workflow_template(self, board_id: str) -> Any:
-        """Get."""
+    async def get_board_workflow_template(self, board_id: str) -> BoardWorkflowTemplate | None:
+        """Get template by board ID."""
         if board_id == self.template.board_id:
             return self.template
         return None
 
-    async def list_board_workflow_templates(self, project_id: str) -> list[Any]:
-        """List."""
+    async def list_board_workflow_templates(self, project_id: str) -> list[BoardWorkflowTemplate]:
+        """List templates for project."""
         if project_id == self.template.project_id:
             return [self.template]
         return []
 
     async def delete_board_workflow_template(self, board_id: str) -> None:
-        """Delete."""
+        """Delete template."""
         pass
 
 
-class TestPhase6ProductionOrchestration:
-    """Phase 6 Production Orchestration Tests."""
+class MockFailedEventStore(IFailedEventStore):
+    """Mock implementation of failed event store for testing."""
+
+    def __init__(self) -> None:
+        """Initialize."""
+        self.events: dict[str, Any] = {}
+
+    async def add_failed_event(
+        self,
+        event_type: str,
+        event_data: dict[str, Any],
+        failure_reason: Any,
+        error_message: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        """Add a failed event."""
+        event_id = f"failed_{len(self.events)}"
+        self.events[event_id] = {
+            "event_type": event_type,
+            "event_data": event_data,
+            "failure_reason": failure_reason,
+            "error_message": error_message,
+            "metadata": metadata,
+        }
+        return event_id
+
+    def get_stats(self) -> FailedEventStoreStats:
+        """Get stats."""
+        return FailedEventStoreStats(
+            total_failed_events=len(self.events),
+            pending_retries=0,
+            exhausted_retries=0,
+            total_retries_attempted=0,
+            total_retries_succeeded=0,
+            total_retries_failed=0,
+        )
+
+    def list_events(
+        self,
+        failure_reason: Any | None = None,
+        can_retry: bool | None = None,
+        limit: int | None = None,
+    ) -> list[Any]:
+        """List events."""
+        return []
+
+    def get_event(self, event_id: str) -> Any | None:
+        """Get event."""
+        return self.events.get(event_id)
+
+    def remove_event(self, event_id: str) -> bool:
+        """Remove event."""
+        if event_id in self.events:
+            del self.events[event_id]
+            return True
+        return False
+
+    def clear(self) -> None:
+        """Clear all events."""
+        self.events.clear()
+
+
+class TestProductionOrchestration:
+    """Production Orchestration Tests."""
 
     @pytest.fixture
     async def codetoreum_pipeline(self) -> Any:
@@ -92,8 +158,9 @@ class TestPhase6ProductionOrchestration:
         event_emitter = MagicMock(spec=IEventEmitter)
         run_registry = MagicMock()
         run_registry.set_active_run = AsyncMock()
+        failed_event_store = MockFailedEventStore()
         recovery_service = AgentExecutionRecoveryService(
-            lock_service=lock_service,
+            failed_event_store=failed_event_store,
             event_store=event_store,
         )
 
@@ -142,8 +209,8 @@ class TestPhase6ProductionOrchestration:
         project_id = "codetoreum"
 
         # Add items to board (queued order)
-        await board_service.add_item(work_item_1, "Backlog", 1)
-        await board_service.add_item(work_item_2, "Backlog", 2)
+        await board_service.add_item_to_column(work_item_1, "Backlog", MovedByType.HUMAN)
+        await board_service.add_item_to_column(work_item_2, "Backlog", MovedByType.HUMAN)
 
         # Trigger pipeline for first item
         event1 = WorkItemColumnChangedEvent(
@@ -162,7 +229,7 @@ class TestPhase6ProductionOrchestration:
         assert lock_status == work_item_1
 
         # Simulate agent completion by moving to next stage
-        await board_service.move_item_to_column(work_item_1, "Implementation")
+        await board_service.move_item_to_column(work_item_1, "Implementation", MovedByType.SYSTEM)
 
         # Simulate completion through all stages (auto-progression)
         for column in ["Testing", "Review", "Done"]:
@@ -208,7 +275,7 @@ class TestPhase6ProductionOrchestration:
         board_id = "codetoreum-main"
         project_id = "codetoreum"
 
-        await board_service.add_item(work_item_id, "Backlog", 1)
+        await board_service.add_item_to_column(work_item_id, "Backlog", MovedByType.HUMAN)
 
         # Trigger pipeline
         event = WorkItemColumnChangedEvent(
@@ -370,7 +437,7 @@ class TestPhase6ProductionOrchestration:
 
         # Add items in order
         for i, item in enumerate([item1, item2, item3]):
-            await board_service.add_item(item, "Backlog", i + 1)
+            await board_service.add_item_to_column(item, "Backlog", MovedByType.HUMAN)
 
         # Trigger all items to Analysis simultaneously
         for item in [item1, item2, item3]:
@@ -419,10 +486,7 @@ class TestPhase6ProductionOrchestration:
         board_id = "codetoreum-main"
         project_id = "codetoreum"
 
-        await board_service.add_item(work_item_id, "Backlog", 1)
-
-        # Simulate agent execution failure
-        agent_executor.set_execution_error(Exception("Agent execution failed"))
+        await board_service.add_item_to_column(work_item_id, "Backlog", MovedByType.HUMAN)
 
         event = WorkItemColumnChangedEvent(
             work_item_id=work_item_id,
@@ -440,120 +504,3 @@ class TestPhase6ProductionOrchestration:
         lock_holder = await lock_service.get_lock_holder(board_id)
         assert lock_holder is None
 
-
-# Manual Testing Guide for Phase 6
-"""
-## Phase 6: Manual Testing Guide
-
-To manually test Phase 6 end-to-end pipeline execution:
-
-### 1. Setup Prerequisites
-
-```bash
-# Start services
-docker-compose up -d redis postgresql elasticsearch
-
-# Set environment variables
-export CODETOREUM_AUTH_SECRET_KEY=test-secret-key
-export CODETOREUM_GITHUB_TOKEN=ghp_xxxx  # Valid GitHub token
-export CODETOREUM_GITHUB_REPO=owner/repo  # Target repository
-export CODETOREUM_CLAUDE_API_KEY=sk-xxxx  # Valid Claude API key
-```
-
-### 2. Start Application
-
-```bash
-# Start production server
-python -m codetoreum.cli.server start --mode=production
-```
-
-### 3. Create Test Work Item
-
-```bash
-# Create GitHub issue in target repository
-# E.g., create issue: "CTMM-001: Test pipeline execution"
-# Get issue number, then place it in Backlog column on GitHub Projects board
-```
-
-### 4. Trigger Pipeline
-
-```bash
-# Move work item from Backlog to Analysis column on board
-# (via GitHub Projects UI or API)
-
-# This will:
-# - Trigger BoardColumnEventHandler
-# - Acquire pipeline lock
-# - Execute analyzer agent in Docker container
-# - Auto-advance to Implementation
-# - Execute maker agent
-# - Auto-advance to Testing
-# - Execute tester agent
-# - Auto-advance to Review
-# - Wait for manual approval
-```
-
-### 5. Approve Review and Trigger PR
-
-```bash
-# Move work item from Review to Done in GitHub Projects board
-# This releases the pipeline lock and triggers PR creation
-
-# Verify PR was created in the target repository
-```
-
-### 6. Monitor for Production Failure Modes
-
-During execution, watch for:
-- **Rate limit (429)**: Check GitHub API rate limit headers
-  - Resolution: Backoff for 60s before retry
-
-- **Auth failure (401)**: Check token validity
-  - Resolution: Refresh token and restart service
-
-- **Docker timeout**: Check container execution time
-  - Resolution: Increase timeout or optimize agent
-
-- **Redis failure**: Check Redis connection
-  - Resolution: Restart Redis or check firewall
-
-### 7. Verify Event Store
-
-```bash
-# Query event store for workflow events
-# (via CLI or direct Redis access)
-
-# Should see events:
-# - WorkflowCreated (when pipeline triggered)
-# - WorkflowStarted (when lock acquired)
-# - WorkflowStageAdvanced (on each column transition)
-# - WorkflowCompleted (when reaching Done)
-
-# All events should have:
-# - Timestamp (occurred_at)
-# - Work item ID (in payload)
-# - Proper sequencing
-```
-
-### 8. Verify PR Creation
-
-```bash
-# Check target repository for new PR
-# Verify:
-# - Author: codetoreum (git user)
-# - Title: References work item (CTMM-001: ...)
-# - Description: Contains context from issue
-# - Changes: Actual code modifications
-# - Mergeable: No conflicts with main
-# - Status: Ready for review
-```
-
-### 9. Document Production Failure
-
-If any production-only failure occurs:
-1. Capture error logs with timestamps
-2. Get event store trace for work item
-3. Check resource usage (memory, CPU, network)
-4. Record failure mode and recovery steps
-5. Create issue for resolution/automation
-"""

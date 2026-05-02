@@ -1,4 +1,4 @@
-"""Phase 6: Production End-to-End Pipeline Execution Smoke Test
+"""Production End-to-End Pipeline Execution Smoke Test
 
 Tests full pipeline execution end-to-end with production adapters.
 
@@ -20,14 +20,14 @@ from codetoreum.application.event_handlers.board_event_handler import BoardColum
 from codetoreum.config.codetoreum_pipeline import create_codetoreum_pipeline_template
 from codetoreum.domain.events import WorkItemColumnChangedEvent
 from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.infrastructure.phase_6_helpers import (
+from codetoreum.infrastructure.production_helpers import (
     ProductionErrorHandler,
     PRVerifier,
 )
 
 
-class TestPhase6ProductionExecution:
-    """Phase 6: Production execution smoke tests."""
+class TestProductionExecution:
+    """Production execution smoke tests."""
 
     @pytest.mark.asyncio
     async def test_pipeline_configuration_exists(self) -> None:
@@ -256,111 +256,3 @@ class TestPhase6ProductionExecution:
         for col_name in ["Analysis", "Implementation", "Testing"]:
             assert template.get_column_config(col_name).on_failure_column == "Blocked"
 
-
-# Phase 6 Summary Documentation
-"""
-## Phase 6: Production End-to-End Pipeline Execution - Summary
-
-### Objectives Completed
-
-1. **End-to-End Pipeline Execution**
-   - ✓ Work item triggering pipeline via board column change
-   - ✓ Pipeline lock acquisition for exclusive execution
-   - ✓ Agent execution through all pipeline stages
-   - ✓ Auto-progression between stages
-   - ✓ Lock release and queue processing
-
-2. **Event Store Audit Trail**
-   - ✓ WorkflowCreated event when lock acquired
-   - ✓ WorkflowStarted event when pipeline begins
-   - ✓ WorkflowStageAdvanced events on transitions
-   - ✓ WorkflowCompleted event at exit column
-   - ✓ All events persisted with timestamps
-
-3. **Production Error Handling**
-   - ✓ Error classification system for production failures
-   - ✓ Recovery strategies for each failure mode
-   - ✓ Graceful degradation on agent failures
-   - ✓ Pipeline lock release despite errors
-   - ✓ Work item moved to Blocked column on failure
-
-4. **Production Failure Modes Documented**
-   - ✓ GitHub API rate limiting (429)
-   - ✓ GitHub authentication failure (401)
-   - ✓ Docker container OOM kill
-   - ✓ Docker execution timeout
-   - ✓ Redis connection failure
-   - ✓ File permission denied
-
-5. **PR Verification**
-   - ✓ PR authorship verification (Codetoreum user)
-   - ✓ PR target repository verification
-   - ✓ PR mergeability checks
-   - ✓ PR content validation
-   - ✓ Complete PR verification helper
-
-### Key Implementation Details
-
-**Pipeline Lock Service:**
-- FIFO queue ordering for fair scheduling
-- Exclusive lock holder per board
-- Queue position tracking
-- Automatic next item assignment on release
-
-**Event Store:**
-- Persists all workflow lifecycle events
-- Maintains aggregate_id for correlation
-- Timestamps all events
-- Enables complete audit trail
-
-**Error Handling:**
-- Classifies errors by type and cause
-- Provides recovery strategies
-- Retryable vs. non-retryable determination
-- Alert levels for ops team
-
-**Agent Execution:**
-- Triggers agents on column entry
-- Auto-progresses on completion
-- Moves to Blocked column on failure
-- Releases lock to unblock queue
-
-### Production Deployment Checklist
-
-- [x] Pipeline configuration saved in database
-- [x] Event store initialized (Redis or alternate)
-- [x] GitHub credentials validated
-- [x] Docker environment verified
-- [x] Pipeline lock service running
-- [x] Resilience decorators applied
-- [x] Error handling configured
-- [x] Monitoring/alerting enabled
-- [x] Event handlers registered
-
-### Testing Evidence
-
-Phase 6 smoke tests verify:
-1. Pipeline configuration exists and is correct
-2. Board column changes trigger correct actions
-3. Event store persists workflow events
-4. Errors are properly classified
-5. PR verification works correctly
-6. Pipeline lock respects FIFO ordering
-
-All tests pass without external service dependencies (mocked).
-
-### Known Limitations & Future Work
-
-1. **Rate Limit Backoff**: Configured but not yet tested with real GitHub API
-2. **Container Recovery**: Needs integration with production container service
-3. **Credential Refresh**: Placeholder for token refresh mechanism
-4. **Memory Monitoring**: Not yet implemented for Docker OOM prevention
-5. **Partial Output Capture**: Need to capture partial logs on timeout
-
-### Maintenance Notes
-
-- Production helpers in `src/codetoreum/infrastructure/phase_6_helpers.py`
-- Event handlers in `application/event_handlers/`
-- Lock service in `adapters/secondary/in_memory_pipeline_lock_service.py`
-- Pipeline template in `config/codetoreum_pipeline.py`
-"""
