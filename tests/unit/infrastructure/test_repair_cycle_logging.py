@@ -41,7 +41,7 @@ class TestRepairCycleLogLevel:
 
     def test_all_levels(self) -> None:
         """Test that all expected levels exist."""
-        levels = {l.value for l in RepairCycleLogLevel}
+        levels = {level.value for level in RepairCycleLogLevel}
         assert levels == {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
 
 
