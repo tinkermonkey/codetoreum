@@ -20,7 +20,10 @@ from codetoreum.infrastructure.event_types import EventTypes
 from codetoreum.infrastructure.observability.instrumentation import (
     instrument_async_function,
 )
-from codetoreum.ports.exceptions import TimeoutError as PortTimeoutError
+from codetoreum.ports.exceptions import (
+    ExternalServiceError,
+    TimeoutError as PortTimeoutError,
+)
 from codetoreum.ports.input.conversational_loop_service import IConversationalLoopService
 from codetoreum.ports.output import IBoardService, IEventStore, ITicketSystem
 from codetoreum.ports.output.board_service import MovedByType
@@ -1624,7 +1627,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
                 # Get workflow configuration
                 try:
                     workflow_config = await self.config.get_workflow_config(project_name, board.name)
-                except Exception as e:
+                except (ValueError, ExternalServiceError, PortTimeoutError) as e:
                     logger.error(
                         f"Failed to load workflow config for board {board.name}, skipping all items on board: {e}",
                         exc_info=True,
@@ -1749,7 +1752,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
 
             logger.info(
                 f"Orchestrated project {project_name}: {actions_taken} actions taken, {error_count} errors encountered",
-                extra={"error_id": "ERR_ORCHESTRATOR_PROJECT_ORCHESTRATION_SUMMARY", "actions": actions_taken, "errors": error_count},
+                extra={"actions": actions_taken, "errors": error_count},
             )
             return actions_taken
 
