@@ -51,7 +51,6 @@ from codetoreum.adapters.testing import (
     InMemoryVersionControlService,
     InMemoryWorkflowConfigService,
     InMemoryWorkItemBranchTracker,
-    MockAgentExecutor,
     MockBoardAdapter,
     MockCIPipelineAdapter,
     MockContainerRecoveryAdapter,
@@ -839,20 +838,6 @@ class AdapterFactory:
             description="Configurable identity service for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock", "production"],
-            config_schema=AdapterCredentialRequirement(
-                simulation_only=True,
-                description="Simulation-only adapter, no credentials required",
-            ),
-            set_as_default=True,
-        )
-
-        # Agent Executor Adapters
-        self._agent_executor_registry.register(
-            name="mock",
-            adapter_type=MockAgentExecutor,
-            description="Mock agent executor for testing",
-            version="1.0.0",
-            tags=["testing", "simulation", "mock"],
             config_schema=AdapterCredentialRequirement(
                 simulation_only=True,
                 description="Simulation-only adapter, no credentials required",

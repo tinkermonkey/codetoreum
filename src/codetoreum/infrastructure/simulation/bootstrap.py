@@ -1658,11 +1658,14 @@ class SimulationApplicationBootstrap:
         # Create causal link registry for managing adapter dependencies
         causal_link_registry = CausalLinkRegistry()
 
-        # Create dead letter queue for capturing failed event publishing
-        # Wrap it with the port adapter to decouple infrastructure from application
-        # This is critical for event bridge reliability (issue #371)
-        dead_letter_queue = DeadLetterQueue()
-        failed_event_store = DeadLetterQueueFailedEventStoreAdapter(dead_letter_queue)
+        # Create in-memory failed event store for simulation mode
+        # No production infrastructure contact (FR-1.5: simulation-only requirement)
+        # Provides fully deterministic behavior for testing event failure scenarios
+        from codetoreum.adapters.testing.in_memory_failed_event_store import (
+            InMemoryFailedEventStore,
+        )
+
+        failed_event_store = InMemoryFailedEventStore()
 
         logger.info("Created infrastructure components (including CausalLinkRegistry and IFailedEventStore)")
 
