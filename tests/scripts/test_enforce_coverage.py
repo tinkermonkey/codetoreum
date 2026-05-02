@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from scripts.enforce_coverage import (
+    CoverageMetrics,
     check_regression,
     enforce_coverage,
     get_layer_coverage,
@@ -17,7 +18,6 @@ from scripts.enforce_coverage import (
     parse_coverage_json,
     run_coverage_tests,
     save_baseline,
-    CoverageMetrics,
 )
 
 

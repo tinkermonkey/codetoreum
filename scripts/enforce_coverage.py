@@ -220,13 +220,12 @@ def enforce_coverage(
         if strict_mode:
             # Strict mode: enforce absolute thresholds
             passed = metrics.percent_covered >= threshold.minimum_percent
+        # Default mode: only fail on regression
+        elif baseline_metrics is not None:
+            passed = check_regression(metrics, baseline_metrics)
         else:
-            # Default mode: only fail on regression
-            if baseline_metrics is not None:
-                passed = check_regression(metrics, baseline_metrics)
-            else:
-                # No baseline yet, so can't regress
-                passed = True
+            # No baseline yet, so can't regress
+            passed = True
 
         all_passed = all_passed and passed
 
@@ -253,11 +252,10 @@ def enforce_coverage(
 
     if strict_mode:
         overall_passed = overall_metrics.percent_covered >= OVERALL_MINIMUM_PERCENT
+    elif baseline_overall is not None:
+        overall_passed = check_regression(overall_metrics, baseline_overall)
     else:
-        if baseline_overall is not None:
-            overall_passed = check_regression(overall_metrics, baseline_overall)
-        else:
-            overall_passed = True
+        overall_passed = True
 
     all_passed = all_passed and overall_passed
 
