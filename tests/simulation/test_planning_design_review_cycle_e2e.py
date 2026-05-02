@@ -174,10 +174,8 @@ async def test_issues_found_path(pr_review_env):
     in_development_reached = await wait_for_column(board, work_item_id, "In Development", timeout=10.0)
     assert in_development_reached, "Item did not reach 'In Development' after PR review cycle"
 
-    # Give async event tasks time to complete before checking event store
-    await asyncio.sleep(0.5)
-
     # AC-2: PRReviewCycleStartedEvent should be fired
+    # Note: Events are properly awaited in emit_async, so no additional sleep is needed
     cycle_events = [e for e in event_store.events if "reviewcycle" in str(type(e).__name__).lower()]
     assert len(cycle_events) > 0, "No PR review cycle events found in event store"
 
@@ -262,10 +260,8 @@ async def test_approved_path(pr_review_env):
     done_reached = await wait_for_column(board, work_item_id, "Done", timeout=10.0)
     assert done_reached, "Item did not reach 'Done' after PR review cycle approval"
 
-    # Give async event tasks time to complete before checking event store
-    await asyncio.sleep(0.5)
-
     # AC-2: PRReviewCycleApprovedEvent should be present
+    # Note: Events are properly awaited in emit_async, so no additional sleep is needed
     cycle_events = [e for e in event_store.events if "reviewcycle" in str(type(e).__name__).lower()]
     approved_events = [e for e in cycle_events if isinstance(e, PRReviewCycleApprovedEvent)]
     assert len(approved_events) > 0, "PRReviewCycleApprovedEvent not fired"
