@@ -7,8 +7,6 @@ from pathlib import Path
 import pytest
 
 from scripts.enforce_coverage import (
-    CoverageMetrics,
-    CoverageThreshold,
     enforce_coverage,
     get_layer_coverage,
     get_overall_coverage,
@@ -280,17 +278,14 @@ class TestEnforceCoverage:
         finally:
             Path(temp_path).unlink()
 
-    def test_returns_coverage_metrics(self, sample_coverage_data: dict) -> None:
-        """Test that coverage metrics are returned as expected."""
+    def test_invalid_json_input(self) -> None:
+        """Test enforce_coverage with invalid/malformed JSON input."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump(sample_coverage_data, f)
+            f.write("{invalid json content")
             temp_path = f.name
 
         try:
-            # Test function returns exit code, not metrics
-            # But we verify it works correctly
-            result = enforce_coverage(temp_path, tests_failed=False)
-            assert isinstance(result, int)
-            assert result in (0, 1)
+            with pytest.raises(json.JSONDecodeError):
+                enforce_coverage(temp_path, tests_failed=False)
         finally:
             Path(temp_path).unlink()
