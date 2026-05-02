@@ -164,9 +164,7 @@ class PRReviewCycleDispatchHandler(EventHandler):
                         "event_type": event.event_type,
                     },
                 )
-                raise ValueError(
-                    f"Legacy WorkItemColumnChanged event missing required key: {missing_key}"
-                ) from e
+                raise ValueError(f"Legacy WorkItemColumnChanged event missing required key: {missing_key}") from e
 
         logger.info(f"Checking PR review cycle for {work_item_id} in column '{to_column}'")
 

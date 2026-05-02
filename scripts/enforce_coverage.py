@@ -67,6 +67,7 @@ def run_coverage_tests() -> tuple[str, bool]:
         capture_output=True,
         text=True,
         cwd=Path.cwd(),
+        check=False,
     )
 
     # Print pytest output when tests fail or if there's a critical error
@@ -197,7 +198,7 @@ def main() -> int:
     try:
         coverage_json_path, tests_failed = run_coverage_tests()
         return enforce_coverage(coverage_json_path, tests_failed)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
 
