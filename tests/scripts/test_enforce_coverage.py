@@ -321,7 +321,7 @@ class TestRunCoverageTests:
                 mock_exists.return_value = True
 
                 # Change to temp dir for this test
-                original_cwd = os.getcwd()
+                original_cwd = Path.cwd()
                 try:
                     os.chdir(tmpdir)
                     result_path, tests_failed = run_coverage_tests()
@@ -346,7 +346,7 @@ class TestRunCoverageTests:
             with patch("scripts.enforce_coverage.Path.exists") as mock_exists:
                 mock_exists.return_value = True
 
-                original_cwd = os.getcwd()
+                original_cwd = Path.cwd()
                 try:
                     os.chdir(tmpdir)
                     result_path, tests_failed = run_coverage_tests()
@@ -415,7 +415,7 @@ class TestRunCoverageTests:
                     return original_exists(self)
 
                 with patch.object(Path, "exists", mock_exists):
-                    original_cwd = os.getcwd()
+                    original_cwd = Path.cwd()
                     try:
                         os.chdir(tmpdir)
                         result_path, tests_failed = run_coverage_tests()
@@ -445,7 +445,7 @@ class TestRunCoverageTests:
             with patch("scripts.enforce_coverage.Path.exists") as mock_exists:
                 mock_exists.return_value = True
 
-                original_cwd = os.getcwd()
+                original_cwd = Path.cwd()
                 try:
                     os.chdir(tmpdir)
                     result_path, tests_failed = run_coverage_tests()
