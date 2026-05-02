@@ -13,9 +13,9 @@ simulation-agnostic - they never receive or use a clock directly.
 """
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
