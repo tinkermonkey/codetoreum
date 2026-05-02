@@ -468,6 +468,47 @@ class WorkspaceRouter:
 
         # Merge with project-level environment variables
         if hasattr(project, "environment_variables"):
+            # Validate project-level environment variables don't contain credential patterns
+            # to prevent accidental or malicious credential injection via project configuration
+            forbidden_patterns = [
+                # Cloud provider credentials
+                "AWS_", "AZURE_", "GCP_", "DO_",
+                # VCS tokens
+                "GITHUB_", "GITLAB_", "BITBUCKET_", "GITEA_",
+                # SSH/Private keys
+                "SSH_", "PRIVATE_", "RSA_KEY", "KEY_",
+                # Passwords and secrets
+                "PASSWORD", "PASSWD", "TOKEN", "SECRET_", "API_KEY",
+                # Docker/Registry
+                "DOCKER_", "REGISTRY_",
+                # Kubernetes
+                "KUBE_", "K8S_",
+                # Database
+                "DB_", "DATABASE_", "MYSQL_", "POSTGRES_", "MONGODB_",
+            ]
+
+            for key in project.environment_variables.keys():
+                key_upper = key.upper()
+                for pattern in forbidden_patterns:
+                    if pattern in key_upper:
+                        error_msg = (
+                            f"Forbidden credential pattern detected in project environment variable: {key}. "
+                            f"Credentials (tokens, keys, passwords) must not be passed via environment variables. "
+                            f"Use secure configuration management, secrets stores, or encrypted environment files instead. "
+                            f"Forbidden patterns: {', '.join(forbidden_patterns)}"
+                        )
+                        self._logger.error(
+                            error_msg,
+                            exc_info=False,
+                            extra={
+                                "error_id": "ERR_CREDENTIAL_ENV_INJECTION",
+                                "project_id": project.id,
+                                "env_var_key": key,
+                                "forbidden_pattern": pattern,
+                            },
+                        )
+                        raise ExternalServiceError(error_msg)
+
             env_vars.update(project.environment_variables)
 
         self._logger.debug(f"Prepared environment variables: {list(env_vars.keys())}")
