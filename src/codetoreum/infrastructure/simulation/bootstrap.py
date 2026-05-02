@@ -1241,7 +1241,7 @@ class SimulationApplicationBootstrap:
 
     async def _create_adapters(self) -> SimulationAdapters:
         """
-        Create all 34 adapters using AdapterResolver in dependency order.
+        Create all 34 adapters: 33 via AdapterResolver + 1 manual post-processing.
 
         Phase 2 bootstrap creates adapters following a partial dependency ordering:
         1. Leaf adapters (no dependencies): event_store, config_store, metrics, encryption, identity_service
@@ -1255,7 +1255,8 @@ class SimulationApplicationBootstrap:
         8. Repository: (depends on event_emitter)
         9. Engine-coupled: review_cycle, repair_cycle, pr_review_cycle (use SimulationEngine for clock injection)
         10. Additional services: code_review, container_recovery, systemic_analysis_service,
-            environment_repair_service, ci_pipeline_service, branch_resolution_service (34 total via resolver)
+            environment_repair_service, ci_pipeline_service (33 total via resolver)
+        11. Manual post-processing: branch_resolution_service (34th adapter, created separately)
 
         AdapterResolver validates credentials before construction and raises aggregated
         configuration errors if any adapter is misconfigured.

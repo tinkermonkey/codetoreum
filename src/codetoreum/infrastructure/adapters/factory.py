@@ -847,18 +847,11 @@ class AdapterFactory:
         )
 
         # Agent Executor Adapters
-        self._agent_executor_registry.register(
-            name="mock",
-            adapter_type=MockAgentExecutor,
-            description="Mock agent executor for testing",
-            version="1.0.0",
-            tags=["testing", "simulation", "mock"],
-            config_schema=AdapterCredentialRequirement(
-                simulation_only=True,
-                description="Simulation-only adapter, no credentials required",
-            ),
-            set_as_default=False,
-        )
+        # Note: MockAgentExecutor is NOT registered here because it is only used for port coverage
+        # conformance testing (see PORT_ADAPTER_MAPPING in test_port_adapter_coverage.py).
+        # The bootstrap uses ExecutionServiceAgentExecutor instead, which is wired directly
+        # by the simulation application dependency injection. Port coverage tests reference
+        # MockAgentExecutor directly via PORT_ADAPTER_MAPPING without going through this factory.
 
         # Agent Repository Adapters
         self._agent_repository_registry.register(
