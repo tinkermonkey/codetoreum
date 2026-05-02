@@ -9,6 +9,7 @@ Enforces coverage thresholds for different architectural layers:
 """
 
 import json
+import logging
 import subprocess
 import sys
 from pathlib import Path
@@ -41,8 +42,13 @@ OVERALL_MINIMUM_PERCENT = 80.0
 
 
 def run_coverage_tests() -> tuple[str, bool]:
-    """Run pytest with coverage and return (coverage JSON path, tests_failed)."""
-    print("Running tests with coverage...")
+    """Run pytest with coverage and return (coverage JSON path, tests_failed).
+
+    Raises:
+        RuntimeError: If pytest encounters an error or coverage.json is not created.
+    """
+    logger = logging.getLogger(__name__)
+    logger.info("Running tests with coverage...")
 
     # Use pytest from the project's virtual environment
     venv_pytest = Path.cwd() / ".venv" / "bin" / "pytest"
@@ -58,7 +64,6 @@ def run_coverage_tests() -> tuple[str, bool]:
         pytest_cmd
         + [
             "tests",
-            "-m", "not integration and not simulation",
             "--cov=src/codetoreum",
             "--cov-report=json",
             "--cov-report=xml",
@@ -79,15 +84,14 @@ def run_coverage_tests() -> tuple[str, bool]:
 
     # Exit codes: 0 = all pass, 1 = test failures (coverage still collected), >1 = error
     if result.returncode > 1:
-        sys.exit(1)
+        raise RuntimeError(f"Pytest encountered an error (exit code {result.returncode})")
 
     # The coverage.json should be in the current directory
     coverage_json_path = Path("coverage.json")
     if not coverage_json_path.exists():
-        print("Error: coverage.json not found")
-        print("STDOUT:", result.stdout)
-        print("STDERR:", result.stderr)
-        sys.exit(1)
+        raise RuntimeError(
+            f"coverage.json not found. STDOUT: {result.stdout}, STDERR: {result.stderr}"
+        )
 
     # Track whether tests failed (returncode == 1)
     tests_failed = result.returncode == 1
@@ -195,11 +199,18 @@ def enforce_coverage(coverage_json_path: str, tests_failed: bool) -> int:
 
 def main() -> int:
     """Main entry point."""
+    # Configure basic logging to capture exception details
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+    logger = logging.getLogger(__name__)
+
     try:
         coverage_json_path, tests_failed = run_coverage_tests()
         return enforce_coverage(coverage_json_path, tests_failed)
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
+    except Exception:
+        logger.exception("Coverage enforcement failed")
         return 1
 
 
