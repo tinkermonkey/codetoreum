@@ -352,28 +352,38 @@ class ContainerConfig:
 
 ### Current State
 
-**Status**: ✅ **IMPLEMENTED** - 11 core variables safe, ⚠️ **TODO** - project-level validation
+**Status**: ✅ **FULLY IMPLEMENTED** - 11 core variables safe + project-level validation enforced
 
 **What's Secure**:
 - 11 core variables (CODETOREUM_*, GIT_*) are non-sensitive
 - No credentials in default configuration
 - No database passwords, API keys, or tokens
+- Project-level `environment_variables` validated against forbidden patterns
 
-**What Needs Fortification**:
-- Project-level `environment_variables` dictionary (line 470-471)
-- Currently no constraint validation on project env var keys
-- Could theoretically be abused to inject credentials
+### Implementation Details
 
-### Recommended Mitigation
+**Validation Enforcement** (src/codetoreum/application/workspace_router.py:470-512):
 
-File Issue: "Add explicit constraint validation for project-level environment variables (Phase 3 follow-up)"
+The following credential pattern prefixes are REJECTED at runtime:
+- Cloud credentials: `AWS_`, `AZURE_`, `GCP_`, `DO_`
+- VCS tokens: `GITHUB_`, `GITLAB_`, `BITBUCKET_`, `GITEA_`
+- SSH/Private keys: `SSH_`, `PRIVATE_`, `RSA_KEY`, `KEY_`
+- Passwords/Secrets: `PASSWORD_`, `PASSWD_`, `TOKEN_`, `SECRET_`, `API_KEY`
+- Docker/Registry: `DOCKER_`, `REGISTRY_`
+- Kubernetes: `KUBE_`, `K8S_`
+- Database: `DB_`, `DATABASE_`, `MYSQL_`, `POSTGRES_`, `MONGODB_`
 
-**Acceptance Criteria**:
-1. Validate project.environment_variables keys against forbidden patterns
-2. Reject project configuration if credential patterns detected  
-3. Log attempted injection attempts at ERROR level with context
-4. Document the constraint in ProjectContext docstring
-5. Add unit tests for pattern validation
+**Validation Mechanism**:
+- Prefix-based pattern matching (not substring, to avoid false positives)
+- Example: `TOKEN_` blocks `TOKEN_SECRET` but allows `AUTH_TOKEN_EXPIRY`
+- Raises `ValidationError` (not `ExternalServiceError`) for semantic correctness
+- Logs with ERROR level including event ID and context for auditability
+
+**Test Coverage**:
+- ✅ Unit tests verify credential patterns are blocked
+- ✅ Unit tests verify legitimate variables containing credential keywords are allowed
+- ✅ Tests for AWS, GitHub, password, token patterns all pass
+- ✅ Edge cases (substring vs prefix) verified
 
 ---
 
@@ -457,17 +467,17 @@ File Issue: "Add explicit constraint validation for project-level environment va
 ## 13. Issues to File (Phase 3 Follow-up)
 
 ### Issue 1: Project-Level Environment Variable Validation
+**Status**: ✅ **CLOSED - IMPLEMENTED**
+**Implemented**: Phase 3 Revision 1 (2026-05-02)
 **Title**: Add explicit constraint validation for project-level environment variables
-**Severity**: Medium
-**Epic**: Phase 3 Security Hardening
 **Description**: 
 - Project-level environment_variables are user-configurable
-- No validation prevents credential injection patterns
-- Add validation to reject forbidden patterns (GITHUB_*, AWS_*, etc.)
-**Files Affected**: 
-- src/codetoreum/application/workspace_router.py
-- src/codetoreum/domain/project_context.py
-**Implementation**: See Section 3.2 above
+- Validation implemented to reject forbidden credential patterns
+- Patterns: AWS_*, GITHUB_*, PASSWORD_*, TOKEN_*, etc. (prefix-based matching)
+**Files Modified**: 
+- src/codetoreum/application/workspace_router.py (lines 470-512)
+- tests/integration/application/test_workspace_router.py (8 comprehensive unit tests)
+**Validation Details**: See Section 9 above
 
 ### Issue 2: Docker TLS Verification Hardening
 **Title**: Harden DockerContainerAdapter TLS verification for production
@@ -522,9 +532,10 @@ The agent container security model is sound and effectively prevents credential 
    - All git operations performed outside container
    - No GitHub access from agent context
 
-5. ⚠️ **Project Env Vars**: Extensible (need validation)
-   - Currently no constraint on project-level variables
-   - Recommend adding pattern validation
+5. ✅ **Project Env Vars**: Extensible with constraint validation
+   - Project-level variables validated against forbidden credential patterns
+   - Prefix-based pattern matching to avoid false positives
+   - Comprehensive unit tests verify validation effectiveness
 
 6. ⚠️ **TLS Verification**: Currently disabled (non-blocking for local)
    - Default safe for local Docker socket
@@ -532,17 +543,20 @@ The agent container security model is sound and effectively prevents credential 
 
 ### Recommended Actions
 
-**Immediate** (should fix before production):
-- [ ] Add project-level environment variable validation (Issue #1)
-- [ ] Document forbidden credential patterns
+**Completed** (Phase 3 Revision 1):
+- ✅ Added project-level environment variable validation (Issue #1)
+- ✅ Added comprehensive unit tests for pattern validation (8 tests)
+- ✅ Used correct exception type (ValidationError) for input validation
+- ✅ Implemented prefix-based pattern matching to avoid false positives
 
 **Short-term** (before large-scale deployment):
 - [ ] Make TLS verification configurable (Issue #2)
-- [ ] Add unit tests for constraint validation
+- [ ] Consider additional hardening for remote Docker connections
 
 **Documentation** (ongoing):
-- [ ] Update security model documentation
-- [ ] Add credential injection prevention guide
+- [ ] Ensure ProjectContext docstring documents credential constraint
+- [ ] Update WorkspaceRouter docstring with forbidden patterns
+- [ ] Add security note to configuration guide
 
 ### Sign-off
 
