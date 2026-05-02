@@ -1588,6 +1588,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
             ExternalServiceError: External service communication failure
         """
         actions_taken = 0
+        error_count = 0
 
         # Check if project is enabled before proceeding
         if not config.enabled:
@@ -1624,8 +1625,8 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
                 try:
                     workflow_config = await self.config.get_workflow_config(project_name, board.name)
                 except Exception as e:
-                    logger.warning(
-                        f"Failed to load workflow config for board {board.name}: {e}",
+                    logger.error(
+                        f"Failed to load workflow config for board {board.name}, skipping all items on board: {e}",
                         exc_info=True,
                         extra={"error_id": "ERR_ORCHESTRATOR_CONFIG_LOAD", "board": board.name},
                     )
@@ -1637,9 +1638,10 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
                         # Validate work_item_id is numeric before any operations
                         try:
                             issue_number = int(item.work_item_id)
-                        except ValueError:
+                        except ValueError as e:
                             logger.warning(
                                 f"Invalid work_item_id format (not numeric): {item.work_item_id}",
+                                exc_info=True,
                                 extra={
                                     "error_id": "ERR_ORCHESTRATOR_INVALID_WORK_ITEM_ID",
                                     "work_item_id": item.work_item_id,
@@ -1742,9 +1744,13 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
                                 "error_type": type(e).__name__,
                             },
                         )
+                        error_count += 1
                         continue
 
-            logger.info(f"Orchestrated project {project_name}: {actions_taken} actions taken")
+            logger.info(
+                f"Orchestrated project {project_name}: {actions_taken} actions taken, {error_count} errors encountered",
+                extra={"error_id": "ERR_ORCHESTRATOR_PROJECT_ORCHESTRATION_SUMMARY", "actions": actions_taken, "errors": error_count},
+            )
             return actions_taken
 
         except Exception as e:
