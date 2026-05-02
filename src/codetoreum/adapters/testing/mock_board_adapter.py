@@ -9,6 +9,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
 from codetoreum.domain.events.board_events import (
     BoardReconciledEvent,
@@ -108,7 +109,7 @@ class MockBoardAdapter(IBoardService):
         self._lock = asyncio.Lock()  # Async-safe lock for concurrent operations
         self._event_listeners: dict[str, list] = {}  # Event type -> list of handlers
         self._event_emitter = event_emitter
-        self._event_bus: "Any | None" = None  # Central event bus for publishing to handlers
+        self._event_bus: Any | None = None  # Central event bus for publishing to handlers
         self._clock = clock
         self.current_project: str | None = None
         self.current_board: str | None = None
@@ -116,12 +117,12 @@ class MockBoardAdapter(IBoardService):
     # ===== Event Bus and Emitter Management =====
 
     @property
-    def event_bus(self) -> "Any | None":
+    def event_bus(self) -> Any | None:
         """Get the event bus for publishing domain events."""
         return self._event_bus
 
     @event_bus.setter
-    def event_bus(self, bus: "Any | None") -> None:
+    def event_bus(self, bus: Any | None) -> None:
         """Set the event bus for publishing domain events."""
         self._event_bus = bus
 
@@ -138,11 +139,11 @@ class MockBoardAdapter(IBoardService):
         if event_type in self._event_listeners:
             self._event_listeners[event_type] = [h for h in self._event_listeners[event_type] if h != handler]
 
-    async def emit_async(self, event) -> None:
-        """Emit event asynchronously with full event bus integration.
+    def _emit_to_listeners_and_emitter(self, event) -> None:
+        """Emit event to local listeners and event emitter.
 
-        This is the async version of emit() that properly awaits event bus publishing.
-        Use this from async methods to ensure events are fully processed before returning.
+        This helper method contains the common logic for both emit() and emit_async(),
+        reducing code duplication.
 
         Args:
             event: Domain event to emit
@@ -164,10 +165,34 @@ class MockBoardAdapter(IBoardService):
             except Exception as e:
                 logger.error(f"Error emitting to event emitter: {e}", exc_info=True)
 
+    async def _publish_to_event_bus_async(self, event) -> None:
+        """Publish event to central event bus asynchronously.
+
+        Args:
+            event: Domain event to publish
+
+        Raises:
+            Exception: If event bus publish fails
+        """
+        if self._event_bus:
+            await self._event_bus.publish(event)
+
+    async def emit_async(self, event) -> None:
+        """Emit event asynchronously with full event bus integration.
+
+        This is the async version of emit() that properly awaits event bus publishing.
+        Use this from async methods to ensure events are fully processed before returning.
+
+        Args:
+            event: Domain event to emit
+        """
+        # Emit to local listeners and emitter
+        self._emit_to_listeners_and_emitter(event)
+
         # Publish to central event bus if provided (awaitable)
         if self._event_bus:
             try:
-                await self._event_bus.publish(event)
+                await self._publish_to_event_bus_async(event)
             except Exception as e:
                 logger.warning(f"Failed to publish event to event_bus: {e}")
 
@@ -179,29 +204,15 @@ class MockBoardAdapter(IBoardService):
         2. Event emitter (for capturing in tests)
         3. Central event bus (for domain event distribution to handlers)
         """
-        event_type = getattr(event, "type", event.__class__.__name__)
-
-        # Emit to local listeners
-        if event_type in self._event_listeners:
-            for handler in self._event_listeners[event_type]:
-                try:
-                    handler(event)
-                except Exception as e:
-                    logger.error(f"Error in event handler: {e}", exc_info=True)
-
-        # Emit to local event emitter if provided (for test event capturing)
-        if self._event_emitter:
-            try:
-                self._event_emitter.emit(event)
-            except Exception as e:
-                logger.error(f"Error emitting to event emitter: {e}", exc_info=True)
+        # Emit to local listeners and emitter
+        self._emit_to_listeners_and_emitter(event)
 
         # Publish to central event bus if provided (for handler subscription)
         if self._event_bus:
             try:
                 # Check if we're in an async context
                 try:
-                    loop = asyncio.get_running_loop()
+                    asyncio.get_running_loop()
                     # Create a task but add a callback to log errors
                     task = asyncio.create_task(self._publish_to_event_bus_async(event))
                     def log_error(t):

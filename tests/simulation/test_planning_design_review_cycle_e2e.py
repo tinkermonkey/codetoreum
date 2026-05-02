@@ -90,7 +90,6 @@ async def test_issues_found_path(pr_review_env):
     """Review identifies 6 issues → 6 sub-issues created → item moves to In Development.
 
     Tests the issues-found path with comprehensive assertions for all acceptance criteria.
-    Some assertions are marked xfail() pending PR review cycle handler implementation.
     """
     bootstrap, seeder = pr_review_env
     adapters = cast("SimulationAdapters", bootstrap.adapters)
@@ -179,7 +178,7 @@ async def test_issues_found_path(pr_review_env):
     await asyncio.sleep(0.5)
 
     # AC-2: PRReviewCycleStartedEvent should be fired
-    cycle_events = [e for e in event_store.events if "previewcycle" in str(type(e).__name__).lower()]
+    cycle_events = [e for e in event_store.events if "reviewcycle" in str(type(e).__name__).lower()]
     assert len(cycle_events) > 0, "No PR review cycle events found in event store"
 
     # AC-3: PRReviewCycleStartedEvent with correct attributes
@@ -224,7 +223,6 @@ async def test_approved_path(pr_review_env):
     """Review approves PR without issues → item moves to Done.
 
     Tests the approved path with comprehensive assertions for all acceptance criteria.
-    Some assertions are marked xfail() pending PR review cycle handler implementation.
     """
     bootstrap, seeder = pr_review_env
     adapters = cast("SimulationAdapters", bootstrap.adapters)
@@ -268,7 +266,7 @@ async def test_approved_path(pr_review_env):
     await asyncio.sleep(0.5)
 
     # AC-2: PRReviewCycleApprovedEvent should be present
-    cycle_events = [e for e in event_store.events if "previewcycle" in str(type(e).__name__).lower()]
+    cycle_events = [e for e in event_store.events if "reviewcycle" in str(type(e).__name__).lower()]
     approved_events = [e for e in cycle_events if isinstance(e, PRReviewCycleApprovedEvent)]
     assert len(approved_events) > 0, "PRReviewCycleApprovedEvent not fired"
 
