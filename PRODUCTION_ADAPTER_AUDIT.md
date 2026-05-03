@@ -12,7 +12,7 @@ This audit verifies that:
 
 1. ✅ All NullEventEmitter fallbacks in production adapters have been replaced with required event_emitter constructor parameters
 2. ✅ The production bootstrap correctly injects real IEventEmitter instances to all adapters that require event emission
-3. ✅ All 34 adapter registry slots resolve to production-ready implementations (no Mock/InMemory/Fake/Null classes)
+3. ✅ Critical-path adapters resolve to production-ready implementations (GitHub, Docker, Claude, Elasticsearch); 11 non-critical slots use in-memory/mock adapters as documented in the audit table below
 4. ✅ The `create_app()` call path traces to concrete production adapter sources
 5. ✅ No unintended fallback patterns remain in the production execution path
 
@@ -124,7 +124,7 @@ The AdapterFactory maintains 34 total registries in factory.py (lines 303-336), 
 | 7 | `board_service_registry` | `mock` | `github` | GitHubBoardAdapter | ✅ No Mock/InMemory/Fake/Null |
 | 8 | `code_review_registry` | `mock` | `github` | GitHubCodeReviewAdapter | ✅ No Mock/InMemory/Fake/Null |
 | 9 | `discussion_adapter_registry` | `mock` | `github` | GitHubDiscussionAdapter | ✅ No Mock/InMemory/Fake/Null |
-| 10 | `version_control_registry` | `in_memory` | `git` | GitRepositoryAdapter | ✅ No Mock/InMemory/Fake/Null |
+| 10 | `version_control_registry` | `in_memory` | `in_memory` | InMemoryVersionControlService | ⚠️  SHARED: MVP implementation (should migrate to git backend) |
 | 11 | `metrics_registry` | `in_memory` | `prometheus` | PrometheusMetricsAdapter | ✅ No Mock/InMemory/Fake/Null |
 | 12 | `notifier_registry` | `mock` | `mock` | MockNotifierAdapter | ⚠️  SHARED: Mock used in production (placeholder) |
 | 13 | `message_broker_registry` | `in_memory` | `redis` | RedisPubSubAdapter | ✅ No Mock/InMemory/Fake/Null |
@@ -138,7 +138,7 @@ The AdapterFactory maintains 34 total registries in factory.py (lines 303-336), 
 | 21 | `pipeline_queue_registry` | `in_memory` | `in_memory` | InMemoryQueueService | ⚠️  SHARED: Ephemeral state (acceptable) |
 | 22 | `project_manager_registry` | `mock` | `mock` | MockProjectManagerAdapter | ⚠️  SHARED: Mock used in production (placeholder) |
 | 23 | `workflow_config_registry` | `in_memory` | `in_memory` | InMemoryWorkflowConfigService | ⚠️  SHARED: MVP implementation (should migrate to persistence) |
-| 24 | `event_emitter_registry` | `capturing` | `mock` | MockEventEmitter | ✅ MVP implementation (future: redis_pubsub) |
+| 24 | `event_emitter_registry` | `capturing` | `mock` | MockEventEmitter | ⚠️  SHARED: Mock used in production (MVP, future: redis_pubsub) |
 | 25 | `identity_service_registry` | `configurable` | `configurable` | ConfigurableIdentityService | ✅ MVP implementation |
 | 26 | `agent_executor_registry` | (unused) | (unused) | N/A | ℹ️  Not used in AdapterResolver.resolve_all() |
 | 27 | `agent_repository_registry` | `in_memory` | `in_memory` | InMemoryAgentRepository | ⚠️  SHARED: Bootstrap-time config (acceptable) |

@@ -28,8 +28,8 @@ from typing import Any
 from fastapi import FastAPI
 
 from codetoreum.adapters.primary.fastapi_app import create_app
-from codetoreum.adapters.primary.input_port_adapters.execution_service_task_query_adapter import (
-    ExecutionServiceTaskQueryAdapter,
+from codetoreum.adapters.primary.input_port_adapters.mock.mock_task_query_adapter import (
+    MockTaskQueryAdapter,
 )
 from codetoreum.adapters.secondary.elasticsearch_workflow_config_service import (
     ElasticsearchWorkflowConfigService,
@@ -738,15 +738,14 @@ class ProductionApplicationBootstrap:
             ticket_system=self.adapters.ticket_system,
         )
 
-        # Create task query implementation that wraps ExecutionService
-        task_query_impl = ExecutionServiceTaskQueryAdapter(
-            execution_service=self.services["execution_service"]
-        )
+        # MVP task query implementation: MockTaskQueryAdapter for placeholder data
+        # TODO: Implement real ITaskQueryPort adapter that queries ExecutionService and event store
+        task_query_impl = MockTaskQueryAdapter()
 
         # Store ports for create_app()
         self.ports = {
             "workflow_command": self.services["workflow_orchestrator"],
-            "task_query": task_query_impl,  # Placeholder implementation of ITaskQueryPort
+            "task_query": task_query_impl,  # MVP: Mock implementation, see TODO above
             "config_command": self.services["configuration_service"],
             "config_query": self.services["configuration_service"],
             "metrics_query": self.adapters.metrics,
