@@ -8,7 +8,7 @@ import asyncio
 import json
 import logging
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from redis import asyncio as aioredis
 

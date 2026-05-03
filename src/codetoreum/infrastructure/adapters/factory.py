@@ -864,7 +864,7 @@ class AdapterFactory:
                 version="1.0.0",
                 tags=["production", "distributed", "redis"],
                 config_schema=AdapterCredentialRequirement(
-                    requires_credentials=["REDIS_URL"],
+                    env_vars=("REDIS_URL",),
                     description="Requires Redis connection URL",
                 ),
             )
