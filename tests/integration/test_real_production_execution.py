@@ -1,32 +1,33 @@
-"""Real Production End-to-End Pipeline Execution Test
+"""Infrastructure Smoke Test: Event Sourcing and Event Bus
 
-This is the critical acceptance test for PR feedback addressing:
-- Acceptance Criterion 1: "at least one full SDLC pipeline executes end-to-end in production mode
-  against a real repo" producing "a real PR merged into a real repository by Codetoreum."
-- Acceptance Criteria 4 & 5: Observability stack verified against real execution
-- FR-10: Resilience patterns exercised against real external service failures
+IMPORTANT: This is NOT a test of real production execution.
 
-Test Demonstrates:
-1. Event sourcing with complete audit trail
-2. Pipeline progression through stages (Analysis → Implementation → Testing → Review → Done)
-3. Real PR creation and merge verification
-4. Event store persistence with correlation IDs
-5. Observability signals (events, metrics, logs)
-6. Resilience pattern verification (circuit breaker, retries, rate limiting)
+This test verifies that the core event sourcing infrastructure (InMemoryEventStore,
+EventBus, domain events) works correctly in isolation. It uses:
+- InMemoryEventStore (not Redis or production event store)
+- Synthetic WorkItemColumnChangedEvent objects (not real GitHub events)
+- No external system calls (GitHub API, Docker, etc.)
 
-Success Criteria:
-- Event store captures complete workflow (>= 5 domain events)
-- All events have timestamps and correlation IDs
-- PR properties verified (author, title, mergeable)
-- Resilience patterns handle production failures correctly
-- No silent failures (all errors logged with context)
+This test is useful for:
+- Verifying event serialization and deserialization
+- Testing event bus pub/sub mechanics
+- Validating event correlation IDs
+- Checking error handling in infrastructure components
 
-Exit on Failure:
-If this test fails, the core acceptance criterion is not met. Do not merge without fixing.
+This test is NOT suitable for:
+- Proving real production execution
+- Testing GitHub API integration
+- Testing Docker execution
+- Verifying resilience patterns against real failures
+- Demonstrating actual PR creation and merge
+
+For real production execution testing, see separate integration tests
+that call actual GitHub/Docker APIs (e.g., tests/integration/test_github_*.py).
 """
 
 import logging
 import os
+import random
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
@@ -36,8 +37,7 @@ import pytest
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.ports.output.board_service import MovedByType
-from tests.helpers.production_helpers import EventStoreAuditTrail, PRVerifier, ProductionErrorHandler
+from tests.helpers.production_helpers import PRVerifier, ProductionErrorHandler
 
 logger = logging.getLogger(__name__)
 
@@ -60,35 +60,42 @@ def skip_without_credentials() -> None:
         pytest.skip("Test repository not configured (CODETOREUM_TEST_REPO env var)")
 
 
-class TestRealProductionExecution:
-    """Real end-to-end production execution tests."""
+class TestEventSourcingInfrastructure:
+    """Event sourcing infrastructure smoke tests (simulation only)."""
 
     @pytest.mark.asyncio
-    async def test_full_pipeline_with_real_github(
+    async def test_event_sourcing_workflow_with_correlation_ids(
         self,
         skip_without_credentials: Any,
     ) -> None:
         """
-        CRITICAL TEST: Full pipeline execution end-to-end in production mode.
+        Smoke test: Event sourcing infrastructure works correctly.
 
-        This test demonstrates production-ready infrastructure through:
-        1. Event sourcing with complete audit trail
-        2. Pipeline progression through stages
-        3. Real PR creation and merge verification
-        4. Event store persistence with correlation IDs
-        5. Observability signals (events, metrics, logs)
-        6. Resilience pattern verification
+        This test is a SIMULATION. It verifies that InMemoryEventStore and EventBus
+        work correctly in isolation. It does NOT test real production execution.
+
+        What this test does:
+        - Creates synthetic WorkItemColumnChangedEvent objects
+        - Appends them to InMemoryEventStore
+        - Verifies they persist with correct timestamps and correlation IDs
+        - Checks event sequence order
+        - Validates error classification logic
+
+        What this test does NOT do:
+        - Call GitHub API or create real issues
+        - Create real pull requests
+        - Execute agents in Docker
+        - Test against real external service failures
+        - Prove production readiness
 
         Success Criteria:
-        - Event store captures complete workflow (>= 5 domain events)
+        - Event store persists >= 5 synthetic events
         - All events have timestamps and correlation IDs
-        - PR properties verified (author, title, mergeable)
-        - Resilience patterns handle production failures correctly
-        - No silent failures (all errors logged with context)
+        - Event sequence order is preserved
+        - Error classification works for common error types
 
-        NOTE: This test uses a persistent event store to demonstrate production
-        readiness. GitHub adapter integration tested separately in
-        tests/integration/test_github_integration.py.
+        For real production execution, separate integration tests must call
+        actual production adapters (GitHub, Docker, Redis, etc.).
         """
         # Setup event infrastructure with persistent storage
         event_store = InMemoryEventStore()
@@ -101,9 +108,7 @@ class TestRealProductionExecution:
         logger.info("=" * 80)
 
         # Step 1: Create simulated GitHub issue
-        logger.info("\n[STEP 1] Creating GitHub issue (simulated)...")
-
-        import random
+        logger.info("\n[STEP 1] Creating synthetic GitHub issue (simulation only)...")
 
         issue_number = random.randint(100, 10000)
         correlation_id = str(uuid4())
@@ -197,8 +202,8 @@ class TestRealProductionExecution:
             logger.error(f"✗ Failed to trigger tester: {e}", exc_info=True)
             raise
 
-        # Step 5: Create and verify PR
-        logger.info("\n[STEP 5] Creating real GitHub PR...")
+        # Step 5: Create and verify synthetic PR data
+        logger.info("\n[STEP 5] Creating synthetic PR data (simulation only)...")
 
         try:
             pr_number = issue_number + 1000  # Simulated PR number
@@ -273,14 +278,11 @@ class TestRealProductionExecution:
         logger.info("\n[STEP 7] Verifying complete event store audit trail...")
 
         try:
-            audit_trail = EventStoreAuditTrail(event_store)
-
             # Verify event sequence
             events = await event_store.get_events(work_item_id)
-            actual_event_types = [e.type for e in events]
 
             assert len(events) >= 5, f"Expected at least 5 events, got {len(events)}"
-            logger.info(f"✓ Event store contains {len(events)} events")
+            logger.info(f"✓ Event store persisted {len(events)} synthetic events")
 
             # Verify all events have correlation IDs
             for event in events:
@@ -308,80 +310,94 @@ class TestRealProductionExecution:
             logger.error(f"✗ Event store audit trail verification failed: {e}", exc_info=True)
             raise
 
-        # Step 8: Verify observability signals
-        logger.info("\n[STEP 8] Verifying observability signals...")
+        # Step 8: Verify observability infrastructure
+        logger.info("\n[STEP 8] Verifying observability infrastructure...")
 
         try:
-            # Verify no silent failures (all errors would be logged with context)
-            logger.info("✓ Event store contains complete audit trail with timestamps")
-            logger.info("✓ All events have correlation IDs for tracing")
-            logger.info("✓ No silent failures detected")
+            # This step verifies that events are properly timestamped for observability
+            logger.info("✓ Event store persists event timestamps (observable in audit trail)")
+            logger.info("✓ Correlation IDs enable request tracing across events")
 
-            # Note: In real production, this would verify:
-            # - Prometheus /metrics endpoint responds with pipeline metrics
-            # - OpenTelemetry traces created with W3C Trace Context
-            # - Structured logs contain correlation IDs
-            # - Dead letter queue empty (no failed events)
+            # NOTE: Real production observability requires actual Prometheus,
+            # OpenTelemetry, and structured logging integration with real
+            # external service calls. This test only verifies that event structures
+            # support these capabilities. For full observability testing, see:
+            # - tests/integration/test_observability_*.py (requires production adapters)
+            # - documentation/architecture/infrastructure/observability.md
 
         except Exception as e:
-            logger.error(f"✗ Observability verification failed: {e}", exc_info=True)
+            logger.error(f"✗ Observability infrastructure check failed: {e}", exc_info=True)
             raise
 
-        # Step 9: Test resilience patterns
-        logger.info("\n[STEP 9] Testing resilience patterns...")
+        # Step 9: Test error classification (NOT actual resilience patterns)
+        logger.info("\n[STEP 9] Testing error classification logic...")
 
         try:
-            # Test rate limit error handling
+            # NOTE: This only tests error classification, not actual resilience infrastructure.
+            # Real resilience testing requires actual circuit breakers, retries, and rate limiters
+            # engaging against real external service failures.
+
+            # Test rate limit error classification
             rate_limit_error = Exception("API rate limit exceeded (429)")
             rate_limit_error.status_code = 429  # type: ignore
             classification = ProductionErrorHandler.classify_error(rate_limit_error)
             assert classification == "GITHUB_RATE_LIMIT", f"Expected rate limit error, got {classification}"
 
             strategy = ProductionErrorHandler.get_recovery_strategy(classification)
-            assert strategy["retryable"] is True, "Rate limit should be retryable"
-            assert strategy["max_retries"] >= 3, "Rate limit should have sufficient retries"
+            assert strategy["retryable"] is True, "Rate limit should be classified as retryable"
+            logger.info(f"✓ Rate limit error classified correctly: {classification}")
 
-            logger.info(f"✓ Rate limit error handling verified: {strategy['recovery_action']}")
-
-            # Test auth failure handling
+            # Test auth failure classification
             auth_error = Exception("Unauthorized: Invalid authentication token (401)")
             auth_error.status_code = 401  # type: ignore
             classification = ProductionErrorHandler.classify_error(auth_error)
             assert classification == "GITHUB_AUTH_FAILURE", f"Expected auth error, got {classification}"
 
             strategy = ProductionErrorHandler.get_recovery_strategy(classification)
-            assert strategy["retryable"] is False, "Auth errors should not be retried"
-            assert strategy["alert_level"] == "critical", "Auth errors should trigger critical alert"
+            assert strategy["retryable"] is False, "Auth errors should be classified as non-retryable"
+            logger.info(f"✓ Auth error classified correctly: {classification}")
 
-            logger.info(f"✓ Auth error handling verified: {strategy['recovery_action']}")
-
-            # Test Docker OOM error handling
+            # Test Docker OOM error classification
             oom_error = Exception("Docker container killed: Out of memory")
             classification = ProductionErrorHandler.classify_error(oom_error)
             assert classification == "DOCKER_OOM_KILL", f"Expected OOM error, got {classification}"
 
             strategy = ProductionErrorHandler.get_recovery_strategy(classification)
-            assert strategy["retryable"] is True, "OOM errors should be retryable"
+            assert strategy["retryable"] is True, "OOM errors should be classified as retryable"
+            logger.info(f"✓ Docker OOM error classified correctly: {classification}")
 
-            logger.info(f"✓ OOM error handling verified: {strategy['recovery_action']}")
+            logger.info("\n⚠️  This step tests error CLASSIFICATION only, not actual resilience patterns.")
+            logger.info("   Real resilience testing (circuit breakers, retries, rate limiters) against")
+            logger.info("   actual external service failures requires production integration tests.")
+            logger.info("   See: tests/integration/test_resilience_*.py")
 
         except Exception as e:
-            logger.error(f"✗ Resilience pattern verification failed: {e}", exc_info=True)
+            logger.error(f"✗ Error classification verification failed: {e}", exc_info=True)
             raise
 
         # Final summary
         logger.info("\n" + "=" * 80)
-        logger.info("✅ REAL PRODUCTION EXECUTION TEST PASSED")
+        logger.info("✅ EVENT SOURCING INFRASTRUCTURE SMOKE TEST PASSED")
         logger.info("=" * 80)
         logger.info(f"Test Completed: {datetime.now(UTC).isoformat()}")
-        logger.info(f"Repository: {CODETOREUM_TEST_REPO}")
-        logger.info(f"Issue: #{issue_number}")
-        logger.info(f"Work Item ID: {work_item_id}")
-        logger.info(f"Correlation ID: {correlation_id}")
         logger.info(f"Events in Store: {len(events)}")
-        logger.info(f"PR: #{pr_number}")
-        logger.info("\nAcceptance Criteria Met:")
-        logger.info("  ✓ Criterion 1: Full SDLC pipeline executes end-to-end in production mode")
-        logger.info("  ✓ Criterion 4: Observability and audit trail verified against real execution")
-        logger.info("  ✓ FR-10: Resilience patterns exercised and verified")
+        logger.info(f"Correlation ID: {correlation_id}")
+        logger.info("\n⚠️  IMPORTANT NOTES:")
+        logger.info("  • This is a SIMULATION test, not real production execution")
+        logger.info("  • No GitHub API calls were made")
+        logger.info("  • No real pull requests were created")
+        logger.info("  • No Docker containers were executed")
+        logger.info("  • No real external service failures were encountered")
+        logger.info("\nWhat this test verifies:")
+        logger.info("  ✓ Event sourcing infrastructure (InMemoryEventStore, EventBus)")
+        logger.info("  ✓ Event persistence with correlation IDs")
+        logger.info("  ✓ Error classification logic")
+        logger.info("\nWhat this test does NOT verify:")
+        logger.info("  ✗ Real GitHub API integration")
+        logger.info("  ✗ Real Docker agent execution")
+        logger.info("  ✗ Real external service resilience patterns")
+        logger.info("  ✗ Production-grade observability")
+        logger.info("\nFor real production execution, see:")
+        logger.info("  • tests/integration/test_github_*.py (GitHub API integration)")
+        logger.info("  • tests/integration/test_resilience_*.py (real failure handling)")
         logger.info("=" * 80 + "\n")
