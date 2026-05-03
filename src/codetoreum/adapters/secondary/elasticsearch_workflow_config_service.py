@@ -40,6 +40,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from elasticsearch import AsyncElasticsearch, NotFoundError
+from elasticsearch.exceptions import ConflictError
 
 from codetoreum.domain.board_workflow_template import (
     BoardWorkflowTemplate,
@@ -50,7 +51,7 @@ from codetoreum.domain.board_workflow_template import (
 from codetoreum.domain.pr_review_cycle_types import PRReviewCycleConfig
 from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig, RepairTestType
 from codetoreum.infrastructure.error_ids import ErrorRegistry
-from codetoreum.ports.exceptions import ValidationError
+from codetoreum.ports.exceptions import ConcurrencyConflictError, ValidationError
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 logger = logging.getLogger(__name__)
@@ -328,6 +329,13 @@ class ElasticsearchWorkflowConfigService(IWorkflowConfigService):
 
         except ValidationError:
             raise
+        except ConflictError as e:
+            msg = (
+                f"Concurrent modification detected for board {template.board_id}: "
+                f"template was modified by another process"
+            )
+            logger.error(msg, exc_info=True, extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR})
+            raise ConcurrencyConflictError(msg) from e
         except Exception as e:
             logger.error(
                 f"Failed to save workflow template for board {template.board_id}: {e}",
