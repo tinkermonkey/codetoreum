@@ -28,7 +28,9 @@ from typing import Any
 from fastapi import FastAPI
 
 from codetoreum.adapters.primary.fastapi_app import create_app
-from codetoreum.adapters.primary.input_port_adapters.mock.mock_task_query_adapter import MockTaskQueryAdapter
+from codetoreum.adapters.primary.input_port_adapters.execution_service_task_query_adapter import (
+    ExecutionServiceTaskQueryAdapter,
+)
 from codetoreum.adapters.secondary.elasticsearch_workflow_config_service import (
     ElasticsearchWorkflowConfigService,
 )
@@ -736,11 +738,10 @@ class ProductionApplicationBootstrap:
             ticket_system=self.adapters.ticket_system,
         )
 
-        # Create a task query implementation using MockTaskQueryAdapter as a placeholder
-        # TODO: Create a proper adapter that wraps ExecutionService and implements ITaskQueryPort.
-        # For now, MockTaskQueryAdapter provides a valid ITaskQueryPort implementation that
-        # can be used in production while the full implementation is being developed.
-        task_query_impl = MockTaskQueryAdapter()
+        # Create task query implementation that wraps ExecutionService
+        task_query_impl = ExecutionServiceTaskQueryAdapter(
+            execution_service=self.services["execution_service"]
+        )
 
         # Store ports for create_app()
         self.ports = {

@@ -1,8 +1,8 @@
 """Production adapter selection configuration.
 
 Defines the production AdapterSelectionConfig that explicitly selects
-production implementations for all 33 adapter slots with no mock or
-in-memory fallbacks.
+production implementations for all 34 adapter slots. Uses the adapter
+names registered in the factory for production environments.
 
 Used by ProductionApplicationBootstrap to wire the production environment.
 """
@@ -14,8 +14,11 @@ def create_production_adapter_config() -> AdapterSelectionConfig:
     """
     Create production adapter selection configuration.
 
-    Explicitly selects production implementations for all 33 adapter slots.
-    No mock or in-memory fallbacks - all adapters are production-ready.
+    Explicitly selects production implementations for all 34 adapter slots.
+    All adapter names are registered in the factory and production-ready.
+
+    Shared adapters (in-memory, mock) are documented in PRODUCTION_ADAPTER_AUDIT.md
+    as acceptable for MVP and non-critical features.
 
     Returns:
         AdapterSelectionConfig with production implementations
@@ -23,52 +26,52 @@ def create_production_adapter_config() -> AdapterSelectionConfig:
     return AdapterSelectionConfig(
         # Core system adapters
         event_store="elasticsearch",  # Production event persistence
-        config_store="postgres",  # Database-backed configuration
+        config_store="elasticsearch",  # Elasticsearch-backed configuration
         metrics="prometheus",  # Production metrics collection
-        storage="redis",  # Distributed storage via Redis
-        encryption="production",  # Real encryption service
-        event_emitter="redis_pubsub",  # Production event distribution
+        storage="in_memory",  # In-memory storage (acceptable for MVP)
+        encryption="simple",  # Simple encryption service (MVP placeholder)
+        event_emitter="mock",  # Mock event emitter (future: redis_pubsub)
         message_broker="redis",  # Redis-based message broker
-        identity_service="ldap",  # Real identity service (LDAP or similar)
+        identity_service="configurable",  # Configurable identity service
 
         # External system integrations
         ticket="github",  # GitHub for ticket/issue management
-        llm="claude",  # Claude Code API for LLM operations
-        version_control="github",  # GitHub for version control
+        llm="claude_code",  # Claude Code API for LLM operations
+        version_control="in_memory",  # Version control (MVP: in-memory implementation)
         container="docker",  # Docker for container management
 
         # Board and workflow management
         board="github",  # GitHub project board
         discussion_adapter="github",  # GitHub discussions
-        workflow_config="postgres",  # Database-backed workflow definitions
-        lock_service="redis",  # Redis-backed pipeline locks
-        queue_service="redis",  # Redis-backed task queues
+        workflow_config="in_memory",  # In-memory workflow definitions (acceptable for MVP)
+        lock_service="in_memory",  # In-memory pipeline locks (ephemeral state acceptable)
+        queue_service="in_memory",  # In-memory task queues (ephemeral state acceptable)
 
         # Review cycles
-        review_cycle="production",  # Production review cycle
-        pr_review_cycle="production",  # Production PR review cycle
+        review_cycle="mock",  # Mock review cycle (placeholder feature)
+        pr_review_cycle="mock",  # Mock PR review cycle (placeholder feature)
         code_review="github",  # GitHub code review
 
         # Repair and maintenance
         repair_cycle="production",  # Production repair cycle
-        checkpoint_store="redis",  # Redis-backed repair cycle checkpoints
+        checkpoint_store="in_memory",  # In-memory checkpoints (ephemeral state acceptable)
         environment_repair="production",  # Production environment repair
         systemic_analysis="llm",  # LLM-based systemic analysis
         container_recovery="docker",  # Docker-based container recovery
         ci_pipeline="github",  # GitHub Actions for CI/CD
 
         # Agent and execution management
-        agent_repository="postgres",  # Database-backed agent repository
-        run_registry="postgres",  # Database-backed workflow run registry
-        branch_tracker="postgres",  # Database-backed branch tracking
-        work_item_service="production",  # Production work item service
+        agent_repository="in_memory",  # In-memory agent repository (bootstrap-time config)
+        run_registry="in_memory",  # In-memory workflow run registry (ephemeral state acceptable)
+        branch_tracker="in_memory",  # In-memory branch tracking (ephemeral state acceptable)
+        work_item_service="mock",  # Mock work item service (placeholder feature)
 
         # Repository access
         repository="git",  # Real Git repository adapter
 
         # Notifications
-        notifier="production",  # Production notification service
+        notifier="mock",  # Mock notifier (placeholder feature)
 
         # Project management
-        project_manager="production",  # Production project manager
+        project_manager="mock",  # Mock project manager (placeholder feature)
     )

@@ -456,6 +456,18 @@ class AdapterFactory:
             ),
             set_as_default=True,
         )
+        if ElasticsearchEventStore:
+            self._event_store_registry.register(
+                name="elasticsearch",
+                adapter_type=ElasticsearchEventStore,
+                description="Elasticsearch event store for production",
+                version="1.0.0",
+                tags=["production", "elasticsearch"],
+                config_schema=AdapterCredentialRequirement(
+                    env_vars=("ELASTICSEARCH_URL",),
+                    description="Elasticsearch cluster URL for event persistence",
+                ),
+            )
 
         # Storage Adapters
         self._storage_registry.register(

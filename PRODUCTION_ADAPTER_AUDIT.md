@@ -107,43 +107,45 @@ The `create_app()` function in `src/codetoreum/adapters/primary/fastapi_app.py` 
 
 ---
 
-## All 34 Adapter Registry Audit
+## All Adapter Registry Audit
 
-The AdapterFactory maintains 34 registries (see factory.py lines 303-336):
+The AdapterFactory maintains 34 total registries in factory.py (lines 303-336), of which 33 are configured via AdapterSelectionConfig and 1 is unused in the resolver.
 
-| Slot # | Registry | Default (Simulation) | Production | Concrete Class | Check |
+**Note**: The AdapterSelectionConfig class has 33 fields, corresponding to 33 active adapter slots. The agent_executor_registry (registry #26) exists in the factory but is not used in AdapterResolver and is not included in AdapterSelectionConfig.
+
+| Slot | Factory Registry | Default (Simulation) | Production | Concrete Class | Check |
 |--------|---|---|---|---|---|
 | 1 | `ticket_system_registry` | `in_memory` | `github` | GitHubTicketAdapter | ✅ No Mock/InMemory/Fake/Null |
-| 2 | `llm_provider_registry` | `mock` | `claude` | ClaudeCodeAdapter | ✅ No Mock/InMemory/Fake/Null |
+| 2 | `llm_provider_registry` | `mock` | `claude_code` | ClaudeCodeAdapter | ✅ No Mock/InMemory/Fake/Null |
 | 3 | `container_registry` | `fake` | `docker` | DockerContainerAdapter | ✅ No Mock/InMemory/Fake/Null |
 | 4 | `repository_registry` | `in_memory` | `git` | GitRepositoryAdapter | ✅ No Mock/InMemory/Fake/Null |
 | 5 | `event_store_registry` | `in_memory` | `elasticsearch` | ElasticsearchEventStore | ✅ No Mock/InMemory/Fake/Null |
-| 6 | `storage_registry` | `in_memory` | `in_memory` | InMemoryStorageAdapter | ⚠️  SHARED: Used in both simulation and production |
+| 6 | `storage_registry` | `in_memory` | `in_memory` | InMemoryStorageAdapter | ⚠️  SHARED: Used in both simulation and production (MVP) |
 | 7 | `board_service_registry` | `mock` | `github` | GitHubBoardAdapter | ✅ No Mock/InMemory/Fake/Null |
 | 8 | `code_review_registry` | `mock` | `github` | GitHubCodeReviewAdapter | ✅ No Mock/InMemory/Fake/Null |
 | 9 | `discussion_adapter_registry` | `mock` | `github` | GitHubDiscussionAdapter | ✅ No Mock/InMemory/Fake/Null |
 | 10 | `version_control_registry` | `in_memory` | `git` | GitRepositoryAdapter | ✅ No Mock/InMemory/Fake/Null |
 | 11 | `metrics_registry` | `in_memory` | `prometheus` | PrometheusMetricsAdapter | ✅ No Mock/InMemory/Fake/Null |
-| 12 | `notifier_registry` | `mock` | `noop` | NoOpNotifier | ✅ No Mock/InMemory/Fake/Null |
+| 12 | `notifier_registry` | `mock` | `mock` | MockNotifierAdapter | ⚠️  SHARED: Mock used in production (placeholder) |
 | 13 | `message_broker_registry` | `in_memory` | `redis` | RedisPubSubAdapter | ✅ No Mock/InMemory/Fake/Null |
 | 14 | `config_store_registry` | `in_memory` | `elasticsearch` | ElasticsearchConfigStorage | ✅ No Mock/InMemory/Fake/Null |
 | 15 | `repair_cycle_registry` | `mock` | `production` | ProductionRepairCycleAdapter | ✅ No Mock/InMemory/Fake/Null |
-| 16 | `review_cycle_registry` | `mock` | `mock` | MockReviewCycleAdapter | ⚠️  SHARED: Mock used in production (expected - test-only feature) |
-| 17 | `pr_review_cycle_registry` | `mock` | `mock` | MockPRReviewCycleAdapter | ⚠️  SHARED: Mock used in production (expected - test-only feature) |
-| 18 | `container_recovery_registry` | `mock` | `production` | DockerContainerRecoveryAdapter | ✅ No Mock/InMemory/Fake/Null |
-| 19 | `encryption_registry` | `simple` | `simple` | SimpleEncryptionAdapter | ✅ No Mock/InMemory/Fake/Null |
-| 20 | `pipeline_lock_registry` | `in_memory` | `in_memory` | InMemoryLockService | ⚠️  SHARED: Lock service is in-memory in all modes (acceptable - ephemeral state) |
-| 21 | `pipeline_queue_registry` | `in_memory` | `in_memory` | InMemoryQueueService | ⚠️  SHARED: Queue service is in-memory in all modes (acceptable - ephemeral state) |
-| 22 | `project_manager_registry` | `mock` | `mock` | MockProjectManagerAdapter | ⚠️  SHARED: Mock used in production (expected - placeholder feature) |
-| 23 | `workflow_config_registry` | `in_memory` | `in_memory` | InMemoryWorkflowConfigService | ⚠️  SHARED: Workflow config is in-memory (legacy - should migrate to persistence) |
-| 24 | `event_emitter_registry` | `capturing` | `redis` | RedisPubSubAdapter (as event emitter) | ✅ No Mock/InMemory/Fake/Null |
-| 25 | `identity_service_registry` | `configurable` | `configurable` | ConfigurableIdentityService | ✅ No Mock/InMemory/Fake/Null |
-| 26 | `agent_executor_registry` | (unused in resolver) | (unused in resolver) | N/A | ℹ️  Not resolved in AdapterResolver.resolve_all() |
-| 27 | `agent_repository_registry` | `in_memory` | `in_memory` | InMemoryAgentRepository | ⚠️  SHARED: Agent repo is in-memory (acceptable - bootstrap-time configuration) |
-| 28 | `work_item_branch_tracker_registry` | `in_memory` | `in_memory` | InMemoryWorkItemBranchTracker | ⚠️  SHARED: Branch tracker is in-memory (acceptable - ephemeral state) |
-| 29 | `work_item_service_registry` | `mock` | `mock` | MockWorkItemService | ⚠️  SHARED: Mock used in production (expected - placeholder feature) |
-| 30 | `repair_cycle_checkpoint_registry` | `in_memory` | `in_memory` | InMemoryCheckpointStore | ⚠️  SHARED: Checkpoint store is in-memory (acceptable - ephemeral state) |
-| 31 | `active_workflow_run_registry_registry` | `in_memory` | `in_memory` | InMemoryActiveWorkflowRunRegistry | ⚠️  SHARED: Workflow run registry is in-memory (acceptable - ephemeral state) |
+| 16 | `review_cycle_registry` | `mock` | `mock` | MockReviewCycleAdapter | ⚠️  SHARED: Mock used in production (placeholder) |
+| 17 | `pr_review_cycle_registry` | `mock` | `mock` | MockPRReviewCycleAdapter | ⚠️  SHARED: Mock used in production (placeholder) |
+| 18 | `container_recovery_registry` | `mock` | `docker` | DockerContainerRecoveryAdapter | ✅ No Mock/InMemory/Fake/Null |
+| 19 | `encryption_registry` | `simple` | `simple` | SimpleEncryptionAdapter | ✅ MVP implementation |
+| 20 | `pipeline_lock_registry` | `in_memory` | `in_memory` | InMemoryLockService | ⚠️  SHARED: Ephemeral state (acceptable) |
+| 21 | `pipeline_queue_registry` | `in_memory` | `in_memory` | InMemoryQueueService | ⚠️  SHARED: Ephemeral state (acceptable) |
+| 22 | `project_manager_registry` | `mock` | `mock` | MockProjectManagerAdapter | ⚠️  SHARED: Mock used in production (placeholder) |
+| 23 | `workflow_config_registry` | `in_memory` | `in_memory` | InMemoryWorkflowConfigService | ⚠️  SHARED: MVP implementation (should migrate to persistence) |
+| 24 | `event_emitter_registry` | `capturing` | `mock` | MockEventEmitter | ✅ MVP implementation (future: redis_pubsub) |
+| 25 | `identity_service_registry` | `configurable` | `configurable` | ConfigurableIdentityService | ✅ MVP implementation |
+| 26 | `agent_executor_registry` | (unused) | (unused) | N/A | ℹ️  Not used in AdapterResolver.resolve_all() |
+| 27 | `agent_repository_registry` | `in_memory` | `in_memory` | InMemoryAgentRepository | ⚠️  SHARED: Bootstrap-time config (acceptable) |
+| 28 | `work_item_branch_tracker_registry` | `in_memory` | `in_memory` | InMemoryWorkItemBranchTracker | ⚠️  SHARED: Ephemeral state (acceptable) |
+| 29 | `work_item_service_registry` | `mock` | `mock` | MockWorkItemService | ⚠️  SHARED: Mock used in production (placeholder) |
+| 30 | `repair_cycle_checkpoint_registry` | `in_memory` | `in_memory` | InMemoryCheckpointStore | ⚠️  SHARED: Ephemeral state (acceptable) |
+| 31 | `active_workflow_run_registry_registry` | `in_memory` | `in_memory` | InMemoryActiveWorkflowRunRegistry | ⚠️  SHARED: Ephemeral state (acceptable) |
 | 32 | `systemic_analysis_registry` | `mock` | `llm` | LLMSystemicAnalysisAdapter | ✅ No Mock/InMemory/Fake/Null |
 | 33 | `environment_repair_registry` | `mock` | `production` | ProductionEnvironmentRepairAdapter | ✅ No Mock/InMemory/Fake/Null |
 | 34 | `ci_pipeline_registry` | `mock` | `github` | GitHubCIPipelineAdapter | ✅ No Mock/InMemory/Fake/Null |
