@@ -26,6 +26,7 @@ Production-only failure modes tested:
 - File permission issues in workspace
 """
 
+import asyncio
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -88,21 +89,23 @@ class EventStoreVerifier:
     async def get_all_events(self) -> list[tuple[str, list[DomainEvent]]]:
         """Get all events from store."""
         all_events = []
-        for aggregate_id, events in self.event_store._events.items():
-            all_events.append((aggregate_id, events))
+        stream_ids = await self.event_store.get_all_stream_ids()
+        for stream_id in stream_ids:
+            events = self.event_store.get_events_for_stream(stream_id)
+            all_events.append((stream_id, events))
         return all_events
 
-    async def assert_event_occurred(self, aggregate_id: str, event_type: str) -> DomainEvent | None:
-        """Assert event occurred for aggregate."""
-        events = self.event_store._events.get(aggregate_id, [])
+    async def assert_event_occurred(self, stream_id: str, event_type: str) -> DomainEvent | None:
+        """Assert event occurred for stream."""
+        events = self.event_store.get_events_for_stream(stream_id)
         for event in events:
             if event.event_type == event_type:
                 return event
-        raise AssertionError(f"Event {event_type} not found for aggregate {aggregate_id}")
+        raise AssertionError(f"Event {event_type} not found for stream {stream_id}")
 
-    async def assert_events_in_order(self, aggregate_id: str, event_types: list[str]) -> None:
+    async def assert_events_in_order(self, stream_id: str, event_types: list[str]) -> None:
         """Assert events occurred in specified order."""
-        events = self.event_store._events.get(aggregate_id, [])
+        events = self.event_store.get_events_for_stream(stream_id)
         event_type_strs = [e.event_type for e in events]
 
         for expected_type in event_types:
@@ -111,9 +114,9 @@ class EventStoreVerifier:
                     f"Expected event {expected_type} not found. " f"Found events: {event_type_strs}"
                 )
 
-    async def get_event_count(self, aggregate_id: str) -> int:
-        """Get count of events for aggregate."""
-        return len(self.event_store._events.get(aggregate_id, []))
+    async def get_event_count(self, stream_id: str) -> int:
+        """Get count of events for stream."""
+        return len(self.event_store.get_events_for_stream(stream_id))
 
 
 class ProductionFailureModeSimulator:
@@ -268,6 +271,15 @@ class TestEndToEndPipelineExecution:
         run_registry = MagicMock(spec=IActiveWorkflowRunRegistry)
         run_registry.set_active_run = AsyncMock()
 
+        # Initialize board with columns from template
+        project_id = pipeline_template.project_id
+        board_id = pipeline_template.board_id
+        column_names = [col.name for col in pipeline_template.columns]
+        board_service.create_board(project_id, board_id, "Test Board", column_names)
+        board_service.current_project = project_id
+        board_service.current_board = board_id
+        board_service.event_bus = event_bus
+
         handler = BoardColumnEventHandler(
             board_service=board_service,
             lock_service=lock_service,
@@ -310,6 +322,9 @@ class TestEndToEndPipelineExecution:
 
         # Simulate user moving work item to Analysis (pipeline trigger)
         event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="test",
             work_item_id=work_item_id,
             board_id=board_id,
             project_id=project_id,
@@ -319,13 +334,20 @@ class TestEndToEndPipelineExecution:
         )
 
         # Mock lock acquisition
+        from codetoreum.application.pipeline_lock_service import LockStatus
+
         lock_result = MagicMock()
-        lock_result.status = "ACQUIRED"
+        lock_result.status = LockStatus.ACQUIRED
+        lock_result.queue_position = 0
+        lock_result.queue_length = 1
         handler.lock_service.try_acquire_lock = AsyncMock(return_value=lock_result)
         handler.lock_service.release_lock = AsyncMock(return_value=MagicMock(next_work_item_id=None))
 
         # Publish event to event bus
         await event_bus.publish(event)
+
+        # Wait for async tasks to complete (agent executor, event bus handlers)
+        await asyncio.sleep(0.1)
 
         # Verify analyzer agent was triggered
         assert len(agent_executor.executions) > 0
@@ -333,9 +355,21 @@ class TestEndToEndPipelineExecution:
         assert latest_execution["agent_id"] == "analyzer"
         assert latest_execution["work_item_id"] == work_item_id
 
-        # Verify workflow started event recorded
-        event_count = await verifier.get_event_count(work_item_id)
-        assert event_count >= 2  # WorkflowCreated + WorkflowStarted
+        # Verify workflow started events recorded (look through all streams for events with matching work_item_id)
+        all_events = await verifier.get_all_events()
+        matching_events = []
+        for stream_id, events in all_events:
+            for event in events:
+                # Check if event payload contains matching work_item_id
+                if hasattr(event, 'payload') and hasattr(event.payload, 'get'):
+                    # Payload is dict-like (dict or mappingproxy)
+                    if event.payload.get("work_item_id") == work_item_id:
+                        matching_events.append(event)
+
+        # Should have WorkflowCreated and WorkflowStarted events
+        event_types = [e.event_type for e in matching_events]
+        assert "WorkflowCreated" in event_types, f"WorkflowCreated not found in events: {event_types}"
+        assert "WorkflowStarted" in event_types, f"WorkflowStarted not found in events: {event_types}"
 
     @pytest.mark.asyncio
     async def test_event_store_captures_all_domain_events(
@@ -360,6 +394,9 @@ class TestEndToEndPipelineExecution:
 
         # Trigger pipeline
         event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="test",
             work_item_id=work_item_id,
             board_id=board_id,
             project_id=project_id,
@@ -368,8 +405,12 @@ class TestEndToEndPipelineExecution:
             moved_by="human",
         )
 
+        from codetoreum.application.pipeline_lock_service import LockStatus
+
         lock_result = MagicMock()
-        lock_result.status = "ACQUIRED"
+        lock_result.status = LockStatus.ACQUIRED
+        lock_result.queue_position = 0
+        lock_result.queue_length = 1
         handler.lock_service.try_acquire_lock = AsyncMock(return_value=lock_result)
 
         await event_bus.publish(event)
@@ -413,6 +454,9 @@ class TestEndToEndPipelineExecution:
         await board_service.add_item_to_column(work_item_id, "Backlog", MovedByType.HUMAN)
 
         event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="test",
             work_item_id=work_item_id,
             board_id=board_id,
             project_id=project_id,
@@ -421,8 +465,12 @@ class TestEndToEndPipelineExecution:
             moved_by="human",
         )
 
+        from codetoreum.application.pipeline_lock_service import LockStatus
+
         lock_result = MagicMock()
-        lock_result.status = "ACQUIRED"
+        lock_result.status = LockStatus.ACQUIRED
+        lock_result.queue_position = 0
+        lock_result.queue_length = 1
         handler.lock_service.try_acquire_lock = AsyncMock(return_value=lock_result)
         handler.lock_service.release_lock = AsyncMock(return_value=MagicMock(next_work_item_id=None))
 
@@ -454,6 +502,9 @@ class TestEndToEndPipelineExecution:
         await board_service.add_item_to_column(work_item_id, "Backlog", MovedByType.HUMAN)
 
         event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="test",
             work_item_id=work_item_id,
             board_id=board_id,
             project_id=project_id,
@@ -462,8 +513,12 @@ class TestEndToEndPipelineExecution:
             moved_by="human",
         )
 
+        from codetoreum.application.pipeline_lock_service import LockStatus
+
         lock_result = MagicMock()
-        lock_result.status = "ACQUIRED"
+        lock_result.status = LockStatus.ACQUIRED
+        lock_result.queue_position = 0
+        lock_result.queue_length = 1
         handler.lock_service.try_acquire_lock = AsyncMock(return_value=lock_result)
         handler.lock_service.release_lock = AsyncMock(return_value=MagicMock(next_work_item_id=None))
 
@@ -518,6 +573,9 @@ class TestEndToEndPipelineExecution:
         await board_service.add_item_to_column(work_item_id, "Backlog", MovedByType.HUMAN)
 
         event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="test",
             work_item_id=work_item_id,
             board_id=board_id,
             project_id=project_id,
@@ -526,8 +584,12 @@ class TestEndToEndPipelineExecution:
             moved_by="human",
         )
 
+        from codetoreum.application.pipeline_lock_service import LockStatus
+
         lock_result = MagicMock()
-        lock_result.status = "ACQUIRED"
+        lock_result.status = LockStatus.ACQUIRED
+        lock_result.queue_position = 0
+        lock_result.queue_length = 1
         handler.lock_service.try_acquire_lock = AsyncMock(return_value=lock_result)
 
         await event_bus.publish(event)
