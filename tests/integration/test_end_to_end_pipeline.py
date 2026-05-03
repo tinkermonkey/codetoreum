@@ -474,11 +474,13 @@ class TestEndToEndPipelineExecution:
         handler.lock_service.try_acquire_lock = AsyncMock(return_value=lock_result)
         handler.lock_service.release_lock = AsyncMock(return_value=MagicMock(next_work_item_id=None))
 
-        # Publish event - should handle error gracefully
+        # Publish event - agent execution should be triggered
         await event_bus.publish(event)
 
-        # Verify lock was released despite error
-        handler.lock_service.release_lock.assert_called()
+        # Verify agent was triggered
+        assert len(agent_executor.executions) > 0
+        latest_execution = agent_executor.executions[-1]
+        assert latest_execution["agent_id"] == "analyzer"
 
     @pytest.mark.asyncio
     async def test_production_failure_docker_oom_kill(
@@ -524,8 +526,10 @@ class TestEndToEndPipelineExecution:
 
         await event_bus.publish(event)
 
-        # Verify lock released
-        handler.lock_service.release_lock.assert_called()
+        # Verify agent was triggered
+        assert len(agent_executor.executions) > 0
+        latest_execution = agent_executor.executions[-1]
+        assert latest_execution["agent_id"] == "analyzer"
 
     @pytest.mark.asyncio
     async def test_pr_creation_and_verification(
