@@ -23,6 +23,7 @@ Usage:
 import asyncio
 import logging
 import os
+import shutil
 import subprocess
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -45,19 +46,14 @@ from codetoreum.application.agent_execution_recovery_service import AgentExecuti
 from codetoreum.application.agent_scheduler import (
     AgentScheduler,
     IProjectConfiguration,
-    IRateLimiter as ISchedulerRateLimiter,
     IResourceMonitor,
     ISchedulingEvents,
     ITaskQueue,
     Task,
 )
-from codetoreum.domain.events.adapter_events import CodetoreumEvent
-from codetoreum.domain.events.scheduler_events import (
-    TaskQueuedEvent,
-    TaskRejectedEvent,
-    TaskThrottledEvent,
+from codetoreum.application.agent_scheduler import (
+    IRateLimiter as ISchedulerRateLimiter,
 )
-from codetoreum.domain.work_item import WorkItemPriority
 from codetoreum.application.configuration_service import ConfigurationService
 from codetoreum.application.container_recovery_service import ContainerRecoveryService
 from codetoreum.application.conversational_loop_orchestrator import ConversationalLoopOrchestrator
@@ -71,6 +67,12 @@ from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator
 from codetoreum.application.workflow_run_query_service import WorkflowRunQueryService
 from codetoreum.application.workspace_router import WorkspaceRouter
 from codetoreum.config.codetoreum_pipeline import create_codetoreum_pipeline_template
+from codetoreum.domain.events.scheduler_events import (
+    TaskQueuedEvent,
+    TaskRejectedEvent,
+    TaskThrottledEvent,
+)
+from codetoreum.domain.work_item import WorkItemPriority
 from codetoreum.infrastructure.adapters.factory import AdapterFactory, AdapterFactoryConfig
 from codetoreum.infrastructure.adapters.resolver import AdapterDependencies, AdapterResolver
 from codetoreum.infrastructure.bootstrap.production_config import create_production_adapter_config
@@ -270,9 +272,12 @@ class ProductionResourceMonitor(IResourceMonitor):
 
             def _docker_ps() -> subprocess.CompletedProcess:
                 """Query Docker for containers with agent label."""
+                docker_path = shutil.which("docker")
+                if not docker_path:
+                    raise FileNotFoundError("docker executable not found in PATH")
                 return subprocess.run(
                     [
-                        "docker",
+                        docker_path,
                         "ps",
                         "--filter",
                         f"label=agent={agent}",
@@ -281,6 +286,7 @@ class ProductionResourceMonitor(IResourceMonitor):
                     capture_output=True,
                     text=True,
                     timeout=5,
+                    check=False,
                 )
 
             result = await loop.run_in_executor(None, _docker_ps)
@@ -293,12 +299,11 @@ class ProductionResourceMonitor(IResourceMonitor):
                     extra={"agent": agent, "count": container_count},
                 )
                 return container_count
-            else:
-                logger.warning(
-                    f"Failed to query Docker for agent {agent}: {result.stderr}",
-                    extra={"agent": agent, "error": result.stderr},
-                )
-                return 0
+            logger.warning(
+                f"Failed to query Docker for agent {agent}: {result.stderr}",
+                extra={"agent": agent, "error": result.stderr},
+            )
+            return 0
         except subprocess.TimeoutExpired:
             logger.error(
                 f"Docker query timeout for agent {agent}",
@@ -327,11 +332,15 @@ class ProductionResourceMonitor(IResourceMonitor):
 
             def _docker_info() -> subprocess.CompletedProcess:
                 """Check Docker daemon responsiveness."""
+                docker_path = shutil.which("docker")
+                if not docker_path:
+                    raise FileNotFoundError("docker executable not found in PATH")
                 return subprocess.run(
-                    ["docker", "info"],
+                    [docker_path, "info"],
                     capture_output=True,
                     text=True,
                     timeout=5,
+                    check=False,
                 )
 
             result = await loop.run_in_executor(None, _docker_info)
