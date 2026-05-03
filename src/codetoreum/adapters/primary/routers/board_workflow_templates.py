@@ -13,6 +13,7 @@ Endpoints:
 
 import logging
 from datetime import UTC, datetime
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -173,7 +174,7 @@ def create_board_workflow_router(
             logger.error(f"Failed to list templates for project {project_id}: {e}", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to list templates: {e!s}",
+                detail="Failed to list templates",
             )
 
     @router.get(
@@ -245,7 +246,7 @@ def create_board_workflow_router(
             logger.error(f"Failed to get template for board {board_id}: {e}", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to get template: {e!s}",
+                detail="Failed to get template",
             )
 
     @router.post(
@@ -291,9 +292,8 @@ def create_board_workflow_router(
                 )
                 columns.append(col)
 
-            # Use board_id as template ID for now (simplifies keying)
-            # In a real system, you might generate a UUID and allow custom board_id mapping
-            template_id = f"template-{project_id}-{len(columns)}-cols"
+            # Generate unique template ID to prevent collisions
+            template_id = f"template-{uuid4()}"
 
             template = BoardWorkflowTemplate(
                 id=template_id,
@@ -338,7 +338,7 @@ def create_board_workflow_router(
             logger.error(f"Failed to create template for project {project_id}: {e}", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to create template: {e!s}",
+                detail="Failed to create template",
             )
 
     @router.put(
@@ -449,7 +449,7 @@ def create_board_workflow_router(
             logger.error(f"Failed to update template for board {board_id}: {e}", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to update template: {e!s}",
+                detail="Failed to update template",
             )
 
     @router.delete(
@@ -487,7 +487,7 @@ def create_board_workflow_router(
             logger.error(f"Failed to delete template for board {board_id}: {e}", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to delete template: {e!s}",
+                detail="Failed to delete template",
             )
 
     return router
