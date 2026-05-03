@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from tests.integration.conftest import MockWorkflowConfigService
-from codetoreum.adapters.secondary.in_memory_pipeline_lock_service import InMemoryPipelineLockService
+from codetoreum.adapters.secondary.in_memory_queue_lock_service import InMemoryLockService
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.adapters.testing.mock_agent_executor import MockAgentExecutor
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
@@ -119,14 +119,14 @@ class TestProductionOrchestration:
         InMemoryEventStore,
         MockBoardAdapter,
         MockAgentExecutor,
-        InMemoryPipelineLockService,
+        InMemoryLockService,
     ]:
         """Set up production-like environment."""
         event_store = InMemoryEventStore()
         event_bus = EventBus()
         board_service = MockBoardAdapter()
         agent_executor = MockAgentExecutor()
-        lock_service = InMemoryPipelineLockService()
+        lock_service = InMemoryLockService(event_bus=event_bus)
         workflow_config = MockWorkflowConfigService(codetoreum_pipeline)
         event_emitter = MagicMock(spec=IEventEmitter)
         run_registry = MagicMock()
@@ -171,7 +171,7 @@ class TestProductionOrchestration:
             InMemoryEventStore,
             MockBoardAdapter,
             MockAgentExecutor,
-            InMemoryPipelineLockService,
+            InMemoryLockService,
         ],
     ) -> None:
         """
@@ -210,11 +210,11 @@ class TestProductionOrchestration:
         await event_bus.publish(event1)
 
         # Verify lock acquired and agent executed
-        lock_status = await lock_service.get_lock_holder(board_id)
-        assert lock_status == work_item_1
+        queue_state = await lock_service.get_queue_state(project_id, board_id)
+        assert queue_state.lock_holder == work_item_1
 
         # Simulate agent completion by moving to next stage
-        await board_service.move_item_to_column(work_item_1, "Implementation", MovedByType.SYSTEM)
+        await board_service.move_item_to_column(work_item_1, "Implementation", MovedByType.ORCHESTRATOR)
 
         # Simulate completion through all stages (auto-progression)
         for column in ["Testing", "Review", "Done"]:
@@ -232,8 +232,8 @@ class TestProductionOrchestration:
             await event_bus.publish(event_progress)
 
         # Verify lock released
-        lock_status = await lock_service.get_lock_holder(board_id)
-        assert lock_status is None
+        queue_state = await lock_service.get_queue_state(project_id, board_id)
+        assert queue_state.lock_holder is None
 
     @pytest.mark.asyncio
     async def test_event_store_audit_trail_completeness(
@@ -244,7 +244,7 @@ class TestProductionOrchestration:
             InMemoryEventStore,
             MockBoardAdapter,
             MockAgentExecutor,
-            InMemoryPipelineLockService,
+            InMemoryLockService,
         ],
     ) -> None:
         """
@@ -409,7 +409,7 @@ class TestProductionOrchestration:
             InMemoryEventStore,
             MockBoardAdapter,
             MockAgentExecutor,
-            InMemoryPipelineLockService,
+            InMemoryLockService,
         ],
     ) -> None:
         """
@@ -448,12 +448,12 @@ class TestProductionOrchestration:
             await event_bus.publish(event)
 
         # Verify first item has lock
-        lock_holder = await lock_service.get_lock_holder(board_id)
-        assert lock_holder == item1
+        queue_state = await lock_service.get_queue_state(project_id, board_id)
+        assert queue_state.lock_holder == item1
 
         # Verify queue contains others
-        queue_items = await lock_service.get_queued_items(board_id)
-        assert item2 in queue_items or item3 in queue_items
+        queued_item_ids = [entry.work_item_id for entry in queue_state.queue]
+        assert item2 in queued_item_ids or item3 in queued_item_ids
 
     @pytest.mark.asyncio
     async def test_graceful_degradation_with_agent_failure(
@@ -464,7 +464,7 @@ class TestProductionOrchestration:
             InMemoryEventStore,
             MockBoardAdapter,
             MockAgentExecutor,
-            InMemoryPipelineLockService,
+            InMemoryLockService,
         ],
     ) -> None:
         """
@@ -499,7 +499,26 @@ class TestProductionOrchestration:
         # Should not raise despite agent failure
         await event_bus.publish(event)
 
+        # Simulate work item being moved to Blocked on agent failure, then to Done
+        # (In production, this would happen via error recovery, here we simulate it)
+        await board_service.move_item_to_column(work_item_id, "Blocked", MovedByType.ORCHESTRATOR)
+        await board_service.move_item_to_column(work_item_id, "Done", MovedByType.ORCHESTRATOR)
+
+        # Publish the column change event to trigger lock release
+        done_event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="test",
+            work_item_id=work_item_id,
+            board_id=board_id,
+            project_id=project_id,
+            from_column="Blocked",
+            to_column="Done",
+            moved_by="orchestrator",
+        )
+        await event_bus.publish(done_event)
+
         # Verify lock was released
-        lock_holder = await lock_service.get_lock_holder(board_id)
-        assert lock_holder is None
+        queue_state = await lock_service.get_queue_state(project_id, board_id)
+        assert queue_state.lock_holder is None
 
