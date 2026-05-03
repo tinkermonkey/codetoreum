@@ -177,6 +177,18 @@ except ImportError:
     )
     ProductionEnvironmentRepairAdapter = None  # type: ignore
 
+try:
+    from codetoreum.adapters.secondary.redis_event_emitter import (
+        RedisEventEmitter,
+    )
+except ImportError:
+    logger.warning(
+        "Optional adapter RedisEventEmitter not available, skipping registration",
+        exc_info=True,
+        extra={"adapter": "RedisEventEmitter"},
+    )
+    RedisEventEmitter = None  # type: ignore
+
 from codetoreum.infrastructure.adapters.registries import (
     ActiveWorkflowRunRegistryRegistry,
     AgentExecutorRegistry,
@@ -843,6 +855,19 @@ class AdapterFactory:
                 description="Simulation-only adapter, no credentials required",
             ),
         )
+
+        if RedisEventEmitter:
+            self._event_emitter_registry.register(
+                name="redis",
+                adapter_type=RedisEventEmitter,
+                description="Redis-backed event emitter for distributed event emission",
+                version="1.0.0",
+                tags=["production", "distributed", "redis"],
+                config_schema=AdapterCredentialRequirement(
+                    requires_credentials=["REDIS_URL"],
+                    description="Requires Redis connection URL",
+                ),
+            )
 
         # Identity Service Adapters
         self._identity_service_registry.register(

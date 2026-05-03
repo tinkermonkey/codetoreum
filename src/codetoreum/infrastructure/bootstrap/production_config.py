@@ -30,7 +30,7 @@ def create_production_adapter_config() -> AdapterSelectionConfig:
         metrics="prometheus",  # Production metrics collection
         storage="in_memory",  # In-memory storage (acceptable for MVP)
         encryption="simple",  # Simple encryption service (MVP placeholder)
-        event_emitter="mock",  # Mock event emitter (future: redis_pubsub)
+        event_emitter="mock",  # Mock event emitter (MVP: adapter-level event emission; production implementation deferred)
         message_broker="redis",  # Redis-based message broker
         identity_service="configurable",  # Configurable identity service
 

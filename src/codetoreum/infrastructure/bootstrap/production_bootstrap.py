@@ -32,8 +32,8 @@ from uuid import uuid4
 from fastapi import FastAPI
 
 from codetoreum.adapters.primary.fastapi_app import create_app
-from codetoreum.adapters.primary.input_port_adapters.mock.mock_task_query_adapter import (
-    MockTaskQueryAdapter,
+from codetoreum.adapters.primary.input_port_adapters.production_task_query_adapter import (
+    ProductionTaskQueryAdapter,
 )
 from codetoreum.adapters.secondary.elasticsearch_workflow_config_service import (
     ElasticsearchWorkflowConfigService,
@@ -54,11 +54,16 @@ from codetoreum.application.agent_scheduler import (
 from codetoreum.application.agent_scheduler import (
     IRateLimiter as ISchedulerRateLimiter,
 )
+from codetoreum.application.board_polling_service import BoardPollingService
 from codetoreum.application.configuration_service import ConfigurationService
 from codetoreum.application.container_recovery_service import ContainerRecoveryService
+from codetoreum.application.context_builder import ContextBuilder
 from codetoreum.application.conversational_loop_orchestrator import ConversationalLoopOrchestrator
+from codetoreum.application.event_sequence_validator import EventSequenceValidator
 from codetoreum.application.execution_service import ExecutionService
+from codetoreum.application.expected_sequence_registry import ExpectedSequenceRegistry
 from codetoreum.application.feedback_processor import FeedbackProcessor
+from codetoreum.application.metrics_service import MetricsService
 from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
 from codetoreum.application.pipeline_manager import PipelineManager
 from codetoreum.application.review_service import ReviewService
@@ -954,7 +959,7 @@ class ProductionApplicationBootstrap:
         """
         Create all application services with production adapters.
 
-        Instantiates 11 application services that orchestrate workflows.
+        Instantiates all 22 application services that orchestrate workflows.
         """
         if not self.adapters:
             msg = "Adapters must be resolved before creating services"
@@ -1074,6 +1079,29 @@ class ProductionApplicationBootstrap:
             event_bus=self.event_bus,
         )
 
+        # Create context builder for preparing execution contexts
+        context_builder = ContextBuilder(
+            ticket_system=self.adapters.ticket_system,
+            storage=self.adapters.storage,
+        )
+
+        # Create metrics service for system observability
+        metrics_service = MetricsService(
+            event_store=self.adapters.event_store,
+            start_time=datetime.now(UTC),
+        )
+
+        # Create board polling service for automated board synchronization
+        board_polling_service = BoardPollingService(
+            board_service=self.adapters.board,
+            event_bus=self.event_bus,
+            poll_interval_seconds=30,
+        )
+
+        # Create sequence validators for event flow validation
+        event_sequence_validator = EventSequenceValidator()
+        expected_sequence_registry = ExpectedSequenceRegistry()
+
         # Store services for later access
         self.services = {
             "workflow_orchestrator": workflow_orchestrator,
@@ -1089,6 +1117,11 @@ class ProductionApplicationBootstrap:
             "container_recovery_service": container_recovery_service,
             "conversational_loop_orchestrator": conversational_loop_orchestrator,
             "agent_executor": agent_executor,
+            "context_builder": context_builder,
+            "metrics_service": metrics_service,
+            "board_polling_service": board_polling_service,
+            "event_sequence_validator": event_sequence_validator,
+            "expected_sequence_registry": expected_sequence_registry,
         }
 
         logger.info("Application services created successfully")
@@ -1117,9 +1150,8 @@ class ProductionApplicationBootstrap:
             ticket_system=self.adapters.ticket_system,
         )
 
-        # MVP task query implementation: MockTaskQueryAdapter for placeholder data
-        # TODO: Implement real ITaskQueryPort adapter that queries ExecutionService and event store
-        task_query_impl = MockTaskQueryAdapter()
+        # Production task query implementation: queries event store for execution data
+        task_query_impl = ProductionTaskQueryAdapter(event_store=self.adapters.event_store)
 
         # Store ports for create_app()
         self.ports = {
