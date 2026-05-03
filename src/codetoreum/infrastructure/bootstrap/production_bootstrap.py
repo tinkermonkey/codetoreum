@@ -71,7 +71,7 @@ class ProductionTaskQueue:
     async def enqueue(self, task: Any) -> str:
         """Enqueue task using queue service adapter."""
         # Store task in queue service and return task ID
-        task_data = {
+        _task_data = {
             "id": task.id,
             "agent": task.agent,
             "project": task.project,
@@ -79,7 +79,7 @@ class ProductionTaskQueue:
             "context": task.context,
             "created_at": task.created_at.isoformat(),
         }
-        # TODO: Send task_data to self.queue_service.enqueue(task_data)
+        # TODO: Send _task_data to self.queue_service.enqueue(_task_data)
         # For now, this is a minimal implementation that tracks the task
         return task.id
 
@@ -666,7 +666,7 @@ class ProductionApplicationBootstrap:
             vcs=self.adapters.repository,
             container=self.adapters.container,
             event_store=self.adapters.event_store,
-            branch_resolution_service=getattr(self.adapters, 'branch_resolution_service', None),
+            branch_resolution_service=self.adapters.branch_resolution_service,
         )
 
         work_item_service = WorkItemService(
