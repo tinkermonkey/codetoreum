@@ -159,8 +159,21 @@ def create_app_instance() -> Any:
     # Create bootstrap instance
     bootstrap = ProductionApplicationBootstrap()
 
-    # Run async setup via asyncio.run() for proper event loop management
-    # This handles loop creation correctly for both standalone and async contexts
+    # Check if there's already a running event loop
+    try:
+        asyncio.get_running_loop()
+        # If we reach here, we're in an async context - this shouldn't happen with uvicorn factory
+        msg = "Cannot create app from within a running event loop"
+        logger.error(msg)
+        raise RuntimeError(msg)
+    except RuntimeError as e:
+        error_str = str(e).lower()
+        # Check if this is the "no running loop" error (which is what we expect)
+        if "no running event loop" not in error_str and "there is no current event loop" not in error_str:
+            # This is a different RuntimeError, re-raise it
+            raise
+
+    # No running loop, safe to use asyncio.run()
     try:
         app = asyncio.run(bootstrap.setup())
         logger.info("Production bootstrap completed successfully")
