@@ -34,6 +34,7 @@ from codetoreum.adapters.primary.input_port_adapters.mock.mock_task_query_adapte
 from codetoreum.adapters.secondary.elasticsearch_workflow_config_service import (
     ElasticsearchWorkflowConfigService,
 )
+from codetoreum.adapters.testing.execution_service_agent_executor import ExecutionServiceAgentExecutor
 from codetoreum.application.agent_scheduler import AgentScheduler, IProjectConfiguration
 from codetoreum.application.configuration_service import ConfigurationService
 from codetoreum.application.container_recovery_service import ContainerRecoveryService
@@ -396,10 +397,7 @@ class ProductionApplicationBootstrap:
         Read and validate required environment variables.
 
         Required variables:
-        - CODETOREUM_AUTH_SECRET_KEY: JWT signing key
-        - CODETOREUM_GITHUB_TOKEN: GitHub API token
-        - CODETOREUM_CLAUDE_API_KEY: Claude API key
-        - Other service-specific credentials
+        - CODETOREUM_AUTH_SECRET_KEY: JWT signing key for authentication
 
         Raises:
             ValueError: If required variables are missing
@@ -411,7 +409,7 @@ class ProductionApplicationBootstrap:
         missing_vars = [var for var in required_vars if not os.getenv(var)]
         if missing_vars:
             msg = f"Missing required environment variables: {', '.join(missing_vars)}"
-            logger.error(msg, extra={"error_id": ErrorRegistry.ERR_CONFIG_ERROR})
+            logger.error(msg, extra={"error_id": ErrorRegistry.ERR_MISSING_CONFIGURATION})
             raise ValueError(msg)
 
         self.auth_secret_key = os.getenv("CODETOREUM_AUTH_SECRET_KEY")
@@ -433,6 +431,9 @@ class ProductionApplicationBootstrap:
         - Board column changes trigger workflow state updates
         - PR review status changes trigger review cycles
         - Review events trigger code review processes
+
+        Raises:
+            RuntimeError: If services or adapters are not yet initialized
         """
         from codetoreum.application.event_handlers.board_event_handler import BoardColumnEventHandler
         from codetoreum.application.event_handlers.pr_review_cycle_dispatch_handler import (
@@ -442,8 +443,9 @@ class ProductionApplicationBootstrap:
         from codetoreum.application.event_handlers.review_event_handler import ReviewEventHandler
 
         if not self.services or not self.adapters:
-            logger.warning("Cannot register event handlers: services or adapters not yet initialized")
-            return
+            msg = "Services and adapters must be initialized before registering event handlers"
+            logger.error(msg, extra={"error_id": ErrorRegistry.ERR_HANDLER_REGISTRATION})
+            raise RuntimeError(msg)
 
         # Create event handlers with correct parameters
         board_handler = BoardColumnEventHandler(
@@ -500,19 +502,14 @@ class ProductionApplicationBootstrap:
         Args:
             engine: Optional engine for time source compatibility. If None, uses _ProductionEngine.
         """
-        from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
-
         adapter_config = create_production_adapter_config()
-
-        # Create a minimal SimulationConfig for adapter resolution
-        minimal_config = SimulationConfig(scenario_name="production")
 
         self._adapter_dependencies = AdapterDependencies(
             event_bus=self.event_bus,
             event_emitter=None,  # Will be resolved in phase 2
             logger=logger,
             engine=engine or _ProductionEngine(),  # Provides time_source compatibility
-            config=minimal_config,  # Available for adapters that need metadata
+            config=None,  # Production doesn't use SimulationConfig
         )
 
         self._resolver = AdapterResolver(
@@ -600,10 +597,14 @@ class ProductionApplicationBootstrap:
         - ILLMProvider (Claude API)
         - IContainer (Docker)
         - IVersionControlService (Git)
+
+        Raises:
+            RuntimeError: If adapters or resilience factory not initialized
         """
         if not self.adapters or not self._resilience_factory:
-            logger.warning("Skipping resilience decorator application: adapters not resolved")
-            return
+            msg = "Adapters and resilience factory must be initialized before applying decorators"
+            logger.error(msg, extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR})
+            raise RuntimeError(msg)
 
         # Wrap ticket system (GitHub API)
         if hasattr(self.adapters, "ticket_system"):
@@ -717,6 +718,24 @@ class ProductionApplicationBootstrap:
             event_bus=self.event_bus,
         )
 
+        # Create ExecutionServiceAgentExecutor to wire into BoardColumnEventHandler
+        # This drives the full LLM → Container → VCS execution chain in production
+        production_clock = _ProductionClock()
+        agent_executor = ExecutionServiceAgentExecutor(
+            execution_service=execution_service,
+            workspace_router=workspace_router,
+            config_store=self.adapters.config_store,
+            agent_repository=self.adapters.agent_repository,
+            work_item_service=work_item_service,
+            run_registry=self.adapters.run_registry,
+            branch_tracker=self.adapters.branch_tracker,
+            vcs=self.adapters.repository,
+            clock=production_clock,  # Production clock (real system time)
+            recovery_service=container_recovery_service,
+        )
+        # Store executor in adapters for BoardColumnEventHandler access
+        self.adapters.agent_executor = agent_executor
+
         # Create input port that's not wired through create_app()
         # IConversationalLoopService
         conversational_loop_orchestrator = ConversationalLoopOrchestrator(
@@ -740,6 +759,7 @@ class ProductionApplicationBootstrap:
             "multi_project_orchestrator": multi_project_orchestrator,
             "container_recovery_service": container_recovery_service,
             "conversational_loop_orchestrator": conversational_loop_orchestrator,
+            "agent_executor": agent_executor,
         }
 
         logger.info("Application services created successfully")
@@ -831,12 +851,13 @@ class ProductionApplicationBootstrap:
             logger.info("Codetoreum pipeline configuration seeded successfully")
 
         except Exception as e:
-            logger.warning(
-                f"Failed to initialize workflow config service or seed pipeline: {e}",
+            msg = f"Failed to initialize workflow config service or seed pipeline: {e}"
+            logger.error(
+                msg,
                 exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_ELASTICSEARCH_ERROR},
             )
-            # Continue without workflow config service - it's optional for backward compatibility
-            workflow_config_service = None
+            raise RuntimeError(msg) from e
 
         # Create FastAPI app with 16 required ports
         self.app = create_app(
