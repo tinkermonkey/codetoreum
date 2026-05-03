@@ -36,7 +36,7 @@ Usage:
     export CODETOREUM_AUTH_SECRET_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(64))')
 
     # Run the test
-    pytest tests/integration/test_real_end_to_end_production_execution.py -v -s
+    pytest tests/integration/test_production_bootstrap_integration.py -v -s
 """
 
 import logging
@@ -74,7 +74,7 @@ OPTIONAL_ENV_VARS = {
 }
 
 
-class RealProductionExecutionTest:
+class ProductionBootstrapIntegrationTest:
     """Infrastructure integration test for production bootstrap and event store."""
 
     def __init__(self) -> None:
@@ -102,7 +102,7 @@ class RealProductionExecutionTest:
     async def _setup_production_environment(self) -> None:
         """Set up production bootstrap and adapters."""
         logger.info("=" * 80)
-        logger.info("REAL PRODUCTION EXECUTION TEST - SETUP")
+        logger.info("PRODUCTION BOOTSTRAP INTEGRATION TEST - SETUP")
         logger.info("=" * 80)
 
         # Check environment first
@@ -159,7 +159,7 @@ class RealProductionExecutionTest:
             raise RuntimeError(msg)
 
         logger.info("\n" + "=" * 80)
-        logger.info("REAL PRODUCTION EXECUTION - FULL SDLC PIPELINE")
+        logger.info("PRODUCTION BOOTSTRAP INTEGRATION TEST - FULL SDLC PIPELINE")
         logger.info("=" * 80)
         logger.info(f"Test Repository: {self.test_repo}")
         logger.info(f"Start Time: {self.start_time.isoformat()}")
@@ -347,6 +347,9 @@ class RealProductionExecutionTest:
             logger.info(f"  Total events: {audit_info['total_events']}")
             logger.info(f"  Has start event: {audit_info['has_start']}")
             logger.info(f"  Has completion event: {audit_info['has_completion']}")
+            logger.info(f"  (Note: has_start/has_completion are always False for synthetic")
+            logger.info(f"   WorkItemColumnChangedEvent events; real orchestration would")
+            logger.info(f"   emit WorkflowCreated and WorkflowCompleted domain events)")
             logger.info(f"  All events timestamped: {audit_info['all_events_have_timestamps']}")
             if audit_info["duration_seconds"] is not None:
                 logger.info(f"  Pipeline duration: {audit_info['duration_seconds']:.1f} seconds")
@@ -457,7 +460,7 @@ class RealProductionExecutionTest:
 # Pytest test function
 @pytest.mark.asyncio
 @pytest.mark.integration
-class TestRealProductionExecution:
+class TestProductionBootstrapIntegration:
     """Infrastructure integration tests for production bootstrap."""
 
     async def test_full_sdlc_pipeline_with_real_adapters(self) -> None:
@@ -480,7 +483,7 @@ class TestRealProductionExecution:
         invoking WorkflowOrchestrator and observing real external service
         interactions, which is beyond the scope of infrastructure testing.
         """
-        test = RealProductionExecutionTest()
+        test = ProductionBootstrapIntegrationTest()
 
         try:
             await test.test_full_sdlc_pipeline_execution()

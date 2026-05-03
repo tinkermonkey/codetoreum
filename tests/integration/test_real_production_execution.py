@@ -22,8 +22,8 @@ This test is NOT suitable for:
 - Verifying resilience patterns against real failures
 - Demonstrating actual PR creation and merge
 
-For REAL PRODUCTION EXECUTION testing, see:
-- tests/integration/test_real_end_to_end_production_execution.py
+For PRODUCTION BOOTSTRAP INTEGRATION testing, see:
+- tests/integration/test_production_bootstrap_integration.py
   (Full SDLC pipeline with real adapters, GitHub, Docker, Elasticsearch)
 - tests/integration/test_github_*.py (GitHub API integration)
 - tests/integration/adapters/secondary/ (Adapter-specific integration tests)
