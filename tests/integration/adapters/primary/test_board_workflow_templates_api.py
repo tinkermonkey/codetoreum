@@ -26,7 +26,6 @@ from codetoreum.domain.board_workflow_template import (
 )
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
-
 # ============================================================================
 # Fixtures
 # ============================================================================
