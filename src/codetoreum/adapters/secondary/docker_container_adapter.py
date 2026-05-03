@@ -216,7 +216,7 @@ class DockerContainerAdapter(IContainer):
             "volumes": docker_volumes,
             "environment": environment,
             "detach": True,
-            "remove": self.config.remove_on_completion,
+            "remove": False,  # We manually remove after getting exit code to avoid race conditions
             "network": self.config.default_network,
             "user": self.config.default_user,
         }
@@ -285,10 +285,24 @@ class DockerContainerAdapter(IContainer):
                             stream_callback(decoded_line)
 
                     # When streaming completes, container has finished
-                    # Get final state before it's auto-removed
+                    # Get final state before we remove it
                     container.reload()
                     exit_code = container.attrs["State"]["ExitCode"]
                     container_id = ContainerId(container.id)
+
+                    # Remove container if configured to do so
+                    if self.config.remove_on_completion:
+                        try:
+                            container.remove(force=False)
+                        except Exception as remove_error:
+                            logger.warning(
+                                f"Failed to remove container after successful execution: {remove_error}",
+                                exc_info=True,
+                                extra={
+                                    "error_id": "ERR_CONTAINER_REMOVAL_FAILED",
+                                    "container_id": container.short_id,
+                                },
+                            )
 
                 except Exception as e:
                     # If we get here due to timeout, re-raise it
