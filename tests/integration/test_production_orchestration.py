@@ -19,7 +19,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tests.integration.conftest import MockWorkflowConfigService
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import InMemoryLockService
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.adapters.testing.mock_agent_executor import MockAgentExecutor
@@ -30,15 +29,16 @@ from codetoreum.config.codetoreum_pipeline import create_codetoreum_pipeline_tem
 from codetoreum.domain.board_workflow_template import BoardWorkflowTemplate
 from codetoreum.domain.events import WorkItemColumnChangedEvent
 from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.ports.output.board_service import MovedByType
+from codetoreum.ports.output.event_emitter import IEventEmitter
+from codetoreum.ports.output.failed_event_store import FailedEventStoreStats, IFailedEventStore
+from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 from tests.helpers.production_helpers import (
     EventStoreAuditTrail,
     ProductionErrorHandler,
     PRVerifier,
 )
-from codetoreum.ports.output.board_service import MovedByType
-from codetoreum.ports.output.event_emitter import IEventEmitter
-from codetoreum.ports.output.failed_event_store import FailedEventStoreStats, IFailedEventStore
-from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
+from tests.integration.conftest import MockWorkflowConfigService
 
 logger = logging.getLogger(__name__)
 

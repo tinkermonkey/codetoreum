@@ -203,21 +203,20 @@ class ProductionErrorHandler:
         """Classify error into one of production failure modes."""
         if ProductionErrorHandler.is_rate_limit_error(error):
             return "GITHUB_RATE_LIMIT"
-        elif ProductionErrorHandler.is_auth_error(error):
+        if ProductionErrorHandler.is_auth_error(error):
             return "GITHUB_AUTH_FAILURE"
-        elif ProductionErrorHandler.is_file_permission_error(error):
+        if ProductionErrorHandler.is_file_permission_error(error):
             # Check file permission BEFORE general permission (more specific)
             return "FILE_PERMISSION_DENIED"
-        elif ProductionErrorHandler.is_permission_error(error):
+        if ProductionErrorHandler.is_permission_error(error):
             return "GITHUB_PERMISSION_DENIED"
-        elif ProductionErrorHandler.is_docker_oom_error(error):
+        if ProductionErrorHandler.is_docker_oom_error(error):
             return "DOCKER_OOM_KILL"
-        elif ProductionErrorHandler.is_docker_timeout_error(error):
+        if ProductionErrorHandler.is_docker_timeout_error(error):
             return "DOCKER_TIMEOUT"
-        elif ProductionErrorHandler.is_redis_error(error):
+        if ProductionErrorHandler.is_redis_error(error):
             return "REDIS_CONNECTION_FAILURE"
-        else:
-            return "UNKNOWN"
+        return "UNKNOWN"
 
     @staticmethod
     def get_recovery_strategy(error_type: str) -> dict[str, Any]:

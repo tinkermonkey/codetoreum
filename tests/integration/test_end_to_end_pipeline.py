@@ -34,7 +34,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from tests.integration.conftest import MockWorkflowConfigService
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.adapters.testing.mock_agent_executor import MockAgentExecutor
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
@@ -47,6 +46,7 @@ from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflow
 from codetoreum.ports.output.board_service import MovedByType
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
+from tests.integration.conftest import MockWorkflowConfigService
 
 logger = logging.getLogger(__name__)
 
@@ -333,7 +333,7 @@ class TestEndToEndPipelineExecution:
         for stream_id, events in all_events:
             for event in events:
                 # Check if event payload contains matching work_item_id
-                if hasattr(event, 'payload') and hasattr(event.payload, 'get'):
+                if hasattr(event, "payload") and hasattr(event.payload, "get"):
                     # Payload is dict-like (dict or mappingproxy)
                     if event.payload.get("work_item_id") == work_item_id:
                         matching_events.append(event)

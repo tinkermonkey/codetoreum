@@ -1,6 +1,7 @@
 """Common test fixtures and utilities for integration tests."""
 
 import pytest
+
 from codetoreum.domain.board_workflow_template import BoardWorkflowTemplate
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
