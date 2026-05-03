@@ -329,12 +329,14 @@ class ProductionApplicationBootstrap:
         This method executes bootstrap phases:
         - Phase 0: Read and validate environment variables
         - Phase 1: Create infrastructure (event bus, logger)
-        - Phase 2: Validate credentials (pre-flight check)
-        - Phase 3: Resolve all adapters with dependency ordering
-        - Phase 4: Wrap adapters with resilience decorators
-        - Phase 5: Create application services
-        - Phase 6: Create input ports
-        - Phase 7: Create FastAPI app and wire all ports
+        - Phase 2: Create adapter factory and resolver
+        - Phase 3: Validate credentials (pre-flight check)
+        - Phase 4: Resolve all adapters with dependency ordering
+        - Phase 5: Apply resilience decorators
+        - Phase 6: Create application services
+        - Phase 6b: Register event handlers
+        - Phase 7: Create input ports
+        - Phase 8: Create FastAPI app and wire all ports
 
         Returns:
             Configured FastAPI application ready for production
