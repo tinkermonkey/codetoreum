@@ -20,11 +20,13 @@ Usage:
     # ... run server
 """
 
+import asyncio
 import logging
 import os
 import subprocess
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
+from uuid import uuid4
 
 from fastapi import FastAPI
 
@@ -49,6 +51,13 @@ from codetoreum.application.agent_scheduler import (
     ITaskQueue,
     Task,
 )
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
+from codetoreum.domain.events.scheduler_events import (
+    TaskQueuedEvent,
+    TaskRejectedEvent,
+    TaskThrottledEvent,
+)
+from codetoreum.domain.work_item import WorkItemPriority
 from codetoreum.application.configuration_service import ConfigurationService
 from codetoreum.application.container_recovery_service import ContainerRecoveryService
 from codetoreum.application.conversational_loop_orchestrator import ConversationalLoopOrchestrator
@@ -151,6 +160,8 @@ class ProductionRateLimiter(ISchedulerRateLimiter):
         """Try to acquire rate limit tokens.
 
         Uses sliding window algorithm to track calls over 1-minute windows.
+        Each token represents one unit of work quota. The total number of tokens
+        consumed across all calls in a 1-minute window must not exceed rate_limit_rpm.
 
         Args:
             agent: Agent identifier
@@ -169,18 +180,21 @@ class ProductionRateLimiter(ISchedulerRateLimiter):
         minute_ago = now - 60
         self._call_times[agent] = [t for t in self._call_times[agent] if t > minute_ago]
 
-        # Check if within limit
-        if len(self._call_times[agent]) < self.rate_limit_rpm:
-            self._call_times[agent].append(now)
+        # Check if we can acquire the requested number of tokens
+        current_tokens = len(self._call_times[agent])
+        if current_tokens + tokens <= self.rate_limit_rpm:
+            # Add tokens to the window (one entry per token)
+            for _ in range(tokens):
+                self._call_times[agent].append(now)
             logger.debug(
                 f"Rate limit acquired for agent {agent}",
-                extra={"agent": agent, "calls_in_window": len(self._call_times[agent])},
+                extra={"agent": agent, "tokens": tokens, "calls_in_window": len(self._call_times[agent])},
             )
             return True
 
         logger.warning(
             f"Rate limit exceeded for agent {agent}",
-            extra={"agent": agent, "limit": self.rate_limit_rpm},
+            extra={"agent": agent, "limit": self.rate_limit_rpm, "requested_tokens": tokens, "available": self.rate_limit_rpm - current_tokens},
         )
         return False
 
@@ -212,12 +226,15 @@ class ProductionResourceMonitor(IResourceMonitor):
     def __init__(self) -> None:
         """Initialize resource monitor."""
         self._docker_available: bool | None = None
+        self._docker_check_time: datetime | None = None
+        self._docker_cache_ttl = timedelta(minutes=5)  # Cache Docker status for 5 minutes
 
     async def check_dev_container_available(self, project: str) -> bool:
         """Check if Docker is available for running containers.
 
         Performs a health check on Docker daemon to ensure containers
-        can be started.
+        can be started. Results are cached for 5 minutes to avoid
+        excessive daemon queries.
 
         Args:
             project: Project identifier
@@ -225,15 +242,22 @@ class ProductionResourceMonitor(IResourceMonitor):
         Returns:
             True if Docker is available, False otherwise
         """
-        # Check Docker availability once per lifecycle
+        now = datetime.now(UTC)
+        # Invalidate cache if TTL expired
+        if self._docker_check_time is not None and now - self._docker_check_time > self._docker_cache_ttl:
+            self._docker_available = None
+            self._docker_check_time = None
+
+        # Check Docker availability with TTL-based cache
         if self._docker_available is None:
             self._docker_available = await self._check_docker_health()
+            self._docker_check_time = now
         return self._docker_available
 
     async def get_running_agents(self, agent: str) -> int:
         """Get number of currently running agent containers.
 
-        Queries Docker API to count containers running for this agent.
+        Queries Docker API asynchronously to count containers running for this agent.
 
         Args:
             agent: Agent identifier
@@ -242,19 +266,24 @@ class ProductionResourceMonitor(IResourceMonitor):
             Number of running agent containers
         """
         try:
-            # Query Docker for containers with agent label
-            result = subprocess.run(
-                [
-                    "docker",
-                    "ps",
-                    "--filter",
-                    f"label=agent={agent}",
-                    "--quiet",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
+            loop = asyncio.get_event_loop()
+
+            def _docker_ps() -> subprocess.CompletedProcess:
+                """Query Docker for containers with agent label."""
+                return subprocess.run(
+                    [
+                        "docker",
+                        "ps",
+                        "--filter",
+                        f"label=agent={agent}",
+                        "--quiet",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+
+            result = await loop.run_in_executor(None, _docker_ps)
 
             if result.returncode == 0:
                 # Count lines (each line is a container ID)
@@ -285,20 +314,27 @@ class ProductionResourceMonitor(IResourceMonitor):
             return 0
 
     async def _check_docker_health(self) -> bool:
-        """Check if Docker daemon is responsive.
+        """Check if Docker daemon is responsive asynchronously.
 
-        Attempts a Docker info command to verify daemon connectivity.
+        Attempts a Docker info command to verify daemon connectivity without
+        blocking the event loop.
 
         Returns:
             True if Docker is available and responsive
         """
         try:
-            result = subprocess.run(
-                ["docker", "info"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
+            loop = asyncio.get_event_loop()
+
+            def _docker_info() -> subprocess.CompletedProcess:
+                """Check Docker daemon responsiveness."""
+                return subprocess.run(
+                    ["docker", "info"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+
+            result = await loop.run_in_executor(None, _docker_info)
             is_healthy = result.returncode == 0
             if is_healthy:
                 logger.info("Docker health check passed")
@@ -341,7 +377,7 @@ class ProductionSchedulingEvents(ISchedulingEvents):
         task_id: str,
         agent: str,
         project: str,
-        priority: Any,
+        priority: WorkItemPriority,
         reason: str,
     ) -> None:
         """Emit task queued event to event bus.
@@ -352,19 +388,20 @@ class ProductionSchedulingEvents(ISchedulingEvents):
             task_id: Unique task identifier
             agent: Agent that will execute the task
             project: Project context for the task
-            priority: Task priority level
+            priority: Task priority level (from WorkItemPriority enum)
             reason: Reason for queueing the task
         """
-        # Create and publish event
-        from codetoreum.domain.events.adapter_events import CodetoreumEvent
-        from uuid import uuid4
-
-        event = CodetoreumEvent(
+        event = TaskQueuedEvent(
             type="task.queued",
             timestamp=datetime.now(UTC).isoformat(),
             source="agent_scheduler",
             event_id=str(uuid4()),
             correlation_id=task_id,
+            task_id=task_id,
+            agent=agent,
+            project=project,
+            priority=priority.value if isinstance(priority, WorkItemPriority) else str(priority),
+            reason=reason,
         )
 
         try:
@@ -391,14 +428,15 @@ class ProductionSchedulingEvents(ISchedulingEvents):
             reason: Reason for throttling
             retry_after: Seconds to wait before retry
         """
-        from codetoreum.domain.events.adapter_events import CodetoreumEvent
-        from uuid import uuid4
-
-        event = CodetoreumEvent(
+        event = TaskThrottledEvent(
             type="task.throttled",
             timestamp=datetime.now(UTC).isoformat(),
             source="agent_scheduler",
             event_id=str(uuid4()),
+            agent=agent,
+            project=project,
+            reason=reason,
+            retry_after=retry_after,
         )
 
         try:
@@ -424,14 +462,14 @@ class ProductionSchedulingEvents(ISchedulingEvents):
             project: Project context
             reason: Reason for rejection
         """
-        from codetoreum.domain.events.adapter_events import CodetoreumEvent
-        from uuid import uuid4
-
-        event = CodetoreumEvent(
+        event = TaskRejectedEvent(
             type="task.rejected",
             timestamp=datetime.now(UTC).isoformat(),
             source="agent_scheduler",
             event_id=str(uuid4()),
+            agent=agent,
+            project=project,
+            reason=reason,
         )
 
         try:
