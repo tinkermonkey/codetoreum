@@ -26,10 +26,8 @@ that call actual GitHub/Docker APIs (e.g., tests/integration/test_github_*.py).
 """
 
 import logging
-import os
 import random
 from datetime import UTC, datetime, timedelta
-from typing import Any
 from uuid import uuid4
 
 import pytest
@@ -42,32 +40,15 @@ from tests.helpers.production_helpers import PRVerifier, ProductionErrorHandler
 logger = logging.getLogger(__name__)
 
 # Test configuration
-CODETOREUM_TEST_REPO = os.getenv("CODETOREUM_TEST_REPO", "")
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
-SKIP_REAL_EXECUTION = os.getenv("SKIP_REAL_EXECUTION", "false").lower() == "true"
-
-
-@pytest.fixture
-def skip_without_credentials() -> None:
-    """Skip test if required credentials are missing."""
-    if SKIP_REAL_EXECUTION:
-        pytest.skip("Real production execution disabled (SKIP_REAL_EXECUTION=true)")
-
-    if not GITHUB_TOKEN:
-        pytest.skip("GitHub token not configured (GITHUB_TOKEN env var)")
-
-    if not CODETOREUM_TEST_REPO:
-        pytest.skip("Test repository not configured (CODETOREUM_TEST_REPO env var)")
+# NOTE: This test uses only synthetic/placeholder data. No real credentials are needed.
+CODETOREUM_TEST_REPO = "test-org/test-repo"  # Hardcoded placeholder for project_id
 
 
 class TestEventSourcingInfrastructure:
     """Event sourcing infrastructure smoke tests (simulation only)."""
 
     @pytest.mark.asyncio
-    async def test_event_sourcing_workflow_with_correlation_ids(
-        self,
-        skip_without_credentials: Any,
-    ) -> None:
+    async def test_event_sourcing_workflow_with_correlation_ids(self) -> None:
         """
         Smoke test: Event sourcing infrastructure works correctly.
 
@@ -102,8 +83,8 @@ class TestEventSourcingInfrastructure:
         event_bus = EventBus()
 
         logger.info("=" * 80)
-        logger.info("REAL PRODUCTION EXECUTION TEST")
-        logger.info(f"Repository: {CODETOREUM_TEST_REPO}")
+        logger.info("EVENT SOURCING INFRASTRUCTURE SMOKE TEST")
+        logger.info(f"Test Repository (placeholder): {CODETOREUM_TEST_REPO}")
         logger.info(f"Timestamp: {datetime.now(UTC).isoformat()}")
         logger.info("=" * 80)
 
