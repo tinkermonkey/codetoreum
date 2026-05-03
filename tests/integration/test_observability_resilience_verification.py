@@ -1,7 +1,7 @@
-"""Phase 7: Observability and Resilience Verification
+"""Observability and Resilience Verification
 
 Comprehensive validation that the full observability stack and resilience
-infrastructure work correctly against real execution from Phase 6.
+infrastructure work correctly in the application.
 
 Tests verify:
 1. Event store contains all expected domain events with proper structure
@@ -16,13 +16,12 @@ Tests verify:
 import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from types import MappingProxyType
 from uuid import uuid4
 
 import pytest
+from starlette.testclient import TestClient
 
-from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.dead_letter_queue import (
     DeadLetterQueue,
@@ -30,11 +29,21 @@ from codetoreum.infrastructure.dead_letter_queue import (
     get_active_dead_letter_queues,
 )
 from codetoreum.infrastructure.event_replayer import EventReplayer
-from codetoreum.infrastructure.resilience.circuit_breaker import CircuitBreaker
+from codetoreum.infrastructure.observability.trace_context_propagation import (
+    inject_current_trace_context_into_event,
+    TraceContextPropagator,
+)
+from codetoreum.infrastructure.resilience.circuit_breaker import (
+    CircuitBreaker,
+    CircuitBreakerOpenError,
+    CircuitState,
+)
+from codetoreum.infrastructure.resilience.exceptions import TimeoutError as ResilienceTimeoutError
 from codetoreum.infrastructure.resilience.rate_limiter import TokenBucketRateLimiter
+from codetoreum.infrastructure.resilience.retry_policy import ExponentialBackoffRetry
+from codetoreum.infrastructure.resilience.timeout import AsyncTimeout
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
-from codetoreum.ports.output.board_service import MovedByType
 
 logger = logging.getLogger(__name__)
 
@@ -42,12 +51,12 @@ logger = logging.getLogger(__name__)
 @pytest.mark.asyncio
 @pytest.mark.timeout(120)
 class TestObservabilityAndResilienceVerification:
-    """Phase 7: Comprehensive observability and resilience infrastructure verification."""
+    """Comprehensive observability and resilience infrastructure verification."""
 
     @pytest.fixture
     async def bootstrap(self):
         """Create a bootstrap instance with simulation."""
-        config = SimulationConfig.create_fast_config("test_phase_7_observability")
+        config = SimulationConfig.create_fast_config("test_observability_resilience")
         bootstrap = SimulationApplicationBootstrap(config)
         await bootstrap.setup()
         yield bootstrap
@@ -121,7 +130,6 @@ class TestObservabilityAndResilienceVerification:
             # Verify payload exists
             assert hasattr(event, "payload"), "Event should have payload"
             # Payload can be dict or mappingproxy (read-only dict)
-            from types import MappingProxyType
             assert isinstance(event.payload, (dict, MappingProxyType)), "Payload should be dict-like"
 
         logger.info(f"✓ Event store contains {len(stored_events)} events with proper structure")
@@ -326,40 +334,46 @@ class TestObservabilityAndResilienceVerification:
     # STRUCTURED LOGGING VERIFICATION
     # =========================================================================
 
-    async def test_structured_logs_contain_context_fields(self, bootstrap):
+    async def test_structured_logs_contain_context_fields(self, caplog):
         """Verify structured log entries contain required context fields."""
-        # Verify that the logging infrastructure supports structured logging
-        # by checking that the logging module is properly configured
-
         logger_test = logging.getLogger("codetoreum.test")
+        event_id = str(uuid4())
+        project_id = "proj-1"
+        work_item_id = "wi-123"
+        agent_id = "analyzer"
 
-        # Log with extra context fields using standard logging
-        logger_test.info(
-            "Test log message",
-            extra={
-                "event_id": str(uuid4()),
-                "project_id": "proj-1",
-                "work_item_id": "wi-123",
-                "agent_id": "analyzer",
-            }
-        )
+        with caplog.at_level(logging.INFO, logger="codetoreum.test"):
+            # Log with extra context fields using standard logging
+            logger_test.info(
+                "Test log message",
+                extra={
+                    "event_id": event_id,
+                    "project_id": project_id,
+                    "work_item_id": work_item_id,
+                    "agent_id": agent_id,
+                }
+            )
 
-        # Verify logger exists and is functional
-        assert logger_test is not None
-        assert logger_test.name == "codetoreum.test"
+        # Verify log record contains context fields
+        assert len(caplog.records) >= 1, "Should have logged a message"
+        log_record = caplog.records[-1]
+        assert log_record.message == "Test log message"
+        assert log_record.event_id == event_id
+        assert log_record.project_id == project_id
+        assert log_record.work_item_id == work_item_id
+        assert log_record.agent_id == agent_id
 
         logger.info(
-            "✓ Structured logging infrastructure verified - supports extra context fields "
+            "✓ Structured logging verified - logs contain required context fields "
             "(event_id, project_id, work_item_id, agent_id)"
         )
 
-    async def test_logs_have_event_context(self, bootstrap, caplog):
+    async def test_logs_have_event_context(self, caplog):
         """Verify logs contain event_id context when processing events."""
-        # Test that logging infrastructure can accept event context
         test_logger = logging.getLogger("codetoreum.events")
-
         event_id = str(uuid4())
-        with caplog.at_level(logging.DEBUG, logger="codetoreum"):
+
+        with caplog.at_level(logging.DEBUG, logger="codetoreum.events"):
             # Simulate event processing logs
             test_logger.debug(
                 "Processing event",
@@ -370,9 +384,15 @@ class TestObservabilityAndResilienceVerification:
                 }
             )
 
-        # Verify logging infrastructure is functional
-        assert test_logger is not None
-        logger.info(f"✓ Event logging infrastructure supports context fields (event_id, event_type, work_item_id)")
+        # Verify log record was captured with context
+        assert len(caplog.records) >= 1, "Should have logged a message"
+        log_record = caplog.records[-1]
+        assert log_record.message == "Processing event"
+        assert log_record.event_id == event_id
+        assert log_record.event_type == "WorkItemColumnChanged"
+        assert log_record.work_item_id == "wi-123"
+
+        logger.info("✓ Event logging verified - logs contain event context (event_id, event_type, work_item_id)")
 
     # =========================================================================
     # PROMETHEUS METRICS VERIFICATION
@@ -380,42 +400,40 @@ class TestObservabilityAndResilienceVerification:
 
     async def test_prometheus_metrics_endpoint_has_pipeline_metrics(self, bootstrap):
         """Verify Prometheus metrics endpoint contains pipeline execution metrics."""
-        # Verify metrics infrastructure is available
-        from starlette.testclient import TestClient
-
         client = TestClient(bootstrap.app)
 
-        # Query Prometheus endpoint if available
-        try:
-            response = client.get("/metrics")
-            # Endpoint should exist and be accessible (may return 200 or other status)
-            assert response.status_code in [200, 404], "Metrics endpoint should exist"
+        # Query Prometheus endpoint
+        response = client.get("/metrics")
 
-            if response.status_code == 200:
-                metrics_text = response.text
-                assert len(metrics_text) > 0, "Metrics endpoint should return content"
-                logger.info(f"✓ Prometheus /metrics endpoint returned {len(metrics_text)} bytes of metrics data")
-            else:
-                logger.warning(f"Prometheus /metrics endpoint returned {response.status_code}")
-        except Exception as e:
-            logger.info(f"Prometheus /metrics endpoint availability: {type(e).__name__}: {e}")
+        # Metrics endpoint should exist and return 200 with content
+        if response.status_code == 404:
+            pytest.skip("Prometheus metrics endpoint not available in bootstrap configuration")
+
+        assert response.status_code == 200, f"Metrics endpoint should return 200, got {response.status_code}"
+
+        metrics_text = response.text
+        assert len(metrics_text) > 0, "Metrics endpoint should return non-empty content"
+
+        # Verify metrics contain expected structure (Prometheus format)
+        assert "# HELP" in metrics_text or "# TYPE" in metrics_text or any(
+            line.startswith(("codetoreum_", "python_", "process_"))
+            for line in metrics_text.split("\n")
+        ), "Metrics should contain Prometheus-formatted metric lines"
+
+        logger.info(f"✓ Prometheus /metrics endpoint returned {len(metrics_text)} bytes of valid metrics data")
 
     async def test_metrics_query_port_has_agent_execution_metrics(self, bootstrap):
         """Verify metrics query port can retrieve agent execution metrics."""
-        # Get the metrics adapter/port from bootstrap
-        if hasattr(bootstrap, "services") and hasattr(bootstrap.services, "metrics_query"):
-            metrics_port = bootstrap.services.metrics_query
-            try:
-                metrics = await metrics_port.get_agent_execution_metrics()
-                # Verify metrics are accessible
-                assert isinstance(metrics, dict), "Metrics should return a dict"
-                logger.info(f"✓ Metrics query port returned agent execution metrics")
-            except NotImplementedError:
-                logger.warning("Metrics query port not fully implemented")
-            except Exception as e:
-                logger.warning(f"Error querying metrics: {e}")
-        else:
-            logger.warning("Metrics query port not available in bootstrap")
+        # Check that metrics query port is available
+        if not (hasattr(bootstrap, "services") and hasattr(bootstrap.services, "metrics_query")):
+            pytest.skip("Metrics query port not available in bootstrap")
+
+        metrics_port = bootstrap.services.metrics_query
+        metrics = await metrics_port.get_agent_execution_metrics()
+
+        # Verify metrics are accessible
+        assert isinstance(metrics, dict), "Metrics should return a dict"
+        logger.info("✓ Metrics query port returned agent execution metrics")
 
     # =========================================================================
     # OPENTELEMETRY TRACE VERIFICATION
@@ -423,12 +441,6 @@ class TestObservabilityAndResilienceVerification:
 
     async def test_opentelemetry_traces_have_trace_context(self, bootstrap):
         """Verify OpenTelemetry spans exist with trace context propagation."""
-        # Verify trace context infrastructure is in place
-        from codetoreum.infrastructure.observability.trace_context_propagation import (
-            inject_current_trace_context_into_event,
-            TraceContextPropagator,
-        )
-
         # Create a test event
         event = DomainEvent(
             aggregate_id="test-trace-1",
@@ -549,13 +561,10 @@ class TestObservabilityAndResilienceVerification:
             await cb.call(failing, "test_fail_2")
 
         # Third call should be blocked (circuit is open)
-        from codetoreum.infrastructure.resilience.circuit_breaker import CircuitBreakerOpenError
-
         with pytest.raises(CircuitBreakerOpenError):
             await cb.call(failing, "test_blocked")
 
         # Verify circuit state
-        from codetoreum.infrastructure.resilience.circuit_breaker import CircuitState
         state = cb.get_state()
         assert state == CircuitState.OPEN, "Circuit should be OPEN after threshold exceeded"
 
@@ -599,29 +608,30 @@ class TestObservabilityAndResilienceVerification:
         assert call_count >= 3, "Should have succeeded on at least 3 calls"
         logger.info(f"✓ Rate limiter correctly limited calls to configured threshold")
 
-    async def test_resilience_patterns_engaged_during_execution(self, bootstrap):
-        """Verify resilience patterns can engage during real execution."""
-        # This test verifies that resilience infrastructure is wired and can engage
-        # We can't easily force failures in simulation, but we can verify the patterns are available
+    async def test_timeout_functionality(self):
+        """Verify timeout resilience pattern works correctly."""
+        timeout = AsyncTimeout()
 
-        # Check that resilience patterns are importable and functional
-        from codetoreum.infrastructure.resilience.circuit_breaker import CircuitBreaker
-        from codetoreum.infrastructure.resilience.rate_limiter import TokenBucketRateLimiter
-        from codetoreum.infrastructure.resilience.timeout import AsyncTimeout
-        from codetoreum.infrastructure.resilience.retry_policy import ExponentialBackoffRetry
+        # Test: operation that completes within timeout
+        async def fast_operation():
+            await asyncio.sleep(0.1)
+            return "success"
 
-        # Verify each pattern has required methods
-        assert hasattr(CircuitBreaker, "call"), "CircuitBreaker should have call method"
-        assert hasattr(TokenBucketRateLimiter, "acquire"), "TokenBucketRateLimiter should have acquire method"
-        assert hasattr(AsyncTimeout, "execute"), "AsyncTimeout should have execute method"
-        assert hasattr(ExponentialBackoffRetry, "execute"), "ExponentialBackoffRetry should have execute method"
+        result = await timeout.execute(fast_operation, timeout_seconds=0.5, operation_name="fast")
+        assert result == "success"
 
-        logger.info("✓ All resilience patterns (circuit breaker, rate limiter, timeout, retry) are available and functional")
+        # Test: operation that exceeds timeout - should raise ResilienceTimeoutError
+        async def slow_operation():
+            await asyncio.sleep(2.0)
+            return "never"
+
+        with pytest.raises(ResilienceTimeoutError):
+            await timeout.execute(slow_operation, timeout_seconds=0.5, operation_name="slow")
+
+        logger.info("✓ Timeout resilience pattern correctly enforces time limits")
 
     async def test_retry_policy_with_exponential_backoff(self):
         """Verify retry policy with exponential backoff is available."""
-        from codetoreum.infrastructure.resilience.retry_policy import ExponentialBackoffRetry
-
         # Create a retry policy with exponential backoff
         base_delay = 0.1
         exponential_base = 2.0
@@ -761,38 +771,17 @@ class TestObservabilityAndResilienceVerification:
 
         stats = dlq.get_stats()
 
-        # Assessment:
-        # 1. In-memory DLQ stores all events in a dict
-        # 2. No persistence layer (loses data on restart)
+        # Verify that DLQ properly tracked the events
+        assert stats.total_failed_events == num_failed_events, "DLQ should track all failed events"
+
+        # The in-memory implementation has these characteristics:
+        # 1. Stores all events in a dict (no persistence)
+        # 2. Data is lost on restart (no durability)
         # 3. Memory grows indefinitely without purging
-        # 4. Suitable for: Development, testing, stateless deployments
-        # 5. Not suitable for: Production with persistent storage requirement
-
-        assessment = {
-            "current_implementation": "in-memory dict",
-            "total_events_tracked": stats.total_failed_events,
-            "memory_model": "unbounded growth without purging",
-            "persistence": "None - data lost on restart",
-            "suitable_for_production": False,
-            "recommendation": "Add Redis-backed persistence for production",
-            "reasoning": [
-                "In-memory storage is lost on restart/deployment",
-                "Unbounded growth can lead to memory exhaustion",
-                "Production should have persistent audit trail of all failures",
-                "Redis-backed storage provides durability with same async API",
-                "Purge policies (purge_old_events, purge_exhausted_events) should run periodically",
-            ],
-        }
-
-        logger.info(f"✓ Dead letter queue assessment complete:")
-        logger.info(f"  - Current implementation: {assessment['current_implementation']}")
-        logger.info(f"  - Total events: {assessment['total_events_tracked']}")
-        logger.info(f"  - Suitable for production: {assessment['suitable_for_production']}")
-        logger.info(f"  - Recommendation: {assessment['recommendation']}")
-
-        # Verify assessment is accurate
-        assert assessment["suitable_for_production"] is False
-        assert "Redis" in assessment["recommendation"]
+        logger.info(f"✓ Dead letter queue assessment:")
+        logger.info(f"  - Total events tracked: {stats.total_failed_events}")
+        logger.info(f"  - Implementation: in-memory dict (no persistence)")
+        logger.info(f"  - For production use: requires Redis-backed persistence layer")
 
     async def test_dead_letter_queue_is_discoverable_at_runtime(self):
         """Verify active DLQs can be discovered at runtime for monitoring."""
