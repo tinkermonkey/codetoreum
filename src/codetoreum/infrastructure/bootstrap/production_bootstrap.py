@@ -34,7 +34,11 @@ from codetoreum.adapters.primary.input_port_adapters.mock.mock_task_query_adapte
 from codetoreum.adapters.secondary.elasticsearch_workflow_config_service import (
     ElasticsearchWorkflowConfigService,
 )
+from codetoreum.adapters.secondary.failed_event_store_adapter import (
+    DeadLetterQueueFailedEventStoreAdapter,
+)
 from codetoreum.adapters.testing.execution_service_agent_executor import ExecutionServiceAgentExecutor
+from codetoreum.application.agent_execution_recovery_service import AgentExecutionRecoveryService
 from codetoreum.application.agent_scheduler import AgentScheduler, IProjectConfiguration
 from codetoreum.application.configuration_service import ConfigurationService
 from codetoreum.application.container_recovery_service import ContainerRecoveryService
@@ -52,6 +56,7 @@ from codetoreum.config.codetoreum_pipeline import create_codetoreum_pipeline_tem
 from codetoreum.infrastructure.adapters.factory import AdapterFactory, AdapterFactoryConfig
 from codetoreum.infrastructure.adapters.resolver import AdapterDependencies, AdapterResolver
 from codetoreum.infrastructure.bootstrap.production_config import create_production_adapter_config
+from codetoreum.infrastructure.dead_letter_queue import DeadLetterQueue
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.resilience import OperationMode
@@ -718,6 +723,21 @@ class ProductionApplicationBootstrap:
             event_bus=self.event_bus,
         )
 
+        # Create failed event store for tracking completion callback failures
+        # Using DeadLetterQueue with production defaults for memory safety and retry tracking
+        dead_letter_queue = DeadLetterQueue()
+        failed_event_store = DeadLetterQueueFailedEventStoreAdapter(dead_letter_queue)
+
+        # Create AgentExecutionRecoveryService to handle agent execution failures
+        # This is separate from ContainerRecoveryService (which handles container issues)
+        # Injected into ExecutionServiceAgentExecutor for completion callback failure recovery
+        agent_execution_recovery_service = AgentExecutionRecoveryService(
+            board_service=self.adapters.board,
+            event_store=self.adapters.event_store,
+            run_registry=self.adapters.run_registry,
+            failed_event_store=failed_event_store,
+        )
+
         # Create ExecutionServiceAgentExecutor to wire into BoardColumnEventHandler
         # This drives the full LLM → Container → VCS execution chain in production
         production_clock = _ProductionClock()
@@ -731,7 +751,7 @@ class ProductionApplicationBootstrap:
             branch_tracker=self.adapters.branch_tracker,
             vcs=self.adapters.repository,
             clock=production_clock,  # Production clock (real system time)
-            recovery_service=container_recovery_service,
+            recovery_service=agent_execution_recovery_service,
         )
         # Store executor in adapters for BoardColumnEventHandler access
         self.adapters.agent_executor = agent_executor

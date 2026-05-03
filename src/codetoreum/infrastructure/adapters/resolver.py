@@ -83,7 +83,7 @@ class AdapterDependencies:
     event_emitter: IEventEmitter  # CapturingMockEventEmitter in simulation - Fallback default for resolved adapters
     logger: logging.Logger  # No ILogger ABC implemented yet; using stdlib Logger
     engine: "SimulationEngine"  # For clock injection in time-aware adapters (actively used)
-    config: "SimulationConfig"  # Actively used for metadata/config lookups
+    config: "SimulationConfig | None"  # For metadata/config lookups (None in production)
 
 
 class AdapterConfigurationError(Exception):
@@ -190,9 +190,11 @@ class AdapterResolver:
                     errors.append(f"{field_name}/{impl_name}: missing env var '{env_var}'")
 
             # Check required config keys (accept falsy values like 0, "", False)
-            for config_key in req.config_keys:
-                if config_key not in self._deps.config.metadata:
-                    errors.append(f"{field_name}/{impl_name}: missing config key '{config_key}'")
+            # Skip if config is not available (e.g., production without SimulationConfig)
+            if self._deps.config is not None:
+                for config_key in req.config_keys:
+                    if config_key not in self._deps.config.metadata:
+                        errors.append(f"{field_name}/{impl_name}: missing config key '{config_key}'")
 
         if errors:
             raise AdapterConfigurationError(errors)
