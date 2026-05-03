@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from tests.integration.conftest import MockWorkflowConfigService
 from codetoreum.adapters.secondary.in_memory_pipeline_lock_service import InMemoryPipelineLockService
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.adapters.testing.mock_agent_executor import MockAgentExecutor
@@ -39,34 +40,6 @@ from codetoreum.ports.output.failed_event_store import FailedEventStoreStats, IF
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 logger = logging.getLogger(__name__)
-
-
-class MockWorkflowConfigService(IWorkflowConfigService):
-    """Mock workflow config service for testing."""
-
-    def __init__(self, template: BoardWorkflowTemplate):
-        """Initialize with template."""
-        self.template = template
-
-    async def save_board_workflow_template(self, template: BoardWorkflowTemplate) -> None:
-        """Save template."""
-        self.template = template
-
-    async def get_board_workflow_template(self, board_id: str) -> BoardWorkflowTemplate | None:
-        """Get template by board ID."""
-        if board_id == self.template.board_id:
-            return self.template
-        return None
-
-    async def list_board_workflow_templates(self, project_id: str) -> list[BoardWorkflowTemplate]:
-        """List templates for project."""
-        if project_id == self.template.project_id:
-            return [self.template]
-        return []
-
-    async def delete_board_workflow_template(self, board_id: str) -> None:
-        """Delete template."""
-        pass
 
 
 class MockFailedEventStore(IFailedEventStore):
@@ -164,6 +137,15 @@ class TestProductionOrchestration:
             event_store=event_store,
         )
 
+        # Initialize board with columns from template
+        project_id = codetoreum_pipeline.project_id
+        board_id = codetoreum_pipeline.board_id
+        column_names = [col.name for col in codetoreum_pipeline.columns]
+        board_service.create_board(project_id, board_id, "Test Board", column_names)
+        board_service.current_project = project_id
+        board_service.current_board = board_id
+        board_service.event_bus = event_bus
+
         handler = BoardColumnEventHandler(
             board_service=board_service,
             lock_service=lock_service,
@@ -214,6 +196,9 @@ class TestProductionOrchestration:
 
         # Trigger pipeline for first item
         event1 = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="test",
             work_item_id=work_item_1,
             board_id=board_id,
             project_id=project_id,
@@ -234,6 +219,9 @@ class TestProductionOrchestration:
         # Simulate completion through all stages (auto-progression)
         for column in ["Testing", "Review", "Done"]:
             event_progress = WorkItemColumnChangedEvent(
+                type="workitem.column_changed",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="test",
                 work_item_id=work_item_1,
                 board_id=board_id,
                 project_id=project_id,
@@ -279,6 +267,9 @@ class TestProductionOrchestration:
 
         # Trigger pipeline
         event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="test",
             work_item_id=work_item_id,
             board_id=board_id,
             project_id=project_id,
@@ -294,7 +285,9 @@ class TestProductionOrchestration:
 
         # Get all events recorded
         all_events = []
-        for aggregate_id, events in event_store._events.items():
+        stream_ids = await event_store.get_all_stream_ids()
+        for stream_id in stream_ids:
+            events = event_store.get_events_for_stream(stream_id)
             all_events.extend(events)
 
         # Should have at least WorkflowCreated and WorkflowStarted
@@ -442,6 +435,9 @@ class TestProductionOrchestration:
         # Trigger all items to Analysis simultaneously
         for item in [item1, item2, item3]:
             event = WorkItemColumnChangedEvent(
+                type="workitem.column_changed",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="test",
                 work_item_id=item,
                 board_id=board_id,
                 project_id=project_id,
@@ -489,6 +485,9 @@ class TestProductionOrchestration:
         await board_service.add_item_to_column(work_item_id, "Backlog", MovedByType.HUMAN)
 
         event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="test",
             work_item_id=work_item_id,
             board_id=board_id,
             project_id=project_id,

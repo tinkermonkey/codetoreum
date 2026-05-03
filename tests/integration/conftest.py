@@ -1,9 +1,40 @@
 """Common test fixtures and utilities for integration tests."""
 
 import pytest
+from codetoreum.domain.board_workflow_template import BoardWorkflowTemplate
+from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 # Set default timeout for all integration tests to prevent hanging
 pytestmark = pytest.mark.timeout(30)
+
+
+class MockWorkflowConfigService(IWorkflowConfigService):
+    """Mock workflow config service for testing."""
+
+    def __init__(self, template: BoardWorkflowTemplate):
+        """Initialize with template."""
+        self.template = template
+
+    async def save_board_workflow_template(self, template: BoardWorkflowTemplate) -> None:
+        """Save template."""
+        self.template = template
+
+    async def get_board_workflow_template(self, board_id: str) -> BoardWorkflowTemplate | None:
+        """Get template by board ID."""
+        if board_id == self.template.board_id:
+            return self.template
+        return None
+
+    async def list_board_workflow_templates(self, project_id: str) -> list[BoardWorkflowTemplate]:
+        """List templates for project."""
+        if project_id == self.template.project_id:
+            return [self.template]
+        return []
+
+    async def delete_board_workflow_template(self, board_id: str) -> None:
+        """Delete template."""
+        if board_id == self.template.board_id:
+            self.template = None
 
 
 @pytest.fixture

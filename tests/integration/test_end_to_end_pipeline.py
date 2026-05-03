@@ -34,6 +34,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from tests.integration.conftest import MockWorkflowConfigService
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.adapters.testing.mock_agent_executor import MockAgentExecutor
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
@@ -48,35 +49,6 @@ from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 logger = logging.getLogger(__name__)
-
-
-class MockWorkflowConfigService(IWorkflowConfigService):
-    """Mock workflow config service for testing."""
-
-    def __init__(self, template: BoardWorkflowTemplate):
-        """Initialize with template."""
-        self.template = template
-
-    async def save_board_workflow_template(self, template: BoardWorkflowTemplate) -> None:
-        """Save template."""
-        self.template = template
-
-    async def get_board_workflow_template(self, board_id: str) -> BoardWorkflowTemplate | None:
-        """Get template by board ID."""
-        if board_id == self.template.board_id:
-            return self.template
-        return None
-
-    async def list_board_workflow_templates(self, project_id: str) -> list[BoardWorkflowTemplate]:
-        """List templates for project."""
-        if project_id == self.template.project_id:
-            return [self.template]
-        return []
-
-    async def delete_board_workflow_template(self, board_id: str) -> None:
-        """Delete template."""
-        if board_id == self.template.board_id:
-            self.template = None
 
 
 class EventStoreVerifier:
@@ -432,18 +404,15 @@ class TestEndToEndPipelineExecution:
                     assert event.occurred_at is not None
 
     @pytest.mark.asyncio
-    async def test_production_failure_github_rate_limit(
+    async def test_agent_executor_triggered_on_analysis_column(
         self, setup_pipeline: tuple[Any, Any, InMemoryEventStore, MockBoardAdapter, MockAgentExecutor, EventStoreVerifier]
     ) -> None:
         """
-        Test production failure: GitHub API rate limit (429).
+        Test agent executor is triggered when work item moves to Analysis column.
 
         Expected behavior:
-        1. Agent execution fails with rate limit error
-        2. Error is logged with context (error_id, work_item_id)
-        3. Pipeline lock is released to unblock queue
-        4. Work item moved to Blocked column
-        5. Event emitted for monitoring/alerting
+        1. Work item moved to Analysis column
+        2. Agent executor is triggered with analyzer agent
         """
         event_bus, handler, event_store, board_service, agent_executor, verifier = setup_pipeline
 
@@ -483,17 +452,15 @@ class TestEndToEndPipelineExecution:
         assert latest_execution["agent_id"] == "analyzer"
 
     @pytest.mark.asyncio
-    async def test_production_failure_docker_oom_kill(
+    async def test_concurrent_work_items_pipeline_execution(
         self, setup_pipeline: tuple[Any, Any, InMemoryEventStore, MockBoardAdapter, MockAgentExecutor, EventStoreVerifier]
     ) -> None:
         """
-        Test production failure: Docker container OOM kill.
+        Test pipeline execution with multiple concurrent work items.
 
         Expected behavior:
-        1. Agent execution fails with OOM error
-        2. Container recovery service intervenes
-        3. Work item moved to Blocked column
-        4. Alert emitted for infrastructure team
+        1. Multiple work items moved to Analysis column
+        2. Agent executor triggered for each work item
         """
         event_bus, handler, event_store, board_service, agent_executor, verifier = setup_pipeline
 
@@ -531,30 +498,9 @@ class TestEndToEndPipelineExecution:
         latest_execution = agent_executor.executions[-1]
         assert latest_execution["agent_id"] == "analyzer"
 
-    @pytest.mark.asyncio
-    async def test_pr_creation_and_verification(
-        self, setup_pipeline: tuple[Any, Any, InMemoryEventStore, MockBoardAdapter, MockAgentExecutor, EventStoreVerifier]
-    ) -> None:
-        """
-        Test PR creation and verification.
-
-        Expected:
-        - PR is created with correct authorship (Codetoreum)
-        - PR is against target repository
-        - PR is mergeable (no conflicts, checks pass)
-        - PR has proper title and description
-        """
-        # This test would require a real or mocked GitHub repository
-        # For now, we verify the structure and dependencies are in place
-        event_bus, handler, event_store, board_service, agent_executor, verifier = setup_pipeline
-
-        # Verify agent executor is properly configured to trigger agents
-        assert agent_executor is not None
-        assert callable(agent_executor.execute)
-
-        # Verify event store can persist PR creation events
-        assert event_store is not None
-        assert callable(event_store.append)
+    # NOTE: test_pr_creation_and_verification would require a real or mocked GitHub repository
+    # and is not implemented in this integration test suite. See architecture documentation
+    # for PR creation workflow specifications.
 
     @pytest.mark.asyncio
     async def test_event_correlation_across_pipeline_stages(
@@ -600,10 +546,16 @@ class TestEndToEndPipelineExecution:
 
         # Verify events are recorded with structure supporting correlation
         all_events = await verifier.get_all_events()
+        assert len(all_events) > 0, "No events were recorded"
+
+        # Check that events have proper identifiers for correlation
         for aggregate_id, events in all_events:
+            assert aggregate_id is not None, "Events should have an aggregate_id"
+            assert len(events) > 0, f"Aggregate {aggregate_id} has no events"
+
+            # Verify all events for this aggregate have consistent identifiers
             for event in events:
-                # Events should have work_item_id in payload for correlation
-                if hasattr(event, "payload") and isinstance(event.payload, dict):
-                    # Correlation can be via work_item_id or other identifiers
-                    pass
+                assert hasattr(event, "aggregate_id"), "Events must have aggregate_id"
+                assert event.aggregate_id == aggregate_id, "Event aggregate_id must match stream aggregate_id"
+                assert hasattr(event, "event_type"), "Events must have event_type"
 
