@@ -45,7 +45,10 @@ from codetoreum.domain.board_workflow_template import (
     BoardWorkflowTemplate,
     ColumnTemplate,
     ColumnType,
+    StageAgentConfig,
 )
+from codetoreum.domain.pr_review_cycle_types import PRReviewCycleConfig
+from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig, RepairTestType
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.exceptions import ValidationError
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
@@ -61,12 +64,16 @@ class ElasticsearchWorkflowConfigService(IWorkflowConfigService):
     - Full CRUD operations keyed by board_id
     - Project-scoped listing for admin UI
     - Timestamps (created_at, updated_at) for audit trail
-    - Version tracking for optimistic concurrency control
+    - Version tracking and optimistic concurrency control (if_seq_no/if_primary_term)
+    - Complete pipeline configuration including stage-specific agent configs, repair cycles,
+      and PR review cycle configurations
 
     Index design:
     - config-board-workflows: Workflow template storage
       - Keyed by template.board_id
       - Fields include columns array, project_id, timestamps, version
+      - Column nested objects include stage_agent_config, repair_cycle_agents,
+        repair_cycle_test_types, and pr_review_cycle_config
     """
 
     # Index name for workflow templates
@@ -174,6 +181,57 @@ class ElasticsearchWorkflowConfigService(IWorkflowConfigService):
                         "on_failure_column": {"type": "keyword"},
                         "sla_escalation_column": {"type": "keyword"},
                         "execution_type": {"type": "keyword"},
+                        "stage_agent_config": {
+                            "type": "object",
+                            "properties": {
+                                "model": {"type": "keyword"},
+                                "timeout_seconds": {"type": "integer"},
+                                "permission_mode": {"type": "keyword"},
+                                "output_format": {"type": "keyword"},
+                                "enable_mcp": {"type": "boolean"},
+                                "enable_tools": {"type": "boolean"},
+                                "max_context_tokens": {"type": "integer"},
+                                "verbose": {"type": "boolean"},
+                                "prompt_template": {"type": "text"},
+                                "tool_permissions": {"type": "object", "enabled": False},
+                                "metadata": {"type": "object", "enabled": False},
+                            },
+                        },
+                        "repair_cycle_agents": {
+                            "type": "object",
+                            "properties": {
+                                "test_execution": {"type": "keyword"},
+                                "code_fix": {"type": "keyword"},
+                                "systemic_analysis": {"type": "keyword"},
+                                "systemic_fix": {"type": "keyword"},
+                                "env_rebuild": {"type": "keyword"},
+                                "env_verification": {"type": "keyword"},
+                                "ci_check": {"type": "keyword"},
+                            },
+                        },
+                        "repair_cycle_test_types": {"type": "keyword"},
+                        "pr_review_cycle_config": {
+                            "type": "object",
+                            "properties": {
+                                "max_outer_cycles": {"type": "integer"},
+                                "verifier_context_sources": {"type": "keyword"},
+                                "code_review_timeout_seconds": {"type": "integer"},
+                                "verification_timeout_seconds": {"type": "integer"},
+                                "ci_check_enabled": {"type": "boolean"},
+                                "ci_check_timeout_seconds": {"type": "integer"},
+                                "consolidation_timeout_seconds": {"type": "integer"},
+                                "sub_issue_target_board": {"type": "keyword"},
+                                "sub_issue_creation": {"type": "boolean"},
+                                "sub_issue_labels": {"type": "keyword"},
+                                "sub_issue_initial_column": {"type": "keyword"},
+                                "on_issues_found_column": {"type": "keyword"},
+                                "on_approved_column": {"type": "keyword"},
+                                "on_failure_column": {"type": "keyword"},
+                                "code_review_agent": {"type": "keyword"},
+                                "verifier_agent": {"type": "keyword"},
+                                "consolidation_agent": {"type": "keyword"},
+                            },
+                        },
                     },
                 },
                 "created_at": {"type": "date"},
@@ -236,10 +294,14 @@ class ElasticsearchWorkflowConfigService(IWorkflowConfigService):
             now = datetime.now(UTC)
             created_at = template.created_at if template.created_at is not None else now
 
-            # Try to get existing document for version tracking
+            # Try to get existing document for version tracking and optimistic concurrency control
+            seq_no = None
+            primary_term = None
             try:
                 existing = await self.client.get(index=self.INDEX_WORKFLOWS, id=template.board_id)
                 version = existing["_source"].get("version", 1) + 1
+                seq_no = existing["_seq_no"]
+                primary_term = existing["_primary_term"]
             except NotFoundError:
                 version = 1
 
@@ -250,11 +312,17 @@ class ElasticsearchWorkflowConfigService(IWorkflowConfigService):
 
             doc = self._serialize_template(template_with_meta, version)
 
-            await self.client.index(
-                index=self.INDEX_WORKFLOWS,
-                id=template.board_id,
-                body=doc,
-            )
+            # Use optimistic concurrency control with if_seq_no and if_primary_term
+            index_kwargs = {
+                "index": self.INDEX_WORKFLOWS,
+                "id": template.board_id,
+                "body": doc,
+            }
+            if seq_no is not None and primary_term is not None:
+                index_kwargs["if_seq_no"] = seq_no
+                index_kwargs["if_primary_term"] = primary_term
+
+            await self.client.index(**index_kwargs)
 
             logger.info(f"Saved workflow template for board {template.board_id}")
 
@@ -347,6 +415,128 @@ class ElasticsearchWorkflowConfigService(IWorkflowConfigService):
             await self.client.close()
             logger.info("Closed Elasticsearch workflow config service")
 
+    # ── Private serialization helpers for complex types ──────────────────────
+
+    def _serialize_stage_agent_config(self, config: StageAgentConfig) -> dict[str, Any]:
+        """Serialize StageAgentConfig to dict."""
+        return {
+            "model": config.model,
+            "timeout_seconds": config.timeout_seconds,
+            "permission_mode": config.permission_mode,
+            "output_format": config.output_format,
+            "enable_mcp": config.enable_mcp,
+            "enable_tools": config.enable_tools,
+            "max_context_tokens": config.max_context_tokens,
+            "verbose": config.verbose,
+            "prompt_template": config.prompt_template,
+            "tool_permissions": dict(config.tool_permissions) if config.tool_permissions else {},
+            "metadata": dict(config.metadata) if config.metadata else {},
+        }
+
+    def _deserialize_stage_agent_config(
+        self, data: dict[str, Any] | None
+    ) -> StageAgentConfig | None:
+        """Deserialize dict back to StageAgentConfig."""
+        if data is None:
+            return None
+        return StageAgentConfig(
+            model=data.get("model"),
+            timeout_seconds=data.get("timeout_seconds"),
+            permission_mode=data.get("permission_mode"),
+            output_format=data.get("output_format"),
+            enable_mcp=data.get("enable_mcp"),
+            enable_tools=data.get("enable_tools"),
+            max_context_tokens=data.get("max_context_tokens"),
+            verbose=data.get("verbose"),
+            prompt_template=data.get("prompt_template"),
+            tool_permissions=data.get("tool_permissions", {}),
+            metadata=data.get("metadata", {}),
+        )
+
+    def _serialize_repair_cycle_agents(self, config: RepairCycleAgentConfig) -> dict[str, Any]:
+        """Serialize RepairCycleAgentConfig to dict."""
+        return {
+            "test_execution": config.test_execution,
+            "code_fix": config.code_fix,
+            "systemic_analysis": config.systemic_analysis,
+            "systemic_fix": config.systemic_fix,
+            "env_rebuild": config.env_rebuild,
+            "env_verification": config.env_verification,
+            "ci_check": config.ci_check,
+        }
+
+    def _deserialize_repair_cycle_agents(
+        self, data: dict[str, Any] | None
+    ) -> RepairCycleAgentConfig | None:
+        """Deserialize dict back to RepairCycleAgentConfig."""
+        if data is None:
+            return None
+        return RepairCycleAgentConfig(
+            test_execution=data.get("test_execution"),
+            code_fix=data.get("code_fix"),
+            systemic_analysis=data.get("systemic_analysis"),
+            systemic_fix=data.get("systemic_fix"),
+            env_rebuild=data.get("env_rebuild"),
+            env_verification=data.get("env_verification"),
+            ci_check=data.get("ci_check"),
+        )
+
+    def _deserialize_repair_cycle_test_types(
+        self, data: list[str] | None
+    ) -> tuple[RepairTestType, ...] | None:
+        """Deserialize list of test type strings back to tuple of RepairTestType."""
+        if data is None:
+            return None
+        return tuple(RepairTestType(test_type_str) for test_type_str in data)
+
+    def _serialize_pr_review_cycle_config(self, config: PRReviewCycleConfig) -> dict[str, Any]:
+        """Serialize PRReviewCycleConfig to dict."""
+        return {
+            "max_outer_cycles": config.max_outer_cycles,
+            "verifier_context_sources": list(config.verifier_context_sources),
+            "code_review_timeout_seconds": config.code_review_timeout_seconds,
+            "verification_timeout_seconds": config.verification_timeout_seconds,
+            "ci_check_enabled": config.ci_check_enabled,
+            "ci_check_timeout_seconds": config.ci_check_timeout_seconds,
+            "consolidation_timeout_seconds": config.consolidation_timeout_seconds,
+            "sub_issue_target_board": config.sub_issue_target_board,
+            "sub_issue_creation": config.sub_issue_creation,
+            "sub_issue_labels": list(config.sub_issue_labels),
+            "sub_issue_initial_column": config.sub_issue_initial_column,
+            "on_issues_found_column": config.on_issues_found_column,
+            "on_approved_column": config.on_approved_column,
+            "on_failure_column": config.on_failure_column,
+            "code_review_agent": config.code_review_agent,
+            "verifier_agent": config.verifier_agent,
+            "consolidation_agent": config.consolidation_agent,
+        }
+
+    def _deserialize_pr_review_cycle_config(
+        self, data: dict[str, Any] | None
+    ) -> PRReviewCycleConfig | None:
+        """Deserialize dict back to PRReviewCycleConfig."""
+        if data is None:
+            return None
+        return PRReviewCycleConfig(
+            max_outer_cycles=data.get("max_outer_cycles", 3),
+            verifier_context_sources=tuple(data.get("verifier_context_sources", ["parent_issue"])),
+            code_review_timeout_seconds=data.get("code_review_timeout_seconds", 600),
+            verification_timeout_seconds=data.get("verification_timeout_seconds", 300),
+            ci_check_enabled=data.get("ci_check_enabled", True),
+            ci_check_timeout_seconds=data.get("ci_check_timeout_seconds", 300),
+            consolidation_timeout_seconds=data.get("consolidation_timeout_seconds", 600),
+            sub_issue_target_board=data.get("sub_issue_target_board"),
+            sub_issue_creation=data.get("sub_issue_creation", True),
+            sub_issue_labels=tuple(data.get("sub_issue_labels", [])),
+            sub_issue_initial_column=data.get("sub_issue_initial_column", "Backlog"),
+            on_issues_found_column=data.get("on_issues_found_column", "In Development"),
+            on_approved_column=data.get("on_approved_column", "Done"),
+            on_failure_column=data.get("on_failure_column"),
+            code_review_agent=data.get("code_review_agent", "default-code-reviewer"),
+            verifier_agent=data.get("verifier_agent", "default-verifier"),
+            consolidation_agent=data.get("consolidation_agent", "default-consolidation"),
+        )
+
     # ── Private serialization helpers ────────────────────────────────────────
 
     def _serialize_template(self, template: BoardWorkflowTemplate, version: int) -> dict[str, Any]:
@@ -366,6 +556,31 @@ class ElasticsearchWorkflowConfigService(IWorkflowConfigService):
                 "sla_escalation_column": col.sla_escalation_column,
                 "execution_type": col.execution_type,
             }
+
+            # Serialize stage_agent_config if present
+            if col.stage_agent_config is not None:
+                col_doc["stage_agent_config"] = self._serialize_stage_agent_config(
+                    col.stage_agent_config
+                )
+
+            # Serialize repair_cycle_agents if present
+            if col.repair_cycle_agents is not None:
+                col_doc["repair_cycle_agents"] = self._serialize_repair_cycle_agents(
+                    col.repair_cycle_agents
+                )
+
+            # Serialize repair_cycle_test_types if present
+            if col.repair_cycle_test_types is not None:
+                col_doc["repair_cycle_test_types"] = [
+                    test_type.value for test_type in col.repair_cycle_test_types
+                ]
+
+            # Serialize pr_review_cycle_config if present
+            if col.pr_review_cycle_config is not None:
+                col_doc["pr_review_cycle_config"] = self._serialize_pr_review_cycle_config(
+                    col.pr_review_cycle_config
+                )
+
             columns.append(col_doc)
 
         return {
@@ -395,6 +610,18 @@ class ElasticsearchWorkflowConfigService(IWorkflowConfigService):
                 on_failure_column=col_doc.get("on_failure_column"),
                 sla_escalation_column=col_doc.get("sla_escalation_column"),
                 execution_type=col_doc.get("execution_type", "task_queue"),
+                stage_agent_config=self._deserialize_stage_agent_config(
+                    col_doc.get("stage_agent_config")
+                ),
+                repair_cycle_agents=self._deserialize_repair_cycle_agents(
+                    col_doc.get("repair_cycle_agents")
+                ),
+                repair_cycle_test_types=self._deserialize_repair_cycle_test_types(
+                    col_doc.get("repair_cycle_test_types")
+                ),
+                pr_review_cycle_config=self._deserialize_pr_review_cycle_config(
+                    col_doc.get("pr_review_cycle_config")
+                ),
             )
             columns.append(column)
 
