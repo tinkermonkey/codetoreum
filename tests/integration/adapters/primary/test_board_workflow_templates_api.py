@@ -137,8 +137,7 @@ def sample_template() -> BoardWorkflowTemplate:
 class TestListTemplates:
     """Tests for listing board workflow templates."""
 
-    @pytest.mark.asyncio
-    async def test_list_templates_success(
+    def test_list_templates_success(
         self,
         client: TestClient,
         mock_workflow_config_service: AsyncMock,
@@ -166,8 +165,7 @@ class TestListTemplates:
             "proj-123"
         )
 
-    @pytest.mark.asyncio
-    async def test_list_templates_empty(
+    def test_list_templates_empty(
         self,
         client: TestClient,
         mock_workflow_config_service: AsyncMock,
@@ -185,8 +183,7 @@ class TestListTemplates:
         assert data["total_count"] == 0
         assert len(data["templates"]) == 0
 
-    @pytest.mark.asyncio
-    async def test_list_templates_internal_error_no_details(
+    def test_list_templates_internal_error_no_details(
         self,
         client: TestClient,
         mock_workflow_config_service: AsyncMock,
@@ -218,8 +215,7 @@ class TestListTemplates:
 class TestGetTemplate:
     """Tests for retrieving a specific board workflow template."""
 
-    @pytest.mark.asyncio
-    async def test_get_template_success(
+    def test_get_template_success(
         self,
         client: TestClient,
         mock_workflow_config_service: AsyncMock,
@@ -247,8 +243,7 @@ class TestGetTemplate:
             "board-001"
         )
 
-    @pytest.mark.asyncio
-    async def test_get_template_not_found(
+    def test_get_template_not_found(
         self,
         client: TestClient,
         mock_workflow_config_service: AsyncMock,
@@ -267,8 +262,7 @@ class TestGetTemplate:
         data = response.json()
         assert "not found" in data["detail"].lower()
 
-    @pytest.mark.asyncio
-    async def test_get_template_cross_project_access_denied(
+    def test_get_template_cross_project_access_denied(
         self,
         client: TestClient,
         mock_workflow_config_service: AsyncMock,
@@ -308,8 +302,7 @@ class TestGetTemplate:
         data = response.json()
         assert "not found" in data["detail"].lower()
 
-    @pytest.mark.asyncio
-    async def test_get_template_internal_error_no_details(
+    def test_get_template_internal_error_no_details(
         self,
         client: TestClient,
         mock_workflow_config_service: AsyncMock,
@@ -340,8 +333,7 @@ class TestGetTemplate:
 class TestCreateTemplate:
     """Tests for creating a new board workflow template."""
 
-    @pytest.mark.asyncio
-    async def test_create_template_success(
+    def test_create_template_success(
         self,
         client: TestClient,
         mock_workflow_config_service: AsyncMock,
@@ -380,13 +372,7 @@ class TestCreateTemplate:
             ],
         }
 
-        # Mock should capture the template being saved
-        async def capture_and_return(template: BoardWorkflowTemplate):
-            return None
-
-        mock_workflow_config_service.save_board_workflow_template.side_effect = (
-            capture_and_return
-        )
+        mock_workflow_config_service.save_board_workflow_template.return_value = None
 
         # Act
         response = client.post(
@@ -399,6 +385,7 @@ class TestCreateTemplate:
         data = response.json()
         assert data["name"] == "New Workflow"
         assert data["project_id"] == "proj-123"
+        assert data["board_id"] == "proj-123"
         assert len(data["columns"]) == 2
         assert data["columns"][0]["name"] == "Todo"
         assert data["columns"][1]["name"] == "Done"
@@ -406,8 +393,7 @@ class TestCreateTemplate:
         assert data["id"].startswith("template-")
         mock_workflow_config_service.save_board_workflow_template.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_create_template_unique_ids(
+    def test_create_template_unique_ids(
         self,
         client: TestClient,
         mock_workflow_config_service: AsyncMock,
@@ -454,8 +440,7 @@ class TestCreateTemplate:
         assert first_id.startswith("template-")
         assert second_id.startswith("template-")
 
-    @pytest.mark.asyncio
-    async def test_create_template_invalid_column_type(
+    def test_create_template_invalid_column_type(
         self,
         client: TestClient,
         mock_workflow_config_service: AsyncMock,
@@ -490,8 +475,7 @@ class TestCreateTemplate:
         # Assert
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-    @pytest.mark.asyncio
-    async def test_create_template_internal_error_no_details(
+    def test_create_template_internal_error_no_details(
         self,
         client: TestClient,
         mock_workflow_config_service: AsyncMock,
@@ -543,8 +527,7 @@ class TestCreateTemplate:
 class TestUpdateTemplate:
     """Tests for updating an existing board workflow template."""
 
-    @pytest.mark.asyncio
-    async def test_update_template_success(
+    def test_update_template_success(
         self,
         client: TestClient,
         mock_workflow_config_service: AsyncMock,
@@ -602,8 +585,7 @@ class TestUpdateTemplate:
         assert len(data["columns"]) == 2
         mock_workflow_config_service.save_board_workflow_template.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_update_template_not_found(
+    def test_update_template_not_found(
         self,
         client: TestClient,
         mock_workflow_config_service: AsyncMock,
@@ -640,8 +622,7 @@ class TestUpdateTemplate:
         # Assert
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    @pytest.mark.asyncio
-    async def test_update_template_cross_project_access_denied(
+    def test_update_template_cross_project_access_denied(
         self,
         client: TestClient,
         mock_workflow_config_service: AsyncMock,
@@ -699,8 +680,7 @@ class TestUpdateTemplate:
         # Assert
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    @pytest.mark.asyncio
-    async def test_update_template_internal_error_no_details(
+    def test_update_template_internal_error_no_details(
         self,
         client: TestClient,
         mock_workflow_config_service: AsyncMock,
@@ -756,8 +736,7 @@ class TestUpdateTemplate:
 class TestDeleteTemplate:
     """Tests for deleting a board workflow template."""
 
-    @pytest.mark.asyncio
-    async def test_delete_template_success(
+    def test_delete_template_success(
         self,
         client: TestClient,
         mock_workflow_config_service: AsyncMock,
@@ -781,8 +760,7 @@ class TestDeleteTemplate:
             "board-001"
         )
 
-    @pytest.mark.asyncio
-    async def test_delete_template_not_found(
+    def test_delete_template_not_found(
         self,
         client: TestClient,
         mock_workflow_config_service: AsyncMock,
@@ -799,8 +777,7 @@ class TestDeleteTemplate:
         # Assert
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    @pytest.mark.asyncio
-    async def test_delete_template_cross_project_access_denied(
+    def test_delete_template_cross_project_access_denied(
         self,
         client: TestClient,
         mock_workflow_config_service: AsyncMock,
@@ -840,8 +817,7 @@ class TestDeleteTemplate:
         # Verify delete was NOT called
         mock_workflow_config_service.delete_board_workflow_template.assert_not_called()
 
-    @pytest.mark.asyncio
-    async def test_delete_template_internal_error_no_details(
+    def test_delete_template_internal_error_no_details(
         self,
         client: TestClient,
         mock_workflow_config_service: AsyncMock,

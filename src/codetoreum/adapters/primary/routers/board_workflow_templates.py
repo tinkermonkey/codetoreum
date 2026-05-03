@@ -294,6 +294,7 @@ def create_board_workflow_router(
 
             # Generate unique template ID to prevent collisions
             template_id = f"template-{uuid4()}"
+            now = datetime.now(UTC)
 
             template = BoardWorkflowTemplate(
                 id=template_id,
@@ -301,6 +302,8 @@ def create_board_workflow_router(
                 board_id=project_id,  # For now, use project_id as board_id
                 project_id=project_id,
                 columns=tuple(columns),
+                created_at=now,
+                updated_at=now,
             )
 
             await workflow_config_service.save_board_workflow_template(template)
