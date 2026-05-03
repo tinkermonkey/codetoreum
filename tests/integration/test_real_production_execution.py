@@ -4,7 +4,7 @@ IMPORTANT: This is NOT a test of real production execution.
 
 This test verifies that the core event sourcing infrastructure (InMemoryEventStore,
 EventBus, domain events) works correctly in isolation. It uses:
-- InMemoryEventStore (not Redis or production event store)
+- InMemoryEventStore (not Elasticsearch or production event store)
 - Synthetic WorkItemColumnChangedEvent objects (not real GitHub events)
 - No external system calls (GitHub API, Docker, etc.)
 
@@ -13,6 +13,7 @@ This test is useful for:
 - Testing event bus pub/sub mechanics
 - Validating event correlation IDs
 - Checking error handling in infrastructure components
+- Testing error classification logic
 
 This test is NOT suitable for:
 - Proving real production execution
@@ -21,8 +22,11 @@ This test is NOT suitable for:
 - Verifying resilience patterns against real failures
 - Demonstrating actual PR creation and merge
 
-For real production execution testing, see separate integration tests
-that call actual GitHub/Docker APIs (e.g., tests/integration/test_github_*.py).
+For REAL PRODUCTION EXECUTION testing, see:
+- tests/integration/test_real_end_to_end_production_execution.py
+  (Full SDLC pipeline with real adapters, GitHub, Docker, Elasticsearch)
+- tests/integration/test_github_*.py (GitHub API integration)
+- tests/integration/adapters/secondary/ (Adapter-specific integration tests)
 """
 
 import logging
