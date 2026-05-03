@@ -218,16 +218,23 @@ class RedisEventEmitter(IEventEmitter):
 
     def emit(self, event: "CodetoreumEvent") -> None:
         """
-        Emit an event to all subscribers asynchronously.
+        Emit an event to all subscribers.
 
-        Events are published to Redis pub/sub for distribution to
-        subscribers across all instances.
+        **Important**: This is a fire-and-forget implementation that schedules
+        event publication to Redis asynchronously. The method returns immediately
+        without waiting for delivery confirmation. Callers should not rely on
+        immediate delivery guarantees.
+
+        Events are published to Redis pub/sub for distribution to subscribers
+        across all instances. If an error occurs during publication, it is logged
+        but does not propagate to the caller.
 
         Args:
             event: CodetoreumEvent instance to emit
 
         Raises:
             ValueError: If event is invalid
+            RuntimeError: If called outside an async context and asyncio cannot schedule the task
         """
         if not event:
             raise ValueError("event must not be None")
@@ -248,13 +255,26 @@ class RedisEventEmitter(IEventEmitter):
 
             event_json = json.dumps(event_dict, default=str)
 
-            # Publish asynchronously to Redis
-            asyncio.create_task(self._publish_event(channel, event_json))
-
-            self._stats["events_emitted"] += 1
+            # Try to publish asynchronously to Redis
+            try:
+                asyncio.create_task(self._publish_event(channel, event_json))
+                self._stats["events_emitted"] += 1
+            except RuntimeError as e:
+                # No running event loop - this is an error condition
+                # Fire-and-forget pattern requires an async context
+                logger.error(
+                    f"Cannot emit event outside async context: {e}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR},
+                )
+                self._stats["emit_errors"] += 1
+                raise
+        except ValueError:
+            # Re-raise validation errors
+            raise
         except Exception as e:
             logger.error(
-                f"Error emitting event: {e}",
+                f"Error preparing event for emission: {e}",
                 exc_info=True,
                 extra={"error_id": ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR},
             )

@@ -61,7 +61,6 @@ from codetoreum.application.context_builder import ContextBuilder
 from codetoreum.application.conversational_loop_orchestrator import ConversationalLoopOrchestrator
 from codetoreum.application.event_sequence_validator import EventSequenceValidator
 from codetoreum.application.execution_service import ExecutionService
-from codetoreum.application.expected_sequence_registry import ExpectedSequenceRegistry
 from codetoreum.application.feedback_processor import FeedbackProcessor
 from codetoreum.application.metrics_service import MetricsService
 from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
@@ -959,7 +958,18 @@ class ProductionApplicationBootstrap:
         """
         Create all application services with production adapters.
 
-        Instantiates all 22 application services that orchestrate workflows.
+        Instantiates 18 application services that orchestrate workflows:
+        - Core: WorkflowOrchestrator, ExecutionService, AgentScheduler, PipelineManager
+        - Review: ReviewService, FeedbackProcessor
+        - Routing: WorkspaceRouter, WorkItemService
+        - Orchestration: MultiProjectOrchestrator, ContainerRecoveryService
+        - Configuration: ConfigurationService
+        - Execution: ConversationalLoopOrchestrator, AgentExecutor
+        - Context/Metrics: ContextBuilder, MetricsService, BoardPollingService
+        - Validation: EventSequenceValidator
+
+        Note: AgentExecutionRecoveryService is created but not stored in services dict
+        as it's only used by ExecutionServiceAgentExecutor for internal failure recovery.
         """
         if not self.adapters:
             msg = "Adapters must be resolved before creating services"
@@ -1098,9 +1108,12 @@ class ProductionApplicationBootstrap:
             poll_interval_seconds=30,
         )
 
-        # Create sequence validators for event flow validation
+        # Create sequence validator for event flow validation
         event_sequence_validator = EventSequenceValidator()
-        expected_sequence_registry = ExpectedSequenceRegistry()
+
+        # Note: ExpectedSequenceRegistry is a stateless class with only classmethods.
+        # Callers should use ExpectedSequenceRegistry.get_expected_sequence() directly
+        # rather than instantiating it as a service.
 
         # Store services for later access
         self.services = {
@@ -1121,7 +1134,6 @@ class ProductionApplicationBootstrap:
             "metrics_service": metrics_service,
             "board_polling_service": board_polling_service,
             "event_sequence_validator": event_sequence_validator,
-            "expected_sequence_registry": expected_sequence_registry,
         }
 
         logger.info("Application services created successfully")
