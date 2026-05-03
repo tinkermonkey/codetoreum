@@ -35,7 +35,7 @@ import pytest
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.infrastructure.event_bus import EventBus
-from tests.helpers.production_helpers import PRVerifier, ProductionErrorHandler
+from tests.helpers.production_helpers import ProductionErrorHandler, PRVerifier
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +121,7 @@ class TestEventSourcingInfrastructure:
 
             logger.info("✓ Analyzer agent triggered")
             logger.info(f"  Event ID: {event.event_id}")
-            logger.info(f"  From: Backlog → To: Analysis")
+            logger.info("  From: Backlog → To: Analysis")
 
         except Exception as e:
             logger.error(f"✗ Failed to trigger analyzer: {e}", exc_info=True)
@@ -149,7 +149,7 @@ class TestEventSourcingInfrastructure:
 
             logger.info("✓ Maker agent triggered")
             logger.info(f"  Event ID: {event.event_id}")
-            logger.info(f"  From: Analysis → To: Implementation")
+            logger.info("  From: Analysis → To: Implementation")
 
         except Exception as e:
             logger.error(f"✗ Failed to trigger maker: {e}", exc_info=True)
@@ -177,7 +177,7 @@ class TestEventSourcingInfrastructure:
 
             logger.info("✓ Tester agent triggered")
             logger.info(f"  Event ID: {event.event_id}")
-            logger.info(f"  From: Implementation → To: Testing")
+            logger.info("  From: Implementation → To: Testing")
 
         except Exception as e:
             logger.error(f"✗ Failed to trigger tester: {e}", exc_info=True)
@@ -280,7 +280,7 @@ class TestEventSourcingInfrastructure:
                 "Done",
             ]
 
-            for i, (event, expected_column) in enumerate(zip(events, expected_sequence)):
+            for i, (event, expected_column) in enumerate(zip(events, expected_sequence, strict=False)):
                 assert event.to_column == expected_column, (
                     f"Event {i} expected to_column '{expected_column}', got '{event.to_column}'"
                 )
