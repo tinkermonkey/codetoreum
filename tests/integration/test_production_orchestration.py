@@ -11,6 +11,7 @@ This test demonstrates:
 6. Pipeline lock release and queue processing
 """
 
+import asyncio
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -397,49 +398,12 @@ class TestProductionOrchestration:
         )
 
         # Configure agent executor to fail for this test
-        original_simulate = agent_executor._simulate_execution
-
-        async def failing_simulate(*args: Any, **kwargs: Any) -> None:
-            """Simulate execution that fails with an error."""
-            work_item = args[0] if args else None
-            try:
-                raise RuntimeError(f"Agent execution failed for {work_item}")
-            except Exception as e:
-                # Call the error handling path
-                import asyncio
-
-                from codetoreum.domain.agent_execution import ExecutionStatus
-                from datetime import UTC
-
-                execution_id = args[2] if len(args) > 2 else ""
-                agent_id = args[1] if len(args) > 1 else ""
-                started_at = args[3] if len(args) > 3 else datetime.now(UTC)
-                board_id = args[4] if len(args) > 4 else "board-1"
-
-                # Update execution record to FAILED
-                agent_executor._update_execution_record(
-                    execution_id,
-                    agent_id,
-                    work_item,
-                    started_at,
-                    ExecutionStatus.FAILED,
-                    error_message=str(e),
-                )
-
-                if agent_executor._completion_callback:
-                    try:
-                        await agent_executor._completion_callback(work_item, board_id, False)
-                    except Exception:
-                        pass
-
-        agent_executor._simulate_execution = failing_simulate  # type: ignore
+        agent_executor.set_failure_mode(True, "Agent execution failed")
 
         # Should not raise despite agent failure
         await event_bus.publish(event)
 
         # Allow async completion to happen
-        import asyncio
-
         await asyncio.sleep(0.2)
 
         # Simulate work item being moved to Blocked on agent failure, then to Done
