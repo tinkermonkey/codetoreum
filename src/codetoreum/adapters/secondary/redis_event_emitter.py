@@ -272,6 +272,10 @@ class RedisEventEmitter(IEventEmitter):
         except ValueError:
             # Re-raise validation errors
             raise
+        except RuntimeError:
+            # Re-raise RuntimeError from async context check - must be re-raised
+            # to match docstring contract before the catch-all Exception handler
+            raise
         except Exception as e:
             logger.error(
                 f"Error preparing event for emission: {e}",

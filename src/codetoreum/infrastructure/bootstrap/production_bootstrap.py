@@ -958,7 +958,7 @@ class ProductionApplicationBootstrap:
         """
         Create all application services with production adapters.
 
-        Instantiates 18 application services that orchestrate workflows:
+        Instantiates 17 application services that orchestrate workflows:
         - Core: WorkflowOrchestrator, ExecutionService, AgentScheduler, PipelineManager
         - Review: ReviewService, FeedbackProcessor
         - Routing: WorkspaceRouter, WorkItemService
