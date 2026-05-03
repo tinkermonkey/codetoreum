@@ -1,9 +1,9 @@
 """Unit tests for ElasticsearchWorkflowConfigService."""
 
-import pytest
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from elasticsearch.exceptions import ConflictError
 
 from codetoreum.adapters.secondary.elasticsearch_workflow_config_service import (
