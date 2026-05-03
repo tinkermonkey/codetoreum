@@ -30,8 +30,8 @@ from codetoreum.infrastructure.dead_letter_queue import (
 )
 from codetoreum.infrastructure.event_replayer import EventReplayer
 from codetoreum.infrastructure.observability.trace_context_propagation import (
-    inject_current_trace_context_into_event,
     TraceContextPropagator,
+    inject_current_trace_context_into_event,
 )
 from codetoreum.infrastructure.resilience.circuit_breaker import (
     CircuitBreaker,
@@ -601,12 +601,12 @@ class TestObservabilityAndResilienceVerification:
                 timeout=0.5,  # Use a short timeout to avoid blocking test
             )
             call_count += 1
-        except (asyncio.TimeoutError, Exception):
+        except (TimeoutError, Exception):
             # Expected: either timeout waiting for rate limit or get rate limit error
             pass
 
         assert call_count >= 3, "Should have succeeded on at least 3 calls"
-        logger.info(f"✓ Rate limiter correctly limited calls to configured threshold")
+        logger.info("✓ Rate limiter correctly limited calls to configured threshold")
 
     async def test_timeout_functionality(self):
         """Verify timeout resilience pattern works correctly."""
@@ -657,7 +657,7 @@ class TestObservabilityAndResilienceVerification:
         stats = policy.get_stats()
         assert stats is not None, "Stats should be available"
 
-        logger.info(f"✓ Retry policy with exponential backoff verified")
+        logger.info("✓ Retry policy with exponential backoff verified")
 
     # =========================================================================
     # DEAD LETTER QUEUE VERIFICATION
@@ -723,7 +723,7 @@ class TestObservabilityAndResilienceVerification:
         assert stats.exhausted_retries == 1
         assert stats.pending_retries == 0
 
-        logger.info(f"✓ Dead letter queue correctly marked validation error as non-retryable")
+        logger.info("✓ Dead letter queue correctly marked validation error as non-retryable")
 
     async def test_dead_letter_queue_tracks_failure_reasons(self):
         """Verify dead letter queue categorizes events by failure reason."""
@@ -778,10 +778,10 @@ class TestObservabilityAndResilienceVerification:
         # 1. Stores all events in a dict (no persistence)
         # 2. Data is lost on restart (no durability)
         # 3. Memory grows indefinitely without purging
-        logger.info(f"✓ Dead letter queue assessment:")
+        logger.info("✓ Dead letter queue assessment:")
         logger.info(f"  - Total events tracked: {stats.total_failed_events}")
-        logger.info(f"  - Implementation: in-memory dict (no persistence)")
-        logger.info(f"  - For production use: requires Redis-backed persistence layer")
+        logger.info("  - Implementation: in-memory dict (no persistence)")
+        logger.info("  - For production use: requires Redis-backed persistence layer")
 
     async def test_dead_letter_queue_is_discoverable_at_runtime(self):
         """Verify active DLQs can be discovered at runtime for monitoring."""
