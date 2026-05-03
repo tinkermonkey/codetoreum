@@ -452,15 +452,16 @@ class TestEndToEndPipelineExecution:
         assert latest_execution["agent_id"] == "analyzer"
 
     @pytest.mark.asyncio
-    async def test_concurrent_work_items_pipeline_execution(
+    async def test_lock_acquired_on_analysis_column_transition(
         self, setup_pipeline: tuple[Any, Any, InMemoryEventStore, MockBoardAdapter, MockAgentExecutor, EventStoreVerifier]
     ) -> None:
         """
-        Test pipeline execution with multiple concurrent work items.
+        Test lock acquisition when work item transitions to Analysis column.
 
         Expected behavior:
-        1. Multiple work items moved to Analysis column
-        2. Agent executor triggered for each work item
+        1. Work item moved to Analysis column
+        2. Pipeline lock is acquired
+        3. Agent executor triggered with analyzer agent
         """
         event_bus, handler, event_store, board_service, agent_executor, verifier = setup_pipeline
 

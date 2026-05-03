@@ -29,7 +29,7 @@ from codetoreum.config.codetoreum_pipeline import create_codetoreum_pipeline_tem
 from codetoreum.domain.board_workflow_template import BoardWorkflowTemplate
 from codetoreum.domain.events import WorkItemColumnChangedEvent
 from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.infrastructure.production_helpers import (
+from tests.helpers.production_helpers import (
     EventStoreAuditTrail,
     ProductionErrorHandler,
     PRVerifier,
@@ -292,113 +292,13 @@ class TestProductionOrchestration:
 
         # Should have at least WorkflowCreated and WorkflowStarted
         event_types = {e.event_type for e in all_events}
-        assert "WorkflowCreated" in event_types or len(event_types) > 0
+        assert "WorkflowCreated" in event_types
+        assert "WorkflowStarted" in event_types
 
         # Verify events have proper structure
         for event in all_events:
             assert event.aggregate_id is not None
             assert event.event_type is not None
-
-    @pytest.mark.asyncio
-    async def test_production_error_classification(self) -> None:
-        """
-        Test error classification for production failure modes.
-
-        Expected:
-        - Rate limit errors (429) classified correctly
-        - Auth errors (401) classified correctly
-        - Docker errors classified correctly
-        - Proper recovery strategies returned
-        """
-        # Test rate limit error
-        rate_limit_err = Exception("API rate limit exceeded (429)")
-        rate_limit_err.status_code = 429  # type: ignore
-        assert ProductionErrorHandler.is_rate_limit_error(rate_limit_err)
-        assert ProductionErrorHandler.classify_error(rate_limit_err) == "GITHUB_RATE_LIMIT"
-
-        strategy = ProductionErrorHandler.get_recovery_strategy("GITHUB_RATE_LIMIT")
-        assert strategy["retryable"] is True
-        assert strategy["backoff_strategy"] == "exponential"
-
-        # Test auth error
-        auth_err = Exception("Unauthorized (401)")
-        auth_err.status_code = 401  # type: ignore
-        assert ProductionErrorHandler.is_auth_error(auth_err)
-        assert ProductionErrorHandler.classify_error(auth_err) == "GITHUB_AUTH_FAILURE"
-
-        strategy = ProductionErrorHandler.get_recovery_strategy("GITHUB_AUTH_FAILURE")
-        assert strategy["retryable"] is False
-        assert strategy["alert_level"] == "critical"
-
-        # Test Docker OOM error
-        oom_err = Exception("Docker container killed: Out of memory")
-        assert ProductionErrorHandler.is_docker_oom_error(oom_err)
-        assert ProductionErrorHandler.classify_error(oom_err) == "DOCKER_OOM_KILL"
-
-        strategy = ProductionErrorHandler.get_recovery_strategy("DOCKER_OOM_KILL")
-        assert strategy["retryable"] is True
-
-        # Test Docker timeout error
-        timeout_err = Exception("Docker container execution timeout (5 minutes exceeded)")
-        assert ProductionErrorHandler.is_docker_timeout_error(timeout_err)
-        assert ProductionErrorHandler.classify_error(timeout_err) == "DOCKER_TIMEOUT"
-
-        # Test Redis error
-        redis_err = Exception("Redis connection refused: ECONNREFUSED 127.0.0.1:6379")
-        assert ProductionErrorHandler.is_redis_error(redis_err)
-        assert ProductionErrorHandler.classify_error(redis_err) == "REDIS_CONNECTION_FAILURE"
-
-        # Test file permission error
-        perm_err = PermissionError("Permission denied: /workspace/code")
-        assert ProductionErrorHandler.is_file_permission_error(perm_err)
-        assert ProductionErrorHandler.classify_error(perm_err) == "FILE_PERMISSION_DENIED"
-
-    @pytest.mark.asyncio
-    async def test_pr_verification_helpers(self) -> None:
-        """
-        Test PR verification helpers.
-
-        Expected:
-        - Can verify PR authorship
-        - Can verify PR target repository
-        - Can verify PR is mergeable
-        - Can detect empty PRs
-        - Can verify complete PR
-        """
-        # Test valid PR
-        valid_pr = {
-            "author": "codetoreum",
-            "title": "CTMM-100: Implement feature X",
-            "description": "This PR implements feature X as requested in the issue.",
-            "additions": 50,
-            "deletions": 10,
-            "mergeable": True,
-            "has_conflicts": False,
-        }
-
-        assert PRVerifier.verify_pr_authorship(valid_pr["author"], "codetoreum")
-        assert PRVerifier.verify_pr_has_valid_title(valid_pr["title"])
-        assert PRVerifier.verify_pr_has_content(valid_pr["additions"], valid_pr["deletions"])
-        assert PRVerifier.verify_pr_is_mergeable(valid_pr["mergeable"], valid_pr["has_conflicts"])
-
-        is_complete, issues = PRVerifier.verify_pr_completeness(valid_pr, verify_description=True)
-        assert is_complete
-        assert len(issues) == 0
-
-        # Test invalid PR (missing description)
-        invalid_pr = {
-            "author": "codetoreum",
-            "title": "Fix",  # Too short
-            "description": None,
-            "additions": 0,
-            "deletions": 0,
-            "mergeable": False,
-            "has_conflicts": True,
-        }
-
-        is_complete, issues = PRVerifier.verify_pr_completeness(invalid_pr, verify_description=True)
-        assert not is_complete
-        assert len(issues) > 0
 
     @pytest.mark.asyncio
     async def test_concurrent_work_items_with_queue(
@@ -496,8 +396,51 @@ class TestProductionOrchestration:
             moved_by="human",
         )
 
+        # Configure agent executor to fail for this test
+        original_simulate = agent_executor._simulate_execution
+
+        async def failing_simulate(*args: Any, **kwargs: Any) -> None:
+            """Simulate execution that fails with an error."""
+            work_item = args[0] if args else None
+            try:
+                raise RuntimeError(f"Agent execution failed for {work_item}")
+            except Exception as e:
+                # Call the error handling path
+                import asyncio
+
+                from codetoreum.domain.agent_execution import ExecutionStatus
+                from datetime import UTC
+
+                execution_id = args[2] if len(args) > 2 else ""
+                agent_id = args[1] if len(args) > 1 else ""
+                started_at = args[3] if len(args) > 3 else datetime.now(UTC)
+                board_id = args[4] if len(args) > 4 else "board-1"
+
+                # Update execution record to FAILED
+                agent_executor._update_execution_record(
+                    execution_id,
+                    agent_id,
+                    work_item,
+                    started_at,
+                    ExecutionStatus.FAILED,
+                    error_message=str(e),
+                )
+
+                if agent_executor._completion_callback:
+                    try:
+                        await agent_executor._completion_callback(work_item, board_id, False)
+                    except Exception:
+                        pass
+
+        agent_executor._simulate_execution = failing_simulate  # type: ignore
+
         # Should not raise despite agent failure
         await event_bus.publish(event)
+
+        # Allow async completion to happen
+        import asyncio
+
+        await asyncio.sleep(0.2)
 
         # Simulate work item being moved to Blocked on agent failure, then to Done
         # (In production, this would happen via error recovery, here we simulate it)

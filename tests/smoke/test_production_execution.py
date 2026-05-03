@@ -12,7 +12,6 @@ This smoke test demonstrates:
 
 import pytest
 
-from codetoreum.adapters.secondary.in_memory_pipeline_lock_service import InMemoryPipelineLockService
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.adapters.testing.mock_agent_executor import MockAgentExecutor
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
@@ -20,7 +19,7 @@ from codetoreum.application.event_handlers.board_event_handler import BoardColum
 from codetoreum.config.codetoreum_pipeline import create_codetoreum_pipeline_template
 from codetoreum.domain.events import WorkItemColumnChangedEvent
 from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.infrastructure.production_helpers import (
+from tests.helpers.production_helpers import (
     ProductionErrorHandler,
     PRVerifier,
 )

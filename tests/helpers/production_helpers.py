@@ -188,7 +188,6 @@ class ProductionErrorHandler:
         # Check for Redis-specific connection errors
         return (
             "redis" in error_str
-            or ("connection refused" in error_str and "redis" in error_str)
             or ("econnrefused" in error_str and "6379" in error_str)  # Redis default port
         )
 
