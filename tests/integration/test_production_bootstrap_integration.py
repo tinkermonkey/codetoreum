@@ -47,12 +47,12 @@ from uuid import uuid4
 
 import pytest
 
+from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.infrastructure.bootstrap.production_bootstrap import ProductionApplicationBootstrap
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.output.event_store import IEventStore
-from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
-from tests.helpers.production_helpers import EventStoreAuditTrail, PRVerifier, ProductionErrorHandler
+from tests.helpers.production_helpers import EventStoreAuditTrail, ProductionErrorHandler, PRVerifier
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +110,7 @@ class ProductionBootstrapIntegrationTest:
         if not env_ok:
             msg = f"Missing required environment variables: {', '.join(missing_vars)}"
             logger.error(msg)
-            raise EnvironmentError(msg)
+            raise OSError(msg)
 
         logger.info("✓ All required environment variables present")
 
@@ -171,7 +171,7 @@ class ProductionBootstrapIntegrationTest:
         issue_number = int(datetime.now(UTC).timestamp() * 1000) % 100000
         work_item_id = f"issue-{issue_number}"
 
-        logger.info(f"\n[INIT] Test Run Configuration")
+        logger.info("\n[INIT] Test Run Configuration")
         logger.info(f"  Run ID: {run_id}")
         logger.info(f"  Correlation ID: {correlation_id}")
         logger.info(f"  Work Item ID: {work_item_id}")
@@ -203,7 +203,7 @@ class ProductionBootstrapIntegrationTest:
                 "id": work_item_id,
                 "event_id": issue_creation_event.event_id,
             })
-            logger.info(f"✓ Issue creation event published and stored")
+            logger.info("✓ Issue creation event published and stored")
             logger.info(f"  Event ID: {issue_creation_event.event_id}")
 
             # Step 2: Analysis stage
@@ -223,7 +223,7 @@ class ProductionBootstrapIntegrationTest:
 
             await self.event_bus.publish(analysis_event)
             await self.event_store.append(work_item_id, [analysis_event])
-            logger.info(f"✓ Analysis stage event published and stored")
+            logger.info("✓ Analysis stage event published and stored")
             logger.info(f"  Event ID: {analysis_event.event_id}")
 
             # Step 3: Implementation stage
@@ -243,7 +243,7 @@ class ProductionBootstrapIntegrationTest:
 
             await self.event_bus.publish(implementation_event)
             await self.event_store.append(work_item_id, [implementation_event])
-            logger.info(f"✓ Implementation stage event published and stored")
+            logger.info("✓ Implementation stage event published and stored")
             logger.info(f"  Event ID: {implementation_event.event_id}")
 
             # Step 4: Testing stage
@@ -263,7 +263,7 @@ class ProductionBootstrapIntegrationTest:
 
             await self.event_bus.publish(testing_event)
             await self.event_store.append(work_item_id, [testing_event])
-            logger.info(f"✓ Testing stage event published and stored")
+            logger.info("✓ Testing stage event published and stored")
             logger.info(f"  Event ID: {testing_event.event_id}")
 
             # Step 5: Review stage (PR creation happens here)
@@ -314,7 +314,7 @@ class ProductionBootstrapIntegrationTest:
                 "url": pr_response["html_url"],
             })
 
-            logger.info(f"✓ Review stage event published and stored")
+            logger.info("✓ Review stage event published and stored")
             logger.info(f"  Event ID: {review_event.event_id}")
             logger.info(f"  (Synthetic PR for test purposes: #{pr_number})")
 
@@ -335,7 +335,7 @@ class ProductionBootstrapIntegrationTest:
 
             await self.event_bus.publish(completion_event)
             await self.event_store.append(work_item_id, [completion_event])
-            logger.info(f"✓ Pipeline completed successfully")
+            logger.info("✓ Pipeline completed successfully")
             logger.info(f"  Event ID: {completion_event.event_id}")
 
             # Step 7: Verify event store audit trail (FR-8)
@@ -347,9 +347,9 @@ class ProductionBootstrapIntegrationTest:
             logger.info(f"  Total events: {audit_info['total_events']}")
             logger.info(f"  Has start event: {audit_info['has_start']}")
             logger.info(f"  Has completion event: {audit_info['has_completion']}")
-            logger.info(f"  (Note: has_start/has_completion are always False for synthetic")
-            logger.info(f"   WorkItemColumnChangedEvent events; real orchestration would")
-            logger.info(f"   emit WorkflowCreated and WorkflowCompleted domain events)")
+            logger.info("  (Note: has_start/has_completion are always False for synthetic")
+            logger.info("   WorkItemColumnChangedEvent events; real orchestration would")
+            logger.info("   emit WorkflowCreated and WorkflowCompleted domain events)")
             logger.info(f"  All events timestamped: {audit_info['all_events_have_timestamps']}")
             if audit_info["duration_seconds"] is not None:
                 logger.info(f"  Pipeline duration: {audit_info['duration_seconds']:.1f} seconds")
@@ -386,8 +386,8 @@ class ProductionBootstrapIntegrationTest:
 
             logger.info("✓ Tracing field structure verified:")
             logger.info(f"  - Correlation ID: {correlation_id}")
-            logger.info(f"  - All synthetic events linked via correlation_id")
-            logger.info(f"  - Event chain timestamps present")
+            logger.info("  - All synthetic events linked via correlation_id")
+            logger.info("  - Event chain timestamps present")
             logger.info("\nNOTE: Real FR-9 verification requires:")
             logger.info("  - OpenTelemetry span queries from actual application service execution")
             logger.info("  - Prometheus metrics from real external service calls")
@@ -421,24 +421,24 @@ class ProductionBootstrapIntegrationTest:
             logger.info("\n" + "=" * 80)
             logger.info("✅ INFRASTRUCTURE INTEGRATION TEST PASSED")
             logger.info("=" * 80)
-            logger.info(f"\nTest Summary:")
+            logger.info("\nTest Summary:")
             logger.info(f"  Run ID: {run_id}")
             logger.info(f"  Correlation ID: {correlation_id}")
             logger.info(f"  Test Repository: {self.test_repo}")
             logger.info(f"  Work Item ID: {work_item_id}")
             logger.info(f"  Total Events Published: {audit_info['total_events']}")
             logger.info(f"  Test Duration: {total_duration:.1f} seconds")
-            logger.info(f"\nWhat was verified:")
-            logger.info(f"  ✓ ProductionApplicationBootstrap initializes successfully")
-            logger.info(f"  ✓ Production event store accepts and stores events")
-            logger.info(f"  ✓ Event bus publishes to event store")
-            logger.info(f"  ✓ Events can be retrieved and contain expected fields")
-            logger.info(f"  ✓ Correlation ID and timestamps preserved in events")
-            logger.info(f"\nWhat was NOT verified (requires full orchestration):")
-            logger.info(f"  ✗ FR-6: Real SDLC pipeline through application services")
-            logger.info(f"  ✗ FR-8: Event audit trail from actual orchestration")
-            logger.info(f"  ✗ FR-9: Observability from real external service calls")
-            logger.info(f"  ✗ FR-10: Resilience patterns engaging under actual load")
+            logger.info("\nWhat was verified:")
+            logger.info("  ✓ ProductionApplicationBootstrap initializes successfully")
+            logger.info("  ✓ Production event store accepts and stores events")
+            logger.info("  ✓ Event bus publishes to event store")
+            logger.info("  ✓ Events can be retrieved and contain expected fields")
+            logger.info("  ✓ Correlation ID and timestamps preserved in events")
+            logger.info("\nWhat was NOT verified (requires full orchestration):")
+            logger.info("  ✗ FR-6: Real SDLC pipeline through application services")
+            logger.info("  ✗ FR-8: Event audit trail from actual orchestration")
+            logger.info("  ✗ FR-9: Observability from real external service calls")
+            logger.info("  ✗ FR-10: Resilience patterns engaging under actual load")
             logger.info("=" * 80 + "\n")
 
         except Exception as e:
