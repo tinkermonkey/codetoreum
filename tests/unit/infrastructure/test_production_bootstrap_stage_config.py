@@ -70,8 +70,8 @@ class TestProductionBootstrapStageConfig:
     @pytest.mark.asyncio
     async def test_wrapper_retrieves_agent_config(self):
         """Test that wrapper retrieves agent configuration from store."""
-        service = MockConfigurationService()
-        wrapper = ProductionProjectConfigurationWrapper(service, project_id="test-project")
+        config_store = MockConfigStore()
+        wrapper = ProductionProjectConfigurationWrapper(config_store, project_id="test-project")
 
         # Test getting analyzer config
         analyzer_config = await wrapper.get_agent_config("analyzer")
@@ -97,8 +97,8 @@ class TestProductionBootstrapStageConfig:
     @pytest.mark.asyncio
     async def test_wrapper_fallback_for_missing_config(self):
         """Test that wrapper returns sensible default when config not found."""
-        service = MockConfigurationService()
-        wrapper = ProductionProjectConfigurationWrapper(service, project_id="test-project")
+        config_store = MockConfigStore()
+        wrapper = ProductionProjectConfigurationWrapper(config_store, project_id="test-project")
 
         # Get config for non-existent agent
         config = await wrapper.get_agent_config("unknown-agent")
