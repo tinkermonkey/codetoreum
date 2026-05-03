@@ -22,6 +22,7 @@ Usage:
 
 import logging
 import os
+import subprocess
 from datetime import UTC, datetime
 from typing import Any
 
@@ -39,7 +40,15 @@ from codetoreum.adapters.secondary.failed_event_store_adapter import (
 )
 from codetoreum.adapters.testing.execution_service_agent_executor import ExecutionServiceAgentExecutor
 from codetoreum.application.agent_execution_recovery_service import AgentExecutionRecoveryService
-from codetoreum.application.agent_scheduler import AgentScheduler, IProjectConfiguration
+from codetoreum.application.agent_scheduler import (
+    AgentScheduler,
+    IProjectConfiguration,
+    IRateLimiter as ISchedulerRateLimiter,
+    IResourceMonitor,
+    ISchedulingEvents,
+    ITaskQueue,
+    Task,
+)
 from codetoreum.application.configuration_service import ConfigurationService
 from codetoreum.application.container_recovery_service import ContainerRecoveryService
 from codetoreum.application.conversational_loop_orchestrator import ConversationalLoopOrchestrator
@@ -69,45 +78,87 @@ logger = logging.getLogger(__name__)
 # Production implementations for AgentScheduler dependencies
 
 
-class ProductionTaskQueue:
-    """Production task queue backed by queue_service adapter."""
+class ProductionTaskQueue(ITaskQueue):
+    """Production task queue implementation.
 
-    def __init__(self, queue_service: Any) -> None:
-        """Initialize with queue service adapter."""
+    Maintains an in-memory queue of tasks for agent execution.
+    Tasks are enqueued and retrieved by the agent scheduler.
+    """
+
+    def __init__(self, queue_service: Any = None) -> None:
+        """Initialize task queue.
+
+        Args:
+            queue_service: Optional queue service adapter (currently unused)
+        """
         self.queue_service = queue_service
+        self._task_store: dict[str, Task] = {}
+        self._agent_queues: dict[str, list[str]] = {}
 
-    async def enqueue(self, task: Any) -> str:
-        """Enqueue task using queue service adapter."""
-        # Store task in queue service and return task ID
-        _task_data = {
-            "id": task.id,
-            "agent": task.agent,
-            "project": task.project,
-            "priority": str(task.priority),
-            "context": task.context,
-            "created_at": task.created_at.isoformat(),
-        }
-        # TODO: Send _task_data to self.queue_service.enqueue(_task_data)
-        # For now, this is a minimal implementation that tracks the task
+    async def enqueue(self, task: Task) -> str:
+        """Enqueue a task for agent execution.
+
+        Stores the task and tracks it by agent queue.
+
+        Args:
+            task: Task to enqueue
+
+        Returns:
+            Task ID
+        """
+        # Store task
+        self._task_store[task.id] = task
+
+        # Add to agent queue
+        if task.agent not in self._agent_queues:
+            self._agent_queues[task.agent] = []
+        self._agent_queues[task.agent].append(task.id)
+
+        logger.info(
+            f"Task {task.id} enqueued for agent {task.agent}",
+            extra={"task_id": task.id, "agent": task.agent, "project": task.project},
+        )
         return task.id
 
     async def get_queue_depth(self, agent: str) -> int:
-        """Get queue depth for agent."""
-        # Would query queue_service for actual depth
-        return 0
+        """Get number of queued tasks for an agent.
+
+        Args:
+            agent: Agent identifier
+
+        Returns:
+            Number of queued tasks
+        """
+        return len(self._agent_queues.get(agent, []))
 
 
-class ProductionRateLimiter:
-    """Production rate limiter implementation."""
+class ProductionRateLimiter(ISchedulerRateLimiter):
+    """Production rate limiter implementation.
+
+    Uses sliding window algorithm to enforce request-per-minute limits.
+    """
 
     def __init__(self, rate_limit_rpm: int = 60) -> None:
-        """Initialize rate limiter with rate limit."""
+        """Initialize rate limiter with rate limit.
+
+        Args:
+            rate_limit_rpm: Requests per minute limit
+        """
         self.rate_limit_rpm = rate_limit_rpm
         self._call_times: dict[str, list[float]] = {}
 
     async def acquire(self, agent: str, tokens: int = 1) -> bool:
-        """Check if rate limit allows operation."""
-        # Simplified implementation - real version would use sliding window
+        """Try to acquire rate limit tokens.
+
+        Uses sliding window algorithm to track calls over 1-minute windows.
+
+        Args:
+            agent: Agent identifier
+            tokens: Number of tokens to acquire (default 1)
+
+        Returns:
+            True if tokens acquired, False if rate limited
+        """
         import time
 
         now = time.time()
@@ -121,15 +172,30 @@ class ProductionRateLimiter:
         # Check if within limit
         if len(self._call_times[agent]) < self.rate_limit_rpm:
             self._call_times[agent].append(now)
+            logger.debug(
+                f"Rate limit acquired for agent {agent}",
+                extra={"agent": agent, "calls_in_window": len(self._call_times[agent])},
+            )
             return True
 
+        logger.warning(
+            f"Rate limit exceeded for agent {agent}",
+            extra={"agent": agent, "limit": self.rate_limit_rpm},
+        )
         return False
 
     async def get_retry_after(self, agent: str) -> int | None:
-        """Get retry after seconds if rate limited."""
-        if self._call_times.get(agent):
-            import time
+        """Get retry after seconds if rate limited.
 
+        Args:
+            agent: Agent identifier
+
+        Returns:
+            Seconds to wait before retry, or None if not rate limited
+        """
+        import time
+
+        if self._call_times.get(agent):
             oldest_call = min(self._call_times[agent])
             retry_after_time = oldest_call + 60
             seconds_to_wait = int(retry_after_time - time.time())
@@ -137,32 +203,137 @@ class ProductionRateLimiter:
         return None
 
 
-class ProductionResourceMonitor:
-    """Production resource monitor implementation."""
+class ProductionResourceMonitor(IResourceMonitor):
+    """Production resource monitor implementation.
+
+    Monitors Docker resource availability and tracks running agent instances.
+    """
 
     def __init__(self) -> None:
         """Initialize resource monitor."""
-        logger.warning("ProductionResourceMonitor: Using default availability checks. "
-                       "Real resource monitoring implementation needed.")
+        self._docker_available: bool | None = None
 
     async def check_dev_container_available(self, project: str) -> bool:
-        """Check if dev container is available for project."""
-        # In production, this should check actual Docker resource availability
-        # For now, assume available unless explicitly configured otherwise
-        return True
+        """Check if Docker is available for running containers.
+
+        Performs a health check on Docker daemon to ensure containers
+        can be started.
+
+        Args:
+            project: Project identifier
+
+        Returns:
+            True if Docker is available, False otherwise
+        """
+        # Check Docker availability once per lifecycle
+        if self._docker_available is None:
+            self._docker_available = await self._check_docker_health()
+        return self._docker_available
 
     async def get_running_agents(self, agent: str) -> int:
-        """Get number of currently running agent instances."""
-        # In production, this should query Docker for running containers
-        # For now, return 0 (no running agents)
-        return 0
+        """Get number of currently running agent containers.
+
+        Queries Docker API to count containers running for this agent.
+
+        Args:
+            agent: Agent identifier
+
+        Returns:
+            Number of running agent containers
+        """
+        try:
+            # Query Docker for containers with agent label
+            result = subprocess.run(
+                [
+                    "docker",
+                    "ps",
+                    "--filter",
+                    f"label=agent={agent}",
+                    "--quiet",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+
+            if result.returncode == 0:
+                # Count lines (each line is a container ID)
+                container_count = len([line for line in result.stdout.strip().split("\n") if line])
+                logger.debug(
+                    f"Found {container_count} running containers for agent {agent}",
+                    extra={"agent": agent, "count": container_count},
+                )
+                return container_count
+            else:
+                logger.warning(
+                    f"Failed to query Docker for agent {agent}: {result.stderr}",
+                    extra={"agent": agent, "error": result.stderr},
+                )
+                return 0
+        except subprocess.TimeoutExpired:
+            logger.error(
+                f"Docker query timeout for agent {agent}",
+                extra={"agent": agent, "error_id": ErrorRegistry.ERR_DOCKER_TIMEOUT},
+            )
+            return 0
+        except Exception as e:
+            logger.error(
+                f"Error querying Docker for agent {agent}: {e}",
+                exc_info=True,
+                extra={"agent": agent, "error_id": ErrorRegistry.ERR_DOCKER_ERROR},
+            )
+            return 0
+
+    async def _check_docker_health(self) -> bool:
+        """Check if Docker daemon is responsive.
+
+        Attempts a Docker info command to verify daemon connectivity.
+
+        Returns:
+            True if Docker is available and responsive
+        """
+        try:
+            result = subprocess.run(
+                ["docker", "info"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            is_healthy = result.returncode == 0
+            if is_healthy:
+                logger.info("Docker health check passed")
+            else:
+                logger.warning(f"Docker health check failed: {result.stderr}")
+            return is_healthy
+        except subprocess.TimeoutExpired:
+            logger.error(
+                "Docker health check timeout",
+                extra={"error_id": ErrorRegistry.ERR_DOCKER_TIMEOUT},
+            )
+            return False
+        except Exception as e:
+            logger.error(
+                f"Docker health check failed: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_DOCKER_ERROR},
+            )
+            return False
 
 
-class ProductionSchedulingEvents:
-    """Production scheduling events implementation."""
+class ProductionSchedulingEvents(ISchedulingEvents):
+    """Production scheduling events implementation.
 
-    def __init__(self, event_bus: Any) -> None:
-        """Initialize with event bus for emitting events."""
+    Emits domain events to the event bus for all scheduling state changes.
+    This ensures that task scheduling decisions are permanently recorded
+    in the event store and can be audited.
+    """
+
+    def __init__(self, event_bus: EventBus) -> None:
+        """Initialize with event bus for emitting events.
+
+        Args:
+            event_bus: Event bus for publishing scheduling events
+        """
         self.event_bus = event_bus
 
     async def emit_task_queued(
@@ -173,17 +344,108 @@ class ProductionSchedulingEvents:
         priority: Any,
         reason: str,
     ) -> None:
-        """Emit task queued event to event bus."""
-        # Emit to event bus instead of silently swallowing
-        logger.info(f"Task queued: {task_id} for agent {agent} in project {project}")
+        """Emit task queued event to event bus.
+
+        Records that a task was successfully enqueued for agent execution.
+
+        Args:
+            task_id: Unique task identifier
+            agent: Agent that will execute the task
+            project: Project context for the task
+            priority: Task priority level
+            reason: Reason for queueing the task
+        """
+        # Create and publish event
+        from codetoreum.domain.events.adapter_events import CodetoreumEvent
+        from uuid import uuid4
+
+        event = CodetoreumEvent(
+            type="task.queued",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="agent_scheduler",
+            event_id=str(uuid4()),
+            correlation_id=task_id,
+        )
+
+        try:
+            await self.event_bus.publish(event)
+            logger.info(
+                f"Task queued event published: {task_id}",
+                extra={"task_id": task_id, "agent": agent, "project": project, "priority": str(priority)},
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to publish task queued event for {task_id}: {e}",
+                exc_info=True,
+                extra={"task_id": task_id, "error_id": ErrorRegistry.ERR_EVENT_BUS_ERROR},
+            )
 
     async def emit_task_throttled(self, agent: str, project: str, reason: str, retry_after: int) -> None:
-        """Emit task throttled event to event bus."""
-        logger.warning(f"Task throttled for agent {agent} in project {project}: {reason} (retry after {retry_after}s)")
+        """Emit task throttled event to event bus.
+
+        Records that a task was throttled due to rate limiting.
+
+        Args:
+            agent: Agent that was throttled
+            project: Project context
+            reason: Reason for throttling
+            retry_after: Seconds to wait before retry
+        """
+        from codetoreum.domain.events.adapter_events import CodetoreumEvent
+        from uuid import uuid4
+
+        event = CodetoreumEvent(
+            type="task.throttled",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="agent_scheduler",
+            event_id=str(uuid4()),
+        )
+
+        try:
+            await self.event_bus.publish(event)
+            logger.warning(
+                f"Task throttled event published for agent {agent}",
+                extra={"agent": agent, "project": project, "reason": reason, "retry_after": retry_after},
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to publish task throttled event for agent {agent}: {e}",
+                exc_info=True,
+                extra={"agent": agent, "error_id": ErrorRegistry.ERR_EVENT_BUS_ERROR},
+            )
 
     async def emit_task_rejected(self, agent: str, project: str, reason: str) -> None:
-        """Emit task rejected event to event bus."""
-        logger.error(f"Task rejected for agent {agent} in project {project}: {reason}")
+        """Emit task rejected event to event bus.
+
+        Records that a task was rejected and cannot be executed.
+
+        Args:
+            agent: Agent that rejected the task
+            project: Project context
+            reason: Reason for rejection
+        """
+        from codetoreum.domain.events.adapter_events import CodetoreumEvent
+        from uuid import uuid4
+
+        event = CodetoreumEvent(
+            type="task.rejected",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="agent_scheduler",
+            event_id=str(uuid4()),
+        )
+
+        try:
+            await self.event_bus.publish(event)
+            logger.error(
+                f"Task rejected event published for agent {agent}",
+                extra={"agent": agent, "project": project, "reason": reason},
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to publish task rejected event for agent {agent}: {e}",
+                exc_info=True,
+                extra={"agent": agent, "error_id": ErrorRegistry.ERR_EVENT_BUS_ERROR},
+            )
 
 
 class _ProductionClock:
