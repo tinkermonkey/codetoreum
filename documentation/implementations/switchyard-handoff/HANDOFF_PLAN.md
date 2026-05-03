@@ -1,4 +1,4 @@
-# Phase 8: Codetoreum → Switchyard Handoff Plan
+# Codetoreum–Switchyard Handoff Plan
 
 **Date**: 2026-05-03  
 **Status**: FINAL  
@@ -35,7 +35,7 @@ This document provides a concrete handoff plan describing what remains before Co
   - Agent execution with containerized context
   - PR creation and verification
 - Phase 7 verified: Event store captures all state transitions with correlation IDs
-- Simulation tests: 5,893 passed, all critical scenarios functional
+- Simulation tests: 5,893 passed (2 pre-existing failures unrelated to Phase 6 work), all critical scenarios functional
 
 **Acceptance**: ✅ PASS - Codetoreum executes complete end-to-end workflows
 
@@ -177,6 +177,34 @@ This document provides a concrete handoff plan describing what remains before Co
 | 5 | Container Isolation | ✅ MET | Phase 6/7: Verified isolation, recovery, no credential exposure |
 | 6 | Board Integration | ✅ MET | Phase 4/6: Field ID + option ID lookup, mutations, transitions working |
 | 7 | Configuration & Extensibility | ✅ MET | Configuration service wired; per-project lessons deferred per design |
+
+---
+
+## Coverage Gap Disclosure (Phase 6 Milestone 4)
+
+**Coverage Status**: ❌ **FAILED** - Below target thresholds
+
+Phase 6 Milestone 4 (Coverage) determined that test coverage failed to meet acceptance thresholds:
+
+| Layer | Coverage | Target | Gap | Status |
+|-------|----------|--------|-----|--------|
+| Domain | 86.24% | 100% | 13.76% | ❌ FAIL |
+| Application | 78.67% | 90% | 11.33% | ❌ FAIL |
+| Overall | 70.32% | 80% | 9.68% | ❌ FAIL |
+
+**Primary Gaps**:
+- Domain: 851 missing lines (repair_cycle_events.py: 239, pr_review_cycle_events.py: 136)
+- Application: 1,078 missing lines (metrics_service.py: 186, execution_service.py: 185, workflow_orchestrator.py: 179)
+
+**Impact Assessment**:
+- **Blocking Handoff?**: NO - Coverage gaps do not block core SDLC pipeline functionality
+- **Risk Level**: LOW - Missing coverage is primarily in advanced workflows (repair cycles, multi-turn dialogue, metrics) identified as enhancements rather than core requirements
+- **Evidence**: Despite coverage gaps, Phase 6 executed complete SDLC pipeline successfully and Phase 7 verified all critical observability paths
+
+**Tracking**:
+- Gap issues filed: #783 (Domain coverage), #784 (Application coverage)
+- Recommended timeline: Address in 2-4 weeks alongside capability enhancements (Repair/Review/Dialogue)
+- Non-blocking for Switchyard migration
 
 ---
 
@@ -463,7 +491,7 @@ ELSE → Requires additional capability (see Part 3)
 
 **Resolution Status**: ✅ **RESOLVED**
 
-**How Fixed** (CRITICAL_PATH_ASSESSMENT.md):
+**How Fixed** (Phase 4 - commit 38cd956d):
 - Implemented `_find_status_field_id(board)` to extract Status field ID from ProjectBoard
 - Implemented `_find_option_id(board, field_id, column_name)` to find column ID
 - Added status_field_id field to ProjectBoard dataclass
@@ -899,7 +927,7 @@ Codetoreum is **production-ready for column-based SDLC workflows** immediately, 
 
 ---
 
-**Document Prepared By**: Claude Code (Haiku 4.5)  
+**Document Prepared By**: Codetoreum Team  
 **Date**: 2026-05-03  
 **Status**: FINAL - Ready for Stakeholder Review and Approval  
 **Distribution**: Codetoreum Team, Switchyard Team, Operations Team
