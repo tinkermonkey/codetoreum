@@ -1,58 +1,57 @@
-"""End-to-End Production Execution Test
+"""Infrastructure Integration Test: Production Bootstrap and Event Store
 
-This test performs actual real-world pipeline execution with production adapters:
-- Real GitHub repository (requires credentials and test repo setup)
-- Real Docker containers for agent execution
-- Real Redis event store for audit trail capture
-- Real external service integrations (GitHub API, Docker daemon, Redis)
+⚠️ IMPORTANT: This is an infrastructure integration test, NOT a full end-to-end
+production execution test. It validates that:
+- ProductionApplicationBootstrap initializes successfully
+- Production adapters (event store, event bus) are correctly wired
+- Domain events can be published and stored in the production event store
+- Events persist and can be retrieved from the event store
 
-This test verifies:
-1. FR-6: Full SDLC pipeline execution against real repository
-2. FR-8: Event store audit trail captured from production run
-3. FR-9: Observability (structured logs, metrics, traces)
-4. FR-10: Resilience patterns (circuit breakers, retries, rate limiting)
+This test does NOT:
+- Orchestrate workflows through application services (WorkflowOrchestrator, ExecutionService, AgentScheduler)
+- Execute agents in real Docker containers
+- Call real GitHub APIs
+- Perform actual code generation, testing, or reviews
+- Create real pull requests
+
+To validate a truly end-to-end production execution, you would need to:
+1. Call WorkflowOrchestrator.start_workflow() to initiate orchestration
+2. Verify that application services invoke real adapters
+3. Observe that Docker containers are actually created and agents execute
+4. Confirm that GitHub API calls result in real PRs
+5. Query OpenTelemetry/Prometheus to verify metrics and traces from real external service calls
 
 Requirements:
-- GitHub test repository credentials and configuration
-- Docker daemon running and accessible
-- Elasticsearch instance for event store persistence
-- Proper environment variables configured
-- Anthropic API key for Claude model
+- Redis instance for event store (or local Docker)
+- Environment variables for production bootstrap
+- No GitHub credentials or Docker execution required for this test
 
 Usage:
-    # Set required environment variables
-    export GITHUB_APP_ID=<your-app-id>
-    export GITHUB_PRIVATE_KEY_PATH=/path/to/private/key
+    # Set required environment variables (minimal, just for bootstrap)
+    export GITHUB_APP_ID=<dummy-app-id>
+    export GITHUB_PRIVATE_KEY_PATH=/path/to/key
     export GITHUB_WEBHOOK_SECRET=<secret>
     export ELASTICSEARCH_URL=http://localhost:9200
-    export ANTHROPIC_API_KEY=<your-api-key>
-    export TEST_GITHUB_REPO=owner/test-repo
+    export ANTHROPIC_API_KEY=<dummy-api-key>
     export CODETOREUM_AUTH_SECRET_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(64))')
 
     # Run the test
     pytest tests/integration/test_real_end_to_end_production_execution.py -v -s
 """
 
-import asyncio
 import logging
 import os
-import shutil
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 import pytest
 
-from codetoreum.adapters.secondary.elasticsearch_event_store import ElasticsearchEventStore
-from codetoreum.adapters.secondary.failed_event_store_adapter import (
-    DeadLetterQueueFailedEventStoreAdapter,
-)
-from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.infrastructure.bootstrap.production_bootstrap import ProductionApplicationBootstrap
-from codetoreum.infrastructure.dead_letter_queue import DeadLetterQueue
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.ports.output.event_store import IEventStore
+from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from tests.helpers.production_helpers import EventStoreAuditTrail, PRVerifier, ProductionErrorHandler
 
 logger = logging.getLogger(__name__)
@@ -76,12 +75,12 @@ OPTIONAL_ENV_VARS = {
 
 
 class RealProductionExecutionTest:
-    """Real production execution test class."""
+    """Infrastructure integration test for production bootstrap and event store."""
 
     def __init__(self) -> None:
         """Initialize test."""
         self.bootstrap: ProductionApplicationBootstrap | None = None
-        self.event_store: ElasticsearchEventStore | None = None
+        self.event_store: IEventStore | None = None
         self.event_bus: EventBus | None = None
         self.test_repo = os.getenv("TEST_GITHUB_REPO", OPTIONAL_ENV_VARS["TEST_GITHUB_REPO"])
         self.start_time = datetime.now(UTC)
@@ -139,15 +138,17 @@ class RealProductionExecutionTest:
             raise
 
     async def test_full_sdlc_pipeline_execution(self) -> None:
-        """Execute a full SDLC pipeline against real repository.
+        """Test production bootstrap and event persistence (not full orchestration).
 
         This test:
-        1. Creates a real GitHub issue in the test repository
-        2. Triggers the analysis agent with real container execution
-        3. Triggers the implementation agent with real code changes
-        4. Triggers the testing agent with real test execution
-        5. Triggers the review agent with real PR validation
-        6. Verifies all events are captured in the production event store
+        1. Initializes production bootstrap with real adapters
+        2. Creates synthetic WorkItemColumnChangedEvent objects
+        3. Publishes events to the event bus
+        4. Persists events to the production event store
+        5. Verifies events can be retrieved from the event store
+
+        NOTE: This is an infrastructure test. It does NOT orchestrate workflows through
+        application services or execute real agents/Docker containers.
         """
         # Set up production environment
         await self._setup_production_environment()
@@ -222,9 +223,8 @@ class RealProductionExecutionTest:
 
             await self.event_bus.publish(analysis_event)
             await self.event_store.append(work_item_id, [analysis_event])
-            logger.info(f"✓ Analysis stage initiated")
+            logger.info(f"✓ Analysis stage event published and stored")
             logger.info(f"  Event ID: {analysis_event.event_id}")
-            logger.info("  Agent executed with real Docker container")
 
             # Step 3: Implementation stage
             logger.info("\n[STEP 3] Implementation Stage - Maker Agent Execution")
@@ -243,10 +243,8 @@ class RealProductionExecutionTest:
 
             await self.event_bus.publish(implementation_event)
             await self.event_store.append(work_item_id, [implementation_event])
-            logger.info(f"✓ Implementation stage initiated")
+            logger.info(f"✓ Implementation stage event published and stored")
             logger.info(f"  Event ID: {implementation_event.event_id}")
-            logger.info("  Agent executed with real Docker container")
-            logger.info("  Code changes committed to real repository")
 
             # Step 4: Testing stage
             logger.info("\n[STEP 4] Testing Stage - Tester Agent Execution")
@@ -265,10 +263,8 @@ class RealProductionExecutionTest:
 
             await self.event_bus.publish(testing_event)
             await self.event_store.append(work_item_id, [testing_event])
-            logger.info(f"✓ Testing stage initiated")
+            logger.info(f"✓ Testing stage event published and stored")
             logger.info(f"  Event ID: {testing_event.event_id}")
-            logger.info("  Agent executed with real Docker container")
-            logger.info("  Tests executed against real code changes")
 
             # Step 5: Review stage (PR creation happens here)
             logger.info("\n[STEP 5] Review Stage - Code Review Agent Execution")
@@ -288,12 +284,14 @@ class RealProductionExecutionTest:
             await self.event_bus.publish(review_event)
             await self.event_store.append(work_item_id, [review_event])
 
-            # Simulate PR creation
+            # Note: In a real orchestration test, the application services would call
+            # GitHub APIs to create an actual PR. Here we just create a synthetic
+            # PR data structure for demonstration purposes.
             pr_number = issue_number + 1000
             pr_response: dict[str, Any] = {
                 "number": pr_number,
                 "title": f"[SOLUTION] Issue #{issue_number} - Production execution pipeline",
-                "body": f"Closes #{issue_number}\n\nThis PR was automatically created by Codetoreum production pipeline execution test.",
+                "body": f"Closes #{issue_number}\n\nThis PR would be created by orchestration through real application services.",
                 "author": "codetoreum",
                 "mergeable": True,
                 "has_conflicts": False,
@@ -303,12 +301,12 @@ class RealProductionExecutionTest:
                 "html_url": f"https://github.com/{self.test_repo}/pull/{pr_number}",
             }
 
-            # Verify PR properties
+            # Verify PR structure (not actual GitHub API call)
             is_complete, pr_issues = PRVerifier.verify_pr_completeness(pr_response)
             if not is_complete:
                 logger.warning(f"PR validation warnings: {pr_issues}")
             else:
-                logger.info("✓ PR validation passed")
+                logger.info("✓ Synthetic PR structure validation passed")
 
             self.created_resources.append({
                 "type": "pull_request",
@@ -316,11 +314,9 @@ class RealProductionExecutionTest:
                 "url": pr_response["html_url"],
             })
 
-            logger.info(f"✓ Review stage initiated")
+            logger.info(f"✓ Review stage event published and stored")
             logger.info(f"  Event ID: {review_event.event_id}")
-            logger.info(f"  Real PR created: #{pr_number}")
-            logger.info(f"  PR URL: {pr_response['html_url']}")
-            logger.info(f"  Changes: +{pr_response['additions']} -{pr_response['deletions']}")
+            logger.info(f"  (Synthetic PR for test purposes: #{pr_number})")
 
             # Step 6: Completion
             logger.info("\n[STEP 6] Completion Stage - Pipeline Finished")
@@ -372,69 +368,74 @@ class RealProductionExecutionTest:
 
             logger.info(f"✓ Event sequence verified: {' → '.join(expected_events)}")
 
-            # Step 8: Verify observability (FR-9)
-            logger.info("\n[STEP 8] Verifying Observability (FR-9)")
-            logger.info("✓ Structured logging verified:")
+            # Step 8: Observability infrastructure check (not full FR-9 verification)
+            logger.info("\n[STEP 8] Infrastructure Observability Check")
+            logger.info("✓ Event structure includes observability fields:")
             logger.info("  - All events have timestamp fields")
             logger.info("  - All events have correlation_id for tracing")
             logger.info("  - Work item ID preserved through pipeline")
-            logger.info("  - Stage transitions logged with timestamps")
 
-            # Verify event timestamps support observability
+            # Verify event timestamps exist in our synthetic events
             events = await self.event_store.get_events(work_item_id)
             for event in events:
                 if hasattr(event, "timestamp"):
                     logger.debug(f"  Event {event.event_id}: {event.timestamp}")
 
-            logger.info("✓ Tracing support verified:")
+            logger.info("✓ Tracing field structure verified:")
             logger.info(f"  - Correlation ID: {correlation_id}")
-            logger.info(f"  - All events linked via correlation_id")
-            logger.info(f"  - Event chain is continuous")
+            logger.info(f"  - All synthetic events linked via correlation_id")
+            logger.info(f"  - Event chain timestamps present")
+            logger.info("\nNOTE: Real FR-9 verification requires:")
+            logger.info("  - OpenTelemetry span queries from actual application service execution")
+            logger.info("  - Prometheus metrics from real external service calls")
+            logger.info("  - Structured log validation from actual orchestration")
 
-            # Step 9: Verify resilience patterns (FR-10)
-            logger.info("\n[STEP 9] Verifying Resilience Patterns (FR-10)")
-            logger.info("✓ Resilience infrastructure verified:")
-            logger.info("  - Event bus persistence to event store")
-            logger.info("  - Dead letter queue for failed events")
-            logger.info("  - Rate limiting on external service calls")
-            logger.info("  - Circuit breakers on GitHub API")
-            logger.info("  - Retry logic with exponential backoff")
-            logger.info("  - Timeout protections on Docker execution")
+            # Step 9: Resilience helper check (not full FR-10 verification)
+            logger.info("\n[STEP 9] Infrastructure Resilience Check")
+            logger.info("✓ Resilience infrastructure components available:")
+            logger.info("  - Event bus configured for persistence")
+            logger.info("  - Event store persistence verified (events retrieved successfully)")
+            logger.info("  - Error classification utilities present")
 
-            # Test error classification (not actual failures)
-            logger.info("✓ Error classification working:")
+            # Test error classification helper (not actual resilience engagement)
+            logger.info("✓ Error classification helper validated:")
             rate_limit_error = Exception("GitHub API rate limit exceeded (429)")
             rate_limit_error.status_code = 429  # type: ignore
             classification = ProductionErrorHandler.classify_error(rate_limit_error)
             assert classification == "GITHUB_RATE_LIMIT"
-            logger.info(f"  - Rate limit error: {classification}")
+            logger.info(f"  - Rate limit error classification: {classification}")
+
+            logger.info("\nNOTE: Real FR-10 verification requires:")
+            logger.info("  - Actual external service calls from application service orchestration")
+            logger.info("  - Circuit breakers engaging under load/failures")
+            logger.info("  - Retry logic executing against real transient failures")
+            logger.info("  - Dead letter queue capturing actual failed events from real services")
 
             # Summary
             end_time = datetime.now(UTC)
             total_duration = (end_time - self.start_time).total_seconds()
 
             logger.info("\n" + "=" * 80)
-            logger.info("✅ REAL PRODUCTION EXECUTION TEST PASSED")
+            logger.info("✅ INFRASTRUCTURE INTEGRATION TEST PASSED")
             logger.info("=" * 80)
             logger.info(f"\nTest Summary:")
             logger.info(f"  Run ID: {run_id}")
             logger.info(f"  Correlation ID: {correlation_id}")
-            logger.info(f"  Repository: {self.test_repo}")
+            logger.info(f"  Test Repository: {self.test_repo}")
             logger.info(f"  Work Item ID: {work_item_id}")
-            logger.info(f"  PR Created: #{pr_number}")
-            logger.info(f"  Total Events: {audit_info['total_events']}")
+            logger.info(f"  Total Events Published: {audit_info['total_events']}")
             logger.info(f"  Test Duration: {total_duration:.1f} seconds")
             logger.info(f"\nWhat was verified:")
-            logger.info(f"  ✓ FR-6: Real SDLC pipeline executed")
-            logger.info(f"  ✓ FR-8: Event store audit trail captured in Redis/Elasticsearch")
-            logger.info(f"  ✓ FR-9: Observability with structured logs, metrics, traces")
-            logger.info(f"  ✓ FR-10: Resilience patterns engaged with real external services")
-            logger.info(f"\nCreated Resources:")
-            for resource in self.created_resources:
-                if resource["type"] == "issue":
-                    logger.info(f"  - GitHub Issue: {resource['id']}")
-                elif resource["type"] == "pull_request":
-                    logger.info(f"  - GitHub PR: #{resource['number']} - {resource['url']}")
+            logger.info(f"  ✓ ProductionApplicationBootstrap initializes successfully")
+            logger.info(f"  ✓ Production event store accepts and stores events")
+            logger.info(f"  ✓ Event bus publishes to event store")
+            logger.info(f"  ✓ Events can be retrieved and contain expected fields")
+            logger.info(f"  ✓ Correlation ID and timestamps preserved in events")
+            logger.info(f"\nWhat was NOT verified (requires full orchestration):")
+            logger.info(f"  ✗ FR-6: Real SDLC pipeline through application services")
+            logger.info(f"  ✗ FR-8: Event audit trail from actual orchestration")
+            logger.info(f"  ✗ FR-9: Observability from real external service calls")
+            logger.info(f"  ✗ FR-10: Resilience patterns engaging under actual load")
             logger.info("=" * 80 + "\n")
 
         except Exception as e:
@@ -457,22 +458,27 @@ class RealProductionExecutionTest:
 @pytest.mark.asyncio
 @pytest.mark.integration
 class TestRealProductionExecution:
-    """Real production execution integration tests."""
+    """Infrastructure integration tests for production bootstrap."""
 
     async def test_full_sdlc_pipeline_with_real_adapters(self) -> None:
-        """Test full SDLC pipeline with real production adapters.
+        """Test production bootstrap and event persistence infrastructure.
 
-        This test requires:
-        - GitHub test repository and credentials
-        - Docker daemon running
-        - Redis instance for event store
-        - All required environment variables set
+        This test verifies:
+        - ProductionApplicationBootstrap initializes with real adapters
+        - Production event store accepts and persists events
+        - Events can be published and retrieved
+        - Event structure includes observability fields
 
-        Acceptance Criteria:
-        - FR-6: Full SDLC pipeline executed against real repository
-        - FR-8: Event store audit trail captured from production run
-        - FR-9: Observability verified (logs, metrics, traces)
-        - FR-10: Resilience patterns working with real external services
+        This test does NOT verify:
+        - Application service orchestration through WorkflowOrchestrator
+        - Real agent execution in Docker containers
+        - Real GitHub API calls and PR creation
+        - Real observability metrics from external services
+        - Real resilience patterns engaging under actual load
+
+        Note: A true end-to-end production execution test would require
+        invoking WorkflowOrchestrator and observing real external service
+        interactions, which is beyond the scope of infrastructure testing.
         """
         test = RealProductionExecutionTest()
 
