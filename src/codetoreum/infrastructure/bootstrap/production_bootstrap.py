@@ -55,7 +55,7 @@ from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.resilience import OperationMode
 from codetoreum.infrastructure.resilience.factory import ResilienceFactory
-from codetoreum.ports.output.config_store import AgentConfig
+from codetoreum.ports.output.config_store import AgentConfig, IConfigStore
 
 logger = logging.getLogger(__name__)
 
@@ -225,8 +225,8 @@ class ProductionProjectConfigurationWrapper(IProjectConfiguration):
     Wrapper that implements IProjectConfiguration interface for AgentScheduler.
 
     The IProjectConfiguration interface expects a get_agent_config(agent_name) method.
-    This wrapper adapts ConfigurationService to provide that interface by querying
-    the actual configuration store for agent configuration.
+    This wrapper adapts the configuration store to provide that interface by querying
+    for agent configuration directly.
 
     Agent configuration includes Claude Code CLI parameters:
     - model: LLM model selection (e.g., "claude-opus-4-6", "claude-sonnet-4-5")
@@ -237,15 +237,15 @@ class ProductionProjectConfigurationWrapper(IProjectConfiguration):
     - metadata: Additional stage-specific configuration (prompt templates, context paths, etc.)
     """
 
-    def __init__(self, configuration_service: ConfigurationService, project_id: str = "default") -> None:
+    def __init__(self, config_store: IConfigStore, project_id: str = "default") -> None:
         """
         Initialize the wrapper.
 
         Args:
-            configuration_service: The ConfigurationService instance to wrap
+            config_store: The IConfigStore instance to query for agent configurations
             project_id: Default project ID for agent config lookups
         """
-        self.configuration_service = configuration_service
+        self.config_store = config_store
         self.project_id = project_id
 
     async def get_agent_config(self, agent_name: str) -> AgentConfig:
@@ -261,13 +261,10 @@ class ProductionProjectConfigurationWrapper(IProjectConfiguration):
 
         Returns:
             Agent configuration with Claude Code CLI parameters
-
-        Raises:
-            Exception: If configuration service query fails
         """
         try:
             # Try to get agent config from configuration store
-            config = await self.configuration_service.config_store.get_agent_config(
+            config = await self.config_store.get_agent_config(
                 project_id=self.project_id,
                 agent_name=agent_name,
             )
@@ -666,8 +663,8 @@ class ProductionApplicationBootstrap:
             event_bus=self.event_bus,
         )
 
-        # Create wrapper for ConfigurationService to implement IProjectConfiguration
-        config_wrapper = ProductionProjectConfigurationWrapper(configuration_service)
+        # Create wrapper for IConfigStore to implement IProjectConfiguration
+        config_wrapper = ProductionProjectConfigurationWrapper(self.adapters.config_store)
 
         agent_scheduler = AgentScheduler(
             task_queue=ProductionTaskQueue(self.adapters.queue_service),

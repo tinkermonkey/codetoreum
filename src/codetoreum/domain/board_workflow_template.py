@@ -6,7 +6,6 @@ where board position (not labels) determines workflow state and agent triggers.
 
 from __future__ import annotations
 
-import dataclasses
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
