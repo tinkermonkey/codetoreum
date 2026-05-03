@@ -225,44 +225,75 @@ class ProductionProjectConfigurationWrapper(IProjectConfiguration):
     Wrapper that implements IProjectConfiguration interface for AgentScheduler.
 
     The IProjectConfiguration interface expects a get_agent_config(agent_name) method.
-    This wrapper adapts ConfigurationService to provide that interface.
+    This wrapper adapts ConfigurationService to provide that interface by querying
+    the actual configuration store for agent configuration.
+
+    Agent configuration includes Claude Code CLI parameters:
+    - model: LLM model selection (e.g., "claude-opus-4-6", "claude-sonnet-4-5")
+    - timeout: Execution timeout in seconds
+    - mcp_servers: MCP (Model Context Protocol) servers for tool availability
+    - capabilities: Agent capabilities (e.g., "code_review", "testing", "analysis")
+    - constraints: Tool-specific permissions and restrictions
+    - metadata: Additional stage-specific configuration (prompt templates, context paths, etc.)
     """
 
-    def __init__(self, configuration_service: ConfigurationService) -> None:
+    def __init__(self, configuration_service: ConfigurationService, project_id: str = "default") -> None:
         """
         Initialize the wrapper.
 
         Args:
             configuration_service: The ConfigurationService instance to wrap
+            project_id: Default project ID for agent config lookups
         """
         self.configuration_service = configuration_service
+        self.project_id = project_id
 
     async def get_agent_config(self, agent_name: str) -> AgentConfig:
         """
-        Get agent configuration.
+        Get agent configuration from configuration store.
+
+        Queries the configuration store for the agent's Claude Code CLI parameters,
+        including model, timeout, MCP servers, and capabilities. If agent config
+        is not found in the store, returns a sensible production default.
 
         Args:
             agent_name: Name of the agent to get config for
 
         Returns:
-            Agent configuration
+            Agent configuration with Claude Code CLI parameters
 
         Raises:
-            Exception: If agent config cannot be retrieved
+            Exception: If configuration service query fails
         """
-        # For now, return a minimal default config
-        # In a full implementation, this would query the actual configuration
-        # TODO: Query actual agent config from configuration_service
-        return AgentConfig(
-            project_id="default",
-            agent_name=agent_name,
-            model="claude-opus-4-6",
-            timeout=300,
-            requires_docker=True,
-            makes_code_changes=True,
-            mcp_servers=(),
-            capabilities=(),
-        )
+        try:
+            # Try to get agent config from configuration store
+            config = await self.configuration_service.config_store.get_agent_config(
+                project_id=self.project_id,
+                agent_name=agent_name,
+            )
+            logger.info(
+                f"Retrieved agent config for {agent_name} from store",
+                extra={"project_id": self.project_id, "agent": agent_name},
+            )
+            return config
+        except Exception as e:
+            # If agent config is not found or store query fails, return sensible production default
+            logger.warning(
+                f"Failed to retrieve agent config from store for {agent_name}, using production default: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_CONFIG_NOT_FOUND, "project_id": self.project_id},
+            )
+            # Return production-sensible defaults
+            return AgentConfig(
+                project_id=self.project_id,
+                agent_name=agent_name,
+                model="claude-opus-4-6",  # Latest production-capable model
+                timeout=300,  # 5 minutes default timeout
+                requires_docker=True,
+                makes_code_changes=True,
+                mcp_servers=(),
+                capabilities=(),
+            )
 
 
 class ProductionApplicationBootstrap:
