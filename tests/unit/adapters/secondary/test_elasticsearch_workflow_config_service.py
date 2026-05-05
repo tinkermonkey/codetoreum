@@ -13,6 +13,7 @@ from codetoreum.domain.board_workflow_template import (
     BoardWorkflowTemplate,
     ColumnTemplate,
     ColumnType,
+    PermissionMode,
     StageAgentConfig,
 )
 from codetoreum.domain.pr_review_cycle_types import PRReviewCycleConfig
@@ -66,7 +67,7 @@ def column_with_stage_agent_config():
         stage_agent_config=StageAgentConfig(
             model="claude-opus-4-6",
             timeout_seconds=3600,
-            permission_mode="bypassPermissions",
+            permission_mode=PermissionMode.BYPASS,
             output_format="stream-json",
             enable_mcp=True,
             enable_tools=True,
@@ -177,7 +178,7 @@ def complex_workflow_template(simple_column_template):
                 stage_agent_config=StageAgentConfig(
                     model="claude-opus-4-6",
                     timeout_seconds=3600,
-                    permission_mode="bypassPermissions",
+                    permission_mode=PermissionMode.BYPASS,
                     output_format="stream-json",
                     enable_mcp=True,
                     enable_tools=True,
@@ -279,7 +280,7 @@ class TestSerialization:
         assert "stage_agent_config" in col_doc
         assert col_doc["stage_agent_config"]["model"] == "claude-opus-4-6"
         assert col_doc["stage_agent_config"]["timeout_seconds"] == 3600
-        assert col_doc["stage_agent_config"]["permission_mode"] == "bypassPermissions"
+        assert col_doc["stage_agent_config"]["permission_mode"] == "bypass"
         assert col_doc["stage_agent_config"]["output_format"] == "stream-json"
         assert col_doc["stage_agent_config"]["enable_mcp"] is True
         assert col_doc["stage_agent_config"]["tool_permissions"] == {
@@ -391,7 +392,7 @@ class TestDeserialization:
                     "stage_agent_config": {
                         "model": "claude-opus-4-6",
                         "timeout_seconds": 3600,
-                        "permission_mode": "bypassPermissions",
+                        "permission_mode": "bypass",
                         "output_format": "stream-json",
                         "enable_mcp": True,
                         "enable_tools": True,
@@ -411,7 +412,7 @@ class TestDeserialization:
         assert col.stage_agent_config is not None
         assert col.stage_agent_config.model == "claude-opus-4-6"
         assert col.stage_agent_config.timeout_seconds == 3600
-        assert col.stage_agent_config.permission_mode == "bypassPermissions"
+        assert col.stage_agent_config.permission_mode == PermissionMode.BYPASS
         assert col.stage_agent_config.output_format == "stream-json"
         assert col.stage_agent_config.enable_mcp is True
         assert col.stage_agent_config.tool_permissions == {"filesystem": {"read": True, "write": False}}
@@ -625,7 +626,7 @@ class TestRoundTrip:
         # Verify stage agent config round-trip
         assert restored.columns[1].stage_agent_config is not None
         assert restored.columns[1].stage_agent_config.model == "claude-opus-4-6"
-        assert restored.columns[1].stage_agent_config.permission_mode == "bypassPermissions"
+        assert restored.columns[1].stage_agent_config.permission_mode == PermissionMode.BYPASS
         assert restored.columns[1].stage_agent_config.tool_permissions == {
             "filesystem": {"read": True, "write": False}
         }

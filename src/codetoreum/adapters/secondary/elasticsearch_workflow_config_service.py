@@ -46,6 +46,7 @@ from codetoreum.domain.board_workflow_template import (
     BoardWorkflowTemplate,
     ColumnTemplate,
     ColumnType,
+    PermissionMode,
     StageAgentConfig,
 )
 from codetoreum.domain.pr_review_cycle_types import PRReviewCycleConfig
@@ -430,7 +431,7 @@ class ElasticsearchWorkflowConfigService(IWorkflowConfigService):
         return {
             "model": config.model,
             "timeout_seconds": config.timeout_seconds,
-            "permission_mode": config.permission_mode,
+            "permission_mode": config.permission_mode.value if config.permission_mode else None,
             "output_format": config.output_format,
             "enable_mcp": config.enable_mcp,
             "enable_tools": config.enable_tools,
@@ -447,10 +448,22 @@ class ElasticsearchWorkflowConfigService(IWorkflowConfigService):
         """Deserialize dict back to StageAgentConfig."""
         if data is None:
             return None
+
+        # Convert permission_mode string value back to enum
+        permission_mode_str = data.get("permission_mode")
+        permission_mode = None
+        if permission_mode_str:
+            try:
+                permission_mode = PermissionMode(permission_mode_str)
+            except ValueError:
+                # If the value is not a valid enum, leave it as None (use default)
+                logger.warning(f"Invalid permission_mode value: {permission_mode_str}")
+                permission_mode = None
+
         return StageAgentConfig(
             model=data.get("model"),
             timeout_seconds=data.get("timeout_seconds"),
-            permission_mode=data.get("permission_mode"),
+            permission_mode=permission_mode,
             output_format=data.get("output_format"),
             enable_mcp=data.get("enable_mcp"),
             enable_tools=data.get("enable_tools"),

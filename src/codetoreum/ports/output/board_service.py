@@ -138,8 +138,8 @@ class ProjectBoard:
         name: Display name
         project_id: Project this board belongs to
         columns: All columns on the board, ordered by position
-        status_field_id: ID of the Status field from the external system (GitHub Projects v2)
-                        Used to construct GraphQL mutations for column transitions.
+        status_field_id: Optional ID of the status/workflow field from the external system.
+                        Used by adapters to track state transitions in the external system.
     """
 
     id: str

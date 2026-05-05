@@ -9,6 +9,7 @@ Tests cover:
 import pytest
 
 from codetoreum.config.codetoreum_pipeline import create_codetoreum_pipeline_template
+from codetoreum.domain.board_workflow_template import PermissionMode
 from codetoreum.infrastructure.bootstrap.production_bootstrap import (
     ProductionProjectConfigurationWrapper,
 )
@@ -117,7 +118,7 @@ class TestProductionBootstrapStageConfig:
         assert analysis_col.stage_agent_config is not None
         assert analysis_col.stage_agent_config.model == "claude-opus-4-6"
         assert analysis_col.stage_agent_config.timeout_seconds == 600
-        assert analysis_col.stage_agent_config.permission_mode == "bypassPermissions"
+        assert analysis_col.stage_agent_config.permission_mode == PermissionMode.BYPASS
         assert analysis_col.stage_agent_config.enable_mcp is True
         assert analysis_col.stage_agent_config.enable_tools is True
 

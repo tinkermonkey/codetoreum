@@ -500,7 +500,7 @@ class WorkspaceRouter:
                         error_msg,
                         exc_info=False,
                         extra={
-                            "error_id": "ERR_CREDENTIAL_ENV_INJECTION",
+                            "error_id": ErrorRegistry.ERR_CREDENTIAL_ENV_INJECTION,
                             "project_id": project.id,
                             "env_var_key": key,
                             "forbidden_pattern": pattern,

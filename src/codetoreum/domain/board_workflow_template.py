@@ -22,19 +22,32 @@ class ColumnType(Enum):
     AUTOMATED = "automated"
 
 
+class PermissionMode(Enum):
+    """Vendor-neutral permission modes for agent execution.
+
+    This enum represents permission modes in a vendor-agnostic way.
+    Adapters translate these to vendor-specific values at the boundary
+    (e.g., BYPASS → "bypassPermissions" for Claude Code CLI).
+    """
+
+    BYPASS = "bypass"
+    ASK = "ask"
+
+
 @dataclass(frozen=True)
 class StageAgentConfig:
-    """Stage-specific Claude Code CLI configuration for agent execution.
+    """Stage-specific agent configuration for pipeline execution.
 
-    Specifies Claude Code CLI parameters that override defaults for a specific
+    Specifies agent parameters that override defaults for a specific
     pipeline stage (column). This enables different agents to use different models,
-    permission modes, tool configurations, etc.
+    permission modes, tool configurations, etc. Values are vendor-neutral;
+    adapters translate them to vendor-specific values at system boundaries.
 
     Attributes:
-        model: Claude model to use for this stage (e.g., "claude-opus-4-6")
+        model: Agent model to use for this stage (e.g., "claude-opus-4-6")
         timeout_seconds: Execution timeout in seconds
-        permission_mode: Claude Code permission mode ("bypassPermissions" or "askForPermissions")
-        output_format: Output format from Claude Code ("stream-json" or "text")
+        permission_mode: Permission mode for agent execution (PermissionMode enum)
+        output_format: Output format from agent ("stream-json" or "text")
         enable_mcp: Whether to enable MCP (Model Context Protocol) for this stage
         enable_tools: Whether to allow tool usage in this stage
         max_context_tokens: Maximum context tokens for this stage
@@ -46,7 +59,7 @@ class StageAgentConfig:
 
     model: str | None = None  # None means use default from agent config
     timeout_seconds: int | None = None  # None means use default
-    permission_mode: str | None = None  # e.g., "bypassPermissions"
+    permission_mode: PermissionMode | None = None  # Vendor-neutral permission mode
     output_format: str | None = None  # e.g., "stream-json"
     enable_mcp: bool | None = None
     enable_tools: bool | None = None
@@ -86,9 +99,8 @@ class StageAgentConfig:
 
         # Validate permission_mode if provided
         if self.permission_mode is not None:
-            valid_modes = {"bypassPermissions", "askForPermissions"}
-            if self.permission_mode not in valid_modes:
-                msg = f"permission_mode must be one of {valid_modes}, got {self.permission_mode!r}"
+            if not isinstance(self.permission_mode, PermissionMode):
+                msg = f"permission_mode must be a PermissionMode enum value or None, got {type(self.permission_mode).__name__}"
                 raise ValueError(msg)
 
         # Validate output_format if provided

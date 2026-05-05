@@ -34,6 +34,7 @@ from codetoreum.domain.board_workflow_template import (
     BoardWorkflowTemplate,
     ColumnTemplate,
     ColumnType,
+    PermissionMode,
     StageAgentConfig,
 )
 
@@ -74,7 +75,7 @@ def create_codetoreum_pipeline_template() -> BoardWorkflowTemplate:
         stage_agent_config=StageAgentConfig(
             model="claude-opus-4-6",  # Use Opus for comprehensive analysis
             timeout_seconds=600,  # 10 minutes for analysis
-            permission_mode="bypassPermissions",  # Allow reading without asking
+            permission_mode=PermissionMode.BYPASS,  # Allow reading without asking
             enable_mcp=True,  # Enable MCP for artifact access
             enable_tools=True,  # Allow tool use
             max_context_tokens=180000,  # Higher context for analysis
@@ -97,7 +98,7 @@ def create_codetoreum_pipeline_template() -> BoardWorkflowTemplate:
         stage_agent_config=StageAgentConfig(
             model="claude-opus-4-6",  # Use Opus for complex code generation
             timeout_seconds=900,  # 15 minutes for implementation
-            permission_mode="bypassPermissions",  # Allow file operations without asking
+            permission_mode=PermissionMode.BYPASS,  # Allow file operations without asking
             enable_mcp=True,  # Enable MCP for git, artifact, and code tools
             enable_tools=True,  # Allow tool use (git, file operations, etc.)
             max_context_tokens=180000,  # High context for code context
@@ -124,7 +125,7 @@ def create_codetoreum_pipeline_template() -> BoardWorkflowTemplate:
         stage_agent_config=StageAgentConfig(
             model="claude-sonnet-4-5",  # Use Sonnet for test generation (faster)
             timeout_seconds=600,  # 10 minutes for testing
-            permission_mode="bypassPermissions",  # Allow test file operations
+            permission_mode=PermissionMode.BYPASS,  # Allow test file operations
             enable_mcp=True,  # Enable MCP for test runners and artifact access
             enable_tools=True,  # Allow tool use
             max_context_tokens=100000,  # Standard context for test generation

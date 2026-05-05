@@ -9,7 +9,12 @@ Tests cover:
 
 import pytest
 
-from codetoreum.domain.board_workflow_template import ColumnTemplate, ColumnType, StageAgentConfig
+from codetoreum.domain.board_workflow_template import (
+    ColumnTemplate,
+    ColumnType,
+    PermissionMode,
+    StageAgentConfig,
+)
 
 
 class TestStageAgentConfig:
@@ -20,7 +25,7 @@ class TestStageAgentConfig:
         config = StageAgentConfig(
             model="claude-opus-4-6",
             timeout_seconds=600,
-            permission_mode="bypassPermissions",
+            permission_mode=PermissionMode.BYPASS,
             output_format="stream-json",
             enable_mcp=True,
             enable_tools=True,
@@ -32,7 +37,7 @@ class TestStageAgentConfig:
         )
         assert config.model == "claude-opus-4-6"
         assert config.timeout_seconds == 600
-        assert config.permission_mode == "bypassPermissions"
+        assert config.permission_mode == PermissionMode.BYPASS
         assert config.output_format == "stream-json"
         assert config.enable_mcp is True
         assert config.enable_tools is True
@@ -91,19 +96,19 @@ class TestStageAgentConfig:
     def test_permission_mode_validation(self):
         """Test permission_mode parameter validation."""
         # Valid modes
-        config1 = StageAgentConfig(permission_mode="bypassPermissions")
-        assert config1.permission_mode == "bypassPermissions"
+        config1 = StageAgentConfig(permission_mode=PermissionMode.BYPASS)
+        assert config1.permission_mode == PermissionMode.BYPASS
 
-        config2 = StageAgentConfig(permission_mode="askForPermissions")
-        assert config2.permission_mode == "askForPermissions"
+        config2 = StageAgentConfig(permission_mode=PermissionMode.ASK)
+        assert config2.permission_mode == PermissionMode.ASK
 
         # None is valid
         config3 = StageAgentConfig(permission_mode=None)
         assert config3.permission_mode is None
 
-        # Invalid mode
-        with pytest.raises(ValueError, match="permission_mode must be one of"):
-            StageAgentConfig(permission_mode="invalidMode")
+        # Invalid mode (string instead of enum)
+        with pytest.raises(ValueError, match="permission_mode must be a PermissionMode enum value"):
+            StageAgentConfig(permission_mode="invalidMode")  # type: ignore
 
     def test_output_format_validation(self):
         """Test output_format parameter validation."""
@@ -182,7 +187,7 @@ class TestColumnTemplateWithStageAgentConfig:
         stage_config = StageAgentConfig(
             model="claude-opus-4-6",
             timeout_seconds=600,
-            permission_mode="bypassPermissions",
+            permission_mode=PermissionMode.BYPASS,
         )
         col = ColumnTemplate(
             name="Analysis",
