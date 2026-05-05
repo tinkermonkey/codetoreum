@@ -180,7 +180,8 @@ class ClaudeCodeAdapter(ILLMProvider):
         cmd.extend(["--model", model])
 
         # Verbose output
-        if self.config.verbose:
+        # Note: --verbose is required when using --print with --output-format=stream-json
+        if self.config.verbose or self.config.output_format == "stream-json":
             cmd.append("--verbose")
 
         # MCP configuration
@@ -680,8 +681,10 @@ class ClaudeCodeAdapter(ILLMProvider):
         conv_data = self._conversations[conversation_id]
 
         # Build context with conversation ID
-        context = conv_data.get("parameters") or ExecutionContext()
-        context.conversation_id = conversation_id
+        # ExecutionContext is frozen, so use replace() to create a new instance with the conversation_id
+        from dataclasses import replace
+        base_context = conv_data.get("parameters") or ExecutionContext()
+        context = replace(base_context, conversation_id=conversation_id)
 
         # Execute with conversation context
         result = await self.execute(message, context, stream_callback)

@@ -140,6 +140,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         circuit_breaker: ICircuitBreaker | None = None,
         systemic_analysis_service: ISystemicAnalysisService | None = None,
         environment_repair_service: IEnvironmentRepairService | None = None,
+        agent_repository=None,
     ) -> None:
         """Initialize production repair cycle adapter.
 
@@ -151,6 +152,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             circuit_breaker: Optional circuit breaker for LLM call protection
             systemic_analysis_service: Optional systemic analysis service for failure classification
             environment_repair_service: Optional environment repair service for rebuilding and verifying environments
+            agent_repository: Optional agent repository (unused, for interface compatibility)
         """
         self._llm_factory = llm_factory
         self.event_emitter = event_emitter

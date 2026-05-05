@@ -27,11 +27,11 @@ def create_production_adapter_config() -> AdapterSelectionConfig:
         # Core system adapters
         event_store="elasticsearch",  # Production event persistence
         config_store="elasticsearch",  # Elasticsearch-backed configuration
-        metrics="prometheus",  # Production metrics collection
+        metrics="in_memory",  # In-memory metrics (optional Prometheus not required for MVP)
         storage="in_memory",  # In-memory storage (acceptable for MVP)
         encryption="simple",  # Simple encryption service (MVP placeholder)
         event_emitter="mock",  # Mock event emitter (MVP: adapter-level event emission; production implementation deferred)
-        message_broker="redis",  # Redis-based message broker
+        message_broker="in_memory",  # In-memory message broker (optional Redis not required for MVP)
         identity_service="configurable",  # Configurable identity service
 
         # External system integrations

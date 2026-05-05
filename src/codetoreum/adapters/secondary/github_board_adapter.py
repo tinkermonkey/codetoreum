@@ -60,6 +60,7 @@ class GitHubBoardAdapter(IBoardService):
         ticket_adapter: GitHubTicketAdapter,
         graphql_client: GitHubGraphQLClient,
         webhook_enabled: bool = True,
+        event_emitter=None,
     ):
         """Initialize GitHub board adapter.
 
@@ -67,10 +68,12 @@ class GitHubBoardAdapter(IBoardService):
             ticket_adapter: GitHub ticket adapter for issue metadata
             graphql_client: GitHub GraphQL client for Projects v2 API
             webhook_enabled: If False, use polling fallback
+            event_emitter: Optional event emitter for domain events (ignored in this adapter)
         """
         self._ticket_adapter = ticket_adapter
         self._graphql = graphql_client
         self._webhook_enabled = webhook_enabled
+        self._event_emitter = event_emitter
 
         # Monitoring state
         self._monitoring: dict[str, MonitoringStatus] = {}

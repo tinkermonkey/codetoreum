@@ -339,13 +339,17 @@ class AdapterResolver:
         Resolve review cycle adapter.
 
         Special handling for SimulationEngine-coupled adapters:
-        - If mock variant selected: use engine to create time-aware mock
+        - If mock variant selected: use engine to create time-aware mock (simulation only)
         - If real variant: create directly without engine
+        - In production mode without engine: fall back to factory
         """
         if self._config.review_cycle == "mock":
-            # Engine creates time-aware mock with optional LLM adapter
-            llm_adapter = self._resolved.get("llm")
-            return self._deps.engine.create_review_cycle_adapter(llm_adapter=llm_adapter)
+            # Try to use engine if available (simulation mode)
+            if hasattr(self._deps.engine, 'create_review_cycle_adapter'):
+                # Engine creates time-aware mock with optional LLM adapter
+                llm_adapter = self._resolved.get("llm")
+                return self._deps.engine.create_review_cycle_adapter(llm_adapter=llm_adapter)
+            # Fall back to factory if engine doesn't have the method (production mode)
         # Real adapter: bypass engine, use factory directly
         return self._factory.create_review_cycle_service(adapter_name=self._config.review_cycle)
 
@@ -354,17 +358,21 @@ class AdapterResolver:
         Resolve PR review cycle adapter.
 
         Special handling for SimulationEngine-coupled adapters:
-        - If mock variant selected: use engine to create time-aware mock
+        - If mock variant selected: use engine to create time-aware mock (simulation only)
         - If real variant: create directly without engine
+        - In production mode without engine: fall back to factory
 
         Dependencies (ticket_system, board_service) are resolved separately
         in resolve_all() before PR review cycle creation and injected in
         bootstrap post-processing to ensure proper initialization order.
         """
         if self._config.pr_review_cycle == "mock":
-            # Engine creates time-aware mock with None dependencies initially
-            # Dependencies are injected in bootstrap post-processing
-            return self._deps.engine.create_pr_review_cycle_adapter()
+            # Try to use engine if available (simulation mode)
+            if hasattr(self._deps.engine, 'create_pr_review_cycle_adapter'):
+                # Engine creates time-aware mock with None dependencies initially
+                # Dependencies are injected in bootstrap post-processing
+                return self._deps.engine.create_pr_review_cycle_adapter()
+            # Fall back to factory if engine doesn't have the method (production mode)
         # Real adapter: bypass engine, use factory directly
         return self._factory.create_pr_review_cycle_service(adapter_name=self._config.pr_review_cycle)
 
@@ -381,14 +389,17 @@ class AdapterResolver:
         and proper dependency injection at construction time.
         """
         if self._config.repair_cycle == "mock":
-            # Engine creates time-aware mock with llm_factory for contract enforcement
-            checkpoint_store = self._resolved.get("checkpoint_store")
-            container_adapter = self._resolved.get("container")
-            return self._deps.engine.create_repair_cycle_adapter(
-                llm_factory=self._create_agent_llm_factory(),
-                checkpoint_store=checkpoint_store,
-                container_adapter=container_adapter,
-            )
+            # Try to use engine if available (simulation mode)
+            if hasattr(self._deps.engine, 'create_repair_cycle_adapter'):
+                # Engine creates time-aware mock with llm_factory for contract enforcement
+                checkpoint_store = self._resolved.get("checkpoint_store")
+                container_adapter = self._resolved.get("container")
+                return self._deps.engine.create_repair_cycle_adapter(
+                    llm_factory=self._create_agent_llm_factory(),
+                    checkpoint_store=checkpoint_store,
+                    container_adapter=container_adapter,
+                )
+            # Fall back to factory if engine doesn't have the method (production mode)
         # Real adapter: inject agent-aware factory and pre-resolved services
         # Use the pre-resolved systemic_analysis_service (resolved in phase 9)
         # Use the pre-resolved environment_repair_service (resolved in phase 9b)

@@ -72,15 +72,19 @@ class DockerContainerAdapter(IContainer):
     It implements all IContainer interface methods for Docker operations.
     """
 
-    def __init__(self, config: DockerConfig):
+    def __init__(self, config: DockerConfig, event_emitter=None, event_bus=None):
         """
         Initialize Docker adapter.
 
         Args:
             config: Docker configuration
+            event_emitter: Optional event emitter for domain events (ignored in this adapter)
+            event_bus: Optional event bus for publishing events (ignored in this adapter)
         """
         self.config = config
         self._docker_client = None
+        self._event_emitter = event_emitter
+        self._event_bus = event_bus
 
     def _get_client(self):
         """Get or create Docker client."""
