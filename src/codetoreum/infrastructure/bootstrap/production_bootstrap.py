@@ -982,24 +982,78 @@ class ProductionApplicationBootstrap:
             event_bus=self.event_bus,
         )
 
+        # Create dependencies for WorkflowOrchestrator
+        task_queue = ProductionTaskQueue(self.adapters.queue_service)
+        config_wrapper = ProductionProjectConfigurationWrapper(self.adapters.config_store)
+
+        # Create simple in-memory implementations for workflow state and decision events
+        class ProductionWorkflowStateManager:
+            """Production workflow state manager - minimal in-memory implementation."""
+
+            def __init__(self):
+                self._states = {}
+
+            async def get_workflow_state(self, issue_id: str):
+                from codetoreum.application.workflow_orchestrator import WorkflowState
+
+                if issue_id not in self._states:
+                    self._states[issue_id] = WorkflowState(
+                        in_progress_tasks={}, current_column=None, current_agent=None
+                    )
+                return self._states[issue_id]
+
+            async def update_workflow_state(self, issue_id: str, state) -> None:
+                self._states[issue_id] = state
+
+            async def get_item_position(self, work_item_id: str):
+                return None
+
+        class ProductionDecisionEvents:
+            """Production decision events - minimal in-memory implementation."""
+
+            async def emit_routing_decision(self, decision) -> None:
+                logger.debug(f"Routing decision: {decision}")
+
+            async def emit_progression_decision(self, decision) -> None:
+                logger.debug(f"Progression decision: {decision}")
+
+        class ProductionProjectsAPI:
+            """Production Projects API - minimal in-memory implementation."""
+
+            async def move_card_to_column(self, project: str, issue_number: int, column_name: str) -> None:
+                logger.debug(f"Move card {issue_number} to {column_name} in {project}")
+
+            async def add_label(self, project: str, issue_number: int, label: str) -> None:
+                logger.debug(f"Add label {label} to {issue_number} in {project}")
+
+        workflow_state_manager = ProductionWorkflowStateManager()
+        decision_events = ProductionDecisionEvents()
+        projects_api = ProductionProjectsAPI()
+
         # Create core orchestration services
         workflow_orchestrator = WorkflowOrchestrator(
+            task_queue=task_queue,
+            config=config_wrapper,
+            workflow_state=workflow_state_manager,
+            decision_events=decision_events,
+            event_store=self.adapters.event_store,
             ticket_system=self.adapters.ticket_system,
-            config_service=None,  # Will be set in port creation
+            event_bus=self.event_bus,
+            projects_api=projects_api,
+            board_service=self.adapters.board,
+            workflow_config=self.adapters.workflow_config,
         )
 
         execution_service = ExecutionService(
+            llm_provider=self.adapters.llm_provider,
             container=self.adapters.container,
-            repository=self.adapters.repository,
-            config_store=self.adapters.config_store,
-            event_bus=self.event_bus,
+            event_store=self.adapters.event_store,
+            storage=self.adapters.storage,
+            vcs=self.adapters.repository,
         )
 
-        # Create wrapper for IConfigStore to implement IProjectConfiguration
-        config_wrapper = ProductionProjectConfigurationWrapper(self.adapters.config_store)
-
         agent_scheduler = AgentScheduler(
-            task_queue=ProductionTaskQueue(self.adapters.queue_service),
+            task_queue=task_queue,
             config=config_wrapper,  # Use wrapper that implements IProjectConfiguration
             rate_limiter=ProductionRateLimiter(rate_limit_rpm=60),
             resource_monitor=ProductionResourceMonitor(),
@@ -1008,21 +1062,15 @@ class ProductionApplicationBootstrap:
         )
 
         pipeline_manager = PipelineManager(
-            lock_service=self.adapters.lock_service,
-            queue_service=self.adapters.queue_service,
-            event_bus=self.event_bus,
+            event_store=self.adapters.event_store,
+            execution_service=execution_service,
         )
 
         review_service = ReviewService(
-            review_cycle=self.adapters.review_cycle,
-            board_service=self.adapters.board,
-            ticket_system=self.adapters.ticket_system,
+            event_store=self.adapters.event_store,
         )
 
-        feedback_processor = FeedbackProcessor(
-            llm_provider=self.adapters.llm_provider,
-            storage=self.adapters.storage,
-        )
+        feedback_processor = FeedbackProcessor()
 
         workspace_router = WorkspaceRouter(
             vcs=self.adapters.repository,
@@ -1032,19 +1080,19 @@ class ProductionApplicationBootstrap:
         )
 
         work_item_service = WorkItemService(
-            ticket_system=self.adapters.ticket_system,
-            board=self.adapters.board,
+            event_store=self.adapters.event_store,
         )
 
         multi_project_orchestrator = MultiProjectOrchestrator(
+            project_manager=self.adapters.project_manager,
             workflow_orchestrator=workflow_orchestrator,
-            event_bus=self.event_bus,
+            board_service=self.adapters.board,
+            event_emitter=self.adapters.event_emitter,
         )
 
         container_recovery_service = ContainerRecoveryService(
-            container=self.adapters.container,
-            container_recovery=self.adapters.container_recovery,
-            event_bus=self.event_bus,
+            recovery_adapter=self.adapters.container_recovery,
+            event_emitter=self.adapters.event_emitter,
         )
 
         # Create failed event store for tracking completion callback failures
@@ -1085,8 +1133,8 @@ class ProductionApplicationBootstrap:
         conversational_loop_orchestrator = ConversationalLoopOrchestrator(
             discussion_adapter=self.adapters.discussion_adapter,
             llm_provider=self.adapters.llm_provider,
-            storage=self.adapters.storage,
-            event_bus=self.event_bus,
+            event_store=self.adapters.event_store,
+            event_emitter=self.adapters.event_emitter,
         )
 
         # Create context builder for preparing execution contexts

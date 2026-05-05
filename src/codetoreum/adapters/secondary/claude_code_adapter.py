@@ -448,6 +448,12 @@ class ClaudeCodeAdapter(ILLMProvider):
                 if "authentication" in error_text.lower() or "invalid api key" in error_text.lower():
                     msg = "Invalid API key or OAuth token"
                     raise AuthenticationError(msg)
+
+                # If no error message, the Claude CLI likely failed silently (missing credentials, etc.)
+                if not sanitized_error or sanitized_error.strip() == "":
+                    msg = "Claude execution failed: CLI returned error with no details (likely missing credentials)"
+                    raise LLMProviderError(msg)
+
                 msg = f"Claude execution failed: {sanitized_error}"
                 raise LLMProviderError(msg)
 
@@ -628,7 +634,11 @@ class ClaudeCodeAdapter(ILLMProvider):
                 stderr = await process.stderr.read()
                 error_text = stderr.decode("utf-8")
                 sanitized_error = self._sanitize_error_message(error_text)
-                msg = f"Stream failed: {sanitized_error}"
+                # If no error message, the Claude CLI likely failed silently (missing credentials, etc.)
+                if not sanitized_error or sanitized_error.strip() == "":
+                    msg = "Stream failed: CLI returned error with no details (likely missing credentials)"
+                else:
+                    msg = f"Stream failed: {sanitized_error}"
                 raise StreamingError(msg)
 
             # Final chunk
