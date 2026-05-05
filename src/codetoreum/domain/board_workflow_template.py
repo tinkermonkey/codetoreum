@@ -27,7 +27,7 @@ class PermissionMode(Enum):
 
     This enum represents permission modes in a vendor-agnostic way.
     Adapters translate these to vendor-specific values at the boundary
-    (e.g., BYPASS → "bypassPermissions" for Claude Code CLI).
+    (e.g., BYPASS → vendor-specific permission bypass string).
     """
 
     BYPASS = "bypass"
@@ -168,9 +168,9 @@ class ColumnTemplate:
         pr_review_cycle_config: Optional configuration for PR review cycle on this column.
                                When set, triggers PR review cycle instead of agent execution.
                                Mutually exclusive with repair_cycle_agents.
-        stage_agent_config: Optional stage-specific Claude Code CLI configuration for the agent
-                           on this column. Specifies model, timeout, permissions, and other
-                           CLI parameters that override defaults for this specific stage.
+        stage_agent_config: Optional stage-specific agent configuration for pipeline execution on this column.
+                           Specifies model, timeout, permissions, and other parameters that
+                           override defaults for this specific stage.
                            None means use default agent configuration.
         execution_type: Execution mode for the agent on this column. One of "task_queue"
                        (default, standard container execution) or "conversational"
