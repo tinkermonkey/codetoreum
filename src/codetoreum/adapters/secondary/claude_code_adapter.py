@@ -180,7 +180,8 @@ class ClaudeCodeAdapter(ILLMProvider):
         cmd.extend(["--model", model])
 
         # Verbose output
-        if self.config.verbose:
+        # Note: --verbose is required when using --print with --output-format=stream-json
+        if self.config.verbose or self.config.output_format == "stream-json":
             cmd.append("--verbose")
 
         # MCP configuration
@@ -447,6 +448,12 @@ class ClaudeCodeAdapter(ILLMProvider):
                 if "authentication" in error_text.lower() or "invalid api key" in error_text.lower():
                     msg = "Invalid API key or OAuth token"
                     raise AuthenticationError(msg)
+
+                # If no error message, the Claude CLI likely failed silently (missing credentials, etc.)
+                if not sanitized_error or sanitized_error.strip() == "":
+                    msg = "Claude execution failed: CLI returned error with no details (likely missing credentials)"
+                    raise LLMProviderError(msg)
+
                 msg = f"Claude execution failed: {sanitized_error}"
                 raise LLMProviderError(msg)
 
@@ -627,7 +634,11 @@ class ClaudeCodeAdapter(ILLMProvider):
                 stderr = await process.stderr.read()
                 error_text = stderr.decode("utf-8")
                 sanitized_error = self._sanitize_error_message(error_text)
-                msg = f"Stream failed: {sanitized_error}"
+                # If no error message, the Claude CLI likely failed silently (missing credentials, etc.)
+                if not sanitized_error or sanitized_error.strip() == "":
+                    msg = "Stream failed: CLI returned error with no details (likely missing credentials)"
+                else:
+                    msg = f"Stream failed: {sanitized_error}"
                 raise StreamingError(msg)
 
             # Final chunk
@@ -680,8 +691,10 @@ class ClaudeCodeAdapter(ILLMProvider):
         conv_data = self._conversations[conversation_id]
 
         # Build context with conversation ID
-        context = conv_data.get("parameters") or ExecutionContext()
-        context.conversation_id = conversation_id
+        # ExecutionContext is frozen, so use replace() to create a new instance with the conversation_id
+        from dataclasses import replace
+        base_context = conv_data.get("parameters") or ExecutionContext()
+        context = replace(base_context, conversation_id=conversation_id)
 
         # Execute with conversation context
         result = await self.execute(message, context, stream_callback)

@@ -106,12 +106,14 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
         self,
         config: GitHubDiscussionConfig,
         identity_service: IIdentityService,
+        time_source=None,
     ):
         """Initialize GitHub discussion adapter.
 
         Args:
             config: GitHub configuration
             identity_service: Service for bot identification
+            time_source: Optional time source for testing (ignored)
 
         Raises:
             ValidationError: If configuration is invalid

@@ -138,12 +138,15 @@ class ProjectBoard:
         name: Display name
         project_id: Project this board belongs to
         columns: All columns on the board, ordered by position
+        status_field_id: Optional ID of the status/workflow field from the external system.
+                        Used by adapters to track state transitions in the external system.
     """
 
     id: str
     name: str
     project_id: str
     columns: tuple[BoardColumn, ...]
+    status_field_id: str | None = None
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
@@ -170,6 +173,12 @@ class ProjectBoard:
         if not all(isinstance(col, BoardColumn) for col in self.columns):
             msg = "all columns must be BoardColumn instances"
             raise ValueError(msg)
+
+        # Validate optional status_field_id
+        if self.status_field_id is not None:
+            if not isinstance(self.status_field_id, str) or not self.status_field_id:
+                msg = "status_field_id must be None or a non-empty string"
+                raise ValueError(msg)
 
 
 @dataclass(frozen=True)

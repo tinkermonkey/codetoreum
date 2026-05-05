@@ -64,6 +64,8 @@ class MockAgentExecutor(IAgentExecutor):
         self._executions: list[dict[str, Any]] = []
         self._pending_tasks: set[asyncio.Task] = set()
         self._execution_query: MockExecutionQueryAdapter | None = None
+        self._should_fail = False
+        self._failure_message = "Agent execution failed"
 
     def set_completion_handler(
         self,
@@ -92,6 +94,16 @@ class MockAgentExecutor(IAgentExecutor):
             adapter: MockExecutionQueryAdapter to push records into
         """
         self._execution_query = adapter
+
+    def set_failure_mode(self, should_fail: bool, failure_message: str = "Agent execution failed") -> None:
+        """Configure whether subsequent executions should fail.
+
+        Args:
+            should_fail: Whether to inject a failure on next execution
+            failure_message: Error message to use if failing
+        """
+        self._should_fail = should_fail
+        self._failure_message = failure_message
 
     async def execute(self, work_item_id: str, agent_id: str, board_id: str | None = None) -> None:
         """Execute an agent on a work item (fire-and-forget).
@@ -160,6 +172,11 @@ class MockAgentExecutor(IAgentExecutor):
         """Simulate agent work then invoke completion callback."""
         try:
             await asyncio.sleep(self._execution_delay)
+
+            # Inject failure if configured for testing
+            if self._should_fail:
+                raise RuntimeError(self._failure_message)
+
             logger.info(f"Agent '{agent_id}' completed on work item '{work_item_id}'")
 
             # Update execution record to COMPLETED

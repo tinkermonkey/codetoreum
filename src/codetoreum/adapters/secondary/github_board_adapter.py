@@ -60,6 +60,7 @@ class GitHubBoardAdapter(IBoardService):
         ticket_adapter: GitHubTicketAdapter,
         graphql_client: GitHubGraphQLClient,
         webhook_enabled: bool = True,
+        event_emitter=None,
     ):
         """Initialize GitHub board adapter.
 
@@ -67,10 +68,12 @@ class GitHubBoardAdapter(IBoardService):
             ticket_adapter: GitHub ticket adapter for issue metadata
             graphql_client: GitHub GraphQL client for Projects v2 API
             webhook_enabled: If False, use polling fallback
+            event_emitter: Optional event emitter for domain events (ignored in this adapter)
         """
         self._ticket_adapter = ticket_adapter
         self._graphql = graphql_client
         self._webhook_enabled = webhook_enabled
+        self._event_emitter = event_emitter
 
         # Monitoring state
         self._monitoring: dict[str, MonitoringStatus] = {}
@@ -329,6 +332,24 @@ class GitHubBoardAdapter(IBoardService):
     async def get_item_position(self, work_item_id: str) -> WorkItemPosition:
         """Get current column position of a work item.
 
+        **NOT ON CRITICAL PATH FOR FIRST EXECUTION**
+
+        This operation is deferred and not required for column-transition-based SDLC pipelines
+        that use get_board() or get_items_in_column() to query work item positions.
+
+        **Why deferred**:
+        - Requires either: (a) querying all boards to find the item, or (b) maintaining a
+          reverse index of work_item_id → board_id → column_name
+        - Not called by move_item_to_column or other critical path operations
+        - Clients can use get_items_in_column(board_id, column_name) instead to get positions
+          if they know the column
+        - Clients can use get_board(project_id, board_id) to query full board and find item
+
+        **Board operations that would trigger this**:
+        - SLA monitoring that queries position without knowing board/column context
+        - Cross-board item position queries
+        - Work item history tracking without maintaining local state
+
         Args:
             work_item_id: Item to locate
 
@@ -336,8 +357,9 @@ class GitHubBoardAdapter(IBoardService):
             WorkItemPosition with column and position details
 
         Raises:
-            ResourceNotFoundError: Work item not found
+            ResourceNotFoundError: Work item not found on any board
             ExternalServiceError: GraphQL API error
+            NotImplementedError: Feature deferred (not on critical path)
         """
         # This would require querying all boards or maintaining a reverse index
         # For now, raise not implemented - clients should track this
@@ -896,11 +918,15 @@ class GitHubBoardAdapter(IBoardService):
                     )
                 )
 
+            # Extract status field ID for mutation operations
+            status_field_id = status_field.get("id") or None
+
             return ProjectBoard(
                 id=board_id,
                 name=board_name,
                 project_id=project_id,
                 columns=columns,
+                status_field_id=status_field_id,
             )
 
         except (KeyError, TypeError) as e:
@@ -910,20 +936,17 @@ class GitHubBoardAdapter(IBoardService):
     def _find_status_field_id(self, board: ProjectBoard) -> str | None:
         """Find status field ID from board data.
 
+        Extracts the Status field ID from the ProjectBoard, which is stored during
+        board parsing from the GitHub Projects v2 GraphQL response. The field ID is
+        required for GraphQL mutations that update item field values (column transitions).
+
         Args:
-            board: Project board
+            board: Project board with status_field_id extracted from GraphQL response
 
         Returns:
-            Status field ID or None
-
-        Raises:
-            NotImplementedError: Feature requires enhancement to extract field IDs from GraphQL response
+            Status field ID (non-empty string), or None if not found
         """
-        msg = (
-            "Status field ID extraction requires enhancement to extract field IDs from GraphQL response. "
-            "The _parse_board_response method should store field IDs and option IDs in the ProjectBoard dataclass."
-        )
-        raise NotImplementedError(msg)
+        return board.status_field_id
 
     def _find_option_id(
         self,
@@ -933,37 +956,60 @@ class GitHubBoardAdapter(IBoardService):
     ) -> str | None:
         """Find option ID for a column name.
 
+        In GitHub Projects v2, "columns" are represented as options in the Status field.
+        This method looks up the option ID by matching the column name against the board's
+        columns. The option ID is required for GraphQL mutations that move items between columns.
+
         Args:
-            board: Project board
-            field_id: Status field ID
-            column_name: Column name to find
+            board: Project board with columns containing their option IDs
+            field_id: Status field ID (not used for lookup, but parameter kept for clarity)
+            column_name: Name of the column to find (e.g., "In Progress")
 
         Returns:
-            Option ID or None
-
-        Raises:
-            NotImplementedError: Feature requires enhancement to extract option IDs from GraphQL response
+            Option ID (non-empty string) if column found, None otherwise
         """
-        msg = (
-            "Option ID extraction requires enhancement to extract option IDs from GraphQL response. "
-            "The _parse_board_response method should store option IDs in the Column dataclass."
-        )
-        raise NotImplementedError(msg)
+        # Search columns for matching name and return its ID (which is the option ID)
+        for column in board.columns:
+            if column.name == column_name:
+                return column.id
+        return None
 
     async def _create_column(self, board_id: str, column_name: str) -> None:
         """Create a new column on the board.
+
+        **NOT ON CRITICAL PATH FOR FIRST EXECUTION**
+
+        This operation is deferred and only required when reconcile_board is called with
+        auto_create_missing=True and the target board lacks expected columns. For the
+        first execution, the board is assumed to already have the required columns.
+
+        **Why deferred**:
+        - reconcile_board() only calls this if auto_create_missing=True and columns are missing
+        - Target pipeline configuration will determine board structure in Phase 5
+        - If board already has all required columns, reconciliation will not trigger creation
+        - Can be implemented as a follow-up if board evolution becomes necessary
+
+        **Board operations that would trigger this**:
+        - Reconciling against an expected board schema that requires new columns
+        - Dynamic board schema evolution where pipelines add new stages to workflow
+        - Backup/recovery scenarios where board must be recreated from scratch
+
+        **Implementation note**:
+        Requires GitHub Projects v2 GraphQL mutation `createProjectV2FieldOption` to add
+        a new option to the Status field.
 
         Args:
             board_id: Board to add column to
             column_name: Name of new column
 
         Raises:
-            NotImplementedError: Feature requires GitHub Projects v2 mutation implementation
+            NotImplementedError: Feature deferred (not on critical path)
             ExternalServiceError: GraphQL mutation failed
         """
         msg = (
             "Column creation requires implementation of GitHub Projects v2 mutation to add a new option to the Status field. "
-            "This requires extracting the field ID and building the proper GraphQL mutation."
+            "This is deferred as it's not on the critical path for the first pipeline execution. "
+            "The board is expected to already have all required columns configured in Phase 5."
         )
         raise NotImplementedError(msg)
 

@@ -47,6 +47,9 @@ from codetoreum.adapters.primary.github_webhook_adapter import (
 from codetoreum.adapters.primary.rest_api_adapter import RestAPIAdapter
 from codetoreum.adapters.primary.routers.agents import create_agents_router
 from codetoreum.adapters.primary.routers.audit import create_audit_router
+from codetoreum.adapters.primary.routers.board_workflow_templates import (
+    create_board_workflow_router,
+)
 from codetoreum.adapters.primary.routers.config import create_config_router
 from codetoreum.adapters.primary.routers.events import create_events_router
 from codetoreum.adapters.primary.routers.executions import create_executions_router
@@ -89,6 +92,7 @@ from codetoreum.ports.input.workflow_query import IWorkflowQueryPort
 from codetoreum.ports.input.workflow_run_query import IWorkflowRunQueryPort
 from codetoreum.ports.input.workspace_query import IWorkspaceQueryPort
 from codetoreum.ports.output.event_store import IEventStore
+from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 # Load environment variables from .env file
 load_dotenv()
@@ -239,6 +243,7 @@ def create_app(
     event_bus: IEventBus,
     config_service: IConfigurationService,
     logger: ILogger,
+    workflow_config_service: IWorkflowConfigService | None = None,
     audit_query_port: IAuditQueryPort | None = None,
     auth_secret_key: str | None = None,
     disable_auth: bool = False,
@@ -529,6 +534,14 @@ def create_app(
         auth_deps=auth_deps,
     )
     app.include_router(config_router)
+
+    # Include Board Workflow Templates router (if workflow_config_service is provided)
+    if workflow_config_service is not None:
+        board_workflow_router = create_board_workflow_router(
+            workflow_config_service=workflow_config_service,
+            auth_deps=auth_deps,
+        )
+        app.include_router(board_workflow_router)
 
     # Include Metrics router
     metrics_router = create_metrics_router(

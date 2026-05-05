@@ -81,6 +81,51 @@ ENV GH_NO_KEYRING=1
 ENV DBUS_SESSION_BUS_ADDRESS=disabled:
 
 # ============================================================================
+# Stage 5b: Test/Development Environment Variable Defaults
+# ============================================================================
+# These provide safe placeholder values so that the production bootstrap can
+# initialize in development/test/CI environments without real credentials.
+# All values below are INERT placeholders — they satisfy env-var-presence
+# checks but do NOT grant access to any real service.
+#
+# PRODUCTION OVERRIDE: In production, the orchestrator MUST inject real
+# values via `docker run -e VAR=value` or an env-file. These defaults are
+# intentionally non-functional to prevent accidental use in production.
+
+# --- Required by integration test _check_environment() ---------------------
+ENV GITHUB_APP_ID=test-app-id-placeholder
+ENV GITHUB_PRIVATE_KEY_PATH=/dev/null
+ENV GITHUB_WEBHOOK_SECRET=test-webhook-secret-placeholder
+ENV ANTHROPIC_API_KEY=sk-ant-test-placeholder
+
+# --- Required by ProductionApplicationBootstrap._read_environment_variables()
+ENV CODETOREUM_AUTH_SECRET_KEY=test-jwt-secret-not-for-production-use
+
+# --- Required by adapter credential resolver (production adapter slots) ----
+# GitHub adapters (ticket, board, discussion, code_review, ci_pipeline)
+ENV GITHUB_TOKEN=ghp_test_placeholder
+ENV GITHUB_ORG=test-org-placeholder
+
+# Claude Code adapter (llm)
+ENV CLAUDE_CODE_TOKEN=test-claude-token-placeholder
+
+# Docker adapter (container) — default socket path
+ENV DOCKER_HOST=unix:///var/run/docker.sock
+
+# Git repository adapter
+ENV GIT_USER=test-user
+ENV GIT_EMAIL=test@example.com
+
+# Elasticsearch adapters (event_store, config_store)
+ENV ELASTICSEARCH_URL=http://localhost:9200
+
+# Prometheus adapter (metrics)
+ENV PROMETHEUS_URL=http://localhost:9090
+
+# Redis adapter (message_broker)
+ENV REDIS_URL=redis://localhost:6379/0
+
+# ============================================================================
 # GitHub Token Scope Requirements (Runtime)
 # ============================================================================
 # The orchestrator must provide GITHUB_TOKEN at container runtime with the

@@ -176,6 +176,105 @@ class TestGetBoard:
             await board_adapter.get_board("proj-123", "board-456")
 
 
+class TestFieldAndOptionIdLookup:
+    """Tests for _find_status_field_id and _find_option_id methods."""
+
+    @pytest.mark.asyncio
+    async def test_find_status_field_id_returns_field_id(self, board_adapter, mock_graphql_client, sample_board_response):
+        """Test that _find_status_field_id extracts field ID from board."""
+        mock_graphql_client.execute.return_value = sample_board_response
+        board = await board_adapter.get_board("proj-123", "board-456")
+
+        field_id = board_adapter._find_status_field_id(board)
+
+        assert field_id is not None
+        assert field_id == "PVTF_lADOA1"
+
+    @pytest.mark.asyncio
+    async def test_find_status_field_id_handles_missing_field(self, board_adapter):
+        """Test that _find_status_field_id returns None if field ID not set."""
+        # Create a board with no status_field_id
+        from codetoreum.ports.output.board_service import BoardColumn, ProjectBoard
+
+        board = ProjectBoard(
+            id="board-456",
+            name="Test Board",
+            project_id="proj-123",
+            columns=(
+                BoardColumn(
+                    id="opt-1",
+                    name="Backlog",
+                    position=0,
+                    work_item_ids=(),
+                ),
+            ),
+            status_field_id=None,
+        )
+
+        field_id = board_adapter._find_status_field_id(board)
+
+        assert field_id is None
+
+    @pytest.mark.asyncio
+    async def test_find_option_id_by_column_name(self, board_adapter, mock_graphql_client, sample_board_response):
+        """Test that _find_option_id finds correct option ID by column name."""
+        mock_graphql_client.execute.return_value = sample_board_response
+        board = await board_adapter.get_board("proj-123", "board-456")
+
+        field_id = board_adapter._find_status_field_id(board)
+        option_id = board_adapter._find_option_id(board, field_id, "In Progress")
+
+        assert option_id is not None
+        assert option_id == "opt-2"
+
+    @pytest.mark.asyncio
+    async def test_find_option_id_not_found(self, board_adapter, mock_graphql_client, sample_board_response):
+        """Test that _find_option_id returns None for nonexistent column."""
+        mock_graphql_client.execute.return_value = sample_board_response
+        board = await board_adapter.get_board("proj-123", "board-456")
+
+        field_id = board_adapter._find_status_field_id(board)
+        option_id = board_adapter._find_option_id(board, field_id, "Nonexistent")
+
+        assert option_id is None
+
+    @pytest.mark.asyncio
+    async def test_find_option_id_empty_column_name(self, board_adapter, mock_graphql_client, sample_board_response):
+        """Test that _find_option_id returns None for empty column name."""
+        mock_graphql_client.execute.return_value = sample_board_response
+        board = await board_adapter.get_board("proj-123", "board-456")
+
+        field_id = board_adapter._find_status_field_id(board)
+        option_id = board_adapter._find_option_id(board, field_id, "")
+
+        assert option_id is None
+
+    @pytest.mark.asyncio
+    async def test_field_and_option_ids_used_in_move_mutation(self, board_adapter, mock_graphql_client, sample_board_response):
+        """Test that field and option IDs are correctly passed to GraphQL mutation."""
+        mock_graphql_client.execute.return_value = sample_board_response
+
+        # Set context for move operation
+        board_adapter._current_project_id = "proj-123"
+        board_adapter._current_board_id = "board-456"
+
+        # First call returns board, second returns mutation success
+        mock_graphql_client.execute.side_effect = [sample_board_response, {"updateProjectV2ItemFieldValue": {"projectV2Item": {"id": "PVTI_1"}}}]
+
+        result = await board_adapter.move_item_to_column("1", "Review", MovedByType.ORCHESTRATOR)
+
+        assert result.work_item_id == "1"
+        assert result.to_column == "Review"
+
+        # Verify the mutation was called with correct field and option IDs
+        assert mock_graphql_client.execute.call_count == 2
+        mutation_call = mock_graphql_client.execute.call_args_list[1]
+        mutation_vars = mutation_call[0][1]
+
+        assert mutation_vars["fieldId"] == "PVTF_lADOA1"  # Status field ID
+        assert mutation_vars["optionId"] == "opt-3"  # Review option ID
+
+
 class TestMoveItemToColumn:
     """Tests for move_item_to_column method."""
 

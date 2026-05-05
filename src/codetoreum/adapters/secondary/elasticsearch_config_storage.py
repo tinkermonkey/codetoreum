@@ -698,25 +698,20 @@ class ElasticsearchConfigStorage(IConfigStore):
         try:
             # Set timestamps
             now = datetime.now(UTC)
-            if template.created_at is None:
-                template.created_at = now
-            template.updated_at = now
-
-            # Serialize template
-            doc = self._serialize_workflow(template)
+            created_at = template.created_at if template.created_at is not None else now
 
             # Try to get existing document to check version
             try:
                 existing = await self.client.get(index=self.INDEX_WORKFLOWS, id=template.id)
-                old_version = existing["_source"].get("version", 1)
-                template.version = old_version + 1
-                doc["version"] = template.version
+                new_version = existing["_source"].get("version", 1) + 1
+                template = dataclasses.replace(template, created_at=created_at, updated_at=now, version=new_version)
+                doc = self._serialize_workflow(template)
 
                 # Save history
                 await self._save_history(
                     config_id=template.id,
                     config_type="workflow",
-                    version=template.version,
+                    version=new_version,
                     changed_by="system",
                     change_type="update",
                     changes={"updated_at": now.isoformat()},
@@ -725,8 +720,8 @@ class ElasticsearchConfigStorage(IConfigStore):
 
             except NotFoundError:
                 # New template
-                template.version = 1
-                doc["version"] = 1
+                template = dataclasses.replace(template, created_at=created_at, updated_at=now, version=1)
+                doc = self._serialize_workflow(template)
 
                 # Save history
                 await self._save_history(

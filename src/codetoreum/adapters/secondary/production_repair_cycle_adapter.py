@@ -16,7 +16,7 @@ Key responsibilities:
 
 Architecture:
 - Factory injection of ILLMProvider for flexible provider selection
-- Optional event emission (null-object pattern)
+- Required event emission via injected IEventEmitter
 - Retry logic for JSON parsing (3 attempts)
 - Comprehensive error logging with no silent failures
 - Circuit breaker preventing exceeding max_total_agent_calls
@@ -73,7 +73,7 @@ from codetoreum.domain.repair_cycle_types import (
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.resilience.exceptions import CircuitBreakerOpenError
 from codetoreum.ports.output.environment_repair_service import IEnvironmentRepairService
-from codetoreum.ports.output.event_emitter import IEventEmitter, NullEventEmitter
+from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.repair_cycle_checkpoint_store import (
     IRepairCycleCheckpointStore,
 )
@@ -123,6 +123,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         config = RepairCycleConfig()
         adapter = ProductionRepairCycleAdapter(
             llm_factory=lambda agent_name: llm_provider,
+            event_emitter=event_emitter,
             config=config
         )
 
@@ -133,27 +134,29 @@ class ProductionRepairCycleAdapter(IRepairCycle):
     def __init__(
         self,
         llm_factory: AgentLLMFactory,
+        event_emitter: IEventEmitter,
         config: RepairCycleConfig | None = None,
-        event_emitter: IEventEmitter | None = None,
         checkpoint_store: IRepairCycleCheckpointStore | None = None,
         circuit_breaker: ICircuitBreaker | None = None,
         systemic_analysis_service: ISystemicAnalysisService | None = None,
         environment_repair_service: IEnvironmentRepairService | None = None,
+        agent_repository=None,
     ) -> None:
         """Initialize production repair cycle adapter.
 
         Args:
             llm_factory: Factory callable that takes agent name and returns configured ILLMProvider
+            event_emitter: Real event emitter for domain event publication (required)
             config: Optional RepairCycleConfig (uses defaults if not provided)
-            event_emitter: Optional event emitter (uses null-object if not provided)
             checkpoint_store: Optional checkpoint store for resumable repairs
             circuit_breaker: Optional circuit breaker for LLM call protection
             systemic_analysis_service: Optional systemic analysis service for failure classification
             environment_repair_service: Optional environment repair service for rebuilding and verifying environments
+            agent_repository: Optional agent repository (unused, for interface compatibility)
         """
         self._llm_factory = llm_factory
+        self.event_emitter = event_emitter
         self.config = config or RepairCycleConfig()
-        self.event_emitter = event_emitter or NullEventEmitter()
         self.checkpoint_store = checkpoint_store
         self.circuit_breaker = circuit_breaker
         self._systemic_analysis_service = systemic_analysis_service

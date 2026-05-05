@@ -40,7 +40,7 @@ from codetoreum.domain.repair_cycle_types import (
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.output.environment_repair_service import IEnvironmentRepairService
-from codetoreum.ports.output.event_emitter import IEventEmitter, NullEventEmitter
+from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.repair_cycle_service import RepairCycleContext
 
 logger = logging.getLogger(__name__)
@@ -86,8 +86,8 @@ class ProductionEnvironmentRepairAdapter(IEnvironmentRepairService):
 
         adapter = ProductionEnvironmentRepairAdapter(
             llm_factory=get_llm,
-            repair_config=config,
-            event_emitter=event_emitter
+            event_emitter=event_emitter,
+            repair_config=config
         )
 
         result = await adapter.rebuild_environment(
@@ -100,8 +100,8 @@ class ProductionEnvironmentRepairAdapter(IEnvironmentRepairService):
     def __init__(
         self,
         llm_factory: AgentLLMFactory,
+        event_emitter: IEventEmitter,
         repair_config: EnvironmentRepairConfig | None = None,
-        event_emitter: IEventEmitter | None = None,
         config: EnvironmentRepairAdapterConfig | None = None,
         circuit_breaker: ICircuitBreaker | None = None,
     ) -> None:
@@ -109,14 +109,14 @@ class ProductionEnvironmentRepairAdapter(IEnvironmentRepairService):
 
         Args:
             llm_factory: Async factory callable that takes agent name and returns configured ILLMProvider
+            event_emitter: Real event emitter for domain event publication (required)
             repair_config: Optional EnvironmentRepairConfig (uses defaults if not provided)
-            event_emitter: Optional event emitter (uses null-object if not provided)
             config: Optional adapter-specific configuration (uses defaults if not provided)
             circuit_breaker: Optional circuit breaker for LLM call protection
         """
         self._llm_factory = llm_factory
+        self.event_emitter = event_emitter
         self.repair_config = repair_config or EnvironmentRepairConfig()
-        self.event_emitter = event_emitter or NullEventEmitter()
         self.config = config or EnvironmentRepairAdapterConfig()
         self.circuit_breaker = circuit_breaker
         self._test_type_descriptions = {
