@@ -1,0 +1,439 @@
+data-model.schemadefinition.work-item-status:
+  id: 678923a2-37fe-46c7-a103-3790c05066e5
+  path: data-model.schemadefinition.work-item-status
+  spec_node_id: data-model.schemadefinition
+  type: schemadefinition
+  layer_id: data-model
+  name: WorkItemStatus
+  description: Enumeration of possible work item lifecycle states
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/work_item.py
+        symbol: WorkItemStatus
+  metadata:
+    created_at: 2026-05-08T10:27:57.412Z
+    updated_at: 2026-05-08T10:27:57.412Z
+    version: 1
+data-model.schemadefinition.work-item-priority:
+  id: 0f653500-5c8e-46a0-8d04-53e5e271353e
+  path: data-model.schemadefinition.work-item-priority
+  spec_node_id: data-model.schemadefinition
+  type: schemadefinition
+  layer_id: data-model
+  name: WorkItemPriority
+  description: Enumeration of work item priority levels using integer values 1-4
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/work_item.py
+        symbol: WorkItemPriority
+  metadata:
+    created_at: 2026-05-08T10:27:57.672Z
+    updated_at: 2026-05-08T10:27:57.672Z
+    version: 1
+data-model.schemadefinition.agent-type:
+  id: f465edbf-daaa-4ecd-b589-6ee41365128e
+  path: data-model.schemadefinition.agent-type
+  spec_node_id: data-model.schemadefinition
+  type: schemadefinition
+  layer_id: data-model
+  name: AgentType
+  description: Enumeration of agent types including maker, reviewer, and specialized roles
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/agent.py
+        symbol: AgentType
+  metadata:
+    created_at: 2026-05-08T10:28:02.781Z
+    updated_at: 2026-05-08T10:28:02.782Z
+    version: 1
+data-model.schemadefinition.execution-status:
+  id: ddafee79-2774-4f7f-9826-4df18e3eef96
+  path: data-model.schemadefinition.execution-status
+  spec_node_id: data-model.schemadefinition
+  type: schemadefinition
+  layer_id: data-model
+  name: ExecutionStatus
+  description: Enumeration of agent execution lifecycle states
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/agent_execution.py
+        symbol: ExecutionStatus
+  metadata:
+    created_at: 2026-05-08T10:28:07.853Z
+    updated_at: 2026-05-08T10:28:07.853Z
+    version: 1
+data-model.schemadefinition.workflow-status:
+  id: b67f7447-ef7b-4494-b24a-93c2609eac69
+  path: data-model.schemadefinition.workflow-status
+  spec_node_id: data-model.schemadefinition
+  type: schemadefinition
+  layer_id: data-model
+  name: WorkflowStatus
+  description: Enumeration of workflow lifecycle states
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/workflow.py
+        symbol: WorkflowStatus
+  metadata:
+    created_at: 2026-05-08T10:28:08.401Z
+    updated_at: 2026-05-08T10:28:08.401Z
+    version: 1
+data-model.schemadefinition.workspace-type:
+  id: 307cd17d-c6f3-4354-9720-e1ac0b870bfb
+  path: data-model.schemadefinition.workspace-type
+  spec_node_id: data-model.schemadefinition
+  type: schemadefinition
+  layer_id: data-model
+  name: WorkspaceType
+  description: "Enum for agent workspace context type: ISSUE (issue-only context,
+    no code changes), HYBRID (full project workspace with branch, PR creation,
+    code read/write access). Controls what files and permissions are mounted
+    into the agent container."
+  attributes:
+    title: WorkspaceType
+    type: string
+    enum:
+      - ISSUE
+      - HYBRID
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/workspace_context.py
+        symbol: WorkspaceType
+  metadata:
+    created_at: 2026-05-08T12:18:20.046Z
+    updated_at: 2026-05-08T12:18:20.046Z
+    version: 1
+data-model.schemadefinition.stage-type:
+  id: ab0f1289-5edf-4161-a752-bd74fedf938f
+  path: data-model.schemadefinition.stage-type
+  spec_node_id: data-model.schemadefinition
+  type: schemadefinition
+  layer_id: data-model
+  name: StageType
+  description: "Enum for pipeline stage execution pattern: SEQUENTIAL (stages run
+    one after another), PARALLEL (stages run concurrently), REVIEW
+    (maker-checker review loop with approval/rejection). Defined on
+    PipelineStage; influences how WorkflowOrchestrator dispatches agent
+    executions."
+  attributes:
+    title: StageType
+    type: string
+    enum:
+      - SEQUENTIAL
+      - PARALLEL
+      - REVIEW
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/pipeline_stage.py
+        symbol: StageType
+  metadata:
+    created_at: 2026-05-08T12:18:22.225Z
+    updated_at: 2026-05-08T12:18:22.225Z
+    version: 1
+data-model.schemadefinition.stage-status:
+  id: 6fdb43bb-49e5-4ce4-b32d-9f4ac6eacf93
+  path: data-model.schemadefinition.stage-status
+  spec_node_id: data-model.schemadefinition
+  type: schemadefinition
+  layer_id: data-model
+  name: StageStatus
+  description: "Enum for pipeline stage execution state: PENDING (not yet
+    started), READY (prerequisites met), RUNNING (agent executing), COMPLETED
+    (success), FAILED (execution error), SKIPPED (bypassed due to conditions).
+    Tracked on PipelineStage domain object."
+  attributes:
+    title: StageStatus
+    type: string
+    enum:
+      - PENDING
+      - READY
+      - RUNNING
+      - COMPLETED
+      - FAILED
+      - SKIPPED
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/pipeline_stage.py
+        symbol: StageStatus
+  metadata:
+    created_at: 2026-05-08T12:18:27.062Z
+    updated_at: 2026-05-08T12:18:27.062Z
+    version: 1
+data-model.schemadefinition.review-status:
+  id: c082f68e-89a5-4c63-a3be-a562b6ff7eaa
+  path: data-model.schemadefinition.review-status
+  spec_node_id: data-model.schemadefinition
+  type: schemadefinition
+  layer_id: data-model
+  name: ReviewStatus
+  description: "Enum for maker-checker review cycle state: PENDING (awaiting
+    start), IN_PROGRESS (reviewer evaluating), APPROVED (reviewer accepted),
+    CHANGES_REQUESTED (reviewer rejected, maker must revise), ESCALATED (routed
+    to human review due to max iterations or explicit escalation). Defined on
+    ReviewCycle domain object."
+  attributes:
+    title: ReviewStatus
+    type: string
+    enum:
+      - PENDING
+      - IN_PROGRESS
+      - APPROVED
+      - CHANGES_REQUESTED
+      - ESCALATED
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/review_cycle.py
+        symbol: ReviewStatus
+  metadata:
+    created_at: 2026-05-08T12:18:29.108Z
+    updated_at: 2026-05-08T12:18:29.108Z
+    version: 1
+data-model.schemadefinition.review-decision:
+  id: ded1958b-e2f9-44ce-8de4-b5698bf0017f
+  path: data-model.schemadefinition.review-decision
+  spec_node_id: data-model.schemadefinition
+  type: schemadefinition
+  layer_id: data-model
+  name: ReviewDecision
+  description: "Enum for reviewer agent decision in maker-checker cycle: APPROVE
+    (work accepted, advance to next stage), REQUEST_CHANGES (feedback provided,
+    maker must revise and resubmit), ESCALATE (route to human reviewer, mark
+    cycle as escalated). Set on ReviewFeedback value object submitted by
+    reviewer agent."
+  attributes:
+    title: ReviewDecision
+    type: string
+    enum:
+      - APPROVE
+      - REQUEST_CHANGES
+      - ESCALATE
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/review_cycle.py
+        symbol: ReviewDecision
+  metadata:
+    created_at: 2026-05-08T12:18:33.007Z
+    updated_at: 2026-05-08T12:18:33.007Z
+    version: 1
+data-model.schemadefinition.column-type:
+  id: 560aaf13-fbc5-4c05-bb3f-5e1301c7b4d7
+  path: data-model.schemadefinition.column-type
+  spec_node_id: data-model.schemadefinition
+  type: schemadefinition
+  layer_id: data-model
+  name: ColumnType
+  description: "Enum for board column automation mode: MANUAL (human-driven
+    column, no agent auto-assignment), AUTOMATED (agent-driven column that
+    triggers pipeline execution when a work item enters). Defined on
+    ColumnTemplate in BoardWorkflowTemplate; controls whether
+    WorkflowOrchestrator activates on column entry."
+  attributes:
+    title: ColumnType
+    type: string
+    enum:
+      - MANUAL
+      - AUTOMATED
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/board_workflow_template.py
+        symbol: ColumnType
+  metadata:
+    created_at: 2026-05-08T12:18:35.506Z
+    updated_at: 2026-05-08T12:18:35.506Z
+    version: 1
+data-model.schemadefinition.failure-classification:
+  id: 6dc56d16-6960-4732-99b0-16657f43580c
+  path: data-model.schemadefinition.failure-classification
+  spec_node_id: data-model.schemadefinition
+  type: schemadefinition
+  layer_id: data-model
+  name: FailureClassification
+  description: "Enum for systemic failure root cause classification in repair
+    cycles: CODE_DEFECT (logic error in source code), ENVIRONMENT_ISSUE (broken
+    dependency or runtime environment), TRANSIENT_FAILURE (intermittent,
+    retry-recoverable), DEPENDENCY_ISSUE (external package or service failure),
+    CONFIGURATION_ISSUE (misconfigured settings or environment variables). Used
+    by SystemicAnalysisResult."
+  attributes:
+    title: FailureClassification
+    type: string
+    enum:
+      - CODE_DEFECT
+      - ENVIRONMENT_ISSUE
+      - TRANSIENT_FAILURE
+      - DEPENDENCY_ISSUE
+      - CONFIGURATION_ISSUE
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/repair_cycle_types.py
+        symbol: FailureClassification
+  metadata:
+    created_at: 2026-05-08T12:18:41.183Z
+    updated_at: 2026-05-08T12:18:41.183Z
+    version: 1
+data-model.schemadefinition.repair-test-type:
+  id: c56673af-beb5-49af-9643-2989939d5612
+  path: data-model.schemadefinition.repair-test-type
+  spec_node_id: data-model.schemadefinition
+  type: schemadefinition
+  layer_id: data-model
+  name: RepairTestType
+  description: "Enum for repair cycle test categories in order of execution:
+    COMPILATION (build and type-check), UNIT (unit tests), INTEGRATION
+    (integration tests), CI (GitHub Actions CI run), E2E (end-to-end tests).
+    Determines which test runner and agent configuration is used in each repair
+    iteration."
+  attributes:
+    title: RepairTestType
+    type: string
+    enum:
+      - COMPILATION
+      - UNIT
+      - INTEGRATION
+      - CI
+      - E2E
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/repair_cycle_types.py
+        symbol: RepairTestType
+  metadata:
+    created_at: 2026-05-08T12:18:43.483Z
+    updated_at: 2026-05-08T12:18:43.483Z
+    version: 1
+data-model.schemadefinition.user-role:
+  id: 7a70134f-d0ac-434c-8976-9a3b783f32d8
+  path: data-model.schemadefinition.user-role
+  spec_node_id: data-model.schemadefinition
+  type: schemadefinition
+  layer_id: data-model
+  name: UserRole
+  description: "Enum for user authorization roles: ADMIN (full system access),
+    DEVELOPER (workflow and execution management), VIEWER (read-only access),
+    SERVICE_ACCOUNT (API-key-only machine identity for adapter integrations).
+    Multiple roles can be assigned; permissions are derived from role union."
+  attributes:
+    title: UserRole
+    type: string
+    enum:
+      - ADMIN
+      - DEVELOPER
+      - VIEWER
+      - SERVICE_ACCOUNT
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/user.py
+        symbol: UserRole
+  metadata:
+    created_at: 2026-05-08T12:18:47.989Z
+    updated_at: 2026-05-08T12:18:47.989Z
+    version: 1
+data-model.schemadefinition.permission:
+  id: 0e46b6a8-20f0-46d1-ae9b-9027f24b053a
+  path: data-model.schemadefinition.permission
+  spec_node_id: data-model.schemadefinition
+  type: schemadefinition
+  layer_id: data-model
+  name: Permission
+  description: "Enum for granular authorization permissions:
+    WORKFLOW_CREATE/VIEW/CANCEL/RETRY, EXECUTION_VIEW/CANCEL,
+    CONFIG_VIEW/UPDATE, PROJECT_CREATE/VIEW/UPDATE/DELETE. Checked by auth
+    middleware; derived from UserRole assignments. Enables fine-grained access
+    control per API operation."
+  attributes:
+    title: Permission
+    type: string
+    enum:
+      - WORKFLOW_CREATE
+      - WORKFLOW_VIEW
+      - WORKFLOW_CANCEL
+      - WORKFLOW_RETRY
+      - EXECUTION_VIEW
+      - EXECUTION_CANCEL
+      - CONFIG_VIEW
+      - CONFIG_UPDATE
+      - PROJECT_CREATE
+      - PROJECT_VIEW
+      - PROJECT_UPDATE
+      - PROJECT_DELETE
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/user.py
+        symbol: Permission
+  metadata:
+    created_at: 2026-05-08T12:18:50.525Z
+    updated_at: 2026-05-08T12:18:50.525Z
+    version: 1
+data-model.schemadefinition.prreview-outcome:
+  id: 77cb2fe5-5036-4961-916f-d05a73213190
+  path: data-model.schemadefinition.prreview-outcome
+  spec_node_id: data-model.schemadefinition
+  type: schemadefinition
+  layer_id: data-model
+  name: PRReviewOutcome
+  description: "Enum for PR automated review cycle final outcome: ISSUES_FOUND
+    (review found problems, sub-issues may be created), APPROVED (all phases
+    passed, PR can advance), MAX_CYCLES_REACHED (exceeded outer cycle limit
+    without approval, escalation triggered). Determines which board column the
+    work item moves to after the cycle."
+  attributes:
+    title: PRReviewOutcome
+    type: string
+    enum:
+      - ISSUES_FOUND
+      - APPROVED
+      - MAX_CYCLES_REACHED
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/pr_review_cycle_types.py
+        symbol: PRReviewOutcome
+  metadata:
+    created_at: 2026-05-08T12:20:23.609Z
+    updated_at: 2026-05-08T12:20:23.609Z
+    version: 1
+data-model.schemadefinition.prreview-status:
+  id: abedf7cc-5549-43cf-8d16-0e44d41646f8
+  path: data-model.schemadefinition.prreview-status
+  spec_node_id: data-model.schemadefinition
+  type: schemadefinition
+  layer_id: data-model
+  name: PRReviewStatus
+  description: "Enum for PR review cycle phase status: PENDING,
+    PHASE_1_CODE_REVIEW, PHASE_2_VERIFICATION, PHASE_3_CI_CHECK,
+    PHASE_4_CONSOLIDATION, COMPLETED, ESCALATED. Tracks which phase is currently
+    executing in PRReviewCycleState; emitted in PR review cycle events."
+  attributes:
+    title: PRReviewStatus
+    type: string
+    enum:
+      - PENDING
+      - PHASE_1_CODE_REVIEW
+      - PHASE_2_VERIFICATION
+      - PHASE_3_CI_CHECK
+      - PHASE_4_CONSOLIDATION
+      - COMPLETED
+      - ESCALATED
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/pr_review_cycle_types.py
+        symbol: PRReviewStatus
+  metadata:
+    created_at: 2026-05-08T12:20:25.891Z
+    updated_at: 2026-05-08T12:20:25.891Z
+    version: 1

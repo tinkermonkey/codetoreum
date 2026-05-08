@@ -1,0 +1,54 @@
+apm.span.agent-execution-trace:
+  id: a3afce45-8e07-456d-ba16-468b70babcb0
+  path: apm.span.agent-execution-trace
+  spec_node_id: apm.span
+  type: span
+  layer_id: apm
+  name: Agent Execution Trace
+  description: OpenTelemetry distributed trace span covering the full lifecycle of
+    an agent execution
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/infrastructure/observability/instrumentation.py
+        symbol: instrument_async_function
+  metadata:
+    created_at: 2026-05-08T11:07:31.661Z
+    updated_at: 2026-05-08T11:07:31.661Z
+    version: 1
+apm.span.event-handler-trace:
+  id: 84e9f2cd-6fee-45e5-aaa3-8606586b9b3a
+  path: apm.span.event-handler-trace
+  spec_node_id: apm.span
+  type: span
+  layer_id: apm
+  name: Event Handler Trace
+  description: Distributed trace span for domain event handler invocations with
+    causal linking
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/infrastructure/observability/event_bus_instrumentation.py
+        symbol: InstrumentedEventHandler
+  metadata:
+    created_at: 2026-05-08T11:07:32.453Z
+    updated_at: 2026-05-08T11:07:32.453Z
+    version: 1
+apm.span.web-socket-session-trace:
+  id: 1fb16b11-7618-4676-a258-1b7094fb3495
+  path: apm.span.web-socket-session-trace
+  spec_node_id: apm.span
+  type: span
+  layer_id: apm
+  name: WebSocket Session Trace
+  description: Trace span for WebSocket session lifecycle including subscription
+    and event delivery
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/infrastructure/observability/websocket_instrumentation.py
+        symbol: WebSocketSessionTracer
+  metadata:
+    created_at: 2026-05-08T11:07:35.838Z
+    updated_at: 2026-05-08T11:07:35.838Z
+    version: 1

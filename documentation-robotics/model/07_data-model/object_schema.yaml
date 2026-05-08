@@ -1,0 +1,1506 @@
+data-model.objectschema.work-item:
+  id: 1e53b9e4-3e1d-4ac8-9de8-094612cb3893
+  path: data-model.objectschema.work-item
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: WorkItem
+  description: Core unit of work representing an issue or task with identity,
+    lifecycle state, and priority
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/work_item.py
+        symbol: WorkItem
+  metadata:
+    created_at: 2026-05-08T10:27:57.161Z
+    updated_at: 2026-05-08T10:27:57.161Z
+    version: 1
+data-model.objectschema.agent:
+  id: 1e82733d-6f62-4ae5-9f73-872e6d742d7d
+  path: data-model.objectschema.agent
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: Agent
+  description: AI agent definition with capabilities, type, and execution configuration
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/agent.py
+        symbol: Agent
+  metadata:
+    created_at: 2026-05-08T10:28:02.248Z
+    updated_at: 2026-05-08T10:28:02.248Z
+    version: 1
+data-model.objectschema.agent-capability:
+  id: 715028a6-012f-4cb6-b251-0b9a93e2097b
+  path: data-model.objectschema.agent-capability
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: AgentCapability
+  description: Represents a specific skill or capability of an agent with proficiency level
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/agent.py
+        symbol: AgentCapability
+  metadata:
+    created_at: 2026-05-08T10:28:02.519Z
+    updated_at: 2026-05-08T10:28:02.519Z
+    version: 1
+data-model.objectschema.agent-execution:
+  id: 2c6e5f8e-c920-4e4f-9287-a2f4d0f5076c
+  path: data-model.objectschema.agent-execution
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: AgentExecution
+  description: Instance of an agent working on a work item, tracking execution
+    lifecycle, logs, and results
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/agent_execution.py
+        symbol: AgentExecution
+  metadata:
+    created_at: 2026-05-08T10:28:07.589Z
+    updated_at: 2026-05-08T10:28:07.589Z
+    version: 1
+data-model.objectschema.workflow:
+  id: e0ffdfde-9a6a-4cf4-8a3b-c24dbf4994c3
+  path: data-model.objectschema.workflow
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: Workflow
+  description: Multi-stage pipeline definition coordinating agent execution across
+    workflow stages
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/workflow.py
+        symbol: Workflow
+  metadata:
+    created_at: 2026-05-08T10:28:08.134Z
+    updated_at: 2026-05-08T10:28:08.135Z
+    version: 1
+data-model.objectschema.workflow-template:
+  id: e5d7d4f9-0ee5-433a-8e26-98e61ebf6236
+  path: data-model.objectschema.workflow-template
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: WorkflowTemplate
+  description: Reusable workflow stage template definition with stage configurations
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/workflow_template.py
+        symbol: WorkflowTemplate
+  metadata:
+    created_at: 2026-05-08T10:28:14.010Z
+    updated_at: 2026-05-08T10:28:14.010Z
+    version: 1
+data-model.objectschema.board-workflow-template:
+  id: b011193b-019c-4785-bf66-ce9e554da68e
+  path: data-model.objectschema.board-workflow-template
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: BoardWorkflowTemplate
+  description: Board-level workflow template associating columns to pipeline
+    stages with reconciliation configuration
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/board_workflow_template.py
+        symbol: BoardWorkflowTemplate
+  metadata:
+    created_at: 2026-05-08T10:28:14.277Z
+    updated_at: 2026-05-08T10:28:14.277Z
+    version: 1
+data-model.objectschema.review-cycle:
+  id: 3ed36862-3583-4e99-aee1-b49ef0dafb8f
+  path: data-model.objectschema.review-cycle
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: ReviewCycle
+  description: Maker-checker review process with feedback loops, tracking review
+    iterations and decisions
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/review_cycle.py
+        symbol: ReviewCycle
+  metadata:
+    created_at: 2026-05-08T10:28:14.557Z
+    updated_at: 2026-05-08T10:28:14.557Z
+    version: 1
+data-model.objectschema.conversational-session:
+  id: f4b806c3-313f-41ba-a00d-ce339ecac52f
+  path: data-model.objectschema.conversational-session
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: ConversationalSession
+  description: Multi-turn conversational session state for agent dialogue management
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/conversational_session.py
+        symbol: ConversationalSessionState
+  metadata:
+    created_at: 2026-05-08T10:28:19.267Z
+    updated_at: 2026-05-08T10:28:19.267Z
+    version: 1
+data-model.objectschema.pipeline-stage:
+  id: b1662a46-751d-43a0-9af7-6c06350f6f0a
+  path: data-model.objectschema.pipeline-stage
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: PipelineStage
+  description: Individual stage in a workflow pipeline with entry conditions,
+    agent config, and status tracking
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/pipeline_stage.py
+        symbol: PipelineStage
+  metadata:
+    created_at: 2026-05-08T10:28:19.536Z
+    updated_at: 2026-05-08T10:28:19.537Z
+    version: 1
+data-model.objectschema.project-context:
+  id: dd13fd25-f1f1-4e16-a54f-e87aab011dee
+  path: data-model.objectschema.project-context
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: ProjectContext
+  description: Project-level configuration and context including workflow
+    mappings, docker config, and test configuration
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/project_context.py
+        symbol: ProjectContext
+  metadata:
+    created_at: 2026-05-08T10:28:19.815Z
+    updated_at: 2026-05-08T10:28:19.815Z
+    version: 1
+data-model.objectschema.prreview-cycle-state:
+  id: 9e4e43a6-e4b9-49b9-949b-b71a856c72ca
+  path: data-model.objectschema.prreview-cycle-state
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: PRReviewCycleState
+  description: State object tracking a PR review cycle including phases, findings,
+    and outcomes
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/pr_review_cycle_types.py
+        symbol: PRReviewCycleState
+  metadata:
+    created_at: 2026-05-08T10:28:24.631Z
+    updated_at: 2026-05-08T10:28:24.631Z
+    version: 1
+data-model.objectschema.repair-cycle-result:
+  id: 4b0986db-27f8-4e15-9859-9835108ff93d
+  path: data-model.objectschema.repair-cycle-result
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: RepairCycleResult
+  description: Result aggregate from a repair cycle including test results,
+    failure classifications, and cycle outcome
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/repair_cycle_types.py
+        symbol: RepairCycleResult
+  metadata:
+    created_at: 2026-05-08T10:28:24.902Z
+    updated_at: 2026-05-08T10:28:24.902Z
+    version: 1
+data-model.objectschema.workspace-context:
+  id: 91cb2d12-999b-4ac3-839c-d301f964204a
+  path: data-model.objectschema.workspace-context
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: WorkspaceContext
+  description: Workspace context for agent container execution including volume
+    mounts and filesystem configuration
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/workspace_context.py
+        symbol: WorkspaceContext
+  metadata:
+    created_at: 2026-05-08T10:28:25.175Z
+    updated_at: 2026-05-08T10:28:25.175Z
+    version: 1
+data-model.objectschema.user:
+  id: 91bd4f54-ae47-4f05-a852-99acaea99b92
+  path: data-model.objectschema.user
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: User
+  description: User identity with role-based permissions and API key support for
+    authentication
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/user.py
+        symbol: User
+  metadata:
+    created_at: 2026-05-08T10:28:29.213Z
+    updated_at: 2026-05-08T10:28:29.213Z
+    version: 1
+data-model.objectschema.comment:
+  id: be6a084b-d67d-4c99-8e53-a368536baacc
+  path: data-model.objectschema.comment
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: Comment
+  description: Comment on a work item with author identity and content
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/comment.py
+        symbol: Comment
+  metadata:
+    created_at: 2026-05-08T10:28:29.480Z
+    updated_at: 2026-05-08T10:28:29.480Z
+    version: 1
+data-model.objectschema.project-config:
+  id: 71184b9b-f1ad-41e7-93aa-41ef600eea9b
+  path: data-model.objectschema.project-config
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: ProjectConfig
+  description: Value object containing project configuration including commit
+    policy and project identifiers
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/value_objects.py
+        symbol: ProjectConfig
+  metadata:
+    created_at: 2026-05-08T10:28:29.749Z
+    updated_at: 2026-05-08T10:28:29.749Z
+    version: 1
+data-model.objectschema.agent-api-dtos:
+  id: 0baa9f28-4584-430c-bac7-167576311539
+  path: data-model.objectschema.agent-api-dtos
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: Agent API DTOs
+  description: "Pydantic request/response schemas for Agent REST API:
+    CreateAgentRequest, UpdateAgentRequest, AgentResponse, AgentListResponse"
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/agent_dtos.py
+        symbol: CreateAgentRequest
+  metadata:
+    created_at: 2026-05-08T10:28:39.360Z
+    updated_at: 2026-05-08T10:28:39.361Z
+    version: 1
+data-model.objectschema.work-item-api-dtos:
+  id: 6752165e-44ed-485c-adbf-43cdc3e47c7c
+  path: data-model.objectschema.work-item-api-dtos
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: WorkItem API DTOs
+  description: "Pydantic request/response schemas for WorkItem REST API:
+    CreateWorkItemRequest, UpdateWorkItemRequest, WorkItemResponse,
+    WorkItemDetailResponse"
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/work_item_dtos.py
+        symbol: WorkItemResponse
+  metadata:
+    created_at: 2026-05-08T10:28:39.631Z
+    updated_at: 2026-05-08T10:28:39.631Z
+    version: 1
+data-model.objectschema.execution-api-dtos:
+  id: c41eb110-fd56-49c8-a5f9-8d516d36fc22
+  path: data-model.objectschema.execution-api-dtos
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: Execution API DTOs
+  description: "Pydantic request/response schemas for Execution REST API:
+    ExecutionResponse, ExecutionLogsResponse, ExecutionHistoryResponse"
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/execution_dtos.py
+        symbol: ExecutionResponse
+  metadata:
+    created_at: 2026-05-08T10:28:39.910Z
+    updated_at: 2026-05-08T10:28:39.910Z
+    version: 1
+data-model.objectschema.workflow-api-dtos:
+  id: e322818e-5f44-4c52-b0cf-c93deebe361d
+  path: data-model.objectschema.workflow-api-dtos
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: Workflow API DTOs
+  description: "Pydantic request/response schemas for Workflow REST API:
+    CreateWorkflowRequest, WorkflowResponse, WorkflowStageResponse"
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/workflow_dtos.py
+        symbol: WorkflowResponse
+  metadata:
+    created_at: 2026-05-08T10:28:44.108Z
+    updated_at: 2026-05-08T10:28:44.108Z
+    version: 1
+data-model.objectschema.config-api-dtos:
+  id: f5b77c01-a0d1-4fc9-892b-a4ba3dc108c8
+  path: data-model.objectschema.config-api-dtos
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: Config API DTOs
+  description: "Pydantic request/response schemas for configuration management:
+    project config, agent config, pipeline config DTOs"
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/config_dtos.py
+        symbol: ProjectConfig
+  metadata:
+    created_at: 2026-05-08T10:28:44.391Z
+    updated_at: 2026-05-08T10:28:44.391Z
+    version: 1
+data-model.objectschema.discussion-events:
+  id: 5e26885d-4eb1-4317-92ab-a57ebf342958
+  path: data-model.objectschema.discussion-events
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: Discussion Events
+  description: "Domain events for conversational loop and comment handling:
+    CommentNeedsResponseEvent (work_item_id, project_id, comment: Comment,
+    context: CommentContext), CommentPostedEvent, AgentResponsePostedEvent
+    (comment_id, response_comment_id, agent_name, conversation_id),
+    ConversationalLoopStartedEvent (session_id, agent_assignment, column_name),
+    FeedbackListeningStartedEvent, FeedbackListeningStoppedEvent
+    (feedback_type). Used by ConversationalLoopOrchestrator."
+  attributes:
+    type: object
+    properties:
+      event_id:
+        type: string
+      occurred_at:
+        type: string
+        format: date-time
+      work_item_id:
+        type: string
+      project_id:
+        type: string
+      session_id:
+        type: string
+      agent_name:
+        type: string
+      conversation_id:
+        type: string
+      comment_id:
+        type: string
+      column_name:
+        type: string
+      feedback_type:
+        type: string
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/events/discussion_events.py
+        symbol: CommentNeedsResponseEvent
+  metadata:
+    created_at: 2026-05-08T12:16:20.623Z
+    updated_at: 2026-05-08T12:16:20.623Z
+    version: 1
+data-model.objectschema.execution-events:
+  id: 0417bb65-99d7-4257-bd5a-4805f3982e0b
+  path: data-model.objectschema.execution-events
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: Execution Events
+  description: "Domain events for agent execution lifecycle:
+    ExecutionTimedOutEvent (execution_id, work_item_id, timeout_seconds,
+    started_at). Emitted when an agent execution exceeds its configured timeout;
+    triggers recovery or failure handling in ExecutionService."
+  attributes:
+    type: object
+    properties:
+      event_id:
+        type: string
+      occurred_at:
+        type: string
+        format: date-time
+      execution_id:
+        type: string
+      work_item_id:
+        type: string
+      timeout_seconds:
+        type: integer
+      started_at:
+        type: string
+        format: date-time
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/events/execution_events.py
+        symbol: ExecutionTimedOutEvent
+  metadata:
+    created_at: 2026-05-08T12:16:23.050Z
+    updated_at: 2026-05-08T12:16:23.050Z
+    version: 1
+data-model.objectschema.lock-events:
+  id: 79f77434-4f56-43ac-9f71-1ef1e4d4e2a7
+  path: data-model.objectschema.lock-events
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: Lock Events
+  description: "Domain events for pipeline lock and queue management:
+    LockAcquiredEvent (project_id, board_id, work_item_id, acquisition_method),
+    LockReleasedEvent (reason, next_in_queue), StaleLockDetectedEvent
+    (lock_acquired_at), PipelineLockAcquiredEvent (queue_length_at_acquire),
+    PipelineLockReleasedEvent (next_work_item_id), LockStuckEvent (reason),
+    WorkItemQueuedEvent (queue_position). Emitted by IPipelineLockService to
+    coordinate single-pipeline execution."
+  attributes:
+    type: object
+    properties:
+      event_id:
+        type: string
+      occurred_at:
+        type: string
+        format: date-time
+      project_id:
+        type: string
+      board_id:
+        type: string
+      work_item_id:
+        type: string
+      acquisition_method:
+        type: string
+      reason:
+        type: string
+      next_in_queue:
+        type: string
+      queue_length_at_acquire:
+        type: integer
+      next_work_item_id:
+        type: string
+      queue_position:
+        type: integer
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/events/lock_events.py
+        symbol: LockAcquiredEvent
+  metadata:
+    created_at: 2026-05-08T12:16:53.246Z
+    updated_at: 2026-05-08T12:16:53.246Z
+    version: 1
+data-model.objectschema.project-events:
+  id: e2f2eba7-b315-4f33-b0da-b78e761d2884
+  path: data-model.objectschema.project-events
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: Project Events
+  description: "Domain events for project lifecycle and orchestration cycles:
+    ProjectClonedEvent (project_name, repo_url, workspace_path, branch),
+    ProjectCloneFailedEvent (error_message, will_retry), ProjectEnabledEvent,
+    ProjectDisabledEvent, OrchestrationCycleCompletedEvent (projects_processed,
+    boards_processed, total_actions, cycle_duration_ms). Emitted by
+    MultiProjectOrchestrator and project management services."
+  attributes:
+    type: object
+    properties:
+      event_id:
+        type: string
+      occurred_at:
+        type: string
+        format: date-time
+      project_name:
+        type: string
+      repo_url:
+        type: string
+      workspace_path:
+        type: string
+      branch:
+        type: string
+      error_message:
+        type: string
+      will_retry:
+        type: boolean
+      projects_processed:
+        type: integer
+      boards_processed:
+        type: integer
+      total_actions:
+        type: integer
+      cycle_duration_ms:
+        type: number
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/events/project_events.py
+        symbol: ProjectClonedEvent
+  metadata:
+    created_at: 2026-05-08T12:16:56.513Z
+    updated_at: 2026-05-08T12:16:56.513Z
+    version: 1
+data-model.objectschema.pr-review-cycle-events:
+  id: 6038cba5-153c-4bb9-9157-dc46bb33f12d
+  path: data-model.objectschema.pr-review-cycle-events
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: PR Review Cycle Events
+  description: "Domain events for PR automated review cycles:
+    PRReviewCycleStartedEvent (pr_id, work_item_id, cycle_number,
+    max_outer_cycles, verifier_context_sources, phases_planned,
+    workflow_run_id), PRReviewCyclePhaseStartedEvent,
+    PRReviewCycleCICheckCompletedEvent, PRReviewCycleApprovedEvent
+    (cycle_duration_seconds, next_column), PRReviewCycleIssuesFoundEvent
+    (total/critical/high/medium/low findings, sub_issue_count),
+    PRReviewCycleMaxCyclesReachedEvent, PRReviewCycleEscalatedEvent,
+    PRReviewCycleSubIssuesCreatedEvent,
+    PRReviewCycleConsolidationCompletedEvent. 13 event classes covering all PR
+    review lifecycle phases."
+  attributes:
+    type: object
+    properties:
+      event_id:
+        type: string
+      occurred_at:
+        type: string
+        format: date-time
+      pr_id:
+        type: string
+      work_item_id:
+        type: string
+      workflow_run_id:
+        type: string
+      cycle_number:
+        type: integer
+      max_outer_cycles:
+        type: integer
+      phases_planned:
+        type: array
+        items:
+          type: string
+      next_column:
+        type: string
+      total_findings:
+        type: integer
+      critical:
+        type: integer
+      high:
+        type: integer
+      medium:
+        type: integer
+      low:
+        type: integer
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/events/pr_review_cycle_events.py
+        symbol: PRReviewCycleStartedEvent
+  metadata:
+    created_at: 2026-05-08T12:17:35.889Z
+    updated_at: 2026-05-08T12:17:35.889Z
+    version: 1
+data-model.objectschema.queue-events:
+  id: e8ace91c-dced-4208-8935-47f3419a1e07
+  path: data-model.objectschema.queue-events
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: Queue Events
+  description: "Domain events for work item queue management: QueueItemAddedEvent
+    (queue_name, item_id, position, project_id), QueueItemRemovedEvent,
+    QueuePositionChangedEvent (old_position, new_position),
+    WorkItemDeadLetterQueuedEvent (work_item_id, board_id, from_column,
+    to_column, reason, failure_details). WorkItemDeadLetterQueuedEvent signals
+    unrecoverable failure routing to dead-letter queue."
+  attributes:
+    type: object
+    properties:
+      event_id:
+        type: string
+      occurred_at:
+        type: string
+        format: date-time
+      queue_name:
+        type: string
+      item_id:
+        type: string
+      position:
+        type: integer
+      project_id:
+        type: string
+      old_position:
+        type: integer
+      new_position:
+        type: integer
+      work_item_id:
+        type: string
+      board_id:
+        type: string
+      from_column:
+        type: string
+      to_column:
+        type: string
+      reason:
+        type: string
+      failure_details:
+        type: string
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/events/queue_events.py
+        symbol: QueueItemAddedEvent
+  metadata:
+    created_at: 2026-05-08T12:17:39.388Z
+    updated_at: 2026-05-08T12:17:39.388Z
+    version: 1
+data-model.objectschema.repair-cycle-events:
+  id: adfe3f9c-8fff-4ad9-9501-e2e830b787be
+  path: data-model.objectschema.repair-cycle-events
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: Repair Cycle Events
+  description: "Domain events for test-fix repair cycle orchestration (25 event
+    classes): RepairCycleStartedEvent (stage_name, test_types, workflow_run_id),
+    RepairCycleTestExecutionStartedEvent (test_type, test_cycle_iteration,
+    max_test_cycle_iterations, timeout), RepairCycleTestExecutionCompletedEvent
+    (passed/failed/warnings, has_failures, agent_name),
+    RepairCycleFileFixStartedEvent/CompletedEvent,
+    RepairCycleWarningReviewStartedEvent/CompletedEvent,
+    RepairCycleTestCycleCompletedEvent (files_fixed, warnings_reviewed,
+    duration_seconds), RepairCycleFastFailEvent, RepairCycleCompletedEvent
+    (overall_success, test_results, total_agent_calls),
+    SystemicAnalysisStartedEvent/CompletedEvent (classification, confidence,
+    reasoning, recommended_action), SystemicFixStartedEvent/CompletedEvent,
+    EnvironmentRebuildStartedEvent/CompletedEvent/ExhaustedEvent,
+    EnvironmentVerificationStartedEvent/CompletedEvent."
+  attributes:
+    type: object
+    properties:
+      event_id:
+        type: string
+      occurred_at:
+        type: string
+        format: date-time
+      workflow_run_id:
+        type: string
+      stage_name:
+        type: string
+      test_type:
+        type: string
+      test_cycle_iteration:
+        type: integer
+      passed:
+        type: integer
+      failed:
+        type: integer
+      warnings:
+        type: integer
+      has_failures:
+        type: boolean
+      overall_success:
+        type: boolean
+      total_agent_calls:
+        type: integer
+      duration_seconds:
+        type: number
+      classification:
+        type: string
+      confidence:
+        type: number
+      reasoning:
+        type: string
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/events/repair_cycle_events.py
+        symbol: RepairCycleStartedEvent
+  metadata:
+    created_at: 2026-05-08T12:17:48.325Z
+    updated_at: 2026-05-08T12:17:48.325Z
+    version: 1
+data-model.objectschema.repository-events:
+  id: c54fbf9d-554a-4505-a0df-9d5166981ac3
+  path: data-model.objectschema.repository-events
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: Repository Events
+  description: "Domain events for version control operations: FilesStagedEvent
+    (repository_id, file_paths, project_id), CommitCreatedEvent (repository_id,
+    commit_sha, message, author, changed_files, project_id), BranchCreatedEvent
+    (repository_id, branch_name, base_commit, project_id), BranchPushedEvent
+    (repository_id, branch_name, project_id). Emitted by IVersionControlService
+    implementations; orchestrator performs all git operations on behalf of
+    agents."
+  attributes:
+    type: object
+    properties:
+      event_id:
+        type: string
+      occurred_at:
+        type: string
+        format: date-time
+      repository_id:
+        type: string
+      project_id:
+        type: string
+      file_paths:
+        type: array
+        items:
+          type: string
+      commit_sha:
+        type: string
+      message:
+        type: string
+      author:
+        type: string
+      changed_files:
+        type: array
+        items:
+          type: string
+      branch_name:
+        type: string
+      base_commit:
+        type: string
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/events/repository_events.py
+        symbol: CommitCreatedEvent
+  metadata:
+    created_at: 2026-05-08T12:17:51.958Z
+    updated_at: 2026-05-08T12:17:51.958Z
+    version: 1
+data-model.objectschema.storage-events:
+  id: c5d668a8-49e1-4b8b-926e-aba1ad9fd09b
+  path: data-model.objectschema.storage-events
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: Storage Events
+  description: "Domain events for artifact storage operations:
+    ArtifactUploadedEvent (key, size_bytes, content_type, project_id),
+    ArtifactDeletedEvent (key, project_id). Emitted by IStorage implementations
+    (e.g., S3StorageAdapter) when agent output artifacts are persisted or
+    removed from object storage."
+  attributes:
+    type: object
+    properties:
+      event_id:
+        type: string
+      occurred_at:
+        type: string
+        format: date-time
+      key:
+        type: string
+      size_bytes:
+        type: integer
+      content_type:
+        type: string
+      project_id:
+        type: string
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/events/storage_events.py
+        symbol: ArtifactUploadedEvent
+  metadata:
+    created_at: 2026-05-08T12:18:11.669Z
+    updated_at: 2026-05-08T12:18:11.669Z
+    version: 1
+data-model.objectschema.work-item-events:
+  id: 8e8dc453-2981-4f4e-bcb8-2500e0c15c09
+  path: data-model.objectschema.work-item-events
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: Work Item Events
+  description: "Domain events for work item lifecycle: WorkItemCreatedEvent
+    (work_item_id, project_id, title, initial_column, parent_issue_id),
+    WorkItemUpdatedEvent (work_item_id, project_id, changes). Core events that
+    drive board reconciliation and workflow triggering;
+    WorkItemColumnChangedEvent (in board_events.py) is the primary event driving
+    pipeline activation."
+  attributes:
+    type: object
+    properties:
+      event_id:
+        type: string
+      occurred_at:
+        type: string
+        format: date-time
+      work_item_id:
+        type: string
+      project_id:
+        type: string
+      title:
+        type: string
+      initial_column:
+        type: string
+      parent_issue_id:
+        type: string
+      changes:
+        type: object
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/events/work_item_events.py
+        symbol: WorkItemCreatedEvent
+  metadata:
+    created_at: 2026-05-08T12:18:14.375Z
+    updated_at: 2026-05-08T12:18:14.375Z
+    version: 1
+data-model.objectschema.container-config:
+  id: 3f9545a7-d616-4917-b70b-013664f9d121
+  path: data-model.objectschema.container-config
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: ContainerConfig
+  description: "Value object for Docker container configuration: image (Docker
+    image reference), name, command, entrypoint, working_dir, user (UID),
+    environment (env vars map), volumes (host:container mount map), network,
+    auto_remove (cleanup on exit), detached (run in background), stdin_open.
+    Used by IContainer implementations when launching agent execution
+    containers."
+  attributes:
+    type: object
+    properties:
+      image:
+        type: string
+      name:
+        type: string
+      command:
+        type: array
+        items:
+          type: string
+      working_dir:
+        type: string
+      user:
+        type: string
+      environment:
+        type: object
+      volumes:
+        type: object
+      network:
+        type: string
+      auto_remove:
+        type: boolean
+      detached:
+        type: boolean
+      stdin_open:
+        type: boolean
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/value_objects.py
+        symbol: ContainerConfig
+  metadata:
+    created_at: 2026-05-08T12:19:19.724Z
+    updated_at: 2026-05-08T12:19:19.724Z
+    version: 1
+data-model.objectschema.execution-context:
+  id: 6990fbad-a2a1-49a6-9d2f-f26d4e4e0277
+  path: data-model.objectschema.execution-context
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: ExecutionContext
+  description: "Value object carrying agent execution context into a pipeline
+    stage: work_item_id, workflow_id, stage_name, agent_id, model (LLM model
+    name), timeout_seconds, workspace_type (WorkspaceType enum), branch_name,
+    discussion_id (for conversational loops), project_id, repository_url,
+    tech_stack list. Passed from WorkflowOrchestrator to agent executor."
+  attributes:
+    type: object
+    properties:
+      work_item_id:
+        type: string
+      workflow_id:
+        type: string
+      stage_name:
+        type: string
+      agent_id:
+        type: string
+      model:
+        type: string
+      timeout_seconds:
+        type: integer
+      workspace_type:
+        type: string
+      branch_name:
+        type: string
+      discussion_id:
+        type: string
+      project_id:
+        type: string
+      repository_url:
+        type: string
+      tech_stack:
+        type: array
+        items:
+          type: string
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/value_objects.py
+        symbol: ExecutionContext
+  metadata:
+    created_at: 2026-05-08T12:19:21.930Z
+    updated_at: 2026-05-08T12:19:21.930Z
+    version: 1
+data-model.objectschema.execution-result:
+  id: 4a68c06c-50b4-4c20-a6bf-7fbc903a8136
+  path: data-model.objectschema.execution-result
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: ExecutionResult
+  description: "Value object for agent execution output: success (bool),
+    exit_code, output (stdout), error_message (stderr or exception),
+    input_tokens, output_tokens, duration_seconds, timestamp, modified_files,
+    added_files, deleted_files (git-tracked changes), session_id (Claude
+    conversation session). Returned by ILLMProvider and stored on
+    AgentExecution."
+  attributes:
+    type: object
+    properties:
+      success:
+        type: boolean
+      exit_code:
+        type: integer
+      output:
+        type: string
+      error_message:
+        type: string
+      input_tokens:
+        type: integer
+      output_tokens:
+        type: integer
+      duration_seconds:
+        type: number
+      timestamp:
+        type: string
+        format: date-time
+      modified_files:
+        type: array
+        items:
+          type: string
+      added_files:
+        type: array
+        items:
+          type: string
+      deleted_files:
+        type: array
+        items:
+          type: string
+      session_id:
+        type: string
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/value_objects.py
+        symbol: ExecutionResult
+  metadata:
+    created_at: 2026-05-08T12:19:28.588Z
+    updated_at: 2026-05-08T12:19:28.588Z
+    version: 1
+data-model.objectschema.token-usage:
+  id: 47ea2ac9-c7b8-467b-a48f-d44dc2f2a3db
+  path: data-model.objectschema.token-usage
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: TokenUsage
+  description: "Value object for LLM token consumption tracking: input_tokens
+    (prompt tokens), output_tokens (completion tokens). Embedded in
+    ExecutionResult; aggregated by metrics infrastructure for cost monitoring
+    and rate limit management per agent execution."
+  attributes:
+    type: object
+    properties:
+      input_tokens:
+        type: integer
+      output_tokens:
+        type: integer
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/value_objects.py
+        symbol: TokenUsage
+  metadata:
+    created_at: 2026-05-08T12:19:30.271Z
+    updated_at: 2026-05-08T12:19:30.271Z
+    version: 1
+data-model.objectschema.repair-cycle-checkpoint:
+  id: f8054a9d-01ad-43e1-8fa7-fec6f25868df
+  path: data-model.objectschema.repair-cycle-checkpoint
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: RepairCycleCheckpoint
+  description: "Value object for repair cycle resumption checkpoint:
+    workflow_run_id, test_type, iteration, total_agent_calls, files_fixed,
+    warnings_reviewed, elapsed_seconds, test_results (list of RepairTestResult),
+    timestamp, expires_at. Persisted to checkpoint store (Redis) at configurable
+    intervals; enables repair cycle recovery after container or process
+    failure."
+  attributes:
+    type: object
+    properties:
+      workflow_run_id:
+        type: string
+      test_type:
+        type: string
+      iteration:
+        type: integer
+      total_agent_calls:
+        type: integer
+      files_fixed:
+        type: integer
+      warnings_reviewed:
+        type: integer
+      elapsed_seconds:
+        type: number
+      test_results:
+        type: array
+        items:
+          type: object
+      timestamp:
+        type: string
+        format: date-time
+      expires_at:
+        type: string
+        format: date-time
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/repair_cycle_types.py
+        symbol: RepairCycleCheckpoint
+  metadata:
+    created_at: 2026-05-08T12:19:37.005Z
+    updated_at: 2026-05-08T12:19:37.005Z
+    version: 1
+data-model.objectschema.prreview-cycle-result:
+  id: 2db0b096-42bf-409d-a0ee-0b1cf5989336
+  path: data-model.objectschema.prreview-cycle-result
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: PRReviewCycleResult
+  description: "Value object for completed PR review cycle outcome: cycle_number,
+    workflow_run_id, outcome (PRReviewOutcome:
+    ISSUES_FOUND/APPROVED/MAX_CYCLES_REACHED), phase_outputs, all_findings (list
+    of PRReviewFinding), sub_issues_created (count), ci_passed (bool),
+    total_findings, critical_count, high_count, medium_count, low_count.
+    Returned by PR review cycle service after all phases complete."
+  attributes:
+    type: object
+    properties:
+      cycle_number:
+        type: integer
+      workflow_run_id:
+        type: string
+      outcome:
+        type: string
+      phase_outputs:
+        type: array
+        items:
+          type: object
+      all_findings:
+        type: array
+        items:
+          type: object
+      sub_issues_created:
+        type: integer
+      ci_passed:
+        type: boolean
+      total_findings:
+        type: integer
+      critical_count:
+        type: integer
+      high_count:
+        type: integer
+      medium_count:
+        type: integer
+      low_count:
+        type: integer
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/pr_review_cycle_types.py
+        symbol: PRReviewCycleResult
+  metadata:
+    created_at: 2026-05-08T12:20:15.035Z
+    updated_at: 2026-05-08T12:20:15.035Z
+    version: 1
+data-model.objectschema.board-events:
+  id: 9f5b59de-38c8-49fe-ad8c-be5f706ef85f
+  path: data-model.objectschema.board-events
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: Board Events
+  description: "Domain events for board and work item column transitions:
+    WorkItemColumnChangedEvent (work_item_id, project_id, board_id, from_column,
+    to_column, moved_by), WorkItemPositionChangedEvent (column_name,
+    old_position, new_position), BoardReconciledEvent (columns_added,
+    columns_removed, items_moved), ColumnSLAExceededEvent (column_name,
+    elapsed_seconds, sla_threshold_seconds, entered_at). All extend
+    BaseDomainEvent with event_id and occurred_at."
+  attributes:
+    type: object
+    properties:
+      event_id:
+        type: string
+      occurred_at:
+        type: string
+        format: date-time
+      project_id:
+        type: string
+      board_id:
+        type: string
+      work_item_id:
+        type: string
+      from_column:
+        type: string
+      to_column:
+        type: string
+      moved_by:
+        type: string
+      column_name:
+        type: string
+      elapsed_seconds:
+        type: number
+      sla_threshold_seconds:
+        type: number
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/events/board_events.py
+        symbol: WorkItemColumnChangedEvent
+  metadata:
+    created_at: 2026-05-08T12:15:58.315Z
+    updated_at: 2026-05-08T12:15:58.315Z
+    version: 1
+data-model.objectschema.branch-events:
+  id: 97266f06-bf97-403c-bc2a-2ff51b197452
+  path: data-model.objectschema.branch-events
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: Branch Events
+  description: "Domain events for branch resolution lifecycle: BranchResolvedEvent
+    (project_id, issue_id, action, branch_name, confidence, reason,
+    parent_issue_id, resolution_strategy), BranchReusedEvent (same fields for
+    branch reuse decisions), BranchResolutionCreatedEvent (branch creation
+    confirmation). All frozen dataclasses extending BaseDomainEvent."
+  attributes:
+    type: object
+    properties:
+      event_id:
+        type: string
+      occurred_at:
+        type: string
+        format: date-time
+      project_id:
+        type: string
+      issue_id:
+        type: string
+      action:
+        type: string
+      branch_name:
+        type: string
+      confidence:
+        type: number
+      reason:
+        type: string
+      parent_issue_id:
+        type: string
+      resolution_strategy:
+        type: string
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/events/branch_events.py
+        symbol: BranchResolvedEvent
+  metadata:
+    created_at: 2026-05-08T12:16:03.362Z
+    updated_at: 2026-05-08T12:16:03.362Z
+    version: 1
+data-model.objectschema.ci-pipeline-events:
+  id: 3195df1d-285d-4f2e-b4cf-a44d58569e92
+  path: data-model.objectschema.ci-pipeline-events
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: CI Pipeline Events
+  description: "Domain events for CI/CD pipeline runs:
+    CIPipelineStatusCheckedEvent (pr_id, project_id, status, check_count,
+    passed_count, failed_count, pending_count), CIRunStartedEvent
+    (workflow_run_id, working_directory, timeout_seconds, checks_planned),
+    CIRunCompletedEvent (workflow_run_id, passed_count, failure_count,
+    warning_count, output). Emitted by CIRunnerAdapter on GitHub Actions
+    workflow runs."
+  attributes:
+    type: object
+    properties:
+      event_id:
+        type: string
+      occurred_at:
+        type: string
+        format: date-time
+      project_id:
+        type: string
+      pr_id:
+        type: string
+      workflow_run_id:
+        type: string
+      status:
+        type: string
+      check_count:
+        type: integer
+      passed_count:
+        type: integer
+      failed_count:
+        type: integer
+      pending_count:
+        type: integer
+      output:
+        type: string
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/events/ci_pipeline_events.py
+        symbol: CIPipelineStatusCheckedEvent
+  metadata:
+    created_at: 2026-05-08T12:16:06.945Z
+    updated_at: 2026-05-08T12:16:06.945Z
+    version: 1
+data-model.objectschema.container-events:
+  id: 94101c88-8486-42c7-9ab6-fda900b8e0ca
+  path: data-model.objectschema.container-events
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: Container Events
+  description: "Domain events for container execution lifecycle:
+    ContainerExecutionCompletedEvent (container_id, command, exit_code,
+    output_files, project_id). Emitted when agent container finishes execution;
+    output_files lists paths written during the run."
+  attributes:
+    type: object
+    properties:
+      event_id:
+        type: string
+      occurred_at:
+        type: string
+        format: date-time
+      container_id:
+        type: string
+      project_id:
+        type: string
+      command:
+        type: string
+      exit_code:
+        type: integer
+      output_files:
+        type: array
+        items:
+          type: string
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/events/container_events.py
+        symbol: ContainerExecutionCompletedEvent
+  metadata:
+    created_at: 2026-05-08T12:16:11.178Z
+    updated_at: 2026-05-08T12:16:11.178Z
+    version: 1
+data-model.objectschema.container-recovery-events:
+  id: 838bafd8-8bef-4a15-a012-02cecd8337bf
+  path: data-model.objectschema.container-recovery-events
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: Container Recovery Events
+  description: "Domain events for container failure recovery:
+    ContainerRecoveredEvent (container_id, container_name, project_id, agent_id,
+    work_item_id, execution_id, uptime_seconds, recovery_action),
+    ContainerKilledEvent (kill_reason, execution_marked_failed),
+    ContainerRecoveryCompletedEvent (containers_recovered, containers_killed,
+    errors_encountered, repair_cycles_processed, duration_seconds). Emitted by
+    ContainerRecoveryService."
+  attributes:
+    type: object
+    properties:
+      event_id:
+        type: string
+      occurred_at:
+        type: string
+        format: date-time
+      container_id:
+        type: string
+      container_name:
+        type: string
+      project_id:
+        type: string
+      agent_id:
+        type: string
+      work_item_id:
+        type: string
+      execution_id:
+        type: string
+      uptime_seconds:
+        type: number
+      recovery_action:
+        type: string
+      kill_reason:
+        type: string
+      execution_marked_failed:
+        type: boolean
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/events/container_recovery_events.py
+        symbol: ContainerRecoveredEvent
+  metadata:
+    created_at: 2026-05-08T12:16:14.477Z
+    updated_at: 2026-05-08T12:16:14.477Z
+    version: 1
+data-model.objectschema.review-cycle-events:
+  id: ee0628c3-895d-457e-8c1b-56bbccdfaa21
+  path: data-model.objectschema.review-cycle-events
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: Review Cycle Events
+  description: "Domain events for maker-checker review cycle lifecycle:
+    ReviewCycleStartedEvent (review_cycle_id, work_item_id, project_id,
+    maker_agent, reviewer_agent, max_iterations),
+    ReviewCycleIterationCompletedEvent (iteration, status, blocking_count),
+    ReviewCycleMakerRevisionEvent, ReviewCycleEscalatedToHumanEvent
+    (blocking_count, escalation_reason), ReviewCycleHumanFeedbackReceivedEvent
+    (feedback), ReviewCycleMaxIterationsReachedEvent, ReviewCycleApprovedEvent
+    (total_iterations). 7 event classes; emitted by ReviewService."
+  attributes:
+    type: object
+    properties:
+      event_id:
+        type: string
+      occurred_at:
+        type: string
+        format: date-time
+      review_cycle_id:
+        type: string
+      work_item_id:
+        type: string
+      project_id:
+        type: string
+      maker_agent:
+        type: string
+      reviewer_agent:
+        type: string
+      max_iterations:
+        type: integer
+      iteration:
+        type: integer
+      status:
+        type: string
+      blocking_count:
+        type: integer
+      escalation_reason:
+        type: string
+      feedback:
+        type: string
+      total_iterations:
+        type: integer
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/events/review_cycle_events.py
+        symbol: ReviewCycleStartedEvent
+  metadata:
+    created_at: 2026-05-08T12:17:58.611Z
+    updated_at: 2026-05-08T12:17:58.611Z
+    version: 1
+data-model.objectschema.review-events:
+  id: a20bf814-9aaa-4bfb-8d6f-19c1775f0c2a
+  path: data-model.objectschema.review-events
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: Review Events
+  description: "Domain events for code review status updates:
+    ReviewStatusChangedEvent (review_id, work_item_id, project_id,
+    previous_status, new_status, reviewer), ReviewCommentAddedEvent (review_id,
+    work_item_id, project_id, comment). Emitted by ICodeReviewService when
+    GitHub PR review state changes; drives column transitions in board
+    automation."
+  attributes:
+    type: object
+    properties:
+      event_id:
+        type: string
+      occurred_at:
+        type: string
+        format: date-time
+      review_id:
+        type: string
+      work_item_id:
+        type: string
+      project_id:
+        type: string
+      previous_status:
+        type: string
+      new_status:
+        type: string
+      reviewer:
+        type: string
+      comment:
+        type: string
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/events/review_events.py
+        symbol: ReviewStatusChangedEvent
+  metadata:
+    created_at: 2026-05-08T12:18:01.315Z
+    updated_at: 2026-05-08T12:18:01.315Z
+    version: 1

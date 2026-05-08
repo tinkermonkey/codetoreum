@@ -1,0 +1,35 @@
+testing.coveragerequirement.domain-layer-100-coverage:
+  id: 0b79d5d5-9b82-47df-aa11-0b89006ce6ab
+  path: testing.coveragerequirement.domain-layer-100-coverage
+  spec_node_id: testing.coveragerequirement
+  type: coveragerequirement
+  layer_id: testing
+  name: Domain Layer 100% Coverage
+  description: All domain model classes (95+), domain events (165 classes), and
+    domain services must achieve 100% code coverage; no external dependencies
+    allowed in domain layer
+  attributes:
+    coverageCriteria: all-partitions
+    priority: critical
+  metadata:
+    created_at: 2026-05-08T12:16:33.369Z
+    updated_at: 2026-05-08T12:16:33.369Z
+    version: 1
+testing.coveragerequirement.application-service-90-coverage:
+  id: bbbf489c-842e-45bc-aea3-09d648d8a1cb
+  path: testing.coveragerequirement.application-service-90-coverage
+  spec_node_id: testing.coveragerequirement
+  type: coveragerequirement
+  layer_id: testing
+  name: Application Service 90% Coverage
+  description: All 23 application services and event handlers must achieve 90%
+    code coverage using mock adapters in simulation mode; covers
+    WorkflowOrchestrator, AgentScheduler, ExecutionService, ReviewService and
+    related services
+  attributes:
+    coverageCriteria: all-partitions
+    priority: high
+  metadata:
+    created_at: 2026-05-08T12:16:33.835Z
+    updated_at: 2026-05-08T12:16:33.835Z
+    version: 1

@@ -135,36 +135,66 @@ src/codetoreum/adapters/primary/input_port_adapters/mock/
 │   (WorkflowOrchestrator, etc.)  │
 └────────────┬────────────────────┘
              │
-             ├─── ITicketSystem ──────────── InMemoryTicketAdapter
-             │
-             ├─── ILLMProvider ──────────── MockLLMAdapter
-             │
-             ├─── IContainer ────────────── FakeContainerAdapter
-             │
-             ├─── IRepository ───────────── InMemoryRepositoryAdapter
-             │
-             ├─── IEventStore ───────────── InMemoryEventStore
-             │
-             ├─── IBoardService ─────────── MockBoardAdapter
-             │
-             ├─── IRepairCycle ──────────── MockRepairCycleAdapter
-             │
-             ├─── ... (30 more adapters)
-             │
-             └─── IAgentExecutor ────────── ExecutionServiceAgentExecutor
+             ├─── ITicketSystem ──────────────── InMemoryTicketAdapter
+             ├─── ILLMProvider ──────────────── MockLLMAdapter
+             ├─── IContainer ────────────────── FakeContainerAdapter
+             ├─── IRepository ───────────────── InMemoryRepositoryAdapter
+             ├─── IEventStore ───────────────── InMemoryEventStore
+             ├─── IMetrics ──────────────────── InMemoryMetricsAdapter
+             ├─── IStorage ──────────────────── InMemoryStorageAdapter
+             ├─── IConfigStore ──────────────── InMemoryConfigStore
+             ├─── INotifier ─────────────────── MockNotifierAdapter
+             ├─── IEncryptionService ────────── SimpleEncryptionAdapter
+             ├─── IBoardService ─────────────── MockBoardAdapter
+             ├─── IRepairCycle ──────────────── MockRepairCycleAdapter
+             ├─── IProjectManagerService ────── MockProjectManagerAdapter
+             ├─── IPipelineLockService ──────── InMemoryLockService
+             ├─── IWorkflowConfigService ────── InMemoryWorkflowConfigService
+             ├─── IPipelineQueueService ─────── InMemoryQueueService
+             ├─── IEventEmitter ─────────────── CapturingMockEventEmitter
+             ├─── IAuditStore ───────────────── InMemoryAuditStore
+             ├─── IVersionControlService ────── InMemoryVersionControlService
+             ├─── IMessageBroker ────────────── InMemoryMessageBroker
+             ├─── IDiscussionAdapter ────────── MockDiscussionAdapter
+             ├─── IReviewCycle ──────────────── MockReviewCycleAdapter
+             ├─── IPRReviewCycle ────────────── MockPRReviewCycleAdapter
+             ├─── ICodeReviewService ────────── InMemoryCodeReviewAdapter
+             ├─── IIdentityService ──────────── ConfigurableIdentityService
+             ├─── IRepairCycleCheckpointStore ─ InMemoryCheckpointStore
+             ├─── ICIPipelineService ────────── MockCIPipelineAdapter
+             ├─── IAgentRepository ──────────── InMemoryAgentRepository
+             ├─── IActiveWorkflowRunRegistry ── InMemoryActiveWorkflowRunRegistry
+             ├─── IWorkItemBranchTracker ────── InMemoryWorkItemBranchTracker
+             ├─── IWorkItemService ──────────── MockWorkItemService
+             ├─── IAgentContainerRecoveryService MockContainerRecoveryAdapter
+             ├─── ISystemicAnalysisService ──── MockSystemicAnalysisAdapter
+             ├─── IEnvironmentRepairService ─── MockEnvironmentRepairAdapter
+             ├─── IBranchResolutionService ──── MockBranchResolutionAdapter
+             └─── IAgentExecutor ────────────── ExecutionServiceAgentExecutor
 
 ┌──────────────────────────────────┐
 │   HTTP Input Ports               │
 │   (FastAPI Routes)               │
 └────────────┬─────────────────────┘
              │
-             ├─── IWorkflowCommandPort ──── MockWorkflowCommandAdapter
-             │
-             ├─── IWorkItemQueryPort ────── MockWorkItemQueryAdapter
-             │
-             ├─── IExecutionCommandPort ─── MockExecutionCommandAdapter
-             │
-             └─── ... (15 more input adapters)
+             ├─── IOrchestrationCommandPort ──── MockOrchestrationCommandAdapter
+             ├─── IWorkflowCommandPort ──────── MockWorkflowCommandAdapter
+             ├─── IWorkflowDefinitionCommandPort MockWorkflowDefinitionCommandAdapter
+             ├─── IWorkflowQueryPort ────────── MockWorkflowQueryAdapter
+             ├─── IWorkflowRunQueryPort ─────── MockWorkflowRunQueryAdapter
+             ├─── IWorkItemCommandPort ──────── MockWorkItemCommandAdapter
+             ├─── IWorkItemQueryPort ────────── MockWorkItemQueryAdapter
+             ├─── IExecutionCommandPort ─────── MockExecutionCommandAdapter
+             ├─── IExecutionQueryPort ───────── MockExecutionQueryAdapter
+             ├─── IAgentCommandPort ─────────── MockAgentCommandAdapter
+             ├─── IAgentQueryPort ───────────── MockAgentQueryAdapter
+             ├─── IConfigurationCommandPort ─── MockConfigCommandAdapter
+             ├─── IConfigurationQueryPort ───── MockConfigQueryAdapter
+             ├─── ITaskQueryPort ────────────── MockTaskQueryAdapter
+             ├─── IMetricsQueryPort ─────────── MockMetricsQueryAdapter
+             ├─── IWorkspaceQueryPort ───────── MockWorkspaceQueryAdapter
+             ├─── IAuditQueryPort ───────────── MockAuditQueryAdapter
+             └─── ConfigurationService ──────── MockConfigServiceAdapter
 ```
 
 ## Integration Pattern
@@ -176,10 +206,12 @@ All adapters follow the same integration pattern:
 class InMemoryTicketAdapter(ITicketSystem):
     pass
 
-# 2. Bootstrap wires adapter to application service
+# 2. Bootstrap wires adapter to application service (34 adapters total)
 adapters = SimulationAdapters(
     ticket_system=InMemoryTicketAdapter(),
-    # ... more adapters
+    llm_provider=MockLLMAdapter(),
+    container=FakeContainerAdapter(),
+    # ... all 34 output port adapters
 )
 
 # 3. Application services use adapters via port interfaces

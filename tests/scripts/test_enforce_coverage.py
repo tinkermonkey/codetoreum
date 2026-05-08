@@ -526,21 +526,11 @@ class TestRegressionDetection:
             # Create baseline with lower coverage
             baseline_data = {
                 "files": {
-                    "src/codetoreum/domain/models.py": {
-                        "summary": {"num_statements": 100, "covered_lines": 100}
-                    },
-                    "src/codetoreum/domain/events.py": {
-                        "summary": {"num_statements": 50, "covered_lines": 40}
-                    },
-                    "src/codetoreum/application/services.py": {
-                        "summary": {"num_statements": 100, "covered_lines": 70}
-                    },
-                    "src/codetoreum/application/handlers.py": {
-                        "summary": {"num_statements": 50, "covered_lines": 30}
-                    },
-                    "src/codetoreum/adapters/testing.py": {
-                        "summary": {"num_statements": 200, "covered_lines": 100}
-                    },
+                    "src/codetoreum/domain/models.py": {"summary": {"num_statements": 100, "covered_lines": 100}},
+                    "src/codetoreum/domain/events.py": {"summary": {"num_statements": 50, "covered_lines": 40}},
+                    "src/codetoreum/application/services.py": {"summary": {"num_statements": 100, "covered_lines": 70}},
+                    "src/codetoreum/application/handlers.py": {"summary": {"num_statements": 50, "covered_lines": 30}},
+                    "src/codetoreum/adapters/testing.py": {"summary": {"num_statements": 200, "covered_lines": 100}},
                 },
                 "totals": {"num_statements": 500, "covered_lines": 340},
             }
@@ -550,16 +540,12 @@ class TestRegressionDetection:
                 json.dump(baseline_data, f)
 
             # Run enforcement in regression detection mode (strict_mode=False)
-            result = enforce_coverage(
-                current_path, tests_failed=False, strict_mode=False, baseline_path=baseline_path
-            )
+            result = enforce_coverage(current_path, tests_failed=False, strict_mode=False, baseline_path=baseline_path)
 
             # Should pass because coverage improved
             assert result == 0
 
-    def test_enforce_coverage_regression_detected(
-        self, low_overall_coverage_data: dict
-    ) -> None:
+    def test_enforce_coverage_regression_detected(self, low_overall_coverage_data: dict) -> None:
         """Test enforce_coverage detects regression from baseline."""
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create current coverage (lower than baseline)
@@ -570,15 +556,11 @@ class TestRegressionDetection:
             # Create baseline with higher coverage
             baseline_data = {
                 "files": {
-                    "src/codetoreum/domain/models.py": {
-                        "summary": {"num_statements": 100, "covered_lines": 100}
-                    },
+                    "src/codetoreum/domain/models.py": {"summary": {"num_statements": 100, "covered_lines": 100}},
                     "src/codetoreum/application/services.py": {
                         "summary": {"num_statements": 100, "covered_lines": 100}
                     },
-                    "src/codetoreum/adapters/uncovered.py": {
-                        "summary": {"num_statements": 500, "covered_lines": 100}
-                    },
+                    "src/codetoreum/adapters/uncovered.py": {"summary": {"num_statements": 500, "covered_lines": 100}},
                 },
                 "totals": {"num_statements": 700, "covered_lines": 300},
             }
@@ -588,9 +570,7 @@ class TestRegressionDetection:
                 json.dump(baseline_data, f)
 
             # Run enforcement - should detect regression
-            result = enforce_coverage(
-                current_path, tests_failed=False, strict_mode=False, baseline_path=baseline_path
-            )
+            result = enforce_coverage(current_path, tests_failed=False, strict_mode=False, baseline_path=baseline_path)
 
             # Should fail because overall coverage regressed
             assert result == 1
@@ -603,15 +583,11 @@ class TestRegressionDetection:
                 json.dump(sample_coverage_data, f)
 
             # Run in strict mode - should pass as sample data meets thresholds
-            result = enforce_coverage(
-                coverage_path, tests_failed=False, strict_mode=True
-            )
+            result = enforce_coverage(coverage_path, tests_failed=False, strict_mode=True)
 
             assert result == 0
 
-    def test_enforce_coverage_strict_mode_fails_below_threshold(
-        self, low_domain_coverage_data: dict
-    ) -> None:
+    def test_enforce_coverage_strict_mode_fails_below_threshold(self, low_domain_coverage_data: dict) -> None:
         """Test enforce_coverage in strict mode fails below threshold."""
         with tempfile.TemporaryDirectory() as tmpdir:
             coverage_path = str(Path(tmpdir) / "coverage.json")
@@ -619,8 +595,6 @@ class TestRegressionDetection:
                 json.dump(low_domain_coverage_data, f)
 
             # Run in strict mode - should fail as domain is below 100%
-            result = enforce_coverage(
-                coverage_path, tests_failed=False, strict_mode=True
-            )
+            result = enforce_coverage(coverage_path, tests_failed=False, strict_mode=True)
 
             assert result == 1

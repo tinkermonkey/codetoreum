@@ -1,0 +1,85 @@
+data-store.namespace.redis-events-key-namespace:
+  id: 0380b61a-2bcf-4ca7-b351-b2774db2573f
+  path: data-store.namespace.redis-events-key-namespace
+  spec_node_id: data-store.namespace
+  type: namespace
+  layer_id: data-store
+  name: "Redis events: Key Namespace"
+  description: Redis key namespace prefix 'events:' for domain event streams.
+    Contains events:buffer (main event buffer stream), events:dead-letter
+    (failed event stream), and events:{EventType} per-event-type streams (e.g.,
+    events:WorkItemCreated). Managed by RedisEventBuffer and EventBus.
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/infrastructure/redis_event_buffer.py
+        symbol: RedisEventBuffer
+  metadata:
+    created_at: 2026-05-08T12:19:23.474Z
+    updated_at: 2026-05-08T12:19:23.474Z
+    version: 1
+data-store.namespace.redis-config-key-namespace:
+  id: 287beda3-249a-4d47-a6c0-a37a77579723
+  path: data-store.namespace.redis-config-key-namespace
+  spec_node_id: data-store.namespace
+  type: namespace
+  layer_id: data-store
+  name: "Redis config: Key Namespace"
+  description: "Redis key namespace prefix 'config:' for configuration cache
+    entries. Key pattern: config:{project|agent|pipeline|workflow}:{id}. TTL:
+    3600s. Managed by RedisConfigCache with pub/sub invalidation channel."
+  attributes:
+    owner: RedisConfigCache
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/infrastructure/redis_config_cache.py
+        symbol: RedisConfigCache
+  metadata:
+    created_at: 2026-05-08T12:19:27.779Z
+    updated_at: 2026-05-08T12:19:27.779Z
+    version: 1
+data-store.namespace.redis-locks-key-namespace:
+  id: eb4f2b50-184c-417f-8019-9425c1fdb33a
+  path: data-store.namespace.redis-locks-key-namespace
+  spec_node_id: data-store.namespace
+  type: namespace
+  layer_id: data-store
+  name: Redis Locks Key Namespace
+  description: "Redis key namespace for pipeline lock state. Key pattern:
+    {project_id}:{board_id} for active locks. Used by IQueuedPipelineLockService
+    to coordinate single-pipeline-execution-at-a-time semantics across the
+    AgentScheduler and WorkflowOrchestrator."
+  attributes:
+    owner: IQueuedPipelineLockService
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/secondary/in_memory_pipeline_lock_service.py
+        symbol: InMemoryPipelineLockService
+  metadata:
+    created_at: 2026-05-08T12:19:32.873Z
+    updated_at: 2026-05-08T12:19:32.873Z
+    version: 1
+data-store.namespace.redis-rate-limit-key-namespace:
+  id: e81d01fe-755a-4ba7-8149-61e64d21ec47
+  path: data-store.namespace.redis-rate-limit-key-namespace
+  spec_node_id: data-store.namespace
+  type: namespace
+  layer_id: data-store
+  name: Redis Rate Limit Key Namespace
+  description: "Redis key namespace for HTTP rate limiter sliding window state.
+    Tracks request counts per IP and per API key within configurable time
+    windows (default: 100 req/min). Used by FastAPI middleware and WebSocket
+    adapter rate limiting."
+  attributes:
+    owner: RateLimitMiddleware
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/fastapi_app.py
+        symbol: create_app
+  metadata:
+    created_at: 2026-05-08T12:19:37.916Z
+    updated_at: 2026-05-08T12:19:37.916Z
+    version: 1

@@ -1,0 +1,342 @@
+- type: add
+  elementId: data-model.objectschema.board-events
+  layerName: data-model
+  after:
+    id: 9f5b59de-38c8-49fe-ad8c-be5f706ef85f
+    path: data-model.objectschema.board-events
+    spec_node_id: data-model.objectschema
+    type: objectschema
+    layer_id: data-model
+    name: Board Events
+    description: "Domain events for board and work item column transitions:
+      WorkItemColumnChangedEvent (work_item_id, project_id, board_id,
+      from_column, to_column, moved_by), WorkItemPositionChangedEvent
+      (column_name, old_position, new_position), BoardReconciledEvent
+      (columns_added, columns_removed, items_moved), ColumnSLAExceededEvent
+      (column_name, elapsed_seconds, sla_threshold_seconds, entered_at). All
+      extend BaseDomainEvent with event_id and occurred_at."
+    attributes:
+      type: object
+      properties:
+        event_id:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        project_id:
+          type: string
+        board_id:
+          type: string
+        work_item_id:
+          type: string
+        from_column:
+          type: string
+        to_column:
+          type: string
+        moved_by:
+          type: string
+        column_name:
+          type: string
+        elapsed_seconds:
+          type: number
+        sla_threshold_seconds:
+          type: number
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/events/board_events.py
+          symbol: WorkItemColumnChangedEvent
+    metadata:
+      created_at: 2026-05-08T12:15:58.315Z
+      updated_at: 2026-05-08T12:15:58.315Z
+      version: 1
+  timestamp: 2026-05-08T12:15:58.337Z
+  sequenceNumber: 0
+- type: add
+  elementId: data-model.objectschema.branch-events
+  layerName: data-model
+  after:
+    id: 97266f06-bf97-403c-bc2a-2ff51b197452
+    path: data-model.objectschema.branch-events
+    spec_node_id: data-model.objectschema
+    type: objectschema
+    layer_id: data-model
+    name: Branch Events
+    description: "Domain events for branch resolution lifecycle: BranchResolvedEvent
+      (project_id, issue_id, action, branch_name, confidence, reason,
+      parent_issue_id, resolution_strategy), BranchReusedEvent (same fields for
+      branch reuse decisions), BranchResolutionCreatedEvent (branch creation
+      confirmation). All frozen dataclasses extending BaseDomainEvent."
+    attributes:
+      type: object
+      properties:
+        event_id:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        project_id:
+          type: string
+        issue_id:
+          type: string
+        action:
+          type: string
+        branch_name:
+          type: string
+        confidence:
+          type: number
+        reason:
+          type: string
+        parent_issue_id:
+          type: string
+        resolution_strategy:
+          type: string
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/events/branch_events.py
+          symbol: BranchResolvedEvent
+    metadata:
+      created_at: 2026-05-08T12:16:03.362Z
+      updated_at: 2026-05-08T12:16:03.362Z
+      version: 1
+  timestamp: 2026-05-08T12:16:03.386Z
+  sequenceNumber: 1
+- type: add
+  elementId: data-model.objectschema.ci-pipeline-events
+  layerName: data-model
+  after:
+    id: 3195df1d-285d-4f2e-b4cf-a44d58569e92
+    path: data-model.objectschema.ci-pipeline-events
+    spec_node_id: data-model.objectschema
+    type: objectschema
+    layer_id: data-model
+    name: CI Pipeline Events
+    description: "Domain events for CI/CD pipeline runs:
+      CIPipelineStatusCheckedEvent (pr_id, project_id, status, check_count,
+      passed_count, failed_count, pending_count), CIRunStartedEvent
+      (workflow_run_id, working_directory, timeout_seconds, checks_planned),
+      CIRunCompletedEvent (workflow_run_id, passed_count, failure_count,
+      warning_count, output). Emitted by CIRunnerAdapter on GitHub Actions
+      workflow runs."
+    attributes:
+      type: object
+      properties:
+        event_id:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        project_id:
+          type: string
+        pr_id:
+          type: string
+        workflow_run_id:
+          type: string
+        status:
+          type: string
+        check_count:
+          type: integer
+        passed_count:
+          type: integer
+        failed_count:
+          type: integer
+        pending_count:
+          type: integer
+        output:
+          type: string
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/events/ci_pipeline_events.py
+          symbol: CIPipelineStatusCheckedEvent
+    metadata:
+      created_at: 2026-05-08T12:16:06.945Z
+      updated_at: 2026-05-08T12:16:06.945Z
+      version: 1
+  timestamp: 2026-05-08T12:16:06.971Z
+  sequenceNumber: 2
+- type: add
+  elementId: data-model.objectschema.container-events
+  layerName: data-model
+  after:
+    id: 94101c88-8486-42c7-9ab6-fda900b8e0ca
+    path: data-model.objectschema.container-events
+    spec_node_id: data-model.objectschema
+    type: objectschema
+    layer_id: data-model
+    name: Container Events
+    description: "Domain events for container execution lifecycle:
+      ContainerExecutionCompletedEvent (container_id, command, exit_code,
+      output_files, project_id). Emitted when agent container finishes
+      execution; output_files lists paths written during the run."
+    attributes:
+      type: object
+      properties:
+        event_id:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        container_id:
+          type: string
+        project_id:
+          type: string
+        command:
+          type: string
+        exit_code:
+          type: integer
+        output_files:
+          type: array
+          items:
+            type: string
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/events/container_events.py
+          symbol: ContainerExecutionCompletedEvent
+    metadata:
+      created_at: 2026-05-08T12:16:11.178Z
+      updated_at: 2026-05-08T12:16:11.178Z
+      version: 1
+  timestamp: 2026-05-08T12:16:11.204Z
+  sequenceNumber: 3
+- type: add
+  elementId: data-model.objectschema.container-recovery-events
+  layerName: data-model
+  after:
+    id: 838bafd8-8bef-4a15-a012-02cecd8337bf
+    path: data-model.objectschema.container-recovery-events
+    spec_node_id: data-model.objectschema
+    type: objectschema
+    layer_id: data-model
+    name: Container Recovery Events
+    description: "Domain events for container failure recovery:
+      ContainerRecoveredEvent (container_id, container_name, project_id,
+      agent_id, work_item_id, execution_id, uptime_seconds, recovery_action),
+      ContainerKilledEvent (kill_reason, execution_marked_failed),
+      ContainerRecoveryCompletedEvent (containers_recovered, containers_killed,
+      errors_encountered, repair_cycles_processed, duration_seconds). Emitted by
+      ContainerRecoveryService."
+    attributes:
+      type: object
+      properties:
+        event_id:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        container_id:
+          type: string
+        container_name:
+          type: string
+        project_id:
+          type: string
+        agent_id:
+          type: string
+        work_item_id:
+          type: string
+        execution_id:
+          type: string
+        uptime_seconds:
+          type: number
+        recovery_action:
+          type: string
+        kill_reason:
+          type: string
+        execution_marked_failed:
+          type: boolean
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/events/container_recovery_events.py
+          symbol: ContainerRecoveredEvent
+    metadata:
+      created_at: 2026-05-08T12:16:14.477Z
+      updated_at: 2026-05-08T12:16:14.477Z
+      version: 1
+  timestamp: 2026-05-08T12:16:14.501Z
+  sequenceNumber: 4
+- type: add
+  elementId: data-store.database.postgre-sql-config-database
+  layerName: data-store
+  after:
+    id: d65ec072-ec00-4e5a-ae38-b23508a2f9ee
+    path: data-store.database.postgre-sql-config-database
+    spec_node_id: data-store.database
+    type: database
+    layer_id: data-store
+    name: PostgreSQL Config Database
+    description: Primary relational database for users, API keys, project
+      configuration, workflow definitions, and audit logs. Managed via
+      SQLAlchemy ORM with Alembic migrations.
+    attributes:
+      engine: PostgreSQL
+      paradigm: RELATIONAL
+      version: 14+
+      deploymentModel: STANDALONE
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/infrastructure/audit/stores.py
+          symbol: PostgreSQLAuditStore
+    metadata:
+      created_at: 2026-05-08T12:16:41.289Z
+      updated_at: 2026-05-08T12:16:41.289Z
+      version: 1
+  timestamp: 2026-05-08T12:16:41.315Z
+  sequenceNumber: 5
+- type: add
+  elementId: testing.testcoveragetarget.simulation-application-bootstrap
+  layerName: testing
+  after:
+    id: 3b1f895a-7c05-4327-820a-8f78945317ad
+    path: testing.testcoveragetarget.simulation-application-bootstrap
+    spec_node_id: testing.testcoveragetarget
+    type: testcoveragetarget
+    layer_id: testing
+    name: SimulationApplicationBootstrap
+    description: Wires all 54 mock adapters, input port adapters, and
+      simulation-only routes; entry point for all simulation and test
+      environments; mounts SimulationWorkflowStateManager,
+      SimulationDecisionEvents, SimulationProjectsAPI routes
+    attributes:
+      targetType: integration-flow
+      priority: critical
+      source:
+        file: src/codetoreum/infrastructure/simulation/bootstrap.py
+        symbol: SimulationApplicationBootstrap
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:16:43.990Z
+      updated_at: 2026-05-08T12:16:43.990Z
+      version: 1
+  timestamp: 2026-05-08T12:16:44.018Z
+  sequenceNumber: 6
+- type: add
+  elementId: testing.testcoveragetarget.simulation-runner
+  layerName: testing
+  after:
+    id: b9caf181-f6c0-4a0f-ab27-7155de269517
+    path: testing.testcoveragetarget.simulation-runner
+    spec_node_id: testing.testcoveragetarget
+    type: testcoveragetarget
+    layer_id: testing
+    name: SimulationRunner
+    description: Orchestrates test scenarios with assertion helpers
+      (assert_event_occurred, assert_metric_recorded, assert_notification_sent,
+      assert_span_exists); provides advance_time/advance_to for time control;
+      captures domain events for inspection
+    attributes:
+      targetType: integration-flow
+      priority: critical
+      source:
+        file: src/codetoreum/infrastructure/simulation/simulation_runner.py
+        symbol: SimulationRunner
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:16:44.350Z
+      updated_at: 2026-05-08T12:16:44.350Z
+      version: 1
+  timestamp: 2026-05-08T12:16:44.379Z
+  sequenceNumber: 7

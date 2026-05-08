@@ -78,11 +78,10 @@ You should:
 
 4. Get confirmation (or proceed if obvious)
 5. Execute:
-   dr add business service --name "Payment Processing" \
-     --description "Handles credit card transactions\" \
-     --property criticality=high
+   dr add business service "Payment Processing" \
+     --description "Handles credit card transactions"
 6. Validate:
-   dr validate --layer business
+   dr validate --layers business
 7. Suggest next steps:
    "✓ Payment service created: business.service.payment-processing
 
@@ -115,9 +114,8 @@ You should:
 1. Check goal exists:
    dr search "customer satisfaction" --layer motivation
 2. If found (e.g., motivation.goal.customer-satisfaction):
-   dr add business service --name "Order Management" \
-     --description "Manages customer orders lifecycle" \
-     --property supports-goals=motivation.goal.customer-satisfaction
+   dr add business service "Order Management" \
+     --description "Manages customer orders lifecycle"
 3. If not found, ask:
    "I couldn't find a 'customer satisfaction' goal. Would you like me to:
    1. Create the goal first
@@ -136,9 +134,8 @@ You should:
 **Your process:**
 
 1. Verify source element exists
-2. Check projection rules
-3. Use `dr project` or manual creation
-4. Validate cross-layer references
+2. Create the target-layer element referencing the source
+3. Validate cross-layer references
 
 **Example:**
 
@@ -148,10 +145,10 @@ User: /dr-model Create application service for payment processing
 You should:
 1. Find business service:
    dr search "payment" --layer business
-2. If found, project:
-   dr project business.service.payment-processing --to application
+2. If found, create application service:
+   dr add application service "Payment Processing"
 3. Verify creation:
-   dr find application.service.payment-processing
+   dr show application.service.payment-processing
 4. Suggest:
    "✓ Application service created and linked to business service
 
@@ -182,17 +179,15 @@ User: /dr-model Add PCI-DSS compliance for payment service
 
 You should:
 1. Find payment service:
-   dr find application.service.payment-processing
+   dr show application.service.payment-processing
 2. Create security policy:
-   dr add security policy --name "PCI-DSS Compliance" \
-     --description "Payment Card Industry Data Security Standard" \
-     --property type=compliance \
-     --property applies_to=application.service.payment-processing
+   dr add security policy "PCI-DSS Compliance" \
+     --description "Payment Card Industry Data Security Standard"
 3. Update service to reference policy:
    dr update application.service.payment-processing \
-     --property securedBy=security.policy.pci-dss-compliance
+     --attributes '{"securedBy":"security.policy.pci-dss-compliance"}'
 4. Validate:
-   dr validate --layer security
+   dr validate --layers security
 ```
 
 #### 5. Add Monitoring
@@ -216,20 +211,15 @@ User: /dr-model Add availability and latency metrics for payment API
 
 You should:
 1. Find element:
-   dr find application.service.payment-api
+   dr show application.service.payment-api
 2. Create availability metric:
-   dr add apm metric --name "payment-api-availability" \
+   dr add apm metric "payment-api-availability" \
      --description "Payment API availability SLI" \
-     --property type=availability \
-     --property instruments=application.service.payment-api \
-     --property threshold=99.9%
+     --attributes '{"type":"availability","instruments":"application.service.payment-api","threshold":"99.9%"}'
 3. Create latency metric:
-   dr add apm metric --name "payment-api-latency" \
+   dr add apm metric "payment-api-latency" \
      --description "Payment API P95 latency" \
-     --property type=latency \
-     --property aggregation=p95 \
-     --property instruments=application.service.payment-api \
-     --property threshold=200ms
+     --attributes '{"type":"latency","aggregation":"p95","instruments":"application.service.payment-api","threshold":"200ms"}'
 4. Validate and report
 ```
 
@@ -255,7 +245,7 @@ User: /dr-model Show me all critical services
 
 You should:
 1. Search:
-   dr search --property criticality=critical --output json
+   dr search "critical" --json
 2. Parse and display:
    "Found 3 critical services:
 
@@ -297,7 +287,7 @@ You should:
    dr search "payment" --layer business --type service
 2. Update:
    dr update business.service.payment-processing \
-     --property criticality=critical
+     --attributes '{"criticality":"critical"}'
 3. Check implications:
    "✓ Updated business.service.payment-processing to critical
 
@@ -428,10 +418,8 @@ You: I'll create a checkout service linked to the conversion goal.
      ✓ Found: motivation.goal.improve-conversion
 
      Creating service:
-     dr add business service --name "Checkout Service" \
-       --description "Handles customer checkout process" \
-       --property supports-goals=motivation.goal.improve-conversion \
-       --property criticality=high
+     dr add business service "Checkout Service" \
+       --description "Handles customer checkout process"
 
      ✓ Created: business.service.checkout
      ✓ Linked to goal
@@ -445,7 +433,7 @@ User: /dr-model Show me services without security policies
 
 You: Searching for unsecured services...
 
-     dr search --layer application --type service --output json
+     dr list application --type service --json
 
      (analyzing results...)
 
@@ -456,10 +444,50 @@ You: Searching for unsecured services...
      Should I add authentication policies to these services?
 ```
 
+## Element Investigation Pattern
+
+When you need to understand an existing element before modifying it, use this standard 3-command sequence:
+
+```bash
+# 1. Inspect element metadata and properties
+dr show <element-id>
+
+# 2. Trace cross-layer dependencies (up and down the stack)
+dr trace <element-id> --direction both
+
+# 3. Check for validation issues affecting this element
+dr validate --layers <layer>
+```
+
+### Important: `dr show` Does Not Display Relationships
+
+`dr show` reports `hasRelationships: false` for many elements even when they have relationships. This is because intra-layer relationships are stored in a central `relationships.yaml` file and are not surfaced by `dr show`. To see actual relationships, use:
+
+```bash
+dr trace <element-id>              # Shows cross-layer dependency chain
+dr relationship list <layer>       # Shows all relationships in the layer
+```
+
+Do not conclude an element is isolated based on `dr show` output alone. Always follow up with `dr trace`.
+
+### Investigation Example
+
+```bash
+# Wrong: only dr show
+dr show api.operation.register-webhook-subscription
+# → shows properties but hides all relationships
+
+# Right: full picture
+dr show api.operation.register-webhook-subscription
+dr trace api.operation.register-webhook-subscription --direction both
+dr validate --layers api
+```
+
 ## Related Commands
 
+- `/dr-info` - Model overview (layer counts, version)
 - `/dr-init` - Initialize a new model
-- `/dr-ingest` - Extract model from code
+- `/dr-map` - Extract model from code
 - `/dr-project` - Automated cross-layer projection
 - `/dr-validate` - Validate model and check for issues
 - `dr --help` - View all DR CLI commands

@@ -378,35 +378,50 @@ async def test_workflow():
 - `documentation/architecture/infrastructure/observability.md` - Observability patterns
 - `documentation/implementations/production-bootstrap.md` - Production bootstrap wiring
 
-## Architecture Documentation Tools
+## Agents
 
-This project includes specialized tools for managing and validating architecture documentation:
+Five specialized agents are available in `.claude/agents/`. Claude invokes them automatically when context matches; you can also name the agent explicitly in your request.
 
-### `/arch-doc` Command
+### `codetoreum-architect` — Architectural Authority
+The authoritative reviewer for all architectural decisions in this project.
 
-Use the `/arch-doc` slash command to:
-- Generate documentation for new ports, adapters, services, or domain models
-- Validate existing documentation against templates
-- Search and audit documentation coverage
-- Update documentation when code changes
+**Invoke when**:
+- Writing a new adapter, port interface, domain event, or application service
+- Reviewing code for hexagonal boundary compliance or resilience pattern placement
+- Designing a new service and need guidance on where it fits among the 23 existing services
+- Deciding where new logic belongs (domain vs. application vs. infrastructure)
 
-The command is powered by the **Architecture Documentation Agent** (`.claude/agents/arch-doc.md`), which intelligently routes your request to the appropriate documentation workflow.
+**How**: Ask Claude to review, or phrase your request in terms of architecture — *"Is this adapter compliant?"*, *"Where should retry logic live?"*, *"Design a service for capability negotiation."*
 
-### Architecture Documentation Validator Skill
+### `arch-doc` — Documentation Management
+Generates, validates, updates, and audits architecture documentation against templates.
 
-The `arch-doc-validator` skill (`.claude/skills/arch-doc-validator/SKILL.md`) automatically validates:
-- Port interface coverage and documentation completeness
-- Adapter documentation conformance to templates
-- Domain event catalog accuracy
-- Application service documentation
-- Template compliance across all architecture documentation
+**Invoke with `/arch-doc <intent> [target]`**:
 
-The skill activates automatically when you modify code in:
-- `src/codetoreum/ports/**/*.py`
-- `src/codetoreum/adapters/**/*.py`
-- `src/codetoreum/domain/events/*.py`
-- `src/codetoreum/application/**/*.py`
-- `documentation/architecture/**/*.md`
+| Intent | Example | Use when |
+|--------|---------|----------|
+| `generate` | `/arch-doc generate IBoardService` | Documenting a new port, adapter, event, or service |
+| `validate` | `/arch-doc validate ports` | Checking doc coverage before a commit or PR |
+| `update` | `/arch-doc update all signatures` | Syncing docs after interface changes |
+| `diagram` | `/arch-doc diagram sequence workflow` | Creating or updating Mermaid diagrams |
+| `audit` | `/arch-doc audit` | Full documentation coverage report |
+
+The `arch-doc-validator` skill auto-validates on changes to `ports/`, `adapters/`, `domain/events/`, `application/`, and `documentation/architecture/`.
+
+### `dr-architect` — DR Model Management
+Handles all Documentation Robotics model tasks: adding elements, validating the model, running changesets, and reviewing drift. Modifies the model exclusively via the `dr` CLI (never writes YAML directly).
+
+**Invoke when**: Adding architectural elements to `documentation-robotics/model/`, running DR validation, generating reports, or reviewing model changesets.
+
+### `dr-extractor` — Code-to-DR Extraction
+Analyzes source code and creates DR model entries with full source provenance (file references, symbol mappings).
+
+**Invoke when**: Onboarding a new module or subsystem into the DR model; every element it creates includes traceability back to the source file.
+
+### `dr-advisor` — DR Guidance
+Strategic advice on DR modeling decisions — which layer to use, how to structure elements, how to resolve cross-layer relationship errors.
+
+**Invoke when**: Uncertain about layer placement, getting validation errors you don't understand, or exploring modeling trade-offs.
 
 ---
 

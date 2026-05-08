@@ -241,7 +241,9 @@ class TestBuildContainerLabels:
         assert "org.codetoreum.type" in labels or "type" in str(labels.keys()).lower()
 
     @pytest.mark.asyncio
-    async def test_build_container_labels_has_required_fields(self, execution_service, sample_execution, sample_execution_context):
+    async def test_build_container_labels_has_required_fields(
+        self, execution_service, sample_execution, sample_execution_context
+    ):
         """Test that labels contain required fields."""
         labels = execution_service._build_container_labels(
             execution=sample_execution,
@@ -417,7 +419,9 @@ class TestExecutionRetryBehavior:
         assert execution_service.retry_delay_seconds == 0.1
 
     @pytest.mark.asyncio
-    async def test_vcs_optional_in_execution_service(self, mock_llm_provider, mock_container, mock_event_store, mock_storage):
+    async def test_vcs_optional_in_execution_service(
+        self, mock_llm_provider, mock_container, mock_event_store, mock_storage
+    ):
         """Test that VCS is optional for execution service."""
         service = ExecutionService(
             llm_provider=mock_llm_provider,

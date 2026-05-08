@@ -1,0 +1,378 @@
+application.applicationservice.workflow-orchestrator:
+  id: 58214bd9-aaaf-40bc-88a6-3920d7344132
+  path: application.applicationservice.workflow-orchestrator
+  spec_node_id: application.applicationservice
+  type: applicationservice
+  layer_id: application
+  name: WorkflowOrchestrator
+  description: Core orchestration service that coordinates workflow execution,
+    routing decisions, and stage transitions for work items
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/workflow_orchestrator.py
+        symbol: WorkflowOrchestrator
+  metadata:
+    created_at: 2026-05-08T10:28:58.281Z
+    updated_at: 2026-05-08T10:28:58.281Z
+    version: 1
+application.applicationservice.agent-scheduler:
+  id: 93659435-a3fe-40de-b824-4f6361f5c8a5
+  path: application.applicationservice.agent-scheduler
+  spec_node_id: application.applicationservice
+  type: applicationservice
+  layer_id: application
+  name: AgentScheduler
+  description: Queues and schedules agent executions with resource monitoring,
+    rate limiting, and priority-based dispatching
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/agent_scheduler.py
+        symbol: AgentScheduler
+  metadata:
+    created_at: 2026-05-08T10:28:58.537Z
+    updated_at: 2026-05-08T10:28:58.537Z
+    version: 1
+application.applicationservice.execution-service:
+  id: 6cb0858b-2974-416b-82f9-16841c8131cc
+  path: application.applicationservice.execution-service
+  spec_node_id: application.applicationservice
+  type: applicationservice
+  layer_id: application
+  name: ExecutionService
+  description: Manages the full agent execution lifecycle including container
+    coordination, log streaming, and result handling
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/execution_service.py
+        symbol: ExecutionService
+  metadata:
+    created_at: 2026-05-08T10:28:58.797Z
+    updated_at: 2026-05-08T10:28:58.798Z
+    version: 1
+application.applicationservice.review-service:
+  id: 1d213ba6-882c-4112-8deb-e26d140887fa
+  path: application.applicationservice.review-service
+  spec_node_id: application.applicationservice
+  type: applicationservice
+  layer_id: application
+  name: ReviewService
+  description: Orchestrates maker-checker review cycles with feedback loops,
+    iteration tracking, and escalation handling
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/review_service.py
+        symbol: ReviewService
+  metadata:
+    created_at: 2026-05-08T10:29:03.704Z
+    updated_at: 2026-05-08T10:29:03.704Z
+    version: 1
+application.applicationservice.workspace-router:
+  id: 6a266b0f-2e6b-466f-b686-854e063053d8
+  path: application.applicationservice.workspace-router
+  spec_node_id: application.applicationservice
+  type: applicationservice
+  layer_id: application
+  name: WorkspaceRouter
+  description: Manages container workspace preparation, file mounting, and
+    finalization for agent execution contexts
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/workspace_router.py
+        symbol: WorkspaceRouter
+  metadata:
+    created_at: 2026-05-08T10:29:03.964Z
+    updated_at: 2026-05-08T10:29:03.964Z
+    version: 1
+application.applicationservice.conversational-loop-orchestrator:
+  id: e9545d9b-6458-4724-901f-54e68f875030
+  path: application.applicationservice.conversational-loop-orchestrator
+  spec_node_id: application.applicationservice
+  type: applicationservice
+  layer_id: application
+  name: ConversationalLoopOrchestrator
+  description: Orchestrates multi-turn conversational agent dialogue sessions with
+    state management
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/conversational_loop_orchestrator.py
+        symbol: ConversationalLoopOrchestrator
+  metadata:
+    created_at: 2026-05-08T10:29:04.220Z
+    updated_at: 2026-05-08T10:29:04.220Z
+    version: 1
+application.applicationservice.container-recovery-service:
+  id: 2d3beaa4-5b67-4af6-96ef-9fd6855c98f1
+  path: application.applicationservice.container-recovery-service
+  spec_node_id: application.applicationservice
+  type: applicationservice
+  layer_id: application
+  name: ContainerRecoveryService
+  description: Handles container failure detection and recovery to restore agent
+    execution continuity
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/container_recovery_service.py
+        symbol: ContainerRecoveryService
+  metadata:
+    created_at: 2026-05-08T10:29:08.660Z
+    updated_at: 2026-05-08T10:29:08.660Z
+    version: 1
+application.applicationservice.multi-project-orchestrator:
+  id: 1908a3ee-527d-4891-9c9e-3a4a6731bfd8
+  path: application.applicationservice.multi-project-orchestrator
+  spec_node_id: application.applicationservice
+  type: applicationservice
+  layer_id: application
+  name: MultiProjectOrchestrator
+  description: Coordinates workflow execution and resource management across
+    multiple projects simultaneously
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/multi_project_orchestrator.py
+        symbol: MultiProjectOrchestrator
+  metadata:
+    created_at: 2026-05-08T10:29:08.922Z
+    updated_at: 2026-05-08T10:29:08.923Z
+    version: 1
+application.applicationservice.work-item-service:
+  id: 6f26bbe3-1156-4dbb-bf04-7a77447aa38f
+  path: application.applicationservice.work-item-service
+  spec_node_id: application.applicationservice
+  type: applicationservice
+  layer_id: application
+  name: WorkItemService
+  description: Implements both command and query ports for work item CRUD
+    operations, status management, and retrieval
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/work_item_service.py
+        symbol: WorkItemService
+  metadata:
+    created_at: 2026-05-08T10:29:09.189Z
+    updated_at: 2026-05-08T10:29:09.189Z
+    version: 1
+application.applicationservice.board-polling-service:
+  id: 24472ab1-de37-406e-919e-3d7539f2360a
+  path: application.applicationservice.board-polling-service
+  spec_node_id: application.applicationservice
+  type: applicationservice
+  layer_id: application
+  name: BoardPollingService
+  description: Polls external board systems for state changes and triggers
+    workflow reactions to column movements
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/board_polling_service.py
+        symbol: BoardPollingService
+  metadata:
+    created_at: 2026-05-08T10:29:13.887Z
+    updated_at: 2026-05-08T10:29:13.887Z
+    version: 1
+application.applicationservice.pipeline-lock-service:
+  id: 7a92d57d-05d7-4ad6-a0f7-c22b5b0ab956
+  path: application.applicationservice.pipeline-lock-service
+  spec_node_id: application.applicationservice
+  type: applicationservice
+  layer_id: application
+  name: PipelineLockService
+  description: Manages queued pipeline locks to prevent concurrent execution
+    conflicts on the same work item
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/pipeline_lock_service.py
+        symbol: IQueuedPipelineLockService
+  metadata:
+    created_at: 2026-05-08T10:29:14.153Z
+    updated_at: 2026-05-08T10:29:14.154Z
+    version: 1
+application.applicationservice.pipeline-manager:
+  id: 36a1cd8f-3c58-4f80-bb82-9b2149c5f140
+  path: application.applicationservice.pipeline-manager
+  spec_node_id: application.applicationservice
+  type: applicationservice
+  layer_id: application
+  name: PipelineManager
+  description: Manages multi-stage pipeline execution with checkpoint support,
+    stage result tracking, and rollback
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/pipeline_manager.py
+        symbol: PipelineManager
+  metadata:
+    created_at: 2026-05-08T10:29:14.420Z
+    updated_at: 2026-05-08T10:29:14.420Z
+    version: 1
+application.applicationservice.authentication-service:
+  id: 0895273a-bc17-40c8-811e-4c10ef85c9f7
+  path: application.applicationservice.authentication-service
+  spec_node_id: application.applicationservice
+  type: applicationservice
+  layer_id: application
+  name: AuthenticationService
+  description: Handles user authentication, JWT token lifecycle, API key
+    management, and authorization context
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/authentication_service.py
+        symbol: AuthenticationService
+  metadata:
+    created_at: 2026-05-08T10:29:24.277Z
+    updated_at: 2026-05-08T10:29:24.277Z
+    version: 1
+application.applicationservice.configuration-service:
+  id: 66d014c5-cdd7-42c0-bf77-516ff73ff326
+  path: application.applicationservice.configuration-service
+  spec_node_id: application.applicationservice
+  type: applicationservice
+  layer_id: application
+  name: ConfigurationService
+  description: Manages platform configuration CRUD operations including projects,
+    agents, pipelines, and workflow templates with validation
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/configuration_service.py
+        symbol: ConfigurationService
+  metadata:
+    created_at: 2026-05-08T10:29:24.544Z
+    updated_at: 2026-05-08T10:29:24.545Z
+    version: 1
+application.applicationservice.context-builder:
+  id: f36c6022-7ec1-4709-b16d-9fcdbddac040
+  path: application.applicationservice.context-builder
+  spec_node_id: application.applicationservice
+  type: applicationservice
+  layer_id: application
+  name: ContextBuilder
+  description: Builds agent execution context by assembling issue details, code
+    snippets, and previous stage outputs into workspace files
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/context_builder.py
+        symbol: ContextBuilder
+  metadata:
+    created_at: 2026-05-08T10:29:24.816Z
+    updated_at: 2026-05-08T10:29:24.817Z
+    version: 1
+application.applicationservice.feedback-processor:
+  id: 7e5efe1e-75be-4fb2-b082-ee4833396e00
+  path: application.applicationservice.feedback-processor
+  spec_node_id: application.applicationservice
+  type: applicationservice
+  layer_id: application
+  name: FeedbackProcessor
+  description: Parses and structures reviewer feedback into actionable items for
+    agent remediation
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/feedback_processor.py
+        symbol: FeedbackProcessor
+  metadata:
+    created_at: 2026-05-08T10:29:29.603Z
+    updated_at: 2026-05-08T10:29:29.603Z
+    version: 1
+application.applicationservice.metrics-service:
+  id: 92ba780b-1e6f-409c-a736-142e4ac86c41
+  path: application.applicationservice.metrics-service
+  spec_node_id: application.applicationservice
+  type: applicationservice
+  layer_id: application
+  name: MetricsService
+  description: Implements metrics query port to collect and expose system
+    performance, resilience, and integration health metrics
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/metrics_service.py
+        symbol: MetricsService
+  metadata:
+    created_at: 2026-05-08T10:29:29.881Z
+    updated_at: 2026-05-08T10:29:29.881Z
+    version: 1
+application.applicationservice.agent-execution-recovery-service:
+  id: 3b44ce9e-cb60-4087-9895-f1498631b405
+  path: application.applicationservice.agent-execution-recovery-service
+  spec_node_id: application.applicationservice
+  type: applicationservice
+  layer_id: application
+  name: AgentExecutionRecoveryService
+  description: Detects and recovers stalled or failed agent executions to maintain
+    workflow progress
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/agent_execution_recovery_service.py
+        symbol: AgentExecutionRecoveryService
+  metadata:
+    created_at: 2026-05-08T10:29:30.154Z
+    updated_at: 2026-05-08T10:29:30.154Z
+    version: 1
+application.applicationservice.event-sequence-validator:
+  id: 9375c225-292c-443d-b730-d5908662fa8f
+  path: application.applicationservice.event-sequence-validator
+  spec_node_id: application.applicationservice
+  type: applicationservice
+  layer_id: application
+  name: EventSequenceValidator
+  description: Validates domain event sequences against expected patterns to
+    detect workflow anomalies
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/event_sequence_validator.py
+        symbol: EventSequenceValidator
+  metadata:
+    created_at: 2026-05-08T10:29:33.930Z
+    updated_at: 2026-05-08T10:29:33.930Z
+    version: 1
+application.applicationservice.workflow-run-query-service:
+  id: e7838b92-d9b2-4b19-a572-ad7df6c719a5
+  path: application.applicationservice.workflow-run-query-service
+  spec_node_id: application.applicationservice
+  type: applicationservice
+  layer_id: application
+  name: WorkflowRunQueryService
+  description: Implements workflow run query port with LRU caching for efficient
+    workflow run and event history retrieval
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/workflow_run_query_service.py
+        symbol: WorkflowRunQueryService
+  metadata:
+    created_at: 2026-05-08T10:29:34.205Z
+    updated_at: 2026-05-08T10:29:34.205Z
+    version: 1
+application.applicationservice.simulation-service:
+  id: a01b7a6f-2058-43ca-9b4f-b487d2c3e034
+  path: application.applicationservice.simulation-service
+  spec_node_id: application.applicationservice
+  type: applicationservice
+  layer_id: application
+  name: Simulation Service
+  description: Application service managing simulation lifecycle, time control,
+    and state inspection for deterministic test execution
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/infrastructure/simulation/simulation_engine.py
+        symbol: SimulationEngine
+  metadata:
+    created_at: 2026-05-08T10:53:34.757Z
+    updated_at: 2026-05-08T10:53:34.757Z
+    version: 1

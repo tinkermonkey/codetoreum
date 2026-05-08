@@ -1,0 +1,1552 @@
+api.operation.create-agent:
+  id: 47f173b7-ff7c-4473-9894-873326aab81a
+  path: api.operation.create-agent
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Create Agent
+  description: Creates a new agent definition with capabilities, model
+    configuration, and execution settings
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/agents/crud.py
+        symbol: create_agent
+  metadata:
+    created_at: 2026-05-08T10:30:05.537Z
+    updated_at: 2026-05-08T10:30:05.537Z
+    version: 1
+api.operation.update-agent:
+  id: 9a1468ba-60d2-44d3-adef-26a4e54278b0
+  path: api.operation.update-agent
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Update Agent
+  description: Updates an existing agent configuration including model, timeouts,
+    and execution flags
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/agents/crud.py
+        symbol: update_agent
+  metadata:
+    created_at: 2026-05-08T10:30:05.787Z
+    updated_at: 2026-05-08T10:30:05.787Z
+    version: 1
+api.operation.delete-agent:
+  id: de962ed7-41ca-42b2-8fff-944fdb6ab17f
+  path: api.operation.delete-agent
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Delete Agent
+  description: Soft-deletes an agent, preserving event history while removing from
+    active queries
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/agents/crud.py
+        symbol: delete_agent
+  metadata:
+    created_at: 2026-05-08T10:30:06.049Z
+    updated_at: 2026-05-08T10:30:06.049Z
+    version: 1
+api.operation.list-agents:
+  id: 65d1bcb7-3ab7-458b-93c6-b40c52a72591
+  path: api.operation.list-agents
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: List Agents
+  description: Returns a paginated list of all agents with optional filtering
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/agents/list.py
+        symbol: list_agents
+  metadata:
+    created_at: 2026-05-08T10:30:11.379Z
+    updated_at: 2026-05-08T10:30:11.379Z
+    version: 1
+api.operation.get-agent:
+  id: 879d28e2-3646-49f6-bd5a-fb16728a7970
+  path: api.operation.get-agent
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Agent
+  description: Returns a single agent by ID including optional execution statistics
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/agents/list.py
+        symbol: get_agent
+  metadata:
+    created_at: 2026-05-08T10:30:11.643Z
+    updated_at: 2026-05-08T10:30:11.643Z
+    version: 1
+api.operation.add-agent-capability:
+  id: d1aab7be-5108-4e7f-8402-e3cd2430a91d
+  path: api.operation.add-agent-capability
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Add Agent Capability
+  description: Adds a new capability with proficiency level to an existing agent
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/agents/capabilities.py
+        symbol: add_capability
+  metadata:
+    created_at: 2026-05-08T10:30:11.909Z
+    updated_at: 2026-05-08T10:30:11.909Z
+    version: 1
+api.operation.remove-agent-capability:
+  id: 679389cb-b3fc-4d13-a88e-41d8a5ea8a73
+  path: api.operation.remove-agent-capability
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Remove Agent Capability
+  description: Removes a capability from an agent definition
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/agents/capabilities.py
+        symbol: remove_capability
+  metadata:
+    created_at: 2026-05-08T10:30:12.174Z
+    updated_at: 2026-05-08T10:30:12.174Z
+    version: 1
+api.operation.update-agent-capability:
+  id: 30312592-fce1-4526-8703-1fd013f9e82a
+  path: api.operation.update-agent-capability
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Update Agent Capability
+  description: Updates the proficiency level for an existing agent capability
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/agents/capabilities.py
+        symbol: update_capability
+  metadata:
+    created_at: 2026-05-08T10:30:12.434Z
+    updated_at: 2026-05-08T10:30:12.434Z
+    version: 1
+api.operation.add-agent-mcp-server:
+  id: 1ff03ad2-cf43-4c5a-988e-9cc5c7c7b15d
+  path: api.operation.add-agent-mcp-server
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Add Agent MCP Server
+  description: Associates an MCP server with an agent for extended tool capabilities
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/agents/mcp_servers.py
+        symbol: add_mcp_server
+  metadata:
+    created_at: 2026-05-08T10:30:15.745Z
+    updated_at: 2026-05-08T10:30:15.745Z
+    version: 1
+api.operation.remove-agent-mcp-server:
+  id: 09d465b1-7e78-443f-98e2-b3c67cc7ff81
+  path: api.operation.remove-agent-mcp-server
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Remove Agent MCP Server
+  description: Removes an MCP server association from an agent
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/agents/mcp_servers.py
+        symbol: remove_mcp_server
+  metadata:
+    created_at: 2026-05-08T10:30:16.010Z
+    updated_at: 2026-05-08T10:30:16.011Z
+    version: 1
+api.operation.list-executions:
+  id: c18cd821-7c5a-47fc-921d-5b0b1b943f39
+  path: api.operation.list-executions
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: List Executions
+  description: Returns a paginated list of agent executions with optional
+    filtering by status or work item
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/executions/list.py
+        symbol: list_executions
+  metadata:
+    created_at: 2026-05-08T10:30:21.465Z
+    updated_at: 2026-05-08T10:30:21.465Z
+    version: 1
+api.operation.get-execution:
+  id: 99655a4b-30ff-46ba-aac0-1d9110ac3fd0
+  path: api.operation.get-execution
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Execution
+  description: Returns detailed information about a specific agent execution
+    including container status
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/executions/detail.py
+        symbol: get_execution
+  metadata:
+    created_at: 2026-05-08T10:30:21.741Z
+    updated_at: 2026-05-08T10:30:21.741Z
+    version: 1
+api.operation.get-execution-history:
+  id: 0f497329-5bb0-45a8-9c8a-15d203715f8c
+  path: api.operation.get-execution-history
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Execution History
+  description: Returns the execution history for a work item showing all past
+    agent executions
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/executions/detail.py
+        symbol: get_execution_history
+  metadata:
+    created_at: 2026-05-08T10:30:22.013Z
+    updated_at: 2026-05-08T10:30:22.013Z
+    version: 1
+api.operation.terminate-execution:
+  id: db39b8b6-cb02-4cf4-985e-b0d40d8bc62b
+  path: api.operation.terminate-execution
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Terminate Execution
+  description: Terminates a running agent execution with an optional reason
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/executions/control.py
+        symbol: terminate_execution
+  metadata:
+    created_at: 2026-05-08T10:30:22.279Z
+    updated_at: 2026-05-08T10:30:22.279Z
+    version: 1
+api.operation.get-execution-logs:
+  id: b1bf0cd0-077f-4fba-8957-a71bb09c91ac
+  path: api.operation.get-execution-logs
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Execution Logs
+  description: Retrieves streaming execution logs from the agent container
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/executions/logs.py
+        symbol: get_execution_logs
+  metadata:
+    created_at: 2026-05-08T10:30:22.548Z
+    updated_at: 2026-05-08T10:30:22.548Z
+    version: 1
+api.operation.create-work-item:
+  id: 5b90796e-be8b-496d-a5f1-d79f4b90e862
+  path: api.operation.create-work-item
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Create Work Item
+  description: Creates a new work item in the system with title, description, and priority
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/work_items.py
+        symbol: create_work_item
+  metadata:
+    created_at: 2026-05-08T10:30:27.532Z
+    updated_at: 2026-05-08T10:30:27.532Z
+    version: 1
+api.operation.list-work-items:
+  id: a8a30416-9446-436f-8a43-b9aaf77b3331
+  path: api.operation.list-work-items
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: List Work Items
+  description: Returns a paginated list of work items with optional status and
+    priority filters
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/work_items.py
+        symbol: list_work_items
+  metadata:
+    created_at: 2026-05-08T10:30:27.797Z
+    updated_at: 2026-05-08T10:30:27.797Z
+    version: 1
+api.operation.get-work-item:
+  id: 43729ead-303e-4dc1-b942-26237f7ad21a
+  path: api.operation.get-work-item
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Work Item
+  description: Returns detailed information about a specific work item including
+    execution history
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/work_items.py
+        symbol: get_work_item
+  metadata:
+    created_at: 2026-05-08T10:30:28.068Z
+    updated_at: 2026-05-08T10:30:28.068Z
+    version: 1
+api.operation.update-work-item:
+  id: 1aafb458-1dc6-4b0e-97b6-5827e0fb1f8d
+  path: api.operation.update-work-item
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Update Work Item
+  description: Updates work item attributes including title, description, status,
+    and priority
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/work_items.py
+        symbol: update_work_item
+  metadata:
+    created_at: 2026-05-08T10:30:28.346Z
+    updated_at: 2026-05-08T10:30:28.346Z
+    version: 1
+api.operation.delete-work-item:
+  id: a400817e-862a-4043-b892-bb5ec7da5ae5
+  path: api.operation.delete-work-item
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Delete Work Item
+  description: Deletes a work item from the system
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/work_items.py
+        symbol: delete_work_item
+  metadata:
+    created_at: 2026-05-08T10:30:28.610Z
+    updated_at: 2026-05-08T10:30:28.610Z
+    version: 1
+api.operation.create-workflow:
+  id: 38437bd7-c5cd-43e4-9d40-3729d869c657
+  path: api.operation.create-workflow
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Create Workflow
+  description: Creates a new workflow definition with stages and transition rules
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/workflows.py
+        symbol: create_workflow
+  metadata:
+    created_at: 2026-05-08T10:30:33.573Z
+    updated_at: 2026-05-08T10:30:33.573Z
+    version: 1
+api.operation.list-workflows:
+  id: ccf9ad4b-3288-43bd-959e-dbc9eae0875b
+  path: api.operation.list-workflows
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: List Workflows
+  description: Returns a paginated list of workflow definitions
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/workflows.py
+        symbol: list_workflows
+  metadata:
+    created_at: 2026-05-08T10:30:33.842Z
+    updated_at: 2026-05-08T10:30:33.842Z
+    version: 1
+api.operation.get-workflow:
+  id: 5ea0a519-98bf-4472-8748-227859c56c7b
+  path: api.operation.get-workflow
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Workflow
+  description: Returns details of a specific workflow definition including all stages
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/workflows.py
+        symbol: get_workflow
+  metadata:
+    created_at: 2026-05-08T10:30:34.110Z
+    updated_at: 2026-05-08T10:30:34.111Z
+    version: 1
+api.operation.update-workflow:
+  id: a4499792-d1e6-4dea-a0b5-d7e3b98f9797
+  path: api.operation.update-workflow
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Update Workflow
+  description: Updates a workflow definition including stage configurations and transitions
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/workflows.py
+        symbol: update_workflow
+  metadata:
+    created_at: 2026-05-08T10:30:34.378Z
+    updated_at: 2026-05-08T10:30:34.378Z
+    version: 1
+api.operation.delete-workflow:
+  id: f17f8ab6-a996-42a3-b82c-ef93b8d5574c
+  path: api.operation.delete-workflow
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Delete Workflow
+  description: Deletes a workflow definition from the system
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/workflows.py
+        symbol: delete_workflow
+  metadata:
+    created_at: 2026-05-08T10:30:34.648Z
+    updated_at: 2026-05-08T10:30:34.648Z
+    version: 1
+api.operation.list-workflow-runs:
+  id: bc288938-0abd-478b-98dc-d4e7b7e76c1d
+  path: api.operation.list-workflow-runs
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: List Workflow Runs
+  description: Returns a list of workflow run records with filtering by project or status
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/workflow_runs.py
+        symbol: list_workflow_runs
+  metadata:
+    created_at: 2026-05-08T10:30:39.366Z
+    updated_at: 2026-05-08T10:30:39.366Z
+    version: 1
+api.operation.get-workflow-run:
+  id: c86816e6-8191-41a3-a0e3-bad88d8c7231
+  path: api.operation.get-workflow-run
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Workflow Run
+  description: Returns detailed information about a specific workflow run
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/workflow_runs.py
+        symbol: get_workflow_run
+  metadata:
+    created_at: 2026-05-08T10:30:39.639Z
+    updated_at: 2026-05-08T10:30:39.640Z
+    version: 1
+api.operation.get-workflow-run-events:
+  id: aa8e3b33-3c3b-4346-9455-f5dbb7177ad8
+  path: api.operation.get-workflow-run-events
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Workflow Run Events
+  description: Returns the domain event stream for a specific workflow run
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/workflow_runs.py
+        symbol: get_workflow_run_events
+  metadata:
+    created_at: 2026-05-08T10:30:39.910Z
+    updated_at: 2026-05-08T10:30:39.911Z
+    version: 1
+api.operation.get-workflow-run-audit:
+  id: d647030e-9a40-4eae-b81a-df00346f96a5
+  path: api.operation.get-workflow-run-audit
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Workflow Run Audit
+  description: Returns the audit log for a specific workflow run
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/workflow_runs.py
+        symbol: get_workflow_run_audit
+  metadata:
+    created_at: 2026-05-08T10:30:40.184Z
+    updated_at: 2026-05-08T10:30:40.184Z
+    version: 1
+api.operation.list-board-workflow-templates:
+  id: 0ff9d9bc-85e8-449b-93d0-c0ff620587f9
+  path: api.operation.list-board-workflow-templates
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: List Board Workflow Templates
+  description: Returns all board workflow templates for board-level pipeline configuration
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/board_workflow_templates.py
+        symbol: list_templates
+  metadata:
+    created_at: 2026-05-08T10:30:45.483Z
+    updated_at: 2026-05-08T10:30:45.483Z
+    version: 1
+api.operation.get-board-workflow-template:
+  id: 22599e41-50c8-4607-bc42-d6bdf454b460
+  path: api.operation.get-board-workflow-template
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Board Workflow Template
+  description: Returns a specific board workflow template by ID
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/board_workflow_templates.py
+        symbol: get_template
+  metadata:
+    created_at: 2026-05-08T10:30:45.766Z
+    updated_at: 2026-05-08T10:30:45.766Z
+    version: 1
+api.operation.create-board-workflow-template:
+  id: a43f3d08-a88f-481e-8546-033e4b092c76
+  path: api.operation.create-board-workflow-template
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Create Board Workflow Template
+  description: Creates a new board workflow template mapping columns to pipeline stages
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/board_workflow_templates.py
+        symbol: create_template
+  metadata:
+    created_at: 2026-05-08T10:30:46.045Z
+    updated_at: 2026-05-08T10:30:46.045Z
+    version: 1
+api.operation.update-board-workflow-template:
+  id: cb8d55d4-ed9a-4fef-b925-74d61b966b35
+  path: api.operation.update-board-workflow-template
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Update Board Workflow Template
+  description: Updates an existing board workflow template configuration
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/board_workflow_templates.py
+        symbol: update_template
+  metadata:
+    created_at: 2026-05-08T10:30:46.322Z
+    updated_at: 2026-05-08T10:30:46.322Z
+    version: 1
+api.operation.delete-board-workflow-template:
+  id: fb4e91a1-27b2-4c52-a99e-ed61bb078a43
+  path: api.operation.delete-board-workflow-template
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Delete Board Workflow Template
+  description: Deletes a board workflow template
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/board_workflow_templates.py
+        symbol: delete_template
+  metadata:
+    created_at: 2026-05-08T10:30:46.604Z
+    updated_at: 2026-05-08T10:30:46.604Z
+    version: 1
+api.operation.get-system-health:
+  id: 8c5e70c4-2a6e-4d04-bb1e-265c0247e01a
+  path: api.operation.get-system-health
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get System Health
+  description: Returns system health status including component availability and error rates
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/metrics.py
+        symbol: get_system_health
+  metadata:
+    created_at: 2026-05-08T10:30:52.350Z
+    updated_at: 2026-05-08T10:30:52.350Z
+    version: 1
+api.operation.get-performance-metrics:
+  id: 3840a72e-afc5-4334-b0ec-6e6d79957f1b
+  path: api.operation.get-performance-metrics
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Performance Metrics
+  description: Returns performance metrics including execution throughput and
+    latency statistics
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/metrics.py
+        symbol: get_performance_metrics
+  metadata:
+    created_at: 2026-05-08T10:30:52.647Z
+    updated_at: 2026-05-08T10:30:52.647Z
+    version: 1
+api.operation.get-resilience-metrics:
+  id: 66862146-0465-4bf3-a327-1d4972c881e3
+  path: api.operation.get-resilience-metrics
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Resilience Metrics
+  description: Returns resilience metrics including circuit breaker states and
+    retry statistics
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/metrics.py
+        symbol: get_resilience_metrics
+  metadata:
+    created_at: 2026-05-08T10:30:52.921Z
+    updated_at: 2026-05-08T10:30:52.921Z
+    version: 1
+api.operation.get-integration-status:
+  id: d4ff802b-a81b-4f23-ade3-a2adc5224166
+  path: api.operation.get-integration-status
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Integration Status
+  description: Returns the connectivity status of all external service integrations
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/metrics.py
+        symbol: get_integration_status
+  metadata:
+    created_at: 2026-05-08T10:30:53.201Z
+    updated_at: 2026-05-08T10:30:53.201Z
+    version: 1
+api.operation.list-audit-events:
+  id: 4c5f1f7e-9032-4b51-9271-64c0f20ccf94
+  path: api.operation.list-audit-events
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: List Audit Events
+  description: Returns a paginated audit event log with filtering by resource
+    type, action, and time range
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/audit.py
+        symbol: list_audit_events
+  metadata:
+    created_at: 2026-05-08T10:30:57.663Z
+    updated_at: 2026-05-08T10:30:57.663Z
+    version: 1
+api.operation.get-causal-chain:
+  id: 04e5a725-88d0-4c8c-89a6-66b429e500c0
+  path: api.operation.get-causal-chain
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Causal Chain
+  description: Returns the causal event chain for a specific audit event showing
+    cause-and-effect relationships
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/audit.py
+        symbol: get_causal_chain
+  metadata:
+    created_at: 2026-05-08T10:30:57.952Z
+    updated_at: 2026-05-08T10:30:57.952Z
+    version: 1
+api.operation.get-domain-events:
+  id: febb150d-4657-4885-813d-2e1273396a85
+  path: api.operation.get-domain-events
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Domain Events
+  description: Queries and returns domain events from the event store with filtering options
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/events.py
+        symbol: get_events
+  metadata:
+    created_at: 2026-05-08T10:31:03.065Z
+    updated_at: 2026-05-08T10:31:03.065Z
+    version: 1
+api.operation.replay-events:
+  id: b2a986b3-d699-4225-bef4-42b0b6dad476
+  path: api.operation.replay-events
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Replay Events
+  description: Replays a set of domain events for debugging and state reconstruction
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/events.py
+        symbol: replay_events
+  metadata:
+    created_at: 2026-05-08T10:31:03.352Z
+    updated_at: 2026-05-08T10:31:03.352Z
+    version: 1
+api.operation.get-event-statistics:
+  id: a3dcdc64-4fa5-49e4-a1b5-0c214e879538
+  path: api.operation.get-event-statistics
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Event Statistics
+  description: Returns event bus statistics including emitted event counts and
+    handler error rates
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/events.py
+        symbol: get_statistics
+  metadata:
+    created_at: 2026-05-08T10:31:03.636Z
+    updated_at: 2026-05-08T10:31:03.636Z
+    version: 1
+api.operation.start-workflow-execution:
+  id: dbaea6f7-32cf-4b67-b2ad-040cac094899
+  path: api.operation.start-workflow-execution
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Start Workflow Execution
+  description: Triggers workflow execution for a work item via the orchestrator
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/orchestrator.py
+        symbol: start_workflow_execution
+  metadata:
+    created_at: 2026-05-08T10:31:09.983Z
+    updated_at: 2026-05-08T10:31:09.983Z
+    version: 1
+api.operation.cancel-workflow-execution:
+  id: d921cfc7-0215-4219-bd77-ba84c146b377
+  path: api.operation.cancel-workflow-execution
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Cancel Workflow Execution
+  description: Cancels an in-progress workflow execution
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/orchestrator.py
+        symbol: cancel_workflow_execution
+  metadata:
+    created_at: 2026-05-08T10:31:10.266Z
+    updated_at: 2026-05-08T10:31:10.267Z
+    version: 1
+api.operation.pause-workflow-execution:
+  id: 85cf4ef5-b624-4a24-88a4-78fa57a927b8
+  path: api.operation.pause-workflow-execution
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Pause Workflow Execution
+  description: Pauses a running workflow execution
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/orchestrator.py
+        symbol: pause_workflow_execution
+  metadata:
+    created_at: 2026-05-08T10:31:10.553Z
+    updated_at: 2026-05-08T10:31:10.553Z
+    version: 1
+api.operation.resume-workflow-execution:
+  id: 2b589161-92ed-4f04-8220-c28e2c9d744b
+  path: api.operation.resume-workflow-execution
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Resume Workflow Execution
+  description: Resumes a paused workflow execution
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/orchestrator.py
+        symbol: resume_workflow_execution
+  metadata:
+    created_at: 2026-05-08T10:31:10.845Z
+    updated_at: 2026-05-08T10:31:10.845Z
+    version: 1
+api.operation.validate-entry-conditions:
+  id: 615db774-05c0-49bd-9bc8-0b6f70acd9cf
+  path: api.operation.validate-entry-conditions
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Validate Entry Conditions
+  description: Validates whether entry conditions are met for a workflow stage transition
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/orchestrator.py
+        symbol: validate_entry_conditions
+  metadata:
+    created_at: 2026-05-08T10:31:11.128Z
+    updated_at: 2026-05-08T10:31:11.128Z
+    version: 1
+api.operation.get-execution-queue:
+  id: 72cdb0d3-333f-4594-a00f-7c440b37ecdf
+  path: api.operation.get-execution-queue
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Execution Queue
+  description: Returns the current agent execution queue with position and status
+    information
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/scheduler.py
+        symbol: get_execution_queue
+  metadata:
+    created_at: 2026-05-08T10:31:14.509Z
+    updated_at: 2026-05-08T10:31:14.509Z
+    version: 1
+api.operation.get-queue-statistics:
+  id: bff31282-f8b9-4b78-8f76-06a3669d5d49
+  path: api.operation.get-queue-statistics
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Queue Statistics
+  description: Returns statistics about the execution queue including throughput
+    and wait times
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/scheduler.py
+        symbol: get_queue_statistics
+  metadata:
+    created_at: 2026-05-08T10:31:14.796Z
+    updated_at: 2026-05-08T10:31:14.796Z
+    version: 1
+api.operation.list-workspaces:
+  id: f96b1c46-e74d-47bf-b06f-0f6cdf4f6937
+  path: api.operation.list-workspaces
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: List Workspaces
+  description: Returns all registered agent workspaces and their container bindings
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/workspace.py
+        symbol: list_workspaces
+  metadata:
+    created_at: 2026-05-08T10:31:20.176Z
+    updated_at: 2026-05-08T10:31:20.176Z
+    version: 1
+api.operation.list-active-workspaces:
+  id: 134c2cff-8bcc-4579-97fc-b23e1236f63c
+  path: api.operation.list-active-workspaces
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: List Active Workspaces
+  description: Returns only the currently active agent workspaces
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/workspace.py
+        symbol: list_active_workspaces
+  metadata:
+    created_at: 2026-05-08T10:31:20.464Z
+    updated_at: 2026-05-08T10:31:20.465Z
+    version: 1
+api.operation.get-workspace:
+  id: d819615a-b95c-4565-a0ef-fe9a437c3857
+  path: api.operation.get-workspace
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Workspace
+  description: Returns details of a specific workspace including resource usage
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/workspace.py
+        symbol: get_workspace
+  metadata:
+    created_at: 2026-05-08T10:31:20.741Z
+    updated_at: 2026-05-08T10:31:20.741Z
+    version: 1
+api.operation.get-resource-usage-summary:
+  id: a9a849ed-fcf3-4708-b3c6-710b48a39d13
+  path: api.operation.get-resource-usage-summary
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Resource Usage Summary
+  description: Returns aggregate resource usage across all active workspaces
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/workspace.py
+        symbol: get_resource_usage_summary
+  metadata:
+    created_at: 2026-05-08T10:31:21.018Z
+    updated_at: 2026-05-08T10:31:21.018Z
+    version: 1
+api.operation.get-workspace-logs:
+  id: fb4cd283-2622-460d-b9ae-57d3a227e499
+  path: api.operation.get-workspace-logs
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Workspace Logs
+  description: Returns execution logs from a specific workspace container
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/workspace.py
+        symbol: get_workspace_logs
+  metadata:
+    created_at: 2026-05-08T10:31:21.324Z
+    updated_at: 2026-05-08T10:31:21.324Z
+    version: 1
+api.operation.list-config-agents:
+  id: 4e3c0638-da25-4be2-8fbc-6bb9d5aeb9d4
+  path: api.operation.list-config-agents
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: List Config Agents
+  description: Returns all agent configurations from the configuration store
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/config/agents.py
+        symbol: list_all_agents
+  metadata:
+    created_at: 2026-05-08T10:31:25.436Z
+    updated_at: 2026-05-08T10:31:25.436Z
+    version: 1
+api.operation.get-agent-config:
+  id: a906f64e-a06a-4c88-8cd9-0462c3c31b5f
+  path: api.operation.get-agent-config
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Agent Config
+  description: Returns the stored configuration for a specific agent
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/config/agents.py
+        symbol: get_agent_config
+  metadata:
+    created_at: 2026-05-08T10:31:25.730Z
+    updated_at: 2026-05-08T10:31:25.730Z
+    version: 1
+api.operation.update-agent-config:
+  id: 8373cc6b-a1c1-4d95-81f2-b5930b0c6298
+  path: api.operation.update-agent-config
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Update Agent Config
+  description: Updates the stored configuration for a specific agent
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/config/agents.py
+        symbol: update_agent_config
+  metadata:
+    created_at: 2026-05-08T10:31:26.022Z
+    updated_at: 2026-05-08T10:31:26.023Z
+    version: 1
+api.operation.get-project-config:
+  id: a65ff298-b4ba-417c-9bb5-c06f2214319a
+  path: api.operation.get-project-config
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Project Config
+  description: Returns the configuration for a specific project
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/config/projects.py
+        symbol: get_project_config
+  metadata:
+    created_at: 2026-05-08T10:31:30.502Z
+    updated_at: 2026-05-08T10:31:30.502Z
+    version: 1
+api.operation.update-project-config:
+  id: dba1f9ab-5220-4f86-98ae-b2484a49e548
+  path: api.operation.update-project-config
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Update Project Config
+  description: Updates the configuration for a specific project
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/config/projects.py
+        symbol: update_project_config
+  metadata:
+    created_at: 2026-05-08T10:31:30.813Z
+    updated_at: 2026-05-08T10:31:30.813Z
+    version: 1
+api.operation.list-projects:
+  id: 192ebef3-3610-4df9-8b51-01f073a374f2
+  path: api.operation.list-projects
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: List Projects
+  description: Returns a list of all configured projects
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/config/projects.py
+        symbol: list_projects
+  metadata:
+    created_at: 2026-05-08T10:31:31.102Z
+    updated_at: 2026-05-08T10:31:31.102Z
+    version: 1
+api.operation.get-project-config-history:
+  id: 5c735f9d-a601-4220-a03a-8fdda4d05813
+  path: api.operation.get-project-config-history
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Project Config History
+  description: Returns the change history for a project configuration
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/config/projects.py
+        symbol: get_project_config_history
+  metadata:
+    created_at: 2026-05-08T10:31:31.389Z
+    updated_at: 2026-05-08T10:31:31.389Z
+    version: 1
+api.operation.list-pipeline-configs:
+  id: 8dfd1820-cf6e-4bfd-9872-f42ec9472ae7
+  path: api.operation.list-pipeline-configs
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: List Pipeline Configs
+  description: Returns all pipeline configurations from the configuration store
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/config/pipelines.py
+        symbol: list_all_pipelines
+  metadata:
+    created_at: 2026-05-08T10:31:36.611Z
+    updated_at: 2026-05-08T10:31:36.611Z
+    version: 1
+api.operation.get-pipeline-config:
+  id: 2b2ef88a-713a-46ba-9a0e-38be5b7ea56a
+  path: api.operation.get-pipeline-config
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Pipeline Config
+  description: Returns the configuration for a specific pipeline
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/config/pipelines.py
+        symbol: get_pipeline_config
+  metadata:
+    created_at: 2026-05-08T10:31:37.021Z
+    updated_at: 2026-05-08T10:31:37.021Z
+    version: 1
+api.operation.update-pipeline-config:
+  id: d71db135-942f-4e5b-bbf3-f842965eecbb
+  path: api.operation.update-pipeline-config
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Update Pipeline Config
+  description: Updates the configuration for a specific pipeline
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/config/pipelines.py
+        symbol: update_pipeline_config
+  metadata:
+    created_at: 2026-05-08T10:31:37.330Z
+    updated_at: 2026-05-08T10:31:37.330Z
+    version: 1
+api.operation.add-environment-variable:
+  id: a55661ab-2e17-4c26-aaf6-c6437dc19f9e
+  path: api.operation.add-environment-variable
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Add Environment Variable
+  description: Adds or updates an environment variable for a project configuration
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/config/environment.py
+        symbol: add_environment_variable
+  metadata:
+    created_at: 2026-05-08T10:31:37.624Z
+    updated_at: 2026-05-08T10:31:37.624Z
+    version: 1
+api.operation.remove-environment-variable:
+  id: bafd70cc-e79a-439d-838e-a3bb793cce2e
+  path: api.operation.remove-environment-variable
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Remove Environment Variable
+  description: Removes an environment variable from a project configuration
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/config/environment.py
+        symbol: remove_environment_variable
+  metadata:
+    created_at: 2026-05-08T10:31:37.909Z
+    updated_at: 2026-05-08T10:31:37.909Z
+    version: 1
+api.operation.upload-configuration-file:
+  id: 59ad69e5-4190-4ec3-8d07-442bf8e842af
+  path: api.operation.upload-configuration-file
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Upload Configuration File
+  description: Imports a YAML configuration file for bulk project/pipeline/agent
+    configuration
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/config/import_export.py
+        symbol: upload_configuration_file
+  metadata:
+    created_at: 2026-05-08T10:31:41.588Z
+    updated_at: 2026-05-08T10:31:41.589Z
+    version: 1
+api.operation.search-configurations:
+  id: da1b5b8c-e5fb-46ba-99e6-baeb5dfce5a1
+  path: api.operation.search-configurations
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Search Configurations
+  description: Full-text search across all configuration entities
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/config/search.py
+        symbol: search_configs
+  metadata:
+    created_at: 2026-05-08T10:31:41.882Z
+    updated_at: 2026-05-08T10:31:41.882Z
+    version: 1
+api.operation.login:
+  id: aec47136-d9df-4497-9ec1-85e53f0177ae
+  path: api.operation.login
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Login
+  description: Authenticates a user with credentials and returns a JWT access token
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/auth_api_adapter.py
+        symbol: login
+  metadata:
+    created_at: 2026-05-08T10:31:47.340Z
+    updated_at: 2026-05-08T10:31:47.340Z
+    version: 1
+api.operation.refresh-token:
+  id: b3d00ccb-82b3-4da3-84c9-d043c7d7d4f1
+  path: api.operation.refresh-token
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Refresh Token
+  description: Refreshes an expired JWT access token using a valid refresh token
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/auth_api_adapter.py
+        symbol: refresh_token
+  metadata:
+    created_at: 2026-05-08T10:31:47.642Z
+    updated_at: 2026-05-08T10:31:47.642Z
+    version: 1
+api.operation.get-current-user:
+  id: 1cceb86b-1967-496a-be50-4e0cfc6ac609
+  path: api.operation.get-current-user
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Current User
+  description: Returns information about the currently authenticated user
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/auth_api_adapter.py
+        symbol: get_current_user_info
+  metadata:
+    created_at: 2026-05-08T10:31:47.932Z
+    updated_at: 2026-05-08T10:31:47.932Z
+    version: 1
+api.operation.create-user:
+  id: 48559339-48ab-446e-8314-33e89885d777
+  path: api.operation.create-user
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Create User
+  description: Creates a new user account with role assignment
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/auth_api_adapter.py
+        symbol: create_user
+  metadata:
+    created_at: 2026-05-08T10:31:48.221Z
+    updated_at: 2026-05-08T10:31:48.221Z
+    version: 1
+api.operation.get-user:
+  id: 20feabc8-1330-49fd-94e0-446f893cc601
+  path: api.operation.get-user
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get User
+  description: Returns details of a specific user account
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/auth_api_adapter.py
+        symbol: get_user
+  metadata:
+    created_at: 2026-05-08T10:31:48.516Z
+    updated_at: 2026-05-08T10:31:48.516Z
+    version: 1
+api.operation.update-user:
+  id: 152b191c-4d4f-4c79-b70d-3159033aac31
+  path: api.operation.update-user
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Update User
+  description: Updates a user account including role and permission changes
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/auth_api_adapter.py
+        symbol: update_user
+  metadata:
+    created_at: 2026-05-08T10:31:53.762Z
+    updated_at: 2026-05-08T10:31:53.762Z
+    version: 1
+api.operation.delete-user:
+  id: fb7dc2bf-6907-4c1b-a59a-0b49fff9b938
+  path: api.operation.delete-user
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Delete User
+  description: Deletes a user account from the system
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/auth_api_adapter.py
+        symbol: delete_user
+  metadata:
+    created_at: 2026-05-08T10:31:54.055Z
+    updated_at: 2026-05-08T10:31:54.055Z
+    version: 1
+api.operation.create-api-key:
+  id: 276c06c2-cb9b-46f9-8566-848edc9a8f63
+  path: api.operation.create-api-key
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Create API Key
+  description: Creates a new API key for programmatic authentication
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/auth_api_adapter.py
+        symbol: create_api_key
+  metadata:
+    created_at: 2026-05-08T10:31:54.354Z
+    updated_at: 2026-05-08T10:31:54.354Z
+    version: 1
+api.operation.list-api-keys:
+  id: 07d9a6a2-2dce-4e74-ad30-eb78d7a0d217
+  path: api.operation.list-api-keys
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: List API Keys
+  description: Returns all active API keys for the current user
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/auth_api_adapter.py
+        symbol: list_api_keys
+  metadata:
+    created_at: 2026-05-08T10:31:54.655Z
+    updated_at: 2026-05-08T10:31:54.655Z
+    version: 1
+api.operation.revoke-api-key:
+  id: 7dc1a111-1ff9-4991-8891-83f6cd7987f5
+  path: api.operation.revoke-api-key
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Revoke API Key
+  description: Revokes and invalidates an API key
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/auth_api_adapter.py
+        symbol: revoke_api_key
+  metadata:
+    created_at: 2026-05-08T10:31:54.951Z
+    updated_at: 2026-05-08T10:31:54.951Z
+    version: 1
+api.operation.get-simulation-clock-state:
+  id: f98451f3-8a79-4592-902d-4c1a3e67e6a8
+  path: api.operation.get-simulation-clock-state
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Simulation Clock State
+  description: Returns the current simulation clock state including time and speed
+    multiplier (simulation-only)
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/simulation_clock.py
+        symbol: get_clock_state
+  metadata:
+    created_at: 2026-05-08T10:32:00.437Z
+    updated_at: 2026-05-08T10:32:00.437Z
+    version: 1
+api.operation.advance-simulation-clock:
+  id: 7b4b604f-a686-4501-a06c-a5d6e71e33e4
+  path: api.operation.advance-simulation-clock
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Advance Simulation Clock
+  description: Fast-forwards the simulation clock by a specified duration (simulation-only)
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/simulation_clock.py
+        symbol: advance_clock
+  metadata:
+    created_at: 2026-05-08T10:32:00.805Z
+    updated_at: 2026-05-08T10:32:00.805Z
+    version: 1
+api.operation.pause-simulation-clock:
+  id: 0d805124-0bfe-4c0f-b6c3-22c15cf29fdf
+  path: api.operation.pause-simulation-clock
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Pause Simulation Clock
+  description: Pauses the simulation clock to freeze time during testing (simulation-only)
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/simulation_clock.py
+        symbol: pause_clock
+  metadata:
+    created_at: 2026-05-08T10:32:01.117Z
+    updated_at: 2026-05-08T10:32:01.117Z
+    version: 1
+api.operation.resume-simulation-clock:
+  id: d63fea48-4e48-436e-9a45-7786061c90e3
+  path: api.operation.resume-simulation-clock
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Resume Simulation Clock
+  description: Resumes the simulation clock after a pause (simulation-only)
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/simulation_clock.py
+        symbol: resume_clock
+  metadata:
+    created_at: 2026-05-08T10:32:01.417Z
+    updated_at: 2026-05-08T10:32:01.417Z
+    version: 1
+api.operation.get-simulation-board-state:
+  id: 2bd8cb07-e9a5-45b1-9d6c-aa6bf8baae28
+  path: api.operation.get-simulation-board-state
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Simulation Board State
+  description: Returns the current board state for a simulation run including
+    columns and work items (simulation-only)
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/simulation_board_state.py
+        symbol: get_board_state
+  metadata:
+    created_at: 2026-05-08T10:32:06.173Z
+    updated_at: 2026-05-08T10:32:06.173Z
+    version: 1
+api.operation.get-simulation-execution-status:
+  id: bcd1ba38-19b2-4930-a1ca-82e31cb82fd9
+  path: api.operation.get-simulation-execution-status
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Simulation Execution Status
+  description: Returns execution status for a simulation run (simulation-only)
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/simulation_executions.py
+        symbol: get_execution_status
+  metadata:
+    created_at: 2026-05-08T10:32:06.479Z
+    updated_at: 2026-05-08T10:32:06.479Z
+    version: 1
+api.operation.stream-simulation-events:
+  id: 5720ed0f-2de4-4371-91ce-cb874116a634
+  path: api.operation.stream-simulation-events
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Stream Simulation Events
+  description: SSE endpoint that streams domain events from the simulation in
+    real-time (simulation-only)
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/simulation_stream.py
+        symbol: stream_events
+  metadata:
+    created_at: 2026-05-08T10:32:06.778Z
+    updated_at: 2026-05-08T10:32:06.778Z
+    version: 1
+api.operation.create-simulation-issue:
+  id: ce444cd1-1346-4c4e-925a-ec0e7983eb62
+  path: api.operation.create-simulation-issue
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Create Simulation Issue
+  description: Creates a simulated work item (issue) in the in-memory ticket
+    system (simulation-only)
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/simulation_ticketing.py
+        symbol: create_issue
+  metadata:
+    created_at: 2026-05-08T10:32:11.424Z
+    updated_at: 2026-05-08T10:32:11.424Z
+    version: 1
+api.operation.list-simulation-issues:
+  id: 9e55f7c3-9db1-4ce4-99e5-21c09ea8fc8e
+  path: api.operation.list-simulation-issues
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: List Simulation Issues
+  description: Returns all simulated issues from the in-memory ticket system
+    (simulation-only)
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/simulation_ticketing.py
+        symbol: list_issues
+  metadata:
+    created_at: 2026-05-08T10:32:11.730Z
+    updated_at: 2026-05-08T10:32:11.730Z
+    version: 1
+api.operation.get-simulation-issue:
+  id: ec1410ca-527a-4ca5-8639-965e93d38130
+  path: api.operation.get-simulation-issue
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Simulation Issue
+  description: Returns a specific simulated issue by ID (simulation-only)
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/simulation_ticketing.py
+        symbol: get_issue
+  metadata:
+    created_at: 2026-05-08T10:32:12.039Z
+    updated_at: 2026-05-08T10:32:12.039Z
+    version: 1
+api.operation.move-simulation-issue:
+  id: a6a96725-55b6-4dab-a1e3-ee2039f99a6a
+  path: api.operation.move-simulation-issue
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Move Simulation Issue
+  description: Moves a simulated issue to a different board column (simulation-only)
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/simulation_ticketing.py
+        symbol: move_issue
+  metadata:
+    created_at: 2026-05-08T10:32:12.354Z
+    updated_at: 2026-05-08T10:32:12.354Z
+    version: 1

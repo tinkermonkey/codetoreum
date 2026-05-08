@@ -1,0 +1,10 @@
+id: changeset-1778242551579-r2aspsf9b
+name: add-domain-event-schemas
+created: 2026-05-08T12:15:51.588Z
+modified: 2026-05-08T12:21:39.002Z
+status: committed
+baseSnapshot: sha256:de398dc553ebfc9f8f697d03a95ebb1216b8526ba6351b754d0088e612027344
+stats:
+  additions: 8
+  modifications: 0
+  deletions: 0

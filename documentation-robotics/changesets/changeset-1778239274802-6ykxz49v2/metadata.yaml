@@ -1,0 +1,10 @@
+id: changeset-1778239274802-6ykxz49v2
+name: relationship-wiring-pass
+created: 2026-05-08T11:21:14.812Z
+modified: 2026-05-08T11:29:49.247Z
+status: committed
+baseSnapshot: sha256:e8d3584d01aff5077f55cc6e7b07f88cce4d939933e0a6d374e1627e3dca019c
+stats:
+  additions: 253
+  modifications: 0
+  deletions: 0

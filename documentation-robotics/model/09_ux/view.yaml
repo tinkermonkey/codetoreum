@@ -1,0 +1,144 @@
+ux.view.dashboard:
+  id: 69d532a1-0ced-4783-aca0-b495f4bc85ee
+  path: ux.view.dashboard
+  spec_node_id: ux.view
+  type: view
+  layer_id: ux
+  name: Dashboard
+  description: Main monitoring dashboard showing active agents, system health,
+    circuit breaker states, and API usage
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/src/pages/DashboardPage.tsx
+        symbol: DashboardPage
+  metadata:
+    created_at: 2026-05-08T11:11:30.290Z
+    updated_at: 2026-05-08T11:11:30.290Z
+    version: 1
+ux.view.pipeline-flow:
+  id: 30b51a3c-15d6-48b1-8dd9-7181cfe33341
+  path: ux.view.pipeline-flow
+  spec_node_id: ux.view
+  type: view
+  layer_id: ux
+  name: Pipeline Flow
+  description: Full-screen React Flow-based visualization of pipeline execution
+    graph with nodes and edges
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/src/pages/PipelineFlowPage.tsx
+        symbol: PipelineFlowPage
+  metadata:
+    created_at: 2026-05-08T11:11:31.775Z
+    updated_at: 2026-05-08T11:11:31.775Z
+    version: 1
+ux.view.pipeline-run-details:
+  id: 0a87a1ed-6991-4c98-90c5-c2e430e21c4f
+  path: ux.view.pipeline-run-details
+  spec_node_id: ux.view
+  type: view
+  layer_id: ux
+  name: Pipeline Run Details
+  description: Full-screen detailed view of a pipeline run with event timeline,
+    audit log, and execution status
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/src/pages/PipelineRunDetailsPage.tsx
+        symbol: PipelineRunDetailsPage
+  metadata:
+    created_at: 2026-05-08T11:11:34.858Z
+    updated_at: 2026-05-08T11:11:34.858Z
+    version: 1
+ux.view.workflow-config:
+  id: ec528926-cdf3-4d43-a6e3-cbc8572c211f
+  path: ux.view.workflow-config
+  spec_node_id: ux.view
+  type: view
+  layer_id: ux
+  name: Workflow Config
+  description: Workflow configuration editor for creating and managing pipeline
+    stages and their entry conditions
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/src/pages/WorkflowConfigPage.tsx
+        symbol: WorkflowConfigPage
+  metadata:
+    created_at: 2026-05-08T11:11:36.020Z
+    updated_at: 2026-05-08T11:11:36.020Z
+    version: 1
+ux.view.agent-config:
+  id: 03966f8b-dd6d-4112-a848-2c149c6cd045
+  path: ux.view.agent-config
+  spec_node_id: ux.view
+  type: view
+  layer_id: ux
+  name: Agent Config
+  description: Agent definition management interface for configuring AI agents,
+    capabilities, and execution parameters
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/src/pages/AgentConfigPage.tsx
+        symbol: AgentConfigPage
+  metadata:
+    created_at: 2026-05-08T11:11:39.497Z
+    updated_at: 2026-05-08T11:11:39.497Z
+    version: 1
+ux.view.project-config:
+  id: 71e6b5b3-09cc-41f4-9e48-62a546a55e84
+  path: ux.view.project-config
+  spec_node_id: ux.view
+  type: view
+  layer_id: ux
+  name: Project Config
+  description: Project settings and environment configuration interface for GitHub
+    integration and pipeline setup
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/src/pages/ProjectConfigPage.tsx
+        symbol: ProjectConfigPage
+  metadata:
+    created_at: 2026-05-08T11:11:40.453Z
+    updated_at: 2026-05-08T11:11:40.453Z
+    version: 1
+ux.view.config-history:
+  id: 64baac6c-7da7-4bf5-8d4c-0a1f0d026ae6
+  path: ux.view.config-history
+  spec_node_id: ux.view
+  type: view
+  layer_id: ux
+  name: Config History
+  description: Configuration change history view showing audit log of all project,
+    agent, and workflow configuration changes
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/src/pages/ConfigHistoryPage.tsx
+        symbol: ConfigHistoryPage
+  metadata:
+    created_at: 2026-05-08T11:11:43.924Z
+    updated_at: 2026-05-08T11:11:43.924Z
+    version: 1
+ux.view.auth-required:
+  id: 613a3bfc-891a-4366-bc1a-296da7fe0a6f
+  path: ux.view.auth-required
+  spec_node_id: ux.view
+  type: view
+  layer_id: ux
+  name: Auth Required
+  description: Authentication gate page shown to unauthenticated users requiring
+    JWT token entry
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/src/pages/AuthRequiredPage.tsx
+        symbol: AuthRequiredPage
+  metadata:
+    created_at: 2026-05-08T11:11:45.106Z
+    updated_at: 2026-05-08T11:11:45.106Z
+    version: 1

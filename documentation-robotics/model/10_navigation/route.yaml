@@ -1,0 +1,113 @@
+navigation.route.dashboard-route:
+  id: 6fa7d1ab-c455-45db-8d9d-41104f8edcb0
+  path: navigation.route.dashboard-route
+  spec_node_id: navigation.route
+  type: route
+  layer_id: navigation
+  name: Dashboard Route
+  description: Root route '/' leading to the main monitoring dashboard
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/src/App.tsx
+  metadata:
+    created_at: 2026-05-08T11:12:50.589Z
+    updated_at: 2026-05-08T11:12:50.589Z
+    version: 1
+navigation.route.pipeline-flow-route:
+  id: 5d150e12-cb48-4441-b595-9569e5bb198c
+  path: navigation.route.pipeline-flow-route
+  spec_node_id: navigation.route
+  type: route
+  layer_id: navigation
+  name: Pipeline Flow Route
+  description: Route '/workflows/flow/:id?' to pipeline visualization with React Flow graph
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/src/pages/PipelineFlowPage.tsx
+  metadata:
+    created_at: 2026-05-08T11:12:54.110Z
+    updated_at: 2026-05-08T11:12:54.110Z
+    version: 1
+navigation.route.pipeline-run-details-route:
+  id: acf6f8f3-076e-4bf4-8a2a-579a5ecdd3f2
+  path: navigation.route.pipeline-run-details-route
+  spec_node_id: navigation.route
+  type: route
+  layer_id: navigation
+  name: Pipeline Run Details Route
+  description: Route '/workflows/runs/:id?' to individual pipeline run detail with
+    events and audit log
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/src/pages/PipelineRunDetailsPage.tsx
+  metadata:
+    created_at: 2026-05-08T11:12:55.379Z
+    updated_at: 2026-05-08T11:12:55.379Z
+    version: 1
+navigation.route.workflow-config-route:
+  id: 99bbf180-b2da-418a-81d0-e4fe24826e5e
+  path: navigation.route.workflow-config-route
+  spec_node_id: navigation.route
+  type: route
+  layer_id: navigation
+  name: Workflow Config Route
+  description: Route '/workflows' to workflow configuration editor
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/src/pages/WorkflowConfigPage.tsx
+  metadata:
+    created_at: 2026-05-08T11:13:00.505Z
+    updated_at: 2026-05-08T11:13:00.505Z
+    version: 1
+navigation.route.agent-config-route:
+  id: ff757922-8688-44b2-b802-f36c7c890e28
+  path: navigation.route.agent-config-route
+  spec_node_id: navigation.route
+  type: route
+  layer_id: navigation
+  name: Agent Config Route
+  description: Route '/agents' to agent definition management and configuration
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/src/pages/AgentConfigPage.tsx
+  metadata:
+    created_at: 2026-05-08T11:13:01.164Z
+    updated_at: 2026-05-08T11:13:01.164Z
+    version: 1
+navigation.route.project-config-route:
+  id: c32ddfd7-e0c9-4c9b-901d-75879889cd28
+  path: navigation.route.project-config-route
+  spec_node_id: navigation.route
+  type: route
+  layer_id: navigation
+  name: Project Config Route
+  description: Route '/config' to project settings and environment configuration
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/src/pages/ProjectConfigPage.tsx
+  metadata:
+    created_at: 2026-05-08T11:13:04.027Z
+    updated_at: 2026-05-08T11:13:04.027Z
+    version: 1
+navigation.route.config-history-route:
+  id: d0295bd2-82da-4dab-b55e-6d81cea63642
+  path: navigation.route.config-history-route
+  spec_node_id: navigation.route
+  type: route
+  layer_id: navigation
+  name: Config History Route
+  description: Route '/history' to configuration change history and audit log
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/src/pages/ConfigHistoryPage.tsx
+  metadata:
+    created_at: 2026-05-08T11:13:04.960Z
+    updated_at: 2026-05-08T11:13:04.960Z
+    version: 1

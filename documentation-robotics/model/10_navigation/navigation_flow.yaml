@@ -1,0 +1,17 @@
+navigation.navigationflow.main-application-flow:
+  id: be7adaf5-91a6-4de3-9126-85ba6a922330
+  path: navigation.navigationflow.main-application-flow
+  spec_node_id: navigation.navigationflow
+  type: navigationflow
+  layer_id: navigation
+  name: Main Application Flow
+  description: Primary navigation between Dashboard, Pipeline Flow, Workflow
+    Config, Agent Config, Project Config, and History
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/src/App.tsx
+  metadata:
+    created_at: 2026-05-08T11:12:47.814Z
+    updated_at: 2026-05-08T11:12:47.814Z
+    version: 1

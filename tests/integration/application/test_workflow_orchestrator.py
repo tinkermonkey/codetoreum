@@ -219,12 +219,7 @@ def mock_decision_events():
 @pytest.fixture
 def project_config():
     """Create a valid ProjectConfig for testing orchestrate_project."""
-    return ProjectConfig(
-        repo_url="https://github.com/test/repo.git",
-        branch="main",
-        enabled=True,
-        org="test-org"
-    )
+    return ProjectConfig(repo_url="https://github.com/test/repo.git", branch="main", enabled=True, org="test-org")
 
 
 @pytest.fixture
@@ -1006,10 +1001,7 @@ async def test_orchestrate_project_disabled_project_skipped(
     """Test orchestrate_project returns 0 when project is disabled."""
     # Create a disabled project config
     disabled_config = ProjectConfig(
-        repo_url="https://github.com/test/repo.git",
-        branch="main",
-        enabled=False,
-        org="test-org"
+        repo_url="https://github.com/test/repo.git", branch="main", enabled=False, org="test-org"
     )
 
     board_service = MockBoardService()

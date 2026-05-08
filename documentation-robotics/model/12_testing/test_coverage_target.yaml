@@ -1,0 +1,451 @@
+testing.testcoveragetarget.simulation-config:
+  id: 1964573d-abe4-4080-ab98-5ba7be219c1b
+  path: testing.testcoveragetarget.simulation-config
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: SimulationConfig
+  description: "Configuration for simulation behavior with three factory modes:
+    create_fast_config (100x speed multiplier for tests),
+    create_realistic_config (1x speed for behavior testing),
+    create_high_fidelity_config; supports per-agent behavior config, container
+    command results, YAML file loading"
+  attributes:
+    targetType: integration-flow
+    priority: high
+  metadata:
+    created_at: 2026-05-08T12:17:04.681Z
+    updated_at: 2026-05-08T12:17:04.681Z
+    version: 1
+testing.testcoveragetarget.simulation-clock:
+  id: bfbc65d4-f1ad-4a3c-bf87-a8d8a05d97e6
+  path: testing.testcoveragetarget.simulation-clock
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: SimulationClock
+  description: Time control with configurable speed multipliers; supports
+    advance(delta), advance_to(time), schedule_callback, auto-advance loop, and
+    start_at for deterministic time-based testing; 10-100x faster than real
+    execution
+  attributes:
+    targetType: integration-flow
+    priority: high
+  metadata:
+    created_at: 2026-05-08T12:17:05.039Z
+    updated_at: 2026-05-08T12:17:05.039Z
+    version: 1
+testing.testcoveragetarget.mock-llmadapter:
+  id: 3b3afcb3-a2d9-4c2c-b3e6-e9dd9f721d74
+  path: testing.testcoveragetarget.mock-llmadapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: MockLLMAdapter
+  description: Mock LLM provider adapter replacing ClaudeCodeAdapter; returns
+    deterministic responses via configurable patterns; used by all simulation
+    scenarios to avoid real LLM API calls
+  attributes:
+    targetType: integration-flow
+    priority: critical
+  metadata:
+    created_at: 2026-05-08T12:17:12.577Z
+    updated_at: 2026-05-08T12:17:12.577Z
+    version: 1
+testing.testcoveragetarget.mock-board-adapter:
+  id: dd35228b-0e01-4be7-a75f-41b0f8649ca3
+  path: testing.testcoveragetarget.mock-board-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: MockBoardAdapter
+  description: In-memory board adapter replacing GitHubBoardAdapter; supports
+    create_board, add_item_to_column sync helpers; requires current_project to
+    be set before most operations; used by workflow orchestration tests
+  attributes:
+    targetType: integration-flow
+    priority: critical
+  metadata:
+    created_at: 2026-05-08T12:17:12.930Z
+    updated_at: 2026-05-08T12:17:12.930Z
+    version: 1
+testing.testcoveragetarget.in-memory-event-store:
+  id: b6709235-0d87-4365-a737-1581bba886e7
+  path: testing.testcoveragetarget.in-memory-event-store
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: InMemoryEventStore
+  description: In-memory Redis-backed event store replacement; stores all domain
+    events for audit trail inspection; supports event replay and debugging in
+    simulation scenarios without Redis dependency
+  attributes:
+    targetType: integration-flow
+    priority: critical
+  metadata:
+    created_at: 2026-05-08T12:17:13.315Z
+    updated_at: 2026-05-08T12:17:13.315Z
+    version: 1
+testing.testcoveragetarget.fake-container-adapter:
+  id: 2639dd56-36d5-476d-bf6a-1d01d292304c
+  path: testing.testcoveragetarget.fake-container-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: FakeContainerAdapter
+  description: Fake container adapter replacing DockerContainerAdapter; simulates
+    container lifecycle (create, start, exec, stop) without Docker daemon; used
+    to test ContainerRecoveryService and WorkspaceRouter
+  attributes:
+    targetType: integration-flow
+    priority: critical
+  metadata:
+    created_at: 2026-05-08T12:17:19.748Z
+    updated_at: 2026-05-08T12:17:19.748Z
+    version: 1
+testing.testcoveragetarget.mock-review-cycle-adapter:
+  id: 62714fa8-bbc9-4ab5-a10b-c4eda1af87c0
+  path: testing.testcoveragetarget.mock-review-cycle-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: MockReviewCycleAdapter
+  description: Mock adapter for review cycle port; simulates maker-checker review
+    process with configurable approval/rejection outcomes for ReviewService
+    integration tests
+  attributes:
+    targetType: integration-flow
+    priority: high
+  metadata:
+    created_at: 2026-05-08T12:17:20.182Z
+    updated_at: 2026-05-08T12:17:20.182Z
+    version: 1
+testing.testcoveragetarget.mock-repair-cycle-adapter:
+  id: 78f58162-4c4c-4d80-a2ee-a9ddc375f582
+  path: testing.testcoveragetarget.mock-repair-cycle-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: MockRepairCycleAdapter
+  description: Mock adapter for repair cycle port; simulates test-fix-validate
+    repair loops for ContainerRecoveryService and repair workflow scenario
+    testing
+  attributes:
+    targetType: integration-flow
+    priority: high
+  metadata:
+    created_at: 2026-05-08T12:17:20.714Z
+    updated_at: 2026-05-08T12:17:20.714Z
+    version: 1
+testing.testcoveragetarget.in-memory-metrics-adapter:
+  id: 98598cc7-5de7-437b-9922-1e65c015ff51
+  path: testing.testcoveragetarget.in-memory-metrics-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: InMemoryMetricsAdapter
+  description: In-memory Prometheus metrics adapter; captures metric recordings
+    for assertion in simulation tests (assert_metric_recorded); replaces
+    Prometheus push gateway in test environments
+  attributes:
+    targetType: integration-flow
+    priority: high
+  metadata:
+    created_at: 2026-05-08T12:17:27.162Z
+    updated_at: 2026-05-08T12:17:27.162Z
+    version: 1
+testing.testcoveragetarget.in-memory-storage-adapter:
+  id: 63b03a3f-05b3-48e0-b6c4-0c8e5ad8b961
+  path: testing.testcoveragetarget.in-memory-storage-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: InMemoryStorageAdapter
+  description: In-memory file storage adapter; simulates container workspace file
+    mounting (issue.txt, code/, previous_stage.txt contexts) without filesystem
+    access in tests
+  attributes:
+    targetType: integration-flow
+    priority: medium
+  metadata:
+    created_at: 2026-05-08T12:17:27.522Z
+    updated_at: 2026-05-08T12:17:27.522Z
+    version: 1
+testing.testcoveragetarget.mock-event-emitter:
+  id: 3fc5e334-c233-4f02-96ab-1a6d379c9a06
+  path: testing.testcoveragetarget.mock-event-emitter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: MockEventEmitter
+  description: Mock event emitter for testing event publication; captures emitted
+    domain events for inspection; used by board reconciliation and workflow
+    state change tests
+  attributes:
+    targetType: integration-flow
+    priority: high
+  metadata:
+    created_at: 2026-05-08T12:17:27.885Z
+    updated_at: 2026-05-08T12:17:27.885Z
+    version: 1
+testing.testcoveragetarget.mock-agent-executor:
+  id: ea530506-7fa7-4838-acf0-cf508144706d
+  path: testing.testcoveragetarget.mock-agent-executor
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: MockAgentExecutor
+  description: Mock agent executor using set_completion_handler(callback,
+    board_id) pattern to wire completion callback after construction, avoiding
+    circular dependencies; simulates agent execution lifecycle for
+    ExecutionService tests
+  attributes:
+    targetType: integration-flow
+    priority: critical
+  metadata:
+    created_at: 2026-05-08T12:17:35.158Z
+    updated_at: 2026-05-08T12:17:35.158Z
+    version: 1
+testing.testcoveragetarget.mock-container-recovery-adapter:
+  id: 16c86929-892e-4533-bdbc-91ec75882de4
+  path: testing.testcoveragetarget.mock-container-recovery-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: MockContainerRecoveryAdapter
+  description: Mock adapter for container recovery port; simulates container
+    failure and recovery sequences for ContainerRecoveryService scenario testing
+    (scenario 12)
+  attributes:
+    targetType: integration-flow
+    priority: high
+  metadata:
+    created_at: 2026-05-08T12:17:35.520Z
+    updated_at: 2026-05-08T12:17:35.520Z
+    version: 1
+testing.testcoveragetarget.in-memory-code-review-adapter:
+  id: a610dda9-ef7c-4cc4-a5e2-5f8ffd973ec1
+  path: testing.testcoveragetarget.in-memory-code-review-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: InMemoryCodeReviewAdapter
+  description: In-memory code review adapter replacing GitHubCodeReviewAdapter;
+    simulates PR creation, review submission, approval/rejection for
+    ReviewService and review cycle scenario tests
+  attributes:
+    targetType: integration-flow
+    priority: high
+  metadata:
+    created_at: 2026-05-08T12:17:35.921Z
+    updated_at: 2026-05-08T12:17:35.921Z
+    version: 1
+testing.testcoveragetarget.in-memory-ticket-adapter:
+  id: 5959fbd6-5036-4e19-9dc8-fec5577555b5
+  path: testing.testcoveragetarget.in-memory-ticket-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: InMemoryTicketAdapter
+  description: In-memory GitHub ticket adapter; simulates issue creation, updates,
+    and comment operations for WorkItemService tests without GitHub API
+    dependency
+  attributes:
+    targetType: integration-flow
+    priority: high
+  metadata:
+    created_at: 2026-05-08T12:17:41.976Z
+    updated_at: 2026-05-08T12:17:41.976Z
+    version: 1
+testing.testcoveragetarget.in-memory-version-control-service:
+  id: a8e1d52b-3c47-4a19-a338-10bfe6f28a9c
+  path: testing.testcoveragetarget.in-memory-version-control-service
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: InMemoryVersionControlService
+  description: In-memory version control adapter; simulates git clone, commit,
+    push operations that the orchestrator performs on behalf of containerized
+    agents (no git credentials in containers)
+  attributes:
+    targetType: integration-flow
+    priority: high
+  metadata:
+    created_at: 2026-05-08T12:17:42.361Z
+    updated_at: 2026-05-08T12:17:42.361Z
+    version: 1
+testing.testcoveragetarget.mock-prreview-cycle-adapter:
+  id: 8664747c-7bd7-45a1-af83-e6bb58a308a5
+  path: testing.testcoveragetarget.mock-prreview-cycle-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: MockPRReviewCycleAdapter
+  description: Mock adapter for PR review cycle port; simulates pull request
+    review lifecycle including approval chains, rejection loops, and status
+    change events
+  attributes:
+    targetType: integration-flow
+    priority: high
+  metadata:
+    created_at: 2026-05-08T12:17:42.748Z
+    updated_at: 2026-05-08T12:17:42.748Z
+    version: 1
+testing.testcoveragetarget.in-memory-agent-repository:
+  id: 54c8509a-7643-4bc2-9b88-571d51d68fb3
+  path: testing.testcoveragetarget.in-memory-agent-repository
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: InMemoryAgentRepository
+  description: In-memory agent repository adapter; stores and retrieves Agent
+    domain objects without PostgreSQL dependency for application service
+    integration tests
+  attributes:
+    targetType: integration-flow
+    priority: medium
+  metadata:
+    created_at: 2026-05-08T12:17:48.748Z
+    updated_at: 2026-05-08T12:17:48.748Z
+    version: 1
+testing.testcoveragetarget.in-memory-config-store:
+  id: 028f2ece-f97b-423d-ade8-82b810db812c
+  path: testing.testcoveragetarget.in-memory-config-store
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: InMemoryConfigStore
+  description: In-memory configuration store replacing PostgreSQL-backed config;
+    holds project settings, workflow definitions, agent configurations, and
+    environment variables for simulation tests
+  attributes:
+    targetType: integration-flow
+    priority: high
+  metadata:
+    created_at: 2026-05-08T12:17:49.137Z
+    updated_at: 2026-05-08T12:17:49.137Z
+    version: 1
+testing.testcoveragetarget.in-memory-queue-service:
+  id: 7df57967-e71e-45fa-813e-adcad360ccf7
+  path: testing.testcoveragetarget.in-memory-queue-service
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: InMemoryQueueService
+  description: In-memory queue service adapter; simulates pipeline lock queue
+    ordering for scenario 09 (queue_position_ordering) and concurrency tests
+  attributes:
+    targetType: integration-flow
+    priority: medium
+  metadata:
+    created_at: 2026-05-08T12:17:49.521Z
+    updated_at: 2026-05-08T12:17:49.521Z
+    version: 1
+testing.testcoveragetarget.input-port-mock-adapters:
+  id: aba06115-914e-4bc1-9a39-13c035a0b720
+  path: testing.testcoveragetarget.input-port-mock-adapters
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: Input Port Mock Adapters
+  description: "19 mock implementations of all input port interfaces in
+    adapters/primary/input_port_adapters/mock/: agent command/query, audit
+    query, config command/query/service, execution command/query, logger,
+    metrics query, orchestration command, task query, workflow
+    command/definition-command/query/run-query, work item command/query,
+    workspace query; enable isolated input port testing without application
+    service wiring"
+  attributes:
+    targetType: integration-flow
+    priority: high
+  metadata:
+    created_at: 2026-05-08T12:18:14.769Z
+    updated_at: 2026-05-08T12:18:14.769Z
+    version: 1
+testing.testcoveragetarget.simulation-application-bootstrap:
+  id: 3b1f895a-7c05-4327-820a-8f78945317ad
+  path: testing.testcoveragetarget.simulation-application-bootstrap
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: SimulationApplicationBootstrap
+  description: Wires all 54 mock adapters, input port adapters, and
+    simulation-only routes; entry point for all simulation and test
+    environments; mounts SimulationWorkflowStateManager,
+    SimulationDecisionEvents, SimulationProjectsAPI routes
+  attributes:
+    targetType: integration-flow
+    priority: critical
+  metadata:
+    created_at: 2026-05-08T12:16:43.990Z
+    updated_at: 2026-05-08T12:16:43.990Z
+    version: 1
+testing.testcoveragetarget.simulation-runner:
+  id: b9caf181-f6c0-4a0f-ab27-7155de269517
+  path: testing.testcoveragetarget.simulation-runner
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: SimulationRunner
+  description: Orchestrates test scenarios with assertion helpers
+    (assert_event_occurred, assert_metric_recorded, assert_notification_sent,
+    assert_span_exists); provides advance_time/advance_to for time control;
+    captures domain events for inspection
+  attributes:
+    targetType: integration-flow
+    priority: critical
+  metadata:
+    created_at: 2026-05-08T12:16:44.350Z
+    updated_at: 2026-05-08T12:16:44.350Z
+    version: 1
+testing.testcoveragetarget.mock-notifier-adapter:
+  id: e185ec50-851b-4db8-b125-fc95118286b2
+  path: testing.testcoveragetarget.mock-notifier-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: MockNotifierAdapter
+  description: Mock notification adapter; captures sent notifications for
+    assert_notification_sent assertions in SimulationRunner; simulates Slack,
+    email, or webhook notification delivery
+  attributes:
+    targetType: integration-flow
+    priority: medium
+  metadata:
+    created_at: 2026-05-08T12:17:57.558Z
+    updated_at: 2026-05-08T12:17:57.558Z
+    version: 1
+testing.testcoveragetarget.in-memory-workflow-config-service:
+  id: b7692cc3-6121-435b-af63-b04054d10b65
+  path: testing.testcoveragetarget.in-memory-workflow-config-service
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: InMemoryWorkflowConfigService
+  description: In-memory workflow configuration service; provides workflow
+    definition lookups, stage transition rules, and agent assignment configs
+    without database dependency
+  attributes:
+    targetType: integration-flow
+    priority: high
+  metadata:
+    created_at: 2026-05-08T12:17:57.877Z
+    updated_at: 2026-05-08T12:17:57.877Z
+    version: 1
+testing.testcoveragetarget.mock-environment-repair-adapter:
+  id: a7abb71b-5958-4370-b9f6-fdd8a06e5dc3
+  path: testing.testcoveragetarget.mock-environment-repair-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: MockEnvironmentRepairAdapter
+  description: "Mock adapter for environment repair port; simulates dev
+    environment repair scenarios (scenario: dev_environment_repair); used to
+    test automated remediation workflows"
+  attributes:
+    targetType: integration-flow
+    priority: medium
+  metadata:
+    created_at: 2026-05-08T12:17:58.209Z
+    updated_at: 2026-05-08T12:17:58.209Z
+    version: 1

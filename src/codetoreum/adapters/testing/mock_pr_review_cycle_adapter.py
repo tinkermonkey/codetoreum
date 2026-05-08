@@ -338,7 +338,9 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             event: Domain event to emit and publish
         """
         event_type = type(event).__name__
-        logger.debug(f"_emit_and_publish_event: {event_type}, event_emitter={self._event_emitter is not None}, event_bus={self._event_bus is not None}, event_store={self._event_store is not None}")
+        logger.debug(
+            f"_emit_and_publish_event: {event_type}, event_emitter={self._event_emitter is not None}, event_bus={self._event_bus is not None}, event_store={self._event_store is not None}"
+        )
 
         # Emit to local event_emitter for test capture
         if self._event_emitter:

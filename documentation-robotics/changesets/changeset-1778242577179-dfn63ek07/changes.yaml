@@ -1,0 +1,3037 @@
+- type: add
+  elementId: data-model.objectschema.discussion-events
+  layerName: data-model
+  after:
+    id: 5e26885d-4eb1-4317-92ab-a57ebf342958
+    path: data-model.objectschema.discussion-events
+    spec_node_id: data-model.objectschema
+    type: objectschema
+    layer_id: data-model
+    name: Discussion Events
+    description: "Domain events for conversational loop and comment handling:
+      CommentNeedsResponseEvent (work_item_id, project_id, comment: Comment,
+      context: CommentContext), CommentPostedEvent, AgentResponsePostedEvent
+      (comment_id, response_comment_id, agent_name, conversation_id),
+      ConversationalLoopStartedEvent (session_id, agent_assignment,
+      column_name), FeedbackListeningStartedEvent, FeedbackListeningStoppedEvent
+      (feedback_type). Used by ConversationalLoopOrchestrator."
+    attributes:
+      type: object
+      properties:
+        event_id:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        work_item_id:
+          type: string
+        project_id:
+          type: string
+        session_id:
+          type: string
+        agent_name:
+          type: string
+        conversation_id:
+          type: string
+        comment_id:
+          type: string
+        column_name:
+          type: string
+        feedback_type:
+          type: string
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/events/discussion_events.py
+          symbol: CommentNeedsResponseEvent
+    metadata:
+      created_at: 2026-05-08T12:16:20.623Z
+      updated_at: 2026-05-08T12:16:20.623Z
+      version: 1
+  timestamp: 2026-05-08T12:16:20.645Z
+  sequenceNumber: 0
+- type: add
+  elementId: testing.testcoveragemodel.simulation-framework
+  layerName: testing
+  after:
+    id: f4d89c33-d2b6-462c-9444-852426484b62
+    path: testing.testcoveragemodel.simulation-framework
+    spec_node_id: testing.testcoveragemodel
+    type: testcoveragemodel
+    layer_id: testing
+    name: Simulation Framework
+    description: Top-level test coverage model for the simulation-based end-to-end
+      testing framework; wires all mock adapters, controls time, orchestrates
+      scenarios, and provides assertion helpers without external service
+      dependencies
+    attributes:
+      version: "1.0"
+      application: codetoreum
+      source:
+        file: src/codetoreum/infrastructure/simulation/bootstrap.py
+        symbol: SimulationApplicationBootstrap
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:16:21.914Z
+      updated_at: 2026-05-08T12:16:21.914Z
+      version: 1
+  timestamp: 2026-05-08T12:16:21.935Z
+  sequenceNumber: 1
+- type: add
+  elementId: data-model.objectschema.execution-events
+  layerName: data-model
+  after:
+    id: 0417bb65-99d7-4257-bd5a-4805f3982e0b
+    path: data-model.objectschema.execution-events
+    spec_node_id: data-model.objectschema
+    type: objectschema
+    layer_id: data-model
+    name: Execution Events
+    description: "Domain events for agent execution lifecycle:
+      ExecutionTimedOutEvent (execution_id, work_item_id, timeout_seconds,
+      started_at). Emitted when an agent execution exceeds its configured
+      timeout; triggers recovery or failure handling in ExecutionService."
+    attributes:
+      type: object
+      properties:
+        event_id:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        execution_id:
+          type: string
+        work_item_id:
+          type: string
+        timeout_seconds:
+          type: integer
+        started_at:
+          type: string
+          format: date-time
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/events/execution_events.py
+          symbol: ExecutionTimedOutEvent
+    metadata:
+      created_at: 2026-05-08T12:16:23.050Z
+      updated_at: 2026-05-08T12:16:23.050Z
+      version: 1
+  timestamp: 2026-05-08T12:16:23.073Z
+  sequenceNumber: 2
+- type: add
+  elementId: testing.testcoveragemodel.domain-layer-unit-tests
+  layerName: testing
+  after:
+    id: bfb1319c-e348-414f-88cd-93e734b653f0
+    path: testing.testcoveragemodel.domain-layer-unit-tests
+    spec_node_id: testing.testcoveragemodel
+    type: testcoveragemodel
+    layer_id: testing
+    name: Domain Layer Unit Tests
+    description: "Coverage model for domain layer: pure business logic (WorkItem,
+      Agent, AgentExecution, Workflow, PipelineStage, ReviewCycle), domain
+      events (165 classes), and domain services; targets 100% code coverage"
+    attributes:
+      version: "1.0"
+      application: codetoreum
+      source:
+        file: src/codetoreum/domain/
+        symbol: domain
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:16:27.948Z
+      updated_at: 2026-05-08T12:16:27.948Z
+      version: 1
+  timestamp: 2026-05-08T12:16:27.971Z
+  sequenceNumber: 3
+- type: add
+  elementId: testing.testcoveragemodel.application-service-integration-tests
+  layerName: testing
+  after:
+    id: 7d220892-20ba-4bee-8621-84e3b7a3707a
+    path: testing.testcoveragemodel.application-service-integration-tests
+    spec_node_id: testing.testcoveragemodel
+    type: testcoveragemodel
+    layer_id: testing
+    name: Application Service Integration Tests
+    description: Coverage model for 23 application services with mock adapters;
+      WorkflowOrchestrator, AgentScheduler, ExecutionService, ReviewService,
+      WorkspaceRouter, ConversationalLoopOrchestrator, ContainerRecoveryService,
+      MultiProjectOrchestrator, and event handlers; targets 90% code coverage
+    attributes:
+      version: "1.0"
+      application: codetoreum
+      source:
+        file: src/codetoreum/application/
+        symbol: application
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:16:28.278Z
+      updated_at: 2026-05-08T12:16:28.278Z
+      version: 1
+  timestamp: 2026-05-08T12:16:28.301Z
+  sequenceNumber: 4
+- type: add
+  elementId: testing.coveragerequirement.domain-layer-100-coverage
+  layerName: testing
+  after:
+    id: 0b79d5d5-9b82-47df-aa11-0b89006ce6ab
+    path: testing.coveragerequirement.domain-layer-100-coverage
+    spec_node_id: testing.coveragerequirement
+    type: coveragerequirement
+    layer_id: testing
+    name: Domain Layer 100% Coverage
+    description: All domain model classes (95+), domain events (165 classes), and
+      domain services must achieve 100% code coverage; no external dependencies
+      allowed in domain layer
+    attributes:
+      coverageCriteria: all-partitions
+      priority: critical
+    metadata:
+      created_at: 2026-05-08T12:16:33.369Z
+      updated_at: 2026-05-08T12:16:33.369Z
+      version: 1
+  timestamp: 2026-05-08T12:16:33.404Z
+  sequenceNumber: 5
+- type: add
+  elementId: testing.coveragerequirement.application-service-90-coverage
+  layerName: testing
+  after:
+    id: bbbf489c-842e-45bc-aea3-09d648d8a1cb
+    path: testing.coveragerequirement.application-service-90-coverage
+    spec_node_id: testing.coveragerequirement
+    type: coveragerequirement
+    layer_id: testing
+    name: Application Service 90% Coverage
+    description: All 23 application services and event handlers must achieve 90%
+      code coverage using mock adapters in simulation mode; covers
+      WorkflowOrchestrator, AgentScheduler, ExecutionService, ReviewService and
+      related services
+    attributes:
+      coverageCriteria: all-partitions
+      priority: high
+    metadata:
+      created_at: 2026-05-08T12:16:33.835Z
+      updated_at: 2026-05-08T12:16:33.835Z
+      version: 1
+  timestamp: 2026-05-08T12:16:33.863Z
+  sequenceNumber: 6
+- type: add
+  elementId: data-model.objectschema.lock-events
+  layerName: data-model
+  after:
+    id: 79f77434-4f56-43ac-9f71-1ef1e4d4e2a7
+    path: data-model.objectschema.lock-events
+    spec_node_id: data-model.objectschema
+    type: objectschema
+    layer_id: data-model
+    name: Lock Events
+    description: "Domain events for pipeline lock and queue management:
+      LockAcquiredEvent (project_id, board_id, work_item_id,
+      acquisition_method), LockReleasedEvent (reason, next_in_queue),
+      StaleLockDetectedEvent (lock_acquired_at), PipelineLockAcquiredEvent
+      (queue_length_at_acquire), PipelineLockReleasedEvent (next_work_item_id),
+      LockStuckEvent (reason), WorkItemQueuedEvent (queue_position). Emitted by
+      IPipelineLockService to coordinate single-pipeline execution."
+    attributes:
+      type: object
+      properties:
+        event_id:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        project_id:
+          type: string
+        board_id:
+          type: string
+        work_item_id:
+          type: string
+        acquisition_method:
+          type: string
+        reason:
+          type: string
+        next_in_queue:
+          type: string
+        queue_length_at_acquire:
+          type: integer
+        next_work_item_id:
+          type: string
+        queue_position:
+          type: integer
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/events/lock_events.py
+          symbol: LockAcquiredEvent
+    metadata:
+      created_at: 2026-05-08T12:16:53.246Z
+      updated_at: 2026-05-08T12:16:53.246Z
+      version: 1
+  timestamp: 2026-05-08T12:16:53.270Z
+  sequenceNumber: 7
+- type: add
+  elementId: data-store.database.postgre-sql-config-database
+  layerName: data-store
+  after:
+    id: 6e19b251-2c13-40d6-a323-8d33527c4939
+    path: data-store.database.postgre-sql-config-database
+    spec_node_id: data-store.database
+    type: database
+    layer_id: data-store
+    name: PostgreSQL Config Database
+    description: Primary relational database for users, API keys, project
+      configuration, workflow definitions, and audit logs. Managed via
+      SQLAlchemy ORM with Alembic migrations.
+    attributes:
+      engine: PostgreSQL
+      paradigm: RELATIONAL
+      version: 14+
+      deploymentModel: STANDALONE
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/infrastructure/audit/stores.py
+          symbol: PostgreSQLAuditStore
+    metadata:
+      created_at: 2026-05-08T12:16:55.655Z
+      updated_at: 2026-05-08T12:16:55.655Z
+      version: 1
+  timestamp: 2026-05-08T12:16:55.683Z
+  sequenceNumber: 8
+- type: add
+  elementId: data-model.objectschema.project-events
+  layerName: data-model
+  after:
+    id: e2f2eba7-b315-4f33-b0da-b78e761d2884
+    path: data-model.objectschema.project-events
+    spec_node_id: data-model.objectschema
+    type: objectschema
+    layer_id: data-model
+    name: Project Events
+    description: "Domain events for project lifecycle and orchestration cycles:
+      ProjectClonedEvent (project_name, repo_url, workspace_path, branch),
+      ProjectCloneFailedEvent (error_message, will_retry), ProjectEnabledEvent,
+      ProjectDisabledEvent, OrchestrationCycleCompletedEvent
+      (projects_processed, boards_processed, total_actions, cycle_duration_ms).
+      Emitted by MultiProjectOrchestrator and project management services."
+    attributes:
+      type: object
+      properties:
+        event_id:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        project_name:
+          type: string
+        repo_url:
+          type: string
+        workspace_path:
+          type: string
+        branch:
+          type: string
+        error_message:
+          type: string
+        will_retry:
+          type: boolean
+        projects_processed:
+          type: integer
+        boards_processed:
+          type: integer
+        total_actions:
+          type: integer
+        cycle_duration_ms:
+          type: number
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/events/project_events.py
+          symbol: ProjectClonedEvent
+    metadata:
+      created_at: 2026-05-08T12:16:56.513Z
+      updated_at: 2026-05-08T12:16:56.513Z
+      version: 1
+  timestamp: 2026-05-08T12:16:56.548Z
+  sequenceNumber: 9
+- type: add
+  elementId: testing.testcoveragetarget.simulation-config
+  layerName: testing
+  after:
+    id: 1964573d-abe4-4080-ab98-5ba7be219c1b
+    path: testing.testcoveragetarget.simulation-config
+    spec_node_id: testing.testcoveragetarget
+    type: testcoveragetarget
+    layer_id: testing
+    name: SimulationConfig
+    description: "Configuration for simulation behavior with three factory modes:
+      create_fast_config (100x speed multiplier for tests),
+      create_realistic_config (1x speed for behavior testing),
+      create_high_fidelity_config; supports per-agent behavior config, container
+      command results, YAML file loading"
+    attributes:
+      targetType: integration-flow
+      priority: high
+      source:
+        file: src/codetoreum/infrastructure/simulation/simulation_config.py
+        symbol: SimulationConfig
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:17:04.681Z
+      updated_at: 2026-05-08T12:17:04.681Z
+      version: 1
+  timestamp: 2026-05-08T12:17:04.706Z
+  sequenceNumber: 10
+- type: add
+  elementId: testing.testcoveragetarget.simulation-clock
+  layerName: testing
+  after:
+    id: bfbc65d4-f1ad-4a3c-bf87-a8d8a05d97e6
+    path: testing.testcoveragetarget.simulation-clock
+    spec_node_id: testing.testcoveragetarget
+    type: testcoveragetarget
+    layer_id: testing
+    name: SimulationClock
+    description: Time control with configurable speed multipliers; supports
+      advance(delta), advance_to(time), schedule_callback, auto-advance loop,
+      and start_at for deterministic time-based testing; 10-100x faster than
+      real execution
+    attributes:
+      targetType: integration-flow
+      priority: high
+      source:
+        file: src/codetoreum/infrastructure/simulation/simulation_clock.py
+        symbol: SimulationClock
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:17:05.039Z
+      updated_at: 2026-05-08T12:17:05.039Z
+      version: 1
+  timestamp: 2026-05-08T12:17:05.064Z
+  sequenceNumber: 11
+- type: add
+  elementId: testing.testcoveragetarget.mock-llmadapter
+  layerName: testing
+  after:
+    id: 3b3afcb3-a2d9-4c2c-b3e6-e9dd9f721d74
+    path: testing.testcoveragetarget.mock-llmadapter
+    spec_node_id: testing.testcoveragetarget
+    type: testcoveragetarget
+    layer_id: testing
+    name: MockLLMAdapter
+    description: Mock LLM provider adapter replacing ClaudeCodeAdapter; returns
+      deterministic responses via configurable patterns; used by all simulation
+      scenarios to avoid real LLM API calls
+    attributes:
+      targetType: integration-flow
+      priority: critical
+      source:
+        file: src/codetoreum/adapters/testing/mock_llm_adapter.py
+        symbol: MockLLMAdapter
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:17:12.577Z
+      updated_at: 2026-05-08T12:17:12.577Z
+      version: 1
+  timestamp: 2026-05-08T12:17:12.602Z
+  sequenceNumber: 12
+- type: add
+  elementId: testing.testcoveragetarget.mock-board-adapter
+  layerName: testing
+  after:
+    id: dd35228b-0e01-4be7-a75f-41b0f8649ca3
+    path: testing.testcoveragetarget.mock-board-adapter
+    spec_node_id: testing.testcoveragetarget
+    type: testcoveragetarget
+    layer_id: testing
+    name: MockBoardAdapter
+    description: In-memory board adapter replacing GitHubBoardAdapter; supports
+      create_board, add_item_to_column sync helpers; requires current_project to
+      be set before most operations; used by workflow orchestration tests
+    attributes:
+      targetType: integration-flow
+      priority: critical
+      source:
+        file: src/codetoreum/adapters/testing/mock_board_adapter.py
+        symbol: MockBoardAdapter
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:17:12.930Z
+      updated_at: 2026-05-08T12:17:12.930Z
+      version: 1
+  timestamp: 2026-05-08T12:17:12.956Z
+  sequenceNumber: 13
+- type: add
+  elementId: testing.testcoveragetarget.in-memory-event-store
+  layerName: testing
+  after:
+    id: b6709235-0d87-4365-a737-1581bba886e7
+    path: testing.testcoveragetarget.in-memory-event-store
+    spec_node_id: testing.testcoveragetarget
+    type: testcoveragetarget
+    layer_id: testing
+    name: InMemoryEventStore
+    description: In-memory Redis-backed event store replacement; stores all domain
+      events for audit trail inspection; supports event replay and debugging in
+      simulation scenarios without Redis dependency
+    attributes:
+      targetType: integration-flow
+      priority: critical
+      source:
+        file: src/codetoreum/adapters/testing/in_memory_event_store.py
+        symbol: InMemoryEventStore
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:17:13.315Z
+      updated_at: 2026-05-08T12:17:13.315Z
+      version: 1
+  timestamp: 2026-05-08T12:17:13.343Z
+  sequenceNumber: 14
+- type: add
+  elementId: testing.testcoveragetarget.fake-container-adapter
+  layerName: testing
+  after:
+    id: 2639dd56-36d5-476d-bf6a-1d01d292304c
+    path: testing.testcoveragetarget.fake-container-adapter
+    spec_node_id: testing.testcoveragetarget
+    type: testcoveragetarget
+    layer_id: testing
+    name: FakeContainerAdapter
+    description: Fake container adapter replacing DockerContainerAdapter; simulates
+      container lifecycle (create, start, exec, stop) without Docker daemon;
+      used to test ContainerRecoveryService and WorkspaceRouter
+    attributes:
+      targetType: integration-flow
+      priority: critical
+      source:
+        file: src/codetoreum/adapters/testing/fake_container_adapter.py
+        symbol: FakeContainerAdapter
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:17:19.748Z
+      updated_at: 2026-05-08T12:17:19.748Z
+      version: 1
+  timestamp: 2026-05-08T12:17:19.775Z
+  sequenceNumber: 15
+- type: add
+  elementId: testing.testcoveragetarget.mock-review-cycle-adapter
+  layerName: testing
+  after:
+    id: 62714fa8-bbc9-4ab5-a10b-c4eda1af87c0
+    path: testing.testcoveragetarget.mock-review-cycle-adapter
+    spec_node_id: testing.testcoveragetarget
+    type: testcoveragetarget
+    layer_id: testing
+    name: MockReviewCycleAdapter
+    description: Mock adapter for review cycle port; simulates maker-checker review
+      process with configurable approval/rejection outcomes for ReviewService
+      integration tests
+    attributes:
+      targetType: integration-flow
+      priority: high
+      source:
+        file: src/codetoreum/adapters/testing/mock_review_cycle_adapter.py
+        symbol: MockReviewCycleAdapter
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:17:20.182Z
+      updated_at: 2026-05-08T12:17:20.182Z
+      version: 1
+  timestamp: 2026-05-08T12:17:20.220Z
+  sequenceNumber: 16
+- type: add
+  elementId: testing.testcoveragetarget.mock-repair-cycle-adapter
+  layerName: testing
+  after:
+    id: 78f58162-4c4c-4d80-a2ee-a9ddc375f582
+    path: testing.testcoveragetarget.mock-repair-cycle-adapter
+    spec_node_id: testing.testcoveragetarget
+    type: testcoveragetarget
+    layer_id: testing
+    name: MockRepairCycleAdapter
+    description: Mock adapter for repair cycle port; simulates test-fix-validate
+      repair loops for ContainerRecoveryService and repair workflow scenario
+      testing
+    attributes:
+      targetType: integration-flow
+      priority: high
+      source:
+        file: src/codetoreum/adapters/testing/mock_repair_cycle_adapter.py
+        symbol: MockRepairCycleAdapter
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:17:20.714Z
+      updated_at: 2026-05-08T12:17:20.714Z
+      version: 1
+  timestamp: 2026-05-08T12:17:20.753Z
+  sequenceNumber: 17
+- type: add
+  elementId: testing.testcoveragetarget.in-memory-metrics-adapter
+  layerName: testing
+  after:
+    id: 98598cc7-5de7-437b-9922-1e65c015ff51
+    path: testing.testcoveragetarget.in-memory-metrics-adapter
+    spec_node_id: testing.testcoveragetarget
+    type: testcoveragetarget
+    layer_id: testing
+    name: InMemoryMetricsAdapter
+    description: In-memory Prometheus metrics adapter; captures metric recordings
+      for assertion in simulation tests (assert_metric_recorded); replaces
+      Prometheus push gateway in test environments
+    attributes:
+      targetType: integration-flow
+      priority: high
+      source:
+        file: src/codetoreum/adapters/testing/in_memory_metrics_adapter.py
+        symbol: InMemoryMetricsAdapter
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:17:27.162Z
+      updated_at: 2026-05-08T12:17:27.162Z
+      version: 1
+  timestamp: 2026-05-08T12:17:27.187Z
+  sequenceNumber: 18
+- type: add
+  elementId: testing.testcoveragetarget.in-memory-storage-adapter
+  layerName: testing
+  after:
+    id: 63b03a3f-05b3-48e0-b6c4-0c8e5ad8b961
+    path: testing.testcoveragetarget.in-memory-storage-adapter
+    spec_node_id: testing.testcoveragetarget
+    type: testcoveragetarget
+    layer_id: testing
+    name: InMemoryStorageAdapter
+    description: In-memory file storage adapter; simulates container workspace file
+      mounting (issue.txt, code/, previous_stage.txt contexts) without
+      filesystem access in tests
+    attributes:
+      targetType: integration-flow
+      priority: medium
+      source:
+        file: src/codetoreum/adapters/testing/in_memory_storage_adapter.py
+        symbol: InMemoryStorageAdapter
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:17:27.522Z
+      updated_at: 2026-05-08T12:17:27.522Z
+      version: 1
+  timestamp: 2026-05-08T12:17:27.547Z
+  sequenceNumber: 19
+- type: add
+  elementId: testing.testcoveragetarget.mock-event-emitter
+  layerName: testing
+  after:
+    id: 3fc5e334-c233-4f02-96ab-1a6d379c9a06
+    path: testing.testcoveragetarget.mock-event-emitter
+    spec_node_id: testing.testcoveragetarget
+    type: testcoveragetarget
+    layer_id: testing
+    name: MockEventEmitter
+    description: Mock event emitter for testing event publication; captures emitted
+      domain events for inspection; used by board reconciliation and workflow
+      state change tests
+    attributes:
+      targetType: integration-flow
+      priority: high
+      source:
+        file: src/codetoreum/adapters/testing/capturing_mock_event_emitter.py
+        symbol: CapturingMockEventEmitter
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:17:27.885Z
+      updated_at: 2026-05-08T12:17:27.885Z
+      version: 1
+  timestamp: 2026-05-08T12:17:27.910Z
+  sequenceNumber: 20
+- type: add
+  elementId: testing.testcoveragetarget.mock-agent-executor
+  layerName: testing
+  after:
+    id: ea530506-7fa7-4838-acf0-cf508144706d
+    path: testing.testcoveragetarget.mock-agent-executor
+    spec_node_id: testing.testcoveragetarget
+    type: testcoveragetarget
+    layer_id: testing
+    name: MockAgentExecutor
+    description: Mock agent executor using set_completion_handler(callback,
+      board_id) pattern to wire completion callback after construction, avoiding
+      circular dependencies; simulates agent execution lifecycle for
+      ExecutionService tests
+    attributes:
+      targetType: integration-flow
+      priority: critical
+      source:
+        file: src/codetoreum/adapters/testing/mock_agent_executor.py
+        symbol: MockAgentExecutor
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:17:35.158Z
+      updated_at: 2026-05-08T12:17:35.158Z
+      version: 1
+  timestamp: 2026-05-08T12:17:35.186Z
+  sequenceNumber: 21
+- type: add
+  elementId: testing.testcoveragetarget.mock-container-recovery-adapter
+  layerName: testing
+  after:
+    id: 16c86929-892e-4533-bdbc-91ec75882de4
+    path: testing.testcoveragetarget.mock-container-recovery-adapter
+    spec_node_id: testing.testcoveragetarget
+    type: testcoveragetarget
+    layer_id: testing
+    name: MockContainerRecoveryAdapter
+    description: Mock adapter for container recovery port; simulates container
+      failure and recovery sequences for ContainerRecoveryService scenario
+      testing (scenario 12)
+    attributes:
+      targetType: integration-flow
+      priority: high
+      source:
+        file: src/codetoreum/adapters/testing/mock_container_recovery_adapter.py
+        symbol: MockContainerRecoveryAdapter
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:17:35.520Z
+      updated_at: 2026-05-08T12:17:35.520Z
+      version: 1
+  timestamp: 2026-05-08T12:17:35.550Z
+  sequenceNumber: 22
+- type: add
+  elementId: data-model.objectschema.pr-review-cycle-events
+  layerName: data-model
+  after:
+    id: 6038cba5-153c-4bb9-9157-dc46bb33f12d
+    path: data-model.objectschema.pr-review-cycle-events
+    spec_node_id: data-model.objectschema
+    type: objectschema
+    layer_id: data-model
+    name: PR Review Cycle Events
+    description: "Domain events for PR automated review cycles:
+      PRReviewCycleStartedEvent (pr_id, work_item_id, cycle_number,
+      max_outer_cycles, verifier_context_sources, phases_planned,
+      workflow_run_id), PRReviewCyclePhaseStartedEvent,
+      PRReviewCycleCICheckCompletedEvent, PRReviewCycleApprovedEvent
+      (cycle_duration_seconds, next_column), PRReviewCycleIssuesFoundEvent
+      (total/critical/high/medium/low findings, sub_issue_count),
+      PRReviewCycleMaxCyclesReachedEvent, PRReviewCycleEscalatedEvent,
+      PRReviewCycleSubIssuesCreatedEvent,
+      PRReviewCycleConsolidationCompletedEvent. 13 event classes covering all PR
+      review lifecycle phases."
+    attributes:
+      type: object
+      properties:
+        event_id:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        pr_id:
+          type: string
+        work_item_id:
+          type: string
+        workflow_run_id:
+          type: string
+        cycle_number:
+          type: integer
+        max_outer_cycles:
+          type: integer
+        phases_planned:
+          type: array
+          items:
+            type: string
+        next_column:
+          type: string
+        total_findings:
+          type: integer
+        critical:
+          type: integer
+        high:
+          type: integer
+        medium:
+          type: integer
+        low:
+          type: integer
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/events/pr_review_cycle_events.py
+          symbol: PRReviewCycleStartedEvent
+    metadata:
+      created_at: 2026-05-08T12:17:35.889Z
+      updated_at: 2026-05-08T12:17:35.889Z
+      version: 1
+  timestamp: 2026-05-08T12:17:35.918Z
+  sequenceNumber: 23
+- type: add
+  elementId: testing.testcoveragetarget.in-memory-code-review-adapter
+  layerName: testing
+  after:
+    id: a610dda9-ef7c-4cc4-a5e2-5f8ffd973ec1
+    path: testing.testcoveragetarget.in-memory-code-review-adapter
+    spec_node_id: testing.testcoveragetarget
+    type: testcoveragetarget
+    layer_id: testing
+    name: InMemoryCodeReviewAdapter
+    description: In-memory code review adapter replacing GitHubCodeReviewAdapter;
+      simulates PR creation, review submission, approval/rejection for
+      ReviewService and review cycle scenario tests
+    attributes:
+      targetType: integration-flow
+      priority: high
+      source:
+        file: src/codetoreum/adapters/testing/in_memory_code_review_adapter.py
+        symbol: InMemoryCodeReviewAdapter
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:17:35.921Z
+      updated_at: 2026-05-08T12:17:35.921Z
+      version: 1
+  timestamp: 2026-05-08T12:17:35.954Z
+  sequenceNumber: 24
+- type: add
+  elementId: data-model.objectschema.queue-events
+  layerName: data-model
+  after:
+    id: e8ace91c-dced-4208-8935-47f3419a1e07
+    path: data-model.objectschema.queue-events
+    spec_node_id: data-model.objectschema
+    type: objectschema
+    layer_id: data-model
+    name: Queue Events
+    description: "Domain events for work item queue management: QueueItemAddedEvent
+      (queue_name, item_id, position, project_id), QueueItemRemovedEvent,
+      QueuePositionChangedEvent (old_position, new_position),
+      WorkItemDeadLetterQueuedEvent (work_item_id, board_id, from_column,
+      to_column, reason, failure_details). WorkItemDeadLetterQueuedEvent signals
+      unrecoverable failure routing to dead-letter queue."
+    attributes:
+      type: object
+      properties:
+        event_id:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        queue_name:
+          type: string
+        item_id:
+          type: string
+        position:
+          type: integer
+        project_id:
+          type: string
+        old_position:
+          type: integer
+        new_position:
+          type: integer
+        work_item_id:
+          type: string
+        board_id:
+          type: string
+        from_column:
+          type: string
+        to_column:
+          type: string
+        reason:
+          type: string
+        failure_details:
+          type: string
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/events/queue_events.py
+          symbol: QueueItemAddedEvent
+    metadata:
+      created_at: 2026-05-08T12:17:39.388Z
+      updated_at: 2026-05-08T12:17:39.388Z
+      version: 1
+  timestamp: 2026-05-08T12:17:39.416Z
+  sequenceNumber: 25
+- type: add
+  elementId: testing.testcoveragetarget.in-memory-ticket-adapter
+  layerName: testing
+  after:
+    id: 5959fbd6-5036-4e19-9dc8-fec5577555b5
+    path: testing.testcoveragetarget.in-memory-ticket-adapter
+    spec_node_id: testing.testcoveragetarget
+    type: testcoveragetarget
+    layer_id: testing
+    name: InMemoryTicketAdapter
+    description: In-memory GitHub ticket adapter; simulates issue creation, updates,
+      and comment operations for WorkItemService tests without GitHub API
+      dependency
+    attributes:
+      targetType: integration-flow
+      priority: high
+      source:
+        file: src/codetoreum/adapters/testing/in_memory_ticket_adapter.py
+        symbol: InMemoryTicketAdapter
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:17:41.976Z
+      updated_at: 2026-05-08T12:17:41.976Z
+      version: 1
+  timestamp: 2026-05-08T12:17:42.006Z
+  sequenceNumber: 26
+- type: add
+  elementId: testing.testcoveragetarget.in-memory-version-control-service
+  layerName: testing
+  after:
+    id: a8e1d52b-3c47-4a19-a338-10bfe6f28a9c
+    path: testing.testcoveragetarget.in-memory-version-control-service
+    spec_node_id: testing.testcoveragetarget
+    type: testcoveragetarget
+    layer_id: testing
+    name: InMemoryVersionControlService
+    description: In-memory version control adapter; simulates git clone, commit,
+      push operations that the orchestrator performs on behalf of containerized
+      agents (no git credentials in containers)
+    attributes:
+      targetType: integration-flow
+      priority: high
+      source:
+        file: src/codetoreum/adapters/testing/in_memory_version_control_service.py
+        symbol: InMemoryVersionControlService
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:17:42.361Z
+      updated_at: 2026-05-08T12:17:42.361Z
+      version: 1
+  timestamp: 2026-05-08T12:17:42.390Z
+  sequenceNumber: 27
+- type: add
+  elementId: testing.testcoveragetarget.mock-prreview-cycle-adapter
+  layerName: testing
+  after:
+    id: 8664747c-7bd7-45a1-af83-e6bb58a308a5
+    path: testing.testcoveragetarget.mock-prreview-cycle-adapter
+    spec_node_id: testing.testcoveragetarget
+    type: testcoveragetarget
+    layer_id: testing
+    name: MockPRReviewCycleAdapter
+    description: Mock adapter for PR review cycle port; simulates pull request
+      review lifecycle including approval chains, rejection loops, and status
+      change events
+    attributes:
+      targetType: integration-flow
+      priority: high
+      source:
+        file: src/codetoreum/adapters/testing/mock_pr_review_cycle_adapter.py
+        symbol: MockPRReviewCycleAdapter
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:17:42.748Z
+      updated_at: 2026-05-08T12:17:42.748Z
+      version: 1
+  timestamp: 2026-05-08T12:17:42.778Z
+  sequenceNumber: 28
+- type: add
+  elementId: data-model.objectschema.repair-cycle-events
+  layerName: data-model
+  after:
+    id: adfe3f9c-8fff-4ad9-9501-e2e830b787be
+    path: data-model.objectschema.repair-cycle-events
+    spec_node_id: data-model.objectschema
+    type: objectschema
+    layer_id: data-model
+    name: Repair Cycle Events
+    description: "Domain events for test-fix repair cycle orchestration (25 event
+      classes): RepairCycleStartedEvent (stage_name, test_types,
+      workflow_run_id), RepairCycleTestExecutionStartedEvent (test_type,
+      test_cycle_iteration, max_test_cycle_iterations, timeout),
+      RepairCycleTestExecutionCompletedEvent (passed/failed/warnings,
+      has_failures, agent_name), RepairCycleFileFixStartedEvent/CompletedEvent,
+      RepairCycleWarningReviewStartedEvent/CompletedEvent,
+      RepairCycleTestCycleCompletedEvent (files_fixed, warnings_reviewed,
+      duration_seconds), RepairCycleFastFailEvent, RepairCycleCompletedEvent
+      (overall_success, test_results, total_agent_calls),
+      SystemicAnalysisStartedEvent/CompletedEvent (classification, confidence,
+      reasoning, recommended_action), SystemicFixStartedEvent/CompletedEvent,
+      EnvironmentRebuildStartedEvent/CompletedEvent/ExhaustedEvent,
+      EnvironmentVerificationStartedEvent/CompletedEvent."
+    attributes:
+      type: object
+      properties:
+        event_id:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        workflow_run_id:
+          type: string
+        stage_name:
+          type: string
+        test_type:
+          type: string
+        test_cycle_iteration:
+          type: integer
+        passed:
+          type: integer
+        failed:
+          type: integer
+        warnings:
+          type: integer
+        has_failures:
+          type: boolean
+        overall_success:
+          type: boolean
+        total_agent_calls:
+          type: integer
+        duration_seconds:
+          type: number
+        classification:
+          type: string
+        confidence:
+          type: number
+        reasoning:
+          type: string
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/events/repair_cycle_events.py
+          symbol: RepairCycleStartedEvent
+    metadata:
+      created_at: 2026-05-08T12:17:48.325Z
+      updated_at: 2026-05-08T12:17:48.325Z
+      version: 1
+  timestamp: 2026-05-08T12:17:48.356Z
+  sequenceNumber: 29
+- type: add
+  elementId: testing.testcoveragetarget.in-memory-agent-repository
+  layerName: testing
+  after:
+    id: 54c8509a-7643-4bc2-9b88-571d51d68fb3
+    path: testing.testcoveragetarget.in-memory-agent-repository
+    spec_node_id: testing.testcoveragetarget
+    type: testcoveragetarget
+    layer_id: testing
+    name: InMemoryAgentRepository
+    description: In-memory agent repository adapter; stores and retrieves Agent
+      domain objects without PostgreSQL dependency for application service
+      integration tests
+    attributes:
+      targetType: integration-flow
+      priority: medium
+      source:
+        file: src/codetoreum/adapters/testing/in_memory_agent_repository.py
+        symbol: InMemoryAgentRepository
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:17:48.748Z
+      updated_at: 2026-05-08T12:17:48.748Z
+      version: 1
+  timestamp: 2026-05-08T12:17:48.779Z
+  sequenceNumber: 30
+- type: add
+  elementId: testing.testcoveragetarget.in-memory-config-store
+  layerName: testing
+  after:
+    id: 028f2ece-f97b-423d-ade8-82b810db812c
+    path: testing.testcoveragetarget.in-memory-config-store
+    spec_node_id: testing.testcoveragetarget
+    type: testcoveragetarget
+    layer_id: testing
+    name: InMemoryConfigStore
+    description: In-memory configuration store replacing PostgreSQL-backed config;
+      holds project settings, workflow definitions, agent configurations, and
+      environment variables for simulation tests
+    attributes:
+      targetType: integration-flow
+      priority: high
+      source:
+        file: src/codetoreum/adapters/testing/in_memory_config_store.py
+        symbol: InMemoryConfigStore
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:17:49.137Z
+      updated_at: 2026-05-08T12:17:49.137Z
+      version: 1
+  timestamp: 2026-05-08T12:17:49.168Z
+  sequenceNumber: 31
+- type: add
+  elementId: testing.testcoveragetarget.in-memory-queue-service
+  layerName: testing
+  after:
+    id: 7df57967-e71e-45fa-813e-adcad360ccf7
+    path: testing.testcoveragetarget.in-memory-queue-service
+    spec_node_id: testing.testcoveragetarget
+    type: testcoveragetarget
+    layer_id: testing
+    name: InMemoryQueueService
+    description: In-memory queue service adapter; simulates pipeline lock queue
+      ordering for scenario 09 (queue_position_ordering) and concurrency tests
+    attributes:
+      targetType: integration-flow
+      priority: medium
+      source:
+        file: src/codetoreum/adapters/testing/in_memory_queue_service.py
+        symbol: InMemoryQueueService
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:17:49.521Z
+      updated_at: 2026-05-08T12:17:49.521Z
+      version: 1
+  timestamp: 2026-05-08T12:17:49.553Z
+  sequenceNumber: 32
+- type: add
+  elementId: data-model.objectschema.repository-events
+  layerName: data-model
+  after:
+    id: c54fbf9d-554a-4505-a0df-9d5166981ac3
+    path: data-model.objectschema.repository-events
+    spec_node_id: data-model.objectschema
+    type: objectschema
+    layer_id: data-model
+    name: Repository Events
+    description: "Domain events for version control operations: FilesStagedEvent
+      (repository_id, file_paths, project_id), CommitCreatedEvent
+      (repository_id, commit_sha, message, author, changed_files, project_id),
+      BranchCreatedEvent (repository_id, branch_name, base_commit, project_id),
+      BranchPushedEvent (repository_id, branch_name, project_id). Emitted by
+      IVersionControlService implementations; orchestrator performs all git
+      operations on behalf of agents."
+    attributes:
+      type: object
+      properties:
+        event_id:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        repository_id:
+          type: string
+        project_id:
+          type: string
+        file_paths:
+          type: array
+          items:
+            type: string
+        commit_sha:
+          type: string
+        message:
+          type: string
+        author:
+          type: string
+        changed_files:
+          type: array
+          items:
+            type: string
+        branch_name:
+          type: string
+        base_commit:
+          type: string
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/events/repository_events.py
+          symbol: CommitCreatedEvent
+    metadata:
+      created_at: 2026-05-08T12:17:51.958Z
+      updated_at: 2026-05-08T12:17:51.958Z
+      version: 1
+  timestamp: 2026-05-08T12:17:51.991Z
+  sequenceNumber: 33
+- type: add
+  elementId: data-model.objectschema.storage-events
+  layerName: data-model
+  after:
+    id: c5d668a8-49e1-4b8b-926e-aba1ad9fd09b
+    path: data-model.objectschema.storage-events
+    spec_node_id: data-model.objectschema
+    type: objectschema
+    layer_id: data-model
+    name: Storage Events
+    description: "Domain events for artifact storage operations:
+      ArtifactUploadedEvent (key, size_bytes, content_type, project_id),
+      ArtifactDeletedEvent (key, project_id). Emitted by IStorage
+      implementations (e.g., S3StorageAdapter) when agent output artifacts are
+      persisted or removed from object storage."
+    attributes:
+      type: object
+      properties:
+        event_id:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        key:
+          type: string
+        size_bytes:
+          type: integer
+        content_type:
+          type: string
+        project_id:
+          type: string
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/events/storage_events.py
+          symbol: ArtifactUploadedEvent
+    metadata:
+      created_at: 2026-05-08T12:18:11.669Z
+      updated_at: 2026-05-08T12:18:11.669Z
+      version: 1
+  timestamp: 2026-05-08T12:18:11.700Z
+  sequenceNumber: 34
+- type: add
+  elementId: data-model.objectschema.work-item-events
+  layerName: data-model
+  after:
+    id: 8e8dc453-2981-4f4e-bcb8-2500e0c15c09
+    path: data-model.objectschema.work-item-events
+    spec_node_id: data-model.objectschema
+    type: objectschema
+    layer_id: data-model
+    name: Work Item Events
+    description: "Domain events for work item lifecycle: WorkItemCreatedEvent
+      (work_item_id, project_id, title, initial_column, parent_issue_id),
+      WorkItemUpdatedEvent (work_item_id, project_id, changes). Core events that
+      drive board reconciliation and workflow triggering;
+      WorkItemColumnChangedEvent (in board_events.py) is the primary event
+      driving pipeline activation."
+    attributes:
+      type: object
+      properties:
+        event_id:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        work_item_id:
+          type: string
+        project_id:
+          type: string
+        title:
+          type: string
+        initial_column:
+          type: string
+        parent_issue_id:
+          type: string
+        changes:
+          type: object
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/events/work_item_events.py
+          symbol: WorkItemCreatedEvent
+    metadata:
+      created_at: 2026-05-08T12:18:14.375Z
+      updated_at: 2026-05-08T12:18:14.375Z
+      version: 1
+  timestamp: 2026-05-08T12:18:14.407Z
+  sequenceNumber: 35
+- type: add
+  elementId: testing.testcoveragetarget.input-port-mock-adapters
+  layerName: testing
+  after:
+    id: aba06115-914e-4bc1-9a39-13c035a0b720
+    path: testing.testcoveragetarget.input-port-mock-adapters
+    spec_node_id: testing.testcoveragetarget
+    type: testcoveragetarget
+    layer_id: testing
+    name: Input Port Mock Adapters
+    description: "19 mock implementations of all input port interfaces in
+      adapters/primary/input_port_adapters/mock/: agent command/query, audit
+      query, config command/query/service, execution command/query, logger,
+      metrics query, orchestration command, task query, workflow
+      command/definition-command/query/run-query, work item command/query,
+      workspace query; enable isolated input port testing without application
+      service wiring"
+    attributes:
+      targetType: integration-flow
+      priority: high
+      source:
+        file: src/codetoreum/adapters/primary/input_port_adapters/mock/
+        symbol: InputPortMocks
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:18:14.769Z
+      updated_at: 2026-05-08T12:18:14.769Z
+      version: 1
+  timestamp: 2026-05-08T12:18:14.803Z
+  sequenceNumber: 36
+- type: add
+  elementId: data-model.schemadefinition.workspace-type
+  layerName: data-model
+  after:
+    id: 307cd17d-c6f3-4354-9720-e1ac0b870bfb
+    path: data-model.schemadefinition.workspace-type
+    spec_node_id: data-model.schemadefinition
+    type: schemadefinition
+    layer_id: data-model
+    name: WorkspaceType
+    description: "Enum for agent workspace context type: ISSUE (issue-only context,
+      no code changes), HYBRID (full project workspace with branch, PR creation,
+      code read/write access). Controls what files and permissions are mounted
+      into the agent container."
+    attributes:
+      title: WorkspaceType
+      type: string
+      enum:
+        - ISSUE
+        - HYBRID
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/workspace_context.py
+          symbol: WorkspaceType
+    metadata:
+      created_at: 2026-05-08T12:18:20.046Z
+      updated_at: 2026-05-08T12:18:20.046Z
+      version: 1
+  timestamp: 2026-05-08T12:18:20.079Z
+  sequenceNumber: 37
+- type: add
+  elementId: data-store.database.redis-pipeline-queue
+  layerName: data-store
+  after:
+    id: 44cfae20-d6fa-498e-8e6e-557547a71a00
+    path: data-store.database.redis-pipeline-queue
+    spec_node_id: data-store.database
+    type: database
+    layer_id: data-store
+    name: Redis Pipeline Queue
+    description: Redis-backed pipeline queue providing FIFO ordering of work items
+      for the AgentScheduler. Supports queue position inspection, peek
+      (lock-without-dequeue), and stale entry detection. Also has an in-memory
+      variant for testing (InMemoryQueueLockService).
+    attributes:
+      engine: Redis
+      paradigm: KEY_VALUE
+      deploymentModel: STANDALONE
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/adapters/secondary/in_memory_queue_lock_service.py
+          symbol: InMemoryQueueLockService
+    metadata:
+      created_at: 2026-05-08T12:18:21.196Z
+      updated_at: 2026-05-08T12:18:21.196Z
+      version: 1
+  timestamp: 2026-05-08T12:18:21.228Z
+  sequenceNumber: 38
+- type: add
+  elementId: data-model.schemadefinition.stage-type
+  layerName: data-model
+  after:
+    id: ab0f1289-5edf-4161-a752-bd74fedf938f
+    path: data-model.schemadefinition.stage-type
+    spec_node_id: data-model.schemadefinition
+    type: schemadefinition
+    layer_id: data-model
+    name: StageType
+    description: "Enum for pipeline stage execution pattern: SEQUENTIAL (stages run
+      one after another), PARALLEL (stages run concurrently), REVIEW
+      (maker-checker review loop with approval/rejection). Defined on
+      PipelineStage; influences how WorkflowOrchestrator dispatches agent
+      executions."
+    attributes:
+      title: StageType
+      type: string
+      enum:
+        - SEQUENTIAL
+        - PARALLEL
+        - REVIEW
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/pipeline_stage.py
+          symbol: StageType
+    metadata:
+      created_at: 2026-05-08T12:18:22.225Z
+      updated_at: 2026-05-08T12:18:22.225Z
+      version: 1
+  timestamp: 2026-05-08T12:18:22.259Z
+  sequenceNumber: 39
+- type: add
+  elementId: testing.testcasesketch.scenario-01-simple-workflow
+  layerName: testing
+  after:
+    id: 5e98afc8-6e3e-41bc-97df-27fca6f606e6
+    path: testing.testcasesketch.scenario-01-simple-workflow
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "Scenario 01: Simple Workflow"
+    description: "Basic single-agent workflow: work item enters trigger column,
+      agent executes, item advances to exit column; validates fundamental
+      WorkflowOrchestrator and AgentScheduler coordination"
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: tests/simulation/scenarios/scenario_01_simple_workflow.py
+        symbol: test_simple_workflow
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:18:23.165Z
+      updated_at: 2026-05-08T12:18:23.165Z
+      version: 1
+  timestamp: 2026-05-08T12:18:23.199Z
+  sequenceNumber: 40
+- type: add
+  elementId: testing.testcasesketch.scenario-02-parallel-executions
+  layerName: testing
+  after:
+    id: cb58a723-0c31-4df0-bffe-52d50892f895
+    path: testing.testcasesketch.scenario-02-parallel-executions
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "Scenario 02: Parallel Executions"
+    description: Multiple work items processed concurrently by parallel agent
+      executions; validates AgentScheduler concurrency controls, pipeline lock
+      management, and queue ordering
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: tests/simulation/scenarios/scenario_02_parallel_executions.py
+        symbol: test_parallel_executions
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:18:23.585Z
+      updated_at: 2026-05-08T12:18:23.585Z
+      version: 1
+  timestamp: 2026-05-08T12:18:23.617Z
+  sequenceNumber: 41
+- type: add
+  elementId: testing.testcasesketch.scenario-03-review-cycle
+  layerName: testing
+  after:
+    id: cbc574f1-d2c2-4393-885d-2184dcc6ce31
+    path: testing.testcasesketch.scenario-03-review-cycle
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "Scenario 03: Review Cycle"
+    description: "Maker-checker review cycle: agent completes work, reviewer
+      approves or rejects, feedback loop triggers re-work; validates
+      ReviewService and ReviewCycle domain model"
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: tests/simulation/scenarios/scenario_03_review_cycle.py
+        symbol: test_review_cycle
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:18:24.024Z
+      updated_at: 2026-05-08T12:18:24.024Z
+      version: 1
+  timestamp: 2026-05-08T12:18:24.059Z
+  sequenceNumber: 42
+- type: add
+  elementId: data-model.schemadefinition.stage-status
+  layerName: data-model
+  after:
+    id: 6fdb43bb-49e5-4ce4-b32d-9f4ac6eacf93
+    path: data-model.schemadefinition.stage-status
+    spec_node_id: data-model.schemadefinition
+    type: schemadefinition
+    layer_id: data-model
+    name: StageStatus
+    description: "Enum for pipeline stage execution state: PENDING (not yet
+      started), READY (prerequisites met), RUNNING (agent executing), COMPLETED
+      (success), FAILED (execution error), SKIPPED (bypassed due to conditions).
+      Tracked on PipelineStage domain object."
+    attributes:
+      title: StageStatus
+      type: string
+      enum:
+        - PENDING
+        - READY
+        - RUNNING
+        - COMPLETED
+        - FAILED
+        - SKIPPED
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/pipeline_stage.py
+          symbol: StageStatus
+    metadata:
+      created_at: 2026-05-08T12:18:27.062Z
+      updated_at: 2026-05-08T12:18:27.062Z
+      version: 1
+  timestamp: 2026-05-08T12:18:27.096Z
+  sequenceNumber: 43
+- type: add
+  elementId: data-model.schemadefinition.review-status
+  layerName: data-model
+  after:
+    id: c082f68e-89a5-4c63-a3be-a562b6ff7eaa
+    path: data-model.schemadefinition.review-status
+    spec_node_id: data-model.schemadefinition
+    type: schemadefinition
+    layer_id: data-model
+    name: ReviewStatus
+    description: "Enum for maker-checker review cycle state: PENDING (awaiting
+      start), IN_PROGRESS (reviewer evaluating), APPROVED (reviewer accepted),
+      CHANGES_REQUESTED (reviewer rejected, maker must revise), ESCALATED
+      (routed to human review due to max iterations or explicit escalation).
+      Defined on ReviewCycle domain object."
+    attributes:
+      title: ReviewStatus
+      type: string
+      enum:
+        - PENDING
+        - IN_PROGRESS
+        - APPROVED
+        - CHANGES_REQUESTED
+        - ESCALATED
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/review_cycle.py
+          symbol: ReviewStatus
+    metadata:
+      created_at: 2026-05-08T12:18:29.108Z
+      updated_at: 2026-05-08T12:18:29.108Z
+      version: 1
+  timestamp: 2026-05-08T12:18:29.144Z
+  sequenceNumber: 44
+- type: add
+  elementId: testing.testcasesketch.scenario-04-execution-failure
+  layerName: testing
+  after:
+    id: ede1f3eb-18fb-4f97-9398-c2a0b7d0dc21
+    path: testing.testcasesketch.scenario-04-execution-failure
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "Scenario 04: Execution Failure"
+    description: Agent execution fails mid-workflow; validates error handling,
+      circuit breaker activation, dead letter queue, and retry/recovery
+      mechanisms in ExecutionService
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: tests/simulation/scenarios/scenario_04_execution_failure.py
+        symbol: test_execution_failure
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:18:29.700Z
+      updated_at: 2026-05-08T12:18:29.700Z
+      version: 1
+  timestamp: 2026-05-08T12:18:29.734Z
+  sequenceNumber: 45
+- type: add
+  elementId: testing.testcasesketch.scenario-05-complex-workflow
+  layerName: testing
+  after:
+    id: 3ae3d4c8-2a7f-4884-801b-9b0389d03353
+    path: testing.testcasesketch.scenario-05-complex-workflow
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "Scenario 05: Complex Workflow"
+    description: Multi-stage pipeline with conditional branching, parallel stages,
+      and inter-stage dependencies; validates WorkflowOrchestrator stage
+      transition logic and PipelineStage entry conditions
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: tests/simulation/scenarios/scenario_05_complex_workflow.py
+        symbol: test_complex_workflow
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:18:30.120Z
+      updated_at: 2026-05-08T12:18:30.120Z
+      version: 1
+  timestamp: 2026-05-08T12:18:30.154Z
+  sequenceNumber: 46
+- type: add
+  elementId: testing.testcasesketch.scenario-06-sdlc-pipeline
+  layerName: testing
+  after:
+    id: 23dff1c9-192b-4412-bade-64bbce946156
+    path: testing.testcasesketch.scenario-06-sdlc-pipeline
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "Scenario 06: SDLC Pipeline"
+    description: "Full 7-stage SDLC pipeline (canonical workflow): planning, design,
+      implementation, review, testing, deployment, release; validates end-to-end
+      orchestration of the complete software development lifecycle"
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: tests/simulation/scenarios/scenario_06_sdlc_pipeline.py
+        symbol: test_sdlc_pipeline
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:18:30.544Z
+      updated_at: 2026-05-08T12:18:30.544Z
+      version: 1
+  timestamp: 2026-05-08T12:18:30.583Z
+  sequenceNumber: 47
+- type: add
+  elementId: data-model.schemadefinition.review-decision
+  layerName: data-model
+  after:
+    id: ded1958b-e2f9-44ce-8de4-b5698bf0017f
+    path: data-model.schemadefinition.review-decision
+    spec_node_id: data-model.schemadefinition
+    type: schemadefinition
+    layer_id: data-model
+    name: ReviewDecision
+    description: "Enum for reviewer agent decision in maker-checker cycle: APPROVE
+      (work accepted, advance to next stage), REQUEST_CHANGES (feedback
+      provided, maker must revise and resubmit), ESCALATE (route to human
+      reviewer, mark cycle as escalated). Set on ReviewFeedback value object
+      submitted by reviewer agent."
+    attributes:
+      title: ReviewDecision
+      type: string
+      enum:
+        - APPROVE
+        - REQUEST_CHANGES
+        - ESCALATE
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/review_cycle.py
+          symbol: ReviewDecision
+    metadata:
+      created_at: 2026-05-08T12:18:33.007Z
+      updated_at: 2026-05-08T12:18:33.007Z
+      version: 1
+  timestamp: 2026-05-08T12:18:33.047Z
+  sequenceNumber: 48
+- type: add
+  elementId: data-model.schemadefinition.column-type
+  layerName: data-model
+  after:
+    id: 560aaf13-fbc5-4c05-bb3f-5e1301c7b4d7
+    path: data-model.schemadefinition.column-type
+    spec_node_id: data-model.schemadefinition
+    type: schemadefinition
+    layer_id: data-model
+    name: ColumnType
+    description: "Enum for board column automation mode: MANUAL (human-driven
+      column, no agent auto-assignment), AUTOMATED (agent-driven column that
+      triggers pipeline execution when a work item enters). Defined on
+      ColumnTemplate in BoardWorkflowTemplate; controls whether
+      WorkflowOrchestrator activates on column entry."
+    attributes:
+      title: ColumnType
+      type: string
+      enum:
+        - MANUAL
+        - AUTOMATED
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/board_workflow_template.py
+          symbol: ColumnType
+    metadata:
+      created_at: 2026-05-08T12:18:35.506Z
+      updated_at: 2026-05-08T12:18:35.506Z
+      version: 1
+  timestamp: 2026-05-08T12:18:35.543Z
+  sequenceNumber: 49
+- type: add
+  elementId: testing.testcasesketch.scenario-06b-sdlc-pipeline-with-repair
+  layerName: testing
+  after:
+    id: ca4f5219-d060-4e9a-94b7-4654c16762e7
+    path: testing.testcasesketch.scenario-06b-sdlc-pipeline-with-repair
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "Scenario 06b: SDLC Pipeline With Repair"
+    description: "Full 7-stage SDLC pipeline with integrated repair cycle: agent
+      execution failure triggers automated test-fix-validate loop before
+      pipeline continues; validates RepairCycleAdapter integration within SDLC
+      orchestration"
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: tests/simulation/scenarios/scenario_06_sdlc_pipeline_with_repair.py
+        symbol: test_sdlc_pipeline_with_repair
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:18:37.877Z
+      updated_at: 2026-05-08T12:18:37.877Z
+      version: 1
+  timestamp: 2026-05-08T12:18:37.913Z
+  sequenceNumber: 50
+- type: add
+  elementId: testing.testcasesketch.scenario-07-repair-cycle-test-fix-validate
+  layerName: testing
+  after:
+    id: 5e36ce93-067f-4d07-868d-f54e69176ce6
+    path: testing.testcasesketch.scenario-07-repair-cycle-test-fix-validate
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "Scenario 07: Repair Cycle Test-Fix-Validate"
+    description: Repair cycle with iterative test-fix-validate loops; agent
+      identifies failure, applies fix, re-runs tests, iterates until passing or
+      max attempts reached; validates ContainerRecoveryService and RepairCycle
+      domain model
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: tests/simulation/scenarios/scenario_07_repair_cycle.py
+        symbol: test_repair_cycle
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:18:38.312Z
+      updated_at: 2026-05-08T12:18:38.312Z
+      version: 1
+  timestamp: 2026-05-08T12:18:38.347Z
+  sequenceNumber: 51
+- type: add
+  elementId: testing.testcasesketch.scenario-09-queue-position-ordering
+  layerName: testing
+  after:
+    id: 382bf4cd-0bd5-4d24-a78f-a89b69dc6555
+    path: testing.testcasesketch.scenario-09-queue-position-ordering
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "Scenario 09: Queue Position Ordering"
+    description: "Pipeline lock queue ordering: multiple work items compete for the
+      same pipeline lock; validates IPipelineLockService queue position
+      assignment and fair ordering via InMemoryQueueService"
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: tests/simulation/scenarios/scenario_09_queue_position_ordering.py
+        symbol: test_queue_position_ordering
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:18:38.761Z
+      updated_at: 2026-05-08T12:18:38.761Z
+      version: 1
+  timestamp: 2026-05-08T12:18:38.798Z
+  sequenceNumber: 52
+- type: add
+  elementId: data-store.database.redis-dead-letter-queue
+  layerName: data-store
+  after:
+    id: 864f7fc7-3c73-410e-8c5d-1dfec806ed97
+    path: data-store.database.redis-dead-letter-queue
+    spec_node_id: data-store.database
+    type: database
+    layer_id: data-store
+    name: Redis Dead Letter Queue
+    description: Redis stream for failed events that could not be processed
+      (events:dead-letter stream key). Stores FailedEvent records with retry
+      metadata, failure reason, and retry count. Backed by RedisEventBuffer with
+      configurable max stream length.
+    attributes:
+      engine: Redis
+      paradigm: KEY_VALUE
+      deploymentModel: STANDALONE
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/infrastructure/redis_event_buffer.py
+          symbol: RedisEventBuffer
+    metadata:
+      created_at: 2026-05-08T12:18:39.201Z
+      updated_at: 2026-05-08T12:18:39.201Z
+      version: 1
+  timestamp: 2026-05-08T12:18:39.239Z
+  sequenceNumber: 53
+- type: add
+  elementId: data-model.schemadefinition.failure-classification
+  layerName: data-model
+  after:
+    id: 6dc56d16-6960-4732-99b0-16657f43580c
+    path: data-model.schemadefinition.failure-classification
+    spec_node_id: data-model.schemadefinition
+    type: schemadefinition
+    layer_id: data-model
+    name: FailureClassification
+    description: "Enum for systemic failure root cause classification in repair
+      cycles: CODE_DEFECT (logic error in source code), ENVIRONMENT_ISSUE
+      (broken dependency or runtime environment), TRANSIENT_FAILURE
+      (intermittent, retry-recoverable), DEPENDENCY_ISSUE (external package or
+      service failure), CONFIGURATION_ISSUE (misconfigured settings or
+      environment variables). Used by SystemicAnalysisResult."
+    attributes:
+      title: FailureClassification
+      type: string
+      enum:
+        - CODE_DEFECT
+        - ENVIRONMENT_ISSUE
+        - TRANSIENT_FAILURE
+        - DEPENDENCY_ISSUE
+        - CONFIGURATION_ISSUE
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/repair_cycle_types.py
+          symbol: FailureClassification
+    metadata:
+      created_at: 2026-05-08T12:18:41.183Z
+      updated_at: 2026-05-08T12:18:41.183Z
+      version: 1
+  timestamp: 2026-05-08T12:18:41.225Z
+  sequenceNumber: 54
+- type: add
+  elementId: data-model.schemadefinition.repair-test-type
+  layerName: data-model
+  after:
+    id: c56673af-beb5-49af-9643-2989939d5612
+    path: data-model.schemadefinition.repair-test-type
+    spec_node_id: data-model.schemadefinition
+    type: schemadefinition
+    layer_id: data-model
+    name: RepairTestType
+    description: "Enum for repair cycle test categories in order of execution:
+      COMPILATION (build and type-check), UNIT (unit tests), INTEGRATION
+      (integration tests), CI (GitHub Actions CI run), E2E (end-to-end tests).
+      Determines which test runner and agent configuration is used in each
+      repair iteration."
+    attributes:
+      title: RepairTestType
+      type: string
+      enum:
+        - COMPILATION
+        - UNIT
+        - INTEGRATION
+        - CI
+        - E2E
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/repair_cycle_types.py
+          symbol: RepairTestType
+    metadata:
+      created_at: 2026-05-08T12:18:43.483Z
+      updated_at: 2026-05-08T12:18:43.483Z
+      version: 1
+  timestamp: 2026-05-08T12:18:43.524Z
+  sequenceNumber: 55
+- type: add
+  elementId: testing.testcasesketch.scenario-10-agent-execution
+  layerName: testing
+  after:
+    id: 9fa12791-b129-466b-bab6-283737981881
+    path: testing.testcasesketch.scenario-10-agent-execution
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "Scenario 10: Agent Execution"
+    description: "Agent execution lifecycle: container creation, context file
+      mounting (issue.txt, code/, previous_stage.txt), LLM invocation, output
+      capture, container teardown; validates ExecutionService and
+      WorkspaceRouter"
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: tests/simulation/scenarios/scenario_10_agent_execution.py
+        symbol: test_agent_execution
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:18:46.053Z
+      updated_at: 2026-05-08T12:18:46.053Z
+      version: 1
+  timestamp: 2026-05-08T12:18:46.091Z
+  sequenceNumber: 56
+- type: add
+  elementId: testing.testcasesketch.scenario-10b-multi-turn-dialogue
+  layerName: testing
+  after:
+    id: c6a2ace9-429d-43f6-a074-28de09853843
+    path: testing.testcasesketch.scenario-10b-multi-turn-dialogue
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "Scenario 10b: Multi-Turn Dialogue"
+    description: "Conversational loop with multi-turn agent dialogue: comment
+      triggers response, agent engages in back-and-forth conversation, loop
+      terminates on resolution; validates ConversationalLoopOrchestrator"
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: tests/simulation/scenarios/scenario_10_conversational_modes.py
+        symbol: test_conversational_modes
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:18:46.518Z
+      updated_at: 2026-05-08T12:18:46.518Z
+      version: 1
+  timestamp: 2026-05-08T12:18:46.557Z
+  sequenceNumber: 57
+- type: add
+  elementId: testing.testcasesketch.scenario-12-container-failure-recovery
+  layerName: testing
+  after:
+    id: 2c7652c3-fc7c-4d7a-b934-a48b62f2f21f
+    path: testing.testcasesketch.scenario-12-container-failure-recovery
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "Scenario 12: Container Failure Recovery"
+    description: Container fails mid-execution; ContainerRecoveryService detects
+      failure, cleans up dead container, re-creates with same context, resumes
+      execution from last checkpoint; validates recovery and resilience patterns
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: tests/simulation/scenarios/
+        symbol: scenario_12
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:18:46.989Z
+      updated_at: 2026-05-08T12:18:46.989Z
+      version: 1
+  timestamp: 2026-05-08T12:18:47.030Z
+  sequenceNumber: 58
+- type: add
+  elementId: data-model.schemadefinition.user-role
+  layerName: data-model
+  after:
+    id: 7a70134f-d0ac-434c-8976-9a3b783f32d8
+    path: data-model.schemadefinition.user-role
+    spec_node_id: data-model.schemadefinition
+    type: schemadefinition
+    layer_id: data-model
+    name: UserRole
+    description: "Enum for user authorization roles: ADMIN (full system access),
+      DEVELOPER (workflow and execution management), VIEWER (read-only access),
+      SERVICE_ACCOUNT (API-key-only machine identity for adapter integrations).
+      Multiple roles can be assigned; permissions are derived from role union."
+    attributes:
+      title: UserRole
+      type: string
+      enum:
+        - ADMIN
+        - DEVELOPER
+        - VIEWER
+        - SERVICE_ACCOUNT
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/user.py
+          symbol: UserRole
+    metadata:
+      created_at: 2026-05-08T12:18:47.989Z
+      updated_at: 2026-05-08T12:18:47.989Z
+      version: 1
+  timestamp: 2026-05-08T12:18:48.030Z
+  sequenceNumber: 59
+- type: update
+  elementId: data-store.database.redis-config-cache
+  layerName: data-store
+  before:
+    id: 2a00e49d-48da-4892-bf4a-3d6ece830fed
+    path: data-store.database.redis-config-cache
+    spec_node_id: data-store.database
+    type: database
+    layer_id: data-store
+    name: Redis Config Cache
+    description: Redis-backed configuration cache with TTL-based invalidation for
+      fast config reads
+    source_reference: &a1
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/infrastructure/redis_config_cache.py
+          symbol: RedisConfigCache
+    metadata: &a2
+      created_at: 2026-05-08T10:27:40.637Z
+      updated_at: 2026-05-08T10:27:40.637Z
+      version: 1
+  after:
+    id: 2a00e49d-48da-4892-bf4a-3d6ece830fed
+    path: data-store.database.redis-config-cache
+    spec_node_id: data-store.database
+    type: database
+    layer_id: data-store
+    name: Redis Config Cache
+    description: "Write-through Redis cache layer wrapping Elasticsearch config
+      storage. Key prefix: config:, TTL: 3600s (1 hour). Cache-first reads with
+      write-through on updates and pub/sub cache invalidation. Implements
+      read-through for project, agent, pipeline, and workflow template configs
+      (CachedConfigStore decorator pattern)."
+    source_reference: *a1
+    metadata: *a2
+    sourceReference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/infrastructure/redis_config_cache.py
+          symbol: RedisConfigCache
+  timestamp: 2026-05-08T12:18:48.032Z
+  sequenceNumber: 60
+- type: add
+  elementId: data-model.schemadefinition.permission
+  layerName: data-model
+  after:
+    id: 0e46b6a8-20f0-46d1-ae9b-9027f24b053a
+    path: data-model.schemadefinition.permission
+    spec_node_id: data-model.schemadefinition
+    type: schemadefinition
+    layer_id: data-model
+    name: Permission
+    description: "Enum for granular authorization permissions:
+      WORKFLOW_CREATE/VIEW/CANCEL/RETRY, EXECUTION_VIEW/CANCEL,
+      CONFIG_VIEW/UPDATE, PROJECT_CREATE/VIEW/UPDATE/DELETE. Checked by auth
+      middleware; derived from UserRole assignments. Enables fine-grained access
+      control per API operation."
+    attributes:
+      title: Permission
+      type: string
+      enum:
+        - WORKFLOW_CREATE
+        - WORKFLOW_VIEW
+        - WORKFLOW_CANCEL
+        - WORKFLOW_RETRY
+        - EXECUTION_VIEW
+        - EXECUTION_CANCEL
+        - CONFIG_VIEW
+        - CONFIG_UPDATE
+        - PROJECT_CREATE
+        - PROJECT_VIEW
+        - PROJECT_UPDATE
+        - PROJECT_DELETE
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/user.py
+          symbol: Permission
+    metadata:
+      created_at: 2026-05-08T12:18:50.525Z
+      updated_at: 2026-05-08T12:18:50.525Z
+      version: 1
+  timestamp: 2026-05-08T12:18:50.568Z
+  sequenceNumber: 61
+- type: add
+  elementId: data-store.database.local-file-storage
+  layerName: data-store
+  after:
+    id: d1c8b27a-2919-4a76-a71b-66237a6c3a0b
+    path: data-store.database.local-file-storage
+    spec_node_id: data-store.database
+    type: database
+    layer_id: data-store
+    name: Local File Storage
+    description: Local filesystem storage implementing the IStorage port. Stores
+      agent execution artifacts, context files (issue.txt, code snippets,
+      previous_stage.txt) mounted into containers. Dev environment uses local
+      disk; production may use S3-compatible object storage.
+    attributes:
+      engine: Filesystem
+      paradigm: DOCUMENT
+      deploymentModel: STANDALONE
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/storage.py
+          symbol: IStorage
+    metadata:
+      created_at: 2026-05-08T12:18:52.450Z
+      updated_at: 2026-05-08T12:18:52.450Z
+      version: 1
+  timestamp: 2026-05-08T12:18:52.493Z
+  sequenceNumber: 62
+- type: add
+  elementId: testing.testcasesketch.scenario-13-multi-project-orchestration
+  layerName: testing
+  after:
+    id: 5338bdd8-30de-454f-bf75-c1687bd177a5
+    path: testing.testcasesketch.scenario-13-multi-project-orchestration
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "Scenario 13: Multi-Project Orchestration"
+    description: MultiProjectOrchestrator coordinates work items across multiple
+      projects simultaneously; validates cross-project isolation, resource
+      allocation, and per-project workflow configuration
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: tests/simulation/scenarios/scenario_13_multi_project.py
+        symbol: test_multi_project
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:18:54.260Z
+      updated_at: 2026-05-08T12:18:54.260Z
+      version: 1
+  timestamp: 2026-05-08T12:18:54.328Z
+  sequenceNumber: 63
+- type: add
+  elementId: testing.testcasesketch.scenario-environment-repair
+  layerName: testing
+  after:
+    id: 151806fd-6073-4cc0-8eb7-18f31ae8f5e3
+    path: testing.testcasesketch.scenario-environment-repair
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "Scenario: Environment Repair"
+    description: "Dev environment repair automation: broken environment detected,
+      repair agent applies fixes, validates environment is healthy; uses
+      MockEnvironmentRepairAdapter; maps to scenarios/dev_environment_repair
+      YAML"
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: tests/simulation/scenarios/scenario_environment_repair.py
+        symbol: test_environment_repair
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:18:54.990Z
+      updated_at: 2026-05-08T12:18:54.990Z
+      version: 1
+  timestamp: 2026-05-08T12:18:55.038Z
+  sequenceNumber: 64
+- type: add
+  elementId: data-store.collection.pipeline-runs-index
+  layerName: data-store
+  after:
+    id: 3879a478-9d26-4d1a-af53-ffe0668f8413
+    path: data-store.collection.pipeline-runs-index
+    spec_node_id: data-store.collection
+    type: collection
+    layer_id: data-store
+    name: pipeline-runs-* Index
+    description: Elasticsearch index pattern for pipeline execution run records.
+      Named pipeline-runs-YYYY.MM (monthly rollover). Stores workflow execution
+      state, stage transitions, and pipeline run history. Queryable via
+      Switchyard ES at localhost:9200.
+    attributes:
+      collectionType: SEARCH_INDEX
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/adapters/secondary/elasticsearch_event_store.py
+          symbol: ElasticsearchEventStore
+    metadata:
+      created_at: 2026-05-08T12:19:01.709Z
+      updated_at: 2026-05-08T12:19:01.709Z
+      version: 1
+  timestamp: 2026-05-08T12:19:01.757Z
+  sequenceNumber: 65
+- type: add
+  elementId: testing.testcasesketch.board-automation-scenario-a-e2e-cascade
+  layerName: testing
+  after:
+    id: 46dfe660-0fdc-49aa-96fb-238aee06ffca
+    path: testing.testcasesketch.board-automation-scenario-a-e2e-cascade
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "Board Automation Scenario A: E2E Cascade"
+    description: "Board automation end-to-end: work item triggers cascade from
+      trigger column through intermediate stages to exit column; tests item
+      cascade, lock-release-after-cascade, cascade-stop-on-agent-failure, and
+      autonomous progression via API or clock tick"
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: tests/simulation/test_board_automation_e2e.py
+        symbol: test_item_cascades_from_trigger_to_exit
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:19:14.989Z
+      updated_at: 2026-05-08T12:19:14.989Z
+      version: 1
+  timestamp: 2026-05-08T12:19:15.035Z
+  sequenceNumber: 66
+- type: add
+  elementId: data-store.collection.decision-events-index
+  layerName: data-store
+  after:
+    id: 8f61a411-8fe8-4f39-850f-1b021bf10a74
+    path: data-store.collection.decision-events-index
+    spec_node_id: data-store.collection
+    type: collection
+    layer_id: data-store
+    name: decision-events-* Index
+    description: Elasticsearch index pattern for agent decision event records. Named
+      decision-events-YYYY.MM (monthly rollover). Stores agent reasoning steps,
+      decision points, and LLM interactions for audit and replay. Queryable via
+      Switchyard ES at localhost:9200.
+    attributes:
+      collectionType: SEARCH_INDEX
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/adapters/secondary/elasticsearch_event_store.py
+          symbol: ElasticsearchEventStore
+    metadata:
+      created_at: 2026-05-08T12:19:14.993Z
+      updated_at: 2026-05-08T12:19:14.993Z
+      version: 1
+  timestamp: 2026-05-08T12:19:15.040Z
+  sequenceNumber: 67
+- type: add
+  elementId: testing.testcasesketch.board-automation-scenario-b-lock-contention
+  layerName: testing
+  after:
+    id: b423aa41-0401-4fa1-84cf-58dae4e60f7b
+    path: testing.testcasesketch.board-automation-scenario-b-lock-contention
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "Board Automation Scenario B: Lock Contention"
+    description: "Pipeline lock contention with queue ordering: multiple items
+      compete for exclusive lock, validates lock_contention_queue_ordering and
+      queue_reordering_by_position; tests fair scheduling under concurrent board
+      automation"
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: tests/simulation/test_board_automation_scenario_b.py
+        symbol: test_lock_contention_queue_ordering
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:19:15.502Z
+      updated_at: 2026-05-08T12:19:15.502Z
+      version: 1
+  timestamp: 2026-05-08T12:19:15.548Z
+  sequenceNumber: 68
+- type: add
+  elementId: testing.testcasesketch.board-automation-scenario-c-review-rejection-loop
+  layerName: testing
+  after:
+    id: 28c38baf-f7c9-44db-8d4e-acd8df7542f6
+    path: testing.testcasesketch.board-automation-scenario-c-review-rejection-loop
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "Board Automation Scenario C: Review Rejection Loop"
+    description: "Board automation with review rejection cycles: item enters review
+      column, reviewer rejects, item loops back to implementation column for
+      rework; tests multi-rejection cycles and review-blocked-outcome edge
+      cases"
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: tests/simulation/test_board_automation_scenario_c.py
+        symbol: test_review_rejection_loop
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:19:16.007Z
+      updated_at: 2026-05-08T12:19:16.007Z
+      version: 1
+  timestamp: 2026-05-08T12:19:16.057Z
+  sequenceNumber: 69
+- type: add
+  elementId: data-store.collection.agent-events-index
+  layerName: data-store
+  after:
+    id: 9c2c9be4-ad77-476d-b8bf-b5d80e727d23
+    path: data-store.collection.agent-events-index
+    spec_node_id: data-store.collection
+    type: collection
+    layer_id: data-store
+    name: agent-events-* Index
+    description: Elasticsearch index pattern for agent lifecycle event records.
+      Named agent-events-YYYY.MM (monthly rollover). Stores AgentExecution state
+      changes, container start/stop events, and agent output artifacts.
+      Queryable via Switchyard ES at localhost:9200.
+    attributes:
+      collectionType: SEARCH_INDEX
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/adapters/secondary/elasticsearch_event_store.py
+          symbol: ElasticsearchEventStore
+    metadata:
+      created_at: 2026-05-08T12:19:18.729Z
+      updated_at: 2026-05-08T12:19:18.729Z
+      version: 1
+  timestamp: 2026-05-08T12:19:18.777Z
+  sequenceNumber: 70
+- type: add
+  elementId: testing.testcasesketch.board-automation-scenario-d-edge-cases
+  layerName: testing
+  after:
+    id: 43b529ec-a5a6-4469-a57a-7e7c61834002
+    path: testing.testcasesketch.board-automation-scenario-d-edge-cases
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "Board Automation Scenario D: Edge Cases"
+    description: "Edge cases in board automation: boundary conditions for column
+      transitions, invalid state transitions, concurrent column moves, and agent
+      execution edge cases not covered by scenarios A-C"
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: tests/simulation/test_board_automation_edge_cases.py
+        symbol: test_board_automation_edge_cases
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:19:19.551Z
+      updated_at: 2026-05-08T12:19:19.551Z
+      version: 1
+  timestamp: 2026-05-08T12:19:19.600Z
+  sequenceNumber: 71
+- type: add
+  elementId: data-model.objectschema.container-config
+  layerName: data-model
+  after:
+    id: 3f9545a7-d616-4917-b70b-013664f9d121
+    path: data-model.objectschema.container-config
+    spec_node_id: data-model.objectschema
+    type: objectschema
+    layer_id: data-model
+    name: ContainerConfig
+    description: "Value object for Docker container configuration: image (Docker
+      image reference), name, command, entrypoint, working_dir, user (UID),
+      environment (env vars map), volumes (host:container mount map), network,
+      auto_remove (cleanup on exit), detached (run in background), stdin_open.
+      Used by IContainer implementations when launching agent execution
+      containers."
+    attributes:
+      type: object
+      properties:
+        image:
+          type: string
+        name:
+          type: string
+        command:
+          type: array
+          items:
+            type: string
+        working_dir:
+          type: string
+        user:
+          type: string
+        environment:
+          type: object
+        volumes:
+          type: object
+        network:
+          type: string
+        auto_remove:
+          type: boolean
+        detached:
+          type: boolean
+        stdin_open:
+          type: boolean
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/value_objects.py
+          symbol: ContainerConfig
+    metadata:
+      created_at: 2026-05-08T12:19:19.724Z
+      updated_at: 2026-05-08T12:19:19.724Z
+      version: 1
+  timestamp: 2026-05-08T12:19:19.780Z
+  sequenceNumber: 72
+- type: add
+  elementId: data-model.objectschema.execution-context
+  layerName: data-model
+  after:
+    id: 6990fbad-a2a1-49a6-9d2f-f26d4e4e0277
+    path: data-model.objectschema.execution-context
+    spec_node_id: data-model.objectschema
+    type: objectschema
+    layer_id: data-model
+    name: ExecutionContext
+    description: "Value object carrying agent execution context into a pipeline
+      stage: work_item_id, workflow_id, stage_name, agent_id, model (LLM model
+      name), timeout_seconds, workspace_type (WorkspaceType enum), branch_name,
+      discussion_id (for conversational loops), project_id, repository_url,
+      tech_stack list. Passed from WorkflowOrchestrator to agent executor."
+    attributes:
+      type: object
+      properties:
+        work_item_id:
+          type: string
+        workflow_id:
+          type: string
+        stage_name:
+          type: string
+        agent_id:
+          type: string
+        model:
+          type: string
+        timeout_seconds:
+          type: integer
+        workspace_type:
+          type: string
+        branch_name:
+          type: string
+        discussion_id:
+          type: string
+        project_id:
+          type: string
+        repository_url:
+          type: string
+        tech_stack:
+          type: array
+          items:
+            type: string
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/value_objects.py
+          symbol: ExecutionContext
+    metadata:
+      created_at: 2026-05-08T12:19:21.930Z
+      updated_at: 2026-05-08T12:19:21.930Z
+      version: 1
+  timestamp: 2026-05-08T12:19:21.993Z
+  sequenceNumber: 73
+- type: add
+  elementId: data-store.namespace.redis-events-key-namespace
+  layerName: data-store
+  after:
+    id: 0380b61a-2bcf-4ca7-b351-b2774db2573f
+    path: data-store.namespace.redis-events-key-namespace
+    spec_node_id: data-store.namespace
+    type: namespace
+    layer_id: data-store
+    name: "Redis events: Key Namespace"
+    description: Redis key namespace prefix 'events:' for domain event streams.
+      Contains events:buffer (main event buffer stream), events:dead-letter
+      (failed event stream), and events:{EventType} per-event-type streams
+      (e.g., events:WorkItemCreated). Managed by RedisEventBuffer and EventBus.
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/infrastructure/redis_event_buffer.py
+          symbol: RedisEventBuffer
+    metadata:
+      created_at: 2026-05-08T12:19:23.474Z
+      updated_at: 2026-05-08T12:19:23.474Z
+      version: 1
+  timestamp: 2026-05-08T12:19:23.530Z
+  sequenceNumber: 74
+- type: add
+  elementId: testing.testcasesketch.yaml-scenario-smoke
+  layerName: testing
+  after:
+    id: 173d62e5-4fb6-4ee2-9b63-66df2b5def85
+    path: testing.testcasesketch.yaml-scenario-smoke
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "YAML Scenario: Smoke"
+    description: Minimal smoke test scenario (scenarios/smoke/); basic configuration
+      with minimal agents and work items to verify the simulation framework
+      boots and runs without errors; fast feedback gate before full scenario
+      suite
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: scenarios/smoke/orchestrator/simulation.yaml
+        symbol: smoke
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:19:27.172Z
+      updated_at: 2026-05-08T12:19:27.172Z
+      version: 1
+  timestamp: 2026-05-08T12:19:27.227Z
+  sequenceNumber: 75
+- type: add
+  elementId: testing.testcasesketch.yaml-scenario-sdlc-pipeline
+  layerName: testing
+  after:
+    id: dfa09256-a42c-4970-9d61-e36eb8c25050
+    path: testing.testcasesketch.yaml-scenario-sdlc-pipeline
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "YAML Scenario: SDLC Pipeline"
+    description: "Full 7-stage SDLC pipeline YAML definition
+      (scenarios/sdlc_pipeline/); canonical workflow for simulation testing used
+      as reference for integration verification; description: Full 7-stage SDLC
+      pipeline"
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: scenarios/sdlc_pipeline/orchestrator/simulation.yaml
+        symbol: sdlc_pipeline
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:19:27.730Z
+      updated_at: 2026-05-08T12:19:27.730Z
+      version: 1
+  timestamp: 2026-05-08T12:19:27.789Z
+  sequenceNumber: 76
+- type: add
+  elementId: data-store.namespace.redis-config-key-namespace
+  layerName: data-store
+  after:
+    id: 287beda3-249a-4d47-a6c0-a37a77579723
+    path: data-store.namespace.redis-config-key-namespace
+    spec_node_id: data-store.namespace
+    type: namespace
+    layer_id: data-store
+    name: "Redis config: Key Namespace"
+    description: "Redis key namespace prefix 'config:' for configuration cache
+      entries. Key pattern: config:{project|agent|pipeline|workflow}:{id}. TTL:
+      3600s. Managed by RedisConfigCache with pub/sub invalidation channel."
+    attributes:
+      owner: RedisConfigCache
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/infrastructure/redis_config_cache.py
+          symbol: RedisConfigCache
+    metadata:
+      created_at: 2026-05-08T12:19:27.779Z
+      updated_at: 2026-05-08T12:19:27.779Z
+      version: 1
+  timestamp: 2026-05-08T12:19:27.838Z
+  sequenceNumber: 77
+- type: add
+  elementId: testing.testcasesketch.yaml-scenario-review-cycle
+  layerName: testing
+  after:
+    id: 36f6f3d7-eddd-4976-b08f-8b9fa6489306
+    path: testing.testcasesketch.yaml-scenario-review-cycle
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "YAML Scenario: Review Cycle"
+    description: Maker-checker review board with human gate before automated review
+      (scenarios/review_cycle/); YAML-defined workflow with reviewer approval
+      column and automated review integration
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: scenarios/review_cycle/orchestrator/simulation.yaml
+        symbol: review_cycle
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:19:28.270Z
+      updated_at: 2026-05-08T12:19:28.270Z
+      version: 1
+  timestamp: 2026-05-08T12:19:28.333Z
+  sequenceNumber: 78
+- type: add
+  elementId: data-model.objectschema.execution-result
+  layerName: data-model
+  after:
+    id: 4a68c06c-50b4-4c20-a6bf-7fbc903a8136
+    path: data-model.objectschema.execution-result
+    spec_node_id: data-model.objectschema
+    type: objectschema
+    layer_id: data-model
+    name: ExecutionResult
+    description: "Value object for agent execution output: success (bool),
+      exit_code, output (stdout), error_message (stderr or exception),
+      input_tokens, output_tokens, duration_seconds, timestamp, modified_files,
+      added_files, deleted_files (git-tracked changes), session_id (Claude
+      conversation session). Returned by ILLMProvider and stored on
+      AgentExecution."
+    attributes:
+      type: object
+      properties:
+        success:
+          type: boolean
+        exit_code:
+          type: integer
+        output:
+          type: string
+        error_message:
+          type: string
+        input_tokens:
+          type: integer
+        output_tokens:
+          type: integer
+        duration_seconds:
+          type: number
+        timestamp:
+          type: string
+          format: date-time
+        modified_files:
+          type: array
+          items:
+            type: string
+        added_files:
+          type: array
+          items:
+            type: string
+        deleted_files:
+          type: array
+          items:
+            type: string
+        session_id:
+          type: string
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/value_objects.py
+          symbol: ExecutionResult
+    metadata:
+      created_at: 2026-05-08T12:19:28.588Z
+      updated_at: 2026-05-08T12:19:28.588Z
+      version: 1
+  timestamp: 2026-05-08T12:19:28.648Z
+  sequenceNumber: 79
+- type: add
+  elementId: data-model.objectschema.token-usage
+  layerName: data-model
+  after:
+    id: 47ea2ac9-c7b8-467b-a48f-d44dc2f2a3db
+    path: data-model.objectschema.token-usage
+    spec_node_id: data-model.objectschema
+    type: objectschema
+    layer_id: data-model
+    name: TokenUsage
+    description: "Value object for LLM token consumption tracking: input_tokens
+      (prompt tokens), output_tokens (completion tokens). Embedded in
+      ExecutionResult; aggregated by metrics infrastructure for cost monitoring
+      and rate limit management per agent execution."
+    attributes:
+      type: object
+      properties:
+        input_tokens:
+          type: integer
+        output_tokens:
+          type: integer
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/value_objects.py
+          symbol: TokenUsage
+    metadata:
+      created_at: 2026-05-08T12:19:30.271Z
+      updated_at: 2026-05-08T12:19:30.271Z
+      version: 1
+  timestamp: 2026-05-08T12:19:30.328Z
+  sequenceNumber: 80
+- type: add
+  elementId: data-store.namespace.redis-locks-key-namespace
+  layerName: data-store
+  after:
+    id: eb4f2b50-184c-417f-8019-9425c1fdb33a
+    path: data-store.namespace.redis-locks-key-namespace
+    spec_node_id: data-store.namespace
+    type: namespace
+    layer_id: data-store
+    name: Redis Locks Key Namespace
+    description: "Redis key namespace for pipeline lock state. Key pattern:
+      {project_id}:{board_id} for active locks. Used by
+      IQueuedPipelineLockService to coordinate
+      single-pipeline-execution-at-a-time semantics across the AgentScheduler
+      and WorkflowOrchestrator."
+    attributes:
+      owner: IQueuedPipelineLockService
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/adapters/secondary/in_memory_pipeline_lock_service.py
+          symbol: InMemoryPipelineLockService
+    metadata:
+      created_at: 2026-05-08T12:19:32.873Z
+      updated_at: 2026-05-08T12:19:32.873Z
+      version: 1
+  timestamp: 2026-05-08T12:19:32.931Z
+  sequenceNumber: 81
+- type: add
+  elementId: testing.testcasesketch.yaml-scenario-failure-recovery
+  layerName: testing
+  after:
+    id: 80bad031-7ca2-4cf7-9550-9eef3815009b
+    path: testing.testcasesketch.yaml-scenario-failure-recovery
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "YAML Scenario: Failure Recovery"
+    description: Error handling and recovery mechanisms
+      (scenarios/failure_recovery/); tests circuit breaker activation, retry
+      logic, and graceful degradation when external services fail
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: scenarios/failure_recovery/orchestrator/simulation.yaml
+        symbol: failure_recovery
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:19:34.371Z
+      updated_at: 2026-05-08T12:19:34.371Z
+      version: 1
+  timestamp: 2026-05-08T12:19:34.490Z
+  sequenceNumber: 82
+- type: add
+  elementId: testing.testcasesketch.yaml-scenario-repair-cycle
+  layerName: testing
+  after:
+    id: dc43d985-0f49-4b1a-b201-4d736d598dcb
+    path: testing.testcasesketch.yaml-scenario-repair-cycle
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "YAML Scenario: Repair Cycle"
+    description: Repair cycle agents feature test (scenarios/repair_cycle_test/);
+      YAML-defined test-fix-validate loop for automated repair workflow
+      validation
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: scenarios/repair_cycle_test/orchestrator/simulation.yaml
+        symbol: repair_cycle_test
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:19:35.298Z
+      updated_at: 2026-05-08T12:19:35.298Z
+      version: 1
+  timestamp: 2026-05-08T12:19:35.372Z
+  sequenceNumber: 83
+- type: add
+  elementId: testing.testcasesketch.yaml-scenario-dev-environment-repair
+  layerName: testing
+  after:
+    id: 23e34d2f-3e7a-441e-9900-828ca4a0a9cc
+    path: testing.testcasesketch.yaml-scenario-dev-environment-repair
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "YAML Scenario: Dev Environment Repair"
+    description: Automated dev environment repair
+      (scenarios/dev_environment_repair/); agent detects broken dev environment,
+      applies repairs, validates health; maps to scenario_environment_repair.py
+      in tests
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: scenarios/dev_environment_repair/orchestrator/simulation.yaml
+        symbol: dev_environment_repair
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:19:35.901Z
+      updated_at: 2026-05-08T12:19:35.901Z
+      version: 1
+  timestamp: 2026-05-08T12:19:35.957Z
+  sequenceNumber: 84
+- type: add
+  elementId: data-model.objectschema.repair-cycle-checkpoint
+  layerName: data-model
+  after:
+    id: f8054a9d-01ad-43e1-8fa7-fec6f25868df
+    path: data-model.objectschema.repair-cycle-checkpoint
+    spec_node_id: data-model.objectschema
+    type: objectschema
+    layer_id: data-model
+    name: RepairCycleCheckpoint
+    description: "Value object for repair cycle resumption checkpoint:
+      workflow_run_id, test_type, iteration, total_agent_calls, files_fixed,
+      warnings_reviewed, elapsed_seconds, test_results (list of
+      RepairTestResult), timestamp, expires_at. Persisted to checkpoint store
+      (Redis) at configurable intervals; enables repair cycle recovery after
+      container or process failure."
+    attributes:
+      type: object
+      properties:
+        workflow_run_id:
+          type: string
+        test_type:
+          type: string
+        iteration:
+          type: integer
+        total_agent_calls:
+          type: integer
+        files_fixed:
+          type: integer
+        warnings_reviewed:
+          type: integer
+        elapsed_seconds:
+          type: number
+        test_results:
+          type: array
+          items:
+            type: object
+        timestamp:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/repair_cycle_types.py
+          symbol: RepairCycleCheckpoint
+    metadata:
+      created_at: 2026-05-08T12:19:37.005Z
+      updated_at: 2026-05-08T12:19:37.005Z
+      version: 1
+  timestamp: 2026-05-08T12:19:37.061Z
+  sequenceNumber: 85
+- type: add
+  elementId: data-store.namespace.redis-rate-limit-key-namespace
+  layerName: data-store
+  after:
+    id: e81d01fe-755a-4ba7-8149-61e64d21ec47
+    path: data-store.namespace.redis-rate-limit-key-namespace
+    spec_node_id: data-store.namespace
+    type: namespace
+    layer_id: data-store
+    name: Redis Rate Limit Key Namespace
+    description: "Redis key namespace for HTTP rate limiter sliding window state.
+      Tracks request counts per IP and per API key within configurable time
+      windows (default: 100 req/min). Used by FastAPI middleware and WebSocket
+      adapter rate limiting."
+    attributes:
+      owner: RateLimitMiddleware
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/adapters/primary/fastapi_app.py
+          symbol: create_app
+    metadata:
+      created_at: 2026-05-08T12:19:37.916Z
+      updated_at: 2026-05-08T12:19:37.916Z
+      version: 1
+  timestamp: 2026-05-08T12:19:37.969Z
+  sequenceNumber: 86
+- type: add
+  elementId: testing.testcasesketch.yaml-scenario-planning-design-pipeline
+  layerName: testing
+  after:
+    id: 2ce378fc-5927-42bf-9748-a766cb283421
+    path: testing.testcasesketch.yaml-scenario-planning-design-pipeline
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "YAML Scenario: Planning Design Pipeline"
+    description: Planning and design stage pipeline
+      (scenarios/planning_design_pipeline/); multi-stage workflow covering
+      requirements analysis, system design, and architecture review stages
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: scenarios/planning_design_pipeline/orchestrator/simulation.yaml
+        symbol: planning_design_pipeline
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:19:42.372Z
+      updated_at: 2026-05-08T12:19:42.372Z
+      version: 1
+  timestamp: 2026-05-08T12:19:42.427Z
+  sequenceNumber: 87
+- type: add
+  elementId: testing.testcasesketch.yaml-scenario-planning-design-review-cycle
+  layerName: testing
+  after:
+    id: 5928a822-9101-4040-8825-d332542d1fa7
+    path: testing.testcasesketch.yaml-scenario-planning-design-review-cycle
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "YAML Scenario: Planning Design Review Cycle"
+    description: Planning and design with review cycle
+      (scenarios/planning_design_review_cycle/); combines multi-stage planning
+      pipeline with maker-checker review for design artifacts
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: scenarios/planning_design_review_cycle/orchestrator/simulation.yaml
+        symbol: planning_design_review_cycle
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:19:42.919Z
+      updated_at: 2026-05-08T12:19:42.919Z
+      version: 1
+  timestamp: 2026-05-08T12:19:42.976Z
+  sequenceNumber: 88
+- type: add
+  elementId: testing.testcasesketch.yaml-scenario-pr-feedback-child-issue
+  layerName: testing
+  after:
+    id: 7dc2bd8d-9822-4ce5-9058-360cad507b6c
+    path: testing.testcasesketch.yaml-scenario-pr-feedback-child-issue
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "YAML Scenario: PR Feedback Child Issue"
+    description: PR feedback triggers child issue creation
+      (scenarios/pr_feedback_child_issue/); reviewer comments on PR create
+      linked child work items that are automatically routed to appropriate
+      workflow columns
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: scenarios/pr_feedback_child_issue/orchestrator/simulation.yaml
+        symbol: pr_feedback_child_issue
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:19:43.451Z
+      updated_at: 2026-05-08T12:19:43.451Z
+      version: 1
+  timestamp: 2026-05-08T12:19:43.507Z
+  sequenceNumber: 89
+- type: add
+  elementId: testing.testcasesketch.yaml-scenario-stress-test
+  layerName: testing
+  after:
+    id: 26ddfcfa-ba47-4d9e-8850-0d6ba4350595
+    path: testing.testcasesketch.yaml-scenario-stress-test
+    spec_node_id: testing.testcasesketch
+    type: testcasesketch
+    layer_id: testing
+    name: "YAML Scenario: Stress Test"
+    description: High-volume stress test (scenarios/stress_test/); large number of
+      concurrent work items and agent executions to test scalability, resource
+      limits, and performance under load; verifies no memory leaks or deadlocks
+    attributes:
+      status: automated
+      implementationFormat: automated
+      source:
+        file: scenarios/stress_test/orchestrator/simulation.yaml
+        symbol: stress_test
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:19:47.803Z
+      updated_at: 2026-05-08T12:19:47.803Z
+      version: 1
+  timestamp: 2026-05-08T12:19:47.863Z
+  sequenceNumber: 90
+- type: add
+  elementId: data-model.objectschema.prreview-cycle-result
+  layerName: data-model
+  after:
+    id: 2db0b096-42bf-409d-a0ee-0b1cf5989336
+    path: data-model.objectschema.prreview-cycle-result
+    spec_node_id: data-model.objectschema
+    type: objectschema
+    layer_id: data-model
+    name: PRReviewCycleResult
+    description: "Value object for completed PR review cycle outcome: cycle_number,
+      workflow_run_id, outcome (PRReviewOutcome:
+      ISSUES_FOUND/APPROVED/MAX_CYCLES_REACHED), phase_outputs, all_findings
+      (list of PRReviewFinding), sub_issues_created (count), ci_passed (bool),
+      total_findings, critical_count, high_count, medium_count, low_count.
+      Returned by PR review cycle service after all phases complete."
+    attributes:
+      type: object
+      properties:
+        cycle_number:
+          type: integer
+        workflow_run_id:
+          type: string
+        outcome:
+          type: string
+        phase_outputs:
+          type: array
+          items:
+            type: object
+        all_findings:
+          type: array
+          items:
+            type: object
+        sub_issues_created:
+          type: integer
+        ci_passed:
+          type: boolean
+        total_findings:
+          type: integer
+        critical_count:
+          type: integer
+        high_count:
+          type: integer
+        medium_count:
+          type: integer
+        low_count:
+          type: integer
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/pr_review_cycle_types.py
+          symbol: PRReviewCycleResult
+    metadata:
+      created_at: 2026-05-08T12:20:15.035Z
+      updated_at: 2026-05-08T12:20:15.035Z
+      version: 1
+  timestamp: 2026-05-08T12:20:15.090Z
+  sequenceNumber: 91
+- type: add
+  elementId: data-model.schemadefinition.prreview-outcome
+  layerName: data-model
+  after:
+    id: 77cb2fe5-5036-4961-916f-d05a73213190
+    path: data-model.schemadefinition.prreview-outcome
+    spec_node_id: data-model.schemadefinition
+    type: schemadefinition
+    layer_id: data-model
+    name: PRReviewOutcome
+    description: "Enum for PR automated review cycle final outcome: ISSUES_FOUND
+      (review found problems, sub-issues may be created), APPROVED (all phases
+      passed, PR can advance), MAX_CYCLES_REACHED (exceeded outer cycle limit
+      without approval, escalation triggered). Determines which board column the
+      work item moves to after the cycle."
+    attributes:
+      title: PRReviewOutcome
+      type: string
+      enum:
+        - ISSUES_FOUND
+        - APPROVED
+        - MAX_CYCLES_REACHED
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/pr_review_cycle_types.py
+          symbol: PRReviewOutcome
+    metadata:
+      created_at: 2026-05-08T12:20:23.609Z
+      updated_at: 2026-05-08T12:20:23.609Z
+      version: 1
+  timestamp: 2026-05-08T12:20:23.671Z
+  sequenceNumber: 92
+- type: add
+  elementId: data-model.schemadefinition.prreview-status
+  layerName: data-model
+  after:
+    id: abedf7cc-5549-43cf-8d16-0e44d41646f8
+    path: data-model.schemadefinition.prreview-status
+    spec_node_id: data-model.schemadefinition
+    type: schemadefinition
+    layer_id: data-model
+    name: PRReviewStatus
+    description: "Enum for PR review cycle phase status: PENDING,
+      PHASE_1_CODE_REVIEW, PHASE_2_VERIFICATION, PHASE_3_CI_CHECK,
+      PHASE_4_CONSOLIDATION, COMPLETED, ESCALATED. Tracks which phase is
+      currently executing in PRReviewCycleState; emitted in PR review cycle
+      events."
+    attributes:
+      title: PRReviewStatus
+      type: string
+      enum:
+        - PENDING
+        - PHASE_1_CODE_REVIEW
+        - PHASE_2_VERIFICATION
+        - PHASE_3_CI_CHECK
+        - PHASE_4_CONSOLIDATION
+        - COMPLETED
+        - ESCALATED
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/pr_review_cycle_types.py
+          symbol: PRReviewStatus
+    metadata:
+      created_at: 2026-05-08T12:20:25.891Z
+      updated_at: 2026-05-08T12:20:25.891Z
+      version: 1
+  timestamp: 2026-05-08T12:20:25.951Z
+  sequenceNumber: 93

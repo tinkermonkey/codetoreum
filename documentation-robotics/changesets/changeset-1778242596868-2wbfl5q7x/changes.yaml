@@ -1,0 +1,188 @@
+- type: add
+  elementId: testing.testcoveragetarget.mock-notifier-adapter
+  layerName: testing
+  after:
+    id: e185ec50-851b-4db8-b125-fc95118286b2
+    path: testing.testcoveragetarget.mock-notifier-adapter
+    spec_node_id: testing.testcoveragetarget
+    type: testcoveragetarget
+    layer_id: testing
+    name: MockNotifierAdapter
+    description: Mock notification adapter; captures sent notifications for
+      assert_notification_sent assertions in SimulationRunner; simulates Slack,
+      email, or webhook notification delivery
+    attributes:
+      targetType: integration-flow
+      priority: medium
+      source:
+        file: src/codetoreum/adapters/testing/mock_notifier_adapter.py
+        symbol: MockNotifierAdapter
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:17:57.558Z
+      updated_at: 2026-05-08T12:17:57.558Z
+      version: 1
+  timestamp: 2026-05-08T12:17:57.579Z
+  sequenceNumber: 0
+- type: add
+  elementId: testing.testcoveragetarget.in-memory-workflow-config-service
+  layerName: testing
+  after:
+    id: b7692cc3-6121-435b-af63-b04054d10b65
+    path: testing.testcoveragetarget.in-memory-workflow-config-service
+    spec_node_id: testing.testcoveragetarget
+    type: testcoveragetarget
+    layer_id: testing
+    name: InMemoryWorkflowConfigService
+    description: In-memory workflow configuration service; provides workflow
+      definition lookups, stage transition rules, and agent assignment configs
+      without database dependency
+    attributes:
+      targetType: integration-flow
+      priority: high
+      source:
+        file: src/codetoreum/adapters/testing/in_memory_workflow_config_service.py
+        symbol: InMemoryWorkflowConfigService
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:17:57.877Z
+      updated_at: 2026-05-08T12:17:57.877Z
+      version: 1
+  timestamp: 2026-05-08T12:17:57.898Z
+  sequenceNumber: 1
+- type: add
+  elementId: testing.testcoveragetarget.mock-environment-repair-adapter
+  layerName: testing
+  after:
+    id: a7abb71b-5958-4370-b9f6-fdd8a06e5dc3
+    path: testing.testcoveragetarget.mock-environment-repair-adapter
+    spec_node_id: testing.testcoveragetarget
+    type: testcoveragetarget
+    layer_id: testing
+    name: MockEnvironmentRepairAdapter
+    description: "Mock adapter for environment repair port; simulates dev
+      environment repair scenarios (scenario: dev_environment_repair); used to
+      test automated remediation workflows"
+    attributes:
+      targetType: integration-flow
+      priority: medium
+      source:
+        file: src/codetoreum/adapters/testing/mock_environment_repair_adapter.py
+        symbol: MockEnvironmentRepairAdapter
+        provenance: extracted
+    metadata:
+      created_at: 2026-05-08T12:17:58.209Z
+      updated_at: 2026-05-08T12:17:58.209Z
+      version: 1
+  timestamp: 2026-05-08T12:17:58.231Z
+  sequenceNumber: 2
+- type: add
+  elementId: data-model.objectschema.review-cycle-events
+  layerName: data-model
+  after:
+    id: ee0628c3-895d-457e-8c1b-56bbccdfaa21
+    path: data-model.objectschema.review-cycle-events
+    spec_node_id: data-model.objectschema
+    type: objectschema
+    layer_id: data-model
+    name: Review Cycle Events
+    description: "Domain events for maker-checker review cycle lifecycle:
+      ReviewCycleStartedEvent (review_cycle_id, work_item_id, project_id,
+      maker_agent, reviewer_agent, max_iterations),
+      ReviewCycleIterationCompletedEvent (iteration, status, blocking_count),
+      ReviewCycleMakerRevisionEvent, ReviewCycleEscalatedToHumanEvent
+      (blocking_count, escalation_reason), ReviewCycleHumanFeedbackReceivedEvent
+      (feedback), ReviewCycleMaxIterationsReachedEvent, ReviewCycleApprovedEvent
+      (total_iterations). 7 event classes; emitted by ReviewService."
+    attributes:
+      type: object
+      properties:
+        event_id:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        review_cycle_id:
+          type: string
+        work_item_id:
+          type: string
+        project_id:
+          type: string
+        maker_agent:
+          type: string
+        reviewer_agent:
+          type: string
+        max_iterations:
+          type: integer
+        iteration:
+          type: integer
+        status:
+          type: string
+        blocking_count:
+          type: integer
+        escalation_reason:
+          type: string
+        feedback:
+          type: string
+        total_iterations:
+          type: integer
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/events/review_cycle_events.py
+          symbol: ReviewCycleStartedEvent
+    metadata:
+      created_at: 2026-05-08T12:17:58.611Z
+      updated_at: 2026-05-08T12:17:58.611Z
+      version: 1
+  timestamp: 2026-05-08T12:17:58.634Z
+  sequenceNumber: 3
+- type: add
+  elementId: data-model.objectschema.review-events
+  layerName: data-model
+  after:
+    id: a20bf814-9aaa-4bfb-8d6f-19c1775f0c2a
+    path: data-model.objectschema.review-events
+    spec_node_id: data-model.objectschema
+    type: objectschema
+    layer_id: data-model
+    name: Review Events
+    description: "Domain events for code review status updates:
+      ReviewStatusChangedEvent (review_id, work_item_id, project_id,
+      previous_status, new_status, reviewer), ReviewCommentAddedEvent
+      (review_id, work_item_id, project_id, comment). Emitted by
+      ICodeReviewService when GitHub PR review state changes; drives column
+      transitions in board automation."
+    attributes:
+      type: object
+      properties:
+        event_id:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        review_id:
+          type: string
+        work_item_id:
+          type: string
+        project_id:
+          type: string
+        previous_status:
+          type: string
+        new_status:
+          type: string
+        reviewer:
+          type: string
+        comment:
+          type: string
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/events/review_events.py
+          symbol: ReviewStatusChangedEvent
+    metadata:
+      created_at: 2026-05-08T12:18:01.315Z
+      updated_at: 2026-05-08T12:18:01.315Z
+      version: 1
+  timestamp: 2026-05-08T12:18:01.340Z
+  sequenceNumber: 4

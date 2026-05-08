@@ -1,0 +1,68 @@
+motivation.principle.hexagonal-architecture:
+  id: c37da53f-9f44-4d28-b242-75a62c033475
+  path: motivation.principle.hexagonal-architecture
+  spec_node_id: motivation.principle
+  type: principle
+  layer_id: motivation
+  name: Hexagonal Architecture
+  description: Strict separation between domain business logic and external
+    adapters via port interfaces prevents coupling
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: README.md
+  metadata:
+    created_at: 2026-05-08T11:10:47.775Z
+    updated_at: 2026-05-08T11:10:47.775Z
+    version: 1
+motivation.principle.vendor-agnosticism:
+  id: ba762a99-0dd3-48c5-8516-cf96c12b6efe
+  path: motivation.principle.vendor-agnosticism
+  spec_node_id: motivation.principle
+  type: principle
+  layer_id: motivation
+  name: Vendor Agnosticism
+  description: All external system interactions through abstract port interfaces
+    to avoid vendor lock-in for LLM providers and ticket systems
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: README.md
+  metadata:
+    created_at: 2026-05-08T11:10:48.885Z
+    updated_at: 2026-05-08T11:10:48.886Z
+    version: 1
+motivation.principle.immutability-of-events:
+  id: daef9e78-df4c-4fc1-a2b6-9a8f87931d8d
+  path: motivation.principle.immutability-of-events
+  spec_node_id: motivation.principle
+  type: principle
+  layer_id: motivation
+  name: Immutability of Events
+  description: Domain events are frozen dataclasses — immutable and append-only —
+    guaranteeing audit integrity and enabling reliable event replay
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/events
+  metadata:
+    created_at: 2026-05-08T11:10:52.685Z
+    updated_at: 2026-05-08T11:10:52.685Z
+    version: 1
+motivation.principle.domain-purity:
+  id: 3d921487-518b-467f-b0d7-a1c46f288696
+  path: motivation.principle.domain-purity
+  spec_node_id: motivation.principle
+  type: principle
+  layer_id: motivation
+  name: Domain Purity
+  description: Domain layer must have zero external dependencies — pure business
+    logic only, all external interactions via output ports
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain
+  metadata:
+    created_at: 2026-05-08T11:10:53.921Z
+    updated_at: 2026-05-08T11:10:53.921Z
+    version: 1

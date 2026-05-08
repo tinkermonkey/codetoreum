@@ -1,0 +1,18 @@
+apm.traceconfiguration.open-telemetry-setup:
+  id: 3ee613f1-e0b5-4e52-944c-4d46213a5bdc
+  path: apm.traceconfiguration.open-telemetry-setup
+  spec_node_id: apm.traceconfiguration
+  type: traceconfiguration
+  layer_id: apm
+  name: OpenTelemetry Setup
+  description: OTLP exporter configuration for Jaeger integration with sampling
+    and resource attribution
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/infrastructure/observability/otel_setup.py
+        symbol: setup_opentelemetry
+  metadata:
+    created_at: 2026-05-08T11:07:37.603Z
+    updated_at: 2026-05-08T11:07:37.604Z
+    version: 1

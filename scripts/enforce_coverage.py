@@ -93,9 +93,7 @@ def run_coverage_tests() -> tuple[str, bool]:
     # The coverage.json should be in the current directory
     coverage_json_path = Path("coverage.json")
     if not coverage_json_path.exists():
-        raise RuntimeError(
-            f"coverage.json not found. STDOUT: {result.stdout}, STDERR: {result.stderr}"
-        )
+        raise RuntimeError(f"coverage.json not found. STDOUT: {result.stdout}, STDERR: {result.stderr}")
 
     # Track whether tests failed (returncode == 1)
     tests_failed = result.returncode == 1

@@ -1,0 +1,72 @@
+apm.metricinstrument.agent-execution-duration:
+  id: 2707a9e4-7803-4c0c-ba4b-be3b5a49983e
+  path: apm.metricinstrument.agent-execution-duration
+  spec_node_id: apm.metricinstrument
+  type: metricinstrument
+  layer_id: apm
+  name: Agent Execution Duration
+  description: Histogram tracking agent execution duration and latency for
+    pipeline performance monitoring
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/secondary/prometheus_metrics_adapter.py
+        symbol: PrometheusMetricsAdapter
+  metadata:
+    created_at: 2026-05-08T11:07:21.595Z
+    updated_at: 2026-05-08T11:07:21.595Z
+    version: 1
+apm.metricinstrument.repair-cycle-metrics:
+  id: 6f03f7d7-0c2e-494c-a7a0-8577cba48715
+  path: apm.metricinstrument.repair-cycle-metrics
+  spec_node_id: apm.metricinstrument
+  type: metricinstrument
+  layer_id: apm
+  name: Repair Cycle Metrics
+  description: Counter and histogram metrics for repair cycle attempts, successes,
+    and failures
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/secondary/prometheus_metrics_adapter.py
+        symbol: PrometheusMetricsAdapter
+  metadata:
+    created_at: 2026-05-08T11:07:22.972Z
+    updated_at: 2026-05-08T11:07:22.972Z
+    version: 1
+apm.metricinstrument.event-bus-stats:
+  id: a104d006-79a0-4c3b-94f7-e74abbfc7213
+  path: apm.metricinstrument.event-bus-stats
+  spec_node_id: apm.metricinstrument
+  type: metricinstrument
+  layer_id: apm
+  name: Event Bus Stats
+  description: Gauge and counter metrics for event bus throughput, handler errors,
+    and queue depth
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/infrastructure/observability/event_bus_instrumentation.py
+        symbol: InstrumentedEventBus
+  metadata:
+    created_at: 2026-05-08T11:07:26.499Z
+    updated_at: 2026-05-08T11:07:26.499Z
+    version: 1
+apm.metricinstrument.board-reconciliation-metrics:
+  id: 46b9e384-3fc8-45ff-bb12-f7b6bed75750
+  path: apm.metricinstrument.board-reconciliation-metrics
+  spec_node_id: apm.metricinstrument
+  type: metricinstrument
+  layer_id: apm
+  name: Board Reconciliation Metrics
+  description: Counter metrics for board reconciliation cycles, drift detections,
+    and sync operations
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/secondary/prometheus_metrics_adapter.py
+        symbol: PrometheusMetricsAdapter
+  metadata:
+    created_at: 2026-05-08T11:07:27.639Z
+    updated_at: 2026-05-08T11:07:27.639Z
+    version: 1

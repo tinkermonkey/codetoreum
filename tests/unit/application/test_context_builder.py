@@ -581,9 +581,7 @@ async def test_fetch_work_item_details_ticket_system_error(
     """Test fetch_work_item_details when ticket system raises TicketSystemError."""
     # Create mock ticket system that raises error
     mock_ticket_system = AsyncMock()
-    mock_ticket_system.get_work_item = AsyncMock(
-        side_effect=TicketSystemError("GitHub API unavailable")
-    )
+    mock_ticket_system.get_work_item = AsyncMock(side_effect=TicketSystemError("GitHub API unavailable"))
     context_builder.ticket_system = mock_ticket_system
 
     result = await context_builder.fetch_work_item_details("work-item-123")
@@ -599,9 +597,7 @@ async def test_fetch_work_item_details_resource_not_found_error(
     """Test fetch_work_item_details when ticket system raises ResourceNotFoundError."""
     # Create mock ticket system that raises error
     mock_ticket_system = AsyncMock()
-    mock_ticket_system.get_work_item = AsyncMock(
-        side_effect=ResourceNotFoundError("WorkItem", "nonexistent-work-item")
-    )
+    mock_ticket_system.get_work_item = AsyncMock(side_effect=ResourceNotFoundError("WorkItem", "nonexistent-work-item"))
     context_builder.ticket_system = mock_ticket_system
 
     result = await context_builder.fetch_work_item_details("nonexistent-work-item")

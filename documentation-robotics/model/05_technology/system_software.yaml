@@ -1,0 +1,206 @@
+technology.systemsoftware.python-311:
+  id: 49db50ec-b95a-4398-b59c-85c832f604be
+  path: technology.systemsoftware.python-311
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: Python 3.11
+  description: Primary runtime language and version for all application code
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: pyproject.toml
+        symbol: python
+  metadata:
+    created_at: 2026-05-08T11:06:03.869Z
+    updated_at: 2026-05-08T11:06:03.870Z
+    version: 1
+technology.systemsoftware.docker:
+  id: dbce604e-ca1f-466c-a731-609aab5ddc52
+  path: technology.systemsoftware.docker
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: Docker
+  description: Container runtime for agent isolation and deployment
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: Dockerfile.agent
+  metadata:
+    created_at: 2026-05-08T11:06:04.852Z
+    updated_at: 2026-05-08T11:06:04.852Z
+    version: 1
+technology.systemsoftware.fast-api:
+  id: 30c1d4a1-8a25-4ebf-82bf-d8eee41b9e4b
+  path: technology.systemsoftware.fast-api
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: FastAPI
+  description: Async REST API framework used for all HTTP endpoints and WebSocket support
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: pyproject.toml
+        symbol: fastapi
+  metadata:
+    created_at: 2026-05-08T11:06:07.968Z
+    updated_at: 2026-05-08T11:06:07.969Z
+    version: 1
+technology.systemsoftware.sqlalchemy:
+  id: 017f5ed3-00ed-4cda-8d54-873709accb9e
+  path: technology.systemsoftware.sqlalchemy
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: SQLAlchemy
+  description: ORM for PostgreSQL configuration database access
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: pyproject.toml
+        symbol: sqlalchemy
+  metadata:
+    created_at: 2026-05-08T11:06:08.847Z
+    updated_at: 2026-05-08T11:06:08.847Z
+    version: 1
+technology.systemsoftware.redis-client:
+  id: f68410f7-8217-4bfe-af28-8e7fbdd1db99
+  path: technology.systemsoftware.redis-client
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: Redis Client
+  description: Redis SDK for event store, pub/sub, and config cache
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: pyproject.toml
+        symbol: redis
+  metadata:
+    created_at: 2026-05-08T11:06:11.787Z
+    updated_at: 2026-05-08T11:06:11.788Z
+    version: 1
+technology.systemsoftware.elasticsearch-client:
+  id: 0e4d749a-347d-40bd-a23c-99a40d25c749
+  path: technology.systemsoftware.elasticsearch-client
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: Elasticsearch Client
+  description: Elasticsearch SDK for event store, config storage, and workflow config
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: pyproject.toml
+        symbol: elasticsearch
+  metadata:
+    created_at: 2026-05-08T11:06:12.720Z
+    updated_at: 2026-05-08T11:06:12.721Z
+    version: 1
+technology.systemsoftware.open-telemetry:
+  id: f607e273-2ed6-4594-9ab8-614e75066356
+  path: technology.systemsoftware.open-telemetry
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: OpenTelemetry
+  description: Distributed tracing SDK with OTLP exporter for Jaeger integration
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: pyproject.toml
+        symbol: opentelemetry-sdk
+  metadata:
+    created_at: 2026-05-08T11:06:15.590Z
+    updated_at: 2026-05-08T11:06:15.590Z
+    version: 1
+technology.systemsoftware.prometheus:
+  id: bc45f3fe-20e1-4d89-befd-6314358a246e
+  path: technology.systemsoftware.prometheus
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: Prometheus
+  description: Prometheus metrics library for application performance monitoring
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/secondary/prometheus_metrics_adapter.py
+        symbol: PrometheusMetricsAdapter
+  metadata:
+    created_at: 2026-05-08T11:06:17.046Z
+    updated_at: 2026-05-08T11:06:17.046Z
+    version: 1
+technology.systemsoftware.pytest:
+  id: c7766129-48f6-498f-8509-688092251713
+  path: technology.systemsoftware.pytest
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: pytest
+  description: Test runner for unit, integration, simulation, and e2e test suites
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: pyproject.toml
+        symbol: pytest
+  metadata:
+    created_at: 2026-05-08T11:06:20.316Z
+    updated_at: 2026-05-08T11:06:20.317Z
+    version: 1
+technology.systemsoftware.postgre-sql:
+  id: 61cc3314-fb38-44c7-8928-a907b0a9e05a
+  path: technology.systemsoftware.postgre-sql
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: PostgreSQL
+  description: Relational database for configuration, agent definitions, and
+    workflow storage
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: pyproject.toml
+        symbol: sqlalchemy
+  metadata:
+    created_at: 2026-05-08T11:06:21.117Z
+    updated_at: 2026-05-08T11:06:21.117Z
+    version: 1
+technology.systemsoftware.redis:
+  id: cedaea87-85a5-432b-8df5-048ecc470333
+  path: technology.systemsoftware.redis
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: Redis
+  description: In-memory data store used as event store, pub/sub broker, and
+    distributed cache
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/infrastructure/event_bus.py
+        symbol: EventBus
+  metadata:
+    created_at: 2026-05-08T11:06:24.716Z
+    updated_at: 2026-05-08T11:06:24.716Z
+    version: 1
+technology.systemsoftware.elasticsearch:
+  id: 3366d620-3d39-431f-9817-1e1254561d68
+  path: technology.systemsoftware.elasticsearch
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: Elasticsearch
+  description: Search and analytics engine used for event store and workflow
+    configuration storage
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/secondary/elasticsearch_event_store.py
+        symbol: ElasticsearchEventStore
+  metadata:
+    created_at: 2026-05-08T11:06:25.625Z
+    updated_at: 2026-05-08T11:06:25.625Z
+    version: 1

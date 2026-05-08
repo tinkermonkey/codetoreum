@@ -45,13 +45,15 @@ To create a new implementation (e.g., production, staging, cloud-hosted):
 2. **Create Bootstrap Function**: Wire adapters together in `bootstrap.py`
    ```python
    async def create_production_app():
-       # Instantiate all adapters
+       # Instantiate all adapters — production implementations of the same
+       # port interfaces used by the simulation (ITicketSystem, IContainer, etc.)
        ticket_adapter = GitHubTicketAdapter(github_token=...)
        container_adapter = DockerContainerAdapter(docker_host=...)
-       # ... more adapters ...
-       
+       llm_adapter = ClaudeCodeAdapter(api_key=...)
+       # (plus all remaining output port adapters)
+
        # Wire them to the application
-       return create_app(ticket_adapter, container_adapter, ...)
+       return create_app(ticket_adapter, container_adapter, llm_adapter, ...)
    ```
 
 3. **Document the Implementation**: Create a directory in `implementations/` with:

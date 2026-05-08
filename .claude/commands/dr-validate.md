@@ -1,11 +1,11 @@
 ---
-description: Comprehensive validation of DR model including schema, references, semantic rules, and cross-layer links
-argument-hint: "[--strict] [--validate-links] [--strict-links]"
+description: Comprehensive validation of DR model including schema, references, semantic rules, and cross-layer relationships
+argument-hint: "[--strict]"
 ---
 
 # Validate Architecture Model
 
-Comprehensive validation of the Documentation Robotics model including schema, naming, references, semantic rules, and cross-layer link validation.
+Comprehensive validation of the Documentation Robotics model including schema, naming, references, semantic rules, and cross-layer relationship validation.
 
 ## What This Command Does
 
@@ -14,7 +14,8 @@ Comprehensive validation of the Documentation Robotics model including schema, n
    - Naming conventions (kebab-case, valid IDs)
    - Reference integrity (broken references)
    - Semantic rules (business logic, best practices)
-   - **Cross-layer link validation** (existence, type, cardinality, format)
+   - **Cross-layer relationship validation** (existence, type, cardinality, format)
+   - **Intra-layer relationship validation** (validated against relationship catalog)
 2. Reports errors, warnings, and informational messages
 3. Analyzes issues and suggests fixes with confidence scores
 4. Provides actionable recommendations for fixes
@@ -22,14 +23,12 @@ Comprehensive validation of the Documentation Robotics model including schema, n
 ## Usage
 
 ```
-/dr-validate [--strict] [--validate-links] [--strict-links]
+/dr-validate [--strict]
 ```
 
 **Options:**
 
 - `--strict`: Enable strict validation with comprehensive semantic rules
-- `--validate-links`: Include comprehensive cross-layer link validation (recommended)
-- `--strict-links`: Treat link warnings as errors (use with --validate-links)
 
 ## Instructions for Claude Code
 
@@ -37,38 +36,27 @@ When the user runs this command, perform intelligent validation with helpful sug
 
 ### Step 1: Run Initial Validation
 
-**RECOMMENDED: Always include link validation**
-
-```bash
-dr validate --strict --validate-links
-```
-
 **Basic validation** (default):
 
 ```bash
 dr validate
 ```
 
-**Comprehensive validation with link checking**:
+**Comprehensive validation with strict rules**:
 
 ```bash
-dr validate --strict --validate-links --strict-links
+dr validate --strict
 ```
 
-**Most thorough validation**:
+### Relationship Validation
 
-```bash
-dr validate --strict --validate-links --strict-links
-```
-
-### Link Validation
-
-Cross-layer link validation checks:
+Cross-layer and intra-layer relationship validation checks:
 
 1. **Existence**: Target elements exist
 2. **Type**: Correct element types referenced
 3. **Cardinality**: Single values vs arrays correct
 4. **Format**: Valid element ID format (UUID, paths, durations)
+5. **Catalog Compliance**: Intra-layer relationships exist in relationship catalog
 
 ### Step 2: Parse and Categorize Results
 
@@ -182,10 +170,10 @@ Apply safe fixes now? (I'll ask about the others)"
 
 # If yes, apply safe fixes
 dr update business.service.orders \
-  --property description="Manages customer orders"
+  --description "Manages customer orders"
 
 dr update business.service.shipping \
-  --property description="Handles shipping logistics"
+  --description "Handles shipping logistics"
 
 # ... continue for all safe fixes
 
@@ -227,8 +215,8 @@ Summary: 0 errors, 3 warnings
 Your model is valid but could be improved:
 
 1. ⚠️  business.service.checkout
-   Recommendation: Add 'supports-goals' reference for traceability
-   Impact: Helps trace business value
+   Recommendation: Add description to document what this element represents
+   Impact: Improves model documentation quality
 
 2. ⚠️  application.service.reporting
    Recommendation: Add monitoring metrics
@@ -326,57 +314,68 @@ Priority 4 (Documentation):
 
 ## Advanced Features
 
+### Understanding Warning Categories
+
+Not all warnings require immediate action. Understand the priority:
+
+**Structural errors** (❌ — must fix before `dr changeset commit` will succeed):
+
+- Schema violations (missing required fields, wrong types)
+- Broken references (referencing non-existent elements)
+- Naming convention violations
+- Cardinality violations in relationships
+
+**Orphan warnings** (⚠️ — expected during active development):
+
+- Elements with no cross-layer references or intra-layer relationships
+- Normal during incremental work — run `/dr-relate` to wire them up when ready
+- Do NOT block `dr changeset commit`
+
+**Source-reference warnings** (⚠️ — expected on manually authored elements):
+
+- Elements without `source_reference` provenance
+- Normal for hand-authored elements; only mandatory for elements created via `dr scan`
+- Do NOT block `dr changeset commit`
+
 ### Validate Before Commit
 
-Help users validate before committing:
+Run `dr validate` **before** `dr changeset commit` so you can see and react to errors:
 
-```
-User: /dr-validate
+```bash
+# Step 1: Validate (includes staged changes automatically)
+dr validate
 
-You: Running validation before commit...
+# Step 2: Fix any structural errors
+# [apply fixes as needed]
 
-     dr validate --strict
-
-     [show results]
-
-     ✓ Model is valid and ready to commit!
-
-     Suggested commit workflow:
-     1. git add documentation-robotics/
-     2. git commit -m "Add payment service with full traceability"
-     3. git push
+# Step 3: Commit — built-in validation runs again as a safety net
+dr changeset commit
 ```
 
-### Continuous Validation
+If a changeset is active, `dr validate` automatically validates the projected model (staged changes merged with the base model). You see exactly what `commit` will validate.
 
-For ongoing work, track validation status:
+### Validate a Specific Layer
 
+```bash
+# Only validate the API layer (faster for targeted checks)
+dr validate --layers api
+
+# Validate multiple layers
+dr validate --layers api,application
 ```
-User: /dr-validate
 
-You: Running validation check #3 today...
-
-     Previous: ❌ 5 errors, 8 warnings
-     Current:  ⚠️  0 errors, 3 warnings
-
-     ✓ Improvement! Fixed all errors since last check.
-
-     Remaining warnings:
-     [show warnings]
-
-     Keep up the good work!
-```
+Note: `--layers` filters which layer elements are reported in errors, but the full model is still loaded for reference validation.
 
 ### Validation Reports
 
-Generate detailed reports:
+Generate machine-readable reports using `--output`:
 
 ```
 User: /dr-validate --report
 
 You: Generating comprehensive validation report...
 
-     dr validate --strict > validation-report.json
+     dr validate --output validation-report.json
 
      ✓ Report saved to: validation-report.json
 
@@ -385,17 +384,47 @@ You: Generating comprehensive validation report...
      - Validated: 45
      - Errors: 0
      - Warnings: 3
-     - Info: 2
 
      Report includes:
      - Element-by-element validation status
      - Cross-layer reference validation
      - Semantic rule results
-     - Traceability matrix
      - Recommendations
 
      View report: cat validation-report.json | jq
 ```
+
+**IMPORTANT**: Use `--output <file.json>` for machine-readable output, NOT shell redirection. Shell redirection (`>`) captures ANSI-colored console output, not clean JSON.
+
+**JSON output schema** (from `--output report.json`):
+
+```json
+{
+  "valid": true,
+  "errorCount": 0,
+  "warningCount": 3,
+  "errors": [
+    {
+      "layer": "api",
+      "elementId": "api.operation.create-order",
+      "message": "Element 'api.operation.create-order': At /name: missing required property 'name'",
+      "location": "/name",
+      "fixSuggestion": "Add required field: name"
+    }
+  ],
+  "warnings": [
+    {
+      "layer": "business",
+      "elementId": "business.service.orders",
+      "message": "Element 'business.service.orders' has no source reference",
+      "category": "source-reference",
+      "fixSuggestion": "Add a source_reference with provenance to link this element to its implementation"
+    }
+  ]
+}
+```
+
+**Note on `location` field**: The `location` field contains an AJV `instancePath` (e.g., `/attributes/criticality`), not a file path. To locate the element's YAML file, use the `elementId` with `dr show <elementId>`.
 
 ## Validation Rules Reference
 
@@ -492,7 +521,7 @@ You: Running model validation...
 ### Example 2: With Fixes
 
 ```
-User: /dr-validate --strict --validate-links
+User: /dr-validate --strict
 
 You: Running validation with auto-fix...
 
@@ -542,9 +571,65 @@ You: Running comprehensive validation...
      3. Create a fix plan for batch processing
 ```
 
+## Relationship Quality Audit
+
+Beyond schema and reference validation, use `dr audit` to measure **intra-layer relationship coverage** — whether node types are connected to each other in a meaningful way.
+
+### When to Run an Audit
+
+Run `dr audit` after:
+
+- Adding many elements to a layer without explicit relationships
+- Completing a major extraction session
+- When the user asks about model completeness or coverage
+
+### Audit Commands
+
+```bash
+# Full model audit (all layers)
+dr audit
+
+# Layer-specific audit
+dr audit <layer-name>
+
+# Generate detailed markdown report (--threshold is not a supported flag)
+
+# Generate detailed markdown report
+dr audit --format markdown --output audit-report.md
+
+# JSON output for programmatic use
+dr audit --format json --output audit.json
+```
+
+### Quality Thresholds
+
+| Metric               | Target | Description                                    |
+| -------------------- | ------ | ---------------------------------------------- |
+| Isolation            | ≤ 20%  | % of node types with no relationships          |
+| Density              | ≥ 1.5  | Average relationships per node type            |
+| High-Priority Gaps   | ≤ 10   | Missing high-value relationships               |
+| Duplicate Candidates | ≤ 5    | Semantically redundant relationship candidates |
+
+### Audit + Validate Workflow
+
+```bash
+# Step 1: Schema and reference validation
+dr validate --strict
+
+# Step 2: Relationship quality audit
+dr audit <layer-name>
+
+# Step 3: Review and address gaps
+# [Add relationships based on audit recommendations]
+
+# Step 4: Re-validate
+dr validate
+```
+
 ## Related Commands
 
 - `/dr-init` - Initialize new model
 - `/dr-model` - Add/update elements
 - `/dr-project` - Cross-layer projection
 - `dr validate --help` - CLI validation options
+- `dr audit --help` - Relationship audit options

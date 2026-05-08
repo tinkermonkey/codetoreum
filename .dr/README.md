@@ -1,35 +1,28 @@
-# codetoreum - Architecture Model
+# Documentation Robotics - Spec Reference
 
-This is a Documentation Robotics architecture model.
+This directory is managed by the Documentation Robotics CLI.
+
+**Spec Version:** 0.8.4
+**Installed:** 2026-05-08T10:23:47.124Z
 
 ## Structure
 
-- `documentation-robotics/` - Main project directory
-  - `model/` - The canonical architecture model (11 layers)
-  - `specs/` - Generated specifications (ArchiMate, OpenAPI, etc.)
-  - `projection-rules.yaml` - Cross-layer projection rules
-- `.dr/` - Tool configuration and schemas
+- `spec/`          — Compiled spec files (14 JSON files: manifest, base, one per layer)
+- `manifest.json`  — Spec version information
+- `changesets/`    — Model changesets (active and saved)
 
-## Quick Start
+## Spec Files
 
-View model layers:
-```bash
-dr list business
-```
+The `spec/` directory contains the complete compiled specification:
 
-Add an element:
-```bash
-dr add business service --name "My Service"
-```
+- `manifest.json`  — Layer index with node type and relationship counts
+- `base.json`      — Base schemas and predicate definitions
+- `{layer}.json`   — One file per layer (12 total), each containing:
+  - `layer`               — Layer metadata (id, name, description, node_types)
+  - `nodeSchemas`         — JSON Schema definitions for all node types in the layer
+  - `relationshipSchemas` — Flat relationship definitions for all relationships in the layer
 
-Validate model:
-```bash
-dr validate
-```
+These files are regenerated on `dr init` and `dr upgrade` to match the
+current CLI version. Do not manually edit them.
 
-## Model Information
-
-- **Project:** codetoreum
-- **Version:** 1.0.0
-
-For more information, see the Documentation Robotics documentation.
+This directory should be git-ignored.

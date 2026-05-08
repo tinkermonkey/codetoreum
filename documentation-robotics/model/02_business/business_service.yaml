@@ -1,0 +1,89 @@
+business.businessservice.workflow-automation:
+  id: 8427c75b-a494-40c1-b7a9-cf8945198c44
+  path: business.businessservice.workflow-automation
+  spec_node_id: business.businessservice
+  type: businessservice
+  layer_id: business
+  name: Workflow Automation
+  description: Automates software development workflows end-to-end using
+    specialized AI agents
+  source_reference:
+    provenance: inferred
+  metadata:
+    created_at: 2026-05-08T11:09:26.648Z
+    updated_at: 2026-05-08T11:09:26.648Z
+    version: 1
+business.businessservice.agent-execution-management:
+  id: d964f441-1506-4db2-a488-aad309d4d5f2
+  path: business.businessservice.agent-execution-management
+  spec_node_id: business.businessservice
+  type: businessservice
+  layer_id: business
+  name: Agent Execution Management
+  description: Manages the lifecycle of AI agent executions including scheduling,
+    monitoring, and recovery
+  source_reference:
+    provenance: inferred
+  metadata:
+    created_at: 2026-05-08T11:09:27.921Z
+    updated_at: 2026-05-08T11:09:27.921Z
+    version: 1
+business.businessservice.code-review-orchestration:
+  id: 65d38843-0f8f-4e9c-a3a0-80ee7f7ec356
+  path: business.businessservice.code-review-orchestration
+  spec_node_id: business.businessservice
+  type: businessservice
+  layer_id: business
+  name: Code Review Orchestration
+  description: Coordinates maker-checker review cycles with AI feedback loops
+  source_reference:
+    provenance: inferred
+  metadata:
+    created_at: 2026-05-08T11:09:30.891Z
+    updated_at: 2026-05-08T11:09:30.891Z
+    version: 1
+business.businessservice.configuration-management:
+  id: 722827dc-3423-4839-af7c-43dd4056a379
+  path: business.businessservice.configuration-management
+  spec_node_id: business.businessservice
+  type: businessservice
+  layer_id: business
+  name: Configuration Management
+  description: Manages project, agent, pipeline, and environment configuration via
+    database-backed storage
+  source_reference:
+    provenance: inferred
+  metadata:
+    created_at: 2026-05-08T11:09:31.728Z
+    updated_at: 2026-05-08T11:09:31.728Z
+    version: 1
+business.businessservice.multi-project-coordination:
+  id: ed5c0aa7-f505-48a8-81eb-710b6d58383c
+  path: business.businessservice.multi-project-coordination
+  spec_node_id: business.businessservice
+  type: businessservice
+  layer_id: business
+  name: Multi-Project Coordination
+  description: Orchestrates work items and agents across multiple GitHub projects
+    simultaneously
+  source_reference:
+    provenance: inferred
+  metadata:
+    created_at: 2026-05-08T11:09:34.932Z
+    updated_at: 2026-05-08T11:09:34.932Z
+    version: 1
+business.businessservice.workspace-management:
+  id: aa693397-7375-484e-8ecf-f1207846025e
+  path: business.businessservice.workspace-management
+  spec_node_id: business.businessservice
+  type: businessservice
+  layer_id: business
+  name: Workspace Management
+  description: Manages containerized workspaces for isolated agent execution with
+    file mounting and context injection
+  source_reference:
+    provenance: inferred
+  metadata:
+    created_at: 2026-05-08T11:09:35.758Z
+    updated_at: 2026-05-08T11:09:35.758Z
+    version: 1

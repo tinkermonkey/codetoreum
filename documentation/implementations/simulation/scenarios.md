@@ -474,7 +474,7 @@ policies:
         target_column: "review"
       - type: "assign_agent"
         agent_type: "reviewer"
-  
+
   - name: "escalate-blocked"
     trigger: "work_item_blocked"
     conditions:
@@ -555,10 +555,10 @@ runner = SimulationRunner(config)
 async def scenario(sim):
     # Access adapters
     ticket_adapter = sim.adapters.ticket_as_mock()
-    
+
     # Run scenario
     await sim.advance_time(timedelta(minutes=10))
-    
+
     # Make assertions
     sim.assert_event_occurred("WorkItemColumnChanged")
     assert len(sim.adapters.event_emitter.captured_events) > 0
@@ -587,12 +587,12 @@ async def test_sdlc_pipeline_workflow():
     """Test complete SDLC pipeline."""
     config = SimulationConfig.from_yaml("scenarios/sdlc_pipeline/orchestrator/simulation.yaml")
     runner = SimulationRunner(config)
-    
+
     async def scenario(sim):
         # Test workflow execution
         await sim.advance_time(timedelta(minutes=30))
         # Assertions...
-    
+
     result = await runner.run(scenario)
     assert result.success
 ```
@@ -627,11 +627,11 @@ agents:
   - name: "fast-agent"          # For smoke tests
     max_tokens: 1024
     temperature: 0.0            # Deterministic
-  
+
   - name: "thorough-agent"      # For feature tests
     max_tokens: 4096
     temperature: 0.7            # Realistic variation
-  
+
   - name: "heavy-agent"         # For stress tests
     max_tokens: 8192
     temperature: 0.8            # More complex

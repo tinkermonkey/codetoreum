@@ -215,9 +215,11 @@ class MockBoardAdapter(IBoardService):
                     asyncio.get_running_loop()
                     # Create a task but add a callback to log errors
                     task = asyncio.create_task(self._publish_to_event_bus_async(event))
+
                     def log_error(t):
                         if t.exception():
                             logger.error(f"Event bus publish failed: {t.exception()}")
+
                     task.add_done_callback(log_error)
                 except RuntimeError:
                     # No running loop - can't publish to async event bus

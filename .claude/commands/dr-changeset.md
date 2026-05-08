@@ -60,12 +60,10 @@ When the user runs this command, interpret their intent and execute the appropri
 
 ```bash
 # Check if changeset is active
-dr changeset list | grep "►"  # Active changeset marked with ►
+dr changeset status  # Show active changeset
 
-# Or check active file directly
-if [ -f .dr/changesets/active ]; then
-  echo "Working in changeset: $(cat .dr/changesets/active)"
-fi
+# Or list all changesets to see which is in use
+dr changeset list
 ```
 
 **Inform the user:**
@@ -98,11 +96,10 @@ fi
 
 **ALWAYS before applying:**
 
-1. Show preview: `dr changeset status --verbose`
+1. Show preview: `dr changeset preview`
 2. Run validation: `dr validate`
 3. Get explicit confirmation
-4. Apply with preview: `dr changeset apply --preview` (first)
-5. Then apply for real: `dr changeset apply --yes`
+4. Commit staged changes: `dr changeset commit`
 
 ### Supported Operations
 
@@ -118,22 +115,23 @@ fi
 **Your process:**
 
 ```bash
-# 1. Check for active changeset
-ACTIVE=$(dr changeset list --status active | grep "►" | awk '{print $2}')
+# 1. Check for existing changesets
+EXISTING=$(dr changeset list)
 
-# 2. If active, inform user and ask
-if [ -n "$ACTIVE" ]; then
-  echo "Currently in changeset: $ACTIVE"
+# 2. If changesets exist, inform user and ask
+if [ -n "$EXISTING" ]; then
+  echo "Found existing staged changesets:"
+  echo "$EXISTING"
   echo "Options:"
-  echo "1. Continue in current changeset"
-  echo "2. Apply current and start new"
-  echo "3. Switch to new without applying"
+  echo "1. Continue in current work"
+  echo "2. Create new changeset for different work"
   # Get user choice
 fi
 
-# 3. Create changeset with appropriate type
-dr changeset create "feature-name" --type feature
-# Types: feature | bugfix | exploration
+# 3. Create changeset
+dr changeset create "feature-name"
+# Add optional description
+dr changeset create "feature-name" --description "Detailed description"
 ```
 
 **Example:**
@@ -145,7 +143,7 @@ You should:
 1. Check for active changeset
 2. Inform: "I'll create a new changeset for the authentication system work"
 3. Execute:
-   dr changeset create "auth-system" --type feature \
+   dr changeset create "auth-system" \
      --description "New authentication and authorization system"
 4. Confirm:
    "✓ Created changeset: feature-auth-system-2024-01-15-001
@@ -165,16 +163,14 @@ You should:
 **Your process:**
 
 ```bash
-# 1. Check active
-ACTIVE=$(cat .dr/changesets/active 2>/dev/null || echo "none")
+# 1. List all changesets
+dr changeset list
 
-# 2. If active, show status
-if [ "$ACTIVE" != "none" ]; then
-  dr changeset status --verbose
-else
-  echo "No active changeset - working in main model"
-  echo "Create one with: dr changeset create \"name\""
-fi
+# 2. Show active changeset status
+dr changeset status
+
+# 3. Preview staged changes merged with model
+dr changeset preview
 ```
 
 **Example:**
@@ -185,7 +181,7 @@ User: /dr-changeset What changes have I made?
 You should:
 1. Check active changeset
 2. Show detailed status:
-   dr changeset status --verbose
+   dr changeset status
 3. Display output clearly:
    "Current changeset: feature-auth-system-2024-01-15-001
 
@@ -216,11 +212,8 @@ You should:
 # Compare current changeset with main
 dr changeset diff
 
-# Compare two specific changesets
-dr changeset diff changeset-a-id changeset-b-id
-
-# Get JSON for programmatic analysis
-dr changeset diff --json
+# Diff for a specific layer only
+dr changeset diff --layer <layer-name>
 ```
 
 **Example:**
@@ -262,11 +255,9 @@ You should:
 # 1. List available changesets
 dr changeset list
 
-# 2. Switch to specific changeset
-dr changeset switch changeset-id
-
-# 3. Return to main model
-dr changeset clear --yes
+# 2. Deactivate current changeset, then activate the target
+dr changeset deactivate
+dr changeset activate <changeset-id>
 ```
 
 **Example:**
@@ -278,8 +269,8 @@ You should:
 1. List changesets:
    dr changeset list
 2. Find matching changeset (fuzzy match on name)
-3. Switch:
-   dr changeset switch feature-payment-feature-2024-01-10-002
+3. Activate:
+   dr changeset activate feature-payment-feature-2024-01-10-002
 4. Confirm:
    "✓ Switched to: feature-payment-feature
 
@@ -298,29 +289,25 @@ You should:
 - "Make it permanent"
 - "Commit the changeset"
 
-**Your process - CRITICAL SAFETY:**
+**Your process:**
 
 ```bash
 # 1. Show preview FIRST
-echo "Preview of changes to be applied:"
-dr changeset apply --preview
+echo "Preview of staged changes:"
+dr changeset preview
 
 # 2. Validate
 echo "\nRunning validation..."
 dr validate
 
-# 3. Get explicit confirmation
-echo "\nReady to apply? This will:"
-echo "- Merge all changes to main model"
-echo "- Mark changeset as 'applied'"
-echo "- Clear active changeset"
-read -p "Proceed? (yes/no): " confirm
-
-# 4. Apply if confirmed
-if [ "$confirm" = "yes" ]; then
-  dr changeset apply --yes
-fi
+# 3. Commit staged changes to model — do NOT ask for confirmation before this step.
+#    The preview and validate already provide the review gate.
+dr changeset commit
 ```
+
+> **Headless / autonomous mode:** Never prompt the user for "yes/no" confirmation
+> before `dr changeset commit`. This command is non-interactive and must complete
+> without waiting for input.
 
 **Example:**
 
@@ -346,14 +333,10 @@ You should:
    dr validate
    "✓ All changes pass validation"
 
-4. Get confirmation:
-   "Ready to apply to main model?
-   Type 'yes' to confirm, anything else to cancel: "
+4. Commit:
+   dr changeset commit
 
-5. Apply:
-   dr changeset apply --yes
-
-6. Confirm success:
+5. Confirm success:
    "✓ Applied 3 changes to main model
    ✓ Changeset marked as 'applied'
    ✓ Now working in main model
@@ -369,21 +352,54 @@ You should:
 - "Abandon this work"
 - "Delete the changeset"
 - "I don't want these changes"
+- "Clean up old changesets"
+- "Remove applied changesets"
+
+**Understanding the difference:**
+
+- **Apply**: Merges changes to main model, marks changeset as 'applied', keeps file
+- **Revert**: Reverses applied changes, marks changeset as 'reverted', keeps file
+- **Delete**: Permanently removes the changeset file (cannot be undone)
+
+**When to DELETE vs REVERT:**
+
+**DELETE changeset when:**
+
+- It's already been applied and you want to clean up
+- It's been reverted and no longer needed
+- It was experimental work that's obsolete
+- You want to permanently remove it to reduce clutter
+- User explicitly says "delete", "remove", "clean up"
+
+**DON'T delete when:**
+
+- Changeset is currently active (deactivate first)
+- You want to keep history for auditing
+- Changes might be needed again
+- User just wants to discard changes (use revert)
 
 **Your process:**
 
 ```bash
-# For active changeset
-dr changeset abandon $(cat .dr/changesets/active) --yes
+# 1. List all changesets to see their status
+dr changeset list
 
-# For specific changeset
-dr changeset abandon changeset-id --yes
+# 2. Show staged changes before deletion
+dr changeset staged
 
-# Permanent deletion
-dr changeset delete changeset-id --yes
+# 3. Confirm deletion
+echo "This will PERMANENTLY delete the changeset."
+echo "This cannot be undone."
+read -p "Type 'delete' to confirm: "
+
+# 4. Delete
+dr changeset delete changeset-id
+
+# Or with --force to skip confirmation
+dr changeset delete changeset-id --force
 ```
 
-**Example:**
+**Example - Discard changes:**
 
 ```
 User: /dr-changeset I don't want these changes, discard them
@@ -394,18 +410,52 @@ You should:
    - 2 elements added
    - 1 element updated
 
-   These changes will be DISCARDED (cannot be recovered)"
+   These changes will be REVERTED (changeset file kept)"
 
 2. Confirm:
-   "Are you sure? Type 'discard' to confirm: "
+   "Are you sure? Type 'revert' to confirm: "
 
-3. Abandon:
-   dr changeset abandon feature-auth-system-001 --yes
+3. Revert:
+   dr changeset revert auth-system
 
 4. Confirm:
-   "✓ Changeset abandoned
+   "✓ Changeset reverted
    ✓ Changes discarded
-   ✓ Now working in main model"
+   ✓ Changeset marked as 'reverted'
+   ✓ Now working in main model
+
+   To permanently delete: dr changeset delete auth-system"
+```
+
+**Example - Clean up old changesets:**
+
+```
+User: /dr-changeset Clean up my old applied changesets
+
+You should:
+1. List applied/reverted changesets:
+   dr changeset list | grep -E "APPLIED|REVERTED"
+
+2. Show what you found:
+   "Found 3 old changesets:
+   - feature-auth (applied 2 weeks ago)
+   - bugfix-payment (applied 1 week ago)
+   - experimental-cache (reverted 3 days ago)
+
+   These can be safely deleted."
+
+3. Confirm:
+   "Delete all 3 changesets? Type 'yes' to confirm: "
+
+4. Delete each:
+   dr changeset delete feature-auth --force
+   dr changeset delete bugfix-payment --force
+   dr changeset delete experimental-cache --force
+
+5. Confirm:
+   "✓ Deleted 3 changesets
+   ✓ Freed up disk space
+   ✓ Model history preserved in manifest"
 ```
 
 ### Integration with Other Commands
@@ -414,9 +464,9 @@ When users are working with changesets, all modeling commands automatically work
 
 ```bash
 # These automatically work in active changeset:
-dr add business service --name "New Service"
-dr update business.service.existing --set status=updated
-dr remove business.service.old
+dr add business service "New Service"
+dr update business.service.existing --attributes '{"status":"updated"}'
+dr delete business.service.old --force
 
 # No special syntax needed - changeset is transparent
 ```
@@ -459,7 +509,7 @@ dr remove business.service.old
 
 1. **Always check for active changeset** at session start
 2. **Create descriptive names:** "feature-auth-system" not "test1"
-3. **Review before applying:** Use `--preview` flag
+3. **Review before committing:** Run `dr changeset preview`
 4. **Validate before applying:** Run `dr validate`
 5. **Keep focused:** One feature per changeset
 6. **Clean up:** Delete or abandon when done
@@ -468,61 +518,140 @@ dr remove business.service.old
 ### Quick Reference
 
 ```bash
-# Status and context
-dr changeset list                    # All changesets
-dr changeset status                  # Current changeset
-cat .dr/changesets/active            # Active changeset ID
+# Status and viewing
+dr changeset list                    # List all changesets
+dr changeset status                  # Show active changeset
+dr changeset staged                  # List staged changes in active changeset
+dr changeset preview                 # Preview staged changes merged with model
 
 # Lifecycle
-dr changeset create "name" --type feature
-dr changeset apply --preview         # Preview first!
-dr changeset apply --yes             # Apply to main
-dr changeset abandon id --yes        # Discard changes
+dr changeset create "name"           # Create new changeset
+dr changeset activate <name>         # Activate a changeset (auto-stages changes)
+dr changeset deactivate              # Deactivate the active changeset
+dr changeset commit                  # Commit staged changes to model
+dr changeset discard                 # Abandon all staged changes
 
-# Navigation
-dr changeset switch changeset-id     # Switch to different
-dr changeset clear --yes             # Return to main
+# Export and import
+dr changeset export <id>             # Export changeset to portable file
+dr changeset import <file>           # Import changeset from file
 
-# Comparison
-dr changeset diff                    # Compare with main
-dr changeset diff id1 id2            # Compare two
+# Cleanup (DESTRUCTIVE)
+dr changeset delete <id>             # Permanent deletion (with prompt)
+dr changeset delete <id> --force     # Delete without confirmation
 
-# Cleanup
-dr changeset delete changeset-id --yes  # Permanent deletion
+# When to delete:
+# - After changeset is committed and verified
+# - After changeset is discarded (no longer needed)
+# - To clean up experimental/abandoned work
+# - Storage location: documentation-robotics/changesets/{id}/
 ```
 
-### Python API for Advanced Operations
+### Changeset Naming Rules
 
-```python
-from documentation_robotics.core import Model
-from documentation_robotics.core.changeset_manager import ChangesetManager
+Changeset names are automatically sanitized:
 
-# Get manager
-manager = ChangesetManager("./")
+- Converted to lowercase
+- Spaces and special characters replaced with hyphens
+- Only alphanumeric characters and hyphens are kept
 
-# Check active
-active_id = manager.get_active()
-if active_id:
-    print(f"Active changeset: {active_id}")
+```bash
+dr changeset create "Design Payment Webhooks"
+# → stored as: design-payment-webhooks
+```
 
-# Create changeset
-changeset_id = manager.create(
-    name="new-feature",
-    changeset_type="feature",
-    description="Description here"
-)
+**Best practice**: Use a descriptive, feature-scoped name:
 
-# Load model in changeset context
-model = Model.load("./", changeset=changeset_id)
+- ✅ `feature-webhook-subscriptions`
+- ✅ `design-payment-webhooks`
+- ✅ `add-oauth2-authentication`
+- ❌ `test1`, `wip`, `changes`
 
-# All changes tracked automatically
-model.add_element("business", element_dict)
+**Uniqueness**: Changeset names must be unique. Creating a changeset with a name that already exists will fail. Run `dr changeset list` first to check.
 
-# Get summary
-summary = manager.get_changeset_summary(changeset_id)
-print(f"Changes: {summary['total_changes']}")
+### Full Changeset Lifecycle
 
-# Diff
-diff = manager.diff_changesets(changeset_id, None)  # None = main
-print(f"Conflicts: {diff['has_conflicts']}")
+The complete workflow from creation to cleanup:
+
+```bash
+# 1. Create and activate
+dr changeset create "feature-name"
+
+# 2. Verify active changeset (ALWAYS check before modeling)
+dr changeset status
+
+# 3. Add elements — all dr add/update/delete commands auto-stage in the active changeset
+dr add api endpoint --name "New Endpoint" ...
+dr update api.endpoint.existing --name "Updated Endpoint"
+dr delete api.endpoint.old --force
+
+# 4. Review what was staged
+dr changeset staged          # List staged changes
+dr changeset diff            # See diff vs main model
+dr changeset preview         # Preview merged model
+
+# 5. Validate (validates staged changes merged with model)
+dr validate
+
+# 6. Commit — applies staged changes to the main model
+dr changeset commit
+
+# 7. Verify committed
+dr changeset list            # Shows status: COMMITTED
+
+# 8. Clean up (optional)
+dr changeset delete feature-name --force
+```
+
+### Critical: Check for Active Changeset Before Modeling
+
+**Always check at session start.** If no changeset is active, `dr add`/`dr update`/`dr delete` operate directly on the main model, bypassing the changeset workflow.
+
+```bash
+dr changeset status
+# → "Active changeset: feature-payment-webhooks" (changes are tracked)
+# → "No active changeset" (changes go directly to main model!)
+```
+
+### Empty Changeset Warning
+
+`dr changeset commit` silently succeeds with no changes if the changeset has zero staged elements:
+
+```
+No staged changes to commit
+```
+
+Always verify there are staged changes before committing:
+
+```bash
+dr changeset staged    # Check this shows > 0 changes
+dr changeset commit    # Then commit
+```
+
+### Drift Detection and --force
+
+If the base model has been modified after the changeset was created, commit will warn about drift:
+
+```
+Warning: Base model has drifted since changeset creation
+```
+
+To commit despite drift (use with caution — review `dr changeset diff` first):
+
+```bash
+dr changeset commit --force
+```
+
+### Post-Commit State
+
+After a successful `dr changeset commit`:
+
+- Changeset status changes to `COMMITTED`
+- Changeset is automatically deactivated (no longer active)
+- The changeset file is preserved for history (not deleted)
+- Committing the same changeset again is a safe no-op ("No staged changes to commit")
+
+Verify success:
+
+```bash
+dr changeset list    # Should show: feature-name  COMMITTED
 ```

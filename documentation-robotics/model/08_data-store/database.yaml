@@ -1,0 +1,186 @@
+data-store.database.redis-event-store:
+  id: e1dbddbf-4cf7-4b6f-a1b5-d54ad2396763
+  path: data-store.database.redis-event-store
+  spec_node_id: data-store.database
+  type: database
+  layer_id: data-store
+  name: Redis Event Store
+  description: Redis-backed event store and pub/sub bus for distributed event
+    distribution and caching
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/secondary/redis_event_emitter.py
+        symbol: RedisEventEmitter
+  metadata:
+    created_at: 2026-05-08T10:27:36.562Z
+    updated_at: 2026-05-08T10:27:36.562Z
+    version: 1
+data-store.database.redis-config-cache:
+  id: 2a00e49d-48da-4892-bf4a-3d6ece830fed
+  path: data-store.database.redis-config-cache
+  spec_node_id: data-store.database
+  type: database
+  layer_id: data-store
+  name: Redis Config Cache
+  description: Redis-backed configuration cache with TTL-based invalidation for
+    fast config reads
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/infrastructure/redis_config_cache.py
+        symbol: RedisConfigCache
+  metadata:
+    created_at: 2026-05-08T10:27:40.637Z
+    updated_at: 2026-05-08T10:27:40.637Z
+    version: 1
+data-store.database.elasticsearch-config-storage:
+  id: 5d5cd974-c623-4abd-a165-11541e35fdee
+  path: data-store.database.elasticsearch-config-storage
+  spec_node_id: data-store.database
+  type: database
+  layer_id: data-store
+  name: Elasticsearch Config Storage
+  description: Elasticsearch-backed configuration persistence for projects,
+    agents, pipelines, and workflows with full-text search
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/secondary/elasticsearch_config_storage.py
+        symbol: ElasticsearchConfigStorage
+  metadata:
+    created_at: 2026-05-08T10:27:40.912Z
+    updated_at: 2026-05-08T10:27:40.912Z
+    version: 1
+data-store.database.elasticsearch-event-store:
+  id: 26b836bd-ccfc-4571-a496-1cf712b14c92
+  path: data-store.database.elasticsearch-event-store
+  spec_node_id: data-store.database
+  type: database
+  layer_id: data-store
+  name: Elasticsearch Event Store
+  description: Elasticsearch-backed event store for domain event persistence with
+    monthly index rollover and optimistic concurrency control
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/secondary/elasticsearch_event_store.py
+        symbol: ElasticsearchEventStore
+  metadata:
+    created_at: 2026-05-08T10:27:45.013Z
+    updated_at: 2026-05-08T10:27:45.013Z
+    version: 1
+data-store.database.elasticsearch-workflow-config:
+  id: a3758c60-cb47-4818-ac19-5fd41895c037
+  path: data-store.database.elasticsearch-workflow-config
+  spec_node_id: data-store.database
+  type: database
+  layer_id: data-store
+  name: Elasticsearch Workflow Config
+  description: Elasticsearch-backed workflow configuration storage for
+    BoardWorkflowTemplate persistence
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/secondary/elasticsearch_workflow_config_service.py
+        symbol: ElasticsearchWorkflowConfigService
+  metadata:
+    created_at: 2026-05-08T10:27:45.269Z
+    updated_at: 2026-05-08T10:27:45.270Z
+    version: 1
+data-store.database.redis-pipeline-queue:
+  id: 44cfae20-d6fa-498e-8e6e-557547a71a00
+  path: data-store.database.redis-pipeline-queue
+  spec_node_id: data-store.database
+  type: database
+  layer_id: data-store
+  name: Redis Pipeline Queue
+  description: Redis-backed pipeline queue providing FIFO ordering of work items
+    for the AgentScheduler. Supports queue position inspection, peek
+    (lock-without-dequeue), and stale entry detection. Also has an in-memory
+    variant for testing (InMemoryQueueLockService).
+  attributes:
+    engine: Redis
+    paradigm: KEY_VALUE
+    deploymentModel: STANDALONE
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/secondary/in_memory_queue_lock_service.py
+        symbol: InMemoryQueueLockService
+  metadata:
+    created_at: 2026-05-08T12:18:21.196Z
+    updated_at: 2026-05-08T12:18:21.196Z
+    version: 1
+data-store.database.redis-dead-letter-queue:
+  id: 864f7fc7-3c73-410e-8c5d-1dfec806ed97
+  path: data-store.database.redis-dead-letter-queue
+  spec_node_id: data-store.database
+  type: database
+  layer_id: data-store
+  name: Redis Dead Letter Queue
+  description: Redis stream for failed events that could not be processed
+    (events:dead-letter stream key). Stores FailedEvent records with retry
+    metadata, failure reason, and retry count. Backed by RedisEventBuffer with
+    configurable max stream length.
+  attributes:
+    engine: Redis
+    paradigm: KEY_VALUE
+    deploymentModel: STANDALONE
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/infrastructure/redis_event_buffer.py
+        symbol: RedisEventBuffer
+  metadata:
+    created_at: 2026-05-08T12:18:39.201Z
+    updated_at: 2026-05-08T12:18:39.201Z
+    version: 1
+data-store.database.local-file-storage:
+  id: d1c8b27a-2919-4a76-a71b-66237a6c3a0b
+  path: data-store.database.local-file-storage
+  spec_node_id: data-store.database
+  type: database
+  layer_id: data-store
+  name: Local File Storage
+  description: Local filesystem storage implementing the IStorage port. Stores
+    agent execution artifacts, context files (issue.txt, code snippets,
+    previous_stage.txt) mounted into containers. Dev environment uses local
+    disk; production may use S3-compatible object storage.
+  attributes:
+    engine: Filesystem
+    paradigm: DOCUMENT
+    deploymentModel: STANDALONE
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/ports/output/storage.py
+        symbol: IStorage
+  metadata:
+    created_at: 2026-05-08T12:18:52.450Z
+    updated_at: 2026-05-08T12:18:52.450Z
+    version: 1
+data-store.database.postgre-sql-config-database:
+  id: 6e19b251-2c13-40d6-a323-8d33527c4939
+  path: data-store.database.postgre-sql-config-database
+  spec_node_id: data-store.database
+  type: database
+  layer_id: data-store
+  name: PostgreSQL Config Database
+  description: Primary relational database for users, API keys, project
+    configuration, workflow definitions, and audit logs. Managed via SQLAlchemy
+    ORM with Alembic migrations.
+  attributes:
+    engine: PostgreSQL
+    paradigm: RELATIONAL
+    version: 14+
+    deploymentModel: STANDALONE
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/infrastructure/audit/stores.py
+        symbol: PostgreSQLAuditStore
+  metadata:
+    created_at: 2026-05-08T12:16:55.655Z
+    updated_at: 2026-05-08T12:16:55.655Z
+    version: 1

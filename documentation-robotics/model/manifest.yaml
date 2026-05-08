@@ -1,276 +1,119 @@
-cli_version: 0.7.3
-conventions:
-  file_naming:
-    api: '{service-name}-api.yaml'
-    database: '{db-name}.yaml'
-    schema: '{entity-name}.schema.yaml'
-  id_format: '{layer}.{type}.{kebab-case-name}'
-created: '2025-12-05T13:22:02.447790Z'
+version: 0.1.0
+schema: documentation-robotics-v1
+cli_version: 0.1.3
+spec_version: 0.8.4
+created: 2026-05-08T10:23:47.104Z
+updated: 2026-05-08T12:30:44.962Z
+project:
+  name: codetoreum
+  description: Adaptable code orchestration
+  version: 0.1.0
 documentation: .dr/README.md
 layers:
-  api:
-    elements:
-      openapi-specs: 1
-      operation: 47
-    enabled: true
-    files:
-    - codetoreum-api.yaml
-    name: API
-    order: 6
-    path: documentation-robotics/model/06_api/
-    schema: .dr/schemas/06-api-layer.schema.json
-  apm:
-    elements: {}
-    enabled: true
-    name: APM/Observability
-    order: 11
-    path: documentation-robotics/model/11_apm/
-    schema: .dr/schemas/11-apm-observability-layer.schema.json
-  application:
-    elements:
-      component: 1
-      components: 17
-      services: 12
-    enabled: true
-    files:
-    - services.yaml
-    - components.yaml
-    - relationships.yaml
-    name: Application
-    order: 4
-    path: documentation-robotics/model/04_application/
-    schema: .dr/schemas/04-application-layer.schema.json
-  business:
-    elements:
-      actors: 6
-      object: 1
-      processes: 9
-      roles: 4
-      services: 12
-    enabled: true
-    files:
-    - services.yaml
-    - actors.yaml
-    - processes.yaml
-    name: Business
-    order: 2
-    path: documentation-robotics/model/02_business/
-    schema: .dr/schemas/02-business-layer.schema.json
-  data_model:
-    elements:
-      schema: 44
-      schemas: 20
-    enabled: true
-    files:
-    - schemas.yaml
-    name: Data Model
-    order: 7
-    path: documentation-robotics/model/07_data_model/
-    schema: .dr/schemas/07-data-model-layer.schema.json
-  datastore:
-    elements:
-      channels: 3
-      database: 2
-      databases: 3
-      indices: 6
-      keyspaces: 6
-    enabled: true
-    files:
-    - databases.yaml
-    - elasticsearch.yaml
-    - redis.yaml
-    name: Data Store
-    order: 8
-    path: documentation-robotics/model/08_datastore/
-    schema: .dr/schemas/08-datastore-layer.schema.json
   motivation:
-    elements:
-      constraints: 9
-      goals: 10
-      principles: 10
-      requirements: 11
-      stakeholders: 8
-    enabled: true
-    files:
-    - goals.yaml
-    - stakeholders.yaml
-    - requirements.yaml
-    - constraints.yaml
-    - principles.yaml
-    name: Motivation
     order: 1
+    name: Motivation
     path: documentation-robotics/model/01_motivation/
-    schema: .dr/schemas/01-motivation-layer.schema.json
-  navigation:
-    elements:
-      deep-linking: 1
-      guard: 0
-      guards: 2
-      route: 0
-      routes: 6
-      state-machines: 4
-      user-flows: 4
     enabled: true
-    files:
-    - flows.yaml
-    name: Navigation
-    order: 10
-    path: documentation-robotics/model/10_navigation/
-    schema: .dr/schemas/10-navigation-layer.schema.json
+    elements:
+      goal: 4
+      principle: 4
+  business:
+    order: 2
+    name: Business
+    path: documentation-robotics/model/02_business/
+    enabled: true
+    elements:
+      businessactor: 2
+      businessfunction: 1
+      businessrole: 1
+      businessservice: 6
   security:
-    elements:
-      authentication-schemes: 5
-      authorization-policies: 2
-      data-protection: 3
-      security-controls: 9
-      threat-mitigations: 3
-    enabled: true
-    files:
-    - security.yaml
-    name: Security
     order: 3
+    name: Security
     path: documentation-robotics/model/03_security/
-    schema: .dr/schemas/03-security-layer.schema.json
+    enabled: true
+    elements:
+      securitypolicy: 5
+  application:
+    order: 4
+    name: Application
+    path: documentation-robotics/model/04_application/
+    enabled: true
+    elements:
+      applicationcomponent: 11
+      applicationinterface: 59
+      applicationservice: 21
   technology:
-    elements:
-      node: 1
-      nodes: 4
-      systemsoftware: 29
-    enabled: true
-    files:
-    - platforms.yaml
-    - nodes.yaml
-    name: Technology
     order: 5
+    name: Technology
     path: documentation-robotics/model/05_technology/
-    schema: .dr/schemas/05-technology-layer.schema.json
-  testing:
-    elements: {}
     enabled: true
-    name: Testing
-    order: 12
-    path: documentation-robotics/model/12_testing/
-    schema: .dr/schemas/12-testing-layer.schema.json
-  ux:
     elements:
-      components: 14
-      hooks: 2
-      interactions: 4
-      screens: 6
-      stores: 2
+      systemsoftware: 12
+  api:
+    order: 6
+    name: Api
+    path: documentation-robotics/model/06_api/
     enabled: true
-    files:
-    - views.yaml
-    name: UX
+    elements:
+      operation: 90
+  data-model:
+    order: 7
+    name: Data model
+    path: documentation-robotics/model/07_data-model/
+    enabled: true
+    elements:
+      objectschema: 45
+      schemadefinition: 17
+  data-store:
+    order: 8
+    name: Data store
+    path: documentation-robotics/model/08_data-store/
+    enabled: true
+    elements:
+      collection: 3
+      database: 9
+      namespace: 4
+  ux:
     order: 9
+    name: Ux
     path: documentation-robotics/model/09_ux/
-    schema: .dr/schemas/09-ux-layer.schema.json
-project:
-  description: Architecture model for the Codetoreum AI Agent Orchestration Platform
-  name: codetoreum
-  version: 2.0.0
-schema: documentation-robotics-v2
-spec_version: 0.5.0
-statistics:
-  completeness: 0.82
-  elements_by_layer:
-    api: 1
-    application: 29
-    business: 31
-    data_model: 20
-    datastore: 9
-    motivation: 48
-    navigation: 17
-    security: 22
-    technology: 15
-    ux: 28
-  last_validation: '2025-12-10T21:28:50.407064Z'
-  total_elements: 322
-  total_relationships: 95
-  validation_status: passed
-updated: '2025-12-10T21:28:50.407073Z'
-upgrade_history:
-- changes:
-  - Fixed YAML structure to match DR CLI element format
-  - Each top-level key is now a valid element with proper id and required properties
-  - API layer now uses single OpenAPI spec element with nested paths
-  - Data Model layer schemas include $schema property for JSON Schema compliance
-  - Datastore layer uses database wrapper object as required by schema
-  - Reduced validation errors from 67 to 0
-  date: '2025-12-05T14:30:00.000000Z'
-  from: 0.1.0
-  to: 0.2.0
-- changes:
-  - Populated motivation layer with goals, stakeholders, requirements, constraints,
-    and principles
-  - Added cross-layer references (supportsGoals) to business services
-  - Added cross-layer references (realizes, supportsGoals) to application services
-  - Added platform-observability business service
-  - Added event-processor application service
-  - Established traceability from motivation through business to application layers
-  date: '2025-12-05T16:30:00.000000Z'
-  from: 0.2.0
-  to: 0.2.1
-- changes:
-  - Replaced PostgreSQL datastore with Elasticsearch event store and configuration
-    storage
-  - Added Redis cache and pub/sub for real-time messaging
-  - Expanded data model from 10 to 20 schemas
-  - Added new schemas - project-context, workflow-template, user, api-key, auth-context,
-    comment, workspace-context, execution-result, execution-context, stage-template
-  - Enhanced existing schemas with complete field definitions from implementation
-  - Added cross-layer stored-in references between schemas and datastores
-  - Added x-aggregate-root, x-entity, x-value-object markers to schemas
-  - Documented Elasticsearch indices for events, projects, agents, pipelines, workflows,
-    config-history
-  - Documented Redis key patterns for config cache, sessions, execution state, rate
-    limiting
-  - Documented Redis pub/sub channels for websocket events, control, config invalidation
-  date: '2025-12-05T20:30:00.000000Z'
-  from: 0.2.1
-  to: 0.2.2
-- changes:
-  - Populated Security layer with 22 elements derived from codebase analysis
-  - Authentication schemes - JWT, httpOnly cookie, bearer header, query param, WebSocket
-  - Authorization policies - single-tenant access, API endpoint protection
-  - Security controls - rate limiting, circuit breaker, container isolation, audit
-    logging
-  - Data protection - secret management, session security, frontend auth state
-  - Threat mitigations - XSS prevention, CSRF prevention, token theft prevention
-  - Populated UX layer with 28 elements from React frontend analysis
-  - Screens - auth-required, dashboard, project-config, workflow-config, agent-config,
-    history
-  - Components - navigation menu, work item list, execution list, real-time events,
-    forms
-  - State stores - auth store (Zustand), websocket store (Zustand singleton)
-  - Hooks - useAuth, useWebSocket
-  - Interactions - authenticate, view-dashboard, manage-env-vars, subscribe-events
-  - Populated Navigation layer with 17 elements
-  - Routes - root, config, workflows, agents, history, catch-all
-  - User flows - authentication, onboarding, monitoring, configuration-change
-  - State machines - work-item, execution, websocket-connection, authentication
-  - Guards - auth guard, error boundary guard
-  - Deep linking patterns
-  - Added cross-layer references to motivation.goal.security, .observability, .ease-of-configuration
-  - Linked security authentication schemes to application.service.authentication-service
-  - Linked UX screens to API operations and security authentication schemes
-  date: '2025-12-05T22:30:00.000000Z'
-  from: 0.2.2
-  to: 0.2.3
-- from_version: 0.2.3
-  to_version: 0.6.3
-  upgraded_at: '2025-12-05T16:01:46.198525Z'
-- from_version: 0.2.3
-  to_version: 0.6.4
-  upgraded_at: '2025-12-06T09:23:56.451210Z'
-- from_version: 0.2.3
-  to_version: 0.6.5
-  upgraded_at: '2025-12-06T09:30:52.153493Z'
-- from_version: 0.2.3
-  to_version: 0.7.1
-  upgraded_at: '2025-12-09T21:27:48.387807Z'
-- from_version: 0.2.3
-  to_version: 0.7.3
-  upgraded_at: '2025-12-10T16:48:19.329754Z'
-upgraded_at: '2025-12-10T16:48:19.341277Z'
-version: 0.2.3
+    enabled: true
+    elements:
+      librarycomponent: 5
+      view: 8
+  navigation:
+    order: 10
+    name: Navigation
+    path: documentation-robotics/model/10_navigation/
+    enabled: true
+    elements:
+      navigationflow: 1
+      route: 7
+  apm:
+    order: 11
+    name: Apm
+    path: documentation-robotics/model/11_apm/
+    enabled: true
+    elements:
+      dashboard: 2
+      instrumentationconfig: 1
+      logconfiguration: 1
+      metricinstrument: 4
+      span: 3
+      traceconfiguration: 1
+  testing:
+    order: 12
+    name: Testing
+    path: documentation-robotics/model/12_testing/
+    enabled: true
+    elements:
+      coveragerequirement: 2
+      testcasesketch: 28
+      testcoveragemodel: 15
+      testcoveragetarget: 26
+changeset_history:
+  - name: orphan-relationship-wiring
+    committed_at: 2026-05-08T12:30:44.962Z
+    action: committed
